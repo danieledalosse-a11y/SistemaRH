@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Férias — Sistema RH Revest</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --border: #e0e0e0;
+    --text: #1a1a1a;
+    --text-sec: #666;
+    --accent: #1a1a1a;
+    --green: #27500A;
+    --green-bg: #EAF3DE;
+    --red: #7F1D1D;
+    --red-bg: #FEF2F2;
+    --blue: #1A3A8F;
+    --blue-bg: #E8F0FE;
+    --amber: #633806;
+    --amber-bg: #FAEEDA;
+    --purple: #4B1D8F;
+    --purple-bg: #EDE8FE;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* ── topbar ── */
+  .topbar { background: var(--accent); color: #fff; padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar-left { display: flex; align-items: center; gap: 20px; }
+  .topbar-logo { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.9; text-decoration: none; color: #fff; }
+  .topbar-sep { opacity: 0.3; font-size: 18px; }
+  .topbar-mod { font-size: 14px; font-weight: 600; }
+  .topbar-ano { font-size: 12px; background: rgba(255,255,255,0.15); padding: 3px 10px; border-radius: 20px; }
+
+  /* ── module tabs ── */
+  .mod-tabs { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 0; }
+  .mod-tab { padding: 14px 18px; font-size: 13px; font-weight: 500; color: var(--text-sec); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; transition: color 0.15s; }
+  .mod-tab:hover { color: var(--text); }
+  .mod-tab.active { color: var(--text); border-bottom-color: var(--text); }
+
+  /* ── container ── */
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
+
+  /* ── cards ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .card-sub { font-size: 12px; color: var(--text-sec); margin-bottom: 16px; }
+
+  /* ── import ── */
+  .import-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+  .import-zone:hover { border-color: var(--accent); background: #f9f9f9; }
+  .import-zone strong { font-size: 14px; color: var(--text); display: block; margin-bottom: 4px; }
+  .import-zone p { font-size: 13px; color: var(--text-sec); margin-top: 8px; }
+  #fileInput { display: none; }
+
+  /* ── metrics ── */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+  .metric:hover { border-color: #aaa; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .metric.active-filter { border-color: var(--text); box-shadow: 0 0 0 2px var(--text); }
+  .metric-val { font-size: 28px; font-weight: 600; line-height: 1; }
+  .metric-label { font-size: 11px; color: var(--text-sec); margin-top: 4px; line-height: 1.4; }
+  .metric-val.c-red { color: var(--red); }
+  .metric-val.c-amber { color: var(--amber); }
+  .metric-val.c-green { color: var(--green); }
+  .metric-val.c-blue { color: var(--blue); }
+
+  /* ── sub-tabs ── */
+  .sub-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .sub-tab { padding: 7px 14px; font-size: 12px; font-weight: 500; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--text-sec); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .sub-tab:hover { border-color: #aaa; color: var(--text); }
+  .sub-tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+  .sub-tab .cnt { display: inline-block; background: rgba(255,255,255,0.25); border-radius: 10px; padding: 0 6px; margin-left: 4px; font-size: 11px; }
+  .sub-tab:not(.active) .cnt { background: #f0f0f0; color: #888; }
+
+  /* ── badges ── */
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 5px; font-weight: 500; }
+  .badge-verde   { background: var(--green-bg);  color: var(--green); }
+  .badge-vermelho{ background: var(--red-bg);    color: var(--red); }
+  .badge-amber   { background: var(--amber-bg);  color: var(--amber); }
+  .badge-azul    { background: var(--blue-bg);   color: var(--blue); }
+  .badge-roxo    { background: var(--purple-bg); color: var(--purple); }
+  .badge-cinza   { background: #f0f0f0;          color: #555; }
+  .badge-acordo  { background: var(--red-bg); color: var(--red); font-weight: 700; }
+
+  /* ── table ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 11px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.clickable:hover td { background: #fafafa; cursor: pointer; }
+
+  /* ── barra de saldo ── */
+  .saldo-bar { display: flex; align-items: center; gap: 8px; }
+  .bar-track { flex: 1; height: 6px; background: #eee; border-radius: 3px; min-width: 60px; }
+  .bar-fill  { height: 100%; border-radius: 3px; background: var(--green); transition: width 0.3s; }
+  .bar-fill.low  { background: var(--red); }
+  .bar-fill.mid  { background: var(--amber); }
+  .saldo-num { font-size: 12px; color: var(--text-sec); white-space: nowrap; }
+
+  /* ── chips de período ── */
+  .periodo-chips { display: flex; flex-direction: column; gap: 3px; }
+  .periodo-chip { font-size: 11px; padding: 2px 7px; border-radius: 4px; background: var(--blue-bg); color: var(--blue); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+  .periodo-chip.passado { background: #f0f0f0; color: #888; }
+  .periodo-chip.futuro  { background: var(--green-bg); color: var(--green); }
+  .periodo-chip.hoje    { background: var(--amber-bg); color: var(--amber); font-weight: 600; }
+
+  /* ── alerta dobra ── */
+  .alerta-dobra { font-size: 11px; padding: 3px 8px; border-radius: 5px; font-weight: 500; white-space: nowrap; }
+  .dobra-vencido  { background: var(--red-bg);   color: var(--red); }
+  .dobra-critico  { background: var(--red-bg);   color: var(--red); }
+  .dobra-atencao  { background: var(--amber-bg); color: var(--amber); }
+
+  /* ── grupo de seção ── */
+  .sec-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .sec-title  { font-size: 13px; font-weight: 600; }
+  .sec-count  { font-size: 12px; color: var(--text-sec); }
+
+  /* ── calendário agrupado ── */
+  .cal-empresa { margin-bottom: 24px; }
+  .cal-empresa-header { font-size: 13px; font-weight: 700; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.06em; padding: 6px 0 8px; border-bottom: 2px solid var(--border); margin-bottom: 0; }
+  .cal-setor-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600; border-left: 4px solid; }
+  .cal-setor-row { display: grid; grid-template-columns: 200px 180px 1fr auto; gap: 0; align-items: center; padding: 9px 12px; border-bottom: 1px solid #f0f0f0; border-left: 4px solid; font-size: 13px; transition: background 0.1s; }
+  .cal-setor-row:hover { background: #fafafa; }
+  .cal-nome-btn { background: none; border: none; font-size: 13px; font-weight: 500; color: var(--blue); cursor: pointer; text-align: left; padding: 0; font-family: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .cal-nome-btn:hover { color: var(--accent); }
+  .cal-periodo { font-size: 12px; color: var(--text-sec); }
+  .cal-obs { font-size: 11px; color: #999; font-style: italic; }
+
+  /* ── formulário lançar ── */
+  .lancar-list { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; padding-right: 4px; }
+  .lancar-item { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: border-color 0.15s; }
+  .lancar-item:hover { border-color: #aaa; }
+  .lancar-item.selected { border-color: var(--text); box-shadow: 0 0 0 2px var(--text); }
+  .lancar-item-nome { flex: 1; font-size: 13px; font-weight: 500; }
+  .lancar-item-info { font-size: 12px; color: var(--text-sec); }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid.col3 { grid-template-columns: 1fr 1fr 1fr; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; font-weight: 500; color: var(--text-sec); }
+  .field input, .field select, .field textarea {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+    font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text);
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--text); }
+  .field textarea { resize: vertical; min-height: 60px; }
+
+  .alerta-form { border-radius: 8px; padding: 10px 14px; font-size: 12px; margin-top: 8px; }
+  .alerta-form.erro  { background: var(--red-bg);   color: var(--red); }
+  .alerta-form.aviso { background: var(--amber-bg); color: var(--amber); }
+  .alerta-form.ok    { background: var(--green-bg); color: var(--green); }
+
+  /* ── painel do colaborador lançar ── */
+  .colab-panel { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px; background: var(--surface); }
+  .colab-panel-header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .colab-panel-nome { font-size: 15px; font-weight: 600; }
+  .colab-panel-sub  { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
+  .colab-panel-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* ── histórico ── */
+  .hist-timeline { display: flex; flex-direction: column; gap: 12px; }
+  .hist-pa { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .hist-pa-header { background: #fafafa; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+  .hist-pa-year { font-size: 13px; font-weight: 600; }
+  .hist-pa-period { font-size: 12px; color: var(--text-sec); }
+  .hist-pa-body { padding: 12px 16px; }
+  .hist-lanc { display: flex; gap: 12px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+  .hist-lanc:last-child { border-bottom: none; }
+  .hist-lanc-num { width: 20px; height: 20px; border-radius: 50%; background: var(--blue-bg); color: var(--blue); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .hist-lanc-info { flex: 1; }
+  .hist-lanc-dates { font-size: 13px; font-weight: 500; }
+  .hist-lanc-meta  { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
+  .hist-lanc-nota  { font-size: 11px; color: #888; font-style: italic; margin-top: 3px; }
+
+  /* ── botões ── */
+  .btn { border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; transition: opacity 0.15s; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--text); color: #fff; }
+  .btn-outline  { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-green    { background: var(--green); color: #fff; }
+  .btn-red      { background: var(--red); color: #fff; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  /* ── filtros ── */
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .filters input, .filters select { border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); }
+  .filters input { flex: 1; min-width: 200px; }
+
+  /* ── inss alerta ── */
+  .inss-alerta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--amber); background: var(--amber-bg); border-radius: 5px; padding: 3px 8px; margin-top: 4px; }
+
+  /* ── empty state ── */
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--text-sec); }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 13px; }
+
+  /* ── modal de lançamento ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 560px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .modal-sub { font-size: 12px; color: var(--text-sec); margin-bottom: 20px; }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+  /* ── toast ── */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: all 0.25s; pointer-events: none; z-index: 999; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── estado sem dados ── */
+  .data-required { display: none; }
+
+  /* ── pendentes ── */
+  .pendente-item { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; display: flex; align-items: flex-start; gap: 12px; }
+  .pendente-body { flex: 1; }
+  .pendente-nome { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .pendente-info { font-size: 12px; color: var(--text-sec); margin-bottom: 8px; }
+  .pendente-actions { display: flex; gap: 8px; }
+
+  /* ── tooltip icon ── */
+  .tooltip-icon { cursor: help; font-size: 13px; color: var(--text-sec); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a class="topbar-logo" href="../../index.html">Sistema RH</a>
+    <span class="topbar-sep">›</span>
+    <span class="topbar-mod">Férias</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span style="font-size:12px;opacity:0.6;">Ano de referência</span>
+    <select id="anoRefSelect" onchange="mudarAnoRef(this.value)"
+      style="background:#fff;color:#1a1a1a;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:4px 10px;font-size:13px;font-family:inherit;cursor:pointer;">
+      <option value="2024">2024</option>
+      <option value="2025">2025</option>
+      <option value="2026" selected>2026</option>
+      <option value="2027">2027</option>
+    </select>
+  </div>
+</div>
+
+<div class="mod-tabs">
+  <button class="mod-tab active" onclick="setTab('visao-rh', this)">Visão RH</button>
+  <button class="mod-tab" onclick="setTab('lancar', this)">Lançar</button>
+  <button class="mod-tab" onclick="setTab('minha-equipe', this)">Minha Equipe</button>
+  <button class="mod-tab" onclick="setTab('historico', this)">Histórico</button>
+</div>
+
+<!-- ═══ VISÃO RH ═══ -->
+<div id="sec-visao-rh" class="container">
+
+  <div class="card" id="importCard">
+    <div class="card-title">Importar controle de férias</div>
+    <div class="card-sub">Faça o upload do arquivo <strong>Controle de Ferias - Base.xlsx</strong> — aba "Ferias"</div>
+    <div class="import-zone" onclick="document.getElementById('fileInput').click()">
+      <div style="font-size:32px;">📅</div>
+      <strong>Clique para selecionar ou arraste o arquivo aqui</strong>
+      <p>Formatos aceitos: .xlsx, .xls</p>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(event)">
+  </div>
+
+  <div id="debugPanel" style="display:none;margin-bottom:16px;">
+    <div style="background:#1a1a1a;color:#00ff88;font-family:monospace;font-size:11px;padding:16px;border-radius:8px;white-space:pre-wrap;max-height:300px;overflow:auto;" id="debugText"></div>
+  </div>
+
+  <div id="visaoContent" style="display:none;">
+
+    <div class="metrics" id="metricsVisao"></div>
+
+    <div class="card">
+      <div class="sub-tabs" id="subTabs">
+        <button class="sub-tab active" onclick="setSubTab('calendario', this)">
+          Calendário do mês <span class="cnt" id="cnt-cal">0</span>
+        </button>
+        <button class="sub-tab" onclick="setSubTab('dobra', this)">
+          Risco de dobra <span class="cnt" id="cnt-dobra">0</span>
+        </button>
+        <button class="sub-tab" onclick="setSubTab('sem-agendado', this)">
+          Sem agendado <span class="cnt" id="cnt-sem">0</span>
+        </button>
+        <button class="sub-tab" onclick="setSubTab('pendentes', this)">
+          Pendentes <span class="cnt" id="cnt-pend">0</span>
+        </button>
+      </div>
+
+      <!-- Calendário -->
+      <div id="sub-calendario">
+        <div class="sec-header">
+          <div class="sec-title" id="calMesTitle">De férias em julho/2026</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-outline btn-sm" onclick="mesAnterior()">‹</button>
+            <button class="btn btn-outline btn-sm" onclick="mesProximo()">›</button>
+          </div>
+        </div>
+        <div id="calContent"></div>
+      </div>
+
+      <!-- Risco de dobra -->
+      <div id="sub-dobra" style="display:none;">
+        <div id="dobraContent"></div>
+      </div>
+
+      <!-- Sem agendado -->
+      <div id="sub-sem-agendado" style="display:none;">
+        <div id="semContent"></div>
+      </div>
+
+      <!-- Pendentes -->
+      <div id="sub-pendentes" style="display:none;">
+        <div id="pendContent"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LANÇAR ═══ -->
+<div id="sec-lancar" class="container" style="display:none;">
+  <div class="card">
+    <div class="card-title">Lançar férias</div>
+    <div class="card-sub">Selecione o colaborador e informe o período de gozo</div>
+
+    <div class="filters">
+      <input type="text" id="lancarBusca" placeholder="Buscar colaborador por nome ou matrícula..." oninput="filtrarLancar()">
+      <select id="lancarSetor" onchange="filtrarLancar()">
+        <option value="">Todos os setores</option>
+      </select>
+      <select id="lancarUnidade" onchange="filtrarLancar()">
+        <option value="">Todas as unidades</option>
+      </select>
+    </div>
+
+    <div class="lancar-list" id="lancarList"></div>
+  </div>
+</div>
+
+<!-- ═══ MINHA EQUIPE ═══ -->
+<div id="sec-minha-equipe" class="container" style="display:none;">
+  <div class="card">
+    <div class="card-title">Minha equipe</div>
+    <div class="card-sub">Situação de férias por setor/unidade</div>
+
+    <div class="filters">
+      <select id="equipeSetor" onchange="renderMinhaEquipe()">
+        <option value="">Todos os setores</option>
+      </select>
+      <select id="equipeUnidade" onchange="renderMinhaEquipe()">
+        <option value="">Todas as unidades</option>
+      </select>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Colaborador</th>
+            <th>Cargo</th>
+            <th>Setor</th>
+            <th>PA atual</th>
+            <th>Saldo</th>
+            <th>Próximo período</th>
+            <th>Situação</th>
+          </tr>
+        </thead>
+        <tbody id="equipeBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ HISTÓRICO ═══ -->
+<div id="sec-historico" class="container" style="display:none;">
+  <div class="card">
+    <div class="card-title">Histórico individual</div>
+    <div class="card-sub">Consulte todos os períodos aquisitivos de um colaborador</div>
+
+    <div class="filters" style="margin-bottom:20px;">
+      <input type="text" id="histBusca" placeholder="Nome ou matrícula..." oninput="filtrarHistorico()">
+    </div>
+
+    <div id="histResults"></div>
+  </div>
+</div>
+
+<!-- ═══ Modal de lançamento ═══ -->
+<div class="modal-overlay" id="modalLancar" onclick="fecharModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="modalNome">—</div>
+    <div class="modal-sub" id="modalSub">—</div>
+
+    <div class="colab-panel" id="modalPA" style="margin-bottom:16px;"></div>
+
+    <div class="form-grid" style="margin-bottom:12px;">
+      <div class="field">
+        <label>Início das férias</label>
+        <input type="date" id="fInicio" onchange="calcularFim()">
+      </div>
+      <div class="field">
+        <label>Número de dias</label>
+        <input type="number" id="fDias" min="1" max="30" oninput="calcularFim()">
+      </div>
+      <div class="field">
+        <label>Fim (calculado)</label>
+        <input type="date" id="fFim" readonly style="background:#f5f5f5;">
+      </div>
+      <div class="field">
+        <label>Dias trabalhando durante férias</label>
+        <input type="number" id="fDiasTrabalhar" min="0" placeholder="0 = sem acordo">
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:12px;">
+      <label>Motivo / observação</label>
+      <textarea id="fMotivo" placeholder="Ex: Coletivas da empresa"></textarea>
+    </div>
+
+    <div id="fAlerta"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('modalLancar').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarLancamento()">Enviar para aprovação</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal histórico do colaborador ═══ -->
+<div class="modal-overlay" id="modalHistColab" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal" style="width:640px;" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div class="modal-title" id="histColabNome">—</div>
+        <div class="modal-sub" id="histColabSub">—</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalHistColab').classList.remove('open')">✕</button>
+    </div>
+    <div id="histColabBody" style="max-height:65vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- ═══ Modal de aprovação (RH) ═══ -->
+<div class="modal-overlay" id="modalAprovar" onclick="fecharModalAprovar(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Aprovar ou rejeitar</div>
+    <div class="modal-sub" id="aprovarSub">—</div>
+    <div id="aprovarInfo" style="background:#f9f9f9;border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
+    <div class="field" id="motivoRejeicaoField" style="display:none;">
+      <label>Motivo da rejeição <span style="color:var(--red)">*</span></label>
+      <textarea id="motivoRejeicao" placeholder="Informe o motivo para o gestor..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('modalAprovar').classList.remove('open')">Fechar</button>
+      <button class="btn btn-red btn-sm" onclick="toggleMotivoRejeicao()" id="btnRejeitar">Rejeitar</button>
+      <button class="btn btn-green" onclick="aprovarPendente()" id="btnAprovar">✓ Aprovar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Configuração ────────────────────────────────────────────────────────────
+let ANO_REF = 2026;
+const HOJE  = new Date().toISOString().slice(0, 10);
+
+const REGRAS_FERIAS = {
+  // Prazo de dobra: PAFim + 1 ano + 1 dia
+  diasAlertaDobra: 180,  // alertar quando restar até N dias para dobra
+  diasCriticoDobra: 30,  // sub-grupo crítico
+  minDiasPrimeiroPeriodo: 14,
+  minDiasOutrosPeriodos: 5,
+  maxPeriodosPorPA: 3,
+  feriadosFixos: ['01-01','04-21','05-01','09-07','10-12','11-02','11-15','11-20','12-25'],
+  feriadosMoveis: [
+    '2025-03-03','2025-03-04','2025-04-18','2025-06-19',
+    '2026-02-16','2026-02-17','2026-04-03','2026-06-04',
+    '2027-03-01','2027-03-02','2027-03-26','2027-05-20',
+  ],
+};
+
+// ─── Estado global ───────────────────────────────────────────────────────────
+let TODOS_REGISTROS = [];   // todos os rows do xlsx
+let COLABORADORES   = [];   // agrupados por __key, com registros[]
+let _lancarKey      = null; // key do colab selecionado no modal
+let _pendIdx        = null; // índice do pendente no modal de aprovação
+let _calMes = parseInt(HOJE.slice(5,7));
+let _calAno = parseInt(HOJE.slice(0,4));
+
+// ─── Utilitários de data ─────────────────────────────────────────────────────
+function diffDays(a, b) {
+  return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+function addDays(str, n) {
+  const d = new Date(str + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function formatDate(str) {
+  if (!str) return '—';
+  const [y, m, d] = str.split('-');
+  return `${d}/${m}/${y}`;
+}
+function mesNome(m) {
+  return ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+          'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][m - 1];
+}
+function isDiaUtil(date) {
+  const dow = date.getDay();
+  if (dow === 0 || dow === 6) return false;
+  const mm = String(date.getMonth()+1).padStart(2,'0');
+  const dd = String(date.getDate()).padStart(2,'0');
+  if (REGRAS_FERIAS.feriadosFixos.includes(`${mm}-${dd}`)) return false;
+  if (REGRAS_FERIAS.feriadosMoveis.includes(date.toISOString().slice(0,10))) return false;
+  return true;
+}
+
+// ─── Verificar início de férias (regra CLT) ──────────────────────────────────
+function verificarInicioFerias(dateStr) {
+  for (let offset = 1; offset <= 2; offset++) {
+    const prox = addDays(dateStr, offset);
+    const dow = new Date(prox + 'T00:00:00').getDay();
+    if (dow === 0) return { bloqueado: true, motivo: `${formatDate(prox)} é domingo — férias não podem iniciar nos 2 dias anteriores a domingo` };
+    if (REGRAS_FERIAS.feriadosFixos.includes(prox.slice(5)) || REGRAS_FERIAS.feriadosMoveis.includes(prox))
+      return { bloqueado: true, motivo: `${formatDate(prox)} é feriado — férias não podem iniciar nos 2 dias anteriores a feriado` };
+  }
+  return { bloqueado: false };
+}
+
+// ─── Parse do xlsx ───────────────────────────────────────────────────────────
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'array' });
+      // tenta aba "Ferias", senão pega a primeira
+      const wsName = wb.SheetNames.includes('Ferias') ? 'Ferias' : wb.SheetNames[0];
+      const ws = wb.Sheets[wsName];
+      const rows = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'yyyy-mm-dd', defval: null });
+parseWorkbook(rows);
+      document.getElementById('importCard').style.display = 'none';
+      document.getElementById('visaoContent').style.display = 'block';
+      popularFiltros();
+      renderAll();
+      toast(`✓ ${TODOS_REGISTROS.length} registros carregados — ${COLABORADORES.length} colaboradores`);
+    } catch(err) {
+      alert('Erro ao ler arquivo: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  // suporte drag-drop
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', ev => {
+    ev.preventDefault();
+    if (ev.dataTransfer.files[0]) {
+      document.getElementById('fileInput').files = ev.dataTransfer.files;
+      handleFile({ target: { files: ev.dataTransfer.files } });
+    }
+  });
+}
+
+function parseWorkbook(rows) {
+  TODOS_REGISTROS = [];
+  const map = new Map();
+
+  rows.forEach(r => {
+    const nome = (r.NomeColaborador || '').trim();
+    if (!nome) return;
+    const cargo = (r.Cargo || '').toLowerCase();
+    if (cargo.includes('pro-labore') || cargo.includes('pro labore')) return;
+
+    const reg = String(r.Registro || '').trim();
+    const __key = reg + '|' + nome;
+
+    // converte data do xlsx — lida com múltiplos formatos que o SheetJS pode retornar
+    const toStr = v => {
+      if (!v) return null;
+      if (v instanceof Date) {
+        const y = v.getFullYear(), m = String(v.getMonth()+1).padStart(2,'0'), d = String(v.getDate()).padStart(2,'0');
+        return `${y}-${m}-${d}`;
+      }
+      if (typeof v === 'string') {
+        // YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+        // DD/MM/YYYY (com ano 4 dígitos)
+        const m4 = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (m4) return `${m4[3]}-${m4[1].padStart(2,'0')}-${m4[2].padStart(2,'0')}`;
+        // M/D/YY (formato americano com ano 2 dígitos — o que o Excel está retornando)
+        const m2 = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+        if (m2) return `20${m2[3]}-${m2[1].padStart(2,'0')}-${m2[2].padStart(2,'0')}`;
+      }
+      return null;
+    };
+
+    // monta lancamentos a partir dos períodos planos
+    const lancamentos = [];
+    const d1i = toStr(r.Periodo1Inicio), d1f = toStr(r.Periodo1Fim);
+    const dias1 = r.Dias1 !== undefined && r.Dias1 !== null && r.Dias1 !== '' ? Number(r.Dias1) : null;
+    if (d1i && dias1 > 0) {
+      lancamentos.push({
+        inicio: d1i,
+        fim: d1f || addDays(d1i, dias1 - 1),
+        dias: dias1,
+        diasUsadosReal: null,
+        motivo: r.MotivoPeriodo1 || null,
+        nota: r.NotaPeriodo1 || null,
+        diasTrabalhar: null,
+        _proximoPA: false,
+      });
+    }
+    const d2i = toStr(r.Periodo2Inicio), d2f = toStr(r.Periodo2Fim);
+    const dias2 = r.Dias2 !== undefined && r.Dias2 !== null && r.Dias2 !== '' ? Number(r.Dias2) : null;
+    if (d2i && dias2 > 0) {
+      const dt2 = r.DiasTrabalharDuranteBloco2 ? Number(r.DiasTrabalharDuranteBloco2) : null;
+      lancamentos.push({
+        inicio: d2i,
+        fim: d2f || addDays(d2i, dias2 - 1),
+        dias: dias2,
+        diasUsadosReal: null,
+        motivo: r.MotivoPeriodo2 || null,
+        nota: r.NotaPeriodo2 || null,
+        diasTrabalhar: dt2,
+        _proximoPA: false,
+      });
+    }
+
+    const diasAntecipadosProximo = Number(r.DiasAntecipadosProximoPeriodo || 0);
+    const diasUsados = lancamentos.reduce((s, l) => s + (l.diasUsadosReal ?? l.dias), 0);
+    const totalDias  = Math.max(diasUsados + Math.max(0, Number(r.Dias1||0) + Number(r.Dias2||0) - diasUsados), 30);
+    // simpler: derive totalDias
+    const td = (dias1 || 0) + (dias2 || 0);
+    const totalDiasFinal = td > 0 ? Math.max(td, 30) : 30;
+
+    const registro = {
+      ano: Number(r.Ano) || ANO_REF,
+      paInicio: toStr(r.PeriodoAquisitivoInicio),
+      paFim:    toStr(r.PeriodoAquisitivoFim),
+      totalDias: totalDiasFinal,
+      status: r.Status || 'Aprovado',
+      alertaINSS: r.AlertaAfastamentoINSS || null,
+      lancamentos,
+      diasAntecipados: diasAntecipadosProximo,
+      _novoLanc: null,
+      _motivoRejeicao: null,
+    };
+
+    TODOS_REGISTROS.push({ __key, reg, nome, cargo: r.Cargo || '', setor: r.Setor || '', unidade: r.Unidade || '', registro });
+
+    if (!map.has(__key)) {
+      map.set(__key, {
+        __key, registro: reg, nome,
+        cargo: r.Cargo || '', setor: r.Setor || '', unidade: r.Unidade || '',
+        registros: [],
+      });
+    }
+    const colab = map.get(__key);
+    colab.registros.push(registro);
+    // atualiza campos com dados mais recentes
+    colab.cargo   = r.Cargo   || colab.cargo;
+    colab.setor   = r.Setor   || colab.setor;
+    colab.unidade = r.Unidade || colab.unidade;
+  });
+
+  COLABORADORES = [...map.values()];
+  COLABORADORES.forEach(c => c.registros.sort((a, b) => a.ano - b.ano));
+}
+
+// ─── Helpers de modelo ───────────────────────────────────────────────────────
+function getRegistroAtual(colab) {
+  // último PA que não seja Pendente/Rejeitado/Cancelado/Descartado
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const validos = colab.registros.filter(r => !excluir.has(r.status));
+  return validos.length ? validos[validos.length - 1] : colab.registros[colab.registros.length - 1];
+}
+
+function calcSaldo(reg) {
+  if (!reg) return 0;
+  const usado = reg.lancamentos.reduce((s, l) => s + (l.diasUsadosReal ?? l.dias), 0);
+  return reg.totalDias - usado;
+}
+
+function dataLimiteDobra(reg) {
+  if (!reg || !reg.paFim) return null;
+  return addDays(reg.paFim, 366); // +1 ano + 1 dia (aprox.)
+}
+
+function diasParaDobra(reg) {
+  const dlim = dataLimiteDobra(reg);
+  if (!dlim) return null;
+  return diffDays(HOJE, dlim);
+}
+
+function isRiscoDobra(colab) {
+  // verifica em todos os PAs válidos se há saldo > 0 próximo da dobra
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  return colab.registros.some(reg => {
+    if (excluir.has(reg.status)) return false;
+    const saldo = calcSaldo(reg);
+    if (saldo <= 0) return false;
+    const dpd = diasParaDobra(reg);
+    return dpd !== null && dpd <= REGRAS_FERIAS.diasAlertaDobra;
+  });
+}
+
+function isSemAgendadoAno(colab, ano) {
+  // há saldo disponível em algum PA válido, mas nenhum lançamento em `ano`
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const validos = colab.registros.filter(r => !excluir.has(r.status));
+  const temSaldo = validos.some(r => calcSaldo(r) > 0);
+  if (!temSaldo) return false;
+  const temAgendado = validos.some(r =>
+    r.lancamentos.some(l => l.inicio && l.inicio.startsWith(String(ano)))
+  );
+  return !temAgendado;
+}
+
+function proximoPA(reg) {
+  if (!reg || !reg.paFim) return null;
+  const saldo = calcSaldo(reg);
+  if (saldo > 0) return null;
+  const dpf = diffDays(HOJE, reg.paFim);
+  if (dpf > 180) return null;
+  return {
+    ano: reg.ano + 1,
+    paInicio: addDays(reg.paInicio, 365),
+    paFim:    addDays(reg.paFim,    365),
+    totalDias: 30,
+    lancamentos: [],
+    status: 'Aprovado',
+    alertaINSS: null,
+    diasAntecipados: 0,
+    _novoLanc: null,
+    _motivoRejeicao: null,
+  };
+}
+
+function deFeriasNoPeriodo(colab, anoMes) {
+  // anoMes = 'YYYY-MM' — busca em TODOS os registros (lancamento pode estar em PA diferente)
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const result = [];
+  colab.registros.forEach(reg => {
+    if (excluir.has(reg.status)) return;
+    reg.lancamentos.forEach(l => {
+      if (!l.inicio || !l.fim) return;
+      const ini = l.inicio.slice(0, 7), fim = l.fim.slice(0, 7);
+      if (ini <= anoMes && anoMes <= fim) result.push(l);
+    });
+  });
+  return result;
+}
+
+function getPendentes() {
+  const result = [];
+  COLABORADORES.forEach(colab => {
+    colab.registros.forEach((reg, ri) => {
+      if (reg.status === 'Pendente' && reg._novoLanc) {
+        result.push({ colab, reg, ri });
+      }
+    });
+  });
+  return result;
+}
+
+// ─── Popular filtros ─────────────────────────────────────────────────────────
+function popularFiltros() {
+  const setores  = [...new Set(COLABORADORES.map(c => c.setor).filter(Boolean))].sort();
+  const unidades = [...new Set(COLABORADORES.map(c => c.unidade).filter(Boolean))].sort();
+
+  ['lancarSetor','equipeSetor'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '<option value="">Todos os setores</option>' +
+      setores.map(s => `<option>${s}</option>`).join('');
+  });
+  ['lancarUnidade','equipeUnidade'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '<option value="">Todas as unidades</option>' +
+      unidades.map(u => `<option>${u}</option>`).join('');
+  });
+}
+
+// ─── Navegação ───────────────────────────────────────────────────────────────
+function setTab(nome, btn) {
+  ['visao-rh','lancar','minha-equipe','historico'].forEach(t => {
+    document.getElementById('sec-' + t).style.display = t === nome ? '' : 'none';
+  });
+  document.querySelectorAll('.mod-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (nome === 'lancar') renderLancar();
+  if (nome === 'minha-equipe') renderMinhaEquipe();
+  if (nome === 'historico') { document.getElementById('histResults').innerHTML = ''; }
+}
+
+function setSubTab(nome, btn) {
+  ['calendario','dobra','sem-agendado','pendentes'].forEach(t => {
+    document.getElementById('sub-' + t).style.display = t === nome ? '' : 'none';
+  });
+  document.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+// ─── Render all ─────────────────────────────────────────────────────────────
+function renderAll() {
+  renderMetricas();
+  renderCalendario();
+  renderDobra();
+  renderSemAgendado();
+  renderPendentes();
+  renderLancar();
+  renderMinhaEquipe();
+}
+
+// ─── Métricas ────────────────────────────────────────────────────────────────
+function renderMetricas() {
+  const anoMes = `${_calAno}-${String(_calMes).padStart(2,'0')}`;
+  const deFeriasAgora = COLABORADORES.filter(c => deFeriasNoPeriodo(c, anoMes).length > 0).length;
+  const riscoDobra    = COLABORADORES.filter(c => isRiscoDobra(c)).length;
+  const semAgendado   = COLABORADORES.filter(c => isSemAgendadoAno(c, ANO_REF)).length;
+  const pendentes     = getPendentes().length;
+
+  document.getElementById('cnt-cal').textContent   = deFeriasAgora;
+  document.getElementById('cnt-dobra').textContent  = riscoDobra;
+  document.getElementById('cnt-sem').textContent    = semAgendado;
+  document.getElementById('cnt-pend').textContent   = pendentes;
+
+  document.getElementById('metricsVisao').innerHTML = `
+    <div class="metric" onclick="setSubTab('calendario', document.querySelectorAll('.sub-tab')[0])">
+      <div class="metric-val c-blue">${deFeriasAgora}</div>
+      <div class="metric-label">De férias em ${mesNome(_calMes).toLowerCase()}</div>
+    </div>
+    <div class="metric" onclick="setSubTab('dobra', document.querySelectorAll('.sub-tab')[1])">
+      <div class="metric-val c-red">${riscoDobra}</div>
+      <div class="metric-label">Risco de dobra</div>
+    </div>
+    <div class="metric" onclick="setSubTab('sem-agendado', document.querySelectorAll('.sub-tab')[2])">
+      <div class="metric-val c-amber">${semAgendado}</div>
+      <div class="metric-label">Sem agendado em ${ANO_REF}</div>
+    </div>
+    <div class="metric" onclick="setSubTab('pendentes', document.querySelectorAll('.sub-tab')[3])">
+      <div class="metric-val">${pendentes}</div>
+      <div class="metric-label">Pendentes de aprovação</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">${COLABORADORES.length}</div>
+      <div class="metric-label">Colaboradores</div>
+    </div>
+  `;
+}
+
+// ─── Paleta de cores por setor (cicla automaticamente) ───────────────────────
+const SETOR_CORES = [
+  { borda: '#1A3A8F', bg: '#E8F0FE', texto: '#1A3A8F' },
+  { borda: '#27500A', bg: '#EAF3DE', texto: '#27500A' },
+  { borda: '#633806', bg: '#FAEEDA', texto: '#633806' },
+  { borda: '#4B1D8F', bg: '#EDE8FE', texto: '#4B1D8F' },
+  { borda: '#7F1D1D', bg: '#FEF2F2', texto: '#7F1D1D' },
+  { borda: '#0F5570', bg: '#E0F2F8', texto: '#0F5570' },
+  { borda: '#5C3317', bg: '#FDF0E5', texto: '#5C3317' },
+  { borda: '#1D4D3B', bg: '#E4F5EF', texto: '#1D4D3B' },
+];
+const _setorCorMap = new Map();
+function corDoSetor(setor) {
+  if (!_setorCorMap.has(setor)) {
+    _setorCorMap.set(setor, SETOR_CORES[_setorCorMap.size % SETOR_CORES.length]);
+  }
+  return _setorCorMap.get(setor);
+}
+
+// ─── Calendário ──────────────────────────────────────────────────────────────
+function renderCalendario() {
+  const anoMes = `${_calAno}-${String(_calMes).padStart(2,'0')}`;
+  document.getElementById('calMesTitle').textContent = `De férias em ${mesNome(_calMes).toLowerCase()}/${_calAno}`;
+
+  const lista = COLABORADORES
+    .map(c => ({ c, ls: deFeriasNoPeriodo(c, anoMes) }))
+    .filter(x => x.ls.length > 0);
+
+  document.getElementById('cnt-cal').textContent = lista.length;
+
+  if (!lista.length) {
+    document.getElementById('calContent').innerHTML =
+      `<div class="empty-state"><div class="icon">🏖️</div><p>Nenhum colaborador de férias em ${mesNome(_calMes).toLowerCase()}/${_calAno}</p></div>`;
+    return;
+  }
+
+  // agrupa por unidade → setor
+  const porEmpresa = new Map();
+  lista.forEach(({ c, ls }) => {
+    const emp    = c.unidade || '—';
+    const setor  = c.setor   || '—';
+    if (!porEmpresa.has(emp)) porEmpresa.set(emp, new Map());
+    if (!porEmpresa.get(emp).has(setor)) porEmpresa.get(emp).set(setor, []);
+    porEmpresa.get(emp).get(setor).push({ c, ls });
+  });
+
+  // ordena empresas e setores
+  const empresasOrdenadas = [...porEmpresa.keys()].sort();
+
+  let html = '';
+  empresasOrdenadas.forEach(emp => {
+    const setores = porEmpresa.get(emp);
+    const setoresOrdenados = [...setores.keys()].sort();
+    let linhas = '';
+
+    setoresOrdenados.forEach(setor => {
+      const cor   = corDoSetor(setor);
+      const items = setores.get(setor).sort((a,b) => a.c.nome.localeCompare(b.c.nome));
+
+      // cabeçalho do setor
+      linhas += `<div class="cal-setor-header" style="border-left-color:${cor.borda};background:${cor.bg};color:${cor.texto};">
+        ${setor} <span style="font-weight:400;opacity:0.7;">(${items.length})</span>
+      </div>`;
+
+      items.forEach(({ c, ls }) => {
+        ls.forEach(l => {
+          const ativo  = HOJE >= l.inicio && HOJE <= l.fim;
+          const futuro = l.inicio > HOJE;
+          const obs    = l.nota ? l.nota.slice(0, 70) + (l.nota.length > 70 ? '…' : '') : '';
+          linhas += `<div class="cal-setor-row" style="border-left-color:${cor.borda};">
+            <button class="cal-nome-btn" onclick="abrirHistoricoColab('${c.__key.replace(/'/g,"\\'")}')">
+              ${c.nome}
+            </button>
+            <div class="cal-periodo">
+              ${formatDate(l.inicio)} → ${formatDate(l.fim)}
+              <span style="color:#aaa;"> (${l.dias}d)</span>
+            </div>
+            <div class="cal-obs">${obs}</div>
+            <div style="display:flex;gap:4px;justify-content:flex-end;">
+              ${ativo  ? `<span class="badge badge-amber">hoje</span>` : ''}
+              ${futuro ? `<span class="badge badge-verde">agendado</span>` : ''}
+              ${l.diasTrabalhar ? `<span class="badge badge-acordo">ACORDO</span>` : ''}
+            </div>
+          </div>`;
+        });
+      });
+    });
+
+    html += `<div class="cal-empresa">
+      <div class="cal-empresa-header">${emp}</div>
+      ${linhas}
+    </div>`;
+  });
+
+  document.getElementById('calContent').innerHTML = html;
+}
+
+function mesAnterior() {
+  _calMes--;
+  if (_calMes < 1) { _calMes = 12; _calAno--; }
+  renderCalendario();
+  renderMetricas();
+}
+function mesProximo() {
+  _calMes++;
+  if (_calMes > 12) { _calMes = 1; _calAno++; }
+  renderCalendario();
+  renderMetricas();
+}
+
+// ─── Risco de dobra ──────────────────────────────────────────────────────────
+function renderDobra() {
+  const lista = COLABORADORES.filter(c => isRiscoDobra(c))
+    .map(c => {
+      const reg = getRegistroAtual(c);
+      const dpd = diasParaDobra(reg);
+      const saldo = calcSaldo(reg);
+      const dlim = dataLimiteDobra(reg);
+      let tipo = 'atencao';
+      if (dpd < 0) tipo = 'vencido';
+      else if (dpd <= REGRAS_FERIAS.diasCriticoDobra) tipo = 'critico';
+      return { c, reg, dpd, saldo, dlim, tipo };
+    })
+    .sort((a,b) => a.dpd - b.dpd);
+
+  document.getElementById('cnt-dobra').textContent = lista.length;
+
+  if (!lista.length) {
+    document.getElementById('dobraContent').innerHTML =
+      `<div class="empty-state"><div class="icon">✅</div><p>Nenhum colaborador com risco de dobra</p></div>`;
+    return;
+  }
+
+  // agrupa por tipo
+  const grupos = [
+    { key: 'vencido',  label: '⚠️ Já vencido', items: lista.filter(x => x.tipo === 'vencido') },
+    { key: 'critico',  label: '🔴 Crítico (0–30 dias)', items: lista.filter(x => x.tipo === 'critico') },
+    { key: 'atencao',  label: '🟡 Atenção (31–180 dias)', items: lista.filter(x => x.tipo === 'atencao') },
+  ];
+
+  document.getElementById('dobraContent').innerHTML = grupos
+    .filter(g => g.items.length)
+    .map(g => `
+      <div style="margin-bottom:20px;">
+        <div class="sec-header"><div class="sec-title">${g.label}</div><div class="sec-count">${g.items.length}</div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Colaborador</th><th>Setor</th><th>PA Fim</th><th>Dobra em</th><th>Dias para dobra</th><th>Saldo</th></tr></thead>
+            <tbody>
+              ${g.items.map(({ c, reg, dpd, saldo, dlim }) => `
+                <tr>
+                  <td><strong>${c.nome}</strong><br><span style="font-size:11px;color:#888">${c.cargo || ''}</span></td>
+                  <td>${c.setor || c.unidade || '—'}</td>
+                  <td>${formatDate(reg.paFim)}</td>
+                  <td><span class="alerta-dobra dobra-${dpd < 0 ? 'vencido' : dpd <= 30 ? 'critico' : 'atencao'}">${formatDate(dlim)}</span></td>
+                  <td>${dpd < 0 ? `<span style="color:var(--red);font-weight:600">Vencido há ${Math.abs(dpd)} dias</span>` : `${dpd} dias`}</td>
+                  <td>${barSaldo(saldo, reg.totalDias)}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`).join('');
+}
+
+// ─── Sem agendado ────────────────────────────────────────────────────────────
+function renderSemAgendado() {
+  const lista = COLABORADORES
+    .filter(c => isSemAgendadoAno(c, ANO_REF))
+    .map(c => {
+      const reg = getRegistroAtual(c);
+      const saldo = calcSaldo(reg);
+      const paVencido = reg.paFim && reg.paFim < HOJE;
+      const dpd = reg.paFim ? diffDays(HOJE, reg.paFim) : null;
+      return { c, reg, saldo, paVencido, dpd };
+    })
+    .sort((a,b) => a.dpd - b.dpd);
+
+  document.getElementById('cnt-sem').textContent = lista.length;
+
+  if (!lista.length) {
+    document.getElementById('semContent').innerHTML =
+      `<div class="empty-state"><div class="icon">✅</div><p>Todos os colaboradores têm férias agendadas em ${ANO_REF}</p></div>`;
+    return;
+  }
+
+  const vencidos = lista.filter(x => x.paVencido);
+  const vigentes = lista.filter(x => !x.paVencido);
+
+  const renderGrupo = (titulo, items) => !items.length ? '' : `
+    <div style="margin-bottom:20px;">
+      <div class="sec-header"><div class="sec-title">${titulo}</div><div class="sec-count">${items.length}</div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Colaborador</th><th>Setor</th><th>PA início</th><th>PA fim</th><th>Dobra em</th><th>Saldo</th><th></th></tr></thead>
+          <tbody>
+            ${items.map(({ c, reg, saldo }) => {
+              const dlim = dataLimiteDobra(reg);
+              const dpd  = dlim ? diffDays(HOJE, dlim) : null;
+              return `<tr>
+                <td><strong>${c.nome}</strong><br><span style="font-size:11px;color:#888">${c.cargo||''}</span></td>
+                <td>${c.setor||c.unidade||'—'}</td>
+                <td>${formatDate(reg.paInicio)}</td>
+                <td>${formatDate(reg.paFim)}</td>
+                <td>${dlim ? `<span class="alerta-dobra dobra-${dpd<=0?'vencido':dpd<=30?'critico':'atencao'}">${formatDate(dlim)}</span>` : '—'}</td>
+                <td>${barSaldo(saldo, reg.totalDias)}</td>
+                <td><button class="btn btn-outline btn-sm" onclick="abrirModalLancar('${c.__key}')">Lançar</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  document.getElementById('semContent').innerHTML =
+    renderGrupo('PA já vencido', vencidos) +
+    renderGrupo('PA vigente', vigentes);
+}
+
+// ─── Pendentes ───────────────────────────────────────────────────────────────
+function renderPendentes() {
+  const lista = getPendentes();
+  document.getElementById('cnt-pend').textContent = lista.length;
+
+  if (!lista.length) {
+    document.getElementById('pendContent').innerHTML =
+      `<div class="empty-state"><div class="icon">✅</div><p>Nenhum lançamento pendente de aprovação</p></div>`;
+    return;
+  }
+
+  document.getElementById('pendContent').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${lista.map(({ colab, reg, ri }, idx) => {
+        const nl = reg._novoLanc;
+        return `<div class="pendente-item">
+          <div class="pendente-body">
+            <div class="pendente-nome">${colab.nome}</div>
+            <div class="pendente-info">${colab.setor || colab.unidade || '—'} · PA ${formatDate(reg.paInicio)} a ${formatDate(reg.paFim)}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <span class="badge badge-azul">${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</span>
+              <span class="badge badge-cinza">${nl.dias} dias</span>
+              ${nl.motivo ? `<span class="badge badge-cinza">${nl.motivo}</span>` : ''}
+              ${nl.diasTrabalhar ? `<span class="badge badge-acordo">ACORDO ${nl.diasTrabalhar}d</span>` : ''}
+            </div>
+          </div>
+          <div class="pendente-actions">
+            <button class="btn btn-outline btn-sm" onclick="abrirModalAprovar(${idx})">Analisar</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+// ─── Helper barra saldo ──────────────────────────────────────────────────────
+function barSaldo(saldo, total) {
+  if (!total) return '—';
+  const pct = Math.max(0, Math.min(100, (saldo / total) * 100));
+  const cls = pct === 0 ? '' : pct <= 30 ? 'low' : pct <= 60 ? 'mid' : '';
+  return `<div class="saldo-bar">
+    <div class="bar-track"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
+    <span class="saldo-num">${saldo}/${total}d</span>
+  </div>`;
+}
+
+// ─── Minha Equipe ────────────────────────────────────────────────────────────
+function renderMinhaEquipe() {
+  if (!COLABORADORES.length) return;
+  const setor   = document.getElementById('equipeSetor')?.value   || '';
+  const unidade = document.getElementById('equipeUnidade')?.value || '';
+
+  let lista = COLABORADORES;
+  if (setor)   lista = lista.filter(c => c.setor   === setor);
+  if (unidade) lista = lista.filter(c => c.unidade === unidade);
+  lista = lista.sort((a,b) => a.nome.localeCompare(b.nome));
+
+  const anoMes = `${_calAno}-${String(_calMes).padStart(2,'0')}`;
+
+  document.getElementById('equipeBody').innerHTML = lista.map(c => {
+    const reg = getRegistroAtual(c);
+    if (!reg) return '';
+    const saldo = calcSaldo(reg);
+    const deFeriasHoje = deFeriasNoPeriodo(c, anoMes);
+    const prox = reg.lancamentos.filter(l => l.inicio > HOJE).sort((a,b) => a.inicio.localeCompare(b.inicio));
+    const proxLanc = prox[0];
+    const risco = isRiscoDobra(c);
+    const semAg  = isSemAgendadoAno(c, ANO_REF);
+
+    let situBadge = '';
+    if (deFeriasHoje.length) {
+      situBadge = `<span class="badge badge-azul">De férias</span>`;
+    } else if (risco) {
+      situBadge = `<span class="badge badge-vermelho">Risco de dobra</span>`;
+    } else if (semAg) {
+      situBadge = `<span class="badge badge-amber">Sem agendado ${ANO_REF}</span>`;
+    } else {
+      situBadge = `<span class="badge badge-verde">OK</span>`;
+    }
+
+    return `<tr>
+      <td><strong>${c.nome}</strong>${c.registro ? `<br><span style="font-size:11px;color:#888">Mat. ${c.registro}</span>` : ''}</td>
+      <td style="font-size:12px">${c.cargo || '—'}</td>
+      <td style="font-size:12px">${c.setor || c.unidade || '—'}</td>
+      <td style="font-size:12px">${formatDate(reg.paInicio)} → ${formatDate(reg.paFim)}</td>
+      <td>${barSaldo(saldo, reg.totalDias)}</td>
+      <td style="font-size:12px">${proxLanc ? `${formatDate(proxLanc.inicio)} (${proxLanc.dias}d)` : '—'}</td>
+      <td>${situBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Lançar ──────────────────────────────────────────────────────────────────
+function renderLancar() {
+  if (!COLABORADORES.length) return;
+  filtrarLancar();
+}
+
+function filtrarLancar() {
+  const busca   = (document.getElementById('lancarBusca')?.value || '').toLowerCase();
+  const setor   = document.getElementById('lancarSetor')?.value   || '';
+  const unidade = document.getElementById('lancarUnidade')?.value || '';
+
+  let lista = COLABORADORES;
+  if (setor)   lista = lista.filter(c => c.setor   === setor);
+  if (unidade) lista = lista.filter(c => c.unidade === unidade);
+  if (busca)   lista = lista.filter(c =>
+    c.nome.toLowerCase().includes(busca) || c.registro.toLowerCase().includes(busca));
+
+  lista = lista.sort((a,b) => a.nome.localeCompare(b.nome));
+  const el = document.getElementById('lancarList');
+  if (!el) return;
+
+  if (!lista.length) {
+    el.innerHTML = `<div class="empty-state"><p>Nenhum colaborador encontrado</p></div>`;
+    return;
+  }
+
+  el.innerHTML = lista.map(c => {
+    const reg = getRegistroAtual(c);
+    const saldo = reg ? calcSaldo(reg) : 0;
+    const saldoPicado = saldo > 0 && saldo < 5;
+    return `<div class="lancar-item" onclick="abrirModalLancar('${c.__key}')">
+      <div style="flex:1;">
+        <div class="lancar-item-nome">${c.nome}</div>
+        <div class="lancar-item-info">${c.cargo || '—'} · ${c.setor || c.unidade || '—'}</div>
+      </div>
+      <div style="text-align:right;">
+        ${barSaldo(saldo, reg ? reg.totalDias : 30)}
+        ${saldoPicado ? `<div style="font-size:11px;color:var(--amber);margin-top:3px;">Saldo picado</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Modal lançar ────────────────────────────────────────────────────────────
+function abrirModalLancar(key) {
+  const colab = COLABORADORES.find(c => c.__key === key);
+  if (!colab) return;
+  _lancarKey = key;
+
+  const reg = getRegistroAtual(colab);
+  const saldo = reg ? calcSaldo(reg) : 0;
+
+  document.getElementById('modalNome').textContent = colab.nome;
+  document.getElementById('modalSub').textContent  = `${colab.cargo || ''} · ${colab.setor || colab.unidade || ''}`;
+
+  // painel PA
+  const nPeriodos = reg ? reg.lancamentos.length : 0;
+  const dlim = reg ? dataLimiteDobra(reg) : null;
+  const dpd  = dlim ? diffDays(HOJE, dlim) : null;
+  document.getElementById('modalPA').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div><div style="font-size:11px;color:var(--text-sec);">Período aquisitivo</div>
+        <div style="font-size:13px;font-weight:500;margin-top:3px;">${reg ? `${formatDate(reg.paInicio)} → ${formatDate(reg.paFim)}` : '—'}</div></div>
+      <div><div style="font-size:11px;color:var(--text-sec);">Saldo disponível</div>
+        <div style="font-size:22px;font-weight:700;color:${saldo<=0?'var(--text-sec)':saldo<5?'var(--amber)':'var(--green)'};">${saldo}d</div></div>
+      <div><div style="font-size:11px;color:var(--text-sec);">Dobra em</div>
+        <div style="font-size:13px;font-weight:500;margin-top:3px;color:${dpd!==null&&dpd<=30?'var(--red)':dpd!==null&&dpd<=180?'var(--amber)':'inherit'};">${dlim ? formatDate(dlim) : '—'}</div></div>
+    </div>
+    ${reg && reg.lancamentos.length ? `
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:6px;">Períodos já lançados</div>
+      <div class="periodo-chips">
+        ${reg.lancamentos.map(l => {
+          const cls = !l.inicio ? '' : l.fim < HOJE ? 'passado' : l.inicio > HOJE ? 'futuro' : 'hoje';
+          return `<span class="periodo-chip ${cls}">${formatDate(l.inicio)} → ${formatDate(l.fim)} (${l.dias}d)${l.diasTrabalhar?` · ACORDO`:''}</span>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+  `;
+
+  // pré-preenche mínimo de dias
+  const minDias = saldo < 5 ? saldo : nPeriodos === 0 ? REGRAS_FERIAS.minDiasPrimeiroPeriodo : REGRAS_FERIAS.minDiasOutrosPeriodos;
+  document.getElementById('fInicio').value = '';
+  document.getElementById('fDias').value   = saldo < 5 ? saldo : minDias;
+  document.getElementById('fDias').readOnly = saldo < 5;
+  document.getElementById('fFim').value    = '';
+  document.getElementById('fDiasTrabalhar').value = '';
+  document.getElementById('fMotivo').value = '';
+  document.getElementById('fAlerta').innerHTML = '';
+
+  document.getElementById('modalLancar').classList.add('open');
+}
+
+function calcularFim() {
+  const ini  = document.getElementById('fInicio').value;
+  const dias = parseInt(document.getElementById('fDias').value);
+  if (!ini || !dias) { document.getElementById('fFim').value = ''; return; }
+  document.getElementById('fFim').value = addDays(ini, dias - 1);
+  validarForm();
+}
+
+function validarForm() {
+  const colab = COLABORADORES.find(c => c.__key === _lancarKey);
+  if (!colab) return;
+  const reg   = getRegistroAtual(colab);
+  const saldo = reg ? calcSaldo(reg) : 0;
+  const ini   = document.getElementById('fInicio').value;
+  const dias  = parseInt(document.getElementById('fDias').value) || 0;
+  const el    = document.getElementById('fAlerta');
+
+  const alertas = [];
+
+  // regra início
+  if (ini) {
+    const r = verificarInicioFerias(ini);
+    if (r.bloqueado) alertas.push({ tipo: 'erro', msg: r.motivo });
+  }
+
+  // regra mínimo
+  const nPeriodos = reg ? reg.lancamentos.length : 0;
+  const minDias = nPeriodos === 0 ? REGRAS_FERIAS.minDiasPrimeiroPeriodo : REGRAS_FERIAS.minDiasOutrosPeriodos;
+  if (dias < minDias && saldo >= 5) alertas.push({ tipo: 'erro', msg: `Mínimo de ${minDias} dias para este período (${nPeriodos === 0 ? '1º período' : 'período adicional'})` });
+
+  // regra saldo residual
+  const residual = saldo - dias;
+  if (residual > 0 && residual < 5) alertas.push({ tipo: 'erro', msg: `Saldo residual de ${residual} dias — não pode ficar entre 1 e 4 dias. Ajuste para usar ${saldo} ou ${saldo - residual + 5} dias.` });
+  if (residual < 0) alertas.push({ tipo: 'erro', msg: `Saldo insuficiente (saldo: ${saldo} dias, solicitado: ${dias} dias)` });
+
+  // max períodos
+  if (nPeriodos >= REGRAS_FERIAS.maxPeriodosPorPA) alertas.push({ tipo: 'erro', msg: `Limite de ${REGRAS_FERIAS.maxPeriodosPorPA} períodos por PA atingido` });
+
+  // saldo picado
+  if (saldo > 0 && saldo < 5) alertas.push({ tipo: 'aviso', msg: `Saldo picado: ${saldo} dias — lançamento usará todo o saldo restante` });
+
+  if (!alertas.length && dias > 0 && ini) {
+    el.innerHTML = `<div class="alerta-form ok">✓ Lançamento válido — residual: ${residual >= 0 ? residual : 0} dias</div>`;
+  } else {
+    el.innerHTML = alertas.map(a => `<div class="alerta-form ${a.tipo}">⚠ ${a.msg}</div>`).join('');
+  }
+
+  return alertas.filter(a => a.tipo === 'erro').length === 0;
+}
+
+function confirmarLancamento() {
+  if (!validarForm()) return;
+  const colab = COLABORADORES.find(c => c.__key === _lancarKey);
+  if (!colab) return;
+  const reg = getRegistroAtual(colab);
+  if (!reg) return;
+
+  const ini  = document.getElementById('fInicio').value;
+  const dias = parseInt(document.getElementById('fDias').value);
+  const fim  = addDays(ini, dias - 1);
+  const dt   = parseInt(document.getElementById('fDiasTrabalhar').value) || null;
+  const mot  = document.getElementById('fMotivo').value.trim() || null;
+
+  reg._novoLanc = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
+  reg.status = 'Pendente';
+
+  document.getElementById('modalLancar').classList.remove('open');
+  toast(`✓ Lançamento enviado para aprovação — ${colab.nome}`);
+  renderAll();
+}
+
+// ─── Modal aprovação ─────────────────────────────────────────────────────────
+let _pendListCache = [];
+function abrirModalAprovar(idx) {
+  _pendListCache = getPendentes();
+  _pendIdx = idx;
+  const { colab, reg } = _pendListCache[idx];
+  const nl = reg._novoLanc;
+
+  document.getElementById('aprovarSub').textContent = `${colab.nome} · ${colab.setor || colab.unidade || '—'}`;
+  document.getElementById('aprovarInfo').innerHTML = `
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <div><span style="font-size:11px;color:var(--text-sec);">Período de gozo</span><br><strong>${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</strong></div>
+      <div><span style="font-size:11px;color:var(--text-sec);">Dias</span><br><strong>${nl.dias}</strong></div>
+      ${nl.motivo ? `<div><span style="font-size:11px;color:var(--text-sec);">Motivo</span><br><strong>${nl.motivo}</strong></div>` : ''}
+      ${nl.diasTrabalhar ? `<div><span style="font-size:11px;color:var(--text-sec);">Acordo (dias trabalhando)</span><br><strong>${nl.diasTrabalhar}</strong></div>` : ''}
+    </div>`;
+  document.getElementById('motivoRejeicaoField').style.display = 'none';
+  document.getElementById('motivoRejeicao').value = '';
+  document.getElementById('btnAprovar').textContent = '✓ Aprovar';
+  document.getElementById('modalAprovar').classList.add('open');
+}
+
+function toggleMotivoRejeicao() {
+  const f = document.getElementById('motivoRejeicaoField');
+  const showing = f.style.display !== 'none';
+  f.style.display = showing ? 'none' : 'block';
+  document.getElementById('btnAprovar').textContent = showing ? '✓ Aprovar' : '✕ Confirmar rejeição';
+  document.getElementById('btnAprovar').onclick = showing ? aprovarPendente : rejeitarPendente;
+}
+
+function aprovarPendente() {
+  if (_pendIdx === null) return;
+  const { colab, reg } = _pendListCache[_pendIdx];
+  reg.lancamentos.push({ ...reg._novoLanc });
+  reg._novoLanc = null;
+  reg.status = 'Aprovado';
+  document.getElementById('modalAprovar').classList.remove('open');
+  toast(`✓ Férias aprovadas — ${colab.nome}`);
+  renderAll();
+}
+
+function rejeitarPendente() {
+  const motivo = document.getElementById('motivoRejeicao').value.trim();
+  if (!motivo) { alert('Informe o motivo da rejeição.'); return; }
+  if (_pendIdx === null) return;
+  const { colab, reg } = _pendListCache[_pendIdx];
+  reg._novoLanc = null;
+  reg.status = 'Rejeitado';
+  reg._motivoRejeicao = motivo;
+  document.getElementById('modalAprovar').classList.remove('open');
+  toast(`Lançamento rejeitado — ${colab.nome}`);
+  renderAll();
+}
+
+function fecharModalAprovar(e) {
+  if (e.target === document.getElementById('modalAprovar'))
+    document.getElementById('modalAprovar').classList.remove('open');
+}
+function fecharModal(e) {
+  if (e.target === document.getElementById('modalLancar'))
+    document.getElementById('modalLancar').classList.remove('open');
+}
+
+// ─── Histórico ───────────────────────────────────────────────────────────────
+function filtrarHistorico() {
+  const busca = (document.getElementById('histBusca').value || '').toLowerCase().trim();
+  if (!busca) { document.getElementById('histResults').innerHTML = ''; return; }
+
+  const lista = COLABORADORES.filter(c =>
+    c.nome.toLowerCase().includes(busca) || c.registro.toLowerCase().includes(busca)
+  ).slice(0, 10);
+
+  if (!lista.length) {
+    document.getElementById('histResults').innerHTML = `<div class="empty-state"><p>Nenhum colaborador encontrado</p></div>`;
+    return;
+  }
+
+  document.getElementById('histResults').innerHTML = lista.map(c => {
+    const regs = [...c.registros].sort((a,b) => b.ano - a.ano);
+    return `<div style="margin-bottom:24px;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:4px;">${c.nome}</div>
+      <div style="font-size:12px;color:var(--text-sec);margin-bottom:12px;">${c.cargo || '—'} · ${c.setor || c.unidade || '—'} · Mat. ${c.registro}</div>
+      <div class="hist-timeline">
+        ${regs.map(reg => {
+          const saldo = calcSaldo(reg);
+          return `<div class="hist-pa">
+            <div class="hist-pa-header">
+              <div>
+                <span class="hist-pa-year">PA ${reg.ano}</span>
+                <span class="hist-pa-period" style="margin-left:12px;">${formatDate(reg.paInicio)} → ${formatDate(reg.paFim)}</span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                ${barSaldo(saldo, reg.totalDias)}
+                <span class="badge badge-${reg.status==='Aprovado'?'verde':reg.status==='Pendente'?'amber':'vermelho'}">${reg.status}</span>
+              </div>
+            </div>
+            <div class="hist-pa-body">
+              ${reg.alertaINSS ? `<div class="inss-alerta">⚠ ${reg.alertaINSS}</div>` : ''}
+              ${!reg.lancamentos.length ? `<div style="font-size:12px;color:var(--text-sec);">Nenhum período lançado</div>` :
+                reg.lancamentos.map((l, li) => `
+                  <div class="hist-lanc">
+                    <div class="hist-lanc-num">${li+1}</div>
+                    <div class="hist-lanc-info">
+                      <div class="hist-lanc-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} <span class="badge badge-cinza">${l.dias}d</span>${l.diasTrabalhar?`<span class="badge badge-acordo" style="margin-left:4px;">ACORDO ${l.diasTrabalhar}d</span>`:''}</div>
+                      ${l.motivo ? `<div class="hist-lanc-meta">${l.motivo}</div>` : ''}
+                      ${l.nota ? `<div class="hist-lanc-nota">${l.nota}</div>` : ''}
+                    </div>
+                  </div>`).join('')}
+              ${reg._motivoRejeicao ? `<div style="font-size:12px;color:var(--red);margin-top:8px;">Rejeitado: ${reg._motivoRejeicao}</div>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('<hr style="margin:20px 0;border:none;border-top:1px solid var(--border);">');
+}
+
+// ─── Histórico do colaborador (clique no calendário) ────────────────────────
+function abrirHistoricoColab(key) {
+  const colab = COLABORADORES.find(c => c.__key === key);
+  if (!colab) return;
+
+  const excluir = new Set(['Cancelado','Descartado']);
+  const regs = [...colab.registros]
+    .filter(r => !excluir.has(r.status))
+    .sort((a, b) => b.ano - a.ano);
+
+  const corpo = regs.map(reg => {
+    const saldo = calcSaldo(reg);
+    const dlim  = dataLimiteDobra(reg);
+    const dpd   = dlim ? diffDays(HOJE, dlim) : null;
+    return `<div class="hist-pa" style="margin-bottom:12px;">
+      <div class="hist-pa-header">
+        <div>
+          <span class="hist-pa-year">PA ${reg.ano}</span>
+          <span class="hist-pa-period" style="margin-left:12px;">${formatDate(reg.paInicio)} → ${formatDate(reg.paFim)}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${barSaldo(saldo, reg.totalDias)}
+          <span class="badge badge-${reg.status==='Aprovado'?'verde':reg.status==='Pendente'?'amber':'vermelho'}">${reg.status}</span>
+        </div>
+      </div>
+      <div class="hist-pa-body">
+        ${reg.alertaINSS ? `<div class="inss-alerta" style="margin-bottom:8px;">⚠ ${reg.alertaINSS}</div>` : ''}
+        ${dlim && dpd !== null && dpd <= 180 ? `<div style="font-size:11px;color:var(--${dpd<=0?'red':dpd<=30?'red':'amber'});margin-bottom:8px;">⏰ Dobra em ${formatDate(dlim)} ${dpd<=0?'(vencida)':'('+dpd+' dias)'}</div>` : ''}
+        ${!reg.lancamentos.length
+          ? `<div style="font-size:12px;color:var(--text-sec);">Nenhum período lançado</div>`
+          : reg.lancamentos.map((l, li) => `
+            <div class="hist-lanc">
+              <div class="hist-lanc-num">${li+1}</div>
+              <div class="hist-lanc-info">
+                <div class="hist-lanc-dates">
+                  ${formatDate(l.inicio)} → ${formatDate(l.fim)}
+                  <span class="badge badge-cinza" style="margin-left:6px;">${l.dias}d</span>
+                  ${l.diasTrabalhar ? `<span class="badge badge-acordo" style="margin-left:4px;">ACORDO ${l.diasTrabalhar}d</span>` : ''}
+                </div>
+                ${l.motivo ? `<div class="hist-lanc-meta">${l.motivo}</div>` : ''}
+                ${l.nota   ? `<div class="hist-lanc-nota">${l.nota}</div>` : ''}
+              </div>
+            </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('histColabNome').textContent = colab.nome;
+  document.getElementById('histColabSub').textContent  = `${colab.cargo || '—'} · ${colab.setor || colab.unidade || '—'} · Mat. ${colab.registro}`;
+  document.getElementById('histColabBody').innerHTML   = corpo || `<div class="empty-state"><p>Nenhum histórico encontrado</p></div>`;
+  document.getElementById('modalHistColab').classList.add('open');
+}
+
+// ─── Toast ───────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ─── Mudar ano de referência ─────────────────────────────────────────────────
+function mudarAnoRef(ano) {
+  ANO_REF = parseInt(ano);
+  _calAno = ANO_REF;
+  _calMes = ANO_REF === parseInt(HOJE.slice(0,4)) ? parseInt(HOJE.slice(5,7)) : 1;
+  if (COLABORADORES.length) renderAll();
+}
+</script>
+</body>
+</html>

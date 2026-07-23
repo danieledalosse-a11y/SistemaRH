@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cadastro de Colaboradores — Sistema RH Revest</title>
+<!-- SheetJS removido — dados vêm do Supabase -->
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --border: #e0e0e0;
+    --text: #1a1a1a;
+    --text-sec: #666;
+    --accent: #1a1a1a;
+    --green: #27500A;
+    --green-bg: #EAF3DE;
+    --red: #7F1D1D;
+    --red-bg: #FEF2F2;
+    --blue: #1A3A8F;
+    --blue-bg: #E8F0FE;
+    --amber: #633806;
+    --amber-bg: #FAEEDA;
+    --purple: #4B1D8F;
+    --purple-bg: #EDE8FE;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  .topbar { background: var(--accent); color: #fff; padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar-title { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+  .topbar-sub { font-size: 12px; opacity: 0.6; margin-top: 1px; }
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .card-sub { font-size: 12px; color: var(--text-sec); margin-bottom: 16px; }
+
+  /* Métricas */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; position: relative; cursor: default; transition: border-color 0.15s, box-shadow 0.15s; }
+  .metric.clickable { cursor: pointer; }
+  .metric.clickable:hover { border-color: #aaa; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .metric.active-filter { border-color: #1a1a1a; box-shadow: 0 0 0 2px #1a1a1a; }
+  .metric-val { font-size: 26px; font-weight: 600; line-height: 1; }
+  .metric-label { font-size: 11px; color: var(--text-sec); margin-top: 4px; line-height: 1.4; }
+  .metric-pending { position: absolute; top: 10px; right: 10px; font-size: 10px; background: #f0f0f0; color: #888; padding: 2px 6px; border-radius: 4px; }
+
+  /* Importação */
+  .import-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+  .import-zone:hover, .import-zone.drag { border-color: var(--accent); background: #f9f9f9; }
+  .import-zone p { font-size: 13px; color: var(--text-sec); margin-top: 8px; }
+  .import-zone strong { font-size: 14px; color: var(--text); display: block; margin-bottom: 4px; }
+  #fileInput { display: none; }
+
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .filters input, .filters select { border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); }
+  .filters input { flex: 1; min-width: 200px; }
+  .filters select { min-width: 150px; }
+  .btn { border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; }
+  .btn-outline { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 5px; font-weight: 500; }
+  .badge-ativo { background: var(--green-bg); color: var(--green); }
+  .badge-inativo { background: var(--red-bg); color: var(--red); }
+  .badge-setor { background: #f0f0f0; color: #444; }
+  .badge-aprendiz { background: var(--blue-bg); color: var(--blue); }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: #1a1a1a; color: #fff; padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; white-space: nowrap; letter-spacing: 0.04em; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: #fafafa; }
+  tbody td { padding: 9px 12px; vertical-align: middle; }
+  .td-nome { font-weight: 500; }
+  .td-sec { color: var(--text-sec); font-size: 12px; }
+
+  .avatar { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; margin-right: 8px; vertical-align: middle; }
+  .avatar-m { background: #1A3A8F; color: #fff; }
+  .avatar-f { background: #7B2D8B; color: #fff; }
+  .avatar-n { background: #444; color: #fff; }
+
+  .progress-wrap { margin: 12px 0; }
+  .progress-bar { height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #1a1a1a; border-radius: 3px; transition: width 0.3s; }
+  .progress-text { font-size: 12px; color: var(--text-sec); margin-top: 4px; }
+
+  .pagination { display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+  .page-btn { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .page-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .page-btn:disabled { opacity: 0.4; cursor: default; }
+  .page-info { font-size: 12px; color: var(--text-sec); }
+
+  /* Modal centralizado */
+  .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  .drawer-overlay.open { display: flex; }
+  .drawer { position: relative; width: 860px; max-width: 100%; max-height: 90vh; background: var(--surface); border-radius: 14px; box-shadow: 0 8px 40px rgba(0,0,0,0.18); z-index: 101; display: flex; flex-direction: column; transform: scale(0.96); opacity: 0; transition: transform 0.2s ease, opacity 0.2s ease; }
+  .drawer-overlay.open .drawer { transform: scale(1); opacity: 1; }
+  .drawer-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; border-radius: 14px 14px 0 0; }
+  .drawer-header .avatar { width: 44px; height: 44px; font-size: 15px; margin: 0; flex-shrink: 0; }
+  .drawer-header-info { flex: 1; min-width: 0; }
+  .drawer-header-info h2 { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drawer-header-info span { font-size: 12px; color: var(--text-sec); }
+  .drawer-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--text-sec); padding: 4px; line-height: 1; flex-shrink: 0; }
+  .drawer-close:hover { color: var(--text); }
+  .drawer-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; overflow-x: auto; }
+  .drawer-tab { flex: 1; min-width: 80px; padding: 10px; font-size: 12px; font-weight: 500; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-sec); font-family: inherit; background: none; border-top: none; border-left: none; border-right: none; transition: color 0.15s; white-space: nowrap; }
+  .drawer-tab.active { color: var(--text); border-bottom-color: var(--text); }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .drawer-section { margin-bottom: 24px; }
+  .drawer-section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-sec); margin-bottom: 12px; }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field-grid.col3 { grid-template-columns: 1fr 1fr 1fr; }
+  .field-grid.full { grid-template-columns: 1fr; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--text-sec); font-weight: 500; }
+  .field input, .field select, .field textarea { border: 1px solid #d0d5dd; border-radius: 7px; padding: 8px 11px; font-size: 13px; font-family: inherit; background: #f9fafb; color: var(--text); transition: border-color 0.15s, background 0.15s; box-shadow: inset 0 1px 2px rgba(0,0,0,0.04); }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #555; background: #fff; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
+  .field input[readonly] { background: #f0f1f3; color: var(--text-sec); cursor: default; box-shadow: none; border-color: #e0e0e0; }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .drawer-footer { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; flex-shrink: 0; border-radius: 0 0 14px 14px; }
+  .btn-primary { background: #1a1a1a; color: #fff; }
+  .btn-primary:hover { background: #333; }
+  .btn-danger { background: var(--red-bg); color: var(--red); border: 1px solid #fca5a5; }
+  .salvo-badge { font-size: 12px; color: var(--green); display: none; align-items: center; gap: 4px; margin-right: auto; }
+  .salvo-badge.show { display: flex; }
+
+  /* Dependentes */
+  .dep-list { display: flex; flex-direction: column; gap: 10px; }
+  .dep-item { border: 1px solid var(--border); border-radius: 8px; padding: 12px; position: relative; }
+  .dep-item-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 8px; align-items: end; }
+  .dep-remove { background: none; border: none; cursor: pointer; color: #ccc; font-size: 16px; padding: 6px; line-height: 1; }
+  .dep-remove:hover { color: var(--red); }
+  .btn-add-dep { background: none; border: 1px dashed var(--border); border-radius: 8px; padding: 8px; width: 100%; font-size: 12px; color: var(--text-sec); cursor: pointer; font-family: inherit; margin-top: 4px; }
+  .btn-add-dep:hover { border-color: #888; color: var(--text); }
+
+  /* Histórico */
+  .hist-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .hist-item:last-child { border-bottom: none; }
+  .hist-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-top: 5px; flex-shrink: 0; }
+  .hist-dot.cargo { background: var(--blue); }
+  .hist-dot.setor { background: var(--amber); }
+  .hist-dot.gestor { background: #7B2D8B; }
+  .hist-info { flex: 1; }
+  .hist-tipo { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-sec); }
+  .hist-detalhe { font-size: 13px; margin-top: 2px; }
+  .hist-data { font-size: 11px; color: var(--text-sec); margin-top: 2px; }
+  .hist-vazio { font-size: 12px; color: var(--text-sec); padding: 8px 0; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a1a; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; z-index: 200; opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  tbody tr.selected { background: #f0f4ff; }
+  tbody tr { cursor: pointer; }
+
+  @media (max-width: 640px) {
+    .container { padding: 16px 12px; }
+    .topbar { padding: 0 16px; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .filters { flex-direction: column; }
+    .filters input, .filters select { width: 100%; }
+    thead th:nth-child(n+5) { display: none; }
+    tbody td:nth-child(n+5) { display: none; }
+    .drawer { width: 100vw; }
+    .field-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-title">Sistema RH</div>
+    <div class="topbar-sub">Módulo: Cadastro de Colaboradores</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <span id="statusConexao" style="font-size:11px;opacity:0.6;"></span>
+    <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);" onclick="exportarExcel()">Exportar Excel</button>
+    <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);" onclick="recarregar()">↺ Recarregar</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="metrics">
+    <div class="metric clickable" id="card-ativos" onclick="filtrarPorCard('ativos')">
+      <div class="metric-val" style="color:var(--green);" id="m-ativos">—</div>
+      <div class="metric-label">Colaboradores ativos</div>
+    </div>
+    <div class="metric clickable" id="card-masc" onclick="filtrarPorCard('masc')">
+      <div class="metric-val" style="color:var(--blue);" id="m-masc">—</div>
+      <div class="metric-label">Masculino</div>
+    </div>
+    <div class="metric clickable" id="card-fem" onclick="filtrarPorCard('fem')">
+      <div class="metric-val" style="color:#7B2D8B;" id="m-fem">—</div>
+      <div class="metric-label">Feminino</div>
+    </div>
+    <div class="metric clickable" id="card-aprendiz" onclick="filtrarPorCard('aprendiz')">
+      <div class="metric-val" style="color:var(--blue);" id="m-aprendiz">—</div>
+      <div class="metric-label">Jovem Aprendiz</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val" style="color:#888;" id="m-inss">—</div>
+      <div class="metric-label">Afastados INSS</div>
+      <span class="metric-pending">a cadastrar</span>
+    </div>
+    <div class="metric">
+      <div class="metric-val" style="color:#888;" id="m-pcd">—</div>
+      <div class="metric-label">PCD</div>
+      <span class="metric-pending">a cadastrar</span>
+    </div>
+    <div class="metric">
+      <div class="metric-val" style="color:var(--amber);" id="m-empresas">—</div>
+      <div class="metric-label">Empresas</div>
+    </div>
+  </div>
+
+  <div class="card" id="importCard">
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;">
+      <div id="loadingSpinner" style="width:20px;height:20px;border:2px solid #e0e0e0;border-top-color:#1a1a1a;border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>
+      <span id="loadingMsg" style="font-size:13px;color:var(--text-sec);">Conectando ao banco de dados...</span>
+    </div>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+  <div class="card" id="tableCard" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div class="card-title" style="margin:0;">Colaboradores</div>
+      <span class="page-info" id="resultCount"></span>
+    </div>
+
+    <div class="filters">
+      <input type="text" id="busca" placeholder="Buscar por nome, matrícula, cargo..." oninput="aplicarFiltros()">
+      <select id="filtroSituacao" onchange="aplicarFiltros()">
+        <option value="">Todas as situações</option>
+        <option value="Ativo">Ativos</option>
+        <option value="Inativo">Inativos</option>
+      </select>
+      <select id="filtroEmpresa" onchange="filtroEmpresaChanged()">
+        <option value="">Todas as empresas</option>
+      </select>
+      <select id="filtroSetor" onchange="aplicarFiltros()">
+        <option value="">Todos os setores</option>
+      </select>
+      <select id="filtroSexo" onchange="aplicarFiltros()">
+        <option value="">Todos</option>
+        <option value="M">Masculino</option>
+        <option value="F">Feminino</option>
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="limparFiltros()">Limpar filtros</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Colaborador</th>
+            <th>Matrícula</th>
+            <th>Cargo</th>
+            <th>Setor</th>
+            <th>Empresa</th>
+            <th>Gestor</th>
+            <th>Admissão</th>
+            <th>Situação</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+</div>
+
+<!-- Modal centralizado -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="overlayClick(event)">
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div class="avatar avatar-n" id="drw-avatar"></div>
+    <div class="drawer-header-info">
+      <h2 id="drw-nome"></h2>
+      <span id="drw-sub"></span>
+    </div>
+    <button class="drawer-close" onclick="fecharFicha()">✕</button>
+  </div>
+  <div class="drawer-tabs">
+    <button class="drawer-tab active" onclick="setDrawerTab('geral', this)">Geral</button>
+    <button class="drawer-tab" onclick="setDrawerTab('contato', this)">Contato</button>
+    <button class="drawer-tab" onclick="setDrawerTab('documentos', this)">Documentos</button>
+    <button class="drawer-tab" onclick="setDrawerTab('familia', this)">Família</button>
+    <button class="drawer-tab" onclick="setDrawerTab('remuneracao', this)">Remuneração</button>
+    <button class="drawer-tab" onclick="setDrawerTab('beneficios', this)">Benefícios</button>
+    <button class="drawer-tab" onclick="setDrawerTab('historico', this)">Histórico</button>
+  </div>
+  <div class="drawer-body">
+
+    <!-- Aba: Dados gerais -->
+    <div id="tab-geral">
+      <div class="drawer-section">
+        <div class="drawer-section-title">Dados de registro</div>
+        <div class="field-grid">
+          <div class="field"><label>Matrícula</label><input type="text" id="df-codigo" readonly></div>
+          <div class="field"><label>Situação</label>
+            <select id="df-situacao">
+              <option value="Ativo">Ativo</option>
+              <option value="Inativo">Inativo</option>
+            </select>
+          </div>
+          <div class="field"><label>Data de admissão</label><input type="date" id="df-admissao"></div>
+          <div class="field"><label>Data de demissão</label><input type="date" id="df-demissao"></div>
+        </div>
+        <div class="field-grid full" style="margin-top:12px;">
+          <div class="field"><label>Motivo de desligamento</label><input type="text" id="df-motivo" placeholder="Se aplicável"></div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Cargo e lotação</div>
+        <div class="field-grid full">
+          <div class="field"><label>Nome completo</label><input type="text" id="df-nome"></div>
+        </div>
+        <div class="field-grid" style="margin-top:12px;">
+          <div class="field"><label>Cargo</label><input type="text" id="df-cargo"></div>
+          <div class="field"><label>Tipo de contrato</label>
+            <select id="df-contrato">
+              <option value="">Não informado</option>
+              <option value="CLT">CLT</option>
+              <option value="PJ">PJ</option>
+              <option value="Aprendiz">Jovem Aprendiz</option>
+              <option value="Estágio">Estágio</option>
+            </select>
+          </div>
+          <div class="field"><label>Setor</label><input type="text" id="df-setor"></div>
+          <div class="field"><label>Empresa (registro)</label><input type="text" id="df-empresa" readonly></div>
+          <div class="field"><label>Empresa (atuação)</label><input type="text" id="df-empresa-atuacao"></div>
+          <div class="field"><label>Gestor</label><input type="text" id="df-gestor"></div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Dados pessoais</div>
+        <div class="field-grid">
+          <div class="field"><label>Data de nascimento</label><input type="date" id="df-nascimento"></div>
+          <div class="field"><label>Sexo</label>
+            <select id="df-sexo">
+              <option value="">Não informado</option>
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
+            </select>
+          </div>
+          <div class="field"><label>Nacionalidade</label>
+            <select id="df-nacionalidade" onchange="togglePaisNascimento()">
+              <option value="">Não informado</option>
+              <option value="Brasileiro(a)">Brasileiro(a)</option>
+              <option value="Estrangeiro(a)">Estrangeiro(a)</option>
+            </select>
+          </div>
+          <div class="field" id="campoPaisNasc" style="display:none;"><label>País de origem</label><input type="text" id="df-paisNascimento" placeholder="Ex: Argentina"></div>
+          <div class="field"><label>Estado (naturalidade)</label>
+            <select id="df-natEstado" onchange="carregarCidadesNat()">
+              <option value="">Selecione o estado</option>
+            </select>
+          </div>
+          <div class="field"><label>Cidade (naturalidade)</label>
+            <select id="df-naturalidade">
+              <option value="">Selecione a cidade</option>
+            </select>
+          </div>
+          <div class="field"><label>Cor / Raça</label>
+            <select id="df-cor">
+              <option value="">Não informado</option>
+              <option value="Branca">Branca</option>
+              <option value="Preta">Preta</option>
+              <option value="Parda">Parda</option>
+              <option value="Amarela">Amarela</option>
+              <option value="Indígena">Indígena</option>
+            </select>
+          </div>
+          <div class="field"><label>Grau de formação</label>
+            <select id="df-escolaridade">
+              <option value="">Não informado</option>
+              <option value="Fundamental incompleto">Fund. incompleto</option>
+              <option value="Fundamental completo">Fund. completo</option>
+              <option value="Médio incompleto">Médio incompleto</option>
+              <option value="Médio completo">Médio completo</option>
+              <option value="Superior incompleto">Superior incompleto</option>
+              <option value="Superior completo">Superior completo</option>
+              <option value="Pós-graduação">Pós-graduação</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Controles especiais</div>
+        <div class="field-grid">
+          <div class="field" style="flex-direction:row;align-items:center;gap:8px;padding-top:4px;">
+            <input type="checkbox" id="df-pcd" style="width:16px;height:16px;cursor:pointer;">
+            <label for="df-pcd" style="cursor:pointer;font-size:13px;color:var(--text);">PCD</label>
+          </div>
+          <div class="field" style="flex-direction:row;align-items:center;gap:8px;padding-top:4px;">
+            <input type="checkbox" id="df-inss" style="width:16px;height:16px;cursor:pointer;">
+            <label for="df-inss" style="cursor:pointer;font-size:13px;color:var(--text);">Afastado INSS</label>
+          </div>
+          <div class="field" style="flex-direction:row;align-items:center;gap:8px;padding-top:4px;">
+            <input type="checkbox" id="df-primeiroEmprego" style="width:16px;height:16px;cursor:pointer;">
+            <label for="df-primeiroEmprego" style="cursor:pointer;font-size:13px;color:var(--text);">Primeiro emprego</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba: Contato -->
+    <div id="tab-contato" style="display:none;">
+      <div class="drawer-section">
+        <div class="drawer-section-title">Telefones</div>
+        <div class="field-grid">
+          <div class="field"><label>Celular</label><input type="tel" id="df-celular" placeholder="(44) 99999-9999"></div>
+          <div class="field"><label>WhatsApp</label><input type="tel" id="df-whatsapp" placeholder="(44) 99999-9999"></div>
+        </div>
+        <div class="field-grid" style="margin-top:12px;">
+          <div class="field"><label>Tel. para recado</label><input type="tel" id="df-telRecado" placeholder="(44) 99999-9999"></div>
+          <div class="field"><label>Nome do contato</label><input type="text" id="df-nomeRecado" placeholder="Ex: Mãe Laliane"></div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Email</div>
+        <div class="field-grid full">
+          <div class="field"><label>Email pessoal</label><input type="email" id="df-email" placeholder="colaborador@email.com"></div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Endereço</div>
+        <div class="field-grid" style="margin-bottom:12px;">
+          <div class="field"><label>CEP</label><input type="text" id="df-cep" placeholder="00000-000" maxlength="9" oninput="mascaraCEP(this)" onblur="buscarCEP(this.value)"></div>
+          <div class="field"><label>Estado</label><input type="text" id="df-estado" placeholder="PR" maxlength="2"></div>
+        </div>
+        <div class="field-grid full" style="margin-bottom:12px;">
+          <div class="field"><label>Logradouro</label><input type="text" id="df-rua" placeholder="Rua, Avenida..."></div>
+        </div>
+        <div class="field-grid" style="margin-bottom:12px;">
+          <div class="field"><label>Número</label><input type="text" id="df-numero" placeholder="Ex: 2217"></div>
+          <div class="field"><label>Complemento</label><input type="text" id="df-complemento" placeholder="Apto, Bloco..."></div>
+        </div>
+        <div class="field-grid" style="margin-bottom:12px;">
+          <div class="field"><label>Bairro</label><input type="text" id="df-bairro"></div>
+          <div class="field"><label>Cidade</label><input type="text" id="df-cidade"></div>
+        </div>
+        <div id="mapaBox" style="display:none;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin-top:4px;">
+          <iframe id="mapaFrame" width="100%" height="200" style="border:0;display:block;" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade" src=""></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba: Documentos -->
+    <div id="tab-documentos" style="display:none;">
+      <div class="drawer-section">
+        <div class="drawer-section-title">Documentos pessoais</div>
+        <div class="field-grid">
+          <div class="field"><label>CPF</label><input type="text" id="df-cpf" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)"></div>
+          <div class="field"><label>RG</label><input type="text" id="df-rg" placeholder="0.000.000-0" maxlength="12" oninput="mascaraRG(this)"></div>
+          <div class="field"><label>Órgão emissor RG</label><input type="text" id="df-rgOrgao" placeholder="Ex: SESP-PR"></div>
+          <div class="field"><label>Data expedição RG</label><input type="date" id="df-rgData"></div>
+          <div class="field"><label>PIS / PASEP</label><input type="text" id="df-pis" placeholder="000.00000.00-0" maxlength="14" oninput="mascaraPIS(this)"></div>
+          <div class="field"><label>CNH (nº)</label><input type="text" id="df-cnh" placeholder="Não possui"></div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Documentos de trabalho</div>
+        <div class="field-grid">
+          <div class="field"><label>CTPS (nº)</label><input type="text" id="df-ctps" placeholder="Número"></div>
+          <div class="field"><label>CTPS (série)</label><input type="text" id="df-ctpsSerie" placeholder="Série"></div>
+          <div class="field"><label>Título de eleitor</label><input type="text" id="df-titulo" placeholder="Número"></div>
+          <div class="field"><label>Zona / Seção</label><input type="text" id="df-tituloZona" placeholder="Ex: 192 / 0212"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba: Família -->
+    <div id="tab-familia" style="display:none;">
+      <div class="drawer-section">
+        <div class="drawer-section-title">Dados familiares</div>
+        <div class="field-grid full">
+          <div class="field"><label>Nome do pai</label><input type="text" id="df-pai" placeholder="Nome completo do pai"></div>
+          <div class="field" style="margin-top:12px;"><label>Nome da mãe</label><input type="text" id="df-mae" placeholder="Nome completo da mãe"></div>
+        </div>
+        <div class="field-grid" style="margin-top:12px;">
+          <div class="field"><label>Estado civil</label>
+            <select id="df-estadoCivil">
+              <option value="">Não informado</option>
+              <option value="Solteiro(a)">Solteiro(a)</option>
+              <option value="Casado(a)">Casado(a)</option>
+              <option value="Divorciado(a)">Divorciado(a)</option>
+              <option value="Viúvo(a)">Viúvo(a)</option>
+              <option value="União estável">União estável</option>
+            </select>
+          </div>
+          <div class="field"><label>Possui filhos?</label>
+            <select id="df-possuiFilhos">
+              <option value="">Não informado</option>
+              <option value="Não">Não</option>
+              <option value="Sim">Sim</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Dependentes / Filhos</div>
+        <div class="dep-list" id="depList"></div>
+        <button class="btn-add-dep" onclick="adicionarDependente()">+ Adicionar dependente</button>
+      </div>
+    </div>
+
+    <!-- Aba: Benefícios -->
+    <div id="tab-beneficios" style="display:none;">
+      <div class="drawer-section">
+        <div class="drawer-section-title">Vale transporte</div>
+        <div class="field-grid">
+          <div class="field"><label>Utiliza vale transporte?</label>
+            <select id="df-vt">
+              <option value="">Não informado</option>
+              <option value="Não">Não</option>
+              <option value="Sim">Sim</option>
+            </select>
+          </div>
+          <div class="field"><label>Passes por dia</label><input type="number" id="df-vtPasses" placeholder="Ex: 2" min="0" max="10"></div>
+        </div>
+        <div class="field-grid full" style="margin-top:12px;">
+          <div class="field"><label>Linha / Itinerário</label><input type="text" id="df-vtLinha" placeholder="Ex: Maringá-Sarandi"></div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Dados bancários</div>
+        <div class="field-grid">
+          <div class="field" style="position:relative;">
+            <label>Banco</label>
+            <input type="text" id="df-banco" placeholder="Digite o nome ou código..." autocomplete="off" oninput="buscarBanco(this.value)">
+            <div id="bancoDrop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d0d5dd;border-radius:7px;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px;"></div>
+            <input type="hidden" id="df-bancoCodigo">
+            <span id="df-bancoInfo" style="font-size:11px;color:var(--text-sec);margin-top:2px;display:none;"></span>
+          </div>
+          <div class="field"><label>Agência</label><input type="text" id="df-agencia" placeholder="0000-0" maxlength="6" oninput="mascaraAgencia(this)"></div>
+          <div class="field"><label>Conta</label><input type="text" id="df-conta" placeholder="Ex: 85580-2"></div>
+          <div class="field"><label>Tipo de conta</label>
+            <select id="df-tipoConta">
+              <option value="">Não informado</option>
+              <option value="Corrente">Corrente</option>
+              <option value="Poupança">Poupança</option>
+              <option value="Conta Salário">Conta Salário</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Outros</div>
+        <div class="field-grid full">
+          <div class="field"><label>Hobby / Interesses</label><input type="text" id="df-hobby" placeholder="Ex: Musculação, leitura..."></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba: Remuneração -->
+    <div id="tab-remuneracao" style="display:none;">
+      <div class="drawer-section">
+        <div class="drawer-section-title">Remuneração atual</div>
+        <div class="field-grid">
+          <div class="field"><label>Salário base (R$)</label><input type="text" id="df-salario" placeholder="0,00" oninput="mascaraMoeda(this)"></div>
+          <div class="field"><label>CBO</label><input type="text" id="df-cbo" placeholder="Ex: 5211-10" maxlength="8"></div>
+          <div class="field"><label>Regime de jornada</label>
+            <select id="df-jornada">
+              <option value="">Não informado</option>
+              <option value="CLT 44h">CLT 44h semanais</option>
+              <option value="CLT 36h">CLT 36h semanais</option>
+              <option value="Tempo parcial">Tempo parcial</option>
+              <option value="Teletrabalho">Teletrabalho</option>
+              <option value="Escala 12x36">Escala 12x36</option>
+              <option value="Aprendiz">Aprendiz</option>
+            </select>
+          </div>
+          <div class="field"><label>Tipo de admissão</label>
+            <select id="df-tipoAdmissao">
+              <option value="">Não informado</option>
+              <option value="Emprego">Emprego (1ª vez)</option>
+              <option value="Reemprego">Reemprego</option>
+              <option value="Transferência">Transferência</option>
+              <option value="Reintegração">Reintegração</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Rescisão</div>
+        <div class="field-grid">
+          <div class="field"><label>Causa da rescisão</label>
+            <select id="df-causaRescisao">
+              <option value="">Não informado</option>
+              <option value="0.0 Colaborador Pediu Encerramento">0.0 Colaborador Pediu Encerramento</option>
+              <option value="0.1 Demitido no Período de Experiência">0.1 Demitido no Período de Experiência</option>
+              <option value="0.2 Demitido s/ Justa Causa">0.2 Demitido s/ Justa Causa</option>
+              <option value="0.3 Demitido com Justa Causa">0.3 Demitido com Justa Causa</option>
+              <option value="0.4 Pediu Demissão">0.4 Pediu Demissão</option>
+              <option value="0.5 JOVEM - Encerramento de Contrato">0.5 JOVEM - Encerramento de Contrato</option>
+              <option value="0.6 JOVEM - Pediu Encerramento">0.6 JOVEM - Pediu Encerramento</option>
+              <option value="0.7 Acordo">0.7 Acordo</option>
+              <option value="0.9 Transferência">0.9 Transferência</option>
+              <option value="10.0 Abandono de Emprego">10.0 Abandono de Emprego</option>
+              <option value="11.0 Morte">11.0 Morte</option>
+            </select>
+          </div>
+          <div class="field"><label>Aviso prévio</label>
+            <select id="df-aviso">
+              <option value="">Não informado</option>
+              <option value="Trabalhado">Trabalhado</option>
+              <option value="Indenizado">Indenizado</option>
+              <option value="Dispensado">Dispensado</option>
+            </select>
+          </div>
+          <div class="field"><label>Data do aviso</label><input type="date" id="df-dataAviso" onchange="calcularVencimentoAviso()"></div>
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:6px;">
+              Vencimento do aviso
+              <span class="tooltip-icon" title="Calculado automaticamente: Data do aviso + prazo configurado em REGRAS_AVISO. Antecipado para o último dia útil caso caia em fim de semana ou feriado.">ⓘ</span>
+            </label>
+            <input type="date" id="df-vencAviso" style="background:var(--bg-alt,#f5f5f5);">
+          </div>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-title">Histórico salarial</div>
+        <div id="salarioList" style="margin-bottom:10px;"></div>
+        <button class="btn-add-dep" onclick="adicionarSalario()">+ Adicionar registro salarial</button>
+      </div>
+    </div>
+
+    <!-- Aba: Histórico -->
+    <div id="tab-historico" style="display:none;">
+      <div class="drawer-section">
+        <div class="drawer-section-title">Movimentações registradas</div>
+        <div id="historicoList"></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="drawer-footer">
+    <span class="salvo-badge" id="salvoBadge">✓ Alterações salvas</span>
+    <button class="btn btn-outline" onclick="fecharFicha()">Fechar</button>
+    <button class="btn btn-primary" onclick="salvarFicha()">Salvar alterações</button>
+  </div>
+</div><!-- /.drawer -->
+</div><!-- /.drawer-overlay -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Supabase ────────────────────────────────────────────────────────────────
+const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
+const SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+
+async function sbGet(tabela, params) {
+  const url = `${SB_URL}/rest/v1/${tabela}?${params}`;
+  const r = await fetch(url, { headers: SB_HEADERS });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function sbPatch(tabela, filtro, dados) {
+  const url = `${SB_URL}/rest/v1/${tabela}?${filtro}`;
+  const r = await fetch(url, { method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(dados) });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+function parseSexo(v) {
+  if (!v) return '';
+  const s = String(v).trim().toUpperCase();
+  if (s === 'M' || s.startsWith('MAS')) return 'M';
+  if (s === 'F' || s.startsWith('FEM')) return 'F';
+  return s.charAt(0) || '';
+}
+
+function supabaseToJS(row) {
+  const dataDemissao = row.data_demissao || '';
+  const ativo = !!row.data_admissao && !dataDemissao;
+  const cargo = row.cargo || '';
+  const sal = parseFloat(row.salario) || 0;
+  return {
+    _sbId:          row.id,
+    codigo:         String(row.matricula || ''),
+    nome:           row.nome || '',
+    dataAdmissao:   row.data_admissao || '',
+    dataDemissao,
+    motivo:         row.motivo_demissao || '',
+    cargo,
+    salarioBase:    sal ? sal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '',
+    empresa:        row.empresa_registro || '',
+    empresaAtuacao: row.empresa_atuacao || '',
+    setor:          row.setor || '',
+    gestor:         row.gestor || '',
+    dependentes:    parseInt(row.dependentes) || 0,
+    proLabore:      !!row.pro_labore,
+    sexo:           parseSexo(row.sexo),
+    dataNascimento: row.data_nascimento || '',
+    cpf:            row.cpf || '',
+    rg:             row.rg || '',
+    pis:            row.pis || '',
+    mae:            row.nome_mae || '',
+    pai:            row.nome_pai || '',
+    naturalidade:   row.cidade_nascimento || '',
+    nacionalidade:  row.nacionalidade ? (row.nacionalidade.startsWith('Bras') ? 'Brasileiro(a)' : 'Estrangeiro(a)') : '',
+    celular:        row.telefone || '',
+    estadoCivil:    row.estado_civil || '',
+    email:          row.email || '',
+    cor:            row.raca || '',
+    escolaridade:   normEscolaridade(row.escolaridade),
+    nomeComercial:  row.nome_comercial || '',
+    situacao:       ativo ? 'Ativo' : 'Inativo',
+    aprendiz:       isAprendiz(cargo),
+    afastadoINSS:   false,
+    pcd:            false,
+    historico:      [],
+    dependentesLista: [],
+  };
+}
+
+function normEscolaridade(v) {
+  if (!v) return '';
+  const l = v.toLowerCase();
+  if (l.includes('superior') && l.includes('completo')) return 'Superior completo';
+  if (l.includes('superior') && l.includes('incompleto')) return 'Superior incompleto';
+  if (l.includes('médio') && l.includes('completo')) return 'Médio completo';
+  if (l.includes('médio') && l.includes('incompleto')) return 'Médio incompleto';
+  if (l.includes('fundamental') && l.includes('completo')) return 'Fundamental completo';
+  if (l.includes('fundamental') && l.includes('incompleto')) return 'Fundamental incompleto';
+  if (l.includes('pós') || l.includes('pos')) return 'Pós-graduação';
+  return '';
+}
+
+async function carregarDoSupabase() {
+  setLoadingMsg('Buscando colaboradores...');
+  try {
+    const dados = await sbGet('colaboradores', 'select=*&order=nome');
+    COLABORADORES = dados.map(supabaseToJS);
+    document.getElementById('importCard').style.display = 'none';
+    document.getElementById('tableCard').style.display = 'block';
+    popularFiltros();
+    aplicarFiltros();
+    atualizarMetricas();
+    document.getElementById('statusConexao').textContent = `${COLABORADORES.length} colaboradores`;
+  } catch(e) {
+    setLoadingMsg('Erro ao conectar: ' + e.message);
+    console.error(e);
+  }
+}
+
+async function recarregar() {
+  document.getElementById('importCard').style.display = 'block';
+  document.getElementById('tableCard').style.display = 'none';
+  await carregarDoSupabase();
+}
+
+function setLoadingMsg(msg) {
+  const el = document.getElementById('loadingMsg');
+  if (el) el.textContent = msg;
+}
+
+// ─── Parametrização de regras ────────────────────────────────────────────────
+// Altere aqui sem precisar mexer no restante do código.
+const REGRAS_AVISO = {
+  // Prazo legal em dias corridos após a data do aviso para pagamento das verbas rescisórias
+  prazoLegalDias: 10,
+
+  // Se true, antecipa o vencimento para o último dia útil quando cair em fim de semana ou feriado
+  anteciparParaDiaUtil: true,
+
+  // Feriados nacionais fixos (MM-DD). Adicione feriados locais conforme necessário.
+  feriadosFixos: [
+    '01-01', // Confraternização Universal
+    '04-21', // Tiradentes
+    '05-01', // Dia do Trabalho
+    '09-07', // Independência
+    '10-12', // Nossa Senhora Aparecida
+    '11-02', // Finados
+    '11-15', // Proclamação da República
+    '11-20', // Consciência Negra
+    '12-25', // Natal
+  ],
+
+  // Feriados móveis por ano (YYYY-MM-DD). Atualize anualmente.
+  feriadosMoveis: [
+    '2025-03-03','2025-03-04','2025-04-18','2025-06-19',
+    '2026-02-16','2026-02-17','2026-04-03','2026-06-04',
+    '2027-03-01','2027-03-02','2027-03-26','2027-05-20',
+  ],
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+let COLABORADORES = [];
+let FILTRADOS = [];
+let PAGE = 1;
+const PER_PAGE = 50;
+
+function isAprendiz(cargo) {
+  return cargo && cargo.toLowerCase().includes('aprendiz');
+}
+
+function atualizarMetricas() {
+  const sem_pl = COLABORADORES.filter(c => !c.proLabore);
+  const ativos  = sem_pl.filter(c => c.situacao === 'Ativo');
+  const inativ  = sem_pl.filter(c => c.situacao === 'Inativo');
+  const masc    = ativos.filter(c => c.sexo === 'M').length;
+  const fem     = ativos.filter(c => c.sexo === 'F').length;
+  const aprendiz= ativos.filter(c => c.aprendiz).length;
+  const inss    = ativos.filter(c => c.afastadoINSS).length;
+  const pcd     = ativos.filter(c => c.pcd).length;
+  const empresas= new Set(sem_pl.filter(c=>c.empresa).map(c=>c.empresa)).size;
+
+  document.getElementById('m-ativos').textContent   = ativos.length;
+  document.getElementById('m-masc').textContent      = masc;
+  document.getElementById('m-fem').textContent       = fem;
+  document.getElementById('m-aprendiz').textContent  = aprendiz;
+  document.getElementById('m-inss').textContent      = inss || '—';
+  document.getElementById('m-pcd').textContent       = pcd || '—';
+  document.getElementById('m-empresas').textContent  = empresas;
+}
+
+function popularFiltros() {
+  const empresas = [...new Set(COLABORADORES.map(c=>c.empresa).filter(Boolean))].sort();
+  const selEmp = document.getElementById('filtroEmpresa');
+  while(selEmp.options.length > 1) selEmp.remove(1);
+  empresas.forEach(e => { const o=document.createElement('option'); o.value=e; o.textContent=e; selEmp.appendChild(o); });
+  popularSetores('');
+}
+
+function popularSetores(empresa) {
+  const fonte = empresa
+    ? COLABORADORES.filter(c => c.empresa === empresa)
+    : COLABORADORES;
+  const setores = [...new Set(fonte.map(c=>c.setor).filter(Boolean))].sort();
+  const selSet = document.getElementById('filtroSetor');
+  const valorAtual = selSet.value;
+  while(selSet.options.length > 1) selSet.remove(1);
+  setores.forEach(s => { const o=document.createElement('option'); o.value=s; o.textContent=s.replace(/^\d+\s*-\s*/,''); selSet.appendChild(o); });
+  // mantém seleção se ainda válida
+  selSet.value = setores.includes(valorAtual) ? valorAtual : '';
+}
+
+function filtroEmpresaChanged() {
+  const emp = document.getElementById('filtroEmpresa').value;
+  popularSetores(emp);
+  aplicarFiltros();
+}
+
+function aplicarFiltros() {
+  const busca = document.getElementById('busca').value.toLowerCase();
+  const sit   = document.getElementById('filtroSituacao').value;
+  const emp   = document.getElementById('filtroEmpresa').value;
+  const set   = document.getElementById('filtroSetor').value;
+  const sex   = document.getElementById('filtroSexo').value;
+  FILTRADOS = COLABORADORES.filter(c => {
+    if (c.proLabore) return false;
+    if (busca && !c.nome.toLowerCase().includes(busca) && !c.codigo.includes(busca) && !c.cargo.toLowerCase().includes(busca)) return false;
+    if (sit && c.situacao !== sit) return false;
+    if (emp && c.empresa !== emp) return false;
+    if (set && c.setor !== set) return false;
+    if (sex && c.sexo !== sex) return false;
+    if (window._filtroAprendiz && !c.aprendiz) return false;
+    return true;
+  });
+  PAGE = 1;
+  renderTabela();
+}
+
+function filtrarPorCard(tipo) {
+  const cards = ['ativos','masc','fem','aprendiz'];
+  const cardAtivo = document.getElementById('card-' + tipo);
+  const jaAtivo = cardAtivo.classList.contains('active-filter');
+
+  window._filtroAprendiz = false;
+  // remove destaque de todos
+  cards.forEach(c => { const el = document.getElementById('card-' + c); if(el) el.classList.remove('active-filter'); });
+
+  if (jaAtivo) {
+    // segundo clique: volta visão geral
+    limparFiltros();
+    return;
+  }
+
+  cardAtivo.classList.add('active-filter');
+  // limpa filtros dos selects mas mantém busca
+  ['filtroSituacao','filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
+  popularSetores('');
+
+  if (tipo === 'ativos') {
+    document.getElementById('filtroSituacao').value = 'Ativo';
+  } else if (tipo === 'masc') {
+    document.getElementById('filtroSituacao').value = 'Ativo';
+    document.getElementById('filtroSexo').value = 'M';
+  } else if (tipo === 'fem') {
+    document.getElementById('filtroSituacao').value = 'Ativo';
+    document.getElementById('filtroSexo').value = 'F';
+  } else if (tipo === 'aprendiz') {
+    document.getElementById('filtroSituacao').value = 'Ativo';
+    window._filtroAprendiz = true;
+  }
+
+  aplicarFiltros();
+}
+
+function limparFiltros() {
+  window._filtroAprendiz = false;
+  ['ativos','masc','fem','aprendiz'].forEach(c => { const el = document.getElementById('card-' + c); if(el) el.classList.remove('active-filter'); });
+  document.getElementById('busca').value = '';
+  ['filtroSituacao','filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
+  popularSetores('');
+  aplicarFiltros();
+}
+
+function iniciais(nome) {
+  return nome.trim().split(' ').filter(p=>p.length>1).slice(0,2).map(p=>p[0].toUpperCase()).join('');
+}
+function fmtDateBR(iso) {
+  if (!iso) return '—';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+function calcTempoEmpresa(admissao) {
+  if (!admissao) return '';
+  const adm  = new Date(admissao + 'T00:00:00');
+  const hoje = new Date();
+  let anos   = hoje.getFullYear() - adm.getFullYear();
+  if (hoje < new Date(hoje.getFullYear(), adm.getMonth(), adm.getDate())) anos--;
+  if (anos < 1) {
+    const meses = Math.floor((hoje - adm) / (1000*60*60*24*30.44));
+    return meses + (meses === 1 ? ' mês' : ' meses');
+  }
+  return anos + (anos === 1 ? ' ano' : ' anos');
+}
+
+function renderTabela() {
+  const total      = FILTRADOS.length;
+  const totalPages = Math.ceil(total / PER_PAGE);
+  const start      = (PAGE - 1) * PER_PAGE;
+  const pagina     = FILTRADOS.slice(start, start + PER_PAGE);
+
+  document.getElementById('resultCount').textContent = total + ' colaborador' + (total !== 1 ? 'es' : '');
+
+  const tbody = document.getElementById('tbody');
+  if (!pagina.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-sec);">Nenhum colaborador encontrado.</td></tr>';
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = pagina.map((c, i) => {
+    const idxGlobal = COLABORADORES.indexOf(c);
+    const ativo     = c.situacao === 'Ativo';
+    const avatarCls = c.sexo === 'M' ? 'avatar-m' : c.sexo === 'F' ? 'avatar-f' : 'avatar-n';
+    const sexoIcon  = c.sexo === 'M' ? ' ♂' : c.sexo === 'F' ? ' ♀' : '';
+    const badgeSit  = ativo
+      ? '<span class="badge badge-ativo">Ativo</span>'
+      : '<span class="badge badge-inativo">Inativo</span>';
+    const badgeApr  = c.aprendiz ? ' <span class="badge badge-aprendiz" style="font-size:10px;">Aprendiz</span>' : '';
+    const tempoInfo = ativo
+      ? `${fmtDateBR(c.dataAdmissao)}<br><span style="font-size:11px;color:#999;">${calcTempoEmpresa(c.dataAdmissao)}</span>`
+      : `<span style="color:var(--red);font-size:12px;">Saída: ${fmtDateBR(c.dataDemissao)}</span>`;
+    return `<tr onclick="abrirFicha(${idxGlobal})" title="Clique para abrir a ficha">
+      <td class="td-nome">
+        <span class="avatar ${avatarCls}">${iniciais(c.nome)}</span>${c.nome}<span class="td-sec">${sexoIcon}</span>
+      </td>
+      <td class="td-sec">${c.codigo || '—'}</td>
+      <td class="td-sec">${c.cargo || '—'}${badgeApr}</td>
+      <td><span class="badge badge-setor">${c.setor || '—'}</span></td>
+      <td class="td-sec" style="white-space:nowrap;">${c.empresa || '—'}</td>
+      <td class="td-sec">${c.gestor || '—'}</td>
+      <td class="td-sec" style="white-space:nowrap;">${tempoInfo}</td>
+      <td>${badgeSit}</td>
+    </tr>`;
+  }).join('');
+
+  // Paginação
+  const pag = document.getElementById('pagination');
+  let ph = `<span class="page-info">${start+1}–${Math.min(start+PER_PAGE,total)} de ${total}</span>`;
+  ph += `<button class="page-btn" onclick="goPage(${PAGE-1})" ${PAGE<=1?'disabled':''}>‹ Anterior</button>`;
+  const maxBtns = 5;
+  let p0 = Math.max(1, PAGE-2), p1 = Math.min(totalPages, p0+maxBtns-1);
+  if (p1-p0 < maxBtns-1) p0 = Math.max(1, p1-maxBtns+1);
+  for (let p=p0; p<=p1; p++) ph += `<button class="page-btn ${p===PAGE?'active':''}" onclick="goPage(${p})">${p}</button>`;
+  ph += `<button class="page-btn" onclick="goPage(${PAGE+1})" ${PAGE>=totalPages?'disabled':''}>Próxima ›</button>`;
+  pag.innerHTML = ph;
+}
+
+function goPage(p) { PAGE = p; renderTabela(); window.scrollTo(0,0); }
+
+function exportarExcel() {
+  if (!FILTRADOS.length) { alert('Nenhum dado para exportar.'); return; }
+  const header = ['Matrícula','Nome','Sexo','Cargo','Aprendiz','Setor','Empresa','Unidade','Gestor','Data Admissão','Tempo de Casa','Dependentes','Situação','Data Demissão','Motivo'];
+  const rows = FILTRADOS.map(c => [
+    c.codigo, c.nome, c.sexo === 'M' ? 'Masculino' : c.sexo === 'F' ? 'Feminino' : '',
+    c.cargo, c.aprendiz ? 'Sim' : 'Não', c.setor, c.empresa, c.nomeComercial, c.gestor,
+    fmtDateBR(c.dataAdmissao), calcTempoEmpresa(c.dataAdmissao), c.dependentes,
+    c.situacao, fmtDateBR(c.dataDemissao), c.motivo
+  ]);
+  let csv = '﻿' + [header, ...rows].map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join('\t')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/tab-separated-values;charset=utf-8' }));
+  a.download = 'Colaboradores_RH.xls';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ─── Ficha do colaborador ────────────────────────────────────────────────────
+
+let _fichaIdx = null; // índice em COLABORADORES do registro aberto
+
+function abrirFicha(idx) {
+  if (idx < 0 || idx >= COLABORADORES.length) return;
+  _fichaIdx = idx;
+  const c = COLABORADORES[idx];
+
+  // destaca linha
+  document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
+  const trSel = document.querySelector(`tbody tr[onclick="abrirFicha(${idx})"]`);
+  if (trSel) trSel.classList.add('selected');
+
+  // cabeçalho
+  const avatarCls = c.sexo === 'M' ? 'avatar-m' : c.sexo === 'F' ? 'avatar-f' : 'avatar-n';
+  const av = document.getElementById('drw-avatar');
+  av.className = 'avatar ' + avatarCls;
+  av.textContent = iniciais(c.nome);
+  document.getElementById('drw-nome').textContent = c.nome;
+  document.getElementById('drw-sub').textContent = (c.cargo || '—') + ' · ' + (c.setor?.replace(/^\d+\s*-\s*/,'') || '—');
+
+  // Aba Geral
+  document.getElementById('df-codigo').value        = c.codigo || '';
+  document.getElementById('df-situacao').value      = c.situacao || 'Ativo';
+  document.getElementById('df-admissao').value      = c.dataAdmissao || '';
+  document.getElementById('df-demissao').value      = c.dataDemissao || '';
+  document.getElementById('df-motivo').value        = c.motivo || '';
+  document.getElementById('df-nome').value          = c.nome || '';
+  document.getElementById('df-cargo').value         = c.cargo || '';
+  document.getElementById('df-contrato').value      = c.contrato || '';
+  document.getElementById('df-setor').value         = c.setor?.replace(/^\d+\s*-\s*/,'') || '';
+  document.getElementById('df-empresa').value       = c.empresa || '';
+  document.getElementById('df-empresa-atuacao').value = c.empresaAtuacao || '';
+  document.getElementById('df-gestor').value        = c.gestor || '';
+  document.getElementById('df-nascimento').value    = c.dataNascimento || '';
+  document.getElementById('df-sexo').value          = c.sexo || '';
+  document.getElementById('df-nacionalidade').value  = c.nacionalidade || '';
+  document.getElementById('df-paisNascimento').value = c.paisNascimento || '';
+  togglePaisNascimento();
+  carregarEstadosNat().then(() => preencherNaturalidade(c.natEstado || '', c.naturalidade || ''));
+  document.getElementById('df-cor').value           = c.cor || '';
+  document.getElementById('df-escolaridade').value  = c.escolaridade || '';
+  document.getElementById('df-pcd').checked         = c.pcd || false;
+  document.getElementById('df-inss').checked        = c.afastadoINSS || false;
+  document.getElementById('df-primeiroEmprego').checked = c.primeiroEmprego || false;
+
+  // Aba Contato
+  document.getElementById('df-celular').value       = c.celular || '';
+  document.getElementById('df-whatsapp').value      = c.whatsapp || '';
+  document.getElementById('df-telRecado').value     = c.telRecado || '';
+  document.getElementById('df-nomeRecado').value    = c.nomeRecado || '';
+  document.getElementById('df-email').value         = c.email || '';
+  document.getElementById('df-cep').value           = c.cep || '';
+  document.getElementById('df-estado').value        = c.estado || '';
+  document.getElementById('df-rua').value           = c.rua || '';
+  document.getElementById('df-numero').value        = c.numero || '';
+  document.getElementById('df-complemento').value   = c.complemento || '';
+  document.getElementById('df-bairro').value        = c.bairro || '';
+  document.getElementById('df-cidade').value        = c.cidade || '';
+
+  // Aba Documentos
+  document.getElementById('df-cpf').value           = c.cpf || '';
+  document.getElementById('df-rg').value            = c.rg || '';
+  document.getElementById('df-rgOrgao').value       = c.rgOrgao || '';
+  document.getElementById('df-rgData').value        = c.rgData || '';
+  document.getElementById('df-pis').value           = c.pis || '';
+  document.getElementById('df-cnh').value           = c.cnh || '';
+  document.getElementById('df-ctps').value          = c.ctps || '';
+  document.getElementById('df-ctpsSerie').value     = c.ctpsSerie || '';
+  document.getElementById('df-titulo').value        = c.titulo || '';
+  document.getElementById('df-tituloZona').value    = c.tituloZona || '';
+
+  // Aba Família
+  document.getElementById('df-pai').value           = c.pai || '';
+  document.getElementById('df-mae').value           = c.mae || '';
+  document.getElementById('df-estadoCivil').value   = c.estadoCivil || '';
+  document.getElementById('df-possuiFilhos').value  = c.possuiFilhos || '';
+  renderDependentes(c.dependentesLista || []);
+
+  // Aba Remuneração
+  document.getElementById('df-salario').value       = c.salarioBase || '';
+  document.getElementById('df-cbo').value           = c.cbo || '';
+  document.getElementById('df-jornada').value       = c.jornada || '';
+  document.getElementById('df-tipoAdmissao').value  = c.tipoAdmissao || '';
+  document.getElementById('df-causaRescisao').value = c.causaRescisao || '';
+  document.getElementById('df-aviso').value         = c.aviso || '';
+  document.getElementById('df-dataAviso').value     = c.dataAviso || '';
+  document.getElementById('df-vencAviso').value     = c.vencAviso || '';
+  renderSalarios(c.historicoSalarial || []);
+
+  // Aba Benefícios
+  document.getElementById('df-vt').value            = c.vt || '';
+  document.getElementById('df-vtPasses').value      = c.vtPasses || '';
+  document.getElementById('df-vtLinha').value       = c.vtLinha || '';
+  document.getElementById('df-banco').value          = c.banco || '';
+  document.getElementById('df-bancoCodigo').value   = c.bancoCodigo || '';
+  const bi = document.getElementById('df-bancoInfo');
+  if (c.bancoCodigo) { bi.textContent = 'Código: ' + String(c.bancoCodigo).padStart(3,'0'); bi.style.display = 'block'; } else { bi.style.display = 'none'; }
+  document.getElementById('df-agencia').value       = c.agencia || '';
+  document.getElementById('df-conta').value         = c.conta || '';
+  document.getElementById('df-tipoConta').value     = c.tipoConta || '';
+  document.getElementById('df-hobby').value         = c.hobby || '';
+
+  // volta para aba Dados gerais
+  setDrawerTab('geral', document.querySelector('.drawer-tab'));
+
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function overlayClick(e) {
+  if (e.target === document.getElementById('drawerOverlay')) fecharFicha();
+}
+
+function fecharFicha() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
+  _fichaIdx = null;
+}
+
+function setDrawerTab(nome, btn) {
+  ['geral','contato','documentos','familia','remuneracao','beneficios','historico'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === nome ? 'block' : 'none';
+  });
+  document.querySelectorAll('.drawer-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (nome === 'historico') renderHistoricoFicha();
+  if (nome === 'contato') setTimeout(atualizarMapa, 100);
+}
+
+function salvarFicha() {
+  if (_fichaIdx === null) return;
+  const c = COLABORADORES[_fichaIdx];
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  // detecta movimentações antes de sobrescrever
+  const novoCargo  = document.getElementById('df-cargo').value.trim();
+  const novoSetor  = document.getElementById('df-setor').value.trim();
+  const novoGestor = document.getElementById('df-gestor').value.trim();
+  if (!c.historico) c.historico = [];
+
+  if (novoCargo && novoCargo !== c.cargo)
+    c.historico.unshift({ tipo: 'cargo',  de: c.cargo  || '—', para: novoCargo,  data: hoje });
+  if (novoSetor && novoSetor !== (c.setor?.replace(/^\d+\s*-\s*/,'') || c.setor))
+    c.historico.unshift({ tipo: 'setor',  de: c.setor  || '—', para: novoSetor,  data: hoje });
+  if (novoGestor !== (c.gestor || '') && (novoGestor || c.gestor))
+    c.historico.unshift({ tipo: 'gestor', de: c.gestor || '—', para: novoGestor || '—', data: hoje });
+
+  // Geral
+  c.situacao          = document.getElementById('df-situacao').value;
+  c.dataAdmissao      = document.getElementById('df-admissao').value;
+  c.dataDemissao      = document.getElementById('df-demissao').value;
+  c.motivo            = document.getElementById('df-motivo').value;
+  c.nome              = document.getElementById('df-nome').value.trim();
+  c.cargo             = novoCargo;
+  c.setor             = novoSetor;
+  c.gestor            = novoGestor;
+  c.contrato          = document.getElementById('df-contrato').value;
+  c.empresaAtuacao    = document.getElementById('df-empresa-atuacao').value.trim();
+  c.dataNascimento    = document.getElementById('df-nascimento').value;
+  c.sexo              = document.getElementById('df-sexo').value;
+  c.nacionalidade     = document.getElementById('df-nacionalidade').value;
+  c.paisNascimento    = document.getElementById('df-paisNascimento').value.trim();
+  c.natEstado         = document.getElementById('df-natEstado').value;
+  c.naturalidade      = document.getElementById('df-naturalidade').value;
+  c.cor               = document.getElementById('df-cor').value;
+  c.escolaridade      = document.getElementById('df-escolaridade').value;
+  c.pcd               = document.getElementById('df-pcd').checked;
+  c.afastadoINSS      = document.getElementById('df-inss').checked;
+  c.primeiroEmprego   = document.getElementById('df-primeiroEmprego').checked;
+  // Contato
+  c.celular           = document.getElementById('df-celular').value.trim();
+  c.whatsapp          = document.getElementById('df-whatsapp').value.trim();
+  c.telRecado         = document.getElementById('df-telRecado').value.trim();
+  c.nomeRecado        = document.getElementById('df-nomeRecado').value.trim();
+  c.email             = document.getElementById('df-email').value.trim();
+  c.cep               = document.getElementById('df-cep').value.trim();
+  c.estado            = document.getElementById('df-estado').value.trim().toUpperCase();
+  c.rua               = document.getElementById('df-rua').value.trim();
+  c.numero            = document.getElementById('df-numero').value.trim();
+  c.complemento       = document.getElementById('df-complemento').value.trim();
+  c.bairro            = document.getElementById('df-bairro').value.trim();
+  c.cidade            = document.getElementById('df-cidade').value.trim();
+  // Documentos
+  c.cpf               = document.getElementById('df-cpf').value.trim();
+  c.rg                = document.getElementById('df-rg').value.trim();
+  c.rgOrgao           = document.getElementById('df-rgOrgao').value.trim();
+  c.rgData            = document.getElementById('df-rgData').value;
+  c.pis               = document.getElementById('df-pis').value.trim();
+  c.cnh               = document.getElementById('df-cnh').value.trim();
+  c.ctps              = document.getElementById('df-ctps').value.trim();
+  c.ctpsSerie         = document.getElementById('df-ctpsSerie').value.trim();
+  c.titulo            = document.getElementById('df-titulo').value.trim();
+  c.tituloZona        = document.getElementById('df-tituloZona').value.trim();
+  // Família
+  c.pai               = document.getElementById('df-pai').value.trim();
+  c.mae               = document.getElementById('df-mae').value.trim();
+  c.estadoCivil       = document.getElementById('df-estadoCivil').value;
+  c.possuiFilhos      = document.getElementById('df-possuiFilhos').value;
+  c.dependentesLista  = coletarDependentes();
+  c.dependentes       = c.dependentesLista.length || parseInt(c.dependentes) || 0;
+  // Remuneração
+  c.salarioBase        = document.getElementById('df-salario').value.trim();
+  c.cbo                = document.getElementById('df-cbo').value.trim();
+  c.jornada            = document.getElementById('df-jornada').value;
+  c.tipoAdmissao       = document.getElementById('df-tipoAdmissao').value;
+  c.causaRescisao      = document.getElementById('df-causaRescisao').value;
+  c.aviso              = document.getElementById('df-aviso').value;
+  c.dataAviso          = document.getElementById('df-dataAviso').value;
+  c.vencAviso          = document.getElementById('df-vencAviso').value;
+  c.historicoSalarial  = [...document.querySelectorAll('#salarioList .dep-item')].map(row => ({
+    valor: row.querySelector('.sal-valor')?.value.trim() || '',
+    data:  row.querySelector('.sal-data')?.value || ''
+  })).filter(s => s.valor);
+  // Benefícios
+  c.vt                = document.getElementById('df-vt').value;
+  c.vtPasses          = document.getElementById('df-vtPasses').value;
+  c.vtLinha           = document.getElementById('df-vtLinha').value.trim();
+  c.banco             = document.getElementById('df-banco').value.trim();
+  c.bancoCodigo       = document.getElementById('df-bancoCodigo').value;
+  c.agencia           = document.getElementById('df-agencia').value.trim();
+  c.conta             = document.getElementById('df-conta').value.trim();
+  c.tipoConta         = document.getElementById('df-tipoConta').value;
+  c.hobby             = document.getElementById('df-hobby').value.trim();
+  c.aprendiz          = isAprendiz(c.cargo);
+
+  aplicarFiltros();
+  atualizarMetricas();
+
+  // Persiste no Supabase
+  if (c._sbId) {
+    const payload = {
+      nome:              c.nome,
+      cargo:             c.cargo,
+      setor:             c.setor,
+      empresa_atuacao:   c.empresaAtuacao,
+      gestor:            c.gestor,
+      data_admissao:     c.dataAdmissao || null,
+      data_demissao:     c.dataDemissao || null,
+      motivo_demissao:   c.motivo || null,
+      data_nascimento:   c.dataNascimento || null,
+      sexo:              c.sexo === 'M' ? 'Masc' : c.sexo === 'F' ? 'Fem' : null,
+      nacionalidade:     c.nacionalidade || null,
+      cidade_nascimento: c.naturalidade || null,
+      estado_civil:      c.estadoCivil || null,
+      email:             c.email || null,
+      telefone:          c.celular || null,
+      cpf:               c.cpf || null,
+      rg:                c.rg || null,
+      pis:               c.pis || null,
+      nome_mae:          c.mae || null,
+      nome_pai:          c.pai || null,
+      raca:              c.cor || null,
+      escolaridade:      c.escolaridade || null,
+      ativo:             c.situacao === 'Ativo',
+    };
+    sbPatch('colaboradores', `id=eq.${c._sbId}`, payload)
+      .then(() => mostrarToast('Salvo no banco de dados ✓'))
+      .catch(e => mostrarToast('Erro ao salvar: ' + e.message));
+  }
+
+  const badge = document.getElementById('salvoBadge');
+  badge.classList.add('show');
+  setTimeout(() => badge.classList.remove('show'), 3000);
+}
+
+// ─── Remuneração ────────────────────────────────────────────────────────────
+
+function calcularVencimentoAviso() {
+  const dataStr = document.getElementById('df-dataAviso').value;
+  if (!dataStr || !REGRAS_AVISO.anteciparParaDiaUtil) return;
+
+  // adiciona prazo em dias corridos
+  const base = new Date(dataStr + 'T00:00:00');
+  base.setDate(base.getDate() + REGRAS_AVISO.prazoLegalDias);
+
+  // antecipa para último dia útil se necessário
+  while (!isDiaUtil(base)) {
+    base.setDate(base.getDate() - 1);
+  }
+
+  document.getElementById('df-vencAviso').value = base.toISOString().slice(0, 10);
+}
+
+function isDiaUtil(date) {
+  const dow = date.getDay(); // 0=dom, 6=sab
+  if (dow === 0 || dow === 6) return false;
+  const mmdd = String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  const yyyymmdd = date.toISOString().slice(0, 10);
+  if (REGRAS_AVISO.feriadosFixos.includes(mmdd)) return false;
+  if (REGRAS_AVISO.feriadosMoveis.includes(yyyymmdd)) return false;
+  return true;
+}
+
+function mascaraMoeda(el) {
+  let v = el.value.replace(/\D/g, '');
+  v = (parseInt(v || '0') / 100).toFixed(2);
+  el.value = v.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function renderSalarios(lista) {
+  const el = document.getElementById('salarioList');
+  if (!lista || !lista.length) {
+    el.innerHTML = '<p style="font-size:12px;color:var(--text-sec);padding:4px 0;">Nenhum histórico salarial registrado.</p>';
+    return;
+  }
+  el.innerHTML = lista.map((s, i) => `
+    <div class="dep-item" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;">
+      <div class="field"><label>Valor (R$)</label><input type="text" class="sal-valor" value="${s.valor||''}" oninput="mascaraMoeda(this)"></div>
+      <div class="field"><label>Data</label><input type="date" class="sal-data" value="${s.data||''}"></div>
+      <button class="btn-rem-dep" onclick="this.closest('.dep-item').remove()" title="Remover">✕</button>
+    </div>`).join('');
+}
+
+function adicionarSalario() {
+  const el = document.getElementById('salarioList');
+  const p = el.querySelector('p');
+  if (p) p.remove();
+  const div = document.createElement('div');
+  div.className = 'dep-item';
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;';
+  div.innerHTML = `
+    <div class="field"><label>Valor (R$)</label><input type="text" class="sal-valor" placeholder="0,00" oninput="mascaraMoeda(this)"></div>
+    <div class="field"><label>Data</label><input type="date" class="sal-data"></div>
+    <button class="btn-rem-dep" onclick="this.closest('.dep-item').remove()" title="Remover">✕</button>`;
+  el.appendChild(div);
+}
+
+// ─── Dependentes ────────────────────────────────────────────────────────────
+
+function renderDependentes(lista) {
+  const el = document.getElementById('depList');
+  el.innerHTML = '';
+  lista.forEach((d, i) => el.appendChild(criarItemDependente(d, i)));
+  if (!lista.length) {
+    el.innerHTML = '<p style="font-size:12px;color:var(--text-sec);padding:4px 0;">Nenhum dependente cadastrado.</p>';
+  }
+}
+
+function criarItemDependente(d, idx) {
+  const div = document.createElement('div');
+  div.className = 'dep-item';
+  div.dataset.idx = idx;
+  div.innerHTML = `<div class="dep-item-grid">
+    <div class="field"><label>Nome</label><input type="text" class="dep-nome" value="${d.nome||''}" placeholder="Nome do dependente"></div>
+    <div class="field"><label>Parentesco</label>
+      <select class="dep-parentesco">
+        <option value="">Selecione</option>
+        ${['Filho(a)','Enteado(a)','Cônjuge','Companheiro(a)','Pai','Mãe','Outro'].map(p=>`<option value="${p}" ${d.parentesco===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field"><label>CPF</label><input type="text" class="dep-cpf" value="${d.cpf||''}" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)"></div>
+    <div class="field"><label>Nascimento</label><input type="date" class="dep-nasc" value="${d.nascimento||''}"></div>
+    <button class="dep-remove" onclick="removerDependente(this)" title="Remover">✕</button>
+  </div>`;
+  return div;
+}
+
+function adicionarDependente() {
+  const el = document.getElementById('depList');
+  const p = el.querySelector('p');
+  if (p) p.remove();
+  const idx = el.children.length;
+  el.appendChild(criarItemDependente({}, idx));
+}
+
+function removerDependente(btn) {
+  btn.closest('.dep-item').remove();
+  const el = document.getElementById('depList');
+  if (!el.children.length) {
+    el.innerHTML = '<p style="font-size:12px;color:var(--text-sec);padding:4px 0;">Nenhum dependente cadastrado.</p>';
+  }
+}
+
+function coletarDependentes() {
+  return [...document.querySelectorAll('#depList .dep-item')].map(div => ({
+    nome:        div.querySelector('.dep-nome').value.trim(),
+    parentesco:  div.querySelector('.dep-parentesco').value,
+    cpf:         div.querySelector('.dep-cpf').value.trim(),
+    nascimento:  div.querySelector('.dep-nasc').value,
+  })).filter(d => d.nome);
+}
+
+// ─── Histórico de movimentações ──────────────────────────────────────────────
+
+function renderHistoricoFicha() {
+  if (_fichaIdx === null) return;
+  const c = COLABORADORES[_fichaIdx];
+  const lista = c.historico || [];
+  const el = document.getElementById('historicoList');
+
+  if (!lista.length) {
+    el.innerHTML = '<p class="hist-vazio">Nenhuma movimentação registrada ainda.<br>Alterações de cargo, setor e gestor serão listadas aqui após salvar.</p>';
+    return;
+  }
+
+  const labels = { cargo: 'Cargo', setor: 'Setor', gestor: 'Gestor' };
+  el.innerHTML = lista.map(h => `
+    <div class="hist-item">
+      <div class="hist-dot ${h.tipo}"></div>
+      <div class="hist-info">
+        <div class="hist-tipo">${labels[h.tipo] || h.tipo}</div>
+        <div class="hist-detalhe"><span style="color:var(--text-sec);">${h.de}</span> → <strong>${h.para}</strong></div>
+        <div class="hist-data">${fmtDateBR(h.data)}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── CEP ─────────────────────────────────────────────────────────────────────
+
+function mascaraCEP(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 8);
+  if (v.length > 5) v = v.replace(/^(\d{5})(\d+)$/, '$1-$2');
+  input.value = v;
+}
+
+async function buscarCEP(cep) {
+  const digits = cep.replace(/\D/g, '');
+  if (digits.length !== 8) return;
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+    const d = await r.json();
+    if (d.erro) { mostrarToast('CEP não encontrado.'); return; }
+    document.getElementById('df-rua').value    = d.logradouro || '';
+    document.getElementById('df-bairro').value = d.bairro     || '';
+    document.getElementById('df-cidade').value = d.localidade || '';
+    document.getElementById('df-estado').value = d.uf         || '';
+    mostrarToast('Endereço preenchido automaticamente.');
+    atualizarMapa();
+  } catch(e) {
+    mostrarToast('Não foi possível consultar o CEP.');
+  }
+}
+
+function atualizarMapa() {
+  const rua    = document.getElementById('df-rua').value.trim();
+  const numero = document.getElementById('df-numero').value.trim();
+  const bairro = document.getElementById('df-bairro').value.trim();
+  const cidade = document.getElementById('df-cidade').value.trim();
+  const estado = document.getElementById('df-estado').value.trim();
+  const cep    = document.getElementById('df-cep').value.trim();
+  const partes = [rua, numero, bairro, cidade, estado, cep].filter(Boolean);
+  if (partes.length < 3) { document.getElementById('mapaBox').style.display = 'none'; return; }
+  const query = encodeURIComponent(partes.join(', ') + ', Brasil');
+  document.getElementById('mapaFrame').src = `https://maps.google.com/maps?q=${query}&output=embed&z=16`;
+  document.getElementById('mapaBox').style.display = 'block';
+}
+
+// ─── Busca de bancos (BrasilAPI) ─────────────────────────────────────────────
+
+let _bancos = [];
+
+async function carregarBancos() {
+  if (_bancos.length) return;
+  try {
+    const r = await fetch('https://brasilapi.com.br/api/banks/v1');
+    const data = await r.json();
+    _bancos = data.filter(b => b.name).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  } catch(e) { console.warn('BrasilAPI bancos indisponível'); }
+}
+
+function buscarBanco(q) {
+  const drop = document.getElementById('bancoDrop');
+  if (!q || q.length < 2) { drop.style.display = 'none'; return; }
+  carregarBancos().then(() => {
+    const termo = q.toLowerCase();
+    const resultados = _bancos.filter(b =>
+      b.name.toLowerCase().includes(termo) ||
+      (b.code && String(b.code).includes(termo))
+    ).slice(0, 12);
+    if (!resultados.length) { drop.style.display = 'none'; return; }
+    drop.innerHTML = resultados.map(b =>
+      `<div onclick="selecionarBanco(${b.code},'${b.name.replace(/'/g,"\\'")}')"
+        style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;display:flex;gap:8px;align-items:center;">
+        <span style="font-size:11px;color:#888;min-width:36px;">${b.code ? String(b.code).padStart(3,'0') : '—'}</span>
+        <span>${b.name}</span>
+      </div>`
+    ).join('');
+    drop.querySelectorAll('div').forEach(el => {
+      el.addEventListener('mouseover', () => el.style.background = '#f5f5f5');
+      el.addEventListener('mouseout',  () => el.style.background = '');
+    });
+    drop.style.display = 'block';
+  });
+}
+
+function selecionarBanco(codigo, nome) {
+  document.getElementById('df-banco').value      = nome;
+  document.getElementById('df-bancoCodigo').value = codigo || '';
+  const info = document.getElementById('df-bancoInfo');
+  if (codigo) { info.textContent = 'Código: ' + String(codigo).padStart(3,'0'); info.style.display = 'block'; }
+  document.getElementById('bancoDrop').style.display = 'none';
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#df-banco') && !e.target.closest('#bancoDrop'))
+    document.getElementById('bancoDrop').style.display = 'none';
+});
+
+// ─── Naturalidade (IBGE) ─────────────────────────────────────────────────────
+
+async function carregarEstadosNat() {
+  const sel = document.getElementById('df-natEstado');
+  if (sel.options.length > 1) return; // já carregado
+  try {
+    const r = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome');
+    const estados = await r.json();
+    estados.forEach(e => {
+      const o = document.createElement('option');
+      o.value = e.sigla;
+      o.textContent = e.nome + ' (' + e.sigla + ')';
+      sel.appendChild(o);
+    });
+  } catch(e) { console.warn('IBGE estados indisponível'); }
+}
+
+async function carregarCidadesNat() {
+  const uf = document.getElementById('df-natEstado').value;
+  const sel = document.getElementById('df-naturalidade');
+  sel.innerHTML = '<option value="">Carregando...</option>';
+  if (!uf) { sel.innerHTML = '<option value="">Selecione a cidade</option>'; return; }
+  try {
+    const r = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios?orderBy=nome`);
+    const cidades = await r.json();
+    sel.innerHTML = '<option value="">Selecione a cidade</option>';
+    cidades.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.nome;
+      o.textContent = c.nome;
+      sel.appendChild(o);
+    });
+  } catch(e) {
+    sel.innerHTML = '<option value="">Erro ao carregar cidades</option>';
+  }
+}
+
+function togglePaisNascimento() {
+  const estrangeiro = document.getElementById('df-nacionalidade').value === 'Estrangeiro(a)';
+  document.getElementById('campoPaisNasc').style.display = estrangeiro ? 'flex' : 'none';
+  document.getElementById('df-natEstado').closest('.field').style.display = estrangeiro ? 'none' : 'flex';
+  document.getElementById('df-naturalidade').closest('.field').style.display = estrangeiro ? 'none' : 'flex';
+}
+
+async function preencherNaturalidade(estado, cidade) {
+  await carregarEstadosNat();
+  const selEstado = document.getElementById('df-natEstado');
+  selEstado.value = estado || '';
+  if (estado) {
+    await carregarCidadesNat();
+    document.getElementById('df-naturalidade').value = cidade || '';
+  }
+}
+
+// ─── Máscaras ────────────────────────────────────────────────────────────────
+
+function mascaraRG(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 9);
+  if (v.length > 8) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d)$/, '$1.$2.$3-$4');
+  else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d+)$/, '$1.$2.$3');
+  else if (v.length > 2) v = v.replace(/^(\d{2})(\d+)$/, '$1.$2');
+  input.value = v;
+}
+
+function mascaraAgencia(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 5);
+  if (v.length === 5) v = v.replace(/^(\d{4})(\d)$/, '$1-$2');
+  input.value = v;
+}
+
+function mascaraCPF(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 11);
+  v = v.replace(/^(\d{3})(\d)/, '$1.$2');
+  v = v.replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3');
+  v = v.replace(/\.(\d{3})(\d)$/, '.$1-$2');
+  input.value = v;
+}
+
+function mascaraPIS(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 11);
+  v = v.replace(/^(\d{3})(\d)/, '$1.$2');
+  v = v.replace(/^(\d{3})\.(\d{5})(\d)/, '$1.$2.$3');
+  v = v.replace(/\.(\d{2})(\d)$/, '.$1-$2');
+  input.value = v;
+}
+
+// ─── Máscara de telefone ─────────────────────────────────────────────────────
+
+function mascaraTel(input) {
+  input.addEventListener('input', function() {
+    let v = this.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 10) {
+      v = v.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
+    } else if (v.length > 6) {
+      v = v.replace(/^(\d{2})(\d{4,5})(\d{0,4})$/, (_, a, b, c) => c ? `(${a}) ${b}-${c}` : `(${a}) ${b}`);
+    } else if (v.length > 2) {
+      v = v.replace(/^(\d{2})(\d+)$/, '($1) $2');
+    } else if (v.length > 0) {
+      v = v.replace(/^(\d+)$/, '($1');
+    }
+    this.value = v;
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  mascaraTel(document.getElementById('df-celular'));
+  mascaraTel(document.getElementById('df-whatsapp'));
+  carregarDoSupabase();
+});
+
+// ─── Toast ───────────────────────────────────────────────────────────────────
+
+function mostrarToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
