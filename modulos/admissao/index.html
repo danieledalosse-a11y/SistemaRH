@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admissão Online — Sistema RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f5f7; --surface: #ffffff; --border: #e0e0e0;
+    --text: #1a1a1a; --text-sec: #666; --text-ter: #9ca3af;
+    --accent: #1a1a1a;
+    --green: #15803d; --green-bg: #f0fdf4;
+    --red: #b91c1c; --red-bg: #fef2f2;
+    --blue: #1d4ed8; --blue-bg: #eff6ff; --blue-light: #dbeafe;
+    --amber: #92400e; --amber-bg: #fffbeb;
+    --purple: #4B1D8F; --purple-bg: #EDE8FE;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+
+  /* Topbar */
+  .topbar { background: var(--accent); color: #fff; padding: 0 28px; height: 64px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .topbar-icon { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .topbar-icon svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .topbar-title { font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #fff; }
+  .topbar-sep { color: rgba(255,255,255,0.2); font-size: 20px; margin: 0 8px; font-weight: 200; }
+  .topbar-mod-wrap { display: flex; align-items: center; gap: 8px; }
+  .topbar-mod { font-size: 15px; font-weight: 600; color: #fff; background: rgba(255,255,255,0.13); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; padding: 3px 12px; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .topbar-user-name { font-size: 13px; color: rgba(255,255,255,0.6); }
+  .avatar-tb { width: 34px; height: 34px; border-radius: 50%; background: #1570EF; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .btn-icon { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.45); padding: 4px; display: flex; align-items: center; transition: color 0.15s; }
+  .btn-icon:hover { color: #fff; }
+
+  /* Layout */
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 24px; }
+  .tab-btn { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; padding: 10px 20px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; color: var(--text-sec); transition: all 0.15s; }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Toolbar */
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar-spacer { flex: 1; }
+  .btn { border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-family: inherit; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.15s, background 0.15s; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: #b0b8c4; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-success { background: var(--green); color: #fff; }
+  .btn-success:hover { opacity: 0.88; }
+  .btn-danger { background: var(--red-bg); color: var(--red); border: 1px solid #fca5a5; }
+  .btn-danger:hover { background: #fecaca; }
+  .filters input, .filters select { border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: #1a1a1a; color: #fff; padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; white-space: nowrap; letter-spacing: 0.04em; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: #fafafa; }
+  tbody td { padding: 10px 14px; vertical-align: middle; }
+  .td-sec { color: var(--text-sec); font-size: 12px; }
+  .td-name { font-weight: 500; }
+  .empty-row td { text-align: center; padding: 32px; color: var(--text-sec); }
+
+  /* Badges */
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  /* pendente = aguardando candidato — neutro/cinza */
+  .badge-pendente  { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+  .badge-pendente .badge-dot { background: #94a3b8; }
+  /* preenchido = ficha recebida, RH precisa agir — laranja urgente */
+  .badge-preenchido { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
+  .badge-preenchido .badge-dot { background: #f97316; animation: pulse-dot 1.5s infinite; }
+  /* aprovado = verde */
+  .badge-aprovado  { background: var(--green-bg); color: var(--green); border: 1px solid #86efac; }
+  .badge-aprovado .badge-dot { background: var(--green); }
+  /* efetivado = verde escuro */
+  .badge-efetivado { background: #14532d; color: #bbf7d0; border: 1px solid #166534; }
+  .badge-efetivado .badge-dot { background: #86efac; }
+  /* cancelado = cinza apagado */
+  .badge-cancelado { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
+  .badge-cancelado .badge-dot { background: #cbd5e1; }
+  @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+
+  /* Actions cell */
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { width: 520px; max-width: 100%; max-height: 90vh; overflow-y: auto; background: var(--surface); border-radius: 14px; box-shadow: 0 8px 40px rgba(0,0,0,0.18); transform: scale(0.96); opacity: 0; transition: transform 0.2s, opacity 0.2s; }
+  .modal-overlay.open .modal { transform: scale(1); opacity: 1; }
+  .modal-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-size: 16px; font-weight: 700; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-sec); padding: 4px; border-radius: 6px; display: flex; }
+  .modal-close:hover { background: #f0f0f0; color: var(--text); }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 14px 24px 20px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--border); }
+
+  /* Form modal */
+  .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text-sec); }
+  .form-label .req { color: var(--red); }
+  .form-control { border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 14px; font-family: inherit; color: var(--text); background: #fff; width: 100%; }
+  .form-control:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,78,216,0.08); }
+
+  /* Link box */
+  .link-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-size: 13px; word-break: break-all; color: var(--text-sec); margin-bottom: 14px; }
+
+  /* Panel centralizado */
+  .panel-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 300; align-items: center; justify-content: center; padding: 20px; }
+  .panel-overlay.open { display: flex; }
+  .panel { width: 880px; max-width: 100%; max-height: 92vh; background: var(--surface); border-radius: 14px; box-shadow: 0 12px 48px rgba(0,0,0,0.22); z-index: 301; display: flex; flex-direction: column; overflow: hidden; transform: scale(0.97); opacity: 0; transition: transform 0.2s, opacity 0.2s; }
+  .panel-overlay.open .panel { transform: scale(1); opacity: 1; }
+  .panel-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .panel-header h2 { font-size: 17px; font-weight: 700; flex: 1; }
+  .panel-close { background: none; border: none; cursor: pointer; color: var(--text-sec); padding: 5px; border-radius: 7px; display: flex; }
+  .panel-close:hover { background: #f0f0f0; color: var(--text); }
+  .panel-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; padding: 0 24px; }
+  .panel-tab { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 10px 18px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; color: var(--text-sec); }
+  .panel-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .panel-body { flex: 1; overflow-y: auto; padding: 24px; }
+  .panel-footer { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; flex-wrap: wrap; flex-shrink: 0; align-items: center; }
+  .panel-footer-spacer { flex: 1; }
+  .panel-tab-pane { display: none; }
+  .panel-tab-pane.active { display: block; }
+  .panel-save-info { font-size: 12px; color: var(--text-ter); }
+
+  /* Data/form display */
+  .data-section { margin-bottom: 24px; }
+  .data-section-title { font-size: 11px; font-weight: 700; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .data-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .data-row { display: flex; flex-direction: column; gap: 4px; }
+  .data-label { font-size: 11px; font-weight: 600; color: var(--text-sec); }
+  .data-val { font-size: 13px; font-weight: 500; word-break: break-word; }
+  .data-val.empty { color: var(--text-ter); font-weight: 400; font-style: italic; }
+  .form-control-sm { border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 13px; font-family: inherit; color: var(--text); background: #fff; width: 100%; }
+  .form-control-sm:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,78,216,0.08); }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 13px; cursor: pointer; }
+  .checkbox-row input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--blue); }
+
+  /* Doc list panel */
+  .panel-doc-list { display: flex; flex-direction: column; gap: 8px; }
+  .panel-doc-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; }
+  .panel-doc-item.has-file { border-color: var(--green); background: var(--green-bg); }
+  .panel-doc-name { flex: 1; font-size: 13px; font-weight: 500; }
+  .panel-doc-status { font-size: 11px; color: var(--text-ter); }
+  .panel-doc-item.has-file .panel-doc-status { color: var(--green); }
+
+  /* Alert inline */
+  .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+  .alert-success { background: var(--green-bg); color: var(--green); border: 1px solid #86efac; }
+  .alert-error { background: var(--red-bg); color: var(--red); border: 1px solid #fca5a5; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .filter-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-sec); transition: all 0.15s; }
+  .filter-chip.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+  /* Tab badge */
+  .tab-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; background: #f97316; color: #fff; font-size: 10px; font-weight: 700; border-radius: 9px; margin-left: 6px; }
+
+  /* Pendência banner */
+  .pendencia-banner { display: flex; align-items: flex-start; gap: 12px; background: #fff7ed; border: 1px solid #fdba74; border-left: 4px solid #f97316; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+  .pendencia-banner svg { flex-shrink: 0; margin-top: 1px; }
+  .pendencia-banner-body { display: flex; flex-direction: column; gap: 4px; }
+  .pendencia-banner-title { font-size: 13px; font-weight: 700; color: #9a3412; }
+  .pendencia-banner-items { display: flex; flex-direction: column; gap: 3px; }
+  .pendencia-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #78350f; }
+  .pendencia-item a { color: #9a3412; font-weight: 700; text-decoration: underline; cursor: pointer; margin-left: 4px; }
+  .pendencia-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+  @media (max-width: 700px) {
+    .data-grid { grid-template-columns: 1fr; }
+    .panel { width: 100vw; right: -100vw; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Auth check -->
+<script>
+(function() {
+  const sess = localStorage.getItem('sb_session');
+  if (!sess) { window.location.href = '../../login.html'; return; }
+  try {
+    const s = JSON.parse(sess);
+    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+  } catch(_) { window.location.href = '../../login.html'; }
+})();
+</script>
+
+<div class="topbar">
+  <div class="topbar-brand" style="text-decoration:none;color:#fff;display:flex;align-items:center;gap:10px;" onclick="window.location.href='../../index.html'" role="link">
+    <div class="topbar-icon">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+    </div>
+    <span class="topbar-title">Sistema RH</span>
+  </div>
+  <div class="topbar-mod-wrap">
+    <span class="topbar-sep">|</span>
+    <span class="topbar-mod">Admissão Online</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user-name" id="userName">—</span>
+    <div class="avatar-tb" id="userAvatar">?</div>
+    <button class="btn-icon" onclick="logout()" title="Sair">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="container">
+  <div id="pendenciaBanner" style="display:none" class="pendencia-banner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <div class="pendencia-banner-body">
+      <div class="pendencia-banner-title">Ações pendentes</div>
+      <div class="pendencia-banner-items" id="pendenciaItems"></div>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="convites">Convites</button>
+    <button class="tab-btn" data-tab="fichas">Fichas Recebidas <span class="tab-badge" id="badgeFichas" style="display:none"></span></button>
+  </div>
+
+  <!-- ABA CONVITES -->
+  <div class="tab-pane active" id="tab-convites">
+    <div class="toolbar">
+      <button class="btn btn-primary" id="btnNovoConvite">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo Convite
+      </button>
+    </div>
+    <div class="table-wrap">
+      <table id="tblConvites">
+        <thead>
+          <tr>
+            <th>Data Envio</th>
+            <th>Nome Candidato</th>
+            <th>Cargo</th>
+            <th>Unidade</th>
+            <th>Enviado por</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyConvites">
+          <tr class="empty-row"><td colspan="7">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ABA FICHAS -->
+  <div class="tab-pane" id="tab-fichas">
+    <div class="filter-bar" id="filterFichas">
+      <button class="filter-chip active" data-status="">Todos</button>
+      <button class="filter-chip" data-status="preenchido">Aguardando revisão</button>
+      <button class="filter-chip" data-status="aprovado">Aprovados</button>
+      <button class="filter-chip" data-status="efetivado">Efetivados</button>
+    </div>
+    <div class="table-wrap">
+      <table id="tblFichas">
+        <thead>
+          <tr>
+            <th>Data Envio</th>
+            <th>Nome</th>
+            <th>Cargo</th>
+            <th>Unidade</th>
+            <th>Preenchido em</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyFichas">
+          <tr class="empty-row"><td colspan="7">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo Convite -->
+<div class="modal-overlay" id="modalConvite">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Novo Convite de Admissão</span>
+      <button class="modal-close" onclick="closeModal('modalConvite')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div id="alertConvite"></div>
+      <div class="form-group">
+        <label class="form-label" for="c_nome">Nome do candidato <span class="req">*</span></label>
+        <input class="form-control" type="text" id="c_nome" placeholder="Nome completo">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="c_tel">Telefone / WhatsApp</label>
+        <input class="form-control" type="text" id="c_tel" placeholder="(44) 99999-0000">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="c_cargo">Cargo <span class="req">*</span></label>
+        <select class="form-control" id="c_cargo"><option value="">Selecione</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="c_unidade">Unidade</label>
+        <select class="form-control" id="c_unidade"><option value="">Selecione</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modalConvite')">Cancelar</button>
+      <button class="btn btn-primary" id="btnSalvarConvite">Enviar Convite</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Sucesso Convite -->
+<div class="modal-overlay" id="modalSucesso">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Convite gerado com sucesso!</span>
+      <button class="modal-close" onclick="closeModal('modalSucesso'); loadConvites();">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-sec);margin-bottom:14px;">Use os botões abaixo para enviar o link de preenchimento ao candidato:</p>
+      <div style="background:var(--blue-bg);border:1px solid var(--blue-light);border-radius:9px;padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--blue);margin-bottom:4px;">Token de acesso</div>
+        <div id="linkGerado" style="font-size:13px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;word-break:break-all;"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="btnCopiarLink">Copiar Link</button>
+        <button class="btn btn-primary" id="btnWhatsApp">Abrir WhatsApp</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modalSucesso'); loadConvites();">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Dados para o PDF -->
+<div class="modal-overlay" id="modalPDF" style="z-index:500;">
+  <div class="modal" style="width:480px;">
+    <div class="modal-header">
+      <span class="modal-title">Dados para o PDF</span>
+      <button class="modal-close" onclick="closeModal('modalPDF')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--text-sec);margin-bottom:16px;">Esses dados aparecerão no topo do PDF junto com a ficha completa do candidato.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Empresa</label>
+          <input class="form-control" id="pdf_empresa" type="text" placeholder="Ex: REVEST MATRIZ">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data de admissão</label>
+          <input class="form-control" id="pdf_data" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Departamento</label>
+          <input class="form-control" id="pdf_departamento" type="text" placeholder="Ex: Vendas">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Cargo</label>
+          <input class="form-control" id="pdf_cargo" type="text">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Salário</label>
+          <input class="form-control" id="pdf_salario" type="text" placeholder="Ex: R$ 2.266,00 (Garantia)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contrato</label>
+          <input class="form-control" id="pdf_contrato" type="text">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Carga horária</label>
+          <input class="form-control" id="pdf_carga" type="text">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modalPDF')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarGerarPDF()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Gerar PDF
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Slide-in Panel Revisão -->
+<div class="panel-overlay" id="panelOverlay">
+  <div class="panel" id="reviewPanel">
+    <div class="panel-header">
+      <h2 id="panelTitle">Ficha do Candidato</h2>
+      <span id="panelBadge"></span>
+      <button class="panel-close" onclick="closePanel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-ptab="pessoal">Dados Pessoais</button>
+      <button class="panel-tab" data-ptab="familia">Família</button>
+      <button class="panel-tab" data-ptab="comp">Complementares</button>
+      <button class="panel-tab" data-ptab="docs">Documentos</button>
+    </div>
+    <div class="panel-body">
+      <div class="panel-tab-pane active" id="ptab-pessoal"></div>
+      <div class="panel-tab-pane" id="ptab-familia"></div>
+      <div class="panel-tab-pane" id="ptab-comp"></div>
+      <div class="panel-tab-pane" id="ptab-docs"></div>
+    </div>
+    <div class="panel-footer">
+      <button class="btn btn-success" id="btnEfetivar">Efetivar Contratação</button>
+      <button class="btn btn-secondary" id="btnGerarPDF">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Gerar PDF
+      </button>
+      <div class="panel-footer-spacer"></div>
+      <span class="panel-save-info" id="panelSaveInfo"></span>
+      <button class="btn btn-primary" id="btnSalvarFicha">Salvar alterações</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
+const SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+
+let currentFicha = null;
+let currentConvite = null;
+let allConvites = [];
+let allFichas = [];
+let fichaStatusFilter = '';
+
+// ─── Auth ────────────────────────────────────────────────
+(function() {
+  try {
+    const s = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    const nome = p.nome || s.email || '';
+    const iniciais = nome.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+    document.getElementById('userAvatar').textContent = iniciais;
+    document.getElementById('userName').textContent = nome.split(' ')[0];
+  } catch(_) {}
+})();
+
+function logout() {
+  localStorage.removeItem('sb_session');
+  localStorage.removeItem('sb_perfil');
+  window.location.href = '../../login.html';
+}
+
+// ─── Tabs ────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ─── Unidades ────────────────────────────────────────────
+async function loadUnidades() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/param_empresa?select=nome&order=nome`, { headers: SB_HEADERS });
+    const data = await res.json();
+    const sel = document.getElementById('c_unidade');
+    if (Array.isArray(data)) {
+      data.forEach(e => { const o = document.createElement('option'); o.value = e.nome; o.textContent = e.nome; sel.appendChild(o); });
+    }
+  } catch(_) {}
+}
+
+async function loadCargos() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/param_cargo?select=nome&ativo=eq.true&order=nome`, { headers: SB_HEADERS });
+    const data = await res.json();
+    const sel = document.getElementById('c_cargo');
+    if (Array.isArray(data)) {
+      data.forEach(e => { const o = document.createElement('option'); o.value = e.nome; o.textContent = e.nome; sel.appendChild(o); });
+    }
+  } catch(_) {}
+}
+
+// ─── Convites ────────────────────────────────────────────
+async function loadConvites() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/admissao_convites?select=*&order=created_at.desc`, { headers: SB_HEADERS });
+    allConvites = await res.json();
+    renderConvites();
+  } catch(e) {
+    document.getElementById('tbodyConvites').innerHTML = '<tr class="empty-row"><td colspan="7">Erro ao carregar convites.</td></tr>';
+  }
+}
+
+function renderConvites() {
+  const tbody = document.getElementById('tbodyConvites');
+  updateBanner();
+  if (!allConvites.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhum convite cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = allConvites.map(c => {
+    const link = `${window.location.origin}/admissao-online.html?token=${c.token}`;
+    const podeVer = ['preenchido','aprovado','efetivado'].includes(c.status);
+    return `<tr>
+      <td class="td-sec">${fmtDate(c.created_at)}</td>
+      <td class="td-name">${esc(c.nome_candidato)}</td>
+      <td class="td-sec">${esc(c.cargo_pretendido||'—')}</td>
+      <td class="td-sec">${esc(c.unidade||'—')}</td>
+      <td class="td-sec">${esc(c.enviado_por||'—')}</td>
+      <td>${statusBadge(c.status)}</td>
+      <td>
+        <div class="actions">
+          <button class="btn btn-secondary btn-sm" onclick="copiarLink('${link}')">Copiar Link</button>
+          ${podeVer ? `<button class="btn btn-primary btn-sm" onclick="verFicha('${c.token}')">Revisar Ficha</button>` : ''}
+          ${c.status === 'pendente' ? `<button class="btn btn-danger btn-sm" onclick="cancelarConvite(${c.id})">Cancelar</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function cancelarConvite(id) {
+  if (!confirm('Cancelar este convite?')) return;
+  await fetch(`${SB_URL}/rest/v1/admissao_convites?id=eq.${id}`, {
+    method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ status: 'cancelado' })
+  });
+  loadConvites();
+}
+
+// ─── Novo Convite ────────────────────────────────────────
+document.getElementById('btnNovoConvite').addEventListener('click', () => {
+  document.getElementById('c_nome').value = '';
+  document.getElementById('c_tel').value = '';
+  document.getElementById('c_cargo').value = '';
+  document.getElementById('c_unidade').value = '';
+  document.getElementById('alertConvite').innerHTML = '';
+  openModal('modalConvite');
+});
+
+document.getElementById('btnSalvarConvite').addEventListener('click', async () => {
+  const nome = document.getElementById('c_nome').value.trim();
+  const cargo = document.getElementById('c_cargo').value;
+  if (!nome || !cargo) {
+    document.getElementById('alertConvite').innerHTML = '<div class="alert alert-error">Nome e cargo são obrigatórios.</div>';
+    return;
+  }
+  const perf = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  const payload = {
+    nome_candidato: nome,
+    telefone: document.getElementById('c_tel').value.trim(),
+    cargo_pretendido: document.getElementById('c_cargo').value.trim(),
+    unidade: document.getElementById('c_unidade').value,
+    enviado_por: perf.nome || ''
+  };
+  const btn = document.getElementById('btnSalvarConvite');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/admissao_convites`, {
+      method: 'POST', headers: SB_HEADERS, body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    const convite = Array.isArray(data) ? data[0] : data;
+    closeModal('modalConvite');
+    const link = `${window.location.origin}/admissao-online.html?token=${convite.token}`;
+    document.getElementById('linkGerado').textContent = convite.token;
+    document.getElementById('btnCopiarLink').onclick = () => copiarLink(link);
+    document.getElementById('btnWhatsApp').onclick = () => {
+      const tel = document.getElementById('c_tel').value.replace(/\D/g, '');
+      const numero = tel ? `55${tel}` : '';
+      const msg = encodeURIComponent(`Olá ${nome}, segue o link para preencher sua ficha de admissão: ${link}`);
+      window.open(`https://wa.me/${numero}?text=${msg}`, '_blank');
+    };
+    openModal('modalSucesso');
+  } catch(e) {
+    document.getElementById('alertConvite').innerHTML = '<div class="alert alert-error">Erro ao salvar convite. Tente novamente.</div>';
+  }
+  btn.disabled = false; btn.textContent = 'Enviar Convite';
+});
+
+// ─── Fichas ──────────────────────────────────────────────
+async function loadFichas() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/admissao_fichas?select=*,admissao_convites(nome_candidato,cargo_pretendido,unidade,status,token)&order=created_at.desc`, { headers: SB_HEADERS });
+    allFichas = await res.json();
+    renderFichas();
+  } catch(e) {
+    document.getElementById('tbodyFichas').innerHTML = '<tr class="empty-row"><td colspan="7">Erro ao carregar fichas.</td></tr>';
+  }
+}
+
+function statusLabel(status) {
+  return { pendente:'Aguardando candidato', preenchido:'Ficha recebida', aprovado:'Aprovado', efetivado:'Efetivado', cancelado:'Cancelado' }[status] || status;
+}
+function statusBadge(status) {
+  return `<span class="badge badge-${status}"><span class="badge-dot"></span>${statusLabel(status)}</span>`;
+}
+
+function updateBanner() {
+  const paraRevisar = allFichas.filter(f => f.admissao_convites?.status === 'preenchido').length;
+  const aguardandoCandidato = allConvites.filter(c => c.status === 'pendente').length;
+  const badgeEl = document.getElementById('badgeFichas');
+  const banner = document.getElementById('pendenciaBanner');
+  const items = document.getElementById('pendenciaItems');
+  if (paraRevisar > 0) { badgeEl.textContent = paraRevisar; badgeEl.style.display = 'inline-flex'; } else { badgeEl.style.display = 'none'; }
+  if (paraRevisar > 0 || aguardandoCandidato > 0) {
+    let html = '';
+    if (paraRevisar > 0) html += `<div class="pendencia-item"><span class="pendencia-dot" style="background:#f97316"></span><strong>${paraRevisar} ficha${paraRevisar>1?'s':''} recebida${paraRevisar>1?'s':''}</strong> — aguardando revisão do RH<a onclick="document.querySelector('.tab-btn[data-tab=fichas]').click();document.querySelector('.filter-chip[data-status=preenchido]').click()">Revisar agora</a></div>`;
+    if (aguardandoCandidato > 0) html += `<div class="pendencia-item"><span class="pendencia-dot" style="background:#94a3b8"></span><strong>${aguardandoCandidato} convite${aguardandoCandidato>1?'s':''}</strong> enviado${aguardandoCandidato>1?'s':''} — aguardando candidato preencher</div>`;
+    items.innerHTML = html;
+    banner.style.display = 'flex';
+  } else { banner.style.display = 'none'; }
+}
+
+function renderFichas() {
+  const tbody = document.getElementById('tbodyFichas');
+  updateBanner();
+  let fichas = allFichas;
+  if (fichaStatusFilter) fichas = fichas.filter(f => f.admissao_convites?.status === fichaStatusFilter);
+  if (!fichas.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhuma ficha encontrada.</td></tr>'; return; }
+  tbody.innerHTML = fichas.map(f => {
+    const c = f.admissao_convites || {};
+    return `<tr>
+      <td class="td-sec">${fmtDate(f.created_at)}</td>
+      <td class="td-name">${esc(f.nome||c.nome_candidato||'—')}</td>
+      <td class="td-sec">${esc(c.cargo_pretendido||'—')}</td>
+      <td class="td-sec">${esc(c.unidade||'—')}</td>
+      <td class="td-sec">${fmtDate(f.preenchido_em)}</td>
+      <td>${statusBadge(c.status||'pendente')}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="abrirRevisao(${f.id})">Revisar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('filterFichas').addEventListener('click', e => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  fichaStatusFilter = chip.dataset.status;
+  renderFichas();
+});
+
+// ─── Panel Revisão ────────────────────────────────────────
+async function abrirRevisao(id) {
+  const f = allFichas.find(x => x.id === id);
+  if (!f) return;
+  currentFicha = f;
+  currentConvite = f.admissao_convites || {};
+
+  document.getElementById('panelTitle').textContent = f.nome || currentConvite.nome_candidato || 'Candidato';
+  const st = currentConvite.status || 'pendente';
+  document.getElementById('panelBadge').innerHTML = statusBadge(st);
+
+  renderPanelPessoal(f);
+  renderPanelFamilia(f);
+  renderPanelComp(f);
+  renderPanelDocs(f);
+
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel-tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelector('.panel-tab[data-ptab="pessoal"]').classList.add('active');
+  document.getElementById('ptab-pessoal').classList.add('active');
+
+  document.getElementById('panelOverlay').classList.add('open');
+
+  document.getElementById('btnEfetivar').onclick = () => efetivarContratacao(f);
+  document.getElementById('btnGerarPDF').onclick = () => abrirModalPDF(currentConvite);
+  document.getElementById('btnSalvarFicha').onclick = savePanel;
+}
+
+function closePanel() { document.getElementById('panelOverlay').classList.remove('open'); }
+
+document.querySelectorAll('.panel-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel-tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('ptab-' + btn.dataset.ptab).classList.add('active');
+  });
+});
+
+document.getElementById('panelOverlay').addEventListener('click', e => { if (e.target === document.getElementById('panelOverlay')) closePanel(); });
+
+function fi(id, label, val, type='text') {
+  const v = (val === null || val === undefined) ? '' : String(val);
+  return `<div class="data-row"><label class="data-label" for="pf_${id}">${label}</label><input class="form-control-sm" id="pf_${id}" type="${type}" value="${esc(v)}"></div>`;
+}
+function fiSel(id, label, val, opts) {
+  const options = opts.map(o => `<option value="${o}"${val===o?' selected':''}>${o}</option>`).join('');
+  return `<div class="data-row"><label class="data-label" for="pf_${id}">${label}</label><select class="form-control-sm" id="pf_${id}"><option value=""></option>${options}</select></div>`;
+}
+function fiCheck(id, label, val) {
+  return `<div class="data-row"><span class="data-label">${label}</span><label class="checkbox-row"><input type="checkbox" id="pf_${id}"${val?' checked':''}>${val?'Sim':'Não'}</label></div>`;
+}
+function fv(id) { const el = document.getElementById('pf_'+id); if (!el) return ''; if (el.type==='checkbox') return el.checked; return el.value.trim(); }
+
+function renderPanelPessoal(f) {
+  document.getElementById('ptab-pessoal').innerHTML = `
+    <div class="data-section"><div class="data-section-title">Identificação</div><div class="data-grid">
+      ${fi('nome','Nome',f.nome)} ${fi('nascimento','Nascimento',f.nascimento,'date')}
+      ${fiSel('sexo','Sexo',f.sexo,['Masculino','Feminino','Outro'])} ${fi('nacionalidade','Nacionalidade',f.nacionalidade)}
+      ${fi('naturalidade','Naturalidade',f.naturalidade)} ${fi('cpf','CPF',f.cpf)}
+      ${fi('rg','RG',f.rg)} ${fi('rg_orgao','Órgão RG',f.rg_orgao)}
+      ${fi('rg_data','Data RG',f.rg_data,'date')} ${fi('pis','PIS/PASEP',f.pis)}
+      ${fi('titulo_eleitor','Título Eleitor',f.titulo_eleitor)} ${fi('titulo_zona','Zona',f.titulo_zona)}
+      ${fi('titulo_secao','Seção',f.titulo_secao)} ${fi('ctps_numero','CTPS nº',f.ctps_numero)}
+      ${fi('ctps_serie','CTPS Série',f.ctps_serie)}
+    </div></div>
+    <div class="data-section"><div class="data-section-title">CNH</div><div class="data-grid">
+      ${fi('cnh_numero','CNH nº',f.cnh_numero)} ${fiSel('cnh_categoria','Categoria',f.cnh_categoria,['A','B','AB','C','D','E'])}
+      ${fi('cnh_primeira_hab','1ª Habilitação',f.cnh_primeira_hab,'date')} ${fi('cnh_emissao','Emissão',f.cnh_emissao,'date')}
+      ${fi('cnh_validade','Validade',f.cnh_validade,'date')}
+    </div></div>
+    <div class="data-section"><div class="data-section-title">Endereço e Contato</div><div class="data-grid">
+      ${fi('endereco','Endereço',f.endereco)} ${fi('cep','CEP',f.cep)}
+      ${fi('cidade','Cidade',f.cidade)} ${fi('uf','UF',f.uf)}
+      ${fi('celular','Celular',f.celular)} ${fi('tel_recado','Tel. Recado',f.tel_recado)}
+      ${fi('tel_recado_nome','Nome Recado',f.tel_recado_nome)} ${fi('email','E-mail',f.email,'email')}
+    </div></div>`;
+}
+
+function renderPanelFamilia(f) {
+  const deps = Array.isArray(f.dependentes) ? f.dependentes : [];
+  document.getElementById('ptab-familia').innerHTML = `
+    <div class="data-section"><div class="data-section-title">Filiação e Estado Civil</div><div class="data-grid">
+      ${fi('nome_pai','Nome do Pai',f.nome_pai)} ${fi('nome_mae','Nome da Mãe',f.nome_mae)}
+      ${fiSel('estado_civil','Estado Civil',f.estado_civil,['Solteiro(a)','Casado(a)','Divorciado(a)','Viúvo(a)','União Estável'])}
+      ${fi('data_casamento','Data Casamento',f.data_casamento,'date')}
+      ${fi('conjuge_nome','Cônjuge',f.conjuge_nome)} ${fi('conjuge_cpf','CPF Cônjuge',f.conjuge_cpf)}
+      ${fi('conjuge_rg','RG Cônjuge',f.conjuge_rg)} ${fi('conjuge_nascimento','Nasc. Cônjuge',f.conjuge_nascimento,'date')}
+    </div></div>
+    <div class="data-section"><div class="data-section-title">Dependentes</div>
+      ${deps.length ? deps.map(d => `<div style="font-size:13px;padding:6px 0;border-bottom:1px solid var(--border);">${esc(d.nome||'—')} — CPF: ${esc(d.cpf||'—')}</div>`).join('') : '<p style="font-size:13px;color:var(--text-ter);">Sem dependentes informados.</p>'}
+    </div>`;
+}
+
+function renderPanelComp(f) {
+  document.getElementById('ptab-comp').innerHTML = `
+    <div class="data-section"><div class="data-section-title">Formação e Perfil</div><div class="data-grid">
+      ${fiSel('escolaridade','Escolaridade',f.escolaridade,['Fundamental Incompleto','Fundamental Completo','Médio Incompleto','Médio Completo','Superior Incompleto','Superior Completo','Pós-graduação'])}
+      ${fiSel('cor_raca','Cor/Raça',f.cor_raca,['Branca','Preta','Parda','Amarela','Indígena'])}
+      ${fiCheck('vale_transporte','Vale Transporte',f.vale_transporte)}
+      ${fiCheck('primeiro_emprego','Primeiro Emprego',f.primeiro_emprego)}
+      ${fi('hobby','Hobby/Passatempo',f.hobby)}
+    </div></div>
+    <div class="data-section"><div class="data-section-title">Dados Bancários</div><div class="data-grid-3">
+      ${fi('banco','Banco',f.banco)} ${fi('agencia','Agência',f.agencia)} ${fi('conta','Conta',f.conta)}
+    </div></div>`;
+}
+
+async function savePanel() {
+  const btn = document.getElementById('btnSalvarFicha');
+  const info = document.getElementById('panelSaveInfo');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  const payload = {
+    nome: fv('nome'), nascimento: fv('nascimento')||null, sexo: fv('sexo'),
+    nacionalidade: fv('nacionalidade'), naturalidade: fv('naturalidade'), cpf: fv('cpf'),
+    rg: fv('rg'), rg_orgao: fv('rg_orgao'), rg_data: fv('rg_data')||null, pis: fv('pis'),
+    titulo_eleitor: fv('titulo_eleitor'), titulo_zona: fv('titulo_zona'), titulo_secao: fv('titulo_secao'),
+    ctps_numero: fv('ctps_numero'), ctps_serie: fv('ctps_serie'),
+    cnh_numero: fv('cnh_numero'), cnh_categoria: fv('cnh_categoria'),
+    cnh_primeira_hab: fv('cnh_primeira_hab')||null, cnh_emissao: fv('cnh_emissao')||null, cnh_validade: fv('cnh_validade')||null,
+    endereco: fv('endereco'), cep: fv('cep'), cidade: fv('cidade'), uf: fv('uf'),
+    celular: fv('celular'), tel_recado: fv('tel_recado'), tel_recado_nome: fv('tel_recado_nome'), email: fv('email'),
+    nome_pai: fv('nome_pai'), nome_mae: fv('nome_mae'), estado_civil: fv('estado_civil'),
+    data_casamento: fv('data_casamento')||null, conjuge_nome: fv('conjuge_nome'),
+    conjuge_cpf: fv('conjuge_cpf'), conjuge_rg: fv('conjuge_rg'), conjuge_nascimento: fv('conjuge_nascimento')||null,
+    escolaridade: fv('escolaridade'), cor_raca: fv('cor_raca'),
+    vale_transporte: fv('vale_transporte'), primeiro_emprego: fv('primeiro_emprego'),
+    hobby: fv('hobby'), banco: fv('banco'), agencia: fv('agencia'), conta: fv('conta'),
+  };
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${currentFicha.id}`, {
+      method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      Object.assign(currentFicha, payload);
+      info.textContent = 'Salvo ✓'; info.style.color = 'var(--green)';
+      setTimeout(() => { info.textContent = ''; }, 3000);
+    } else { info.textContent = 'Erro ao salvar.'; info.style.color = 'var(--red)'; }
+  } catch(e) { info.textContent = 'Erro ao salvar.'; info.style.color = 'var(--red)'; }
+  btn.disabled = false; btn.textContent = 'Salvar alterações';
+}
+
+function renderPanelDocs(f) {
+  const docs = f.docs || {};
+  const DOC_LABELS = {
+    foto3x4:'Foto 3x4', rg_frente:'RG (frente)', rg_verso:'RG (verso)', cpf_doc:'CPF',
+    titulo:'Título de Eleitor', ctps:'CTPS', pis_doc:'PIS/PASEP', cnh_doc:'CNH',
+    comp_res:'Comprovante de Residência', cert_nasc:'Certidão de Nascimento/Casamento'
+  };
+  document.getElementById('ptab-docs').innerHTML = `<div class="panel-doc-list">` +
+    Object.entries(DOC_LABELS).map(([k, label]) => {
+      const path = docs[k];
+      const has = !!path;
+      const viewBtn = has ? `<a href="${SB_URL}/storage/v1/object/admissao-docs/${path}" target="_blank" style="color:var(--blue);font-size:12px;font-weight:600;text-decoration:none;">Ver</a>` : '';
+      return `<div class="panel-doc-item ${has?'has-file':''}">
+        <span class="panel-doc-name">${label}</span>
+        <span class="panel-doc-status">${has ? 'Enviado ✓' : 'Não enviado'}</span>
+        ${viewBtn}
+      </div>`;
+    }).join('') + `</div>`;
+}
+
+// ─── Efetivar ────────────────────────────────────────────
+async function efetivarContratacao(f) {
+  if (!confirm(`Efetivar a contratação de ${f.nome}?`)) return;
+  try {
+    const btn = document.getElementById('btnEfetivar');
+    btn.disabled = true; btn.textContent = 'Processando...';
+    await fetch(`${SB_URL}/rest/v1/admissao_convites?token=eq.${f.token}`, {
+      method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ status: 'efetivado' })
+    });
+    document.getElementById('panelBadge').innerHTML = statusBadge('efetivado');
+    alert('Contratação efetivada com sucesso!');
+    closePanel();
+    loadFichas();
+    loadConvites();
+  } catch(e) {
+    alert('Erro ao efetivar. Tente novamente.');
+    document.getElementById('btnEfetivar').disabled = false;
+    document.getElementById('btnEfetivar').textContent = 'Efetivar Contratação';
+  }
+}
+
+// ─── Modal PDF ───────────────────────────────────────────
+function abrirModalPDF(c) {
+  document.getElementById('pdf_empresa').value     = c.unidade || '';
+  document.getElementById('pdf_cargo').value       = c.cargo_pretendido || '';
+  document.getElementById('pdf_departamento').value = '';
+  document.getElementById('pdf_data').value        = '';
+  document.getElementById('pdf_salario').value     = '';
+  document.getElementById('pdf_contrato').value    = 'Experiência de 45 dias';
+  document.getElementById('pdf_carga').value       = 'das 08h às 12h e das 14h às 18h';
+  openModal('modalPDF');
+}
+
+function confirmarGerarPDF() {
+  const dadosAdm = {
+    empresa:      document.getElementById('pdf_empresa').value,
+    data:         document.getElementById('pdf_data').value,
+    departamento: document.getElementById('pdf_departamento').value,
+    cargo:        document.getElementById('pdf_cargo').value,
+    salario:      document.getElementById('pdf_salario').value,
+    contrato:     document.getElementById('pdf_contrato').value,
+    carga:        document.getElementById('pdf_carga').value,
+  };
+  closeModal('modalPDF');
+  gerarPDFFicha(currentFicha, currentConvite, dadosAdm);
+}
+
+// ─── Gerar PDF ────────────────────────────────────────────
+function gerarPDFFicha(f, c, dadosAdm = {}) {
+  const DOC_LABELS = {
+    foto3x4:'Foto 3x4', rg_frente:'RG (frente)', rg_verso:'RG (verso)', cpf_doc:'CPF',
+    titulo:'Título de Eleitor', ctps:'CTPS', pis_doc:'PIS/PASEP', cnh_doc:'CNH',
+    comp_res:'Comprovante de Residência', cert_nasc:'Certidão de Nascimento/Casamento'
+  };
+  const docs = f.docs || {};
+  const docsHtml = Object.entries(DOC_LABELS).map(([k, label]) => {
+    const has = !!docs[k];
+    return `<tr><td>${label}</td><td style="text-align:center;color:${has?'#15803d':'#9ca3af'};font-weight:600;">${has ? '✓ Enviado' : '— Não enviado'}</td></tr>`;
+  }).join('');
+
+  const row = (label, val) => val ? `<tr><td class="lbl">${label}</td><td>${val}</td></tr>` : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Ficha de Admissão — ${f.nome || c.nome_candidato || ''}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; background: #fff; }
+  .page { max-width: 740px; margin: 0 auto; padding: 28px 32px; }
+  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; margin-bottom: 20px; }
+  .header-title { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .header-sub { font-size: 11px; color: #555; margin-top: 2px; }
+  .header-meta { text-align: right; font-size: 10px; color: #666; }
+  .section { margin-bottom: 18px; }
+  .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #fff; background: #1a1a1a; padding: 4px 10px; margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 5px 10px; border: 1px solid #e0e0e0; vertical-align: top; }
+  .lbl { font-weight: 600; color: #555; width: 38%; background: #f9fafb; }
+  .two-col td { width: 50%; }
+  .registro-box { border: 2px solid #1a1a1a; border-radius: 4px; margin-bottom: 22px; overflow: hidden; }
+  .registro-box-title { background: #1a1a1a; color: #fff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 6px 12px; }
+  .registro-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .registro-item { padding: 7px 12px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; }
+  .registro-item:nth-child(even) { border-right: none; }
+  .registro-item:nth-last-child(-n+2) { border-bottom: none; }
+  .registro-item-full { grid-column: 1 / -1; border-right: none; padding: 7px 12px; border-bottom: 1px solid #e0e0e0; }
+  .registro-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 2px; }
+  .registro-value { font-size: 12px; font-weight: 600; color: #1a1a1a; }
+  .print-btn { display: block; margin: 18px auto 0; padding: 10px 32px; background: #1a1a1a; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: Arial; }
+  @media print {
+    .print-btn { display: none; }
+    body { font-size: 10px; }
+    .page { padding: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div>
+      <div class="header-title">Grupo Revest</div>
+      <div class="header-sub">Ficha de Admissão — Documentação para Registro</div>
+    </div>
+    <div class="header-meta">
+      Gerado em: ${new Date().toLocaleDateString('pt-BR')}<br>
+      Responsável: RH
+    </div>
+  </div>
+
+  <div class="registro-box">
+    <div class="registro-box-title">Dados para registro</div>
+    <div class="registro-grid">
+      <div class="registro-item-full">
+        <div class="registro-label">Empresa</div>
+        <div class="registro-value">${esc(dadosAdm.empresa||'—')}</div>
+      </div>
+      <div class="registro-item">
+        <div class="registro-label">Data de admissão</div>
+        <div class="registro-value">${dadosAdm.data ? fmtDateBR(dadosAdm.data) : '—'}</div>
+      </div>
+      <div class="registro-item">
+        <div class="registro-label">Departamento</div>
+        <div class="registro-value">${esc(dadosAdm.departamento||'—')}</div>
+      </div>
+      <div class="registro-item">
+        <div class="registro-label">Cargo</div>
+        <div class="registro-value">${esc(dadosAdm.cargo||'—')}</div>
+      </div>
+      <div class="registro-item">
+        <div class="registro-label">Salário</div>
+        <div class="registro-value">${esc(dadosAdm.salario||'—')}</div>
+      </div>
+      <div class="registro-item">
+        <div class="registro-label">Contrato</div>
+        <div class="registro-value">${esc(dadosAdm.contrato||'—')}</div>
+      </div>
+      <div class="registro-item">
+        <div class="registro-label">Carga horária</div>
+        <div class="registro-value">${esc(dadosAdm.carga||'—')}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Dados Pessoais</div>
+    <table>
+      ${row('Nome completo', f.nome)}
+      ${row('Data de nascimento', fmtDateBR(f.nascimento))}
+      ${row('Sexo', f.sexo)}
+      ${row('Nacionalidade', f.nacionalidade)}
+      ${row('Naturalidade', f.naturalidade)}
+      ${row('Estado civil', f.estado_civil)}
+      ${row('CPF', f.cpf)}
+      ${row('RG / Órgão / Data', [f.rg, f.rg_orgao, fmtDateBR(f.rg_data)].filter(Boolean).join(' / '))}
+      ${row('PIS/PASEP', f.pis)}
+      ${row('CTPS nº / Série', [f.ctps_numero, f.ctps_serie].filter(Boolean).join(' / '))}
+      ${row('Título Eleitor / Zona / Seção', [f.titulo_eleitor, f.titulo_zona, f.titulo_secao].filter(Boolean).join(' / '))}
+      ${row('CNH nº / Categoria', f.cnh_numero ? [f.cnh_numero, f.cnh_categoria].filter(Boolean).join(' / ') : '')}
+      ${row('CNH 1ª Habilitação / Emissão / Validade', f.cnh_numero ? [fmtDateBR(f.cnh_primeira_hab), fmtDateBR(f.cnh_emissao), fmtDateBR(f.cnh_validade)].filter(Boolean).join(' / ') : '')}
+      ${row('Escolaridade', f.escolaridade)}
+      ${row('Cor/Raça', f.cor_raca)}
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Endereço e Contato</div>
+    <table>
+      ${row('Endereço', f.endereco)}
+      ${row('CEP / Cidade / UF', [f.cep, f.cidade, f.uf].filter(Boolean).join(' / '))}
+      ${row('Celular', f.celular)}
+      ${row('Tel. recado', f.tel_recado ? `${f.tel_recado} (${f.tel_recado_nome||''})` : '')}
+      ${row('E-mail', f.email)}
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Filiação e Família</div>
+    <table>
+      ${row('Nome do Pai', f.nome_pai)}
+      ${row('Nome da Mãe', f.nome_mae)}
+      ${row('Estado Civil', f.estado_civil)}
+      ${f.data_casamento ? row('Data do Casamento', fmtDateBR(f.data_casamento)) : ''}
+      ${f.conjuge_nome ? row('Cônjuge', f.conjuge_nome) : ''}
+      ${f.conjuge_cpf  ? row('CPF do Cônjuge', f.conjuge_cpf) : ''}
+      ${f.conjuge_rg   ? row('RG do Cônjuge', f.conjuge_rg) : ''}
+      ${f.conjuge_nascimento ? row('Nasc. do Cônjuge', fmtDateBR(f.conjuge_nascimento)) : ''}
+      ${(Array.isArray(f.dependentes) && f.dependentes.length) ? f.dependentes.map((d,i) => row(`Dependente ${i+1}`, `${d.nome||''}${d.cpf?' — CPF: '+d.cpf:''}`)).join('') : ''}
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Dados Bancários e Benefícios</div>
+    <table>
+      ${row('Banco', f.banco)}
+      ${row('Agência / Conta', [f.agencia, f.conta].filter(Boolean).join(' / '))}
+      ${row('Vale Transporte', f.vale_transporte ? 'Sim' : 'Não')}
+      ${row('Primeiro Emprego', f.primeiro_emprego ? 'Sim' : 'Não')}
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Documentos Enviados</div>
+    <table>
+      <tr style="background:#f9fafb;font-weight:700;"><td>Documento</td><td style="text-align:center;width:30%;">Status</td></tr>
+      ${docsHtml}
+    </table>
+  </div>
+
+  <button class="print-btn" onclick="window.print()">Imprimir / Salvar como PDF</button>
+</div>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+}
+
+// ─── Helpers ──────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function copiarLink(link) {
+  navigator.clipboard.writeText(link).then(() => alert('Link copiado!')).catch(() => prompt('Copie o link:', link));
+}
+
+async function verFicha(token) {
+  await loadFichas();
+  const f = allFichas.find(x => x.token === token);
+  if (f) { document.querySelector('.tab-btn[data-tab="fichas"]').click(); abrirRevisao(f.id); }
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+function fmtDateBR(iso) {
+  if (!iso) return '—';
+  if (iso.includes('-') && iso.length === 10) {
+    const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`;
+  }
+  return fmtDate(iso);
+}
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Init ────────────────────────────────────────────────
+loadUnidades();
+loadCargos();
+loadConvites();
+loadFichas();
+</script>
+</body>
+</html>
