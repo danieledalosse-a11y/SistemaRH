@@ -763,16 +763,8 @@ function bindStepEvents() {
     });
   }
 
-  // Máscara CPF — todos os campos de CPF da página
-  document.querySelectorAll('#cpf, #conjuge_cpf, .dep-cpfval').forEach(el => {
-    el.addEventListener('input', function() {
-      let v = this.value.replace(/\D/g,'').slice(0,11);
-      if (v.length > 9) v = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);
-      else if (v.length > 6) v = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);
-      else if (v.length > 3) v = v.slice(0,3)+'.'+v.slice(3);
-      this.value = v;
-    });
-  });
+  bindCpfMasks();
+  bindDateMasks();
 
   // Máscara Celular / Telefone
   ['celular','tel_recado'].forEach(id => {
@@ -795,15 +787,7 @@ function bindStepEvents() {
     this.value = v;
   });
 
-  // Máscara DD/MM/AAAA nos campos de data
-  document.querySelectorAll('input.date-mask').forEach(el => {
-    el.addEventListener('input', function() {
-      let v = this.value.replace(/\D/g, '').slice(0, 8);
-      if (v.length > 4) v = v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4);
-      else if (v.length > 2) v = v.slice(0,2) + '/' + v.slice(2);
-      this.value = v;
-    });
-  });
+  // máscaras iniciais já cobertas por bindCpfMasks/bindDateMasks acima
 
   // Radio pills interaction
   document.querySelectorAll('.radio-pill').forEach(pill => {
@@ -836,6 +820,8 @@ function bindStepEvents() {
         formData.dependentes.push({ nome:'', tipo:'', cpf:'', nascimento:'' });
         list.insertAdjacentHTML('beforeend', buildDepRow(0, {}));
         bindDepEvents();
+        bindDateMasks();
+        bindCpfMasks();
       }
     } else {
       sec.style.display = 'none';
@@ -844,12 +830,41 @@ function bindStepEvents() {
 
   const btnAddDep = document.getElementById('btnAddDep');
   if (btnAddDep) btnAddDep.addEventListener('click', () => {
-    formData.dependentes.push({ nome:'', cpf:'' });
+    formData.dependentes.push({ nome:'', tipo:'', cpf:'', nascimento:'' });
     document.getElementById('depList').insertAdjacentHTML('beforeend', buildDepRow(formData.dependentes.length - 1, {}));
     bindDepEvents();
+    bindDateMasks();
+    bindCpfMasks();
   });
 
   bindDepEvents();
+}
+
+function bindCpfMasks() {
+  document.querySelectorAll('#cpf, #conjuge_cpf, .dep-cpfval').forEach(el => {
+    if (el._cpfMask) return;
+    el._cpfMask = true;
+    el.addEventListener('input', function() {
+      let v = this.value.replace(/\D/g,'').slice(0,11);
+      if (v.length > 9) v = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);
+      else if (v.length > 6) v = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);
+      else if (v.length > 3) v = v.slice(0,3)+'.'+v.slice(3);
+      this.value = v;
+    });
+  });
+}
+
+function bindDateMasks() {
+  document.querySelectorAll('input.date-mask').forEach(el => {
+    if (el._dateMask) return;
+    el._dateMask = true;
+    el.addEventListener('input', function() {
+      let v = this.value.replace(/\D/g,'').slice(0,8);
+      if (v.length > 4) v = v.slice(0,2)+'/'+v.slice(2,4)+'/'+v.slice(4);
+      else if (v.length > 2) v = v.slice(0,2)+'/'+v.slice(2);
+      this.value = v;
+    });
+  });
 }
 
 function bindDepEvents() {
