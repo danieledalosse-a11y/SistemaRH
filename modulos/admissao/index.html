@@ -844,14 +844,19 @@ async function efetivarContratacao(f) {
 }
 
 // ─── Modal PDF ───────────────────────────────────────────
+function pdfStorageKey(c) {
+  return `pdf_dados_${c.id}`;
+}
+
 function abrirModalPDF(c) {
-  document.getElementById('pdf_empresa').value     = c.unidade || '';
-  document.getElementById('pdf_cargo').value       = c.cargo_pretendido || '';
-  document.getElementById('pdf_departamento').value = '';
-  document.getElementById('pdf_data').value        = '';
-  document.getElementById('pdf_salario').value     = '';
-  document.getElementById('pdf_contrato').value    = 'Experiência de 45 dias';
-  document.getElementById('pdf_carga').value       = 'das 08h às 12h e das 14h às 18h';
+  const saved = JSON.parse(localStorage.getItem(pdfStorageKey(c)) || 'null');
+  document.getElementById('pdf_empresa').value      = saved?.empresa      ?? (c.unidade || '');
+  document.getElementById('pdf_cargo').value        = saved?.cargo        ?? (c.cargo_pretendido || '');
+  document.getElementById('pdf_departamento').value = saved?.departamento ?? '';
+  document.getElementById('pdf_data').value         = saved?.data         ?? '';
+  document.getElementById('pdf_salario').value      = saved?.salario      ?? '';
+  document.getElementById('pdf_contrato').value     = saved?.contrato     ?? 'Experiência de 45 dias';
+  document.getElementById('pdf_carga').value        = saved?.carga        ?? 'das 08h às 12h e das 14h às 18h';
   openModal('modalPDF');
 }
 
@@ -865,6 +870,7 @@ function confirmarGerarPDF() {
     contrato:     document.getElementById('pdf_contrato').value,
     carga:        document.getElementById('pdf_carga').value,
   };
+  localStorage.setItem(pdfStorageKey(currentConvite), JSON.stringify(dadosAdm));
   closeModal('modalPDF');
   gerarPDFFicha(currentFicha, currentConvite, dadosAdm);
 }
