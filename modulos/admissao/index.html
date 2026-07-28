@@ -884,8 +884,15 @@ function gerarPDFFicha(f, c, dadosAdm = {}) {
   };
   const docs = f.docs || {};
   const docsHtml = Object.entries(DOC_LABELS).map(([k, label]) => {
-    const has = !!docs[k];
-    return `<tr><td>${label}</td><td style="text-align:center;color:${has?'#15803d':'#9ca3af'};font-weight:600;">${has ? '✓ Enviado' : '— Não enviado'}</td></tr>`;
+    const path = docs[k];
+    if (!path) return '';
+    const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
+    return `
+      <div class="doc-page">
+        <div class="doc-label">${label}</div>
+        <img src="${url}" class="doc-img" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div style="display:none;color:#9ca3af;font-size:11px;padding:10px;">Imagem não disponível</div>
+      </div>`;
   }).join('');
 
   const row = (label, val) => val ? `<tr><td class="lbl">${label}</td><td>${val}</td></tr>` : '';
@@ -918,11 +925,15 @@ function gerarPDFFicha(f, c, dadosAdm = {}) {
   .registro-item-full { grid-column: 1 / -1; border-right: none; padding: 7px 12px; border-bottom: 1px solid #e0e0e0; }
   .registro-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 2px; }
   .registro-value { font-size: 12px; font-weight: 600; color: #1a1a1a; }
+  .doc-page { page-break-before: always; padding: 20px 0; }
+  .doc-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #fff; background: #1a1a1a; padding: 4px 10px; margin-bottom: 12px; }
+  .doc-img { max-width: 100%; max-height: 85vh; display: block; margin: 0 auto; object-fit: contain; }
   .print-btn { display: block; margin: 18px auto 0; padding: 10px 32px; background: #1a1a1a; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: Arial; }
   @media print {
     .print-btn { display: none; }
     body { font-size: 10px; }
     .page { padding: 0; }
+    .doc-img { max-height: 100vh; }
   }
 </style>
 </head>
@@ -1030,13 +1041,7 @@ function gerarPDFFicha(f, c, dadosAdm = {}) {
     </table>
   </div>
 
-  <div class="section">
-    <div class="section-title">Documentos Enviados</div>
-    <table>
-      <tr style="background:#f9fafb;font-weight:700;"><td>Documento</td><td style="text-align:center;width:30%;">Status</td></tr>
-      ${docsHtml}
-    </table>
-  </div>
+  ${docsHtml}
 
   <button class="print-btn" onclick="window.print()">Imprimir / Salvar como PDF</button>
 </div>
