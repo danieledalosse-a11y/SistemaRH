@@ -560,6 +560,7 @@ function renderConvites() {
         <div class="actions">
           <button class="btn btn-secondary btn-sm" onclick="copiarLink('${link}')">Copiar Link</button>
           ${podeVer ? `<button class="btn btn-primary btn-sm" onclick="verFicha('${c.token}')">Revisar Ficha</button>` : ''}
+          ${c.status === 'pendente' ? `<button class="btn btn-secondary btn-sm" onclick="editarConvite(${c.id},'${esc(c.nome_candidato)}','${esc(c.cargo_pretendido||'')}','${esc(c.unidade||'')}')">Editar</button>` : ''}
           ${c.status === 'pendente' ? `<button class="btn btn-danger btn-sm" onclick="cancelarConvite(${c.id})">Cancelar</button>` : ''}
         </div>
       </td>
@@ -583,6 +584,23 @@ function cancelarConvite(id) {
   openModal('modalCancelamento');
 }
 
+let _editarId = null;
+
+function editarConvite(id, nome, cargo, unidade) {
+  _editarId = id;
+  document.getElementById('c_nome').value  = nome;
+  document.getElementById('c_cargo').value = cargo;
+  document.getElementById('c_unidade').value = unidade;
+  document.getElementById('c_tel').value   = '';
+  document.getElementById('alertConvite').innerHTML = '';
+  // Trocar botão para "Salvar alterações"
+  const btn = document.getElementById('btnSalvarConvite');
+  btn.textContent = 'Salvar alterações';
+  btn.dataset.modo = 'editar';
+  document.querySelector('#modalConvite .modal-title').textContent = 'Editar Convite';
+  openModal('modalConvite');
+}
+
 async function confirmarCancelamento() {
   const selecionado = document.querySelector('input[name="motivoCancelamento"]:checked');
   if (!selecionado) { alert('Selecione um motivo.'); return; }
@@ -602,11 +620,16 @@ async function confirmarCancelamento() {
 
 // ─── Novo Convite ────────────────────────────────────────
 document.getElementById('btnNovoConvite').addEventListener('click', () => {
+  _editarId = null;
   document.getElementById('c_nome').value = '';
   document.getElementById('c_tel').value = '';
   document.getElementById('c_cargo').value = '';
   document.getElementById('c_unidade').value = '';
   document.getElementById('alertConvite').innerHTML = '';
+  const btn = document.getElementById('btnSalvarConvite');
+  btn.textContent = 'Enviar Convite';
+  btn.dataset.modo = 'novo';
+  document.querySelector('#modalConvite .modal-title').textContent = 'Novo Convite de Admissão';
   openModal('modalConvite');
 });
 
@@ -628,26 +651,42 @@ document.getElementById('btnSalvarConvite').addEventListener('click', async () =
   const btn = document.getElementById('btnSalvarConvite');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
-    const res = await fetch(`${SB_URL}/rest/v1/admissao_convites`, {
-      method: 'POST', headers: SB_HEADERS, body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    const convite = Array.isArray(data) ? data[0] : data;
-    closeModal('modalConvite');
-    const link = `${window.location.origin}/SistemaRH/admissao-online.html?token=${convite.token.substring(0,8)}`;
-    document.getElementById('linkGerado').textContent = convite.token;
-    document.getElementById('btnCopiarLink').onclick = () => copiarLink(link);
-    document.getElementById('btnWhatsApp').onclick = () => {
-      const tel = document.getElementById('c_tel').value.replace(/\D/g, '');
-      const numero = tel ? `55${tel}` : '';
-      const msg = encodeURIComponent(`Olá ${nome}, segue o link para preencher sua ficha de admissão: ${link}`);
-      window.open(`https://wa.me/${numero}?text=${msg}`, '_blank');
-    };
-    openModal('modalSucesso');
+    if (_editarId) {
+      // Modo edição — só atualiza os campos do convite existente
+      await fetch(`${SB_URL}/rest/v1/admissao_convites?id=eq.${_editarId}`, {
+        method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({
+          nome_candidato: payload.nome_candidato,
+          cargo_pretendido: payload.cargo_pretendido,
+          unidade: payload.unidade
+        })
+      });
+      closeModal('modalConvite');
+      loadConvites();
+    } else {
+      // Modo novo convite
+      const res = await fetch(`${SB_URL}/rest/v1/admissao_convites`, {
+        method: 'POST', headers: SB_HEADERS, body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      const convite = Array.isArray(data) ? data[0] : data;
+      closeModal('modalConvite');
+      const link = `${window.location.origin}/SistemaRH/admissao-online.html?token=${convite.token.substring(0,8)}`;
+      document.getElementById('linkGerado').textContent = convite.token;
+      document.getElementById('btnCopiarLink').onclick = () => copiarLink(link);
+      document.getElementById('btnWhatsApp').onclick = () => {
+        const tel = document.getElementById('c_tel').value.replace(/\D/g, '');
+        const numero = tel ? `55${tel}` : '';
+        const msg = encodeURIComponent(`Olá ${nome}, segue o link para preencher sua ficha de admissão: ${link}`);
+        window.open(`https://wa.me/${numero}?text=${msg}`, '_blank');
+      };
+      openModal('modalSucesso');
+    }
   } catch(e) {
-    document.getElementById('alertConvite').innerHTML = '<div class="alert alert-error">Erro ao salvar convite. Tente novamente.</div>';
+    document.getElementById('alertConvite').innerHTML = '<div class="alert alert-error">Erro ao salvar. Tente novamente.</div>';
   }
-  btn.disabled = false; btn.textContent = 'Enviar Convite';
+  btn.disabled = false;
+  btn.textContent = _editarId ? 'Salvar alterações' : 'Enviar Convite';
+  _editarId = null;
 });
 
 // ─── Fichas ──────────────────────────────────────────────
