@@ -37,6 +37,7 @@
   /* Card */
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 16px; }
   .card-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .form-section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 4px; margin: 20px 0 10px; }
   .card-sub { font-size: 13px; color: var(--text-sec); margin-bottom: 24px; }
 
   /* Form */
@@ -52,7 +53,7 @@
 
   /* Dependentes */
   .dep-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
-  .dep-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
+  .dep-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
   .btn-rem { background: var(--red-bg); color: var(--red); border: none; border-radius: 7px; padding: 9px 12px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; transition: background 0.15s; }
   .btn-rem:hover { background: #fecaca; }
   .btn-add { display: inline-flex; align-items: center; gap: 6px; background: var(--blue-bg); color: var(--blue); border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; margin-top: 10px; transition: background 0.15s; }
@@ -123,8 +124,8 @@
   @media (max-width: 600px) {
     .form-grid { grid-template-columns: 1fr; }
     .form-grid .span2 { grid-column: 1; }
-    .dep-row { grid-template-columns: 1fr auto; }
-    .dep-row .dep-cpf { display: none; }
+    .dep-row { grid-template-columns: 1fr 1fr; }
+    .dep-row .btn-rem { grid-column: 1 / -1; justify-self: end; }
     .stepper { gap: 0; }
     .step-label { font-size: 9px; }
     .card { padding: 18px; }
@@ -188,8 +189,8 @@ const formData = {
 
 const DOC_ITEMS = [
   { key:'foto3x4',      label:'Foto 3x4',                   req: true },
-  { key:'rg_frente',    label:'RG (frente)',                 req: true },
-  { key:'rg_verso',     label:'RG (verso)',                  req: true },
+  { key:'rg_frente',    label:'RG (frente ou verso)',         req: true },
+  { key:'rg_verso',     label:'RG (verso — opcional)',        req: false },
   { key:'cpf_doc',      label:'CPF',                         req: true },
   { key:'titulo',       label:'Título de Eleitor',           req: false },
   { key:'ctps',         label:'CTPS (folha de rosto)',        req: false },
@@ -300,17 +301,23 @@ function buildStep1() {
   const f = formData;
   return `<div class="card">
     <div class="card-title">Dados Pessoais</div>
-    <div class="card-sub">Preencha seus dados pessoais e documentos.</div>
+    <div class="card-sub">Preencha seus dados pessoais e de contato.</div>
+
+    <div class="form-section-title">Identificação</div>
     <div class="form-grid">
       <div class="span2">${fg('nome','Nome Completo','text',true,'',f.nome)}</div>
       ${fg('nascimento','Data de Nascimento','date',true,'',f.nascimento)}
       ${fgSel('sexo','Sexo',['Masculino','Feminino','Outro'],false,f.sexo)}
       ${fg('nacionalidade','Nacionalidade','text',false,'',f.nacionalidade||'Brasileira')}
       ${fg('naturalidade','Naturalidade','text',false,'Cidade - UF',f.naturalidade)}
+    </div>
+
+    <div class="form-section-title">Documentos</div>
+    <div class="form-grid">
+      ${fg('cpf','CPF','text',true,'000.000.000-00',f.cpf)}
       ${fg('rg','RG','text',false,'',f.rg)}
       ${fg('rg_orgao','Órgão Emissor RG','text',false,'SSP/SP',f.rg_orgao)}
       ${fg('rg_data','Data Expedição RG','date',false,'',f.rg_data)}
-      ${fg('cpf','CPF','text',true,'000.000.000-00',f.cpf)}
       ${fg('titulo_eleitor','Título de Eleitor','text',false,'',f.titulo_eleitor)}
       ${fg('titulo_zona','Zona Eleitoral','text',false,'',f.titulo_zona)}
       ${fg('titulo_secao','Seção Eleitoral','text',false,'',f.titulo_secao)}
@@ -322,15 +329,27 @@ function buildStep1() {
       ${fg('cnh_emissao','CNH Emissão','date',false,'',f.cnh_emissao)}
       ${fg('cnh_validade','CNH Validade','date',false,'',f.cnh_validade)}
       ${fg('cnh_categoria','CNH Categoria','text',false,'A/B',f.cnh_categoria)}
-      <div class="span2">${fg('endereco','Endereço (Rua, nº, Bairro)','text',false,'',f.endereco)}</div>
-      ${fg('cep','CEP','text',false,'',f.cep)}
+    </div>
+
+    <div class="form-section-title">Endereço</div>
+    <div class="form-grid">
+      ${fg('cep','CEP','text',false,'00000-000',f.cep)}
+      <div class="span2">${fg('logradouro','Rua / Avenida','text',false,'',f.logradouro||f.endereco)}</div>
+      ${fg('numero','Número','text',false,'',f.numero)}
+      ${fg('complemento','Complemento','text',false,'Apto, Bloco...',f.complemento)}
+      ${fg('bairro','Bairro','text',false,'',f.bairro)}
       ${fg('cidade','Cidade','text',false,'',f.cidade)}
       ${fg('uf','UF','text',false,'',f.uf,'maxlength="2"')}
+    </div>
+
+    <div class="form-section-title">Contato</div>
+    <div class="form-grid">
       ${fg('celular','Telefone Celular','text',true,'',f.celular)}
       ${fg('tel_recado','Telefone para Recado','text',false,'',f.tel_recado)}
       ${fg('tel_recado_nome','Nome p/ Recado','text',false,'',f.tel_recado_nome)}
-      ${fg('email','E-mail','email',true,'',f.email)}
+      <div class="span2">${fg('email','E-mail','email',true,'',f.email)}</div>
     </div>
+
     <div class="nav-btns">
       <button class="btn btn-primary" id="btnNext">Próximo →</button>
     </div>
@@ -378,9 +397,13 @@ function buildStep2() {
 }
 
 function buildDepRow(i, d) {
+  const tipoOpts = ['Filho(a)','Enteado(a)','Outro'].map(o =>
+    `<option value="${o}" ${d.tipo===o?'selected':''}>${o}</option>`).join('');
   return `<div class="dep-row" data-dep="${i}">
     <div class="form-group"><label class="form-label">Nome</label><input class="form-control dep-nome" type="text" value="${d.nome||''}" placeholder="Nome completo"></div>
+    <div class="form-group"><label class="form-label">Tipo</label><select class="form-control dep-tipo"><option value="">Selecione</option>${tipoOpts}</select></div>
     <div class="form-group dep-cpf"><label class="form-label">CPF</label><input class="form-control dep-cpfval" type="text" value="${d.cpf||''}" placeholder="000.000.000-00"></div>
+    <div class="form-group"><label class="form-label">Data de Nascimento</label><input class="form-control dep-nascimento" type="date" value="${d.nascimento||''}"></div>
     <button class="btn-rem" data-dep="${i}">✕</button>
   </div>`;
 }
@@ -602,8 +625,11 @@ function saveCurrentStep() {
     ['nome','nascimento','sexo','nacionalidade','naturalidade','rg','rg_orgao','rg_data','cpf',
      'titulo_eleitor','titulo_zona','titulo_secao','ctps_numero','ctps_serie','pis',
      'cnh_numero','cnh_primeira_hab','cnh_emissao','cnh_validade','cnh_categoria',
-     'endereco','cep','cidade','uf','celular','tel_recado','tel_recado_nome','email'
+     'cep','logradouro','numero','complemento','bairro','cidade','uf',
+     'celular','tel_recado','tel_recado_nome','email'
     ].forEach(k => { const el = document.getElementById(k); if (el) formData[k] = el.value; });
+    // manter compatibilidade com campo legado
+    formData.endereco = [formData.logradouro, formData.numero, formData.bairro].filter(Boolean).join(', ');
   } else if (currentStep === 2) {
     ['nome_pai','nome_mae','estado_civil','data_casamento','conjuge_nome','conjuge_cpf','conjuge_rg','conjuge_nascimento']
       .forEach(k => { const el = document.getElementById(k); if (el) formData[k] = el.value; });
@@ -613,7 +639,9 @@ function saveCurrentStep() {
     document.querySelectorAll('.dep-row').forEach((row, i) => {
       if (!formData.dependentes[i]) formData.dependentes[i] = {};
       const n = row.querySelector('.dep-nome'); if (n) formData.dependentes[i].nome = n.value;
+      const t = row.querySelector('.dep-tipo'); if (t) formData.dependentes[i].tipo = t.value;
       const c = row.querySelector('.dep-cpfval'); if (c) formData.dependentes[i].cpf = c.value;
+      const nasc = row.querySelector('.dep-nascimento'); if (nasc) formData.dependentes[i].nascimento = nasc.value;
     });
   } else if (currentStep === 3) {
     ['escolaridade','cor_raca','banco','agencia','conta','hobby']
