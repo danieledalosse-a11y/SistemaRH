@@ -208,7 +208,10 @@ async function init() {
   root.innerHTML = '<div class="screen-center"><p style="color:var(--text-sec);font-size:14px;">Carregando...</p></div>';
 
   try {
-    const res = await fetch(`${SB_URL}/rest/v1/admissao_convites?token=like.${token}%&select=*`, { headers: SB_HEADERS });
+    const qUrl = new URL(`${SB_URL}/rest/v1/admissao_convites`);
+    qUrl.searchParams.set('token', `like.${token}%`);
+    qUrl.searchParams.set('select', '*');
+    const res = await fetch(qUrl.toString(), { headers: SB_HEADERS });
     const data = await res.json();
     if (!data || data.length === 0) { showError('Convite não encontrado', 'Este link de convite não existe ou foi removido.'); return; }
     convite = data[0];
