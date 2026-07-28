@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parâmetros — Sistema RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --border: #e2e5ea;
+    --text: #111827;
+    --text-sec: #5a6474;
+    --text-ter: #9ca3af;
+    --accent: #0f172a;
+    --blue: #1d4ed8;
+    --blue-bg: #eff6ff;
+    --blue-light: #dbeafe;
+    --green: #15803d;
+    --green-bg: #f0fdf4;
+    --red: #b91c1c;
+    --red-bg: #fef2f2;
+    --amber: #92400e;
+    --amber-bg: #fffbeb;
+    --radius: 10px;
+    --sidebar-w: 264px;
+    --topbar-h: 72px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; min-height: 100vh; }
+
+  /* ── Topbar ── */
+  .topbar { background: var(--accent); color: #fff; padding: 0 32px; height: var(--topbar-h); display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(0,0,0,0.25); }
+  .topbar-brand { display: flex; align-items: center; gap: 14px; text-decoration: none; cursor: pointer; }
+  .topbar-icon { width: 42px; height: 42px; border-radius: 11px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .topbar-icon svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .topbar-wordmark { display: flex; flex-direction: column; gap: 1px; }
+  .topbar-title { font-size: 32px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; line-height: 1; }
+  .topbar-sub { display: none; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .topbar-mod { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 4px 14px; }
+  .topbar-sep { color: rgba(255,255,255,0.2); font-size: 18px; margin: 0 4px; }
+  .topbar-user { font-size: 13px; color: rgba(255,255,255,0.55); }
+  .topbar-btn { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.4); padding: 6px; display: flex; align-items: center; border-radius: 6px; transition: background 0.15s, color 0.15s; }
+  .topbar-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  .topbar-btn svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Layout ── */
+  .layout { display: flex; height: calc(100vh - var(--topbar-h)); }
+
+  /* ── Sidebar ── */
+  .sidebar { width: var(--sidebar-w); flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 8px 0 16px; overflow-y: auto; }
+  .sidebar-group { border-top: 1px solid var(--border); }
+  .sidebar-group:first-child { border-top: none; }
+  .sidebar-group-header { display: flex; align-items: center; padding: 11px 18px 11px 20px; cursor: pointer; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.13em; color: var(--text); user-select: none; transition: background 0.13s; gap: 8px; }
+  .sidebar-group-header:hover { background: #f4f6f9; }
+  .sidebar-group-header-label { flex: 1; }
+  .sidebar-group-header-count { font-size: 10px; font-weight: 600; background: #e8ecf1; color: var(--text-sec); border-radius: 10px; padding: 1px 7px; letter-spacing: 0; text-transform: none; }
+  .sidebar-group-header .chevron { width: 12px; height: 12px; stroke: var(--text-ter); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; transition: transform 0.2s; }
+  .sidebar-group.collapsed .sidebar-group-header .chevron { transform: rotate(-90deg); }
+  .sidebar-group-items { overflow: hidden; max-height: 600px; transition: max-height 0.25s ease; padding-bottom: 4px; }
+  .sidebar-group.collapsed .sidebar-group-items { max-height: 0; padding-bottom: 0; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 28px; cursor: pointer; font-size: 13.5px; font-weight: 500; color: var(--text-sec); border-left: 3px solid transparent; transition: background 0.1s, color 0.1s, border-color 0.1s; }
+  .sidebar-item:hover { background: #f4f6f9; color: var(--text); }
+  .sidebar-item.active { background: var(--blue-bg); color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+  .sidebar-item svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; opacity: 0.65; }
+  .sidebar-item.active svg { opacity: 1; }
+  .sidebar-search { padding: 12px 12px 8px; border-bottom: 1px solid var(--border); }
+  .sidebar-search-box { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; transition: border-color 0.13s, box-shadow 0.13s; }
+  .sidebar-search-box:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,78,216,0.08); background: #fff; }
+  .sidebar-search-box svg { width: 13px; height: 13px; stroke: var(--text-ter); flex-shrink: 0; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .sidebar-search-box input { border: none; outline: none; font-family: inherit; font-size: 13px; color: var(--text); background: transparent; width: 100%; }
+  .sidebar-search-box input::placeholder { color: var(--text-ter); }
+  .sidebar-search-clear { background: none; border: none; cursor: pointer; color: var(--text-ter); display: none; padding: 0; line-height: 1; font-size: 16px; flex-shrink: 0; }
+  .sidebar-search-clear:hover { color: var(--text-sec); }
+  .sidebar-search-results { padding: 8px 0; }
+  .sidebar-search-empty { padding: 24px 20px; text-align: center; font-size: 13px; color: var(--text-ter); }
+  .sidebar-search-result-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px 9px 20px; cursor: pointer; font-size: 13.5px; font-weight: 500; color: var(--text-sec); border-left: 3px solid transparent; transition: background 0.1s, color 0.1s; }
+  .sidebar-search-result-item:hover { background: #f4f6f9; color: var(--text); }
+  .sidebar-search-result-item.active { background: var(--blue-bg); color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+  .sidebar-search-result-item svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; opacity: 0.65; }
+  .sidebar-search-result-item .result-section { font-size: 10.5px; color: var(--text-ter); margin-left: auto; white-space: nowrap; padding-left: 8px; }
+
+  /* ── Main ── */
+  .main { flex: 1; overflow-y: auto; padding: 32px 36px; display: flex; flex-direction: column; }
+  #emptyState { flex: 1; display: flex; align-items: center; justify-content: center; }
+  #mainPanel { flex: 1; }
+
+  /* Welcome panel */
+  .welcome-panel { max-width: 680px; }
+  .welcome-title { font-size: 28px; font-weight: 800; letter-spacing: 0.02em; color: var(--text); margin-bottom: 8px; }
+  .welcome-sub { font-size: 15px; color: var(--text-sec); margin-bottom: 32px; line-height: 1.6; }
+  .welcome-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .welcome-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; }
+  .welcome-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: #c8d0db; }
+  .welcome-card-icon { width: 36px; height: 36px; border-radius: 9px; background: var(--blue-light); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+  .welcome-card-icon svg { width: 18px; height: 18px; stroke: var(--blue); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .welcome-card-label { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+  .welcome-card-desc { font-size: 12px; color: var(--text-sec); line-height: 1.45; }
+
+  /* Page header (when cat selected) */
+  .page-header { margin-bottom: 26px; display: flex; align-items: center; gap: 10px; }
+  .page-title { font-size: 22px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text); }
+  .page-info-btn { background: none; border: none; cursor: default; color: var(--text-ter); display: flex; align-items: center; position: relative; }
+  .page-info-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .page-info-btn:hover .page-tooltip { display: block; }
+  .page-tooltip { display: none; position: absolute; left: 24px; top: -4px; background: #0f172a; color: #fff; font-size: 12px; padding: 8px 14px; border-radius: 8px; white-space: nowrap; z-index: 50; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+
+  /* Toolbar */
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .toolbar-left { display: flex; align-items: center; gap: 10px; }
+  .search-box { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 8px 14px; gap: 8px; min-width: 260px; }
+  .search-box input { border: none; outline: none; font-family: inherit; font-size: 14px; color: var(--text); background: transparent; width: 100%; }
+  .search-box svg { width: 15px; height: 15px; stroke: var(--text-ter); flex-shrink: 0; }
+  select.filter { border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 14px; font-family: inherit; background: var(--surface); color: var(--text); outline: none; }
+
+  .btn { border: none; border-radius: 8px; padding: 9px 18px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; transition: opacity 0.15s; }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-outline { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-danger  { background: var(--red-bg); color: var(--red); border: 1px solid #fca5a5; }
+  .btn-delete  { background: none; color: var(--red); border: 1px solid #fca5a5; }
+  .btn-delete:hover { background: var(--red-bg); }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+  /* Icon button */
+  .btn-icon { background: none; border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; cursor: pointer; display: inline-flex; align-items: center; color: var(--text-sec); transition: background 0.12s, color 0.12s; }
+  .btn-icon:hover { background: var(--blue-light); color: var(--blue); border-color: var(--blue-light); }
+  .btn-icon svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Table */
+  .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead th { background: #f8fafc; border-bottom: 1px solid var(--border); padding: 12px 18px; text-align: left; font-size: 11.5px; font-weight: 700; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid #f1f3f6; transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #fafbfc; }
+  tbody td { padding: 14px 18px; vertical-align: middle; text-align: left; }
+  .col-ordem { width: 64px; color: var(--text-ter); font-size: 13px; font-weight: 600; }
+  .col-codigo { width: 110px; font-weight: 700; color: var(--text-sec); font-size: 13px; }
+  .col-acoes { width: 56px; text-align: right; }
+
+  .field-audit { background: #f8fafc; border: 1px solid var(--border); border-radius: 9px; padding: 14px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .field-audit-item label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-ter); display: block; margin-bottom: 4px; }
+  .field-audit-item span { font-size: 13px; color: var(--text-sec); }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+  .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.7; flex-shrink: 0; }
+  .badge-ativo { background: var(--green-bg); color: var(--green); }
+  .badge-inativo { background: #fef2f2; color: #b91c1c; }
+
+  /* Modal */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+  .overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 16px; padding: 32px; width: 500px; max-width: 95vw; max-height: 88vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,0.2); }
+
+  /* Histórico de auditoria */
+  .hist-section { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 18px; }
+  .hist-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-ter); margin-bottom: 12px; }
+  .hist-entry { display: flex; gap: 12px; margin-bottom: 12px; }
+  .hist-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .hist-dot.criado    { background: var(--green); }
+  .hist-dot.editado   { background: var(--blue); }
+  .hist-dot.inativado { background: var(--red); }
+  .hist-dot.reativado { background: #0891b2; }
+  .hist-body { flex: 1; min-width: 0; }
+  .hist-header { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .hist-acao { font-size: 13px; font-weight: 700; color: var(--text); text-transform: capitalize; }
+  .hist-user { font-size: 12px; color: var(--text-sec); }
+  .hist-date { font-size: 11px; color: var(--text-ter); margin-left: auto; white-space: nowrap; }
+  .hist-detalhe { font-size: 12px; color: var(--text-sec); margin-top: 3px; line-height: 1.5; word-break: break-word; }
+  .hist-vazio { font-size: 13px; color: var(--text-ter); padding: 4px 0 8px; }
+  .hist-expand-btn { display: flex; align-items: center; gap: 6px; background: none; border: none; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--blue); font-family: inherit; padding: 6px 0 2px; transition: opacity 0.15s; }
+  .hist-expand-btn:hover { opacity: 0.75; }
+  .hist-expand-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.2s; }
+  .hist-expand-btn.open svg { transform: rotate(180deg); }
+  .hist-extra { display: none; }
+  .hist-extra.open { display: block; }
+  .modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 12px; position: sticky; top: -32px; margin-top: -32px; padding: 32px 0 16px; background: var(--surface); z-index: 10; }
+  .modal-header-left { flex: 1; min-width: 0; }
+  .modal-title { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.2; margin-bottom: 6px; }
+  .modal-status { margin-top: 4px; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-ter); padding: 4px; border-radius: 7px; display: flex; align-items: center; transition: background 0.12s, color 0.12s; flex-shrink: 0; }
+  .modal-close:hover { background: var(--bg); color: var(--text); }
+  .modal-close svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 11.5px; font-weight: 700; color: var(--text-sec); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field input, .field select, .field textarea { width: 100%; border: 1px solid var(--border); border-radius: 9px; padding: 10px 14px; font-size: 14px; font-family: inherit; color: var(--text); background: var(--surface); outline: none; transition: border-color 0.12s, box-shadow 0.12s; }
+  .field input:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,78,216,0.1); }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--border); align-items: center; }
+
+  /* Empty / Loading */
+  .empty { text-align: center; padding: 56px 24px; color: var(--text-sec); }
+  .empty svg { width: 44px; height: 44px; stroke: var(--text-ter); margin-bottom: 14px; }
+  .empty p { font-size: 14px; }
+  .loading { text-align: center; padding: 40px; color: var(--text-ter); font-size: 14px; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 28px; right: 28px; background: var(--accent); color: #fff; padding: 13px 22px; border-radius: 10px; font-size: 14px; font-weight: 500; z-index: 200; opacity: 0; transform: translateY(10px); transition: all 0.2s; pointer-events: none; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { background: var(--green); }
+  .toast.error { background: var(--red); }
+
+  /* Confirm dialog */
+  .confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 300; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+  .confirm-overlay.open { display: flex; }
+  .confirm-box { background: var(--surface); border-radius: 14px; padding: 28px 28px 22px; width: 420px; max-width: 92vw; box-shadow: 0 24px 80px rgba(0,0,0,0.22); }
+  .confirm-icon { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .confirm-icon.danger { background: var(--red-bg); }
+  .confirm-icon.warning { background: var(--amber-bg); }
+  .confirm-icon.info { background: var(--blue-bg); }
+  .confirm-icon svg { width: 20px; height: 20px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .confirm-icon.danger svg { stroke: var(--red); }
+  .confirm-icon.warning svg { stroke: var(--amber); }
+  .confirm-icon.info svg { stroke: var(--blue); }
+  .confirm-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+  .confirm-msg { font-size: 14px; color: var(--text-sec); line-height: 1.6; margin-bottom: 22px; }
+  .confirm-footer { display: flex; justify-content: flex-end; gap: 10px; }
+  .btn-confirm-danger  { background: var(--red);   color: #fff; }
+  .btn-confirm-warning { background: #D97706;       color: #fff; }
+  .btn-confirm-success { background: var(--green);  color: #fff; }
+  .btn-confirm-info    { background: var(--blue);   color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand" onclick="window.location.href='../../index.html'">
+    <div class="topbar-icon">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+    </div>
+    <div class="topbar-wordmark">
+      <span class="topbar-title">Sistema RH</span>
+      <span class="topbar-sub">Revest do Brasil</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-sep">›</span>
+    <span class="topbar-mod">Parâmetros</span>
+    <span class="topbar-user" id="userName"></span>
+    <button class="topbar-btn" onclick="logout()" title="Sair">
+      <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Sidebar gerada dinamicamente via JS (renderSidebar) -->
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <!-- Main content -->
+  <main class="main">
+
+    <!-- Estado vazio (nenhuma categoria selecionada) -->
+    <div id="emptyState">
+      <div style="text-align:center;max-width:320px;">
+        <div style="width:52px;height:52px;border-radius:14px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+          <svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:#64748b;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round">
+            <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="11" y2="18"/>
+            <circle cx="18" cy="15" r="3"/><line x1="20.2" y1="17.2" x2="22" y2="19"/>
+          </svg>
+        </div>
+        <p style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;">Nenhum parâmetro selecionado</p>
+        <p style="font-size:13px;color:var(--text-ter);line-height:1.65;">Use o menu lateral ou a busca acima para localizar e gerenciar uma tabela de referência.</p>
+      </div>
+    </div>
+
+    <!-- Painel de listagem -->
+    <div id="mainPanel" style="display:none">
+      <div class="page-header">
+        <div class="page-title" id="pageTitle"></div>
+        <div class="page-info-btn">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <div class="page-tooltip" id="pageTooltip"></div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div id="toolbarLeft" class="toolbar-left">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="searchInput" placeholder="Buscar..." oninput="filtrarTabela()">
+          </div>
+          <select id="filtroAtivo" class="filter" onchange="filtrarTabela()">
+            <option value="">Todos</option>
+            <option value="true" selected>Ativos</option>
+            <option value="false">Inativos</option>
+          </select>
+        </div>
+        <button id="btnNovo" class="btn btn-primary" onclick="abrirModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo
+        </button>
+      </div>
+
+      <div class="table-card">
+        <div id="tableBody" class="loading">Carregando...</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Modal -->
+<div class="overlay" id="overlay" onclick="fecharModalOutside(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <div class="modal-title" id="modalTitle">Novo Item</div>
+        <div class="modal-status" id="modalStatus"></div>
+      </div>
+      <button class="modal-close" onclick="fecharModal(true)" title="Fechar">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="modalFields"></div>
+    <div id="histSection" style="display:none" class="hist-section">
+      <div class="hist-section-label">Histórico de alterações</div>
+      <div id="histList"></div>
+    </div>
+    <div class="modal-footer">
+      <div style="display:flex;gap:8px;margin-right:auto">
+        <button class="btn btn-delete btn-sm" id="btnExcluir" style="display:none" onclick="excluirItem()">Excluir</button>
+        <button class="btn btn-danger btn-sm" id="btnToggleAtivo" style="display:none" onclick="toggleAtivoModal()"></button>
+      </div>
+      <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Confirm dialog -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-icon" id="confirmIcon">
+      <svg id="confirmIconSvg" viewBox="0 0 24 24"></svg>
+    </div>
+    <div class="confirm-title" id="confirmTitle"></div>
+    <div class="confirm-msg" id="confirmMsg"></div>
+    <div class="confirm-footer">
+      <button class="btn btn-outline" onclick="resolveConfirm(false)">Cancelar</button>
+      <button class="btn" id="confirmBtn" onclick="resolveConfirm(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
+const SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+
+const CBO_DATA = [{"codigo":"1210-05","titulo":"Diretor geral de empresa","grupo":"Diretores"},{"codigo":"1211-05","titulo":"Diretor financeiro","grupo":"Diretores"},{"codigo":"1212-05","titulo":"Diretor de recursos humanos","grupo":"Diretores"},{"codigo":"1213-05","titulo":"Diretor de marketing","grupo":"Diretores"},{"codigo":"1231-05","titulo":"Gerente administrativo","grupo":"Gerentes Administrativos"},{"codigo":"1231-10","titulo":"Gerente de riscos","grupo":"Gerentes Administrativos"},{"codigo":"1231-20","titulo":"Gerente financeiro","grupo":"Gerentes Administrativos"},{"codigo":"1231-25","titulo":"Gerente de patrimônio","grupo":"Gerentes Administrativos"},{"codigo":"1232-05","titulo":"Gerente de recursos humanos","grupo":"Gerentes Administrativos"},{"codigo":"1233-05","titulo":"Gerente de compras","grupo":"Gerentes de Comércio"},{"codigo":"1234-05","titulo":"Gerente de vendas","grupo":"Gerentes de Comércio"},{"codigo":"1235-05","titulo":"Gerente de marketing","grupo":"Gerentes de Comércio"},{"codigo":"1236-05","titulo":"Gerente de tecnologia da informação","grupo":"Gerentes de TI"},{"codigo":"1237-05","titulo":"Gerente de projetos","grupo":"Gerentes de TI"},{"codigo":"1311-05","titulo":"Diretor administrativo e financeiro","grupo":"Diretores"},{"codigo":"1312-05","titulo":"Diretor administrativo","grupo":"Diretores"},{"codigo":"1317-05","titulo":"Gerente comercial","grupo":"Gerentes Comerciais"},{"codigo":"1317-10","titulo":"Gerente de loja","grupo":"Gerentes Comerciais"},{"codigo":"1317-15","titulo":"Gerente de vendas no varejo","grupo":"Gerentes Comerciais"},{"codigo":"1317-20","titulo":"Gerente de pós-vendas","grupo":"Gerentes Comerciais"},{"codigo":"1421-05","titulo":"Gerente comercial (serviços)","grupo":"Gerentes de Serviços"},{"codigo":"1421-10","titulo":"Gerente de atendimento","grupo":"Gerentes de Serviços"},{"codigo":"1421-15","titulo":"Gerente de compras (serviços)","grupo":"Gerentes de Serviços"},{"codigo":"1421-20","titulo":"Gerente de e-commerce","grupo":"Gerentes de Serviços"},{"codigo":"1422-05","titulo":"Gerente de produto","grupo":"Gerentes de Serviços"},{"codigo":"1227-05","titulo":"Gerente de comunicação","grupo":"Gerentes de Marketing"},{"codigo":"1227-10","titulo":"Gerente de publicidade","grupo":"Gerentes de Marketing"},{"codigo":"1227-15","titulo":"Gerente de marketing","grupo":"Gerentes de Marketing"},{"codigo":"1228-05","titulo":"Gerente de transporte","grupo":"Gerentes de Logística"},{"codigo":"1228-10","titulo":"Gerente de logística e distribuição","grupo":"Gerentes de Logística"},{"codigo":"1228-15","titulo":"Gerente de armazenagem","grupo":"Gerentes de Logística"},{"codigo":"2122-05","titulo":"Analista de tecnologia da informação","grupo":"Profissionais de TI"},{"codigo":"2122-10","titulo":"Desenvolvedor de sistemas","grupo":"Profissionais de TI"},{"codigo":"2122-15","titulo":"Analista de desenvolvimento de sistemas","grupo":"Profissionais de TI"},{"codigo":"2122-20","titulo":"Desenvolvedor web","grupo":"Profissionais de TI"},{"codigo":"2122-25","titulo":"Desenvolvedor de aplicativos","grupo":"Profissionais de TI"},{"codigo":"2123-05","titulo":"Administrador de banco de dados","grupo":"Profissionais de TI"},{"codigo":"2124-05","titulo":"Analista de sistemas (desenvolvimento)","grupo":"Profissionais de TI"},{"codigo":"2124-10","titulo":"Analista de sistemas (suporte)","grupo":"Profissionais de TI"},{"codigo":"2124-15","titulo":"Analista de redes e comunicação","grupo":"Profissionais de TI"},{"codigo":"2124-20","titulo":"Analista de segurança da informação","grupo":"Profissionais de TI"},{"codigo":"2124-25","titulo":"Analista de qualidade de TI","grupo":"Profissionais de TI"},{"codigo":"2124-30","titulo":"Programador de sistemas","grupo":"Profissionais de TI"},{"codigo":"2131-05","titulo":"Arquiteto de edificações","grupo":"Arquitetos e Designers"},{"codigo":"2131-10","titulo":"Arquiteto de interiores","grupo":"Arquitetos e Designers"},{"codigo":"2393-05","titulo":"Designer de produto","grupo":"Arquitetos e Designers"},{"codigo":"2393-10","titulo":"Designer de moda","grupo":"Arquitetos e Designers"},{"codigo":"2393-15","titulo":"Designer de interiores","grupo":"Arquitetos e Designers"},{"codigo":"2393-20","titulo":"Designer de embalagem","grupo":"Arquitetos e Designers"},{"codigo":"2393-25","titulo":"Designer gráfico","grupo":"Arquitetos e Designers"},{"codigo":"2393-30","titulo":"Web designer","grupo":"Arquitetos e Designers"},{"codigo":"2394-05","titulo":"Fotógrafo","grupo":"Arquitetos e Designers"},{"codigo":"2312-05","titulo":"Analista de publicidade e marketing","grupo":"Profissionais de Marketing"},{"codigo":"2312-10","titulo":"Analista de pesquisa de mercado","grupo":"Profissionais de Marketing"},{"codigo":"2312-15","titulo":"Analista de mídias sociais","grupo":"Profissionais de Marketing"},{"codigo":"2411-05","titulo":"Auditor","grupo":"Contabilidade e Finanças"},{"codigo":"2411-10","titulo":"Auditor interno","grupo":"Contabilidade e Finanças"},{"codigo":"2421-05","titulo":"Contador","grupo":"Contabilidade e Finanças"},{"codigo":"2421-10","titulo":"Analista contábil","grupo":"Contabilidade e Finanças"},{"codigo":"2422-05","titulo":"Economista","grupo":"Contabilidade e Finanças"},{"codigo":"2521-05","titulo":"Analista de recursos humanos e de pessoal","grupo":"Profissionais de RH"},{"codigo":"2521-10","titulo":"Analista de treinamento e desenvolvimento","grupo":"Profissionais de RH"},{"codigo":"2521-15","titulo":"Analista de cargos e salários","grupo":"Profissionais de RH"},{"codigo":"2521-20","titulo":"Analista de recrutamento e seleção","grupo":"Profissionais de RH"},{"codigo":"2521-25","titulo":"Analista de benefícios","grupo":"Profissionais de RH"},{"codigo":"2521-30","titulo":"Analista de departamento pessoal","grupo":"Profissionais de RH"},{"codigo":"2522-05","titulo":"Analista de organização e métodos","grupo":"Profissionais de RH"},{"codigo":"2531-05","titulo":"Analista de relações trabalhistas","grupo":"Profissionais de RH"},{"codigo":"2543-05","titulo":"Psicólogo","grupo":"Profissionais de RH"},{"codigo":"2543-15","titulo":"Psicólogo organizacional","grupo":"Profissionais de RH"},{"codigo":"3172-05","titulo":"Técnico de redes","grupo":"Técnicos de TI"},{"codigo":"3172-10","titulo":"Técnico de hardware","grupo":"Técnicos de TI"},{"codigo":"3172-15","titulo":"Técnico de suporte em tecnologia da informação","grupo":"Técnicos de TI"},{"codigo":"3172-20","titulo":"Analista de helpdesk","grupo":"Técnicos de TI"},{"codigo":"3172-25","titulo":"Suporte técnico de informática","grupo":"Técnicos de TI"},{"codigo":"3311-05","titulo":"Técnico contábil","grupo":"Técnicos Administrativos"},{"codigo":"3411-05","titulo":"Técnico em secretariado","grupo":"Técnicos Administrativos"},{"codigo":"3411-10","titulo":"Secretário executivo","grupo":"Técnicos Administrativos"},{"codigo":"3513-05","titulo":"Assistente financeiro","grupo":"Financeiro"},{"codigo":"3513-10","titulo":"Analista financeiro","grupo":"Financeiro"},{"codigo":"3513-15","titulo":"Auxiliar de cobrança sênior","grupo":"Financeiro"},{"codigo":"3514-05","titulo":"Analista de custos","grupo":"Financeiro"},{"codigo":"3514-10","titulo":"Analista orçamentário","grupo":"Financeiro"},{"codigo":"3511-05","titulo":"Analista de compras","grupo":"Compras e Suprimentos"},{"codigo":"3511-10","titulo":"Auxiliar de compras","grupo":"Compras e Suprimentos"},{"codigo":"3511-15","titulo":"Assistente de suprimentos","grupo":"Compras e Suprimentos"},{"codigo":"3541-05","titulo":"Vendedor de comércio varejista","grupo":"Vendas e Atendimento"},{"codigo":"3541-10","titulo":"Promotor de vendas","grupo":"Vendas e Atendimento"},{"codigo":"3541-15","titulo":"Representante comercial","grupo":"Vendas e Atendimento"},{"codigo":"3541-20","titulo":"Vendedor de serviços","grupo":"Vendas e Atendimento"},{"codigo":"3541-25","titulo":"Vendedor técnico","grupo":"Vendas e Atendimento"},{"codigo":"3543-05","titulo":"Consultor de vendas","grupo":"Vendas e Atendimento"},{"codigo":"4214-25","titulo":"Atendente de lojas e mercados","grupo":"Vendas e Atendimento"},{"codigo":"4214-30","titulo":"Assistente de e-commerce","grupo":"Vendas e Atendimento"},{"codigo":"4214-35","titulo":"Analista de e-commerce","grupo":"Vendas e Atendimento"},{"codigo":"3941-05","titulo":"Desenhista técnico","grupo":"Projetos"},{"codigo":"3941-10","titulo":"Desenhista projetista","grupo":"Projetos"},{"codigo":"3942-05","titulo":"Projetista de produtos e serviços","grupo":"Projetos"},{"codigo":"3942-10","titulo":"Projetista de móveis","grupo":"Projetos"},{"codigo":"3942-15","titulo":"Projetista de interiores","grupo":"Projetos"},{"codigo":"4101-05","titulo":"Supervisor administrativo","grupo":"Administrativo"},{"codigo":"4101-10","titulo":"Supervisor de almoxarifado","grupo":"Administrativo"},{"codigo":"4110-05","titulo":"Assistente administrativo","grupo":"Administrativo"},{"codigo":"4110-10","titulo":"Auxiliar administrativo","grupo":"Administrativo"},{"codigo":"4141-05","titulo":"Almoxarife","grupo":"Logística e Expedição"},{"codigo":"4141-10","titulo":"Auxiliar de logística","grupo":"Logística e Expedição"},{"codigo":"4141-15","titulo":"Assistente de estoque","grupo":"Logística e Expedição"},{"codigo":"4141-20","titulo":"Auxiliar de expedição","grupo":"Logística e Expedição"},{"codigo":"4141-25","titulo":"Conferente-expedidor","grupo":"Logística e Expedição"},{"codigo":"4141-30","titulo":"Operador de recebimento","grupo":"Logística e Expedição"},{"codigo":"4142-05","titulo":"Operador de empilhadeira","grupo":"Logística e Expedição"},{"codigo":"4142-10","titulo":"Movimentador de mercadorias","grupo":"Logística e Expedição"},{"codigo":"4151-05","titulo":"Auxiliar de departamento pessoal","grupo":"RH Operacional"},{"codigo":"4151-10","titulo":"Auxiliar de recrutamento e seleção","grupo":"RH Operacional"},{"codigo":"4152-05","titulo":"Auxiliar de cálculo de folha de pagamento","grupo":"RH Operacional"},{"codigo":"4211-25","titulo":"Caixa de loja","grupo":"Financeiro"},{"codigo":"4212-05","titulo":"Cobrador","grupo":"Financeiro"},{"codigo":"4213-05","titulo":"Auxiliar de cobrança","grupo":"Financeiro"},{"codigo":"4213-10","titulo":"Analista de crédito","grupo":"Financeiro"},{"codigo":"4213-15","titulo":"Auxiliar de crédito","grupo":"Financeiro"},{"codigo":"4214-05","titulo":"Operador de caixa","grupo":"Financeiro"},{"codigo":"5211-25","titulo":"Operador de caixa de supermercado","grupo":"Financeiro"},{"codigo":"4222-05","titulo":"Recepcionista","grupo":"Atendimento"},{"codigo":"4223-05","titulo":"Telefonista","grupo":"Atendimento"},{"codigo":"4231-10","titulo":"Auxiliar de escritório","grupo":"Administrativo"},{"codigo":"4241-05","titulo":"Faturista","grupo":"Administrativo"},{"codigo":"7824-05","titulo":"Carregador (veículos de transportes terrestres)","grupo":"Transporte"},{"codigo":"7824-25","titulo":"Ajudante de motorista","grupo":"Transporte"},{"codigo":"7825-05","titulo":"Motorista de veículo leve (CNH B)","grupo":"Transporte"},{"codigo":"7825-10","titulo":"Motorista de veículo pesado (CNH C)","grupo":"Transporte"},{"codigo":"7825-15","titulo":"Motorista de carga a granel (CNH C/E)","grupo":"Transporte"},{"codigo":"7825-20","titulo":"Motorista de ônibus (CNH D)","grupo":"Transporte"},{"codigo":"7825-25","titulo":"Motorista carreteiro (CNH E)","grupo":"Transporte"},{"codigo":"7826-05","titulo":"Motociclista de entregas (CNH A)","grupo":"Transporte"},{"codigo":"7826-10","titulo":"Entregador de mercadorias","grupo":"Transporte"},{"codigo":"9101-05","titulo":"Auxiliar de manutenção geral","grupo":"Manutenção"},{"codigo":"9101-10","titulo":"Técnico de manutenção","grupo":"Manutenção"},{"codigo":"9111-05","titulo":"Mecânico de automóveis","grupo":"Manutenção"},{"codigo":"9141-05","titulo":"Eletricista de automóveis","grupo":"Manutenção"},{"codigo":"9512-05","titulo":"Técnico em refrigeração","grupo":"Manutenção"},{"codigo":"9513-05","titulo":"Técnico em eletrônica","grupo":"Manutenção"},{"codigo":"5142-05","titulo":"Faxineiro","grupo":"Limpeza e Conservação"},{"codigo":"5142-10","titulo":"Auxiliar de serviços gerais","grupo":"Limpeza e Conservação"},{"codigo":"5142-25","titulo":"Porteiro de edifícios","grupo":"Limpeza e Conservação"},{"codigo":"5142-30","titulo":"Vigia","grupo":"Limpeza e Conservação"},{"codigo":"5142-35","titulo":"Zelador de edifícios","grupo":"Limpeza e Conservação"},{"codigo":"5173-10","titulo":"Vigilante","grupo":"Segurança"},{"codigo":"9919-05","titulo":"Ajudante de serviços gerais","grupo":"Serviços Gerais"},{"codigo":"9919-10","titulo":"Servente","grupo":"Serviços Gerais"},{"codigo":"9919-15","titulo":"Auxiliar geral de serviços","grupo":"Serviços Gerais"},{"codigo":"7101-05","titulo":"Mestre de obras","grupo":"Construção Civil"},{"codigo":"7111-05","titulo":"Pedreiro","grupo":"Construção Civil"},{"codigo":"7152-10","titulo":"Azulejista","grupo":"Construção Civil"},{"codigo":"7153-05","titulo":"Pintor de obras","grupo":"Construção Civil"},{"codigo":"7154-05","titulo":"Gesseiro","grupo":"Construção Civil"},{"codigo":"7155-05","titulo":"Instalador de revestimentos","grupo":"Construção Civil"},{"codigo":"7163-05","titulo":"Eletricista de instalações","grupo":"Construção Civil"},{"codigo":"7170-05","titulo":"Encanador","grupo":"Construção Civil"},{"codigo":"2211-05","titulo":"Médico clínico","grupo":"Saúde"},{"codigo":"2231-05","titulo":"Enfermeiro","grupo":"Saúde"},{"codigo":"2251-05","titulo":"Nutricionista","grupo":"Saúde"},{"codigo":"2263-05","titulo":"Fisioterapeuta","grupo":"Saúde"},{"codigo":"5162-10","titulo":"Cuidador de idosos","grupo":"Saúde"},{"codigo":"2141-05","titulo":"Engenheiro civil","grupo":"Engenharia"},{"codigo":"2143-05","titulo":"Engenheiro eletricista","grupo":"Engenharia"},{"codigo":"2145-05","titulo":"Engenheiro mecânico","grupo":"Engenharia"},{"codigo":"2147-05","titulo":"Engenheiro de produção","grupo":"Engenharia"},{"codigo":"2149-15","titulo":"Engenheiro de segurança do trabalho","grupo":"Engenharia"},{"codigo":"2149-20","titulo":"Engenheiro ambiental","grupo":"Engenharia"},{"codigo":"3251-05","titulo":"Técnico de segurança do trabalho","grupo":"Engenharia"},{"codigo":"2410-05","titulo":"Advogado","grupo":"Direito"},{"codigo":"2410-10","titulo":"Advogado trabalhista","grupo":"Direito"},{"codigo":"2410-15","titulo":"Advogado tributarista","grupo":"Direito"}];
+
+const CATS = {
+  empresa: {
+    label: 'Empresas', section: 'Estrutura', sectionOrder: 1, order: 1,
+    icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+    desc:  'Cadastro de empresas. Código, Razão Social, CNPJ e nome simplificado para uso interno no sistema.',
+    table: 'param_empresa',
+    cols:  ['codigo','razao_social','cnpj','nome_simplificado'],
+    fields: [
+      { key: 'codigo',           label: 'Código',           type: 'text',   placeholder: 'Ex: 0148',                 width: 1, required: true },
+      { key: 'razao_social',     label: 'Razão Social',     type: 'text',   placeholder: 'Ex: Empresa Exemplo S/A',  width: 4, required: true },
+      { key: 'cnpj',             label: 'CNPJ',             type: 'text',   placeholder: '00.000.000/0000-00',        width: 2 },
+      { key: 'nome_simplificado',label: 'Nome Simplificado',type: 'text',   placeholder: 'Ex: MATRIZ',                width: 2 },
+      { key: 'ordem',            label: 'Ordem',            type: 'number', placeholder: '1',                         width: 1 },
+    ],
+    headers: ['Ordem','Código','Razão Social','CNPJ','Nome','Situação',''],
+  },
+  setor: {
+    label: 'Setores', section: 'Estrutura', sectionOrder: 1, order: 2,
+    icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+    desc:  'Setores de lotação dos colaboradores. O valor salvo deve seguir o formato "código - nome" (ex: 148 - Compras) para funcionar corretamente no Cadastro.',
+    table: 'param_setor',
+    cols:  ['descricao'],
+    fields: [
+      { key: 'descricao', label: 'Valor (código - nome)', type: 'text', placeholder: 'Ex: 148 - Compras', width: 4, required: true },
+      { key: 'ordem',     label: 'Ordem',                 type: 'number', placeholder: '1',               width: 1 },
+    ],
+    headers: ['Ordem','Setor','Situação',''],
+  },
+  gestor: {
+    label: 'Gestores', section: 'Estrutura', sectionOrder: 1, order: 3,
+    icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    desc:  'Cadastro de gestores. Cada gestor pode ser vinculado a um ou mais setores independentemente.',
+    table: 'param_gestor',
+    cols:  ['nome'],
+    fields: [
+      { key: 'nome',  label: 'Nome',  type: 'text',   placeholder: 'Nome do gestor', width: 4, required: true },
+      { key: 'ordem', label: 'Ordem', type: 'number', placeholder: '1',              width: 1 },
+    ],
+    headers: ['Ordem','Nome','Situação',''],
+  },
+  gestor_setor: {
+    label: 'Gestores por Setor', section: 'Estrutura', sectionOrder: 1, order: 4,
+    icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    desc:  'Vínculo entre gestores e setores. Um gestor pode gerenciar múltiplos setores; um setor pode ter co-gestão.',
+    table: 'param_gestor_setor',
+    cols:  ['setor_id','gestor_id'],
+    fields: [
+      { key: 'setor_id',  label: 'Setor',  type: 'select', source: 'setores',  width: 3, required: true },
+      { key: 'gestor_id', label: 'Gestor', type: 'select', source: 'gestores', width: 3, required: true },
+      { key: 'ordem',     label: 'Ordem',  type: 'number', placeholder: '1',   width: 1 },
+    ],
+    headers: ['Ordem','Setor','Gestor','Situação',''],
+  },
+  tipo_contrato: {
+    label: 'Tipo de Contratação', section: 'Contrato', sectionOrder: 2, order: 1,
+    icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+    desc:  'Tipos de vínculo empregatício disponíveis para cadastro.',
+    table: 'param_tipo_contrato',
+    cols:  ['codigo','descricao'],
+    fields: [
+      { key: 'codigo',   label: 'Código',    type: 'text',   placeholder: 'Ex: CLT_INDET', width: 1 },
+      { key: 'descricao',label: 'Descrição', type: 'text',   placeholder: 'Ex: Contrato por Prazo Indeterminado (CLT)', width: 3 },
+      { key: 'ordem',    label: 'Ordem',     type: 'number', placeholder: '1', width: 1 },
+    ],
+    headers: ['Ordem','Código','Descrição','Situação',''],
+  },
+  instituicao_aprendiz: {
+    label: 'Inst. Jovem Aprendiz', section: 'Contrato', sectionOrder: 2, order: 2,
+    icon: '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+    desc:  'Instituições parceiras do programa Jovem Aprendiz. Inclua, edite ou inative conforme contratos vigentes em cada unidade.',
+    table: 'param_instituicao_aprendiz',
+    cols:  ['codigo','descricao'],
+    fields: [
+      { key: 'codigo',   label: 'Código', type: 'text',   placeholder: 'Ex: SENAI', width: 1 },
+      { key: 'descricao',label: 'Nome',   type: 'text',   placeholder: 'Ex: SENAI — Serviço Nacional de Aprendizagem Industrial', width: 3 },
+      { key: 'ordem',    label: 'Ordem',  type: 'number', placeholder: '1', width: 1 },
+    ],
+    headers: ['Ordem','Código','Nome','Situação',''],
+  },
+  escolaridade: {
+    label: 'Grau de Formação', section: 'Contrato', sectionOrder: 2, order: 3,
+    icon: '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+    desc:  'Níveis de escolaridade disponíveis para cadastro de colaboradores.',
+    table: 'param_escolaridade',
+    cols:  ['codigo','descricao'],
+    fields: [
+      { key: 'codigo',   label: 'Código',    type: 'text',   placeholder: 'Ex: SUP_COMP', width: 1 },
+      { key: 'descricao',label: 'Descrição', type: 'text',   placeholder: 'Ex: Superior completo', width: 3 },
+      { key: 'ordem',    label: 'Ordem',     type: 'number', placeholder: '1', width: 1 },
+    ],
+    headers: ['Ordem','Código','Descrição','Situação',''],
+  },
+  regime_horas: {
+    label: 'Regime de Horas', section: 'Jornada', sectionOrder: 3, order: 1,
+    icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    desc:  'Jornadas de trabalho disponíveis para vinculação ao contrato.',
+    table: 'param_regime_horas',
+    cols:  ['codigo','descricao','horas_dia','horas_semana','horas_mes'],
+    fields: [
+      { key: 'codigo',      label: 'Código',        type: 'text',   placeholder: 'Ex: 44H', width: 2 },
+      { key: 'descricao',   label: 'Descrição',     type: 'text',   placeholder: 'Ex: 44h semanais - Padrão CLT', width: 4 },
+      { key: 'horas_dia',   label: 'Horas / Dia',   type: 'text',   placeholder: '08:00', width: 2 },
+      { key: 'horas_semana',label: 'Horas / Semana',type: 'text',   placeholder: '44:00', width: 2 },
+      { key: 'horas_mes',   label: 'Horas / Mês',   type: 'text',   placeholder: '220:00', width: 2 },
+      { key: 'ordem',       label: 'Ordem',         type: 'number', placeholder: '1', width: 2 },
+    ],
+    headers: ['Ordem','Código','Descrição','Dia','Semana','Mês','Situação',''],
+  },
+  tipo_admissao: {
+    label: 'Tipo de Admissão', section: 'Admissão e Rescisão', sectionOrder: 4, order: 1,
+    icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>',
+    desc:  'Categorias de admissão utilizadas no registro do colaborador.',
+    table: 'param_tipo_admissao',
+    cols:  ['codigo','descricao'],
+    fields: [
+      { key: 'codigo',   label: 'Código',    type: 'text',   placeholder: 'Ex: REEMPREGO', width: 1 },
+      { key: 'descricao',label: 'Descrição', type: 'text',   placeholder: 'Ex: Reemprego', width: 3 },
+      { key: 'ordem',    label: 'Ordem',     type: 'number', placeholder: '1', width: 1 },
+    ],
+    headers: ['Ordem','Código','Descrição','Situação',''],
+  },
+  aviso_previo: {
+    label: 'Aviso Prévio', section: 'Admissão e Rescisão', sectionOrder: 4, order: 2,
+    icon: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    desc:  'Modalidades de aviso prévio utilizadas na rescisão.',
+    table: 'param_aviso_previo',
+    cols:  ['codigo','descricao'],
+    fields: [
+      { key: 'codigo',   label: 'Código',    type: 'text',   placeholder: 'Ex: INDENIZADO', width: 1 },
+      { key: 'descricao',label: 'Descrição', type: 'text',   placeholder: 'Ex: Indenizado', width: 3 },
+      { key: 'ordem',    label: 'Ordem',     type: 'number', placeholder: '1', width: 1 },
+    ],
+    headers: ['Ordem','Código','Descrição','Situação',''],
+  },
+  parentesco: {
+    label: 'Parentesco', section: 'Família', sectionOrder: 5, order: 1,
+    icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    desc:  'Graus de parentesco para cadastro de dependentes.',
+    table: 'param_parentesco',
+    cols:  ['codigo','descricao'],
+    fields: [
+      { key: 'codigo',   label: 'Código',    type: 'text',   placeholder: 'Ex: CONJUGE', width: 1 },
+      { key: 'descricao',label: 'Descrição', type: 'text',   placeholder: 'Ex: Cônjuge', width: 3 },
+      { key: 'ordem',    label: 'Ordem',     type: 'number', placeholder: '1', width: 1 },
+    ],
+    headers: ['Ordem','Código','Descrição','Situação',''],
+  },
+  cargo: {
+    label: 'Cargos', section: 'Cargos e CBO', sectionOrder: 6, order: 1,
+    icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>',
+    desc:  'Cadastro de cargos com vínculo ao CBO (Classificação Brasileira de Ocupações / MTE). Os códigos CBO são sugeridos — verifique em mtecbo.gov.br.',
+    table: 'param_cargo',
+    cols:  ['nome','cbo_codigo'],
+    fields: [
+      { key: 'nome',   label: 'Nome do Cargo', type: 'text',   placeholder: 'Ex: Vendedor(a) Sênior', width: 4, required: true },
+      { key: 'cbo_id', label: 'CBO (MTE)',      type: 'select', source: 'cbos', width: 3 },
+      { key: 'ordem',  label: 'Ordem',          type: 'number', placeholder: '1', width: 1 },
+    ],
+    headers: ['Ordem','Cargo','CBO','Situação',''],
+  },
+  cbo: {
+    label: 'Tabela CBO', section: 'Cargos e CBO', sectionOrder: 6, order: 2,
+    icon: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+    desc:  'Classificação Brasileira de Ocupações — fonte oficial MTE (mtecbo.gov.br). Tabela de referência vinculada aos cargos cadastrados.',
+    table: 'param_cbo',
+    cols:  ['codigo','titulo','grupo'],
+    fields: [
+      { key: 'codigo', label: 'Código CBO', type: 'text', placeholder: 'Ex: 3541-05', width: 2, required: true },
+      { key: 'titulo', label: 'Título',     type: 'text', placeholder: 'Ex: Vendedor de comércio varejista', width: 5, required: true },
+      { key: 'grupo',  label: 'Grupo',      type: 'text', placeholder: 'Ex: Vendas e Atendimento', width: 3 },
+    ],
+    headers: ['Código','Título','Grupo','Situação',''],
+  },
+  motivo_desligamento: {
+    label: 'Motivo de Desligamento', section: 'Desligamento', sectionOrder: 7, order: 1,
+    icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="11" x2="23" y2="11"/>',
+    desc:  'Gerencie os motivos utilizados no desligamento de colaboradores.',
+    table: 'param_motivo_desligamento',
+    cols:  ['codigo','descricao'],
+    fields: [
+      { key: 'codigo',   label: 'Código',    type: 'text',   placeholder: 'Ex: 0.2', width: 1 },
+      { key: 'descricao',label: 'Descrição', type: 'text',   placeholder: 'Ex: Demitido s/ justa causa', width: 3 },
+      { key: 'ordem',    label: 'Ordem',     type: 'number', placeholder: '1', width: 1 },
+    ],
+    headers: ['Ordem','Código','Descrição','Situação',''],
+  },
+};
+
+let currentCat = null;
+let allRows = [];
+let editingId = null;
+let empresasMap = {};
+let gestoresMap = {};
+let setoresMap  = {};
+let cbosMap     = {};   // id → "codigo — titulo"
+let cbosRaw     = [];   // [{id, codigo, titulo, grupo}] para select agrupado
+
+async function carregarEmpresas() {
+  try {
+    const rows = await sbGet('param_empresa', 'select=codigo,nome_simplificado,razao_social&ativo=eq.true&order=ordem');
+    empresasMap = {};
+    rows.forEach(r => { empresasMap[r.codigo] = r.nome_simplificado || r.razao_social || r.codigo; });
+    return rows;
+  } catch(_) { return []; }
+}
+
+async function carregarGestores() {
+  try {
+    const rows = await sbGet('param_gestor', 'select=id,nome&ativo=eq.true&order=ordem');
+    gestoresMap = {};
+    rows.forEach(r => { gestoresMap[r.id] = r.nome; });
+    return rows;
+  } catch(_) { return []; }
+}
+
+async function carregarSetores() {
+  try {
+    const rows = await sbGet('param_setor', 'select=id,descricao&ativo=eq.true&order=ordem');
+    setoresMap = {};
+    rows.forEach(r => { setoresMap[r.id] = r.descricao.replace(/^\d+\s*-\s*/, ''); });
+    return rows;
+  } catch(_) { return []; }
+}
+
+async function carregarCbos() {
+  try {
+    const rows = await sbGet('param_cbo', 'select=id,codigo,titulo,grupo&ativo=eq.true&order=grupo,codigo');
+    cbosMap = {};
+    cbosRaw = rows;
+    rows.forEach(r => { cbosMap[r.id] = `${r.codigo} — ${r.titulo}`; });
+    return rows;
+  } catch(_) { return []; }
+}
+
+// Dependências por tabela: antes de excluir, verifica se há vínculos
+const DEPENDENCIAS = {
+  param_setor:               [{ tb: 'colaboradores', col: 'setor',            chave: 'descricao', label: 'colaboradores' }],
+  param_gestor:              [{ tb: 'colaboradores', col: 'gestor',            chave: 'nome',      label: 'colaboradores' }],
+  param_empresa:             [{ tb: 'colaboradores', col: 'empresa_registro',  chave: 'codigo',    label: 'colaboradores', parcial: true }],
+  param_motivo_desligamento: [{ tb: 'colaboradores', col: 'motivo_demissao',   chave: 'descricao', label: 'colaboradores' }],
+  param_tipo_contrato:       [{ tb: 'colaboradores', col: 'tipo_contrato',     chave: 'codigo',    label: 'colaboradores' }],
+  param_regime_horas:        [{ tb: 'colaboradores', col: 'jornada',           chave: 'codigo',    label: 'colaboradores' }],
+  param_cargo:               [{ tb: 'colaboradores', col: 'cargo',             chave: 'nome',      label: 'colaboradores' }],
+};
+
+async function verificarDependencias(row) {
+  const cat  = CATS[currentCat];
+  const deps = DEPENDENCIAS[cat.table] || [];
+  for (const dep of deps) {
+    const valor = row[dep.chave] || '';
+    if (!valor) continue;
+    const filtro = dep.parcial
+      ? `${dep.col}=ilike.*${encodeURIComponent(valor)}*`
+      : `${dep.col}=eq.${encodeURIComponent(valor)}`;
+    const resultado = await sbGet(dep.tb, `select=id&${filtro}&limit=1`);
+    if (resultado.length > 0) return dep.label;
+  }
+  return null;
+}
+
+async function sbDelete(table, id) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: 'DELETE', headers: SB_HEADERS });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+async function excluirItem() {
+  if (!editingId) return;
+  const row  = allRows.find(r => r.id === editingId);
+  if (!row)  return;
+  const nome = row.nome || row.descricao || row.razao_social || 'este registro';
+
+  const ok = await confirmar({
+    titulo: 'Excluir registro permanentemente?',
+    mensagem: `Tem certeza que deseja excluir "${nome}"? Esta ação não pode ser desfeita.`,
+    confirmarLabel: 'Sim, excluir',
+    tipo: 'danger',
+  });
+  if (!ok) return;
+
+  try {
+    const vinculo = await verificarDependencias(row);
+    if (vinculo) {
+      await confirmar({
+        titulo: 'Exclusão não permitida',
+        mensagem: `O registro "${nome}" está vinculado a um ou mais ${vinculo} e não pode ser excluído. Inative-o caso não queira que apareça nas listas.`,
+        confirmarLabel: 'Entendi',
+        tipo: 'warning',
+      });
+      return;
+    }
+    const cat = CATS[currentCat];
+    await sbDelete(cat.table, editingId);
+    await registrarAudit('excluído', editingId, `Registro excluído: ${nome}`);
+    showToast('Registro excluído com sucesso.', 'success');
+    fecharModal(true);
+    carregar();
+  } catch(e) {
+    showToast('Erro ao excluir: ' + e.message, 'error');
+  }
+}
+
+async function sbGet(table, qs) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${qs}`, { headers: SB_HEADERS });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPost(table, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: 'POST', headers: SB_HEADERS, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPatch(table, id, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+function renderSidebar() {
+  const groups = {};
+  const groupOrder = {};
+  Object.entries(CATS).forEach(([key, cat]) => {
+    const s  = cat.section || 'Outros';
+    const so = cat.sectionOrder || 99;
+    if (!groups[s]) { groups[s] = []; groupOrder[s] = so; }
+    groups[s].push({ key, cat });
+  });
+  const sortedSections = Object.entries(groups)
+    .sort((a, b) => (groupOrder[a[0]] || 99) - (groupOrder[b[0]] || 99));
+  const nav = document.getElementById('sidebar');
+  let html = `
+    <div class="sidebar-search">
+      <div class="sidebar-search-box">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="sidebarSearch" placeholder="Buscar parâmetro..." oninput="filtrarSidebar()" autocomplete="off">
+        <button class="sidebar-search-clear" id="sidebarSearchClear" onclick="limparBuscaSidebar()" title="Limpar">✕</button>
+      </div>
+    </div>
+    <div id="sidebarSearchResults" class="sidebar-search-results" style="display:none"></div>
+    <div id="sidebarGroups">`;
+  sortedSections.forEach(([section, items]) => {
+    items.sort((a, b) => (a.cat.order || 0) - (b.cat.order || 0));
+    html += `<div class="sidebar-group collapsed">
+      <div class="sidebar-group-header" onclick="toggleSidebarGroup(this)">
+        <span class="sidebar-group-header-label">${section}</span>
+        <svg class="chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="sidebar-group-items">`;
+    items.forEach(({ key, cat }) => {
+      html += `<div class="sidebar-item" data-cat="${key}" onclick="selectCat(this)">
+        <svg viewBox="0 0 24 24">${cat.icon || ''}</svg>
+        ${cat.label}
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  html += `</div>`;
+  nav.innerHTML = html;
+}
+
+function filtrarSidebar() {
+  const q = document.getElementById('sidebarSearch').value.trim().toLowerCase();
+  const clearBtn = document.getElementById('sidebarSearchClear');
+  const results  = document.getElementById('sidebarSearchResults');
+  const groups   = document.getElementById('sidebarGroups');
+  clearBtn.style.display = q ? '' : 'none';
+  if (!q) {
+    results.style.display = 'none';
+    groups.style.display = '';
+    return;
+  }
+  groups.style.display = 'none';
+  results.style.display = '';
+  const matches = Object.entries(CATS).filter(([, cat]) =>
+    cat.label.toLowerCase().includes(q) ||
+    (cat.section || '').toLowerCase().includes(q) ||
+    (cat.desc || '').toLowerCase().includes(q)
+  );
+  if (!matches.length) {
+    results.innerHTML = `<div class="sidebar-search-empty">Nenhum resultado para "<b>${q}</b>"</div>`;
+    return;
+  }
+  results.innerHTML = matches.map(([key, cat]) => {
+    const isActive = currentCat === key;
+    return `<div class="sidebar-search-result-item${isActive ? ' active' : ''}" data-cat="${key}" onclick="selectCatByKey('${key}')">
+      <svg viewBox="0 0 24 24">${cat.icon || ''}</svg>
+      <span>${cat.label}</span>
+      <span class="result-section">${cat.section || ''}</span>
+    </div>`;
+  }).join('');
+}
+
+function limparBuscaSidebar() {
+  document.getElementById('sidebarSearch').value = '';
+  filtrarSidebar();
+  document.getElementById('sidebarSearch').focus();
+}
+
+function toggleSidebarGroup(header) {
+  header.closest('.sidebar-group').classList.toggle('collapsed');
+}
+
+function selectCatByKey(key) {
+  const el = document.querySelector(`.sidebar-item[data-cat="${key}"]`);
+  if (el) selectCat(el);
+}
+
+function mostrarVazio() {
+  document.getElementById('emptyState').style.display = '';
+  document.getElementById('mainPanel').style.display = 'none';
+}
+
+function selectCat(el) {
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  const group = el.closest('.sidebar-group');
+  if (group) group.classList.remove('collapsed');
+  currentCat = el.dataset.cat;
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('mainPanel').style.display = '';
+  const btnNovo = document.getElementById('btnNovo');
+  if (btnNovo) btnNovo.style.display = currentCat === 'cbo' ? 'none' : '';
+  const toolbarLeft = document.getElementById('toolbarLeft');
+  if (toolbarLeft) toolbarLeft.style.display = currentCat === 'cbo' ? 'none' : '';
+  const cat = CATS[currentCat];
+  document.getElementById('pageTitle').textContent = cat.label;
+  document.getElementById('pageTooltip').textContent = cat.desc;
+  document.getElementById('searchInput').value = '';
+  carregar();
+}
+
+async function carregar() {
+  document.getElementById('tableBody').innerHTML = '<div class="loading">Carregando...</div>';
+  const cat = CATS[currentCat];
+  try {
+    if (currentCat === 'gestor_setor') {
+      await Promise.all([carregarGestores(), carregarSetores()]);
+    } else if (currentCat === 'cargo') {
+      await carregarCbos();
+    }
+    const orderBy = currentCat === 'cbo' ? 'grupo,codigo' : 'ordem,id';
+    allRows = await sbGet(cat.table, `select=*&order=${orderBy}`);
+    if (currentCat === 'cbo') { renderCboConsultivo(); return; }
+    renderTabela(allRows);
+  } catch(e) {
+    document.getElementById('tableBody').innerHTML = `<div class="empty"><p style="color:var(--red)">Erro ao carregar: ${e.message}</p><p style="margin-top:8px;font-size:12px">Execute o SQL de criação das tabelas no Supabase Dashboard antes de usar esta página.</p></div>`;
+  }
+}
+
+function filtrarTabela() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const at = document.getElementById('filtroAtivo').value;
+  let rows = allRows;
+  if (q) rows = rows.filter(r => Object.values(r).some(v => String(v||'').toLowerCase().includes(q)));
+  if (at !== '') rows = rows.filter(r => String(r.ativo) === at);
+  if (currentCat === 'cbo') { renderCboConsultivo(rows); return; }
+  renderTabela(rows);
+}
+
+// ── Interface consultiva CBO ───────────────────────────────────
+function renderCboConsultivo() {
+  const container = document.getElementById('tableBody');
+  container.innerHTML = `
+    <div style="padding:0 0 20px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+        <input id="cboBusca" type="text" placeholder="🔍  Buscar por código ou título (ex: 3541, vendedor...)"
+          style="flex:1;min-width:280px;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none;"
+          oninput="filtrarCbo()" autofocus>
+        <span style="font-size:12px;color:var(--text-sec);white-space:nowrap;">Base: <b>${CBO_DATA.length}</b> CBOs oficiais MTE</span>
+      </div>
+      <div id="cboResultados"></div>
+    </div>`;
+  filtrarCbo();
+}
+
+function filtrarCbo() {
+  const busca = (document.getElementById('cboBusca')?.value || '').toLowerCase().trim();
+
+  const filtered = busca.length < 2
+    ? CBO_DATA.slice(0, 60)
+    : CBO_DATA.filter(r =>
+        r.codigo.toLowerCase().includes(busca) ||
+        r.titulo.toLowerCase().includes(busca) ||
+        (r.grupo || '').toLowerCase().includes(busca)
+      );
+
+  const grupos = [...new Set(filtered.map(r => r.grupo))];
+  let html = '';
+
+  if (!busca) html += `<p style="font-size:12px;color:var(--text-sec);margin-bottom:12px;">Mostrando os primeiros 60 registros. Digite para filtrar por código, título ou grupo.</p>`;
+
+  grupos.forEach(g => {
+    const items = filtered.filter(r => r.grupo === g);
+    html += `<div style="margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">${g}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <tbody>`;
+    items.forEach(r => {
+      html += `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px 12px;font-family:monospace;font-weight:700;color:var(--blue);width:90px;">${r.codigo}</td>
+        <td style="padding:8px 12px;">${r.titulo}</td>
+        <td style="padding:8px 12px;width:180px;font-size:11px;color:var(--text-sec);">${r.grupo}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+  });
+
+  if (!filtered.length) html = `<p style="color:var(--text-sec);text-align:center;padding:32px;">Nenhum CBO encontrado para "${busca}".</p>`;
+
+  document.getElementById('cboResultados').innerHTML = html;
+}
+
+function renderTabela(rows) {
+  const cat = CATS[currentCat];
+  if (!rows.length) {
+    document.getElementById('tableBody').innerHTML = '<div class="empty"><p>Nenhum item encontrado.</p></div>';
+    return;
+  }
+
+  let html = `<table><thead><tr>`;
+  cat.headers.forEach(h => html += `<th>${h}</th>`);
+  html += `</tr></thead><tbody>`;
+
+  rows.forEach(row => {
+    const badge = row.ativo
+      ? `<span class="badge badge-ativo">Ativo</span>`
+      : `<span class="badge badge-inativo">Inativo</span>`;
+
+    html += `<tr>`;
+    if (currentCat !== 'cbo') html += `<td class="col-ordem">${row.ordem ?? '—'}</td>`;
+
+    if (currentCat === 'cargo') {
+      html += `<td style="font-weight:600">${row.nome || '—'}</td>`;
+      const cboLabel = row.cbo_id ? (cbosMap[row.cbo_id] || row.cbo_codigo || '—') : (row.cbo_codigo || '—');
+      html += `<td style="font-size:12px;color:var(--text-sec);">${cboLabel}</td>`;
+    } else if (currentCat === 'cbo') {
+      html += `<td class="col-codigo" style="font-family:monospace;font-weight:600;">${row.codigo || '—'}</td>`;
+      html += `<td>${row.titulo || '—'}</td>`;
+      html += `<td style="font-size:12px;color:var(--text-sec);">${row.grupo || '—'}</td>`;
+    } else if (currentCat === 'gestor_setor') {
+      html += `<td>${setoresMap[row.setor_id] || '—'}</td>`;
+      html += `<td style="font-weight:600">${gestoresMap[row.gestor_id] || '—'}</td>`;
+    } else if (currentCat === 'gestor') {
+      html += `<td style="font-weight:600">${row.nome || '—'}</td>`;
+    } else if (currentCat === 'setor') {
+      html += `<td>${(row.descricao || '—').replace(/^\d+\s*-\s*/, '')}</td>`;
+    } else if (currentCat === 'empresa') {
+      html += `<td class="col-codigo">${row.codigo || '—'}</td>`;
+      html += `<td>${row.razao_social || '—'}</td>`;
+      html += `<td style="font-size:12px;color:var(--text-sec)">${row.cnpj || '—'}</td>`;
+      html += `<td style="font-size:12px;font-weight:600">${row.nome_simplificado || '—'}</td>`;
+    } else {
+      html += `<td class="col-codigo">${row.codigo || '—'}</td>`;
+      html += `<td>${row.descricao || '—'}</td>`;
+      if (currentCat === 'tipo_experiencia') {
+        html += `<td>${row.dias_total != null ? row.dias_total + ' dias' : '—'}</td>`;
+      }
+      if (currentCat === 'regime_horas') {
+        html += `<td>${row.horas_dia || '—'}</td>`;
+        html += `<td>${row.horas_semana || '—'}</td>`;
+        html += `<td>${row.horas_mes || '—'}</td>`;
+      }
+    }
+
+    html += `<td>${badge}</td>`;
+    html += `<td class="col-acoes">
+      <button class="btn-icon" onclick="editarItem(${row.id})" title="Editar">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+    </td>`;
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table>`;
+  document.getElementById('tableBody').innerHTML = html;
+}
+
+function abrirModal(row) {
+  const cat = CATS[currentCat];
+  editingId = row ? row.id : null;
+  const titleLabel = row
+    ? (row.nome || row.titulo || row.descricao || row.razao_social || gestoresMap[row.gestor_id] || 'Item')
+    : 'Novo Item';
+  document.getElementById('modalTitle').textContent = titleLabel;
+  const btnExcluir = document.getElementById('btnExcluir');
+  btnExcluir.style.display = row ? '' : 'none';
+  const btnToggle = document.getElementById('btnToggleAtivo');
+  if (row) {
+    btnToggle.style.display = '';
+    btnToggle.textContent = row.ativo ? 'Inativar' : 'Ativar';
+    btnToggle.style.background = row.ativo ? 'var(--red-bg)' : 'var(--green-bg)';
+    btnToggle.style.color = row.ativo ? 'var(--red)' : 'var(--green)';
+    btnToggle.style.borderColor = row.ativo ? '#FECDCA' : '#A9DFC4';
+    btnToggle.dataset.ativo = row.ativo;
+  } else {
+    btnToggle.style.display = 'none';
+  }
+  // Badge de status no cabeçalho
+  const statusEl = document.getElementById('modalStatus');
+  if (row) {
+    statusEl.innerHTML = row.ativo
+      ? '<span class="badge badge-ativo">Ativo</span>'
+      : '<span class="badge badge-inativo">Inativo</span>';
+  } else {
+    statusEl.innerHTML = '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">Novo registro</span>';
+  }
+
+  document.getElementById('overlay').classList.add('open');
+
+  const proximaOrdem = row ? null : (allRows.length ? Math.max(...allRows.map(r => r.ordem || 0)) + 1 : 1);
+
+  let html = '';
+  cat.fields.forEach(f => {
+    const val = row ? (row[f.key] ?? '') : (f.key === 'ordem' ? proximaOrdem : '');
+    if (f.type === 'select' && f.source === 'empresas') {
+      const opts = Object.entries(empresasMap).map(([k,v]) =>
+        `<option value="${k}"${val==k?' selected':''}>${v} (${k})</option>`).join('');
+      html += `<div class="field"><label>${f.label}</label>
+        <select id="field_${f.key}"><option value="">Selecionar empresa...</option>${opts}</select>
+      </div>`;
+    } else if (f.type === 'select' && f.source === 'gestores') {
+      const opts = Object.entries(gestoresMap).map(([k,v]) =>
+        `<option value="${k}"${val==k?' selected':''}>${v}</option>`).join('');
+      html += `<div class="field"><label>${f.label}</label>
+        <select id="field_${f.key}"><option value="">Selecionar gestor...</option>${opts}</select>
+      </div>`;
+    } else if (f.type === 'select' && f.source === 'setores') {
+      const opts = Object.entries(setoresMap).map(([k,v]) =>
+        `<option value="${k}"${val==k?' selected':''}>${v}</option>`).join('');
+      html += `<div class="field"><label>${f.label}</label>
+        <select id="field_${f.key}"><option value="">Selecionar setor...</option>${opts}</select>
+      </div>`;
+    } else if (f.type === 'select' && f.source === 'cbos') {
+      // Agrupado por grupo CBO
+      const grupos = [...new Set(cbosRaw.map(r => r.grupo || 'Outros'))];
+      let opts = `<option value="">Selecionar CBO...</option>`;
+      grupos.forEach(g => {
+        const items = cbosRaw.filter(r => (r.grupo || 'Outros') === g);
+        opts += `<optgroup label="${g}">`;
+        items.forEach(r => {
+          opts += `<option value="${r.id}"${val==r.id?' selected':''}>${r.codigo} — ${r.titulo}</option>`;
+        });
+        opts += `</optgroup>`;
+      });
+      html += `<div class="field"><label>${f.label}</label>
+        <select id="field_${f.key}" style="font-size:13px;">${opts}</select>
+        <small style="color:var(--text-sec);font-size:11px;">Fonte: MTE — mtecbo.gov.br</small>
+      </div>`;
+    } else {
+      html += `<div class="field">
+        <label>${f.label}</label>
+        <input type="${f.type}" id="field_${f.key}" value="${val}" placeholder="${f.placeholder || ''}" style="width:100%">
+      </div>`;
+    }
+  });
+
+  if (row) {
+    html += `<div class="field-audit">
+      <div class="field-audit-item">
+        <label>Criado em</label>
+        <span>${fmtDate(row.created_at)}${row.criado_por ? ` · ${row.criado_por}` : ''}</span>
+      </div>
+      <div class="field-audit-item">
+        <label>Última alteração</label>
+        <span>${row.updated_at && row.updated_at !== row.created_at ? fmtDate(row.updated_at) : '—'}${row.alterado_por ? ` · ${row.alterado_por}` : ''}</span>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('modalFields').innerHTML = html;
+  document.getElementById('histSection').style.display = 'none';
+  document.getElementById('histList').innerHTML = '';
+  if (row) {
+    carregarHistorico(row.id, cat.table).then(renderHistorico);
+  }
+}
+
+function editarItem(id) {
+  const row = allRows.find(r => r.id === id);
+  if (row) abrirModal(row);
+}
+
+async function fecharModal(forcar = false) {
+  if (!forcar && editingId) {
+    const ok = await confirmar({
+      titulo: 'Descartar alterações?',
+      mensagem: 'Você possui alterações não salvas. Se sair agora, todas as modificações serão perdidas.',
+      confirmarLabel: 'Sim, descartar',
+      tipo: 'warning',
+    });
+    if (!ok) return;
+  }
+  document.getElementById('overlay').classList.remove('open');
+  editingId = null;
+}
+
+function fecharModalOutside(e) {
+  if (e.target === document.getElementById('overlay')) fecharModal(true);
+}
+
+async function salvar() {
+  const cat = CATS[currentCat];
+  const body = {};
+  for (const f of cat.fields) {
+    const el = document.getElementById('field_' + f.key);
+    if (!el) continue;
+    const isInt = f.type === 'number' || f.source === 'gestores' || f.source === 'setores' || f.source === 'cbos';
+    body[f.key] = isInt ? (el.value === '' ? null : parseInt(el.value)) : el.value;
+  }
+  // Para cargo: sincroniza cbo_codigo a partir do cbo_id selecionado
+  if (currentCat === 'cargo' && body.cbo_id) {
+    const cboRow = cbosRaw.find(r => r.id === body.cbo_id);
+    if (cboRow) body.cbo_codigo = cboRow.codigo;
+  } else if (currentCat === 'cargo' && !body.cbo_id) {
+    body.cbo_codigo = null;
+  }
+
+  const _perf = localStorage.getItem('sb_perfil');
+  const _nome = _perf ? (JSON.parse(_perf).nome || '') : '';
+  if (editingId) {
+    body.alterado_por = _nome;
+    body.updated_at = new Date().toISOString();
+  } else {
+    body.ativo = true;
+    body.criado_por = _nome;
+  }
+
+  const missingReq = cat.fields.filter(f => f.required && !body[f.key]);
+  if (missingReq.length) { showToast(`${missingReq[0].label} é obrigatório.`, 'error'); return; }
+
+  try {
+    if (editingId) {
+      const original = allRows.find(r => r.id === editingId);
+      const alteracoes = cat.fields
+        .filter(f => body[f.key] !== undefined && String(body[f.key] ?? '') !== String(original[f.key] ?? ''))
+        .map(f => `${f.label}: "${original[f.key] ?? ''}" → "${body[f.key] ?? ''}"`)
+        .join(' | ');
+      await sbPatch(cat.table, editingId, body);
+      await registrarAudit('editado', editingId, alteracoes || null);
+      showToast('Registro atualizado com sucesso!', 'success');
+    } else {
+      const criado = await sbPost(cat.table, body);
+      const novoId = Array.isArray(criado) ? criado[0]?.id : criado?.id;
+      if (novoId) await registrarAudit('criado', novoId, null);
+      showToast('Registro criado com sucesso!', 'success');
+    }
+    fecharModal(true);
+    carregar();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+async function toggleAtivo(id, atual) {
+  const cat = CATS[currentCat];
+  const _nome = nomeUsuario();
+  try {
+    await sbPatch(cat.table, id, { ativo: !atual, alterado_por: _nome, updated_at: new Date().toISOString() });
+    await registrarAudit(atual ? 'inativado' : 'reativado', id, null);
+    showToast(atual ? 'Registro inativado.' : 'Registro reativado!', 'success');
+    carregar();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+async function toggleAtivoModal() {
+  if (!editingId) return;
+  const row = allRows.find(r => r.id === editingId);
+  if (!row) return;
+  const nome = row.nome || row.descricao || row.razao_social || 'este registro';
+  const inativando = row.ativo;
+  const ok = await confirmar(inativando ? {
+    titulo: 'Inativar registro?',
+    mensagem: `Tem certeza que deseja inativar "${nome}"? Ele deixará de aparecer nas listas e não poderá ser selecionado em novos cadastros.`,
+    confirmarLabel: 'Sim, inativar',
+    tipo: 'danger',
+  } : {
+    titulo: 'Reativar registro?',
+    mensagem: `Deseja reativar "${nome}"? Ele voltará a estar disponível para seleção em todos os cadastros.`,
+    confirmarLabel: 'Sim, reativar',
+    tipo: 'info',
+  });
+  if (!ok) return;
+  await toggleAtivo(editingId, row.ativo);
+  fecharModal(true);
+}
+
+// ─── Audit log ────────────────────────────────────────────────────────────────
+function nomeUsuario() {
+  try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}').nome || ''; } catch(_) { return ''; }
+}
+
+async function registrarAudit(acao, registroId, detalhe) {
+  const cat = CATS[currentCat];
+  try {
+    await sbPost('audit_log', {
+      tabela: cat.table,
+      registro_id: registroId,
+      acao,
+      detalhe: detalhe || null,
+      usuario: nomeUsuario(),
+    });
+  } catch(e) { console.warn('Audit log:', e.message); }
+}
+
+async function carregarHistorico(registroId, tabela) {
+  try {
+    return await sbGet('audit_log',
+      `select=*&tabela=eq.${tabela}&registro_id=eq.${registroId}&order=created_at.desc&limit=50`);
+  } catch(_) { return []; }
+}
+
+function histEntryHtml(l) {
+  return `<div class="hist-entry">
+    <div class="hist-dot ${l.acao}"></div>
+    <div class="hist-body">
+      <div class="hist-header">
+        <span class="hist-acao">${l.acao}</span>
+        <span class="hist-user">${l.usuario ? '· ' + l.usuario : ''}</span>
+        <span class="hist-date">${fmtDate(l.created_at)}</span>
+      </div>
+      ${l.detalhe ? `<div class="hist-detalhe">${l.detalhe}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderHistorico(logs) {
+  const section = document.getElementById('histSection');
+  const list    = document.getElementById('histList');
+  section.style.display = '';
+
+  if (!logs.length) {
+    list.innerHTML = '<div class="hist-vazio">Nenhuma movimentação registrada.</div>';
+    return;
+  }
+
+  const primeiro = logs[0];
+  const resto    = logs.slice(1);
+  const total    = logs.length;
+
+  let html = histEntryHtml(primeiro);
+
+  if (resto.length) {
+    html += `<button class="hist-expand-btn" id="histExpandBtn" onclick="toggleHistorico()">
+      <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      <span id="histExpandLabel">Ver histórico completo (${total} registro${total > 1 ? 's' : ''})</span>
+    </button>
+    <div class="hist-extra" id="histExtra">
+      ${resto.map(histEntryHtml).join('')}
+    </div>`;
+  }
+
+  list.innerHTML = html;
+}
+
+function toggleHistorico() {
+  const btn   = document.getElementById('histExpandBtn');
+  const extra = document.getElementById('histExtra');
+  const label = document.getElementById('histExpandLabel');
+  const total = document.querySelectorAll('#histExtra .hist-entry').length + 1;
+  const open  = extra.classList.toggle('open');
+  btn.classList.toggle('open', open);
+  label.textContent = open
+    ? 'Recolher histórico'
+    : `Ver histórico completo (${total} registro${total > 1 ? 's' : ''})`;
+}
+
+// ─── Confirm dialog ───────────────────────────────────────────────────────────
+let _confirmResolve = null;
+
+const CONFIRM_ICONS = {
+  danger:  '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  warning: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+  info:    '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+};
+
+function confirmar({ titulo, mensagem, confirmarLabel = 'Confirmar', tipo = 'danger' }) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirmTitle').textContent = titulo;
+    document.getElementById('confirmMsg').textContent = mensagem;
+    const icon = document.getElementById('confirmIcon');
+    icon.className = `confirm-icon ${tipo}`;
+    document.getElementById('confirmIconSvg').innerHTML = CONFIRM_ICONS[tipo] || CONFIRM_ICONS.info;
+    const btn = document.getElementById('confirmBtn');
+    btn.textContent = confirmarLabel;
+    btn.className = `btn btn-confirm-${tipo}`;
+    document.getElementById('confirmOverlay').classList.add('open');
+  });
+}
+
+function resolveConfirm(val) {
+  document.getElementById('confirmOverlay').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(val); _confirmResolve = null; }
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || '');
+  setTimeout(() => t.className = 'toast', 2800);
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Auth
+(function() {
+  const sess = localStorage.getItem('sb_session');
+  const perf = localStorage.getItem('sb_perfil');
+  if (!sess) { window.location.href = '../../login.html'; return; }
+  try {
+    const s = JSON.parse(sess);
+    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    const p = perf ? JSON.parse(perf) : {};
+    if (p.perfil !== 'admin') { window.location.href = '../../index.html'; return; }
+    document.getElementById('userName').textContent = (p.nome || '').split(' ')[0];
+  } catch(_) { window.location.href = '../../login.html'; }
+})();
+
+function logout() {
+  localStorage.removeItem('sb_session');
+  localStorage.removeItem('sb_perfil');
+  window.location.href = '../../login.html';
+}
+
+// Inicia
+renderSidebar();
+mostrarVazio();
+</script>
+</body>
+</html>

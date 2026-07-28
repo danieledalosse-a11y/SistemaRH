@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Sistema RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --border: #e0e0e0;
+    --text: #1a1a1a;
+    --text-sec: #666;
+    --accent: #1a1a1a;
+    --blue: #1570EF;
+    --red: #B42318;
+    --red-bg: #FEF3F2;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+  .login-wrap { width: 100%; max-width: 400px; padding: 24px; }
+
+  .brand { text-align: center; margin-bottom: 32px; }
+  .brand-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--accent); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
+  .brand-icon svg { width: 24px; height: 24px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .brand-title { font-size: 26px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+  .brand-sub { font-size: 13px; color: var(--text-sec); margin-top: 4px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+  .card-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .card-sub { font-size: 13px; color: var(--text-sec); margin-bottom: 24px; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field input { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: inherit; color: var(--text); background: var(--surface); outline: none; transition: border-color 0.12s; }
+  .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(21,112,239,0.1); }
+  .field-password { position: relative; }
+  .field-password input { padding-right: 42px; }
+  .btn-eye { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-sec); padding: 0; display: flex; align-items: center; }
+  .btn-eye:hover { color: var(--text); }
+  .btn-eye svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  .btn-login { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 12px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; margin-top: 8px; transition: opacity 0.15s; }
+  .btn-login:hover { opacity: 0.88; }
+  .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .error-box { background: var(--red-bg); border: 1px solid #FECDCA; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--red); margin-bottom: 16px; display: none; }
+  .error-box.show { display: block; }
+
+  .footer { text-align: center; margin-top: 20px; font-size: 12px; color: var(--text-sec); }
+</style>
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+    </div>
+    <div class="brand-title">Sistema RH</div>
+    <div class="brand-sub">Gestão de Recursos Humanos</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Entrar</div>
+    <div class="card-sub">Use seu e-mail corporativo para acessar.</div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <form onsubmit="login(event)">
+      <div class="field">
+        <label>E-mail</label>
+        <input type="email" id="email" placeholder="seu@email.com.br" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Senha</label>
+        <div class="field-password">
+          <input type="password" id="senha" placeholder="••••••••" required autocomplete="current-password">
+          <button type="button" class="btn-eye" onclick="toggleSenha()" id="btnEye" title="Mostrar/ocultar senha">
+            <svg id="eyeIcon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:4px 0 8px;">
+        <input type="checkbox" id="lembrar" checked style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent);">
+        <label for="lembrar" style="font-size:13px;color:var(--text-sec);cursor:pointer;user-select:none;">Lembrar meu e-mail</label>
+      </div>
+      <button type="submit" class="btn-login" id="btnLogin">Entrar</button>
+    </form>
+  </div>
+
+  <div class="footer">Sistema RH · v1.0</div>
+</div>
+
+<script>
+function toggleSenha() {
+  const input = document.getElementById('senha');
+  const icon = document.getElementById('eyeIcon');
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+  } else {
+    input.type = 'password';
+    icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  }
+}
+
+const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
+
+async function sbFetch(path, opts = {}) {
+  const r = await fetch(SB_URL + path, {
+    ...opts,
+    headers: {
+      'apikey': SB_KEY,
+      'Content-Type': 'application/json',
+      ...(opts.headers || {})
+    }
+  });
+  const body = await r.json();
+  if (!r.ok) throw body;
+  return body;
+}
+
+function salvarSessao(data) {
+  localStorage.setItem('sb_session', JSON.stringify({
+    access_token:  data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at:    Date.now() + data.expires_in * 1000,
+    user_id:       data.user.id,
+    email:         data.user.email
+  }));
+}
+
+async function renovarSessao(refreshToken) {
+  try {
+    const data = await sbFetch('/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    salvarSessao(data);
+    return data.access_token;
+  } catch(_) {
+    return null;
+  }
+}
+
+async function login(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btnLogin');
+  const err = document.getElementById('errorBox');
+  err.classList.remove('show');
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+
+  try {
+    const emailVal = document.getElementById('email').value.trim();
+    const data = await sbFetch('/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      body: JSON.stringify({ email: emailVal, password: document.getElementById('senha').value })
+    });
+
+    salvarSessao(data);
+
+    // Lembrar e-mail
+    if (document.getElementById('lembrar').checked) {
+      localStorage.setItem('sb_email_salvo', emailVal);
+    } else {
+      localStorage.removeItem('sb_email_salvo');
+    }
+
+    // Busca perfil
+    const perfis = await sbFetch(`/rest/v1/usuarios_perfil?user_id=eq.${data.user.id}&select=nome,perfil`, {
+      headers: { 'Authorization': `Bearer ${data.access_token}` }
+    });
+    const perfil = perfis[0] || { nome: data.user.email, perfil: 'rh' };
+    localStorage.setItem('sb_perfil', JSON.stringify(perfil));
+
+    window.location.href = 'index.html';
+  } catch(err2) {
+    const msg = err2.error_description || err2.message || 'Erro ao entrar. Verifique e-mail e senha.';
+    document.getElementById('errorBox').textContent = msg === 'Invalid login credentials'
+      ? 'E-mail ou senha incorretos.' : msg;
+    document.getElementById('errorBox').classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+}
+
+// Pré-preenche e-mail salvo
+const emailSalvo = localStorage.getItem('sb_email_salvo');
+if (emailSalvo) {
+  document.getElementById('email').value = emailSalvo;
+  document.getElementById('lembrar').checked = true;
+}
+
+// Se já logado: redireciona ou renova token expirado automaticamente
+(async function() {
+  const sess = localStorage.getItem('sb_session');
+  if (!sess) return;
+  try {
+    const s = JSON.parse(sess);
+    if (s.expires_at > Date.now()) {
+      window.location.href = 'index.html';
+    } else if (s.refresh_token) {
+      const novoToken = await renovarSessao(s.refresh_token);
+      if (novoToken) window.location.href = 'index.html';
+    }
+  } catch(_) {}
+})();
+</script>
+</body>
+</html>

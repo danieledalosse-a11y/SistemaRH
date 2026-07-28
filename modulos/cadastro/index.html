@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cadastro de Colaboradores — Sistema RH Revest</title>
+<title>Cadastro de Colaboradores — Sistema RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <!-- SheetJS removido — dados vêm do Supabase -->
 <style>
   :root {
@@ -26,11 +28,31 @@
     --radius: 10px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  body { font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
 
-  .topbar { background: var(--accent); color: #fff; padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; }
-  .topbar-title { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
-  .topbar-sub { font-size: 12px; opacity: 0.6; margin-top: 1px; }
+  .topbar { background: var(--accent); color: #fff; padding: 0 28px; height: 64px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .topbar-icon { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .topbar-icon svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .topbar-title { font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #fff; }
+  .topbar-sep { color: rgba(255,255,255,0.2); font-size: 20px; margin: 0 8px; font-weight: 200; }
+  .topbar-mod-wrap { display: flex; align-items: center; gap: 8px; }
+  .topbar-mod { font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 600; color: #fff; background: rgba(255,255,255,0.13); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; padding: 3px 12px; letter-spacing: 0.01em; }
+
+  /* Tela de seleção de empresa */
+  .empresa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 8px; }
+  .empresa-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid #CBD5E1; border-radius: var(--radius); padding: 18px 20px; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; display: flex; flex-direction: column; gap: 0; }
+  .empresa-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.09); border-color: #b0b8c4; border-left-color: inherit; }
+  .empresa-card.todos { border-left-color: #CBD5E1 !important; }
+  .empresa-card-abbr { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-sec); margin-bottom: 4px; }
+  .empresa-card-nome { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.3; margin-bottom: 14px; }
+  .empresa-card-footer { display: flex; align-items: baseline; gap: 6px; margin-top: auto; }
+  .empresa-card-count { font-size: 28px; font-weight: 700; line-height: 1; color: var(--text); }
+  .empresa-card-count-label { font-size: 12px; color: var(--text-sec); }
+  .breadcrumb { display: flex; align-items: center; gap: 6px; margin-bottom: 20px; font-size: 13px; color: var(--text-sec); }
+  .breadcrumb a { color: var(--blue); text-decoration: none; cursor: pointer; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb-sep { color: var(--text-sec); }
   .container { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
 
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 16px; }
@@ -41,8 +63,12 @@
   .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px; margin-bottom: 20px; }
   .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; position: relative; cursor: default; transition: border-color 0.15s, box-shadow 0.15s; }
   .metric.clickable { cursor: pointer; }
-  .metric.clickable:hover { border-color: #aaa; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-  .metric.active-filter { border-color: #1a1a1a; box-shadow: 0 0 0 2px #1a1a1a; }
+  .metric.clickable:hover { border-color: #1570EF; box-shadow: 0 2px 8px rgba(21,112,239,0.10); }
+  .metric.clickable:hover .metric-label { color: #1570EF; }
+  .metric.active-filter { border-color: #1570EF; box-shadow: 0 0 0 2px rgba(21,112,239,0.18); background: #F0F6FF; }
+  .metric.active-filter .metric-label { color: #1570EF; font-weight: 600; }
+  .btn-link-limpar { background: none; border: none; color: #1570EF; font-size: 13px; font-family: inherit; cursor: pointer; padding: 4px 2px; text-decoration: none; white-space: nowrap; }
+  .btn-link-limpar:hover { text-decoration: underline; }
   .metric-val { font-size: 26px; font-weight: 600; line-height: 1; }
   .metric-label { font-size: 11px; color: var(--text-sec); margin-top: 4px; line-height: 1.4; }
   .metric-pending { position: absolute; top: 10px; right: 10px; font-size: 10px; background: #f0f0f0; color: #888; padding: 2px 6px; border-radius: 4px; }
@@ -69,8 +95,14 @@
   .badge-aprendiz { background: var(--blue-bg); color: var(--blue); }
 
   .table-wrap { overflow-x: auto; }
+  .hide-empresa .col-empresa { display: none; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead th { background: #1a1a1a; color: #fff; padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; white-space: nowrap; letter-spacing: 0.04em; }
+  thead th[data-sort] { cursor: pointer; user-select: none; }
+  thead th[data-sort]:hover { background: #2d2d2d; }
+  thead th[data-sort]::after { content: ' ↕'; opacity: 0.35; font-size: 10px; }
+  thead th[data-sort].sort-asc::after { content: ' ↑'; opacity: 1; }
+  thead th[data-sort].sort-desc::after { content: ' ↓'; opacity: 1; }
   tbody tr { border-bottom: 1px solid var(--border); }
   tbody tr:hover { background: #fafafa; }
   tbody td { padding: 9px 12px; vertical-align: middle; }
@@ -103,11 +135,13 @@
   .drawer-header-info { flex: 1; min-width: 0; }
   .drawer-header-info h2 { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .drawer-header-info span { font-size: 12px; color: var(--text-sec); }
-  .drawer-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--text-sec); padding: 4px; line-height: 1; flex-shrink: 0; }
-  .drawer-close:hover { color: var(--text); }
-  .drawer-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; overflow-x: auto; }
-  .drawer-tab { flex: 1; min-width: 80px; padding: 10px; font-size: 12px; font-weight: 500; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-sec); font-family: inherit; background: none; border-top: none; border-left: none; border-right: none; transition: color 0.15s; white-space: nowrap; }
-  .drawer-tab.active { color: var(--text); border-bottom-color: var(--text); }
+  .drawer-close { background: none; border: none; cursor: pointer; color: var(--text-sec); padding: 5px; border-radius: 7px; display: flex; align-items: center; flex-shrink: 0; transition: background 0.12s, color 0.12s; }
+  .drawer-close:hover { background: #f0f0f0; color: var(--text); }
+  .drawer-close svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .drawer-tabs { display: flex; background: #eef0f4; border-radius: 10px; padding: 4px; gap: 2px; flex-shrink: 0; overflow-x: auto; margin: 12px 16px; }
+  .drawer-tab { flex: 1; min-width: 70px; padding: 8px 10px; font-size: 12px; font-weight: 500; text-align: center; cursor: pointer; border-radius: 7px; color: var(--text-sec); border: none; background: none; white-space: nowrap; transition: all .15s; font-family: inherit; }
+  .drawer-tab:hover:not(.active) { color: var(--text); background: rgba(255,255,255,.5); }
+  .drawer-tab.active { background: #fff; color: var(--blue); font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
   .drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
   .drawer-section { margin-bottom: 24px; }
   .drawer-section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-sec); margin-bottom: 12px; }
@@ -171,18 +205,45 @@
 <body>
 
 <div class="topbar">
-  <div>
-    <div class="topbar-title">Sistema RH</div>
-    <div class="topbar-sub">Módulo: Cadastro de Colaboradores</div>
+  <div class="topbar-brand">
+    <a href="../../index.html" class="topbar-brand" style="text-decoration:none;display:flex;align-items:center;gap:10px;">
+      <div class="topbar-icon">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+      </div>
+      <span class="topbar-title">Sistema RH</span>
+    </a>
+    <span class="topbar-sep">›</span>
+    <div class="topbar-mod-wrap">
+      <span class="topbar-mod">Cadastro</span>
+    </div>
   </div>
   <div style="display:flex;gap:8px;align-items:center;">
-    <span id="statusConexao" style="font-size:11px;opacity:0.6;"></span>
-    <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);" onclick="exportarExcel()">Exportar Excel</button>
-    <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);" onclick="recarregar()">↺ Recarregar</button>
+    <span id="statusConexao" style="font-size:11px;opacity:0.5;"></span>
+    <span id="userNomeTopbar" style="font-size:13px;color:rgba(255,255,255,0.6);"></span>
+    <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);display:none;" id="btnExportar" onclick="exportarExcel()">Exportar</button>
+    <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);display:none;" id="btnRecarregar" onclick="recarregar()">↺ Recarregar</button>
+    <button onclick="logout()" title="Sair" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.45);padding:4px;display:flex;align-items:center;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.45)'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
   </div>
 </div>
 
-<div class="container">
+<!-- Tela de seleção de empresa -->
+<div id="telaEmpresas" class="container" style="display:none;">
+  <div style="margin-bottom:28px;">
+    <div style="font-size:20px;font-weight:700;margin-bottom:4px;">Cadastro de Colaboradores</div>
+    <div style="font-size:13px;color:var(--text-sec);">Selecione uma empresa para visualizar seus colaboradores</div>
+  </div>
+  <div id="empresaGrid" class="empresa-grid"></div>
+</div>
+
+<div class="container" id="telaLista" style="display:none;">
+
+  <div class="breadcrumb">
+    <a onclick="voltarParaEmpresas()">Cadastro</a>
+    <span id="breadcrumbEmpresa" style="display:none;">—</span>
+    <span style="margin-left:auto;font-size:12px;color:var(--text-sec);" id="statusConexao2"></span>
+  </div>
 
   <div class="metrics">
     <div class="metric clickable" id="card-ativos" onclick="filtrarPorCard('ativos')">
@@ -225,10 +286,30 @@
   </div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
+  <!-- Barra de contexto de empresa -->
+  <div id="empresaContextBar" style="display:none;align-items:center;gap:16px;background:#1e40af;border-radius:10px;padding:14px 20px;margin-bottom:16px;">
+    <div style="width:40px;height:40px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    </div>
+    <div style="flex:1;">
+      <div style="font-size:11px;font-weight:500;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Operando na empresa</div>
+      <div id="empresaContextNome" style="font-size:17px;font-weight:700;color:#fff;line-height:1.2;"></div>
+    </div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.12);padding:4px 10px;border-radius:20px;white-space:nowrap;">Filtro ativo</div>
+  </div>
+
   <div class="card" id="tableCard" style="display:none;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <div class="card-title" style="margin:0;">Colaboradores</div>
-      <span class="page-info" id="resultCount"></span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="page-info" id="resultCount"></span>
+        <button id="btnNovoColab" class="btn btn-primary btn-sm" onclick="novoColaborador()" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo Colaborador
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="exportarExcel()">Exportar</button>
+        <button class="btn btn-outline btn-sm" onclick="recarregar()">↺</button>
+      </div>
     </div>
 
     <div class="filters">
@@ -249,20 +330,20 @@
         <option value="M">Masculino</option>
         <option value="F">Feminino</option>
       </select>
-      <button class="btn btn-outline btn-sm" onclick="limparFiltros()">Limpar filtros</button>
+      <button class="btn-link-limpar" onclick="limparFiltros()">✕ Limpar filtros</button>
     </div>
 
-    <div class="table-wrap">
+    <div class="table-wrap" id="tableWrap">
       <table>
         <thead>
           <tr>
-            <th>Colaborador</th>
-            <th>Matrícula</th>
-            <th>Cargo</th>
-            <th>Setor</th>
-            <th>Empresa</th>
+            <th data-sort="nome" onclick="sortBy('nome')">Colaborador</th>
+            <th data-sort="codigo" onclick="sortBy('codigo')">Matrícula</th>
+            <th data-sort="cargo" onclick="sortBy('cargo')">Cargo</th>
+            <th data-sort="setor" onclick="sortBy('setor')">Setor</th>
+            <th class="col-empresa" data-sort="empresa" onclick="sortBy('empresa')">Empresa</th>
             <th>Gestor</th>
-            <th>Admissão</th>
+            <th data-sort="dataAdmissao" onclick="sortBy('dataAdmissao')">Admissão</th>
             <th>Situação</th>
           </tr>
         </thead>
@@ -283,7 +364,9 @@
       <h2 id="drw-nome"></h2>
       <span id="drw-sub"></span>
     </div>
-    <button class="drawer-close" onclick="fecharFicha()">✕</button>
+    <button class="drawer-close" onclick="fecharFicha()" title="Fechar">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
   </div>
   <div class="drawer-tabs">
     <button class="drawer-tab active" onclick="setDrawerTab('geral', this)">Geral</button>
@@ -308,7 +391,7 @@
               <option value="Inativo">Inativo</option>
             </select>
           </div>
-          <div class="field"><label>Data de admissão</label><input type="date" id="df-admissao"></div>
+          <div class="field"><label>Data de admissão</label><input type="date" id="df-admissao" oninput="calcularFimExperiencia()"></div>
           <div class="field"><label>Data de demissão</label><input type="date" id="df-demissao"></div>
         </div>
         <div class="field-grid full" style="margin-top:12px;">
@@ -321,20 +404,118 @@
           <div class="field"><label>Nome completo</label><input type="text" id="df-nome"></div>
         </div>
         <div class="field-grid" style="margin-top:12px;">
-          <div class="field"><label>Cargo</label><input type="text" id="df-cargo"></div>
-          <div class="field"><label>Tipo de contrato</label>
-            <select id="df-contrato">
-              <option value="">Não informado</option>
-              <option value="CLT">CLT</option>
-              <option value="PJ">PJ</option>
-              <option value="Aprendiz">Jovem Aprendiz</option>
-              <option value="Estágio">Estágio</option>
+          <div class="field"><label>Cargo</label>
+            <select id="df-cargo">
+              <option value="">Selecione o cargo</option>
             </select>
           </div>
-          <div class="field"><label>Setor</label><input type="text" id="df-setor"></div>
+
+          <!-- ── Card unificado de Contratação ────────────────────────── -->
+          <div style="grid-column:1/-1;background:#fff;border:1px solid #dbeafe;border-left:3px solid #1d4ed8;border-radius:10px;padding:14px 18px;">
+            <!-- Cabeçalho: eyebrow + select -->
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.13em;color:#1d4ed8;white-space:nowrap;">Tipo de contrato</span>
+              <select id="df-contrato" onchange="toggleExperiencia()" style="flex:1;max-width:320px;">
+                <option value="">Não informado</option>
+              </select>
+              <span id="contrato-lock-msg" style="display:none;font-size:11px;color:#64748b;display:flex;align-items:center;gap:4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Bloqueado após admissão — para alterar, utilize o processo de recontratação.
+              </span>
+            </div>
+
+            <!-- Sub-bloco: Período de Experiência (CLT) -->
+            <div id="bloco-experiencia" style="display:none;border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px;">
+              <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:12px;">
+                Período de Experiência
+                <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--text-ter);">— admissão: <span id="exp-adm-inline" style="font-weight:600;color:#6d28d9;">—</span> · máximo 90 dias (CLT art. 445)</span>
+              </div>
+              <div style="display:flex;align-items:stretch;gap:0;">
+
+                <!-- Card 1ª Etapa -->
+                <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;">
+                  <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#94a3b8;margin-bottom:10px;">1ª Etapa</div>
+                  <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:10px;">
+                    <input type="text" inputmode="numeric" id="df-periodoExp" placeholder="—" maxlength="2"
+                      oninput="this.value=this.value.replace(/\D/g,'');calcularFimExperiencia()"
+                      style="width:56px;text-align:center;font-size:20px;font-weight:700;padding:4px 0;border-radius:6px;">
+                    <span style="font-size:12px;color:#64748b;">dias</span>
+                  </div>
+                  <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">Término</div>
+                  <input type="date" id="df-fimExperiencia" readonly
+                    style="width:100%;font-size:13px;font-weight:600;color:#1e293b;background:#eef2f7;border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;cursor:default;">
+                  <div id="label-oportunidade" style="margin-top:6px;font-size:10px;font-weight:600;color:#d97706;">1ª oportunidade de encerramento</div>
+                </div>
+
+                <!-- Conector -->
+                <div id="divisor-exp" style="display:flex;align-items:center;justify-content:center;padding:0 14px;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </div>
+
+                <!-- Card Prorrogação -->
+                <div id="bloco-prorrogacao-dias" style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;">
+                  <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#94a3b8;margin-bottom:10px;">Prorrogação</div>
+                  <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:10px;">
+                    <input type="text" inputmode="numeric" id="df-diasProrrogacao" placeholder="—" maxlength="2"
+                      oninput="this.value=this.value.replace(/\D/g,'');calcularFimExperiencia()"
+                      style="width:56px;text-align:center;font-size:20px;font-weight:700;padding:4px 0;border-radius:6px;">
+                    <span style="font-size:12px;color:#64748b;">dias</span>
+                  </div>
+                  <div id="field-exp2">
+                    <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">Término</div>
+                    <input type="date" id="df-fimExperiencia2" readonly
+                      style="width:100%;font-size:13px;font-weight:600;color:#1e293b;background:#eef2f7;border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;cursor:default;">
+                    <div style="margin-top:6px;font-size:10px;font-weight:600;color:#dc2626;">data prevista no contrato</div>
+                  </div>
+                  <div id="seta-exp2" style="display:none;"></div>
+                </div>
+
+              </div>
+              <div id="aviso-exp" style="display:none;margin-top:10px;font-size:12px;color:#ef4444;font-weight:600;">
+                ⚠️ Total de <span id="aviso-exp-total"></span> dias ultrapassa o limite legal de 90 dias.
+              </div>
+            </div>
+
+            <!-- Sub-bloco: Prazo Determinado (Jovem Aprendiz, Temporário, Estágio) -->
+            <div id="bloco-prazo-determinado" style="display:none;border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);margin-bottom:12px;">
+                Contrato a Prazo Determinado
+                <span id="label-prazo-lei" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;"></span>
+                <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">· admissão: <span id="prazo-adm-inline" style="font-weight:600;color:#6d28d9;">—</span></span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end;">
+                <div class="field" style="margin:0;">
+                  <label>Data de término do contrato</label>
+                  <input type="date" id="df-fimContrato" oninput="calcularDuracaoContrato()">
+                </div>
+                <div class="field" style="margin:0;">
+                  <label>Instituição parceira</label>
+                  <select id="df-instituicaoAprendiz">
+                    <option value="">Selecione</option>
+                  </select>
+                </div>
+              </div>
+              <div id="aviso-prazo" style="display:none;margin-top:10px;font-size:12px;font-weight:500;padding:8px 12px;border-radius:6px;border-left:3px solid;"></div>
+            </div>
+          </div>
+          <!-- ── fim card contratação ──────────────────────────────────── -->
+
+          <div class="field"><label>Setor</label>
+            <select id="df-setor">
+              <option value="">Selecione o setor</option>
+            </select>
+          </div>
           <div class="field"><label>Empresa (registro)</label><input type="text" id="df-empresa" readonly></div>
-          <div class="field"><label>Empresa (atuação)</label><input type="text" id="df-empresa-atuacao"></div>
-          <div class="field"><label>Gestor</label><input type="text" id="df-gestor"></div>
+          <div class="field"><label>Empresa (atuação)</label>
+            <select id="df-empresa-atuacao">
+              <option value="">Selecione a empresa</option>
+            </select>
+          </div>
+          <div class="field"><label>Gestor</label>
+            <select id="df-gestor">
+              <option value="">Selecione o gestor</option>
+            </select>
+          </div>
         </div>
       </div>
       <div class="drawer-section">
@@ -379,13 +560,6 @@
           <div class="field"><label>Grau de formação</label>
             <select id="df-escolaridade">
               <option value="">Não informado</option>
-              <option value="Fundamental incompleto">Fund. incompleto</option>
-              <option value="Fundamental completo">Fund. completo</option>
-              <option value="Médio incompleto">Médio incompleto</option>
-              <option value="Médio completo">Médio completo</option>
-              <option value="Superior incompleto">Superior incompleto</option>
-              <option value="Superior completo">Superior completo</option>
-              <option value="Pós-graduação">Pós-graduação</option>
             </select>
           </div>
         </div>
@@ -458,7 +632,10 @@
         <div class="field-grid">
           <div class="field"><label>CPF</label><input type="text" id="df-cpf" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)"></div>
           <div class="field"><label>RG</label><input type="text" id="df-rg" placeholder="0.000.000-0" maxlength="12" oninput="mascaraRG(this)"></div>
-          <div class="field"><label>Órgão emissor RG</label><input type="text" id="df-rgOrgao" placeholder="Ex: SESP-PR"></div>
+          <div class="field" style="position:relative;"><label>Órgão emissor RG</label>
+            <input type="text" id="df-rgOrgao" placeholder="Digite para buscar (ex: SSP)..." autocomplete="off" oninput="buscarRgOrgao(this.value)" onfocus="buscarRgOrgao(this.value)" onblur="setTimeout(()=>document.getElementById('rgOrgaoDrop').style.display='none',200)">
+            <div id="rgOrgaoDrop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d0d5dd;border-radius:7px;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:300;max-height:200px;overflow-y:auto;margin-top:2px;"></div>
+          </div>
           <div class="field"><label>Data expedição RG</label><input type="date" id="df-rgData"></div>
           <div class="field"><label>PIS / PASEP</label><input type="text" id="df-pis" placeholder="000.00000.00-0" maxlength="14" oninput="mascaraPIS(this)"></div>
           <div class="field"><label>CNH (nº)</label><input type="text" id="df-cnh" placeholder="Não possui"></div>
@@ -564,25 +741,20 @@
         <div class="drawer-section-title">Remuneração atual</div>
         <div class="field-grid">
           <div class="field"><label>Salário base (R$)</label><input type="text" id="df-salario" placeholder="0,00" oninput="mascaraMoeda(this)"></div>
-          <div class="field"><label>CBO</label><input type="text" id="df-cbo" placeholder="Ex: 5211-10" maxlength="8"></div>
+          <div class="field" style="position:relative;"><label>CBO</label>
+            <input type="text" id="df-cbo" placeholder="Digite o código ou cargo..." autocomplete="off"
+              oninput="buscarCbo(this.value)" onfocus="buscarCbo(this.value)"
+              onblur="setTimeout(()=>document.getElementById('cboDrop').style.display='none',200)">
+            <div id="cboDrop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d0d5dd;border-radius:7px;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:300;max-height:220px;overflow-y:auto;margin-top:2px;"></div>
+          </div>
           <div class="field"><label>Regime de jornada</label>
             <select id="df-jornada">
               <option value="">Não informado</option>
-              <option value="CLT 44h">CLT 44h semanais</option>
-              <option value="CLT 36h">CLT 36h semanais</option>
-              <option value="Tempo parcial">Tempo parcial</option>
-              <option value="Teletrabalho">Teletrabalho</option>
-              <option value="Escala 12x36">Escala 12x36</option>
-              <option value="Aprendiz">Aprendiz</option>
             </select>
           </div>
           <div class="field"><label>Tipo de admissão</label>
             <select id="df-tipoAdmissao">
               <option value="">Não informado</option>
-              <option value="Emprego">Emprego (1ª vez)</option>
-              <option value="Reemprego">Reemprego</option>
-              <option value="Transferência">Transferência</option>
-              <option value="Reintegração">Reintegração</option>
             </select>
           </div>
         </div>
@@ -593,25 +765,11 @@
           <div class="field"><label>Causa da rescisão</label>
             <select id="df-causaRescisao">
               <option value="">Não informado</option>
-              <option value="0.0 Colaborador Pediu Encerramento">0.0 Colaborador Pediu Encerramento</option>
-              <option value="0.1 Demitido no Período de Experiência">0.1 Demitido no Período de Experiência</option>
-              <option value="0.2 Demitido s/ Justa Causa">0.2 Demitido s/ Justa Causa</option>
-              <option value="0.3 Demitido com Justa Causa">0.3 Demitido com Justa Causa</option>
-              <option value="0.4 Pediu Demissão">0.4 Pediu Demissão</option>
-              <option value="0.5 JOVEM - Encerramento de Contrato">0.5 JOVEM - Encerramento de Contrato</option>
-              <option value="0.6 JOVEM - Pediu Encerramento">0.6 JOVEM - Pediu Encerramento</option>
-              <option value="0.7 Acordo">0.7 Acordo</option>
-              <option value="0.9 Transferência">0.9 Transferência</option>
-              <option value="10.0 Abandono de Emprego">10.0 Abandono de Emprego</option>
-              <option value="11.0 Morte">11.0 Morte</option>
             </select>
           </div>
           <div class="field"><label>Aviso prévio</label>
             <select id="df-aviso">
               <option value="">Não informado</option>
-              <option value="Trabalhado">Trabalhado</option>
-              <option value="Indenizado">Indenizado</option>
-              <option value="Dispensado">Dispensado</option>
             </select>
           </div>
           <div class="field"><label>Data do aviso</label><input type="date" id="df-dataAviso" onchange="calcularVencimentoAviso()"></div>
@@ -639,11 +797,11 @@
       </div>
     </div>
 
-  </div>
+  </div><!-- /drawer-body -->
   <div class="drawer-footer">
     <span class="salvo-badge" id="salvoBadge">✓ Alterações salvas</span>
     <button class="btn btn-outline" onclick="fecharFicha()">Fechar</button>
-    <button class="btn btn-primary" onclick="salvarFicha()">Salvar alterações</button>
+    <button class="btn btn-primary" id="btnSalvarFicha" onclick="salvarFicha()">Salvar alterações</button>
   </div>
 </div><!-- /.drawer -->
 </div><!-- /.drawer-overlay -->
@@ -669,6 +827,327 @@ async function sbPatch(tabela, filtro, dados) {
   if (!r.ok) throw new Error(await r.text());
 }
 
+// ─── Audit log ────────────────────────────────────────────────────────────────
+async function registrarAudit(acao, registroId, detalhe) {
+  try {
+    const _nome = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil')||'{}').nome||''; } catch(_){return '';} })();
+    await fetch(`${SB_URL}/rest/v1/audit_log`, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ tabela: 'colaboradores', registro_id: registroId, acao, detalhe: detalhe||null, usuario: _nome })
+    });
+  } catch(e) { console.warn('Audit log:', e.message); }
+}
+
+// ─── Setores ─────────────────────────────────────────────────────────────────
+let SETORES = [];
+
+async function carregarSetores() {
+  try {
+    SETORES = await sbGet('param_setor', 'select=descricao,empresa_codigo&ativo=eq.true&order=ordem,descricao');
+    popularSelectSetor();
+  } catch(e) { console.warn('Setores não carregados:', e.message); }
+}
+
+function popularSelectSetor(valorAtual, empresaRegistro) {
+  const sel = document.getElementById('df-setor');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+
+  // Filtra setores pela empresa: extrai prefixo numérico de "148 - Matriz Adm" → "148"
+  const prefixMatch = (empresaRegistro || '').match(/^(\d+)/);
+  const prefix = prefixMatch ? prefixMatch[1] : null;
+  const filtered = prefix
+    ? SETORES.filter(s => !s.empresa_codigo || s.empresa_codigo.endsWith(prefix))
+    : SETORES;
+
+  sel.innerHTML = '<option value="">Selecione o setor</option>';
+  filtered.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.descricao;
+    opt.textContent = s.descricao.replace(/^\d+\s*-\s*/, '');
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
+// ─── Gestor (select de param_gestor) ─────────────────────────────────────────
+let GESTORES = [];
+
+async function carregarGestores() {
+  try {
+    GESTORES = await sbGet('param_gestor', 'select=nome&ativo=eq.true&order=ordem,nome');
+    popularSelectGestor();
+  } catch(e) { console.warn('Gestores não carregados:', e.message); }
+}
+
+function popularSelectGestor(valorAtual) {
+  const sel = document.getElementById('df-gestor');
+  if (!sel) return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '<option value="">Selecione o gestor</option>';
+  GESTORES.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.nome;
+    opt.textContent = g.nome;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
+// ─── Cargo (select de param_cargo) ───────────────────────────────────────────
+let CARGOS = [];
+
+async function carregarCargos() {
+  try {
+    CARGOS = await sbGet('param_cargo', 'select=nome&ativo=eq.true&order=ordem,nome');
+    popularSelectCargo();
+  } catch(e) { console.warn('Cargos não carregados:', e.message); }
+}
+
+function popularSelectCargo(valorAtual) {
+  const sel = document.getElementById('df-cargo');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '<option value="">Selecione o cargo</option>';
+  CARGOS.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.nome;
+    opt.textContent = c.nome;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
+// ─── Tipo de Contrato (select de param_tipo_contrato) ────────────────────────
+let TIPOS_CONTRATO = [];
+
+async function carregarTiposContrato() {
+  try {
+    TIPOS_CONTRATO = await sbGet('param_tipo_contrato', 'select=codigo,descricao&ativo=eq.true&order=ordem');
+    popularSelectContrato();
+  } catch(e) { console.warn('Tipos de contrato não carregados:', e.message); }
+}
+
+function popularSelectContrato(valorAtual) {
+  const sel = document.getElementById('df-contrato');
+  if (!sel) return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '<option value="">Não informado</option>';
+  TIPOS_CONTRATO.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.codigo;
+    opt.textContent = t.descricao;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
+// ─── Instituições Jovem Aprendiz (param_instituicao_aprendiz) ────────────────
+let INSTITUICOES_APRENDIZ = [];
+
+async function carregarInstituicoesAprendiz() {
+  try {
+    INSTITUICOES_APRENDIZ = await sbGet('param_instituicao_aprendiz', 'select=codigo,descricao&ativo=eq.true&order=ordem');
+    popularSelectInstituicao();
+  } catch(e) { console.warn('Instituições aprendiz não carregadas:', e.message); }
+}
+
+function popularSelectInstituicao(valorAtual) {
+  const sel = document.getElementById('df-instituicaoAprendiz');
+  if (!sel) return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '<option value="">Selecione</option>';
+  INSTITUICOES_APRENDIZ.forEach(i => {
+    const opt = document.createElement('option');
+    opt.value = i.codigo;
+    opt.textContent = i.descricao;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
+// ─── Escolaridade (param_escolaridade) ───────────────────────────────────────
+let ESCOLARIDADES = [];
+async function carregarEscolaridades() {
+  try {
+    ESCOLARIDADES = await sbGet('param_escolaridade', 'select=codigo,descricao&ativo=eq.true&order=ordem');
+    popularSelect('df-escolaridade', ESCOLARIDADES, 'Não informado');
+  } catch(e) { console.warn('Escolaridades não carregadas:', e.message); }
+}
+
+// ─── Tipo de Admissão (param_tipo_admissao) ───────────────────────────────────
+let TIPOS_ADMISSAO = [];
+async function carregarTiposAdmissao() {
+  try {
+    TIPOS_ADMISSAO = await sbGet('param_tipo_admissao', 'select=codigo,descricao&ativo=eq.true&order=ordem');
+    popularSelect('df-tipoAdmissao', TIPOS_ADMISSAO, 'Não informado');
+  } catch(e) { console.warn('Tipos de admissão não carregados:', e.message); }
+}
+
+// ─── Aviso Prévio (param_aviso_previo) ────────────────────────────────────────
+let AVISOS_PREVIO = [];
+async function carregarAvisosPrevio() {
+  try {
+    AVISOS_PREVIO = await sbGet('param_aviso_previo', 'select=codigo,descricao&ativo=eq.true&order=ordem');
+    popularSelect('df-aviso', AVISOS_PREVIO, 'Não informado');
+  } catch(e) { console.warn('Avisos prévio não carregados:', e.message); }
+}
+
+// ─── Parentesco (param_parentesco) ────────────────────────────────────────────
+let PARENTESCOS = [];
+async function carregarParentescos() {
+  try {
+    PARENTESCOS = await sbGet('param_parentesco', 'select=codigo,descricao&ativo=eq.true&order=ordem');
+  } catch(e) { console.warn('Parentescos não carregados:', e.message); }
+}
+
+// ─── Helper genérico para popular selects simples ────────────────────────────
+function popularSelect(id, lista, placeholder) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">${placeholder}</option>`;
+  lista.forEach(i => {
+    const opt = document.createElement('option');
+    opt.value = i.codigo;
+    opt.textContent = i.descricao;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
+// ─── Empresa (atuação) (select de param_empresa) ─────────────────────────────
+let EMPRESAS_PARAM = [];
+
+async function carregarEmpresasParam() {
+  try {
+    EMPRESAS_PARAM = await sbGet('param_empresa', 'select=codigo,nome_simplificado,razao_social&ativo=eq.true&order=ordem');
+    popularSelectEmpresaAtuacao();
+  } catch(e) { console.warn('Empresas não carregadas:', e.message); }
+}
+
+function popularSelectEmpresaAtuacao(valorAtual) {
+  const sel = document.getElementById('df-empresa-atuacao');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '<option value="">Selecione a empresa</option>';
+  EMPRESAS_PARAM.forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e.nome_simplificado;
+    opt.textContent = e.nome_simplificado;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
+// ─── Regime de Jornada (select de param_regime_horas) ────────────────────────
+let JORNADAS = [];
+
+async function carregarJornadas() {
+  try {
+    JORNADAS = await sbGet('param_regime_horas', 'select=descricao&ativo=eq.true&order=ordem');
+    popularSelectJornada();
+  } catch(e) { console.warn('Jornadas não carregadas:', e.message); }
+}
+
+function popularSelectJornada(valorAtual) {
+  const sel = document.getElementById('df-jornada');
+  if (!sel) return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '<option value="">Não informado</option>';
+  JORNADAS.forEach(j => {
+    const opt = document.createElement('option');
+    opt.value = j.descricao;
+    opt.textContent = j.descricao;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
+// ─── Causa de Rescisão (select de param_motivo_desligamento) ─────────────────
+let MOTIVOS_DESLIGAMENTO = [];
+
+async function carregarMotivosDesligamento() {
+  try {
+    MOTIVOS_DESLIGAMENTO = await sbGet('param_motivo_desligamento', 'select=descricao&ativo=eq.true&order=ordem,id');
+    popularSelectCausaRescisao();
+  } catch(e) { console.warn('Motivos de desligamento não carregados:', e.message); }
+}
+
+function popularSelectCausaRescisao(valorAtual) {
+  const sel = document.getElementById('df-causaRescisao');
+  if (!sel) return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '<option value="">Não informado</option>';
+  MOTIVOS_DESLIGAMENTO.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.descricao;
+    opt.textContent = m.descricao;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
+// ─── Autocomplete CBO ────────────────────────────────────────────────────────
+let CBOS_PARAM = [];
+
+async function carregarCbosParam() {
+  try {
+    CBOS_PARAM = await sbGet('param_cbo', 'select=codigo,titulo,grupo&order=codigo');
+  } catch(e) { console.warn('CBOs não carregados:', e.message); }
+}
+
+function buscarCbo(val) {
+  const drop = document.getElementById('cboDrop');
+  if (!drop) return;
+  const q = val.trim().toLowerCase();
+  const matches = q.length === 0
+    ? CBOS_PARAM.slice(0, 10)
+    : CBOS_PARAM.filter(c =>
+        c.codigo.toLowerCase().includes(q) ||
+        c.titulo.toLowerCase().includes(q)
+      ).slice(0, 20);
+  if (!matches.length) { drop.style.display = 'none'; return; }
+  drop.innerHTML = matches.map(c => {
+    const safe = c.codigo.replace(/'/g, "\\'");
+    return `<div onclick="document.getElementById('df-cbo').value='${safe}';document.getElementById('cboDrop').style.display='none';"
+      style="padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f0f0;"
+      onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+      <span style="font-weight:600;color:#1849A9;">${c.codigo}</span>
+      <span style="color:#344054;margin-left:8px;">${c.titulo}</span>
+      ${c.grupo ? `<span style="font-size:11px;color:#98A2B3;margin-left:6px;">· ${c.grupo}</span>` : ''}
+    </div>`;
+  }).join('');
+  drop.style.display = 'block';
+}
+
+// ─── Autocomplete Órgão Emissor RG ───────────────────────────────────────────
+const RG_ORGAOS = [
+  'SSP-PR','SSP-SP','SSP-MG','SSP-RJ','SSP-SC','SSP-RS','SSP-GO','SSP-BA',
+  'SSP-DF','SSP-CE','SSP-AM','SSP-PA','SSP-PE','SSP-MT','SSP-MS','SSP-ES',
+  'SSP-MA','SSP-PB','SSP-RN','SSP-AL','SSP-SE','SSP-PI','SSP-TO','SSP-RO',
+  'SSP-AC','SSP-AP','SSP-RR',
+  'SESP-PR','SESP-SP',
+  'DETRAN-PR','DETRAN-SP','DETRAN-MG',
+  'PC-PR','PC-SP','PM-PR',
+  'IFP','CGP','SDS','DGPC',
+];
+
+function buscarRgOrgao(val) {
+  const drop = document.getElementById('rgOrgaoDrop');
+  const q = val.trim().toLowerCase();
+  const matches = q.length === 0
+    ? RG_ORGAOS.slice(0, 10)
+    : RG_ORGAOS.filter(o => o.toLowerCase().includes(q)).slice(0, 15);
+
+  if (!matches.length) { drop.style.display = 'none'; return; }
+  drop.innerHTML = matches.map(o =>
+    `<div onclick="document.getElementById('df-rgOrgao').value='${o}';document.getElementById('rgOrgaoDrop').style.display='none';" style="padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">${o}</div>`
+  ).join('');
+  drop.style.display = 'block';
+}
+
 function parseSexo(v) {
   if (!v) return '';
   const s = String(v).trim().toUpperCase();
@@ -683,41 +1162,85 @@ function supabaseToJS(row) {
   const cargo = row.cargo || '';
   const sal = parseFloat(row.salario) || 0;
   return {
-    _sbId:          row.id,
-    codigo:         String(row.matricula || ''),
-    nome:           row.nome || '',
-    dataAdmissao:   row.data_admissao || '',
+    _sbId:            row.id,
+    codigo:           String(row.matricula || ''),
+    nome:             row.nome || '',
+    dataAdmissao:     row.data_admissao || '',
     dataDemissao,
-    motivo:         row.motivo_demissao || '',
+    motivo:           row.motivo_demissao || '',
     cargo,
-    salarioBase:    sal ? sal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '',
-    empresa:        row.empresa_registro || '',
-    empresaAtuacao: row.empresa_atuacao || '',
-    setor:          row.setor || '',
-    gestor:         row.gestor || '',
-    dependentes:    parseInt(row.dependentes) || 0,
-    proLabore:      !!row.pro_labore,
-    sexo:           parseSexo(row.sexo),
-    dataNascimento: row.data_nascimento || '',
-    cpf:            row.cpf || '',
-    rg:             row.rg || '',
-    pis:            row.pis || '',
-    mae:            row.nome_mae || '',
-    pai:            row.nome_pai || '',
-    naturalidade:   row.cidade_nascimento || '',
-    nacionalidade:  row.nacionalidade ? (row.nacionalidade.startsWith('Bras') ? 'Brasileiro(a)' : 'Estrangeiro(a)') : '',
-    celular:        row.telefone || '',
-    estadoCivil:    row.estado_civil || '',
-    email:          row.email || '',
-    cor:            row.raca || '',
-    escolaridade:   normEscolaridade(row.escolaridade),
-    nomeComercial:  row.nome_comercial || '',
-    situacao:       ativo ? 'Ativo' : 'Inativo',
-    aprendiz:       isAprendiz(cargo),
-    afastadoINSS:   false,
-    pcd:            false,
-    historico:      [],
-    dependentesLista: [],
+    contrato:         row.tipo_contrato || '',
+    periodoExp:       row.periodo_experiencia ? String(row.periodo_experiencia) : '',
+    diasProrrogacao:  row.dias_prorrogacao    ? String(row.dias_prorrogacao)    : '',
+    fimExperiencia:   row.data_fim_experiencia || '',
+    fimContrato:          row.data_fim_contrato      || '',
+    instituicaoAprendiz:  row.instituicao_aprendiz   || '',
+    salarioBase:      sal ? sal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '',
+    empresa:          row.empresa_registro || '',
+    empresaAtuacao:   row.empresa_atuacao || '',
+    setor:            row.setor || '',
+    gestor:           row.gestor || '',
+    dependentes:      parseInt(row.dependentes) || 0,
+    proLabore:        !!row.pro_labore,
+    sexo:             parseSexo(row.sexo),
+    dataNascimento:   row.data_nascimento || '',
+    cpf:              row.cpf || '',
+    rg:               row.rg || '',
+    rgOrgao:          row.rg_orgao || '',
+    rgData:           row.rg_data || '',
+    pis:              row.pis || '',
+    cnh:              row.cnh || '',
+    ctps:             row.ctps || '',
+    ctpsSerie:        row.ctps_serie || '',
+    titulo:           row.titulo_eleitor || '',
+    tituloZona:       row.titulo_zona || '',
+    mae:              row.nome_mae || '',
+    pai:              row.nome_pai || '',
+    naturalidade:     row.cidade_nascimento || '',
+    natEstado:        row.estado_naturalidade || '',
+    paisNascimento:   row.pais_nascimento || '',
+    nacionalidade:    row.nacionalidade ? (row.nacionalidade.startsWith('Bras') ? 'Brasileiro(a)' : 'Estrangeiro(a)') : '',
+    celular:          row.telefone || '',
+    whatsapp:         row.whatsapp || '',
+    telRecado:        row.tel_recado || '',
+    nomeRecado:       row.nome_recado || '',
+    email:            row.email || '',
+    cep:              row.cep || '',
+    rua:              row.logradouro || '',
+    numero:           row.numero_end || '',
+    complemento:      row.complemento || '',
+    bairro:           row.bairro || '',
+    cidade:           row.cidade || '',
+    estado:           row.estado_end || '',
+    estadoCivil:      row.estado_civil || '',
+    possuiFilhos:     row.possui_filhos || '',
+    cor:              row.raca || '',
+    escolaridade:     normEscolaridade(row.escolaridade),
+    nomeComercial:    row.nome_comercial || '',
+    pcd:              !!row.pcd,
+    afastadoINSS:     !!row.afastado_inss,
+    primeiroEmprego:  !!row.primeiro_emprego,
+    cbo:              row.cbo || '',
+    jornada:          row.jornada || '',
+    tipoAdmissao:     row.tipo_admissao || '',
+    causaRescisao:    row.causa_rescisao || '',
+    aviso:            row.aviso_previo || '',
+    dataAviso:        row.data_aviso || '',
+    vencAviso:        row.venc_aviso || '',
+    historicoSalarial: row.historico_salarial || [],
+    vt:               row.vt || '',
+    vtPasses:         row.vt_passes || '',
+    vtLinha:          row.vt_linha || '',
+    banco:            row.banco || '',
+    bancoCodigo:      row.banco_codigo || '',
+    agencia:          row.agencia || '',
+    conta:            row.conta || '',
+    tipoConta:        row.tipo_conta || '',
+    hobby:            row.hobby || '',
+    situacao:         ativo ? 'Ativo' : 'Inativo',
+    aprendiz:         isAprendiz(cargo),
+    historico:        [],
+    dependentesLista: row.dependentes_lista || [],
   };
 }
 
@@ -734,17 +1257,167 @@ function normEscolaridade(v) {
   return '';
 }
 
+// cores por grupo jurídico: bg = fundo do badge, txt = texto do badge, num = cor do número
+const GRUPOS = {
+  revest:    { bg: '#FEF08A', txt: '#713F12', num: '#A16207', border: '#EAB308' }, // amarelo
+  metalshop: { bg: '#F3F4F6', txt: '#374151', num: '#374151', border: '#94A3B8' }, // cinza
+  log:       { bg: '#FFD5CC', txt: '#7C2D12', num: '#C2410C', border: '#F97316' }, // salmão
+  jp:        { bg: '#DBEAFE', txt: '#1E3A8A', num: '#1849A9', border: '#3B82F6' }, // azul
+  pj:        { bg: '#1F2937', txt: '#F9FAFB', num: '#1F2937', border: '#1F2937' }, // preto
+};
+
+// Keyed por nome_simplificado (param_empresa.nome_simplificado)
+const EMPRESAS_CNPJ = {
+  'Matriz':     { nome: 'Revest Matriz',      abbr: 'MATRIZ',     grupo: 'revest'    },
+  'CD':         { nome: 'Revest CD',          abbr: 'CD',         grupo: 'revest'    },
+  'Atelier':    { nome: 'Revest Atelier',     abbr: 'ATELIER',    grupo: 'revest'    },
+  'Paranavaí':  { nome: 'Revest Paranavaí',   abbr: 'PARANAVAÍ',  grupo: 'revest'    },
+  'Porto Rico': { nome: 'Revest Porto Rico',  abbr: 'PORTO RICO', grupo: 'revest'    },
+  'Metalshop':  { nome: 'Revest Metalshop',   abbr: 'METALSHOP',  grupo: 'metalshop' },
+  'Red':        { nome: 'Metalshop Red',      abbr: 'RED',        grupo: 'metalshop' },
+  'Log':        { nome: 'Revestlog',          abbr: 'LOG',        grupo: 'log'       },
+  'JP':         { nome: 'JP Revestimentos',   abbr: 'JP',         grupo: 'jp'        },
+  'Sarandi':    { nome: 'JP Sarandi',         abbr: 'SARANDI',    grupo: 'jp'        },
+  'PJ':         { nome: 'PJ',                 abbr: 'PJ',         grupo: 'pj'        },
+};
+
+function codigoEmpresa(emp) {
+  // extrai o número antes do " - ", ex: "148 - Matriz Adm" → "148"
+  const m = emp.match(/^(\d+)\s*-/);
+  return m ? m[1] : emp;
+}
+
+// Lookup case-insensitive em EMPRESAS_CNPJ
+function getEmpresaInfo(nomeSimplificado) {
+  if (!nomeSimplificado) return null;
+  if (EMPRESAS_CNPJ[nomeSimplificado]) return EMPRESAS_CNPJ[nomeSimplificado];
+  const lower = nomeSimplificado.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const key = Object.keys(EMPRESAS_CNPJ).find(k =>
+    k.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'') === lower
+  );
+  return key ? EMPRESAS_CNPJ[key] : null;
+}
+
+function renderTelaEmpresas() {
+  document.getElementById('telaEmpresas').style.display = 'block';
+  document.getElementById('telaLista').style.display    = 'none';
+
+  const ativos = COLABORADORES.filter(c => !c.proLabore && c.situacao === 'Ativo');
+
+  // Agrupa por nome_simplificado (empresa_registro normalizado)
+  const porNome = {};
+  ativos.forEach(c => {
+    const n = c.empresa || '';
+    if (!porNome[n]) porNome[n] = 0;
+    porNome[n]++;
+  });
+
+  const grid = document.getElementById('empresaGrid');
+  grid.innerHTML = '';
+
+  // Card "Todas as empresas"
+  const cardTodos = document.createElement('div');
+  cardTodos.className = 'empresa-card todos';
+  cardTodos.innerHTML = `
+    <div class="empresa-card-abbr">Consulta geral</div>
+    <div class="empresa-card-nome">Todas as empresas</div>
+    <div class="empresa-card-footer">
+      <div class="empresa-card-count">${ativos.length}</div>
+      <div class="empresa-card-count-label">colaboradores ativos</div>
+    </div>`;
+  cardTodos.onclick = () => entrarEmpresa('');
+  grid.appendChild(cardTodos);
+
+  // Ordem: prioriza sequência do EMPRESAS_CNPJ, depois desconhecidas
+  const ORDEM = Object.keys(EMPRESAS_CNPJ);
+  const nomesOrdenados = [
+    ...ORDEM.filter(n => porNome[n] !== undefined),
+    ...Object.keys(porNome).filter(n => !getEmpresaInfo(n))
+  ];
+
+  nomesOrdenados.forEach(nome => {
+    const info  = getEmpresaInfo(nome);
+    const abbr  = info ? info.abbr : nome.toUpperCase();
+    const label = info ? info.nome : nome;
+    const g     = info ? (GRUPOS[info.grupo] || GRUPOS.revest) : { bg: '#F3F4F6', txt: '#374151', num: '#374151', border: '#94A3B8' };
+    const count = porNome[nome] || 0;
+
+    const card = document.createElement('div');
+    card.className = 'empresa-card';
+    card.style.borderLeftColor = g.border;
+    card.innerHTML = `
+      <div class="empresa-card-abbr">${abbr}</div>
+      <div class="empresa-card-nome">${label}</div>
+      <div class="empresa-card-footer">
+        <div class="empresa-card-count">${count}</div>
+        <div class="empresa-card-count-label">colaboradores ativos</div>
+      </div>`;
+    card.onclick = () => entrarEmpresaNome(nome);
+    grid.appendChild(card);
+  });
+}
+
+function entrarEmpresaNome(nome) {
+  document.getElementById('telaEmpresas').style.display = 'none';
+  document.getElementById('telaLista').style.display    = 'block';
+  document.getElementById('tableCard').style.display    = 'block';
+  document.getElementById('importCard').style.display   = 'none';
+
+  const info = EMPRESAS_CNPJ[nome];
+  const nomeEmpresa = info ? info.nome : nome;
+  document.getElementById('breadcrumbEmpresa').textContent = nomeEmpresa;
+  document.getElementById('btnNovoColab').style.display = 'inline-flex';
+
+  _filtroEmpresa = nome;
+  atualizarColunaEmpresa(nomeEmpresa);
+  document.getElementById('filtroSituacao').value = 'Ativo';
+  aplicarFiltros();
+  atualizarMetricas();
+}
+
+function entrarEmpresa(empresa) {
+  document.getElementById('telaEmpresas').style.display = 'none';
+  document.getElementById('telaLista').style.display    = 'block';
+  document.getElementById('tableCard').style.display    = 'block';
+  document.getElementById('importCard').style.display   = 'none';
+  document.getElementById('breadcrumbEmpresa').textContent = empresa || 'Todas as empresas';
+  document.getElementById('btnNovoColab').style.display = 'inline-flex';
+  document.getElementById('filtroEmpresa').value = empresa;
+  filtroEmpresaChanged();
+  atualizarMetricas();
+}
+
+function voltarParaEmpresas() {
+  _filtroEmpresa = '';
+  document.getElementById('btnNovoColab').style.display = 'none';
+  renderTelaEmpresas();
+}
+
 async function carregarDoSupabase() {
   setLoadingMsg('Buscando colaboradores...');
   try {
-    const dados = await sbGet('colaboradores', 'select=*&order=nome');
+    const [dados] = await Promise.all([
+      sbGet('colaboradores', 'select=*&order=nome'),
+      carregarSetores(),
+      carregarGestores(),
+      carregarCargos(),
+      carregarTiposContrato(),
+      carregarInstituicoesAprendiz(),
+      carregarEmpresasParam(),
+      carregarJornadas(),
+      carregarMotivosDesligamento(),
+      carregarCbosParam(),
+      carregarEscolaridades(),
+      carregarTiposAdmissao(),
+      carregarAvisosPrevio(),
+      carregarParentescos(),
+    ]);
     COLABORADORES = dados.map(supabaseToJS);
     document.getElementById('importCard').style.display = 'none';
-    document.getElementById('tableCard').style.display = 'block';
     popularFiltros();
-    aplicarFiltros();
-    atualizarMetricas();
-    document.getElementById('statusConexao').textContent = `${COLABORADORES.length} colaboradores`;
+    renderTelaEmpresas();
+    const ativos = COLABORADORES.filter(c => !c.proLabore && c.situacao === 'Ativo').length;
+    document.getElementById('statusConexao').textContent = `${ativos} colaboradores ativos`;
   } catch(e) {
     setLoadingMsg('Erro ao conectar: ' + e.message);
     console.error(e);
@@ -753,7 +1426,8 @@ async function carregarDoSupabase() {
 
 async function recarregar() {
   document.getElementById('importCard').style.display = 'block';
-  document.getElementById('tableCard').style.display = 'none';
+  document.getElementById('telaEmpresas').style.display = 'none';
+  document.getElementById('telaLista').style.display = 'none';
   await carregarDoSupabase();
 }
 
@@ -795,6 +1469,29 @@ const REGRAS_AVISO = {
 
 let COLABORADORES = [];
 let FILTRADOS = [];
+let _filtroEmpresa = '';
+let _sortCol = '';
+let _sortDir = 0; // 0=off 1=asc -1=desc
+let _modoNovo = false;
+
+function sortBy(col) {
+  if (_sortCol === col) {
+    _sortDir = _sortDir === 1 ? -1 : _sortDir === -1 ? 0 : 1;
+    if (_sortDir === 0) _sortCol = '';
+  } else {
+    _sortCol = col;
+    _sortDir = 1;
+  }
+  // atualiza visual dos headers
+  document.querySelectorAll('thead th[data-sort]').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.sort === _sortCol) {
+      th.classList.add(_sortDir === 1 ? 'sort-asc' : 'sort-desc');
+    }
+  });
+  PAGE = 1;
+  renderTabela();
+} // código CNPJ da empresa selecionada na tela de seleção
 let PAGE = 1;
 const PER_PAGE = 50;
 
@@ -843,9 +1540,24 @@ function popularSetores(empresa) {
   selSet.value = setores.includes(valorAtual) ? valorAtual : '';
 }
 
+function atualizarColunaEmpresa(nomeEmpresa) {
+  const bar  = document.getElementById('empresaContextBar');
+  const nome = document.getElementById('empresaContextNome');
+  const wrap = document.getElementById('tableWrap');
+  if (nomeEmpresa) {
+    nome.textContent = nomeEmpresa;
+    bar.style.display = 'flex';
+    if (wrap) wrap.classList.add('hide-empresa');
+  } else {
+    bar.style.display = 'none';
+    if (wrap) wrap.classList.remove('hide-empresa');
+  }
+}
+
 function filtroEmpresaChanged() {
   const emp = document.getElementById('filtroEmpresa').value;
   popularSetores(emp);
+  atualizarColunaEmpresa(emp);
   aplicarFiltros();
 }
 
@@ -860,6 +1572,7 @@ function aplicarFiltros() {
     if (busca && !c.nome.toLowerCase().includes(busca) && !c.codigo.includes(busca) && !c.cargo.toLowerCase().includes(busca)) return false;
     if (sit && c.situacao !== sit) return false;
     if (emp && c.empresa !== emp) return false;
+    if (_filtroEmpresa && c.empresa !== _filtroEmpresa) return false;
     if (set && c.setor !== set) return false;
     if (sex && c.sexo !== sex) return false;
     if (window._filtroAprendiz && !c.aprendiz) return false;
@@ -911,6 +1624,7 @@ function limparFiltros() {
   document.getElementById('busca').value = '';
   ['filtroSituacao','filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
   popularSetores('');
+  atualizarColunaEmpresa('');
   aplicarFiltros();
 }
 
@@ -936,10 +1650,29 @@ function calcTempoEmpresa(admissao) {
 }
 
 function renderTabela() {
-  const total      = FILTRADOS.length;
+  let lista = FILTRADOS.slice();
+  if (_sortCol && _sortDir) {
+    lista.sort((a, b) => {
+      let va = a[_sortCol] || '';
+      let vb = b[_sortCol] || '';
+      if (_sortCol === 'dataAdmissao') {
+        va = va || '0000-00-00';
+        vb = vb || '0000-00-00';
+      } else if (_sortCol === 'codigo') {
+        va = parseInt(va) || 0;
+        vb = parseInt(vb) || 0;
+        return _sortDir * (va - vb);
+      } else {
+        va = va.toString().toLowerCase();
+        vb = vb.toString().toLowerCase();
+      }
+      return _sortDir * va.localeCompare(vb, 'pt-BR');
+    });
+  }
+  const total      = lista.length;
   const totalPages = Math.ceil(total / PER_PAGE);
   const start      = (PAGE - 1) * PER_PAGE;
-  const pagina     = FILTRADOS.slice(start, start + PER_PAGE);
+  const pagina     = lista.slice(start, start + PER_PAGE);
 
   document.getElementById('resultCount').textContent = total + ' colaborador' + (total !== 1 ? 'es' : '');
 
@@ -968,8 +1701,8 @@ function renderTabela() {
       </td>
       <td class="td-sec">${c.codigo || '—'}</td>
       <td class="td-sec">${c.cargo || '—'}${badgeApr}</td>
-      <td><span class="badge badge-setor">${c.setor || '—'}</span></td>
-      <td class="td-sec" style="white-space:nowrap;">${c.empresa || '—'}</td>
+      <td><span class="badge badge-setor">${(c.setor || '—').replace(/^\d+\s*-\s*/, '')}</span></td>
+      <td class="col-empresa td-sec" style="white-space:nowrap;">${(c.empresa || '—').replace(/^\d+\s*-\s*/, '')}</td>
       <td class="td-sec">${c.gestor || '—'}</td>
       <td class="td-sec" style="white-space:nowrap;">${tempoInfo}</td>
       <td>${badgeSit}</td>
@@ -1006,6 +1739,80 @@ function exportarExcel() {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
+// ─── Novo colaborador ────────────────────────────────────────────────────────
+
+function novoColaborador() {
+  _fichaIdx = null;
+  _modoNovo = true;
+
+  // Cabeçalho
+  const av = document.getElementById('drw-avatar');
+  av.className = 'avatar avatar-n';
+  av.textContent = '+';
+  document.getElementById('drw-nome').textContent = 'Novo Colaborador';
+  const nomeEmpresaCtx = document.getElementById('breadcrumbEmpresa').textContent || '';
+  document.getElementById('drw-sub').innerHTML =
+    (nomeEmpresaCtx && nomeEmpresaCtx !== '—'
+      ? `<span style="display:inline-flex;align-items:center;gap:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>${nomeEmpresaCtx}</span> &nbsp;·&nbsp; `
+      : '') + 'Preencha os dados e salve para cadastrar';
+
+  // Limpa todos os inputs de texto/data/number
+  ['df-codigo','df-admissao','df-demissao','df-motivo','df-nome','df-cargo',
+   'df-setor','df-empresa-atuacao','df-gestor','df-nascimento',
+   'df-cpf','df-rg','df-rgOrgao','df-rgData','df-pis','df-cnh',
+   'df-ctps','df-ctpsSerie','df-titulo','df-tituloZona',
+   'df-celular','df-whatsapp','df-telRecado','df-nomeRecado','df-email',
+   'df-cep','df-estado','df-rua','df-numero','df-complemento','df-bairro','df-cidade',
+   'df-pai','df-mae','df-salario','df-cbo','df-dataAviso','df-vencAviso',
+   'df-vtPasses','df-vtLinha','df-banco','df-agencia','df-conta','df-hobby']
+  .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+
+  // Selects → valor padrão
+  document.getElementById('df-situacao').value = 'Ativo';
+  ['df-contrato','df-sexo','df-nacionalidade','df-cor','df-escolaridade',
+   'df-estadoCivil','df-possuiFilhos','df-jornada','df-tipoAdmissao',
+   'df-causaRescisao','df-aviso','df-vt','df-tipoConta']
+  .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+
+  // Checkboxes
+  ['df-pcd','df-inss','df-primeiroEmprego'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.checked = false;
+  });
+
+  // Matrícula — livre para o RH preencher com o código do escritório
+  const codEl = document.getElementById('df-codigo');
+  if (codEl) { codEl.value = ''; codEl.removeAttribute('readonly'); }
+
+  // Empresa: substitui input readonly por select com empresas existentes
+  const empInput = document.getElementById('df-empresa');
+  if (empInput && empInput.tagName === 'INPUT') {
+    const sel = document.createElement('select');
+    sel.id = 'df-empresa';
+    sel.innerHTML = '<option value="">Selecione a empresa de registro</option>';
+    const empresasDistintas = [...new Set(COLABORADORES.map(c => c.empresa).filter(Boolean))].sort();
+    empresasDistintas.forEach(e => {
+      const o = document.createElement('option'); o.value = e; o.textContent = e; sel.appendChild(o);
+    });
+    // Pré-seleciona se veio de uma empresa específica
+    if (_filtroEmpresa) {
+      sel.value = _filtroEmpresa;
+    }
+    sel.onchange = () => popularSelectSetor('', sel.value);
+    empInput.parentNode.replaceChild(sel, empInput);
+  }
+
+  // Listas vazias
+  renderDependentes([]);
+  renderSalarios([]);
+
+  // Botão de salvar
+  document.getElementById('btnSalvarFicha').textContent = 'Criar colaborador';
+
+  // Abre na aba Geral
+  setDrawerTab('geral', document.querySelector('.drawer-tab'));
+  document.getElementById('drawerOverlay').classList.add('open');
+}
+
 // ─── Ficha do colaborador ────────────────────────────────────────────────────
 
 let _fichaIdx = null; // índice em COLABORADORES do registro aberto
@@ -1035,12 +1842,23 @@ function abrirFicha(idx) {
   document.getElementById('df-demissao').value      = c.dataDemissao || '';
   document.getElementById('df-motivo').value        = c.motivo || '';
   document.getElementById('df-nome').value          = c.nome || '';
-  document.getElementById('df-cargo').value         = c.cargo || '';
+  popularSelectCargo(c.cargo || '');
   document.getElementById('df-contrato').value      = c.contrato || '';
-  document.getElementById('df-setor').value         = c.setor?.replace(/^\d+\s*-\s*/,'') || '';
+  document.getElementById('df-periodoExp').value      = c.periodoExp || '';
+  document.getElementById('df-diasProrrogacao').value  = c.diasProrrogacao || '';
+  document.getElementById('df-fimContrato').value           = c.fimContrato || '';
+  document.getElementById('df-instituicaoAprendiz').value    = c.instituicaoAprendiz || '';
+  // Bloqueia tipo de contrato se colaborador já tem admissão registrada
+  const selContrato  = document.getElementById('df-contrato');
+  const lockMsg      = document.getElementById('contrato-lock-msg');
+  const temAdmissao  = !!c.admissao;
+  selContrato.disabled = temAdmissao;
+  if (lockMsg) lockMsg.style.display = temAdmissao ? 'flex' : 'none';
+  toggleExperiencia();
   document.getElementById('df-empresa').value       = c.empresa || '';
+  popularSelectSetor(c.setor || '', c.empresa || '');
   document.getElementById('df-empresa-atuacao').value = c.empresaAtuacao || '';
-  document.getElementById('df-gestor').value        = c.gestor || '';
+  popularSelectGestor(c.gestor || '');
   document.getElementById('df-nascimento').value    = c.dataNascimento || '';
   document.getElementById('df-sexo').value          = c.sexo || '';
   document.getElementById('df-nacionalidade').value  = c.nacionalidade || '';
@@ -1125,6 +1943,22 @@ function fecharFicha() {
   document.getElementById('drawerOverlay').classList.remove('open');
   document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
   _fichaIdx = null;
+  if (_modoNovo) {
+    _modoNovo = false;
+    // Restaura df-empresa como input readonly
+    const empEl = document.getElementById('df-empresa');
+    if (empEl && empEl.tagName === 'SELECT') {
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.id = 'df-empresa'; inp.readOnly = true;
+      inp.className = empEl.className; inp.style.cssText = empEl.style.cssText;
+      empEl.parentNode.replaceChild(inp, empEl);
+    }
+    // Restaura matrícula como readonly
+    const codEl = document.getElementById('df-codigo');
+    if (codEl) codEl.setAttribute('readonly', true);
+    // Restaura texto do botão
+    document.getElementById('btnSalvarFicha').textContent = 'Salvar alterações';
+  }
 }
 
 function setDrawerTab(nome, btn) {
@@ -1138,6 +1972,70 @@ function setDrawerTab(nome, btn) {
 }
 
 function salvarFicha() {
+  // ── Criação de novo colaborador ──────────────────────────────────────────
+  if (_modoNovo) {
+    const nome    = document.getElementById('df-nome').value.trim();
+    const empresa = document.getElementById('df-empresa').value.trim();
+    const admissao= document.getElementById('df-admissao').value;
+    const matricula = document.getElementById('df-codigo').value.trim();
+
+    if (!nome)     { mostrarToast('Informe o nome do colaborador.', 'error'); return; }
+    if (!empresa)  { mostrarToast('Selecione a empresa de registro.', 'error'); return; }
+    if (!admissao) { mostrarToast('Informe a data de admissão.', 'error'); return; }
+
+    const sexoVal = document.getElementById('df-sexo').value;
+    const payload = {
+      matricula:       matricula || null,
+      nome:            nome,
+      cargo:           document.getElementById('df-cargo').value.trim() || null,
+      setor:           document.getElementById('df-setor').value.trim() || null,
+      empresa_registro: empresa,
+      empresa_atuacao: document.getElementById('df-empresa-atuacao').value.trim() || null,
+      gestor:          document.getElementById('df-gestor').value.trim() || null,
+      data_admissao:   admissao,
+      data_demissao:   null,
+      sexo:            sexoVal === 'M' ? 'Masc' : sexoVal === 'F' ? 'Fem' : null,
+      data_nascimento: document.getElementById('df-nascimento').value || null,
+      cpf:             document.getElementById('df-cpf').value.trim() || null,
+      rg:              document.getElementById('df-rg').value.trim() || null,
+      pis:             document.getElementById('df-pis').value.trim() || null,
+      telefone:        document.getElementById('df-celular').value.trim() || null,
+      email:           document.getElementById('df-email').value.trim() || null,
+      estado_civil:    document.getElementById('df-estadoCivil').value || null,
+      raca:            document.getElementById('df-cor').value || null,
+      escolaridade:    document.getElementById('df-escolaridade').value || null,
+      nome_mae:        document.getElementById('df-mae').value.trim() || null,
+      nome_pai:        document.getElementById('df-pai').value.trim() || null,
+      nacionalidade:   document.getElementById('df-nacionalidade').value || null,
+      ativo:           true,
+    };
+
+    const btn = document.getElementById('btnSalvarFicha');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+
+    fetch(`${SB_URL}/rest/v1/colaboradores`, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+      body: JSON.stringify(payload)
+    })
+    .then(r => {
+      if (!r.ok) return r.text().then(t => { throw new Error(t); });
+      return r.json();
+    })
+    .then(data => {
+      const novoId = Array.isArray(data) ? data[0]?.id : data?.id;
+      if (novoId) registrarAudit('criado', novoId, `Colaborador: ${payload.nome}`);
+      mostrarToast('Colaborador cadastrado com sucesso! ✓');
+      fecharFicha();
+      carregarDoSupabase();
+    })
+    .catch(e => {
+      mostrarToast('Erro ao salvar: ' + e.message);
+      btn.disabled = false; btn.textContent = 'Criar colaborador';
+    });
+    return;
+  }
+  // ── Edição de colaborador existente ──────────────────────────────────────
   if (_fichaIdx === null) return;
   const c = COLABORADORES[_fichaIdx];
   const hoje = new Date().toISOString().slice(0, 10);
@@ -1150,7 +2048,7 @@ function salvarFicha() {
 
   if (novoCargo && novoCargo !== c.cargo)
     c.historico.unshift({ tipo: 'cargo',  de: c.cargo  || '—', para: novoCargo,  data: hoje });
-  if (novoSetor && novoSetor !== (c.setor?.replace(/^\d+\s*-\s*/,'') || c.setor))
+  if (novoSetor && novoSetor !== (c.setor || ''))
     c.historico.unshift({ tipo: 'setor',  de: c.setor  || '—', para: novoSetor,  data: hoje });
   if (novoGestor !== (c.gestor || '') && (novoGestor || c.gestor))
     c.historico.unshift({ tipo: 'gestor', de: c.gestor || '—', para: novoGestor || '—', data: hoje });
@@ -1165,6 +2063,12 @@ function salvarFicha() {
   c.setor             = novoSetor;
   c.gestor            = novoGestor;
   c.contrato          = document.getElementById('df-contrato').value;
+  c.periodoExp        = document.getElementById('df-periodoExp').value;
+  c.diasProrrogacao   = document.getElementById('df-diasProrrogacao').value;
+  c.fimExperiencia    = document.getElementById('df-fimExperiencia2').value
+                        || document.getElementById('df-fimExperiencia').value;
+  c.fimContrato           = document.getElementById('df-fimContrato').value;
+  c.instituicaoAprendiz   = document.getElementById('df-instituicaoAprendiz').value;
   c.empresaAtuacao    = document.getElementById('df-empresa-atuacao').value.trim();
   c.dataNascimento    = document.getElementById('df-nascimento').value;
   c.sexo              = document.getElementById('df-sexo').value;
@@ -1239,32 +2143,97 @@ function salvarFicha() {
   // Persiste no Supabase
   if (c._sbId) {
     const payload = {
-      nome:              c.nome,
-      cargo:             c.cargo,
-      setor:             c.setor,
-      empresa_atuacao:   c.empresaAtuacao,
-      gestor:            c.gestor,
-      data_admissao:     c.dataAdmissao || null,
-      data_demissao:     c.dataDemissao || null,
-      motivo_demissao:   c.motivo || null,
-      data_nascimento:   c.dataNascimento || null,
-      sexo:              c.sexo === 'M' ? 'Masc' : c.sexo === 'F' ? 'Fem' : null,
-      nacionalidade:     c.nacionalidade || null,
-      cidade_nascimento: c.naturalidade || null,
-      estado_civil:      c.estadoCivil || null,
-      email:             c.email || null,
-      telefone:          c.celular || null,
-      cpf:               c.cpf || null,
-      rg:                c.rg || null,
-      pis:               c.pis || null,
-      nome_mae:          c.mae || null,
-      nome_pai:          c.pai || null,
-      raca:              c.cor || null,
-      escolaridade:      c.escolaridade || null,
-      ativo:             c.situacao === 'Ativo',
+      nome:               c.nome,
+      cargo:              c.cargo,
+      tipo_contrato:      c.contrato || null,
+      periodo_experiencia:  c.periodoExp     ? parseInt(c.periodoExp)     : null,
+      dias_prorrogacao:     c.diasProrrogacao ? parseInt(c.diasProrrogacao) : null,
+      data_fim_experiencia: c.fimExperiencia || null,
+      prorrogacao_exp:      !!c.diasProrrogacao,
+      em_experiencia:       !!c.periodoExp,
+      data_fim_contrato:    c.fimContrato || null,
+      instituicao_aprendiz: c.instituicaoAprendiz || null,
+      setor:              c.setor,
+      empresa_atuacao:    c.empresaAtuacao || null,
+      gestor:             c.gestor || null,
+      data_admissao:      c.dataAdmissao || null,
+      data_demissao:      c.dataDemissao || null,
+      motivo_demissao:    c.motivo || null,
+      // Dados pessoais
+      data_nascimento:    c.dataNascimento || null,
+      sexo:               c.sexo === 'M' ? 'Masc' : c.sexo === 'F' ? 'Fem' : null,
+      nacionalidade:      c.nacionalidade || null,
+      pais_nascimento:    c.paisNascimento || null,
+      estado_naturalidade: c.natEstado || null,
+      cidade_nascimento:  c.naturalidade || null,
+      estado_civil:       c.estadoCivil || null,
+      possui_filhos:      c.possuiFilhos || null,
+      raca:               c.cor || null,
+      escolaridade:       c.escolaridade || null,
+      nome_mae:           c.mae || null,
+      nome_pai:           c.pai || null,
+      pcd:                !!c.pcd,
+      afastado_inss:      !!c.afastadoINSS,
+      primeiro_emprego:   !!c.primeiroEmprego,
+      // Contato
+      telefone:           c.celular || null,
+      whatsapp:           c.whatsapp || null,
+      tel_recado:         c.telRecado || null,
+      nome_recado:        c.nomeRecado || null,
+      email:              c.email || null,
+      // Endereço
+      cep:                c.cep || null,
+      logradouro:         c.rua || null,
+      numero_end:         c.numero || null,
+      complemento:        c.complemento || null,
+      bairro:             c.bairro || null,
+      cidade:             c.cidade || null,
+      estado_end:         c.estado || null,
+      // Documentos
+      cpf:                c.cpf || null,
+      rg:                 c.rg || null,
+      rg_orgao:           c.rgOrgao || null,
+      rg_data:            c.rgData || null,
+      pis:                c.pis || null,
+      cnh:                c.cnh || null,
+      ctps:               c.ctps || null,
+      ctps_serie:         c.ctpsSerie || null,
+      titulo_eleitor:     c.titulo || null,
+      titulo_zona:        c.tituloZona || null,
+      // Remuneração
+      cbo:                c.cbo || null,
+      jornada:            c.jornada || null,
+      tipo_admissao:      c.tipoAdmissao || null,
+      historico_salarial: c.historicoSalarial?.length ? c.historicoSalarial : null,
+      // Rescisão
+      causa_rescisao:     c.causaRescisao || null,
+      aviso_previo:       c.aviso || null,
+      data_aviso:         c.dataAviso || null,
+      venc_aviso:         c.vencAviso || null,
+      // Benefícios
+      vt:                 c.vt || null,
+      vt_passes:          c.vtPasses ? parseInt(c.vtPasses) : null,
+      vt_linha:           c.vtLinha || null,
+      banco:              c.banco || null,
+      banco_codigo:       c.bancoCodigo || null,
+      agencia:            c.agencia || null,
+      conta:              c.conta || null,
+      tipo_conta:         c.tipoConta || null,
+      hobby:              c.hobby || null,
+      // Dependentes
+      dependentes_lista:  c.dependentesLista?.length ? c.dependentesLista : null,
+      ativo:              c.situacao === 'Ativo',
     };
+    const alteracoes = [];
+    if (novoCargo  && novoCargo  !== c.cargo)            alteracoes.push(`Cargo: "${c.cargo||'—'}" → "${novoCargo}"`);
+    if (novoSetor  && novoSetor  !== (c.setor||''))      alteracoes.push(`Setor: "${(c.setor||'—').replace(/^\d+\s*-\s*/,'')}" → "${novoSetor.replace(/^\d+\s*-\s*/,'')}"`);
+    if (novoGestor !== (c.gestor||'') && (novoGestor||c.gestor)) alteracoes.push(`Gestor: "${c.gestor||'—'}" → "${novoGestor||'—'}"`);
+    if (payload.ativo !== undefined && payload.ativo !== (c.situacao === 'Ativo')) alteracoes.push(`Situação: "${c.situacao}" → "${payload.ativo ? 'Ativo' : 'Inativo'}"`);
     sbPatch('colaboradores', `id=eq.${c._sbId}`, payload)
-      .then(() => mostrarToast('Salvo no banco de dados ✓'))
+      .then(() => {
+        registrarAudit('editado', c._sbId, alteracoes.length ? alteracoes.join(' | ') : null);
+        mostrarToast('Salvo no banco de dados ✓');
+      })
       .catch(e => mostrarToast('Erro ao salvar: ' + e.message));
   }
 
@@ -1355,7 +2324,7 @@ function criarItemDependente(d, idx) {
     <div class="field"><label>Parentesco</label>
       <select class="dep-parentesco">
         <option value="">Selecione</option>
-        ${['Filho(a)','Enteado(a)','Cônjuge','Companheiro(a)','Pai','Mãe','Outro'].map(p=>`<option value="${p}" ${d.parentesco===p?'selected':''}>${p}</option>`).join('')}
+        ${(PARENTESCOS.length ? PARENTESCOS : [{codigo:'Filho(a)',descricao:'Filho(a)'},{codigo:'Enteado(a)',descricao:'Enteado(a)'},{codigo:'Cônjuge',descricao:'Cônjuge'},{codigo:'Companheiro(a)',descricao:'Companheiro(a)'},{codigo:'Pai',descricao:'Pai'},{codigo:'Mãe',descricao:'Mãe'},{codigo:'Outro',descricao:'Outro'}]).map(p=>`<option value="${p.codigo}" ${d.parentesco===p.codigo?'selected':''}>${p.descricao}</option>`).join('')}
       </select>
     </div>
     <div class="field"><label>CPF</label><input type="text" class="dep-cpf" value="${d.cpf||''}" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)"></div>
@@ -1543,6 +2512,181 @@ async function carregarCidadesNat() {
   }
 }
 
+const CONTRATOS_PRAZO_DETERMINADO = {
+  APRENDIZ: { lei: '— Lei 10.097/2000 · máximo 2 anos', maxMeses: 24 },
+  TEMP:     { lei: '— Lei 6.019/74 · máximo 180 dias',  maxMeses: 6  },
+  ESTAGIO:  { lei: '— Lei 11.788/2008 · máximo 2 anos', maxMeses: 24 },
+};
+
+function toggleExperiencia() {
+  const contrato  = document.getElementById('df-contrato').value;
+  const blocoExp  = document.getElementById('bloco-experiencia');
+  const blocoPrazo = document.getElementById('bloco-prazo-determinado');
+
+  const isCLT   = contrato === 'CLT';
+  const isPrazo = !!CONTRATOS_PRAZO_DETERMINADO[contrato];
+
+  if (blocoExp)  blocoExp.style.display  = isCLT   ? '' : 'none';
+  if (blocoPrazo) blocoPrazo.style.display = isPrazo ? '' : 'none';
+
+  if (!isCLT) {
+    ['df-periodoExp','df-diasProrrogacao','df-fimExperiencia','df-fimExperiencia2'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+  }
+  if (!isPrazo) {
+    const el = document.getElementById('df-fimContrato'); if (el) el.value = '';
+  } else {
+    const cfg = CONTRATOS_PRAZO_DETERMINADO[contrato];
+    const lbl = document.getElementById('label-prazo-lei');
+    if (lbl) lbl.textContent = cfg.lei;
+
+    // auto-preenche data de término com o prazo máximo legal, se ainda não preenchido
+    const adm    = document.getElementById('df-admissao')?.value;
+    const fimEl  = document.getElementById('df-fimContrato');
+    if (fimEl && adm && !fimEl.value) {
+      const d = new Date(adm + 'T00:00:00');
+      d.setMonth(d.getMonth() + cfg.maxMeses);
+      fimEl.value = d.toISOString().split('T')[0];
+    }
+  }
+
+  calcularFimExperiencia();
+  calcularDuracaoContrato();
+}
+
+function calcularDuracaoContrato() {
+  const contrato  = document.getElementById('df-contrato')?.value;
+  const admissao  = document.getElementById('df-admissao')?.value;
+  const fimVal    = document.getElementById('df-fimContrato')?.value;
+  const aviso     = document.getElementById('aviso-prazo');
+  const admInline = document.getElementById('prazo-adm-inline');
+
+  // popula data de admissão no cabeçalho
+  if (admInline) {
+    if (admissao) {
+      const [y,m,d] = admissao.split('-');
+      admInline.textContent = `${d}/${m}/${y}`;
+    } else {
+      admInline.textContent = '—';
+    }
+  }
+
+  if (!fimVal || !admissao) {
+    if (aviso) { aviso.style.display = 'none'; aviso.textContent = ''; }
+    return;
+  }
+
+  const inicio = new Date(admissao + 'T00:00:00');
+  const fim    = new Date(fimVal   + 'T00:00:00');
+  const dias   = Math.round((fim - inicio) / 86400000);
+
+  if (dias <= 0) {
+    if (aviso) { aviso.style.display = ''; aviso.style.color = '#ef4444'; aviso.textContent = '⚠️ A data de término deve ser posterior à data de admissão.'; }
+    return;
+  }
+
+  const cfg     = CONTRATOS_PRAZO_DETERMINADO[contrato];
+  // calcula o limite em dias reais de calendário (não meses × 30)
+  let maxDias = Infinity;
+  if (cfg) {
+    const limiteDate = new Date(admissao + 'T00:00:00');
+    limiteDate.setMonth(limiteDate.getMonth() + cfg.maxMeses);
+    maxDias = Math.round((limiteDate - inicio) / 86400000);
+  }
+
+  if (aviso) {
+    if (dias > maxDias) {
+      const meses = Math.floor(dias / 30);
+      const diasR = dias % 30;
+      let durTxt  = meses > 0 ? `${meses} ${meses === 1 ? 'mês' : 'meses'}` : '';
+      if (diasR > 0) durTxt += (durTxt ? ' e ' : '') + `${diasR} ${diasR === 1 ? 'dia' : 'dias'}`;
+      aviso.style.display         = '';
+      aviso.style.color           = '#991b1b';
+      aviso.style.background      = '#fef2f2';
+      aviso.style.borderLeftColor = '#ef4444';
+      aviso.textContent           = `⚠️ Duração de ${durTxt} ultrapassa o limite legal (${cfg.lei.replace('— ','')}).`;
+    } else {
+      aviso.style.display         = '';
+      aviso.style.color           = '#1e40af';
+      aviso.style.background      = '#eff6ff';
+      aviso.style.borderLeftColor = '#3b82f6';
+      aviso.textContent           = 'ℹ️ Contrato com término determinado conforme contrato.';
+    }
+  }
+}
+
+function calcularFimExperiencia() {
+  const prazo1   = parseInt(document.getElementById('df-periodoExp')?.value) || 0;
+  const inpPrazo2 = document.getElementById('df-diasProrrogacao');
+
+  // se 1ª etapa já ocupa o limite legal, limpa a prorrogação automaticamente
+  if (prazo1 >= 90 && inpPrazo2?.value) inpPrazo2.value = '';
+
+  const prazo2   = parseInt(inpPrazo2?.value) || 0;
+  const admissao = document.getElementById('df-admissao')?.value;
+
+  // data de admissão inline no cabeçalho
+  const inlineAdm = document.getElementById('exp-adm-inline');
+  if (inlineAdm) {
+    if (admissao) {
+      const [y,m,d] = admissao.split('-');
+      inlineAdm.textContent = `${d}/${m}/${y}`;
+    } else {
+      inlineAdm.textContent = '—';
+    }
+  }
+  const inp1     = document.getElementById('df-fimExperiencia');
+  const inp2     = document.getElementById('df-fimExperiencia2');
+  const field2   = document.getElementById('field-exp2');
+  const aviso    = document.getElementById('aviso-exp');
+  const avisoVal = document.getElementById('aviso-exp-total');
+
+  const addDias = (base, dias) => {
+    const d = new Date(base + 'T00:00:00');
+    d.setDate(d.getDate() + dias);
+    return d.toISOString().split('T')[0];
+  };
+
+  const total = prazo1 + prazo2;
+  const excede = total > 90;
+
+  if (aviso)    aviso.style.display = (excede && prazo1 > 0) ? '' : 'none';
+  if (avisoVal) avisoVal.textContent = total;
+
+  if (!admissao || prazo1 <= 0) {
+    if (inp1)   inp1.value = '';
+    if (inp2)   inp2.value = '';
+    if (field2) field2.style.display = 'none';
+    return;
+  }
+
+  if (inp1) inp1.value = addDias(admissao, prazo1);
+
+  const limiteAtingido    = prazo1 >= 90;
+  const divisor           = document.getElementById('divisor-exp');
+  const blocoProrrogDias  = document.getElementById('bloco-prorrogacao-dias');
+  const seta2             = document.getElementById('seta-exp2');
+  const labelOport        = document.getElementById('label-oportunidade');
+
+  // oculta prorrogação quando 1ª etapa já usa o limite legal
+  if (divisor)          divisor.style.display         = limiteAtingido ? 'none' : '';
+  if (blocoProrrogDias) blocoProrrogDias.style.display = limiteAtingido ? 'none' : '';
+
+  // ajusta texto contextual abaixo da 1ª data
+  if (labelOport) {
+    labelOport.textContent = limiteAtingido
+      ? 'data final do contrato de experiência'
+      : '1ª oportunidade de encerramento';
+    labelOport.style.color = limiteAtingido ? '#dc2626' : '#d97706';
+  }
+
+  const temProrrogacao = !limiteAtingido && prazo2 > 0;
+  if (field2) field2.style.display = temProrrogacao ? '' : 'none';
+  if (seta2)  seta2.style.display  = temProrrogacao ? '' : 'none';
+  if (inp2)   inp2.value = temProrrogacao && !excede ? addDias(admissao, total) : '';
+}
+
 function togglePaisNascimento() {
   const estrangeiro = document.getElementById('df-nacionalidade').value === 'Estrangeiro(a)';
   document.getElementById('campoPaisNasc').style.display = estrangeiro ? 'flex' : 'none';
@@ -1623,6 +2767,26 @@ function mostrarToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// Auth
+(function() {
+  const sess = localStorage.getItem('sb_session');
+  const perf = localStorage.getItem('sb_perfil');
+  if (!sess) { window.location.href = '../../login.html'; return; }
+  try {
+    const s = JSON.parse(sess);
+    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    const p = perf ? JSON.parse(perf) : {};
+    const nome = (p.nome || s.email || '').split(' ')[0];
+    document.getElementById('userNomeTopbar').textContent = nome;
+  } catch(_) { window.location.href = '../../login.html'; }
+})();
+
+function logout() {
+  localStorage.removeItem('sb_session');
+  localStorage.removeItem('sb_perfil');
+  window.location.href = '../../login.html';
 }
 </script>
 </body>
