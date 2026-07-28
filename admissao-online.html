@@ -97,6 +97,7 @@
   .form-label .req { color: var(--red); margin-left: 2px; }
   .form-control { border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 13px; font-size: 14px; font-family: inherit; color: var(--text); background: #fff; transition: border-color .15s, box-shadow .15s; width: 100%; height: 42px; line-height: 1.2; -webkit-appearance: none; appearance: none; }
   input[type="date"].form-control { padding: 0 13px; display: flex; align-items: center; }
+  input.date-mask::placeholder { color: var(--text-ter); }
   .form-control:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
   .form-control:not(:placeholder-shown):not(:focus) { border-color: #b6c3d8; }
   .form-control.invalid { border-color: var(--red); background: var(--red-bg); }
@@ -358,10 +359,26 @@ function fg(id, label, type, req, placeholder, val, extra) {
   const r = req ? '<span class="req"> *</span>' : '';
   const v = val || '';
   const p = placeholder ? `placeholder="${placeholder}"` : '';
+  if (type === 'date') {
+    // converte YYYY-MM-DD → DD/MM/AAAA para exibir
+    const display = v ? v.split('-').reverse().join('/') : '';
+    return `<div class="form-group">
+      <label class="form-label" for="${id}">${label}${r}</label>
+      <input class="form-control date-mask" type="text" inputmode="numeric" id="${id}" name="${id}" value="${display}" placeholder="DD/MM/AAAA" maxlength="10" ${extra||''}>
+    </div>`;
+  }
   return `<div class="form-group">
     <label class="form-label" for="${id}">${label}${r}</label>
     <input class="form-control" type="${type}" id="${id}" name="${id}" value="${v}" ${p} ${extra||''}>
   </div>`;
+}
+
+// converte DD/MM/AAAA → YYYY-MM-DD (ou '' se inválido)
+function parseDateBR(str) {
+  if (!str) return '';
+  const m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return '';
+  return `${m[3]}-${m[2]}-${m[1]}`;
 }
 
 function radioP(name, value, label, checked) {
@@ -508,7 +525,7 @@ function buildDepRow(i, d) {
     <div class="form-group"><label class="form-label">Nome</label><input class="form-control dep-nome" type="text" value="${d.nome||''}" placeholder="Nome completo"></div>
     <div class="form-group"><label class="form-label">Tipo</label><select class="form-control dep-tipo"><option value="">Selecione</option>${tipoOpts}</select></div>
     <div class="form-group dep-cpf"><label class="form-label">CPF</label><input class="form-control dep-cpfval" type="text" value="${d.cpf||''}" placeholder="000.000.000-00"></div>
-    <div class="form-group"><label class="form-label">Data de Nascimento</label><input class="form-control dep-nascimento" type="date" value="${d.nascimento||''}"></div>
+    <div class="form-group"><label class="form-label">Data de Nascimento</label><input class="form-control date-mask dep-nascimento" type="text" inputmode="numeric" value="${d.nascimento ? d.nascimento.split('-').reverse().join('/') : ''}" placeholder="DD/MM/AAAA" maxlength="10"></div>
     <button class="btn-rem" data-dep="${i}">✕</button>
   </div>`;
 }
@@ -746,15 +763,13 @@ function bindStepEvents() {
     });
   }
 
-  // Limitar ano a 4 dígitos em todos os campos de data
-  document.querySelectorAll('input[type="date"]').forEach(el => {
+  // Máscara DD/MM/AAAA nos campos de data
+  document.querySelectorAll('input.date-mask').forEach(el => {
     el.addEventListener('input', function() {
-      if (!this.value) return;
-      const parts = this.value.split('-');
-      if (parts[0] && parts[0].length > 4) {
-        parts[0] = parts[0].slice(0, 4);
-        this.value = parts.join('-');
-      }
+      let v = this.value.replace(/\D/g, '').slice(0, 8);
+      if (v.length > 4) v = v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4);
+      else if (v.length > 2) v = v.slice(0,2) + '/' + v.slice(2);
+      this.value = v;
     });
   });
 
@@ -808,29 +823,38 @@ function bindDepEvents() {
   });
 }
 
+const DATE_FIELDS_S1 = ['nascimento','rg_data','cnh_primeira_hab','cnh_emissao','cnh_validade'];
+const DATE_FIELDS_S2 = ['data_casamento','conjuge_nascimento'];
+
 // ─── Save / Validate ────────────────────────────────────
 function saveCurrentStep() {
   if (currentStep === 1) {
-    ['nome','nascimento','sexo','nacionalidade','naturalidade','rg','rg_orgao','rg_data','cpf',
+    ['nome','sexo','nacionalidade','naturalidade','rg','rg_orgao','cpf',
      'titulo_eleitor','titulo_zona','titulo_secao','ctps_numero','ctps_serie','pis',
-     'cnh_numero','cnh_primeira_hab','cnh_emissao','cnh_validade','cnh_categoria',
+     'cnh_numero','cnh_categoria',
      'cep','logradouro','numero','complemento','bairro','cidade','uf',
      'celular','tel_recado','tel_recado_nome','email'
     ].forEach(k => { const el = document.getElementById(k); if (el) formData[k] = el.value; });
-    // manter compatibilidade com campo legado
+    DATE_FIELDS_S1.forEach(k => {
+      const el = document.getElementById(k);
+      if (el) formData[k] = parseDateBR(el.value);
+    });
     formData.endereco = [formData.logradouro, formData.numero, formData.bairro].filter(Boolean).join(', ');
   } else if (currentStep === 2) {
-    ['nome_pai','nome_mae','estado_civil','data_casamento','conjuge_nome','conjuge_cpf','conjuge_rg','conjuge_nascimento']
+    ['nome_pai','nome_mae','estado_civil','conjuge_nome','conjuge_cpf','conjuge_rg']
       .forEach(k => { const el = document.getElementById(k); if (el) formData[k] = el.value; });
+    DATE_FIELDS_S2.forEach(k => {
+      const el = document.getElementById(k);
+      if (el) formData[k] = parseDateBR(el.value);
+    });
     const rf = document.querySelector('input[name="tem_filhos"]:checked');
     formData.tem_filhos = rf ? rf.value === 'sim' : false;
-    // save deps
     document.querySelectorAll('.dep-row').forEach((row, i) => {
       if (!formData.dependentes[i]) formData.dependentes[i] = {};
       const n = row.querySelector('.dep-nome'); if (n) formData.dependentes[i].nome = n.value;
       const t = row.querySelector('.dep-tipo'); if (t) formData.dependentes[i].tipo = t.value;
       const c = row.querySelector('.dep-cpfval'); if (c) formData.dependentes[i].cpf = c.value;
-      const nasc = row.querySelector('.dep-nascimento'); if (nasc) formData.dependentes[i].nascimento = nasc.value;
+      const nasc = row.querySelector('.dep-nascimento'); if (nasc) formData.dependentes[i].nascimento = parseDateBR(nasc.value);
     });
   } else if (currentStep === 3) {
     ['escolaridade','cor_raca','banco','agencia','conta','hobby']
@@ -849,7 +873,7 @@ function validateStep() {
   let errors = [];
   if (currentStep === 1) {
     if (!formData.nome.trim()) errors.push('Nome Completo é obrigatório.');
-    if (!formData.nascimento) errors.push('Data de Nascimento é obrigatória.');
+    if (!formData.nascimento) errors.push('Data de Nascimento é obrigatória (DD/MM/AAAA).');
     if (!formData.cpf.trim()) errors.push('CPF é obrigatório.');
     if (!formData.celular.trim()) errors.push('Telefone Celular é obrigatório.');
     if (!formData.email.trim()) errors.push('E-mail é obrigatório.');
