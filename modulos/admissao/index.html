@@ -406,6 +406,31 @@
   </div>
 </div>
 
+<!-- Modal Cancelamento -->
+<div class="modal-overlay" id="modalCancelamento">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Cancelar convite</h3>
+      <button class="modal-close" onclick="closeModal('modalCancelamento')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-sec);margin-bottom:16px;">Selecione o motivo do cancelamento. Essa informação ficará registrada para consulta futura.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="radio" name="motivoCancelamento" value="Desistência do candidato"> Desistência do candidato</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="radio" name="motivoCancelamento" value="Reprovação no processo seletivo"> Reprovação no processo seletivo</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="radio" name="motivoCancelamento" value="Vaga encerrada"> Vaga encerrada</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="radio" name="motivoCancelamento" value="Documentação irregular"> Documentação irregular</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="radio" name="motivoCancelamento" value="Outro"> Outro</label>
+      </div>
+      <input class="form-control" id="motivoOutro" type="text" placeholder="Descreva o motivo..." style="display:none;">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modalCancelamento')">Voltar</button>
+      <button class="btn btn-danger" id="btnConfirmarCancelamento">Confirmar cancelamento</button>
+    </div>
+  </div>
+</div>
+
 <!-- Slide-in Panel Revisão -->
 <div class="panel-overlay" id="panelOverlay">
   <div class="panel" id="reviewPanel">
@@ -527,7 +552,10 @@ function renderConvites() {
       <td class="td-sec">${esc(c.cargo_pretendido||'—')}</td>
       <td class="td-sec">${esc(c.unidade||'—')}</td>
       <td class="td-sec">${esc(c.enviado_por||'—')}</td>
-      <td>${statusBadge(c.status)}</td>
+      <td>
+        ${statusBadge(c.status)}
+        ${c.status === 'cancelado' && c.observacoes ? `<div style="font-size:11px;color:var(--text-ter);margin-top:4px;">${esc(c.observacoes)}</div>` : ''}
+      </td>
       <td>
         <div class="actions">
           <button class="btn btn-secondary btn-sm" onclick="copiarLink('${link}')">Copiar Link</button>
@@ -539,11 +567,36 @@ function renderConvites() {
   }).join('');
 }
 
-async function cancelarConvite(id) {
-  if (!confirm('Cancelar este convite?')) return;
-  await fetch(`${SB_URL}/rest/v1/admissao_convites?id=eq.${id}`, {
-    method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ status: 'cancelado' })
+let _cancelarId = null;
+
+function cancelarConvite(id) {
+  _cancelarId = id;
+  document.querySelectorAll('input[name="motivoCancelamento"]').forEach(r => r.checked = false);
+  document.getElementById('motivoOutro').value = '';
+  document.getElementById('motivoOutro').style.display = 'none';
+  document.querySelectorAll('input[name="motivoCancelamento"]').forEach(r => {
+    r.onchange = () => {
+      document.getElementById('motivoOutro').style.display = r.value === 'Outro' ? 'block' : 'none';
+    };
   });
+  document.getElementById('btnConfirmarCancelamento').onclick = confirmarCancelamento;
+  openModal('modalCancelamento');
+}
+
+async function confirmarCancelamento() {
+  const selecionado = document.querySelector('input[name="motivoCancelamento"]:checked');
+  if (!selecionado) { alert('Selecione um motivo.'); return; }
+  let motivo = selecionado.value;
+  if (motivo === 'Outro') {
+    const outro = document.getElementById('motivoOutro').value.trim();
+    if (!outro) { alert('Descreva o motivo.'); return; }
+    motivo = outro;
+  }
+  await fetch(`${SB_URL}/rest/v1/admissao_convites?id=eq.${_cancelarId}`, {
+    method: 'PATCH', headers: SB_HEADERS,
+    body: JSON.stringify({ status: 'cancelado', observacoes: motivo })
+  });
+  closeModal('modalCancelamento');
   loadConvites();
 }
 
