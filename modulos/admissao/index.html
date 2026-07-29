@@ -1210,7 +1210,7 @@ function abrirModalPDF(c) {
   openModal('modalPDF');
 }
 
-function confirmarGerarPDF() {
+async function confirmarGerarPDF() {
   const dadosAdm = {
     empresa:      document.getElementById('pdf_empresa').value,
     data:         document.getElementById('pdf_data').value,
@@ -1222,11 +1222,28 @@ function confirmarGerarPDF() {
   };
   localStorage.setItem(pdfStorageKey(), JSON.stringify(dadosAdm));
   closeModal('modalPDF');
-  gerarPDFFicha(currentFicha, currentConvite, dadosAdm);
+  const btn = document.getElementById('btnGerarPDF');
+  if (btn) { btn.disabled = true; btn.textContent = 'Carregando imagens...'; }
+  await gerarPDFFicha(currentFicha, currentConvite, dadosAdm);
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Gerar PDF'; }
 }
 
 // ─── Gerar PDF ────────────────────────────────────────────
-function gerarPDFFicha(f, c, dadosAdm = {}) {
+async function imgToBase64(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise(resolve => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => resolve(null);
+      r.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
+
+async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const DOC_LABELS = {
     foto3x4:'Foto 3x4', rg_frente:'RG', cpf_doc:'CPF',
     titulo:'Título de Eleitor', ctps:'CTPS', pis_doc:'PIS/PASEP', cnh_doc:'CNH',
@@ -1235,15 +1252,29 @@ function gerarPDFFicha(f, c, dadosAdm = {}) {
     exame_admissional:'Exame Admissional'
   };
   const docs = f.docs || {};
-  const docsHtml = Object.entries(DOC_LABELS).map(([k, label]) => {
-    const path = docs[k];
-    if (!path) return '';
-    const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
+
+  // Converte todas as imagens para base64 antes de abrir a janela
+  const docEntries = await Promise.all(
+    Object.entries(DOC_LABELS).map(async ([k, label]) => {
+      const path = docs[k];
+      if (!path) return null;
+      const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
+      const isPdf = path.toLowerCase().endsWith('.pdf');
+      const b64 = isPdf ? null : await imgToBase64(url);
+      return { k, label, url, b64, isPdf };
+    })
+  );
+
+  const docsHtml = docEntries.filter(Boolean).map(({ label, url, b64, isPdf }) => {
+    const imgTag = isPdf
+      ? `<div style="text-align:center;padding:20px;"><a href="${url}" target="_blank" style="color:#1d4ed8;font-size:14px;">Abrir PDF: ${label}</a></div>`
+      : b64
+        ? `<img src="${b64}" class="doc-img">`
+        : `<div style="color:#9ca3af;font-size:11px;padding:10px;">Imagem não disponível</div>`;
     return `
       <div class="doc-page">
         <div class="doc-label">${label}</div>
-        <img src="${url}" class="doc-img" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-        <div style="display:none;color:#9ca3af;font-size:11px;padding:10px;">Imagem não disponível</div>
+        ${imgTag}
       </div>`;
   }).join('');
 
