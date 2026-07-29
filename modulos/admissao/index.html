@@ -1003,33 +1003,42 @@ function renderPanelDocs(f) {
   const hasDeps = Array.isArray(f.dependentes) && f.dependentes.length > 0;
 
   const DOC_CAND = [
-    { key:'foto3x4',    label:'Foto 3x4' },
-    { key:'rg_frente',  label:'RG' },
-    { key:'cpf_doc',    label:'CPF' },
-    { key:'comp_res',   label:'Comprovante de Residência' },
-    { key:'cert_nasc',  label:'Certidão de Nascimento/Casamento' },
-    { key:'titulo',     label:'Título de Eleitor' },
-    { key:'ctps',       label:'CTPS' },
-    { key:'pis_doc',    label:'PIS/PASEP' },
-    { key:'cnh_doc',    label:'CNH' },
-    { key:'cert_dep',   label:'Certidão dos Dependentes', depOnly: true },
-    { key:'cart_vacina',label:'Carteira de Vacinação (dep. < 6 anos)', depOnly: true },
+    { key:'foto3x4',    label:'Foto 3x4',                              req: true },
+    { key:'rg_frente',  label:'RG',                                    req: true },
+    { key:'cpf_doc',    label:'CPF',                                   req: true },
+    { key:'comp_res',   label:'Comprovante de Residência',             req: true },
+    { key:'ctps',       label:'CTPS',                                  req: true },
+    { key:'cert_nasc',  label:'Certidão de Nascimento/Casamento',      req: false },
+    { key:'titulo',     label:'Título de Eleitor',                     req: false },
+    { key:'pis_doc',    label:'PIS/PASEP',                             req: false },
+    { key:'cnh_doc',    label:'CNH',                                   req: false },
+    { key:'cert_dep',   label:'Certidão dos Dependentes',              req: false, depOnly: true },
+    { key:'cart_vacina',label:'Carteira de Vacinação (dep. < 6 anos)', req: false, depOnly: true },
   ];
 
-  const docRow = (k, label, byRH) => {
+  const icoEye = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+  const icoUpload = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
+  const icoTrash = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+
+  const iconBtn = (title, color, content, onclick) =>
+    `<button title="${title}" onclick="${onclick}" style="background:none;border:none;cursor:pointer;color:${color};display:flex;align-items:center;padding:4px 5px;border-radius:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${content}</button>`;
+
+  const docRow = (k, label, req, byRH) => {
     const path = docs[k];
     const has = !!path;
-    const viewBtn = has ? `<a href="${SB_URL}/storage/v1/object/public/admissao-docs/${path}" target="_blank" style="color:var(--blue);font-size:12px;font-weight:600;text-decoration:none;">Ver</a>` : '';
-    const uploadBtn = `<label style="cursor:pointer;color:var(--blue);font-size:12px;font-weight:600;">${has?'Substituir':'Anexar'}<input type="file" accept="image/*,application/pdf" style="display:none" onchange="panelUploadDoc('${k}',this)"></label>`;
+    const url = has ? `${SB_URL}/storage/v1/object/public/admissao-docs/${path}` : '';
+    const viewBtn = has ? `<a href="${url}" target="_blank" title="Ver documento" style="color:var(--blue);display:flex;align-items:center;padding:4px 5px;border-radius:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${icoEye}</a>` : '';
+    const uploadBtn = `<label title="${has?'Substituir anexo':'Adicionar anexo'}" style="cursor:pointer;color:var(--blue);display:flex;align-items:center;padding:4px 5px;border-radius:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${icoUpload}<input type="file" accept="image/*,application/pdf" style="display:none" onchange="panelUploadDoc('${k}',this)"></label>`;
+    const delBtn = (!req && has) ? iconBtn('Excluir anexo', 'var(--red)', icoTrash, `panelDeleteDoc('${k}')`) : '';
     return `<div class="panel-doc-item ${has?'has-file':''}">
-      <span class="panel-doc-name">${label}${byRH?' <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(RH)</span>':''}</span>
+      <span class="panel-doc-name">${label}${byRH?' <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(RH)</span>':''}${req?'':' <span style="font-size:10px;color:var(--text-ter);font-weight:400;">opcional</span>'}</span>
       <span class="panel-doc-status">${has ? 'Enviado ✓' : 'Não enviado'}</span>
-      ${viewBtn}${uploadBtn}
+      <span style="display:flex;align-items:center;gap:2px;">${viewBtn}${uploadBtn}${delBtn}</span>
     </div>`;
   };
 
-  const candRows = DOC_CAND.filter(d => !d.depOnly || hasDeps).map(d => docRow(d.key, d.label, false)).join('');
-  const rhRows = docRow('exame_admissional', 'Exame Admissional', true);
+  const candRows = DOC_CAND.filter(d => !d.depOnly || hasDeps).map(d => docRow(d.key, d.label, d.req, false)).join('');
+  const rhRows = docRow('exame_admissional', 'Exame Admissional', false, true);
 
   document.getElementById('ptab-docs').innerHTML = `
     <div class="panel-doc-list">
@@ -1038,6 +1047,18 @@ function renderPanelDocs(f) {
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);padding:12px 0 6px;">Anexados pelo RH</div>
       ${rhRows}
     </div>`;
+}
+
+async function panelDeleteDoc(key) {
+  if (!confirm('Excluir este anexo?')) return;
+  const newDocs = { ...(currentFicha.docs || {}) };
+  delete newDocs[key];
+  const res = await fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${currentFicha.id}`, {
+    method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ docs: newDocs })
+  });
+  if (!res.ok) { alert('Erro ao excluir anexo.'); return; }
+  currentFicha.docs = newDocs;
+  renderPanelDocs(currentFicha);
 }
 
 async function panelUploadDoc(key, input) {
