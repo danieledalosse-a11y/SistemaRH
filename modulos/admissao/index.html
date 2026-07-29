@@ -1286,6 +1286,9 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
     `<tr><td class="lbl">${label}</td><td><a href="${url}" target="_blank" style="color:#1d4ed8;">${url}</a></td></tr>`
   ).join('');
 
+  const now = new Date();
+  const dataHora = now.toLocaleDateString('pt-BR') + ', ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -1293,33 +1296,38 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 <title>Ficha de Admissão — ${f.nome || c.nome_candidato || ''}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; background: #fff; }
-  .page { max-width: 760px; margin: 0 auto; padding: 24px 30px; }
-  .hd { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1a1a1a; padding-bottom: 10px; margin-bottom: 16px; }
-  .hd-title { font-size: 16px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-  .hd-sub { font-size: 9px; color: #555; margin-top: 2px; }
-  .hd-meta { text-align: right; font-size: 9px; color: #666; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5px; color: #1a1a1a; background: #fff; }
+  .page { max-width: 760px; margin: 0 auto; padding: 14px 22px; }
+  /* Cabeçalho */
+  .hd { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1.5px solid #1a1a1a; }
+  .hd-left { display: flex; align-items: baseline; gap: 10px; }
+  .hd-company { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #1a1a1a; }
+  .hd-divider { width: 1px; height: 14px; background: #999; flex-shrink: 0; }
+  .hd-doc { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #555; }
+  .hd-right { text-align: right; font-size: 8.5px; color: #666; line-height: 1.5; }
   /* Box de registro */
-  .reg { border: 2px solid #1a1a1a; border-radius: 3px; margin-bottom: 16px; overflow: hidden; }
-  .reg-title { background: #1a1a1a; color: #fff; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 5px 12px; }
+  .reg { border: 1.5px solid #1a1a1a; border-radius: 2px; margin-bottom: 10px; overflow: hidden; }
+  .reg-title { background: #1a1a1a; color: #fff; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; padding: 4px 10px; }
   .reg-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; }
-  .ri { padding: 6px 12px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; }
+  .ri { padding: 4px 10px; border-bottom: 1px solid #e5e5e5; border-right: 1px solid #e5e5e5; }
   .ri:nth-child(3n) { border-right: none; }
   .ri.full { grid-column: 1/-1; border-right: none; }
-  .ri.half { grid-column: span 2; border-right: 1px solid #e0e0e0; }
-  .rl { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #888; margin-bottom: 2px; }
-  .rv { font-size: 11px; font-weight: 700; color: #1a1a1a; }
+  .ri.half { grid-column: span 2; border-right: 1px solid #e5e5e5; }
+  .rl { font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #888; margin-bottom: 1px; }
+  .rv { font-size: 10.5px; font-weight: 700; color: #1a1a1a; }
   /* Tabelas de dados */
-  .sec { margin-bottom: 12px; }
-  .st { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #fff; background: #444; padding: 4px 10px; }
+  .sec { margin-bottom: 6px; }
+  .st { font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #fff; background: #444; padding: 3px 10px; }
   table { width: 100%; border-collapse: collapse; }
-  td { padding: 5px 10px; border: 1px solid #e0e0e0; vertical-align: top; line-height: 1.4; }
-  .lbl { font-weight: 700; color: #555; width: 34%; background: #f9fafb; font-size: 10px; }
+  td { padding: 3.5px 8px; border: 1px solid #e5e5e5; vertical-align: top; line-height: 1.35; }
+  .lbl { font-weight: 700; color: #555; width: 34%; background: #f9fafb; font-size: 9.5px; }
   /* Página 2 */
-  .pg2 { page-break-before: always; padding-top: 24px; }
-  .pg2-title { font-size: 13px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; margin-bottom: 12px; }
+  .pg2 { page-break-before: always; padding-top: 20px; }
+  .pg2-hd { display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; margin-bottom: 10px; border-bottom: 1.5px solid #1a1a1a; }
+  .pg2-hd-left { display: flex; align-items: baseline; gap: 10px; }
+  .pg2-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #555; }
   .pg2 td { font-size: 10px; word-break: break-all; }
-  .print-btn { display: block; margin: 18px auto 0; padding: 9px 30px; background: #1a1a1a; color: #fff; border: none; border-radius: 5px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: Arial; }
+  .print-btn { display: block; margin: 14px auto 0; padding: 8px 28px; background: #1a1a1a; color: #fff; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: Arial; }
   @media print { .print-btn { display: none; } .page { padding: 0; } }
 </style>
 </head>
@@ -1327,11 +1335,12 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 <div class="page">
 
   <div class="hd">
-    <div>
-      <div class="hd-title">Grupo Revest</div>
-      <div class="hd-sub">Ficha de Admissão — Documentação para Registro</div>
+    <div class="hd-left">
+      <div class="hd-company">Grupo Revest</div>
+      <div class="hd-divider"></div>
+      <div class="hd-doc">Ficha de Admissão</div>
     </div>
-    <div class="hd-meta">Gerado em: ${new Date().toLocaleDateString('pt-BR')}<br>RH</div>
+    <div class="hd-right">${dataHora}<br>Recursos Humanos</div>
   </div>
 
   <div class="reg">
@@ -1344,6 +1353,8 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
       <div class="ri"><div class="rl">Salário</div><div class="rv">${esc(dadosAdm.salario||'—')}</div></div>
       <div class="ri"><div class="rl">Contrato</div><div class="rv">${esc(dadosAdm.contrato||'—')}</div></div>
       <div class="ri"><div class="rl">Carga Horária</div><div class="rv">${esc(dadosAdm.carga||'—')}</div></div>
+      <div class="ri"><div class="rl">Vale Transporte</div><div class="rv">${f.vale_transporte ? 'Sim' : 'Não'}</div></div>
+      <div class="ri"><div class="rl">Primeiro Emprego</div><div class="rv">${f.primeiro_emprego ? 'Sim' : 'Não'}</div></div>
     </div>
   </div>
 
@@ -1388,18 +1399,23 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   </div>
 
   <div class="sec">
-    <div class="st">Dados Bancários e Benefícios</div>
+    <div class="st">Dados Bancários</div>
     <table>
       ${row('Banco', f.banco)}
       ${row('Agência / Conta', [f.agencia, f.conta].filter(Boolean).join(' / '))}
-      ${row('Vale Transporte', f.vale_transporte ? 'Sim' : 'Não')}
-      ${row('Primeiro Emprego', f.primeiro_emprego ? 'Sim' : 'Não')}
     </table>
   </div>
 
   <!-- Página 2: documentos -->
   <div class="pg2">
-    <div class="pg2-title">Documentos Anexados</div>
+    <div class="pg2-hd">
+      <div class="pg2-hd-left">
+        <div class="hd-company">Grupo Revest</div>
+        <div class="hd-divider"></div>
+        <div class="pg2-title">Documentos Anexados — ${esc(f.nome || c.nome_candidato || '')}</div>
+      </div>
+      <div class="hd-right">${dataHora}<br>Recursos Humanos</div>
+    </div>
     ${docsListHtml ? `<table>${docsListHtml}</table>` : '<p style="color:#888;font-size:11px;">Nenhum documento anexado.</p>'}
   </div>
 
