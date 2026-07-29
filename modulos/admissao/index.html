@@ -6,6 +6,12 @@
 <title>Admissão Online — Sistema RH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+</script>
 <style>
   :root {
     --bg: #f4f5f7; --surface: #ffffff; --border: #e0e0e0;
@@ -1256,54 +1262,60 @@ async function confirmarGerarPDF() {
 }
 
 // ─── Gerar PDF ────────────────────────────────────────────
-async function imgToBase64(url) {
+async function docUrlToBase64(url) {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const blob = await res.blob();
-    return await new Promise(resolve => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = () => resolve(null);
-      r.readAsDataURL(blob);
-    });
-  } catch { return null; }
+    if (blob.type === 'application/pdf' || url.toLowerCase().endsWith('.pdf')) {
+      const arrayBuffer = await blob.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const scale = 1.8;
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      return canvas.toDataURL('image/jpeg', 0.85);
+    } else {
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch(_) { return null; }
 }
 
 async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const DOC_LABELS = {
-    foto3x4:'Foto 3x4', rg_frente:'RG', cpf_doc:'CPF',
-    titulo:'Título de Eleitor', ctps:'CTPS', pis_doc:'PIS/PASEP', cnh_doc:'CNH',
-    comp_res:'Comprovante de Residência', cert_nasc:'Certidão de Nascimento/Casamento',
-    cert_dep:'Certidão dos Dependentes', cart_vacina:'Carteira de Vacinação',
-    exame_admissional:'Exame Admissional'
+    foto3x4:     'Foto 3x4',
+    rg_frente:   'RG',
+    cpf_doc:     'CPF',
+    comp_res:    'Comprovante de Residência',
+    ctps:        'CTPS',
+    cert_nasc:   'Certidão de Nascimento/Casamento',
+    titulo:      'Título de Eleitor',
+    pis_doc:     'PIS/PASEP',
+    cnh_doc:     'CNH',
+    cert_dep:    'Certidão dos Dependentes',
+    cart_vacina: 'Carteira de Vacinação',
+    exame_admissional: 'Exame Admissional',
   };
   const docs = f.docs || {};
 
-  // Converte todas as imagens para base64 antes de abrir a janela
+  // Converte todos os documentos para base64 (inclusive PDFs via PDF.js)
   const docEntries = await Promise.all(
     Object.entries(DOC_LABELS).map(async ([k, label]) => {
       const path = docs[k];
-      if (!path) return null;
+      if (!path) return { k, label, b64: null };
       const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
-      const isPdf = path.toLowerCase().endsWith('.pdf');
-      const b64 = isPdf ? null : await imgToBase64(url);
-      return { k, label, url, b64, isPdf };
+      const b64 = await docUrlToBase64(url);
+      return { k, label, b64 };
     })
   );
-
-  const docsHtml = docEntries.filter(Boolean).map(({ label, url, b64, isPdf }) => {
-    const imgTag = isPdf
-      ? `<div style="text-align:center;padding:20px;"><a href="${url}" target="_blank" style="color:#1d4ed8;font-size:14px;">Abrir PDF: ${label}</a></div>`
-      : b64
-        ? `<img src="${b64}" class="doc-img">`
-        : `<div style="color:#9ca3af;font-size:11px;padding:10px;">Imagem não disponível</div>`;
-    return `
-      <div class="doc-page">
-        <div class="doc-label">${label}</div>
-        ${imgTag}
-      </div>`;
-  }).join('');
 
   const row = (label, val) => val ? `<tr><td class="lbl">${label}</td><td>${val}</td></tr>` : '';
   const depStr = d => {
@@ -1312,10 +1324,73 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
     return `<span style="font-weight:700;">${d.nome||''}</span><span style="color:#666;font-size:9.5px;margin-left:6px;">${d.tipo||''}</span>${sub ? '<br><span style="color:#555;font-size:9px;">'+sub+'</span>' : ''}`;
   };
 
-  // Página 2 — lista de documentos com links
-  const docsListHtml = docEntries.filter(Boolean).map(({ label, url }) =>
-    `<tr><td class="lbl">${label}</td><td><a href="${url}" target="_blank" style="color:#1d4ed8;">${url}</a></td></tr>`
-  ).join('');
+  // Configuração de layout por documento
+  const DOC_CONFIG = {
+    foto3x4:           { full: false, foto: true },
+    rg_frente:         { full: false },
+    cpf_doc:           { full: false },
+    pis_doc:           { full: false },
+    titulo:            { full: false },
+    cnh_doc:           { full: false },
+    ctps:              { full: true },
+    comp_res:          { full: true },
+    cert_nasc:         { full: true },
+    exame_admissional: { full: true },
+    cert_dep:          { full: true },
+    cart_vacina:       { full: true },
+  };
+
+  // Blocos: colaborador e dependentes
+  const BLOCO_COLAB = ['foto3x4','rg_frente','cpf_doc','pis_doc','titulo','cnh_doc','ctps','comp_res','cert_nasc','exame_admissional'];
+  const BLOCO_DEP   = ['cert_dep','cart_vacina'];
+  const OBRIGATORIOS = ['foto3x4','rg_frente','cpf_doc','comp_res','ctps','cert_nasc'];
+
+  const docMap = Object.fromEntries(docEntries.map(e => [e.k, e]));
+
+  const renderDocItem = ({ k, label, b64 }) => {
+    const cfg = DOC_CONFIG[k] || {};
+    if (cfg.foto) {
+      return `<div style="grid-column:span 1;border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:10px;background:#fafafa;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;margin-bottom:8px;align-self:flex-start;">${label}</div>
+        <img src="${b64}" style="max-height:200px;max-width:160px;object-fit:contain;display:block;">
+      </div>`;
+    }
+    const spanStyle = cfg.full ? 'grid-column:span 2;' : 'grid-column:span 1;';
+    const maxH = cfg.full ? '360px' : '240px';
+    return `<div style="${spanStyle}border:1px solid #ddd;border-radius:6px;overflow:hidden;">
+      <div style="background:#f5f5f5;padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;">${label}</div>
+      <img src="${b64}" style="width:100%;display:block;max-height:${maxH};object-fit:contain;background:#fafafa;">
+    </div>`;
+  };
+
+  const buildBloco = (keys) => keys
+    .map(k => docMap[k])
+    .filter(e => e && e.b64)
+    .map(renderDocItem)
+    .join('');
+
+  const buildFaltantes = (keys) => keys
+    .filter(k => OBRIGATORIOS.includes(k) && docMap[k] && !docMap[k].b64)
+    .map(k => `<div style="font-size:10px;color:#b91c1c;margin:2px 0;">&#9888; ${DOC_LABELS[k]} — não enviado</div>`)
+    .join('');
+
+  const gridColab = buildBloco(BLOCO_COLAB);
+  const faltantesColab = buildFaltantes(BLOCO_COLAB);
+
+  const hasDeps = Array.isArray(f.dependentes) && f.dependentes.length > 0;
+  const gridDep = hasDeps ? buildBloco(BLOCO_DEP) : '';
+
+  const st = (txt) => `<div style="font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#fff;background:#444;padding:3px 10px;margin:14px 0 10px;">${txt}</div>`;
+
+  const cabecalho = (subtitulo) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;margin-bottom:10px;border-bottom:1.5px solid #1a1a1a;">
+      <div style="display:flex;align-items:baseline;gap:10px;">
+        <div style="font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#1a1a1a;">Grupo Revest</div>
+        <div style="width:1px;height:14px;background:#999;flex-shrink:0;"></div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555;">${subtitulo}</div>
+      </div>
+      <div style="text-align:right;font-size:8.5px;color:#666;line-height:1.5;">${dataHora}<br>Recursos Humanos</div>
+    </div>`;
 
   const now = new Date();
   const dataHora = now.toLocaleDateString('pt-BR') + ', ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
@@ -1329,35 +1404,19 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5px; color: #1a1a1a; background: #fff; }
   .page { max-width: 760px; margin: 0 auto; padding: 14px 22px; }
-  /* Cabeçalho */
-  .hd { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1.5px solid #1a1a1a; }
-  .hd-left { display: flex; align-items: baseline; gap: 10px; }
-  .hd-company { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #1a1a1a; }
-  .hd-divider { width: 1px; height: 14px; background: #999; flex-shrink: 0; }
-  .hd-doc { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #555; }
-  .hd-right { text-align: right; font-size: 8.5px; color: #666; line-height: 1.5; }
-  /* Box de registro */
   .reg { border: 1.5px solid #1a1a1a; border-radius: 2px; margin-bottom: 10px; overflow: hidden; }
   .reg-title { background: #1a1a1a; color: #fff; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; padding: 4px 10px; }
   .reg-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; }
   .ri { padding: 4px 10px; border-bottom: 1px solid #e5e5e5; border-right: 1px solid #e5e5e5; }
   .ri:nth-child(3n) { border-right: none; }
   .ri.full { grid-column: 1/-1; border-right: none; }
-  .ri.half { grid-column: span 2; border-right: 1px solid #e5e5e5; }
   .rl { font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #888; margin-bottom: 1px; }
   .rv { font-size: 10.5px; font-weight: 700; color: #1a1a1a; }
-  /* Tabelas de dados */
   .sec { margin-bottom: 6px; }
   .st { font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #fff; background: #444; padding: 3px 10px; }
   table { width: 100%; border-collapse: collapse; }
   td { padding: 3.5px 8px; border: 1px solid #e5e5e5; vertical-align: top; line-height: 1.35; }
   .lbl { font-weight: 700; color: #555; width: 34%; background: #f9fafb; font-size: 9.5px; }
-  /* Página 2 */
-  .pg2 { page-break-before: always; padding-top: 20px; }
-  .pg2-hd { display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; margin-bottom: 10px; border-bottom: 1.5px solid #1a1a1a; }
-  .pg2-hd-left { display: flex; align-items: baseline; gap: 10px; }
-  .pg2-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #555; }
-  .pg2 td { font-size: 10px; word-break: break-all; }
   .print-btn { display: block; margin: 14px auto 0; padding: 8px 28px; background: #1a1a1a; color: #fff; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: Arial; }
   @media print { .print-btn { display: none; } .page { padding: 0; } }
 </style>
@@ -1365,16 +1424,10 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 <body>
 <div class="page">
 
-  <div class="hd">
-    <div class="hd-left">
-      <div class="hd-company">Grupo Revest</div>
-      <div class="hd-divider"></div>
-      <div class="hd-doc">Ficha de Admissão</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:16px;">
-      <div class="hd-right">${dataHora}<br>Recursos Humanos</div>
-      <button class="print-btn" style="margin:0;" onclick="window.print()">Imprimir / Salvar PDF</button>
-    </div>
+  ${cabecalho('Ficha de Admissão')}
+
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+    <button class="print-btn" style="margin:0;" onclick="window.print()">Imprimir / Salvar PDF</button>
   </div>
 
   <div class="reg">
@@ -1440,17 +1493,19 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
     </table>
   </div>
 
-  <!-- Página 2: documentos -->
-  <div class="pg2">
-    <div class="pg2-hd">
-      <div class="pg2-hd-left">
-        <div class="hd-company">Grupo Revest</div>
-        <div class="hd-divider"></div>
-        <div class="pg2-title">Documentos Anexados — ${esc(f.nome || c.nome_candidato || '')}</div>
-      </div>
-      <div class="hd-right">${dataHora}<br>Recursos Humanos</div>
+  <!-- Página 2+: documentos embutidos como imagens -->
+  <div style="page-break-before:always;">
+    ${cabecalho('Documentos — ' + esc(f.nome || c.nome_candidato || ''))}
+    ${st('Documentos do Colaborador')}
+    ${faltantesColab}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      ${gridColab || '<div style="grid-column:span 2;color:#aaa;font-size:10px;">Nenhum documento enviado.</div>'}
     </div>
-    ${docsListHtml ? `<table>${docsListHtml}</table>` : '<p style="color:#888;font-size:11px;">Nenhum documento anexado.</p>'}
+    ${hasDeps && gridDep ? `
+    ${st('Documentos dos Dependentes')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      ${gridDep}
+    </div>` : ''}
   </div>
 
   <button class="print-btn" onclick="window.print()">Imprimir / Salvar como PDF</button>
