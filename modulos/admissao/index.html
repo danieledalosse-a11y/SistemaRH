@@ -1000,22 +1000,65 @@ async function savePanel() {
 
 function renderPanelDocs(f) {
   const docs = f.docs || {};
-  const DOC_LABELS = {
-    foto3x4:'Foto 3x4', rg_frente:'RG (frente)', rg_verso:'RG (verso)', cpf_doc:'CPF',
-    titulo:'Título de Eleitor', ctps:'CTPS', pis_doc:'PIS/PASEP', cnh_doc:'CNH',
-    comp_res:'Comprovante de Residência', cert_nasc:'Certidão de Nascimento/Casamento'
+  const hasDeps = Array.isArray(f.dependentes) && f.dependentes.length > 0;
+
+  const DOC_CAND = [
+    { key:'foto3x4',    label:'Foto 3x4' },
+    { key:'rg_frente',  label:'RG' },
+    { key:'cpf_doc',    label:'CPF' },
+    { key:'comp_res',   label:'Comprovante de Residência' },
+    { key:'cert_nasc',  label:'Certidão de Nascimento/Casamento' },
+    { key:'titulo',     label:'Título de Eleitor' },
+    { key:'ctps',       label:'CTPS' },
+    { key:'pis_doc',    label:'PIS/PASEP' },
+    { key:'cnh_doc',    label:'CNH' },
+    { key:'cert_dep',   label:'Certidão dos Dependentes', depOnly: true },
+    { key:'cart_vacina',label:'Carteira de Vacinação (dep. < 6 anos)', depOnly: true },
+  ];
+
+  const docRow = (k, label, byRH) => {
+    const path = docs[k];
+    const has = !!path;
+    const viewBtn = has ? `<a href="${SB_URL}/storage/v1/object/public/admissao-docs/${path}" target="_blank" style="color:var(--blue);font-size:12px;font-weight:600;text-decoration:none;">Ver</a>` : '';
+    const uploadBtn = byRH ? `<label style="cursor:pointer;color:var(--blue);font-size:12px;font-weight:600;">${has?'Substituir':'Anexar'}<input type="file" accept="image/*,application/pdf" style="display:none" onchange="panelUploadDoc('${k}',this)"></label>` : '';
+    return `<div class="panel-doc-item ${has?'has-file':''}">
+      <span class="panel-doc-name">${label}${byRH?' <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(RH)</span>':''}</span>
+      <span class="panel-doc-status">${has ? 'Enviado ✓' : 'Não enviado'}</span>
+      ${viewBtn}${uploadBtn}
+    </div>`;
   };
-  document.getElementById('ptab-docs').innerHTML = `<div class="panel-doc-list">` +
-    Object.entries(DOC_LABELS).map(([k, label]) => {
-      const path = docs[k];
-      const has = !!path;
-      const viewBtn = has ? `<a href="${SB_URL}/storage/v1/object/admissao-docs/${path}" target="_blank" style="color:var(--blue);font-size:12px;font-weight:600;text-decoration:none;">Ver</a>` : '';
-      return `<div class="panel-doc-item ${has?'has-file':''}">
-        <span class="panel-doc-name">${label}</span>
-        <span class="panel-doc-status">${has ? 'Enviado ✓' : 'Não enviado'}</span>
-        ${viewBtn}
-      </div>`;
-    }).join('') + `</div>`;
+
+  const candRows = DOC_CAND.filter(d => !d.depOnly || hasDeps).map(d => docRow(d.key, d.label, false)).join('');
+  const rhRows = docRow('exame_admissional', 'Exame Admissional', true);
+
+  document.getElementById('ptab-docs').innerHTML = `
+    <div class="panel-doc-list">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);padding:4px 0 6px;">Enviados pelo Colaborador</div>
+      ${candRows}
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);padding:12px 0 6px;">Anexados pelo RH</div>
+      ${rhRows}
+    </div>`;
+}
+
+async function panelUploadDoc(key, input) {
+  const file = input.files[0];
+  if (!file || !currentFicha) return;
+  const token = currentConvite?.token || currentFicha?.token;
+  if (!token) return alert('Token não encontrado.');
+  const ext = file.name.split('.').pop().toLowerCase();
+  const path = `${token}/${key}.${ext}`;
+  const res = await fetch(`${SB_URL}/storage/v1/object/admissao-docs/${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${SB_KEY}`, 'Content-Type': file.type, 'x-upsert': 'true' },
+    body: file
+  });
+  if (!res.ok) { alert('Erro ao enviar arquivo.'); return; }
+  const newDocs = { ...(currentFicha.docs || {}), [key]: path };
+  await fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${currentFicha.id}`, {
+    method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ docs: newDocs })
+  });
+  currentFicha.docs = newDocs;
+  renderPanelDocs(currentFicha);
 }
 
 // ─── Efetivar ────────────────────────────────────────────
@@ -1188,7 +1231,8 @@ function gerarPDFFicha(f, c, dadosAdm = {}) {
     foto3x4:'Foto 3x4', rg_frente:'RG', cpf_doc:'CPF',
     titulo:'Título de Eleitor', ctps:'CTPS', pis_doc:'PIS/PASEP', cnh_doc:'CNH',
     comp_res:'Comprovante de Residência', cert_nasc:'Certidão de Nascimento/Casamento',
-    cert_dep:'Certidão dos Dependentes'
+    cert_dep:'Certidão dos Dependentes', cart_vacina:'Carteira de Vacinação',
+    exame_admissional:'Exame Admissional'
   };
   const docs = f.docs || {};
   const docsHtml = Object.entries(DOC_LABELS).map(([k, label]) => {
