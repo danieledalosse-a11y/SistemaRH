@@ -1414,7 +1414,7 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 
   const docMap = Object.fromEntries(docEntries.map(e => [e.k, e]));
 
-  const renderDocItem = ({ k, label, b64 }) => {
+  const renderDocItem = ({ k, label, b64 }, skipBreak = false) => {
     const cfg = DOC_CONFIG[k] || {};
     if (cfg.foto) {
       return `<div style="grid-column:span 1;border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:10px;background:#fafafa;">
@@ -1422,8 +1422,8 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
         <img src="${b64}" style="max-height:200px;max-width:160px;object-fit:contain;display:block;">
       </div>`;
     }
-    // Todos os demais documentos: página inteira
-    return `<div style="grid-column:span 2;page-break-before:always;border:1px solid #ddd;border-radius:6px;overflow:hidden;">
+    const brk = skipBreak ? '' : 'page-break-before:always;';
+    return `<div style="grid-column:span 2;${brk}border:1px solid #ddd;border-radius:6px;overflow:hidden;">
       <div style="background:#f5f5f5;padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;">${label}</div>
       <img src="${b64}" style="width:100%;height:265mm;object-fit:contain;background:#fafafa;display:block;">
     </div>`;
@@ -1444,7 +1444,7 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const faltantesColab = buildFaltantes(BLOCO_COLAB);
 
   const hasDeps = deps.length > 0;
-  const gridDepCertidoes = certDepEntries.filter(e => e.b64).map(renderDocItem).join('');
+  const gridDepCertidoes = certDepEntries.filter(e => e.b64).map((e, i) => renderDocItem(e, i === 0)).join('');
   const gridDepVacina = cartVacinaEntry?.b64 ? renderDocItem(cartVacinaEntry) : '';
   const gridDep = gridDepCertidoes + gridDepVacina;
 
@@ -1570,7 +1570,7 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
       ${gridColab || '<div style="grid-column:span 2;color:#aaa;font-size:10px;">Nenhum documento enviado.</div>'}
     </div>
     ${hasDeps && gridDep ? `
-    ${st('Documentos dos Dependentes')}
+    <div style="page-break-before:always;">${st('Documentos dos Dependentes')}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
       ${gridDep}
     </div>` : ''}
