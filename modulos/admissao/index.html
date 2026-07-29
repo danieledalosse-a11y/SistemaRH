@@ -1278,7 +1278,8 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
       </div>`;
   }).join('');
 
-  const row = (label, val) => val ? `<tr><td class="lbl">${label}</td><td>${val}</td></tr>` : '';
+  const cel = (label, val) => `<div class="c"><div class="cl">${label}</div><div class="cv">${val||'—'}</div></div>`;
+  const depStr = d => [d.nome, d.tipo, d.cpf?'CPF: '+d.cpf:'', d.nascimento?'Nasc.: '+d.nascimento.split('-').reverse().join('/'):'', d.cidade_nascimento?'Cidade: '+d.cidade_nascimento:''].filter(Boolean).join(' · ');
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -1286,142 +1287,110 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 <meta charset="UTF-8">
 <title>Ficha de Admissão — ${f.nome || c.nome_candidato || ''}</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; background: #fff; }
-  .page { max-width: 740px; margin: 0 auto; padding: 28px 32px; }
-  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; margin-bottom: 20px; }
-  .header-title { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-  .header-sub { font-size: 11px; color: #555; margin-top: 2px; }
-  .header-meta { text-align: right; font-size: 10px; color: #666; }
-  .section { margin-bottom: 18px; }
-  .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #fff; background: #1a1a1a; padding: 4px 10px; margin-bottom: 0; }
-  table { width: 100%; border-collapse: collapse; }
-  td { padding: 5px 10px; border: 1px solid #e0e0e0; vertical-align: top; }
-  .lbl { font-weight: 600; color: #555; width: 38%; background: #f9fafb; }
-  .two-col td { width: 50%; }
-  .registro-box { border: 2px solid #1a1a1a; border-radius: 4px; margin-bottom: 22px; overflow: hidden; }
-  .registro-box-title { background: #1a1a1a; color: #fff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 6px 12px; }
-  .registro-grid { display: grid; grid-template-columns: 1fr 1fr; }
-  .registro-item { padding: 7px 12px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; }
-  .registro-item:nth-child(even) { border-right: none; }
-  .registro-item:nth-last-child(-n+2) { border-bottom: none; }
-  .registro-item-full { grid-column: 1 / -1; border-right: none; padding: 7px 12px; border-bottom: 1px solid #e0e0e0; }
-  .registro-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 2px; }
-  .registro-value { font-size: 12px; font-weight: 600; color: #1a1a1a; }
-  .doc-page { page-break-before: always; padding: 20px 0; }
-  .doc-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #fff; background: #1a1a1a; padding: 4px 10px; margin-bottom: 12px; }
-  .doc-img { max-width: 100%; max-height: 85vh; display: block; margin: 0 auto; object-fit: contain; }
-  .print-btn { display: block; margin: 18px auto 0; padding: 10px 32px; background: #1a1a1a; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: Arial; }
-  @media print {
-    .print-btn { display: none; }
-    body { font-size: 10px; }
-    .page { padding: 0; }
-    .doc-img { max-height: 100vh; }
-  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:8.5px;color:#1a1a1a;background:#fff}
+  .page{max-width:760px;margin:0 auto;padding:20px 24px}
+  /* Cabeçalho */
+  .hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #1a1a1a;padding-bottom:8px;margin-bottom:10px}
+  .hd-title{font-size:14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+  .hd-sub{font-size:8px;color:#555;margin-top:1px}
+  .hd-meta{text-align:right;font-size:8px;color:#666}
+  /* Box de registro */
+  .reg{border:1.5px solid #1a1a1a;border-radius:3px;margin-bottom:10px;overflow:hidden}
+  .reg-title{background:#1a1a1a;color:#fff;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 10px}
+  .reg-grid{display:grid;grid-template-columns:repeat(4,1fr)}
+  .reg-item{padding:4px 8px;border-bottom:1px solid #e0e0e0;border-right:1px solid #e0e0e0}
+  .reg-item:nth-child(4n){border-right:none}
+  .reg-item.full{grid-column:1/-1;border-right:none}
+  .reg-item.half{grid-column:span 2}
+  .rl{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:1px}
+  .rv{font-size:9px;font-weight:700;color:#1a1a1a}
+  /* Seções de dados */
+  .sec{margin-bottom:8px}
+  .st{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#fff;background:#444;padding:3px 8px;margin-bottom:0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #e0e0e0;border-top:none}
+  .grid.g3{grid-template-columns:1fr 1fr 1fr}
+  .c{padding:3px 8px;border-bottom:1px solid #eee;border-right:1px solid #eee}
+  .c:nth-child(2n){border-right:none}
+  .g3 .c:nth-child(2n){border-right:1px solid #eee}
+  .g3 .c:nth-child(3n){border-right:none}
+  .c.full{grid-column:1/-1;border-right:none}
+  .cl{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888;margin-bottom:1px}
+  .cv{font-size:8.5px;color:#1a1a1a}
+  /* Docs */
+  .doc-page{page-break-before:always;padding:16px 0}
+  .doc-label{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#fff;background:#1a1a1a;padding:3px 10px;margin-bottom:10px}
+  .doc-img{max-width:100%;max-height:86vh;display:block;margin:0 auto;object-fit:contain}
+  .print-btn{display:block;margin:14px auto 0;padding:8px 28px;background:#1a1a1a;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;font-family:Arial}
+  @media print{.print-btn{display:none}.page{padding:0}.doc-img{max-height:100vh}}
 </style>
 </head>
 <body>
 <div class="page">
-  <div class="header">
+
+  <div class="hd">
     <div>
-      <div class="header-title">Grupo Revest</div>
-      <div class="header-sub">Ficha de Admissão — Documentação para Registro</div>
+      <div class="hd-title">Grupo Revest</div>
+      <div class="hd-sub">Ficha de Admissão — Documentação para Registro</div>
     </div>
-    <div class="header-meta">
-      Gerado em: ${new Date().toLocaleDateString('pt-BR')}<br>
-      Responsável: RH
-    </div>
+    <div class="hd-meta">Gerado em: ${new Date().toLocaleDateString('pt-BR')} · RH</div>
   </div>
 
-  <div class="registro-box">
-    <div class="registro-box-title">Dados para registro</div>
-    <div class="registro-grid">
-      <div class="registro-item-full">
-        <div class="registro-label">Empresa</div>
-        <div class="registro-value">${esc(dadosAdm.empresa||'—')}</div>
-      </div>
-      <div class="registro-item">
-        <div class="registro-label">Data de admissão</div>
-        <div class="registro-value">${dadosAdm.data ? fmtDateBR(dadosAdm.data) : '—'}</div>
-      </div>
-      <div class="registro-item">
-        <div class="registro-label">Departamento</div>
-        <div class="registro-value">${esc(dadosAdm.departamento||'—')}</div>
-      </div>
-      <div class="registro-item">
-        <div class="registro-label">Cargo</div>
-        <div class="registro-value">${esc(dadosAdm.cargo||'—')}</div>
-      </div>
-      <div class="registro-item">
-        <div class="registro-label">Salário</div>
-        <div class="registro-value">${esc(dadosAdm.salario||'—')}</div>
-      </div>
-      <div class="registro-item">
-        <div class="registro-label">Contrato</div>
-        <div class="registro-value">${esc(dadosAdm.contrato||'—')}</div>
-      </div>
-      <div class="registro-item">
-        <div class="registro-label">Carga horária</div>
-        <div class="registro-value">${esc(dadosAdm.carga||'—')}</div>
-      </div>
+  <div class="reg">
+    <div class="reg-title">Dados para Registro</div>
+    <div class="reg-grid">
+      <div class="reg-item full"><div class="rl">Empresa</div><div class="rv">${esc(dadosAdm.empresa||'—')}</div></div>
+      <div class="reg-item half"><div class="rl">Data de Admissão</div><div class="rv">${dadosAdm.data ? fmtDateBR(dadosAdm.data) : '—'}</div></div>
+      <div class="reg-item half"><div class="rl">Departamento</div><div class="rv">${esc(dadosAdm.departamento||'—')}</div></div>
+      <div class="reg-item half"><div class="rl">Cargo</div><div class="rv">${esc(dadosAdm.cargo||'—')}</div></div>
+      <div class="reg-item half"><div class="rl">Salário</div><div class="rv">${esc(dadosAdm.salario||'—')}</div></div>
+      <div class="reg-item half"><div class="rl">Contrato</div><div class="rv">${esc(dadosAdm.contrato||'—')}</div></div>
+      <div class="reg-item half"><div class="rl">Carga Horária</div><div class="rv">${esc(dadosAdm.carga||'—')}</div></div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-title">Dados Pessoais</div>
-    <table>
-      ${row('Nome completo', f.nome)}
-      ${row('Data de nascimento', fmtDateBR(f.nascimento))}
-      ${row('Sexo', f.sexo)}
-      ${row('Nacionalidade', f.nacionalidade)}
-      ${row('Naturalidade', f.naturalidade)}
-      ${row('Estado civil', f.estado_civil)}
-      ${row('CPF', f.cpf)}
-      ${row('RG / Órgão / Data', [f.rg, f.rg_orgao, fmtDateBR(f.rg_data)].filter(Boolean).join(' / '))}
-      ${row('PIS/PASEP', f.pis)}
-      ${row('CTPS nº / Série', [f.ctps_numero, f.ctps_serie].filter(Boolean).join(' / '))}
-      ${row('Título Eleitor / Zona / Seção', [f.titulo_eleitor, f.titulo_zona, f.titulo_secao].filter(Boolean).join(' / '))}
-      ${row('CNH nº / Categoria', f.cnh_numero ? [f.cnh_numero, f.cnh_categoria].filter(Boolean).join(' / ') : '')}
-      ${row('CNH 1ª Habilitação / Emissão / Validade', f.cnh_numero ? [fmtDateBR(f.cnh_primeira_hab), fmtDateBR(f.cnh_emissao), fmtDateBR(f.cnh_validade)].filter(Boolean).join(' / ') : '')}
-      ${row('Escolaridade', f.escolaridade)}
-      ${row('Cor/Raça', f.cor_raca)}
-    </table>
+  <div class="sec">
+    <div class="st">Dados Pessoais</div>
+    <div class="grid">
+      <div class="c full"><div class="cl">Nome Completo</div><div class="cv">${esc(f.nome||'—')}</div></div>
+      ${cel('Data de Nascimento', fmtDateBR(f.nascimento))}
+      ${cel('Sexo', f.sexo)}
+      ${cel('Nacionalidade', f.nacionalidade)}
+      ${cel('Naturalidade', f.naturalidade)}
+      ${cel('CPF', f.cpf)}
+      ${cel('RG / Órgão / Data', [f.rg, f.rg_orgao, fmtDateBR(f.rg_data)].filter(Boolean).join(' / '))}
+      ${cel('PIS/PASEP', f.pis)}
+      ${cel('CTPS nº / Série', [f.ctps_numero, f.ctps_serie].filter(Boolean).join(' / '))}
+      ${cel('Título / Zona / Seção', [f.titulo_eleitor||'Não Possui', f.titulo_zona, f.titulo_secao].filter(Boolean).join(' / '))}
+      ${cel('CNH nº / Categoria', f.cnh_numero ? [f.cnh_numero, f.cnh_categoria].filter(Boolean).join(' / ') : 'Não Possui')}
+      ${cel('Escolaridade', f.escolaridade)} ${cel('Cor/Raça', f.cor_raca)}
+    </div>
   </div>
 
-  <div class="section">
-    <div class="section-title">Endereço e Contato</div>
-    <table>
-      ${row('Endereço', f.endereco)}
-      ${row('CEP / Cidade / UF', [f.cep, f.cidade, f.uf].filter(Boolean).join(' / '))}
-      ${row('Celular', f.celular)}
-      ${row('Tel. recado', f.tel_recado ? `${f.tel_recado} (${f.tel_recado_nome||''})` : '')}
-      ${row('E-mail', f.email)}
-    </table>
+  <div class="sec">
+    <div class="st">Endereço e Contato</div>
+    <div class="grid">
+      <div class="c full"><div class="cl">Endereço</div><div class="cv">${esc(f.endereco||'—')}${f.cep?' — CEP: '+f.cep:''} ${f.cidade||''} ${f.uf?'/'+f.uf:''}</div></div>
+      ${cel('Celular', f.celular)}
+      ${cel('Tel. Recado', f.tel_recado ? f.tel_recado+' ('+f.tel_recado_nome+')' : '')}
+      <div class="c full"><div class="cl">E-mail</div><div class="cv">${esc(f.email||'—')}</div></div>
+    </div>
   </div>
 
-  <div class="section">
-    <div class="section-title">Filiação e Família</div>
-    <table>
-      ${row('Nome do Pai', f.nome_pai)}
-      ${row('Nome da Mãe', f.nome_mae)}
-      ${row('Estado Civil', f.estado_civil)}
-      ${f.data_casamento ? row('Data do Casamento', fmtDateBR(f.data_casamento)) : ''}
-      ${f.conjuge_nome ? row('Cônjuge', f.conjuge_nome) : ''}
-      ${f.conjuge_cpf  ? row('CPF do Cônjuge', f.conjuge_cpf) : ''}
-      ${f.conjuge_rg   ? row('RG do Cônjuge', f.conjuge_rg) : ''}
-      ${f.conjuge_nascimento ? row('Nasc. do Cônjuge', fmtDateBR(f.conjuge_nascimento)) : ''}
-      ${(Array.isArray(f.dependentes) && f.dependentes.length) ? f.dependentes.map((d,i) => row(`Dependente ${i+1}`, [d.nome, d.tipo, d.cpf?'CPF: '+d.cpf:'', d.nascimento?'Nasc.: '+d.nascimento.split('-').reverse().join('/'):'', d.cidade_nascimento?'Cidade: '+d.cidade_nascimento:''].filter(Boolean).join(' — '))).join('') : ''}
-    </table>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Dados Bancários e Benefícios</div>
-    <table>
-      ${row('Banco', f.banco)}
-      ${row('Agência / Conta', [f.agencia, f.conta].filter(Boolean).join(' / '))}
-      ${row('Vale Transporte', f.vale_transporte ? 'Sim' : 'Não')}
-      ${row('Primeiro Emprego', f.primeiro_emprego ? 'Sim' : 'Não')}
-    </table>
+  <div class="sec">
+    <div class="st">Filiação, Família e Dados Bancários</div>
+    <div class="grid">
+      ${cel('Nome do Pai', f.nome_pai)}
+      ${cel('Nome da Mãe', f.nome_mae)}
+      ${cel('Estado Civil', f.estado_civil)}
+      ${f.data_casamento ? cel('Data do Casamento', fmtDateBR(f.data_casamento)) : ''}
+      ${f.conjuge_nome ? `<div class="c full"><div class="cl">Cônjuge</div><div class="cv">${esc(f.conjuge_nome)} — CPF: ${esc(f.conjuge_cpf||'—')} — RG: ${esc(f.conjuge_rg||'—')} — Nasc.: ${fmtDateBR(f.conjuge_nascimento)}</div></div>` : ''}
+      ${(Array.isArray(f.dependentes) && f.dependentes.length) ? f.dependentes.map((d,i) => `<div class="c full"><div class="cl">Dependente ${i+1}</div><div class="cv">${esc(depStr(d))}</div></div>`).join('') : ''}
+      ${cel('Banco', f.banco)}
+      ${cel('Agência / Conta', [f.agencia, f.conta].filter(Boolean).join(' / '))}
+      ${cel('Vale Transporte', f.vale_transporte ? 'Sim' : 'Não')}
+      ${cel('Primeiro Emprego', f.primeiro_emprego ? 'Sim' : 'Não')}
+    </div>
   </div>
 
   ${docsHtml}
