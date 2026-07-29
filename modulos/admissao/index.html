@@ -1444,9 +1444,29 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const faltantesColab = buildFaltantes(BLOCO_COLAB);
 
   const hasDeps = deps.length > 0;
-  const gridDepCertidoes = certDepEntries.filter(e => e.b64).map((e, i) => renderDocItem(e, i === 0)).join('');
-  const gridDepVacina = cartVacinaEntry?.b64 ? renderDocItem(cartVacinaEntry) : '';
-  const gridDep = gridDepCertidoes + gridDepVacina;
+
+  // Monta seção de documentos dos dependentes com título integrado ao primeiro item
+  const renderDepSection = () => {
+    const all = [...certDepEntries.filter(e => e.b64), ...(cartVacinaEntry?.b64 ? [cartVacinaEntry] : [])];
+    if (!all.length) return '';
+    return all.map((e, i) => {
+      const sectionTitle = i === 0
+        ? `<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+            <div style="width:3px;height:12px;background:#E8A800;border-radius:2px;flex-shrink:0;"></div>
+            <div style="font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#374151;">Documentos dos Dependentes</div>
+            <div style="flex:1;height:1px;background:#e5e7eb;"></div>
+           </div>` : '';
+      const imgH = i === 0 ? '248mm' : '265mm';
+      return `<div style="grid-column:span 2;page-break-before:always;">
+        ${sectionTitle}
+        <div style="border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;">
+          <div style="background:#1a1a1a;padding:6px 12px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#E8A800;">${e.label}</div>
+          <img src="${e.b64}" style="width:100%;height:${imgH};object-fit:contain;background:#fff;display:block;">
+        </div>
+      </div>`;
+    }).join('');
+  };
+  const gridDep = hasDeps ? renderDepSection() : '';
 
   const st = (txt) => `<div style="display:flex;align-items:center;gap:8px;margin:18px 0 8px;">
     <div style="width:3px;height:14px;background:#E8A800;border-radius:2px;flex-shrink:0;"></div>
@@ -1600,13 +1620,7 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       ${gridColab || '<div style="grid-column:span 2;color:#aaa;font-size:10px;padding:20px;text-align:center;">Nenhum documento enviado.</div>'}
     </div>
-    ${hasDeps && gridDep ? `
-    <div style="page-break-before:always;">
-      ${cabecalho(nomeColaborador, 'Documentos dos Dependentes')}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        ${gridDep}
-      </div>
-    </div>` : ''}
+    ${hasDeps && gridDep ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">${gridDep}</div>` : ''}
   </div>
 
 </div>
