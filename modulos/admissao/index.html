@@ -1503,22 +1503,15 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 
   const nomeColaborador = esc(f.nome || c.nome_candidato || '');
 
-  // Cabeçalho da seção de documentos — com foto da colaboradora
-  const docPageId = `<div style="background:#1a1a1a;border-radius:4px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-    <div style="display:flex;align-items:center;gap:9px;">
-      <div style="width:24px;height:24px;background:#E8A800;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#1a1a1a;flex-shrink:0;">R</div>
-      <div>
-        <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff;line-height:1.2;">Grupo Revest</div>
-        <div style="font-size:7.5px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#E8A800;">Documentos — Ficha de Admissão</div>
-      </div>
+  // Faixa de identificação mínima para páginas de documentos
+  const docPageId = `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;margin-bottom:10px;border-bottom:2px solid #1a1a1a;">
+    <div style="display:flex;align-items:center;gap:7px;">
+      <div style="width:16px;height:16px;background:#E8A800;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#1a1a1a;">R</div>
+      <span style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1a1a1a;">Grupo Revest</span>
+      <span style="color:#ccc;">·</span>
+      <span style="font-size:8px;color:#555;">Ficha de Admissão</span>
     </div>
-    <div style="display:flex;align-items:center;gap:12px;">
-      <div style="text-align:right;">
-        <div style="font-size:9px;font-weight:700;color:#fff;">${nomeColaborador}</div>
-        <div style="font-size:7.5px;color:#9ca3af;margin-top:2px;">${dataHora} · Recursos Humanos</div>
-      </div>
-      ${fotoB64 ? `<img src="${fotoB64}" style="height:72px;width:auto;border-radius:3px;border:2px solid #E8A800;object-fit:cover;flex-shrink:0;">` : ''}
-    </div>
+    <span style="font-size:8px;color:#888;">${nomeColaborador}</span>
   </div>`;
 
   const html = `<!DOCTYPE html>
@@ -1562,17 +1555,29 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 
   ${cabecalho(nomeColaborador, 'Ficha de Admissão', true)}
 
-  <!-- Dados para Registro -->
+  <!-- Dados para Registro com foto à esquerda -->
   <div class="reg">
     <div class="reg-head"><div class="reg-head-dot"></div><div class="reg-head-title">Dados para Registro</div></div>
-    <div class="reg-grid">
-      <div class="ri full"><div class="rl">Empresa / Unidade</div><div class="rv">${esc(dadosAdm.empresa||'—')}</div></div>
-      <div class="ri"><div class="rl">Data de Admissão</div><div class="rv">${dadosAdm.data ? fmtDateBR(dadosAdm.data) : '—'}</div></div>
-      <div class="ri"><div class="rl">Departamento</div><div class="rv">${esc(dadosAdm.departamento||'—')}</div></div>
-      <div class="ri"><div class="rl">Cargo</div><div class="rv">${esc(dadosAdm.cargo||'—')}</div></div>
-      <div class="ri"><div class="rl">Salário</div><div class="rv">${esc(dadosAdm.salario||'—')}</div></div>
-      <div class="ri"><div class="rl">Tipo de Contrato</div><div class="rv">${esc(dadosAdm.contrato||'—')}</div></div>
-      <div class="ri"><div class="rl">Carga Horária</div><div class="rv">${esc(dadosAdm.carga||'—')}</div></div>
+    <div style="display:flex;background:#fff;">
+      <!-- Foto -->
+      <div style="width:110px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 8px;border-right:1px solid #f1f1f1;background:#fafafa;">
+        ${fotoB64
+          ? `<img src="${fotoB64}" style="width:88px;height:110px;object-fit:cover;border-radius:3px;border:1px solid #e5e7eb;display:block;">`
+          : `<div style="width:88px;height:110px;background:#f3f4f6;border-radius:3px;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:9px;">Sem foto</div>`}
+        <div style="font-size:6.5px;color:#9ca3af;margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Foto 3×4</div>
+      </div>
+      <!-- Dados -->
+      <div style="flex:1;min-width:0;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;">
+          <div class="ri full" style="grid-column:1/-1;background:#fffbeb;border-bottom:1px solid #fde68a;"><div class="rl">Empresa / Unidade</div><div class="rv">${esc(dadosAdm.empresa||'—')}</div></div>
+          <div class="ri"><div class="rl">Data de Admissão</div><div class="rv">${dadosAdm.data ? fmtDateBR(dadosAdm.data) : '—'}</div></div>
+          <div class="ri"><div class="rl">Departamento</div><div class="rv">${esc(dadosAdm.departamento||'—')}</div></div>
+          <div class="ri" style="border-right:none;"><div class="rl">Cargo</div><div class="rv">${esc(dadosAdm.cargo||'—')}</div></div>
+          <div class="ri"><div class="rl">Salário</div><div class="rv">${esc(dadosAdm.salario||'—')}</div></div>
+          <div class="ri"><div class="rl">Tipo de Contrato</div><div class="rv">${esc(dadosAdm.contrato||'—')}</div></div>
+          <div class="ri" style="border-right:none;border-bottom:none;"><div class="rl">Carga Horária</div><div class="rv">${esc(dadosAdm.carga||'—')}</div></div>
+        </div>
+      </div>
     </div>
   </div>
 
