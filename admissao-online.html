@@ -526,6 +526,7 @@ function buildDepRow(i, d) {
     <div class="form-group"><label class="form-label">Tipo</label><select class="form-control dep-tipo"><option value="">Selecione</option>${tipoOpts}</select></div>
     <div class="form-group dep-cpf"><label class="form-label">CPF</label><input class="form-control dep-cpfval" type="text" value="${d.cpf||''}" placeholder="000.000.000-00"></div>
     <div class="form-group"><label class="form-label">Data de Nascimento</label><input class="form-control date-mask dep-nascimento" type="text" inputmode="numeric" value="${d.nascimento ? d.nascimento.split('-').reverse().join('/') : ''}" placeholder="DD/MM/AAAA" maxlength="10"></div>
+    <div class="form-group"><label class="form-label">Cidade de Nascimento</label><input class="form-control dep-cidade-nasc" type="text" value="${d.cidade_nascimento||''}" placeholder="Ex: São Paulo - SP"></div>
     <button class="btn-rem" data-dep="${i}">✕</button>
   </div>`;
 }
@@ -817,7 +818,7 @@ function bindStepEvents() {
     if (e.target.value === 'sim') {
       sec.style.display = '';
       if (list && list.children.length === 0) {
-        formData.dependentes.push({ nome:'', tipo:'', cpf:'', nascimento:'' });
+        formData.dependentes.push({ nome:'', tipo:'', cpf:'', nascimento:'', cidade_nascimento:'' });
         list.insertAdjacentHTML('beforeend', buildDepRow(0, {}));
         bindDepEvents();
         bindDateMasks();
@@ -830,7 +831,7 @@ function bindStepEvents() {
 
   const btnAddDep = document.getElementById('btnAddDep');
   if (btnAddDep) btnAddDep.addEventListener('click', () => {
-    formData.dependentes.push({ nome:'', tipo:'', cpf:'', nascimento:'' });
+    formData.dependentes.push({ nome:'', tipo:'', cpf:'', nascimento:'', cidade_nascimento:'' });
     document.getElementById('depList').insertAdjacentHTML('beforeend', buildDepRow(formData.dependentes.length - 1, {}));
     bindDepEvents();
     bindDateMasks();
@@ -914,6 +915,7 @@ function saveCurrentStep() {
       const t = row.querySelector('.dep-tipo'); if (t) formData.dependentes[i].tipo = t.value;
       const c = row.querySelector('.dep-cpfval'); if (c) formData.dependentes[i].cpf = c.value;
       const nasc = row.querySelector('.dep-nascimento'); if (nasc) formData.dependentes[i].nascimento = parseDateBR(nasc.value);
+      const cn = row.querySelector('.dep-cidade-nasc'); if (cn) formData.dependentes[i].cidade_nascimento = cn.value;
     });
   } else if (currentStep === 3) {
     ['escolaridade','cor_raca','banco','agencia','conta','hobby']
