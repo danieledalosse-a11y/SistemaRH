@@ -198,6 +198,35 @@
   .empty p { font-size: 14px; }
   .loading { text-align: center; padding: 40px; color: var(--text-ter); font-size: 14px; }
 
+  /* ── Users Panel ── */
+  .users-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .users-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 14px; }
+  .user-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; display: flex; align-items: center; gap: 14px; transition: box-shadow 0.15s, border-color 0.15s; position: relative; }
+  .user-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: #c8d0db; }
+  .user-card.inativo { opacity: 0.55; }
+  .user-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: #fff; flex-shrink: 0; letter-spacing: .03em; }
+  .user-info { flex: 1; min-width: 0; }
+  .user-nome { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .user-cargo-label { font-size: 12px; color: var(--text-sec); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .user-email-label { font-size: 11.5px; color: var(--text-ter); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .user-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+  .badge-perfil { font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: .05em; }
+  .badge-perfil.admin  { background: #ede9fe; color: #6d28d9; }
+  .badge-perfil.rh     { background: var(--blue-bg); color: var(--blue); }
+  .badge-perfil.gestor { background: var(--amber-bg); color: var(--amber); }
+  .user-edit-btn { position: absolute; bottom: 14px; right: 14px; }
+
+  /* Modal usuarios */
+  .modulos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+  .modulo-check { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: border-color 0.12s, background 0.12s; font-size: 13px; color: var(--text-sec); font-weight: 500; }
+  .modulo-check:has(input:checked) { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); font-weight: 600; }
+  .modulo-check input { accent-color: var(--blue); width: 15px; height: 15px; flex-shrink: 0; }
+  .modulo-check.disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .sql-box { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 14px 16px; font-family: monospace; font-size: 12px; line-height: 1.65; overflow-x: auto; margin-top: 8px; position: relative; white-space: pre; }
+  .sql-copy-btn { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.1); border: none; color: #94a3b8; border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+  .sql-copy-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
   /* Toast */
   .toast { position: fixed; bottom: 28px; right: 28px; background: var(--accent); color: #fff; padding: 13px 22px; border-radius: 10px; font-size: 14px; font-weight: 500; z-index: 200; opacity: 0; transform: translateY(10px); transition: all 0.2s; pointer-events: none; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
   .toast.show { opacity: 1; transform: translateY(0); }
@@ -301,6 +330,34 @@
       </div>
     </div>
 
+    <!-- Painel de usuários -->
+    <div id="usersPanel" style="display:none">
+      <div class="page-header">
+        <div class="page-title">Usuários</div>
+      </div>
+      <div id="sqlBanner" style="display:none;background:var(--amber-bg);border:1px solid #fcd34d;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+        <div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:6px;">Execute o SQL abaixo no Supabase Dashboard para habilitar campos de e-mail, cargo e acesso por módulo</div>
+        <div style="position:relative">
+          <div class="sql-box">ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS cargo TEXT;
+ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAULT '[]';</div>
+          <button class="sql-copy-btn" onclick="copiarSql()" style="position:absolute;top:10px;right:10px;">Copiar</button>
+        </div>
+        <div style="font-size:12px;color:var(--amber);margin-top:8px;">Acesse <b>supabase.com → projeto → SQL Editor</b>, cole e clique em Run. Depois recarregue esta página.</div>
+      </div>
+      <div class="users-toolbar">
+        <div class="search-box" style="min-width:280px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;stroke:var(--text-ter)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="userSearchInput" placeholder="Buscar usuário..." oninput="filtrarUsers()" style="border:none;outline:none;font-family:inherit;font-size:14px;color:var(--text);background:transparent;width:100%">
+        </div>
+        <button class="btn btn-primary" onclick="abrirUserModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo Usuário
+        </button>
+      </div>
+      <div id="usersGrid" class="users-grid"></div>
+    </div>
+
   </main>
 </div>
 
@@ -334,6 +391,75 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Modal Usuário -->
+<div class="overlay" id="userOverlay" onclick="fecharUserModalOutside(event)">
+  <div class="modal" style="width:540px">
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <div class="modal-title" id="userModalTitle">Novo Usuário</div>
+        <div id="userModalStatus"></div>
+      </div>
+      <button class="modal-close" onclick="fecharUserModal()" title="Fechar">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="field-row" style="grid-template-columns:2fr 1fr">
+      <div class="field">
+        <label>Nome completo *</label>
+        <input type="text" id="uNome" placeholder="Ex: Daniele Dalosse">
+      </div>
+      <div class="field">
+        <label>Perfil *</label>
+        <select id="uPerfil" onchange="perfilChanged()">
+          <option value="rh">RH</option>
+          <option value="gestor">Gestor</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row" style="grid-template-columns:1fr 1fr">
+      <div class="field">
+        <label>E-mail de acesso</label>
+        <input type="email" id="uEmail" placeholder="email@empresa.com">
+      </div>
+      <div class="field">
+        <label>Cargo</label>
+        <input type="text" id="uCargo" placeholder="Ex: Analista de RH">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Módulos com acesso</label>
+      <div class="modulos-grid" id="modulosGrid"></div>
+    </div>
+
+    <!-- Instruções para nova conta -->
+    <div id="userNewInstructions" style="display:none;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:4px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text-sec);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Próximo passo — Criar conta de acesso</div>
+      <div style="font-size:13px;color:var(--text-sec);line-height:1.6;">
+        O registro foi salvo. Para que o usuário consiga fazer login, crie a conta de autenticação no Supabase:<br>
+        <b>Authentication → Users → Add user</b> com o e-mail informado e senha padrão <code style="background:#e2e8f0;padding:1px 6px;border-radius:4px;font-size:12px">Revest@2026</code>.
+      </div>
+      <div style="margin-top:10px">
+        <div style="font-size:11.5px;font-weight:700;color:var(--text-sec);margin-bottom:4px;">Ou use o script Python local:</div>
+        <div style="position:relative">
+          <div class="sql-box" id="userPyScript"></div>
+          <button class="sql-copy-btn" onclick="copiarPyScript()">Copiar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <div style="margin-right:auto;display:flex;gap:8px;">
+        <button class="btn btn-danger btn-sm" id="userBtnToggle" style="display:none" onclick="toggleUserAtivoModal()"></button>
+      </div>
+      <button class="btn btn-outline" onclick="fecharUserModal()">Cancelar</button>
+      <button class="btn btn-primary" id="userBtnSalvar" onclick="salvarUser()">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm dialog -->
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-box">
@@ -352,7 +478,7 @@
 <script>
 const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
 const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
-const SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+let SB_HEADERS = {};
 
 const CBO_DATA = [{"codigo":"1210-05","titulo":"Diretor geral de empresa","grupo":"Diretores"},{"codigo":"1211-05","titulo":"Diretor financeiro","grupo":"Diretores"},{"codigo":"1212-05","titulo":"Diretor de recursos humanos","grupo":"Diretores"},{"codigo":"1213-05","titulo":"Diretor de marketing","grupo":"Diretores"},{"codigo":"1231-05","titulo":"Gerente administrativo","grupo":"Gerentes Administrativos"},{"codigo":"1231-10","titulo":"Gerente de riscos","grupo":"Gerentes Administrativos"},{"codigo":"1231-20","titulo":"Gerente financeiro","grupo":"Gerentes Administrativos"},{"codigo":"1231-25","titulo":"Gerente de patrimônio","grupo":"Gerentes Administrativos"},{"codigo":"1232-05","titulo":"Gerente de recursos humanos","grupo":"Gerentes Administrativos"},{"codigo":"1233-05","titulo":"Gerente de compras","grupo":"Gerentes de Comércio"},{"codigo":"1234-05","titulo":"Gerente de vendas","grupo":"Gerentes de Comércio"},{"codigo":"1235-05","titulo":"Gerente de marketing","grupo":"Gerentes de Comércio"},{"codigo":"1236-05","titulo":"Gerente de tecnologia da informação","grupo":"Gerentes de TI"},{"codigo":"1237-05","titulo":"Gerente de projetos","grupo":"Gerentes de TI"},{"codigo":"1311-05","titulo":"Diretor administrativo e financeiro","grupo":"Diretores"},{"codigo":"1312-05","titulo":"Diretor administrativo","grupo":"Diretores"},{"codigo":"1317-05","titulo":"Gerente comercial","grupo":"Gerentes Comerciais"},{"codigo":"1317-10","titulo":"Gerente de loja","grupo":"Gerentes Comerciais"},{"codigo":"1317-15","titulo":"Gerente de vendas no varejo","grupo":"Gerentes Comerciais"},{"codigo":"1317-20","titulo":"Gerente de pós-vendas","grupo":"Gerentes Comerciais"},{"codigo":"1421-05","titulo":"Gerente comercial (serviços)","grupo":"Gerentes de Serviços"},{"codigo":"1421-10","titulo":"Gerente de atendimento","grupo":"Gerentes de Serviços"},{"codigo":"1421-15","titulo":"Gerente de compras (serviços)","grupo":"Gerentes de Serviços"},{"codigo":"1421-20","titulo":"Gerente de e-commerce","grupo":"Gerentes de Serviços"},{"codigo":"1422-05","titulo":"Gerente de produto","grupo":"Gerentes de Serviços"},{"codigo":"1227-05","titulo":"Gerente de comunicação","grupo":"Gerentes de Marketing"},{"codigo":"1227-10","titulo":"Gerente de publicidade","grupo":"Gerentes de Marketing"},{"codigo":"1227-15","titulo":"Gerente de marketing","grupo":"Gerentes de Marketing"},{"codigo":"1228-05","titulo":"Gerente de transporte","grupo":"Gerentes de Logística"},{"codigo":"1228-10","titulo":"Gerente de logística e distribuição","grupo":"Gerentes de Logística"},{"codigo":"1228-15","titulo":"Gerente de armazenagem","grupo":"Gerentes de Logística"},{"codigo":"2122-05","titulo":"Analista de tecnologia da informação","grupo":"Profissionais de TI"},{"codigo":"2122-10","titulo":"Desenvolvedor de sistemas","grupo":"Profissionais de TI"},{"codigo":"2122-15","titulo":"Analista de desenvolvimento de sistemas","grupo":"Profissionais de TI"},{"codigo":"2122-20","titulo":"Desenvolvedor web","grupo":"Profissionais de TI"},{"codigo":"2122-25","titulo":"Desenvolvedor de aplicativos","grupo":"Profissionais de TI"},{"codigo":"2123-05","titulo":"Administrador de banco de dados","grupo":"Profissionais de TI"},{"codigo":"2124-05","titulo":"Analista de sistemas (desenvolvimento)","grupo":"Profissionais de TI"},{"codigo":"2124-10","titulo":"Analista de sistemas (suporte)","grupo":"Profissionais de TI"},{"codigo":"2124-15","titulo":"Analista de redes e comunicação","grupo":"Profissionais de TI"},{"codigo":"2124-20","titulo":"Analista de segurança da informação","grupo":"Profissionais de TI"},{"codigo":"2124-25","titulo":"Analista de qualidade de TI","grupo":"Profissionais de TI"},{"codigo":"2124-30","titulo":"Programador de sistemas","grupo":"Profissionais de TI"},{"codigo":"2131-05","titulo":"Arquiteto de edificações","grupo":"Arquitetos e Designers"},{"codigo":"2131-10","titulo":"Arquiteto de interiores","grupo":"Arquitetos e Designers"},{"codigo":"2393-05","titulo":"Designer de produto","grupo":"Arquitetos e Designers"},{"codigo":"2393-10","titulo":"Designer de moda","grupo":"Arquitetos e Designers"},{"codigo":"2393-15","titulo":"Designer de interiores","grupo":"Arquitetos e Designers"},{"codigo":"2393-20","titulo":"Designer de embalagem","grupo":"Arquitetos e Designers"},{"codigo":"2393-25","titulo":"Designer gráfico","grupo":"Arquitetos e Designers"},{"codigo":"2393-30","titulo":"Web designer","grupo":"Arquitetos e Designers"},{"codigo":"2394-05","titulo":"Fotógrafo","grupo":"Arquitetos e Designers"},{"codigo":"2312-05","titulo":"Analista de publicidade e marketing","grupo":"Profissionais de Marketing"},{"codigo":"2312-10","titulo":"Analista de pesquisa de mercado","grupo":"Profissionais de Marketing"},{"codigo":"2312-15","titulo":"Analista de mídias sociais","grupo":"Profissionais de Marketing"},{"codigo":"2411-05","titulo":"Auditor","grupo":"Contabilidade e Finanças"},{"codigo":"2411-10","titulo":"Auditor interno","grupo":"Contabilidade e Finanças"},{"codigo":"2421-05","titulo":"Contador","grupo":"Contabilidade e Finanças"},{"codigo":"2421-10","titulo":"Analista contábil","grupo":"Contabilidade e Finanças"},{"codigo":"2422-05","titulo":"Economista","grupo":"Contabilidade e Finanças"},{"codigo":"2521-05","titulo":"Analista de recursos humanos e de pessoal","grupo":"Profissionais de RH"},{"codigo":"2521-10","titulo":"Analista de treinamento e desenvolvimento","grupo":"Profissionais de RH"},{"codigo":"2521-15","titulo":"Analista de cargos e salários","grupo":"Profissionais de RH"},{"codigo":"2521-20","titulo":"Analista de recrutamento e seleção","grupo":"Profissionais de RH"},{"codigo":"2521-25","titulo":"Analista de benefícios","grupo":"Profissionais de RH"},{"codigo":"2521-30","titulo":"Analista de departamento pessoal","grupo":"Profissionais de RH"},{"codigo":"2522-05","titulo":"Analista de organização e métodos","grupo":"Profissionais de RH"},{"codigo":"2531-05","titulo":"Analista de relações trabalhistas","grupo":"Profissionais de RH"},{"codigo":"2543-05","titulo":"Psicólogo","grupo":"Profissionais de RH"},{"codigo":"2543-15","titulo":"Psicólogo organizacional","grupo":"Profissionais de RH"},{"codigo":"3172-05","titulo":"Técnico de redes","grupo":"Técnicos de TI"},{"codigo":"3172-10","titulo":"Técnico de hardware","grupo":"Técnicos de TI"},{"codigo":"3172-15","titulo":"Técnico de suporte em tecnologia da informação","grupo":"Técnicos de TI"},{"codigo":"3172-20","titulo":"Analista de helpdesk","grupo":"Técnicos de TI"},{"codigo":"3172-25","titulo":"Suporte técnico de informática","grupo":"Técnicos de TI"},{"codigo":"3311-05","titulo":"Técnico contábil","grupo":"Técnicos Administrativos"},{"codigo":"3411-05","titulo":"Técnico em secretariado","grupo":"Técnicos Administrativos"},{"codigo":"3411-10","titulo":"Secretário executivo","grupo":"Técnicos Administrativos"},{"codigo":"3513-05","titulo":"Assistente financeiro","grupo":"Financeiro"},{"codigo":"3513-10","titulo":"Analista financeiro","grupo":"Financeiro"},{"codigo":"3513-15","titulo":"Auxiliar de cobrança sênior","grupo":"Financeiro"},{"codigo":"3514-05","titulo":"Analista de custos","grupo":"Financeiro"},{"codigo":"3514-10","titulo":"Analista orçamentário","grupo":"Financeiro"},{"codigo":"3511-05","titulo":"Analista de compras","grupo":"Compras e Suprimentos"},{"codigo":"3511-10","titulo":"Auxiliar de compras","grupo":"Compras e Suprimentos"},{"codigo":"3511-15","titulo":"Assistente de suprimentos","grupo":"Compras e Suprimentos"},{"codigo":"3541-05","titulo":"Vendedor de comércio varejista","grupo":"Vendas e Atendimento"},{"codigo":"3541-10","titulo":"Promotor de vendas","grupo":"Vendas e Atendimento"},{"codigo":"3541-15","titulo":"Representante comercial","grupo":"Vendas e Atendimento"},{"codigo":"3541-20","titulo":"Vendedor de serviços","grupo":"Vendas e Atendimento"},{"codigo":"3541-25","titulo":"Vendedor técnico","grupo":"Vendas e Atendimento"},{"codigo":"3543-05","titulo":"Consultor de vendas","grupo":"Vendas e Atendimento"},{"codigo":"4214-25","titulo":"Atendente de lojas e mercados","grupo":"Vendas e Atendimento"},{"codigo":"4214-30","titulo":"Assistente de e-commerce","grupo":"Vendas e Atendimento"},{"codigo":"4214-35","titulo":"Analista de e-commerce","grupo":"Vendas e Atendimento"},{"codigo":"3941-05","titulo":"Desenhista técnico","grupo":"Projetos"},{"codigo":"3941-10","titulo":"Desenhista projetista","grupo":"Projetos"},{"codigo":"3942-05","titulo":"Projetista de produtos e serviços","grupo":"Projetos"},{"codigo":"3942-10","titulo":"Projetista de móveis","grupo":"Projetos"},{"codigo":"3942-15","titulo":"Projetista de interiores","grupo":"Projetos"},{"codigo":"4101-05","titulo":"Supervisor administrativo","grupo":"Administrativo"},{"codigo":"4101-10","titulo":"Supervisor de almoxarifado","grupo":"Administrativo"},{"codigo":"4110-05","titulo":"Assistente administrativo","grupo":"Administrativo"},{"codigo":"4110-10","titulo":"Auxiliar administrativo","grupo":"Administrativo"},{"codigo":"4141-05","titulo":"Almoxarife","grupo":"Logística e Expedição"},{"codigo":"4141-10","titulo":"Auxiliar de logística","grupo":"Logística e Expedição"},{"codigo":"4141-15","titulo":"Assistente de estoque","grupo":"Logística e Expedição"},{"codigo":"4141-20","titulo":"Auxiliar de expedição","grupo":"Logística e Expedição"},{"codigo":"4141-25","titulo":"Conferente-expedidor","grupo":"Logística e Expedição"},{"codigo":"4141-30","titulo":"Operador de recebimento","grupo":"Logística e Expedição"},{"codigo":"4142-05","titulo":"Operador de empilhadeira","grupo":"Logística e Expedição"},{"codigo":"4142-10","titulo":"Movimentador de mercadorias","grupo":"Logística e Expedição"},{"codigo":"4151-05","titulo":"Auxiliar de departamento pessoal","grupo":"RH Operacional"},{"codigo":"4151-10","titulo":"Auxiliar de recrutamento e seleção","grupo":"RH Operacional"},{"codigo":"4152-05","titulo":"Auxiliar de cálculo de folha de pagamento","grupo":"RH Operacional"},{"codigo":"4211-25","titulo":"Caixa de loja","grupo":"Financeiro"},{"codigo":"4212-05","titulo":"Cobrador","grupo":"Financeiro"},{"codigo":"4213-05","titulo":"Auxiliar de cobrança","grupo":"Financeiro"},{"codigo":"4213-10","titulo":"Analista de crédito","grupo":"Financeiro"},{"codigo":"4213-15","titulo":"Auxiliar de crédito","grupo":"Financeiro"},{"codigo":"4214-05","titulo":"Operador de caixa","grupo":"Financeiro"},{"codigo":"5211-25","titulo":"Operador de caixa de supermercado","grupo":"Financeiro"},{"codigo":"4222-05","titulo":"Recepcionista","grupo":"Atendimento"},{"codigo":"4223-05","titulo":"Telefonista","grupo":"Atendimento"},{"codigo":"4231-10","titulo":"Auxiliar de escritório","grupo":"Administrativo"},{"codigo":"4241-05","titulo":"Faturista","grupo":"Administrativo"},{"codigo":"7824-05","titulo":"Carregador (veículos de transportes terrestres)","grupo":"Transporte"},{"codigo":"7824-25","titulo":"Ajudante de motorista","grupo":"Transporte"},{"codigo":"7825-05","titulo":"Motorista de veículo leve (CNH B)","grupo":"Transporte"},{"codigo":"7825-10","titulo":"Motorista de veículo pesado (CNH C)","grupo":"Transporte"},{"codigo":"7825-15","titulo":"Motorista de carga a granel (CNH C/E)","grupo":"Transporte"},{"codigo":"7825-20","titulo":"Motorista de ônibus (CNH D)","grupo":"Transporte"},{"codigo":"7825-25","titulo":"Motorista carreteiro (CNH E)","grupo":"Transporte"},{"codigo":"7826-05","titulo":"Motociclista de entregas (CNH A)","grupo":"Transporte"},{"codigo":"7826-10","titulo":"Entregador de mercadorias","grupo":"Transporte"},{"codigo":"9101-05","titulo":"Auxiliar de manutenção geral","grupo":"Manutenção"},{"codigo":"9101-10","titulo":"Técnico de manutenção","grupo":"Manutenção"},{"codigo":"9111-05","titulo":"Mecânico de automóveis","grupo":"Manutenção"},{"codigo":"9141-05","titulo":"Eletricista de automóveis","grupo":"Manutenção"},{"codigo":"9512-05","titulo":"Técnico em refrigeração","grupo":"Manutenção"},{"codigo":"9513-05","titulo":"Técnico em eletrônica","grupo":"Manutenção"},{"codigo":"5142-05","titulo":"Faxineiro","grupo":"Limpeza e Conservação"},{"codigo":"5142-10","titulo":"Auxiliar de serviços gerais","grupo":"Limpeza e Conservação"},{"codigo":"5142-25","titulo":"Porteiro de edifícios","grupo":"Limpeza e Conservação"},{"codigo":"5142-30","titulo":"Vigia","grupo":"Limpeza e Conservação"},{"codigo":"5142-35","titulo":"Zelador de edifícios","grupo":"Limpeza e Conservação"},{"codigo":"5173-10","titulo":"Vigilante","grupo":"Segurança"},{"codigo":"9919-05","titulo":"Ajudante de serviços gerais","grupo":"Serviços Gerais"},{"codigo":"9919-10","titulo":"Servente","grupo":"Serviços Gerais"},{"codigo":"9919-15","titulo":"Auxiliar geral de serviços","grupo":"Serviços Gerais"},{"codigo":"7101-05","titulo":"Mestre de obras","grupo":"Construção Civil"},{"codigo":"7111-05","titulo":"Pedreiro","grupo":"Construção Civil"},{"codigo":"7152-10","titulo":"Azulejista","grupo":"Construção Civil"},{"codigo":"7153-05","titulo":"Pintor de obras","grupo":"Construção Civil"},{"codigo":"7154-05","titulo":"Gesseiro","grupo":"Construção Civil"},{"codigo":"7155-05","titulo":"Instalador de revestimentos","grupo":"Construção Civil"},{"codigo":"7163-05","titulo":"Eletricista de instalações","grupo":"Construção Civil"},{"codigo":"7170-05","titulo":"Encanador","grupo":"Construção Civil"},{"codigo":"2211-05","titulo":"Médico clínico","grupo":"Saúde"},{"codigo":"2231-05","titulo":"Enfermeiro","grupo":"Saúde"},{"codigo":"2251-05","titulo":"Nutricionista","grupo":"Saúde"},{"codigo":"2263-05","titulo":"Fisioterapeuta","grupo":"Saúde"},{"codigo":"5162-10","titulo":"Cuidador de idosos","grupo":"Saúde"},{"codigo":"2141-05","titulo":"Engenheiro civil","grupo":"Engenharia"},{"codigo":"2143-05","titulo":"Engenheiro eletricista","grupo":"Engenharia"},{"codigo":"2145-05","titulo":"Engenheiro mecânico","grupo":"Engenharia"},{"codigo":"2147-05","titulo":"Engenheiro de produção","grupo":"Engenharia"},{"codigo":"2149-15","titulo":"Engenheiro de segurança do trabalho","grupo":"Engenharia"},{"codigo":"2149-20","titulo":"Engenheiro ambiental","grupo":"Engenharia"},{"codigo":"3251-05","titulo":"Técnico de segurança do trabalho","grupo":"Engenharia"},{"codigo":"2410-05","titulo":"Advogado","grupo":"Direito"},{"codigo":"2410-10","titulo":"Advogado trabalhista","grupo":"Direito"},{"codigo":"2410-15","titulo":"Advogado tributarista","grupo":"Direito"}];
 
@@ -711,6 +837,22 @@ function renderSidebar() {
     });
     html += `</div></div>`;
   });
+  // Grupo admin-only: Acesso ao Sistema
+  const _p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  if (_p.perfil === 'admin') {
+    html += `<div class="sidebar-group">
+      <div class="sidebar-group-header" onclick="toggleSidebarGroup(this)">
+        <span class="sidebar-group-header-label">Acesso ao Sistema</span>
+        <svg class="chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="sidebar-group-items">
+        <div class="sidebar-item" data-cat="usuarios" onclick="selectCat(this)">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Usuários
+        </div>
+      </div>
+    </div>`;
+  }
   html += `</div>`;
   nav.innerHTML = html;
 }
@@ -765,6 +907,7 @@ function selectCatByKey(key) {
 function mostrarVazio() {
   document.getElementById('emptyState').style.display = '';
   document.getElementById('mainPanel').style.display = 'none';
+  document.getElementById('usersPanel').style.display = 'none';
 }
 
 function selectCat(el) {
@@ -774,6 +917,15 @@ function selectCat(el) {
   if (group) group.classList.remove('collapsed');
   currentCat = el.dataset.cat;
   document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('mainPanel').style.display = 'none';
+  document.getElementById('usersPanel').style.display = 'none';
+
+  if (currentCat === 'usuarios') {
+    document.getElementById('usersPanel').style.display = '';
+    carregarUsers();
+    return;
+  }
+
   document.getElementById('mainPanel').style.display = '';
   const btnNovo = document.getElementById('btnNovo');
   if (btnNovo) btnNovo.style.display = currentCat === 'cbo' ? 'none' : '';
@@ -1265,6 +1417,253 @@ function fmtDate(iso) {
   return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
+// ─── Módulo Usuários ──────────────────────────────────────────────────────────
+const MODULOS_SISTEMA = [
+  { key: 'cadastro',   label: 'Cadastro' },
+  { key: 'ferias',     label: 'Férias' },
+  { key: 'admissao',   label: 'Admissão Online' },
+  { key: 'parametros', label: 'Parâmetros' },
+];
+
+const PERFIL_ACESSO_PADRAO = {
+  admin:  ['cadastro', 'ferias', 'admissao', 'parametros'],
+  rh:     ['cadastro', 'ferias', 'admissao'],
+  gestor: ['ferias'],
+};
+
+const AVATAR_COLORS = {
+  admin:  '#6d28d9',
+  rh:     '#1d4ed8',
+  gestor: '#b45309',
+};
+
+let allUsers = [];
+let editingUserId = null;
+let _temColunaExtra = null; // null = não testado ainda
+
+async function testarColunaExtra() {
+  if (_temColunaExtra !== null) return _temColunaExtra;
+  try {
+    const r = await sbGet('usuarios_perfil', 'select=email&limit=1');
+    _temColunaExtra = true;
+  } catch(_) {
+    _temColunaExtra = false;
+  }
+  return _temColunaExtra;
+}
+
+async function carregarUsers() {
+  document.getElementById('usersGrid').innerHTML = '<div class="loading">Carregando usuários...</div>';
+  const temExtra = await testarColunaExtra();
+  document.getElementById('sqlBanner').style.display = temExtra ? 'none' : '';
+  try {
+    const cols = temExtra ? 'select=*' : 'select=id,user_id,nome,perfil,ativo,created_at';
+    allUsers = await sbGet('usuarios_perfil', cols + '&order=nome');
+    renderUsers(allUsers);
+  } catch(e) {
+    document.getElementById('usersGrid').innerHTML = `<div class="empty"><p style="color:var(--red)">Erro ao carregar: ${e.message}</p></div>`;
+  }
+}
+
+function filtrarUsers() {
+  const q = (document.getElementById('userSearchInput')?.value || '').toLowerCase();
+  const filtered = q ? allUsers.filter(u =>
+    (u.nome || '').toLowerCase().includes(q) ||
+    (u.email || '').toLowerCase().includes(q) ||
+    (u.cargo || '').toLowerCase().includes(q) ||
+    (u.perfil || '').toLowerCase().includes(q)
+  ) : allUsers;
+  renderUsers(filtered);
+}
+
+function renderUsers(users) {
+  const grid = document.getElementById('usersGrid');
+  if (!users.length) {
+    grid.innerHTML = '<div class="empty"><p>Nenhum usuário encontrado.</p></div>';
+    return;
+  }
+  const perfisLabel = { admin: 'Administrador', rh: 'RH', gestor: 'Gestor' };
+  grid.innerHTML = users.map(u => {
+    const iniciais = (u.nome || 'US').split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+    const cor = AVATAR_COLORS[u.perfil] || '#64748b';
+    const perfilLabel = perfisLabel[u.perfil] || u.perfil || '—';
+    const badgeAtivo = u.ativo
+      ? `<span class="badge badge-ativo" style="font-size:10px">Ativo</span>`
+      : `<span class="badge badge-inativo" style="font-size:10px">Inativo</span>`;
+    return `<div class="user-card ${u.ativo ? '' : 'inativo'}">
+      <div class="user-avatar" style="background:${cor}">${iniciais}</div>
+      <div class="user-info">
+        <div class="user-nome">${u.nome || '—'}</div>
+        ${u.cargo ? `<div class="user-cargo-label">${u.cargo}</div>` : ''}
+        ${u.email ? `<div class="user-email-label">${u.email}</div>` : ''}
+      </div>
+      <div class="user-badges">
+        <span class="badge-perfil ${u.perfil}">${perfilLabel}</span>
+        ${badgeAtivo}
+      </div>
+      <button class="btn-icon user-edit-btn" onclick="abrirUserModal(${u.id})" title="Editar usuário">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function renderModulosGrid(acessoAtual) {
+  const perfil = document.getElementById('uPerfil').value;
+  const acesso = acessoAtual || PERFIL_ACESSO_PADRAO[perfil] || [];
+  const isAdmin = perfil === 'admin';
+  document.getElementById('modulosGrid').innerHTML = MODULOS_SISTEMA.map(m => {
+    const checked = acesso.includes(m.key);
+    const disabled = isAdmin && m.key === 'parametros';
+    return `<label class="modulo-check ${disabled ? 'disabled' : ''}">
+      <input type="checkbox" value="${m.key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} onchange="syncModulosAdmin()">
+      ${m.label}
+    </label>`;
+  }).join('');
+}
+
+function syncModulosAdmin() {
+  // Se admin, parametros sempre marcado
+  if (document.getElementById('uPerfil').value === 'admin') {
+    const cb = document.querySelector('.modulos-grid input[value="parametros"]');
+    if (cb) cb.checked = true;
+  }
+}
+
+function perfilChanged() {
+  renderModulosGrid(null);
+}
+
+function getModulosSelecionados() {
+  return [...document.querySelectorAll('#modulosGrid input[type=checkbox]:checked')].map(c => c.value);
+}
+
+function abrirUserModal(id) {
+  editingUserId = id || null;
+  const user = id ? allUsers.find(u => u.id === id) : null;
+  document.getElementById('userModalTitle').textContent = user ? (user.nome || 'Usuário') : 'Novo Usuário';
+  document.getElementById('userModalStatus').innerHTML = user
+    ? (user.ativo ? '<span class="badge badge-ativo">Ativo</span>' : '<span class="badge badge-inativo">Inativo</span>')
+    : '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">Novo usuário</span>';
+
+  document.getElementById('uNome').value   = user?.nome   || '';
+  document.getElementById('uEmail').value  = user?.email  || '';
+  document.getElementById('uCargo').value  = user?.cargo  || '';
+  document.getElementById('uPerfil').value = user?.perfil || 'rh';
+  document.getElementById('uEmail').readOnly = !!user; // email só editável na criação
+
+  const btnToggle = document.getElementById('userBtnToggle');
+  if (user) {
+    btnToggle.style.display = '';
+    btnToggle.textContent = user.ativo ? 'Inativar' : 'Ativar';
+    btnToggle.style.background = user.ativo ? 'var(--red-bg)' : 'var(--green-bg)';
+    btnToggle.style.color = user.ativo ? 'var(--red)' : 'var(--green)';
+    btnToggle.style.borderColor = user.ativo ? '#FECDCA' : '#A9DFC4';
+  } else {
+    btnToggle.style.display = 'none';
+  }
+
+  document.getElementById('userNewInstructions').style.display = 'none';
+  document.getElementById('userBtnSalvar').style.display = '';
+  renderModulosGrid(user?.acesso_modulos || null);
+  document.getElementById('userOverlay').classList.add('open');
+}
+
+function fecharUserModal() {
+  document.getElementById('userOverlay').classList.remove('open');
+  editingUserId = null;
+}
+
+function fecharUserModalOutside(e) {
+  if (e.target === document.getElementById('userOverlay')) fecharUserModal();
+}
+
+async function salvarUser() {
+  const nome   = document.getElementById('uNome').value.trim();
+  const email  = document.getElementById('uEmail').value.trim();
+  const cargo  = document.getElementById('uCargo').value.trim();
+  const perfil = document.getElementById('uPerfil').value;
+  const acesso = getModulosSelecionados();
+  const _nome = nomeUsuario();
+
+  if (!nome) { showToast('Nome é obrigatório.', 'error'); return; }
+
+  const temExtra = await testarColunaExtra();
+  const body = temExtra
+    ? { nome, email: email || null, cargo: cargo || null, perfil, acesso_modulos: acesso, alterado_por: _nome, updated_at: new Date().toISOString() }
+    : { nome, perfil, alterado_por: _nome, updated_at: new Date().toISOString() };
+
+  try {
+    if (editingUserId) {
+      await sbPatch('usuarios_perfil', editingUserId, body);
+      showToast('Usuário atualizado!', 'success');
+      fecharUserModal();
+      carregarUsers();
+    } else {
+      const novo = { ...body, ativo: true, criado_por: _nome };
+      delete novo.alterado_por;
+      delete novo.updated_at;
+      const res = await sbPost('usuarios_perfil', novo);
+      const novoId = Array.isArray(res) ? res[0]?.id : res?.id;
+      // Mostrar instruções para criar conta de autenticação
+      document.getElementById('userBtnSalvar').style.display = 'none';
+      document.getElementById('userBtnToggle').style.display = 'none';
+      document.getElementById('userNewInstructions').style.display = '';
+      const pyScript = `python3 -c "
+import urllib.request, json
+SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co'
+SB_SECRET = 'SEU_SERVICE_KEY'  # Chave secreta — nunca no browser
+data = json.dumps({'email': '${email || 'email@empresa.com'}', 'password': 'Revest@2026', 'email_confirm': True}).encode()
+req = urllib.request.Request(SB_URL+'/auth/v1/admin/users', data=data,
+  headers={'apikey': SB_SECRET, 'Authorization': 'Bearer '+SB_SECRET, 'Content-Type': 'application/json'}, method='POST')
+with urllib.request.urlopen(req) as r: print('OK:', json.loads(r.read())['id'])
+"`;
+      document.getElementById('userPyScript').textContent = pyScript;
+      showToast('Usuário criado com sucesso!', 'success');
+      carregarUsers();
+    }
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+async function toggleUserAtivoModal() {
+  if (!editingUserId) return;
+  const user = allUsers.find(u => u.id === editingUserId);
+  if (!user) return;
+  const inativando = user.ativo;
+  const ok = await confirmar(inativando ? {
+    titulo: 'Inativar usuário?',
+    mensagem: `Tem certeza que deseja inativar "${user.nome}"? O usuário não conseguirá acessar o sistema.`,
+    confirmarLabel: 'Sim, inativar',
+    tipo: 'danger',
+  } : {
+    titulo: 'Reativar usuário?',
+    mensagem: `Deseja reativar "${user.nome}"?`,
+    confirmarLabel: 'Sim, reativar',
+    tipo: 'info',
+  });
+  if (!ok) return;
+  try {
+    await sbPatch('usuarios_perfil', editingUserId, { ativo: !user.ativo, alterado_por: nomeUsuario(), updated_at: new Date().toISOString() });
+    showToast(inativando ? 'Usuário inativado.' : 'Usuário reativado!', 'success');
+    fecharUserModal();
+    carregarUsers();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+function copiarSql() {
+  const sql = `ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS email TEXT;\nALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS cargo TEXT;\nALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAULT '[]';`;
+  navigator.clipboard.writeText(sql).then(() => showToast('SQL copiado!', 'success'));
+}
+
+function copiarPyScript() {
+  const txt = document.getElementById('userPyScript').textContent;
+  navigator.clipboard.writeText(txt).then(() => showToast('Script copiado!', 'success'));
+}
+
 // Auth
 (function() {
   const sess = localStorage.getItem('sb_session');
@@ -1273,6 +1672,7 @@ function fmtDate(iso) {
   try {
     const s = JSON.parse(sess);
     if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
     const p = perf ? JSON.parse(perf) : {};
     if (p.perfil !== 'admin') { window.location.href = '../../index.html'; return; }
     document.getElementById('userName').textContent = (p.nome || '').split(' ')[0];
