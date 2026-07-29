@@ -1023,9 +1023,19 @@ function renderPanelDocs(f) {
     { key:'titulo',     label:'Título de Eleitor',                     req: false },
     { key:'pis_doc',    label:'PIS/PASEP',                             req: false },
     { key:'cnh_doc',    label:'CNH',                                   req: false },
-    { key:'cert_dep',   label:'Certidão dos Dependentes',              req: false, depOnly: true },
     { key:'cart_vacina',label:'Carteira de Vacinação (dep. < 6 anos)', req: false, depOnly: true },
   ];
+
+  // Gerar linhas de certidão individuais por dependente
+  const depsDocs = Array.isArray(f.dependentes) ? f.dependentes : [];
+  const certDepRows = hasDeps ? depsDocs.map((dep, i) => {
+    const k = `cert_dep_${i}`;
+    // compatibilidade: primeiro dep pode ter chave antiga 'cert_dep'
+    const pathLegado = i === 0 && docs['cert_dep'] && !docs[k] ? docs['cert_dep'] : null;
+    if (pathLegado) docs[k] = pathLegado; // migra chave antiga para nova no objeto local
+    const nome = dep.nome || `Dependente ${i + 1}`;
+    return docRow(k, `Certidão — ${nome}`, false, false);
+  }).join('') : '';
 
   const icoEye = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
   const icoUpload = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
@@ -1048,7 +1058,7 @@ function renderPanelDocs(f) {
     </div>`;
   };
 
-  const candRows = DOC_CAND.filter(d => !d.depOnly || hasDeps).map(d => docRow(d.key, d.label, d.req, false)).join('');
+  const candRows = DOC_CAND.filter(d => !d.depOnly || hasDeps).map(d => docRow(d.key, d.label, d.req, false)).join('') + certDepRows;
   const rhRows = docRow('exame_admissional', 'Exame Admissional', false, true);
 
   document.getElementById('ptab-docs').innerHTML = `
@@ -1262,6 +1272,48 @@ async function confirmarGerarPDF() {
 }
 
 // ─── Gerar PDF ────────────────────────────────────────────
+
+// Lê orientação EXIF de um JPEG (retorna 1-8; 1 = normal)
+function lerExifOrientacao(buf) {
+  try {
+    const v = new DataView(buf);
+    if (v.getUint16(0, false) !== 0xFFD8) return 1;
+    let off = 2;
+    while (off < v.byteLength) {
+      const marker = v.getUint16(off, false); off += 2;
+      if (marker === 0xFFE1) {
+        if (v.getUint32(off + 2, false) !== 0x45786966) return 1;
+        const le = v.getUint16(off + 10, false) === 0x4949;
+        const ifd = v.getUint32(off + 14, le) + off + 10;
+        const n = v.getUint16(ifd, le);
+        for (let i = 0; i < n; i++) {
+          if (v.getUint16(ifd + 2 + i * 12, le) === 0x0112)
+            return v.getUint16(ifd + 2 + i * 12 + 8, le);
+        }
+        return 1;
+      }
+      if ((marker & 0xFF00) !== 0xFF00) break;
+      off += v.getUint16(off, false);
+    }
+  } catch(_) {}
+  return 1;
+}
+
+// Desenha imagem no canvas corrigindo a orientação EXIF
+function desenharComOrientacao(canvas, img, ori) {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const girado = ori >= 5;
+  canvas.width  = girado ? h : w;
+  canvas.height = girado ? w : h;
+  const ctx = canvas.getContext('2d');
+  const t = { 1:()=>{}, 2:()=>ctx.transform(-1,0,0,1,w,0), 3:()=>ctx.transform(-1,0,0,-1,w,h),
+               4:()=>ctx.transform(1,0,0,-1,0,h), 5:()=>ctx.transform(0,1,1,0,0,0),
+               6:()=>ctx.transform(0,1,-1,0,h,0), 7:()=>ctx.transform(0,-1,-1,0,h,w),
+               8:()=>ctx.transform(0,-1,1,0,0,w) };
+  (t[ori] || t[1])();
+  ctx.drawImage(img, 0, 0);
+}
+
 async function docUrlToBase64(url) {
   try {
     const res = await fetch(url);
@@ -1279,11 +1331,20 @@ async function docUrlToBase64(url) {
       await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
       return canvas.toDataURL('image/jpeg', 0.85);
     } else {
+      // Imagem: corrige rotação EXIF antes de embutir
+      const arrayBuffer = await blob.arrayBuffer();
+      const ori = lerExifOrientacao(arrayBuffer);
+      const blobUrl = URL.createObjectURL(blob);
       return await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          desenharComOrientacao(canvas, img, ori);
+          URL.revokeObjectURL(blobUrl);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
+        img.src = blobUrl;
       });
     }
   } catch(_) { return null; }
@@ -1327,36 +1388,60 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   // Configuração de layout por documento
   const DOC_CONFIG = {
     foto3x4:           { full: false, foto: true },
-    rg_frente:         { full: false },
-    cpf_doc:           { full: false },
-    pis_doc:           { full: false },
-    titulo:            { full: false },
-    cnh_doc:           { full: false },
-    ctps:              { full: true },
-    comp_res:          { full: true },
-    cert_nasc:         { full: true },
-    exame_admissional: { full: true },
-    cert_dep:          { full: true },
-    cart_vacina:       { full: true },
+    rg_frente:         { full: true,  maxH: '300px' },
+    cpf_doc:           { full: true,  maxH: '300px' },
+    pis_doc:           { full: false, maxH: '280px' },
+    titulo:            { full: false, maxH: '280px' },
+    cnh_doc:           { full: false, maxH: '280px' },
+    ctps:              { full: true,  maxH: '380px' },
+    comp_res:          { full: true,  maxH: '265mm', fullPage: true },
+    cert_nasc:         { full: true,  maxH: '265mm', fullPage: true },
+    exame_admissional: { full: true,  maxH: '400px' },
+    cart_vacina:       { full: true,  maxH: '380px' },
   };
 
-  // Blocos: colaborador e dependentes
+  // Blocos: colaborador e dependentes (certidão por dependente individualmente)
   const BLOCO_COLAB = ['foto3x4','rg_frente','cpf_doc','pis_doc','titulo','cnh_doc','ctps','comp_res','cert_nasc','exame_admissional'];
-  const BLOCO_DEP   = ['cert_dep','cart_vacina'];
   const OBRIGATORIOS = ['foto3x4','rg_frente','cpf_doc','comp_res','ctps','cert_nasc'];
+
+  // Gerar entradas de certidão por dependente (cert_dep_0, cert_dep_1, ...)
+  const deps = Array.isArray(f.dependentes) ? f.dependentes : [];
+  const certDepEntries = await Promise.all(
+    deps.map(async (dep, i) => {
+      const k = `cert_dep_${i}`;
+      const kLegado = i === 0 ? 'cert_dep' : null; // compatibilidade com chave antiga
+      const path = docs[k] || (kLegado ? docs[kLegado] : null);
+      const label = `Certidão — ${dep.nome || ('Dependente ' + (i + 1))}`;
+      if (!path) return { k, label, b64: null };
+      const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
+      const b64 = await docUrlToBase64(url);
+      return { k, label, b64 };
+    })
+  );
+  const cart_vacina_path = docs['cart_vacina'];
+  const cartVacinaEntry = cart_vacina_path
+    ? { k: 'cart_vacina', label: 'Carteira de Vacinação', b64: await docUrlToBase64(`${SB_URL}/storage/v1/object/public/admissao-docs/${cart_vacina_path}`) }
+    : null;
 
   const docMap = Object.fromEntries(docEntries.map(e => [e.k, e]));
 
   const renderDocItem = ({ k, label, b64 }) => {
-    const cfg = DOC_CONFIG[k] || {};
+    const cfg = DOC_CONFIG[k] || { full: true, maxH: '380px' };
+    const isFullPage = cfg.fullPage || k.startsWith('cert_dep_');
     if (cfg.foto) {
       return `<div style="grid-column:span 1;border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:10px;background:#fafafa;">
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;margin-bottom:8px;align-self:flex-start;">${label}</div>
         <img src="${b64}" style="max-height:200px;max-width:160px;object-fit:contain;display:block;">
       </div>`;
     }
+    if (isFullPage) {
+      return `<div style="grid-column:span 2;page-break-before:always;border:1px solid #ddd;border-radius:6px;overflow:hidden;">
+        <div style="background:#f5f5f5;padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;">${label}</div>
+        <img src="${b64}" style="width:100%;display:block;max-height:265mm;object-fit:contain;background:#fafafa;">
+      </div>`;
+    }
     const spanStyle = cfg.full ? 'grid-column:span 2;' : 'grid-column:span 1;';
-    const maxH = cfg.full ? '360px' : '240px';
+    const maxH = cfg.maxH || (cfg.full ? '380px' : '280px');
     return `<div style="${spanStyle}border:1px solid #ddd;border-radius:6px;overflow:hidden;">
       <div style="background:#f5f5f5;padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;">${label}</div>
       <img src="${b64}" style="width:100%;display:block;max-height:${maxH};object-fit:contain;background:#fafafa;">
@@ -1377,8 +1462,10 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const gridColab = buildBloco(BLOCO_COLAB);
   const faltantesColab = buildFaltantes(BLOCO_COLAB);
 
-  const hasDeps = Array.isArray(f.dependentes) && f.dependentes.length > 0;
-  const gridDep = hasDeps ? buildBloco(BLOCO_DEP) : '';
+  const hasDeps = deps.length > 0;
+  const gridDepCertidoes = certDepEntries.filter(e => e.b64).map(renderDocItem).join('');
+  const gridDepVacina = cartVacinaEntry?.b64 ? renderDocItem(cartVacinaEntry) : '';
+  const gridDep = gridDepCertidoes + gridDepVacina;
 
   const st = (txt) => `<div style="font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#fff;background:#444;padding:3px 10px;margin:14px 0 10px;">${txt}</div>`;
 
