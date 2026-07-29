@@ -1278,8 +1278,13 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
       </div>`;
   }).join('');
 
-  const cel = (label, val) => `<div class="c"><div class="cl">${label}</div><div class="cv">${val||'—'}</div></div>`;
+  const row = (label, val) => val ? `<tr><td class="lbl">${label}</td><td>${val}</td></tr>` : '';
   const depStr = d => [d.nome, d.tipo, d.cpf?'CPF: '+d.cpf:'', d.nascimento?'Nasc.: '+d.nascimento.split('-').reverse().join('/'):'', d.cidade_nascimento?'Cidade: '+d.cidade_nascimento:''].filter(Boolean).join(' · ');
+
+  // Página 2 — lista de documentos com links
+  const docsListHtml = docEntries.filter(Boolean).map(({ label, url }) =>
+    `<tr><td class="lbl">${label}</td><td><a href="${url}" target="_blank" style="color:#1d4ed8;">${url}</a></td></tr>`
+  ).join('');
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -1287,42 +1292,35 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 <meta charset="UTF-8">
 <title>Ficha de Admissão — ${f.nome || c.nome_candidato || ''}</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,Helvetica,sans-serif;font-size:8.5px;color:#1a1a1a;background:#fff}
-  .page{max-width:760px;margin:0 auto;padding:20px 24px}
-  /* Cabeçalho */
-  .hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #1a1a1a;padding-bottom:8px;margin-bottom:10px}
-  .hd-title{font-size:14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
-  .hd-sub{font-size:8px;color:#555;margin-top:1px}
-  .hd-meta{text-align:right;font-size:8px;color:#666}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; background: #fff; }
+  .page { max-width: 760px; margin: 0 auto; padding: 24px 30px; }
+  .hd { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1a1a1a; padding-bottom: 10px; margin-bottom: 16px; }
+  .hd-title { font-size: 16px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+  .hd-sub { font-size: 9px; color: #555; margin-top: 2px; }
+  .hd-meta { text-align: right; font-size: 9px; color: #666; }
   /* Box de registro */
-  .reg{border:1.5px solid #1a1a1a;border-radius:3px;margin-bottom:10px;overflow:hidden}
-  .reg-title{background:#1a1a1a;color:#fff;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 10px}
-  .reg-grid{display:grid;grid-template-columns:repeat(4,1fr)}
-  .reg-item{padding:4px 8px;border-bottom:1px solid #e0e0e0;border-right:1px solid #e0e0e0}
-  .reg-item:nth-child(4n){border-right:none}
-  .reg-item.full{grid-column:1/-1;border-right:none}
-  .reg-item.half{grid-column:span 2}
-  .rl{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:1px}
-  .rv{font-size:9px;font-weight:700;color:#1a1a1a}
-  /* Seções de dados */
-  .sec{margin-bottom:8px}
-  .st{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#fff;background:#444;padding:3px 8px;margin-bottom:0}
-  .grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #e0e0e0;border-top:none}
-  .grid.g3{grid-template-columns:1fr 1fr 1fr}
-  .c{padding:3px 8px;border-bottom:1px solid #eee;border-right:1px solid #eee}
-  .c:nth-child(2n){border-right:none}
-  .g3 .c:nth-child(2n){border-right:1px solid #eee}
-  .g3 .c:nth-child(3n){border-right:none}
-  .c.full{grid-column:1/-1;border-right:none}
-  .cl{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888;margin-bottom:1px}
-  .cv{font-size:8.5px;color:#1a1a1a}
-  /* Docs */
-  .doc-page{page-break-before:always;padding:16px 0}
-  .doc-label{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#fff;background:#1a1a1a;padding:3px 10px;margin-bottom:10px}
-  .doc-img{max-width:100%;max-height:86vh;display:block;margin:0 auto;object-fit:contain}
-  .print-btn{display:block;margin:14px auto 0;padding:8px 28px;background:#1a1a1a;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;font-family:Arial}
-  @media print{.print-btn{display:none}.page{padding:0}.doc-img{max-height:100vh}}
+  .reg { border: 2px solid #1a1a1a; border-radius: 3px; margin-bottom: 16px; overflow: hidden; }
+  .reg-title { background: #1a1a1a; color: #fff; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 5px 12px; }
+  .reg-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+  .ri { padding: 6px 12px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; }
+  .ri:nth-child(3n) { border-right: none; }
+  .ri.full { grid-column: 1/-1; border-right: none; }
+  .ri.half { grid-column: span 2; border-right: 1px solid #e0e0e0; }
+  .rl { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #888; margin-bottom: 2px; }
+  .rv { font-size: 11px; font-weight: 700; color: #1a1a1a; }
+  /* Tabelas de dados */
+  .sec { margin-bottom: 12px; }
+  .st { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #fff; background: #444; padding: 4px 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 5px 10px; border: 1px solid #e0e0e0; vertical-align: top; line-height: 1.4; }
+  .lbl { font-weight: 700; color: #555; width: 34%; background: #f9fafb; font-size: 10px; }
+  /* Página 2 */
+  .pg2 { page-break-before: always; padding-top: 24px; }
+  .pg2-title { font-size: 13px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; margin-bottom: 12px; }
+  .pg2 td { font-size: 10px; word-break: break-all; }
+  .print-btn { display: block; margin: 18px auto 0; padding: 9px 30px; background: #1a1a1a; color: #fff; border: none; border-radius: 5px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: Arial; }
+  @media print { .print-btn { display: none; } .page { padding: 0; } }
 </style>
 </head>
 <body>
@@ -1333,67 +1331,77 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
       <div class="hd-title">Grupo Revest</div>
       <div class="hd-sub">Ficha de Admissão — Documentação para Registro</div>
     </div>
-    <div class="hd-meta">Gerado em: ${new Date().toLocaleDateString('pt-BR')} · RH</div>
+    <div class="hd-meta">Gerado em: ${new Date().toLocaleDateString('pt-BR')}<br>RH</div>
   </div>
 
   <div class="reg">
     <div class="reg-title">Dados para Registro</div>
     <div class="reg-grid">
-      <div class="reg-item full"><div class="rl">Empresa</div><div class="rv">${esc(dadosAdm.empresa||'—')}</div></div>
-      <div class="reg-item half"><div class="rl">Data de Admissão</div><div class="rv">${dadosAdm.data ? fmtDateBR(dadosAdm.data) : '—'}</div></div>
-      <div class="reg-item half"><div class="rl">Departamento</div><div class="rv">${esc(dadosAdm.departamento||'—')}</div></div>
-      <div class="reg-item half"><div class="rl">Cargo</div><div class="rv">${esc(dadosAdm.cargo||'—')}</div></div>
-      <div class="reg-item half"><div class="rl">Salário</div><div class="rv">${esc(dadosAdm.salario||'—')}</div></div>
-      <div class="reg-item half"><div class="rl">Contrato</div><div class="rv">${esc(dadosAdm.contrato||'—')}</div></div>
-      <div class="reg-item half"><div class="rl">Carga Horária</div><div class="rv">${esc(dadosAdm.carga||'—')}</div></div>
+      <div class="ri full"><div class="rl">Empresa</div><div class="rv">${esc(dadosAdm.empresa||'—')}</div></div>
+      <div class="ri"><div class="rl">Data de Admissão</div><div class="rv">${dadosAdm.data ? fmtDateBR(dadosAdm.data) : '—'}</div></div>
+      <div class="ri"><div class="rl">Departamento</div><div class="rv">${esc(dadosAdm.departamento||'—')}</div></div>
+      <div class="ri"><div class="rl">Cargo</div><div class="rv">${esc(dadosAdm.cargo||'—')}</div></div>
+      <div class="ri"><div class="rl">Salário</div><div class="rv">${esc(dadosAdm.salario||'—')}</div></div>
+      <div class="ri"><div class="rl">Contrato</div><div class="rv">${esc(dadosAdm.contrato||'—')}</div></div>
+      <div class="ri"><div class="rl">Carga Horária</div><div class="rv">${esc(dadosAdm.carga||'—')}</div></div>
     </div>
   </div>
 
   <div class="sec">
     <div class="st">Dados Pessoais</div>
-    <div class="grid">
-      <div class="c full"><div class="cl">Nome Completo</div><div class="cv">${esc(f.nome||'—')}</div></div>
-      ${cel('Data de Nascimento', fmtDateBR(f.nascimento))}
-      ${cel('Sexo', f.sexo)}
-      ${cel('Nacionalidade', f.nacionalidade)}
-      ${cel('Naturalidade', f.naturalidade)}
-      ${cel('CPF', f.cpf)}
-      ${cel('RG / Órgão / Data', [f.rg, f.rg_orgao, fmtDateBR(f.rg_data)].filter(Boolean).join(' / '))}
-      ${cel('PIS/PASEP', f.pis)}
-      ${cel('CTPS nº / Série', [f.ctps_numero, f.ctps_serie].filter(Boolean).join(' / '))}
-      ${cel('Título / Zona / Seção', [f.titulo_eleitor||'Não Possui', f.titulo_zona, f.titulo_secao].filter(Boolean).join(' / '))}
-      ${cel('CNH nº / Categoria', f.cnh_numero ? [f.cnh_numero, f.cnh_categoria].filter(Boolean).join(' / ') : 'Não Possui')}
-      ${cel('Escolaridade', f.escolaridade)} ${cel('Cor/Raça', f.cor_raca)}
-    </div>
+    <table>
+      ${row('Nome Completo', f.nome)}
+      ${row('Data de Nascimento', fmtDateBR(f.nascimento))}
+      ${row('Sexo', f.sexo)}
+      ${row('Nacionalidade / Naturalidade', [f.nacionalidade, f.naturalidade].filter(Boolean).join(' — '))}
+      ${row('CPF', f.cpf)}
+      ${row('RG / Órgão / Data', [f.rg, f.rg_orgao, fmtDateBR(f.rg_data)].filter(Boolean).join(' / '))}
+      ${row('PIS/PASEP', f.pis)}
+      ${row('CTPS nº / Série', [f.ctps_numero, f.ctps_serie].filter(Boolean).join(' / '))}
+      ${row('Título Eleitor / Zona / Seção', f.titulo_eleitor ? [f.titulo_eleitor, f.titulo_zona, f.titulo_secao].filter(Boolean).join(' / ') : 'Não Possui')}
+      ${row('CNH nº / Categoria', f.cnh_numero ? [f.cnh_numero, f.cnh_categoria].filter(Boolean).join(' / ') : 'Não Possui')}
+      ${row('Escolaridade', f.escolaridade)}
+      ${row('Cor/Raça', f.cor_raca)}
+    </table>
   </div>
 
   <div class="sec">
     <div class="st">Endereço e Contato</div>
-    <div class="grid">
-      <div class="c full"><div class="cl">Endereço</div><div class="cv">${esc(f.endereco||'—')}${f.cep?' — CEP: '+f.cep:''} ${f.cidade||''} ${f.uf?'/'+f.uf:''}</div></div>
-      ${cel('Celular', f.celular)}
-      ${cel('Tel. Recado', f.tel_recado ? f.tel_recado+' ('+f.tel_recado_nome+')' : '')}
-      <div class="c full"><div class="cl">E-mail</div><div class="cv">${esc(f.email||'—')}</div></div>
-    </div>
+    <table>
+      ${row('Endereço', [f.endereco, f.cep ? 'CEP: '+f.cep : '', f.cidade, f.uf].filter(Boolean).join(' — '))}
+      ${row('Celular', f.celular)}
+      ${row('Tel. Recado', f.tel_recado ? f.tel_recado + (f.tel_recado_nome ? ' ('+f.tel_recado_nome+')' : '') : '')}
+      ${row('E-mail', f.email)}
+    </table>
   </div>
 
   <div class="sec">
-    <div class="st">Filiação, Família e Dados Bancários</div>
-    <div class="grid">
-      ${cel('Nome do Pai', f.nome_pai)}
-      ${cel('Nome da Mãe', f.nome_mae)}
-      ${cel('Estado Civil', f.estado_civil)}
-      ${f.data_casamento ? cel('Data do Casamento', fmtDateBR(f.data_casamento)) : ''}
-      ${f.conjuge_nome ? `<div class="c full"><div class="cl">Cônjuge</div><div class="cv">${esc(f.conjuge_nome)} — CPF: ${esc(f.conjuge_cpf||'—')} — RG: ${esc(f.conjuge_rg||'—')} — Nasc.: ${fmtDateBR(f.conjuge_nascimento)}</div></div>` : ''}
-      ${(Array.isArray(f.dependentes) && f.dependentes.length) ? f.dependentes.map((d,i) => `<div class="c full"><div class="cl">Dependente ${i+1}</div><div class="cv">${esc(depStr(d))}</div></div>`).join('') : ''}
-      ${cel('Banco', f.banco)}
-      ${cel('Agência / Conta', [f.agencia, f.conta].filter(Boolean).join(' / '))}
-      ${cel('Vale Transporte', f.vale_transporte ? 'Sim' : 'Não')}
-      ${cel('Primeiro Emprego', f.primeiro_emprego ? 'Sim' : 'Não')}
-    </div>
+    <div class="st">Filiação e Família</div>
+    <table>
+      ${row('Nome do Pai', f.nome_pai)}
+      ${row('Nome da Mãe', f.nome_mae)}
+      ${row('Estado Civil', f.estado_civil)}
+      ${f.data_casamento ? row('Data do Casamento', fmtDateBR(f.data_casamento)) : ''}
+      ${f.conjuge_nome ? row('Cônjuge', [f.conjuge_nome, f.conjuge_cpf?'CPF: '+f.conjuge_cpf:'', f.conjuge_rg?'RG: '+f.conjuge_rg:'', f.conjuge_nascimento?'Nasc.: '+fmtDateBR(f.conjuge_nascimento):''].filter(Boolean).join(' — ')) : ''}
+      ${(Array.isArray(f.dependentes)&&f.dependentes.length) ? f.dependentes.map((d,i) => row('Dependente '+(i+1), depStr(d))).join('') : ''}
+    </table>
   </div>
 
-  ${docsHtml}
+  <div class="sec">
+    <div class="st">Dados Bancários e Benefícios</div>
+    <table>
+      ${row('Banco', f.banco)}
+      ${row('Agência / Conta', [f.agencia, f.conta].filter(Boolean).join(' / '))}
+      ${row('Vale Transporte', f.vale_transporte ? 'Sim' : 'Não')}
+      ${row('Primeiro Emprego', f.primeiro_emprego ? 'Sim' : 'Não')}
+    </table>
+  </div>
+
+  <!-- Página 2: documentos -->
+  <div class="pg2">
+    <div class="pg2-title">Documentos Anexados</div>
+    ${docsListHtml ? `<table>${docsListHtml}</table>` : '<p style="color:#888;font-size:11px;">Nenhum documento anexado.</p>'}
+  </div>
 
   <button class="print-btn" onclick="window.print()">Imprimir / Salvar como PDF</button>
 </div>
