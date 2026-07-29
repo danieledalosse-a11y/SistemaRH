@@ -1442,7 +1442,10 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
     .map(k => `<div style="font-size:10px;color:#b91c1c;margin:2px 0;">&#9888; ${DOC_LABELS[k]} — não enviado</div>`)
     .join('');
 
-  const gridColab = buildBloco(BLOCO_COLAB);
+  // foto vai para o cabeçalho da página de documentos — excluir do bloco
+  const BLOCO_COLAB_DOCS = BLOCO_COLAB.filter(k => k !== 'foto3x4');
+  const fotoB64 = docMap['foto3x4']?.b64 || null;
+  const gridColab = buildBloco(BLOCO_COLAB_DOCS);
   const faltantesColab = buildFaltantes(BLOCO_COLAB);
 
   const hasDeps = deps.length > 0;
@@ -1499,15 +1502,22 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 
   const nomeColaborador = esc(f.nome || c.nome_candidato || '');
 
-  // Faixa de identificação mínima para páginas de documento (sem repetir cabeçalho completo)
-  const docPageId = `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;margin-bottom:8px;border-bottom:2px solid #1a1a1a;">
-    <div style="display:flex;align-items:center;gap:7px;">
-      <div style="width:16px;height:16px;background:#E8A800;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#1a1a1a;">R</div>
-      <span style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1a1a1a;">Grupo Revest</span>
-      <span style="color:#ccc;font-size:8px;">·</span>
-      <span style="font-size:8px;color:#555;">Ficha de Admissão</span>
+  // Cabeçalho da seção de documentos — com foto da colaboradora
+  const docPageId = `<div style="background:#1a1a1a;border-radius:4px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:9px;">
+      <div style="width:24px;height:24px;background:#E8A800;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#1a1a1a;flex-shrink:0;">R</div>
+      <div>
+        <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff;line-height:1.2;">Grupo Revest</div>
+        <div style="font-size:7.5px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#E8A800;">Documentos — Ficha de Admissão</div>
+      </div>
     </div>
-    <span style="font-size:8px;color:#888;">${nomeColaborador}</span>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="text-align:right;">
+        <div style="font-size:9px;font-weight:700;color:#fff;">${nomeColaborador}</div>
+        <div style="font-size:7.5px;color:#9ca3af;margin-top:2px;">${dataHora} · Recursos Humanos</div>
+      </div>
+      ${fotoB64 ? `<img src="${fotoB64}" style="height:72px;width:auto;border-radius:3px;border:2px solid #E8A800;object-fit:cover;flex-shrink:0;">` : ''}
+    </div>
   </div>`;
 
   const html = `<!DOCTYPE html>
@@ -1541,7 +1551,7 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   .val { font-size: 9.5px; color: #111827; font-weight: 500; }
   @media print {
     body { background: #fff; }
-    .page { padding: 0; max-width: 100%; }
+    .page { padding: 0; max-width: 100%; zoom: 1.05; }
     .sec, .reg { border-radius: 0; }
   }
 </style>
