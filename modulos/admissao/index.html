@@ -860,9 +860,9 @@ function fiSel(id, label, val, opts) {
   return `<div class="data-row"><label class="data-label" for="pf_${id}">${label}</label><select class="form-control-sm" id="pf_${id}"><option value=""></option>${options}</select></div>`;
 }
 function fiCheck(id, label, val) {
-  return `<div class="data-row"><span class="data-label">${label}</span><label class="checkbox-row"><input type="checkbox" id="pf_${id}"${val?' checked':''}>${val?'Sim':'Não'}</label></div>`;
+  return `<div class="data-row"><label class="data-label" for="pf_${id}">${label}</label><select class="form-control-sm" id="pf_${id}"><option value="Sim"${val?' selected':''}>Sim</option><option value="Não"${!val?' selected':''}>Não</option></select></div>`;
 }
-function fv(id) { const el = document.getElementById('pf_'+id); if (!el) return ''; if (el.type==='checkbox') return el.checked; return el.value.trim(); }
+function fv(id) { const el = document.getElementById('pf_'+id); if (!el) return ''; if (el.type==='checkbox') return el.checked; if (el.tagName==='SELECT' && (el.id==='pf_vale_transporte'||el.id==='pf_primeiro_emprego')) return el.value==='Sim'; return el.value.trim(); }
 
 function renderPanelPessoal(f) {
   document.getElementById('ptab-pessoal').innerHTML = `
@@ -900,7 +900,17 @@ function renderPanelFamilia(f) {
       ${fi('conjuge_rg','RG Cônjuge',f.conjuge_rg)} ${fi('conjuge_nascimento','Nasc. Cônjuge',f.conjuge_nascimento,'date')}
     </div></div>
     <div class="data-section"><div class="data-section-title">Dependentes</div>
-      ${deps.length ? deps.map(d => `<div style="font-size:13px;padding:6px 0;border-bottom:1px solid var(--border);">${esc(d.nome||'—')} — CPF: ${esc(d.cpf||'—')}${d.cidade_nascimento ? ' — Cidade Nasc.: '+esc(d.cidade_nascimento) : ''}</div>`).join('') : '<p style="font-size:13px;color:var(--text-ter);">Sem dependentes informados.</p>'}
+      ${deps.length ? deps.map((d,i) => `
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Dependente ${i+1}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;font-size:13px;">
+            <div><span style="color:var(--text-ter)">Nome: </span>${esc(d.nome||'—')}</div>
+            <div><span style="color:var(--text-ter)">Tipo: </span>${esc(d.tipo||'—')}</div>
+            <div><span style="color:var(--text-ter)">CPF: </span>${esc(d.cpf||'—')}</div>
+            <div><span style="color:var(--text-ter)">Nascimento: </span>${d.nascimento ? d.nascimento.split('-').reverse().join('/') : '—'}</div>
+            <div style="grid-column:1/-1"><span style="color:var(--text-ter)">Cidade de Nascimento: </span>${esc(d.cidade_nascimento||'—')}</div>
+          </div>
+        </div>`).join('') : '<p style="font-size:13px;color:var(--text-ter);">Sem dependentes informados.</p>'}
     </div>`;
 }
 
