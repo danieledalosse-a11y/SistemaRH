@@ -1149,9 +1149,10 @@ function confirmarGerarPDF() {
 // ─── Gerar PDF ────────────────────────────────────────────
 function gerarPDFFicha(f, c, dadosAdm = {}) {
   const DOC_LABELS = {
-    foto3x4:'Foto 3x4', rg_frente:'RG (frente)', rg_verso:'RG (verso)', cpf_doc:'CPF',
+    foto3x4:'Foto 3x4', rg_frente:'RG', cpf_doc:'CPF',
     titulo:'Título de Eleitor', ctps:'CTPS', pis_doc:'PIS/PASEP', cnh_doc:'CNH',
-    comp_res:'Comprovante de Residência', cert_nasc:'Certidão de Nascimento/Casamento'
+    comp_res:'Comprovante de Residência', cert_nasc:'Certidão de Nascimento/Casamento',
+    cert_dep:'Certidão dos Dependentes'
   };
   const docs = f.docs || {};
   const docsHtml = Object.entries(DOC_LABELS).map(([k, label]) => {
@@ -1298,7 +1299,7 @@ function gerarPDFFicha(f, c, dadosAdm = {}) {
       ${f.conjuge_cpf  ? row('CPF do Cônjuge', f.conjuge_cpf) : ''}
       ${f.conjuge_rg   ? row('RG do Cônjuge', f.conjuge_rg) : ''}
       ${f.conjuge_nascimento ? row('Nasc. do Cônjuge', fmtDateBR(f.conjuge_nascimento)) : ''}
-      ${(Array.isArray(f.dependentes) && f.dependentes.length) ? f.dependentes.map((d,i) => row(`Dependente ${i+1}`, `${d.nome||''}${d.cpf?' — CPF: '+d.cpf:''}${d.cidade_nascimento?' — Cidade Nasc.: '+d.cidade_nascimento:''}`)).join('') : ''}
+      ${(Array.isArray(f.dependentes) && f.dependentes.length) ? f.dependentes.map((d,i) => row(`Dependente ${i+1}`, [d.nome, d.tipo, d.cpf?'CPF: '+d.cpf:'', d.nascimento?'Nasc.: '+d.nascimento.split('-').reverse().join('/'):'', d.cidade_nascimento?'Cidade: '+d.cidade_nascimento:''].filter(Boolean).join(' — '))).join('') : ''}
     </table>
   </div>
 
