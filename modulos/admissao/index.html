@@ -527,7 +527,7 @@
 <script>
 const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
 const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
-const SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+let SB_HEADERS = {};
 
 let currentFicha = null;
 let currentConvite = null;
@@ -537,14 +537,19 @@ let fichaStatusFilter = '';
 
 // ─── Auth ────────────────────────────────────────────────
 (function() {
+  const sess = localStorage.getItem('sb_session');
+  const perf = localStorage.getItem('sb_perfil');
+  if (!sess) { window.location.href = '../../login.html'; return; }
   try {
-    const s = JSON.parse(localStorage.getItem('sb_session') || '{}');
-    const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    const s = JSON.parse(sess);
+    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+    const p = perf ? JSON.parse(perf) : {};
     const nome = p.nome || s.email || '';
     const iniciais = nome.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
     document.getElementById('userAvatar').textContent = iniciais;
     document.getElementById('userName').textContent = nome.split(' ')[0];
-  } catch(_) {}
+  } catch(_) { window.location.href = '../../login.html'; }
 })();
 
 function logout() {
@@ -1068,9 +1073,10 @@ async function panelUploadDoc(key, input) {
   if (!token) return alert('Token não encontrado.');
   const ext = file.name.split('.').pop().toLowerCase();
   const path = `${token}/${key}.${ext}`;
+  const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
   const res = await fetch(`${SB_URL}/storage/v1/object/admissao-docs/${path}`, {
     method: 'POST',
-    headers: { 'apikey': SB_KEY, 'Content-Type': file.type, 'x-upsert': 'true' },
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + (sess.access_token || ''), 'Content-Type': file.type, 'x-upsert': 'true' },
     body: file
   });
   if (!res.ok) { const err = await res.text(); alert('Erro ao enviar arquivo.\n' + res.status + ': ' + err); return; }
