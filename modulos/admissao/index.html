@@ -1417,13 +1417,15 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const renderDocItem = ({ k, label, b64 }, skipBreak = false) => {
     const cfg = DOC_CONFIG[k] || {};
     if (cfg.foto) {
-      return `<div style="grid-column:span 1;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:12px;background:#fafafa;">
-        <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:10px;align-self:flex-start;">${label}</div>
+      // Foto pequena — sem page-break, ocupa metade da largura
+      return `<div style="display:inline-block;width:48%;vertical-align:top;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;padding:12px;background:#fafafa;margin-bottom:10px;">
+        <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:10px;">${label}</div>
         <img src="${b64}" style="max-height:200px;max-width:160px;object-fit:contain;display:block;border-radius:2px;">
       </div>`;
     }
+    // Documento em bloco inteiro — page-break funciona em block, não em grid-item
     const brk = skipBreak ? '' : 'page-break-before:always;';
-    return `<div style="grid-column:span 2;${brk}border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;">
+    return `<div style="display:block;${brk}border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;margin-bottom:10px;">
       <div style="background:#1a1a1a;padding:6px 12px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#E8A800;">${label}</div>
       <img src="${b64}" style="width:100%;height:265mm;object-fit:contain;background:#fff;display:block;">
     </div>`;
@@ -1457,7 +1459,7 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
             <div style="flex:1;height:1px;background:#e5e7eb;"></div>
            </div>` : '';
       const imgH = i === 0 ? '248mm' : '265mm';
-      return `<div style="grid-column:span 2;page-break-before:always;">
+      return `<div style="display:block;page-break-before:always;">
         ${sectionTitle}
         <div style="border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;">
           <div style="background:#1a1a1a;padding:6px 12px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#E8A800;">${e.label}</div>
@@ -1535,8 +1537,8 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   tr:nth-child(even) td { background: #f9fafb; }
   td { padding: 3px 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; line-height: 1.35; }
   tr:last-child td { border-bottom: none; }
-  .lbl { font-size: 8.5px; font-weight: 700; color: #6b7280; width: 32%; white-space: nowrap; }
-  .val { font-size: 9.5px; color: #111827; }
+  .lbl { font-size: 8.5px; font-weight: 700; color: #374151; width: 32%; white-space: nowrap; }
+  .val { font-size: 9.5px; color: #111827; font-weight: 500; }
   @media print {
     body { background: #fff; }
     .page { padding: 0; max-width: 100%; }
@@ -1613,14 +1615,12 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
     </table>
   </div>
 
-  <!-- Documentos — sem repetir cabeçalho completo -->
+  <!-- Documentos — sem grid, page-break funciona em block -->
   <div style="page-break-before:always;">
     ${docPageId}
     ${faltantesColab ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:4px;padding:6px 12px;margin-bottom:10px;">${faltantesColab}</div>` : ''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      ${gridColab || '<div style="grid-column:span 2;color:#aaa;font-size:10px;padding:20px;text-align:center;">Nenhum documento enviado.</div>'}
-    </div>
-    ${hasDeps && gridDep ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">${gridDep}</div>` : ''}
+    ${gridColab || '<div style="color:#aaa;font-size:10px;padding:20px;text-align:center;">Nenhum documento enviado.</div>'}
+    ${hasDeps && gridDep ? gridDep : ''}
   </div>
 
 </div>
@@ -1630,6 +1630,8 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
+  w.onload = () => w.scrollTo(0, 0);
+  setTimeout(() => w.scrollTo(0, 0), 300);
 }
 
 // ─── Helpers ──────────────────────────────────────────────
