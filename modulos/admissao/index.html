@@ -1279,7 +1279,11 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   }).join('');
 
   const row = (label, val) => val ? `<tr><td class="lbl">${label}</td><td>${val}</td></tr>` : '';
-  const depStr = d => [d.nome, d.tipo, d.cpf?'CPF: '+d.cpf:'', d.nascimento?'Nasc.: '+d.nascimento.split('-').reverse().join('/'):'', d.cidade_nascimento?'Cidade: '+d.cidade_nascimento:''].filter(Boolean).join(' · ');
+  const depStr = d => {
+    const nasc = d.nascimento ? d.nascimento.split('-').reverse().join('/') : '';
+    const sub = [d.cpf?'CPF: '+d.cpf:'', nasc?'Nasc.: '+nasc:'', d.cidade_nascimento?'Cidade Nasc.: '+d.cidade_nascimento:''].filter(Boolean).join('  ·  ');
+    return `<span style="font-weight:700;">${d.nome||''}</span><span style="color:#666;font-size:9.5px;margin-left:6px;">${d.tipo||''}</span>${sub ? '<br><span style="color:#555;font-size:9px;">'+sub+'</span>' : ''}`;
+  };
 
   // Página 2 — lista de documentos com links
   const docsListHtml = docEntries.filter(Boolean).map(({ label, url }) =>
