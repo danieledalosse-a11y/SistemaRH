@@ -1384,19 +1384,9 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
     return `<span style="font-weight:700;">${d.nome||''}</span><span style="color:#666;font-size:9.5px;margin-left:6px;">${d.tipo||''}</span>${sub ? '<br><span style="color:#555;font-size:9px;">'+sub+'</span>' : ''}`;
   };
 
-  // Configuração de layout por documento
+  // Configuração de layout por documento — todos em página inteira exceto foto
   const DOC_CONFIG = {
-    foto3x4:           { full: false, foto: true },
-    rg_frente:         { full: false, maxH: '370px' },
-    cpf_doc:           { full: false, maxH: '370px' },
-    pis_doc:           { full: false, maxH: '320px' },
-    titulo:            { full: false, maxH: '320px' },
-    cnh_doc:           { full: false, maxH: '320px' },
-    ctps:              { full: true,  maxH: '380px' },
-    comp_res:          { full: true,  maxH: '265mm', fullPage: true },
-    cert_nasc:         { full: true,  maxH: '265mm', fullPage: true },
-    exame_admissional: { full: true,  maxH: '400px' },
-    cart_vacina:       { full: true,  maxH: '380px' },
+    foto3x4: { foto: true },
   };
 
   // Blocos: colaborador e dependentes (certidão por dependente individualmente)
@@ -1425,25 +1415,17 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const docMap = Object.fromEntries(docEntries.map(e => [e.k, e]));
 
   const renderDocItem = ({ k, label, b64 }) => {
-    const cfg = DOC_CONFIG[k] || { full: true, maxH: '380px' };
-    const isFullPage = cfg.fullPage || k.startsWith('cert_dep_');
+    const cfg = DOC_CONFIG[k] || {};
     if (cfg.foto) {
       return `<div style="grid-column:span 1;border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:10px;background:#fafafa;">
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;margin-bottom:8px;align-self:flex-start;">${label}</div>
         <img src="${b64}" style="max-height:200px;max-width:160px;object-fit:contain;display:block;">
       </div>`;
     }
-    if (isFullPage) {
-      return `<div style="grid-column:span 2;page-break-before:always;border:1px solid #ddd;border-radius:6px;overflow:hidden;">
-        <div style="background:#f5f5f5;padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;">${label}</div>
-        <img src="${b64}" style="width:100%;display:block;max-height:265mm;object-fit:contain;background:#fafafa;">
-      </div>`;
-    }
-    const spanStyle = cfg.full ? 'grid-column:span 2;' : 'grid-column:span 1;';
-    const maxH = cfg.maxH || (cfg.full ? '380px' : '280px');
-    return `<div style="${spanStyle}border:1px solid #ddd;border-radius:6px;overflow:hidden;">
+    // Todos os demais documentos: página inteira
+    return `<div style="grid-column:span 2;page-break-before:always;border:1px solid #ddd;border-radius:6px;overflow:hidden;">
       <div style="background:#f5f5f5;padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;">${label}</div>
-      <img src="${b64}" style="width:100%;display:block;max-height:${maxH};object-fit:contain;background:#fafafa;">
+      <img src="${b64}" style="width:100%;height:265mm;object-fit:contain;background:#fafafa;display:block;">
     </div>`;
   };
 
