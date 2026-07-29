@@ -503,7 +503,7 @@
       <button class="panel-tab active" data-ptab="pessoal">Dados Pessoais</button>
       <button class="panel-tab" data-ptab="familia">Família</button>
       <button class="panel-tab" data-ptab="comp">Complementares</button>
-      <button class="panel-tab" data-ptab="docs">Documentos</button>
+      <button class="panel-tab" data-ptab="docs">Anexos</button>
     </div>
     <div class="panel-body">
       <div class="panel-tab-pane active" id="ptab-pessoal"></div>
@@ -1020,7 +1020,7 @@ function renderPanelDocs(f) {
     const path = docs[k];
     const has = !!path;
     const viewBtn = has ? `<a href="${SB_URL}/storage/v1/object/public/admissao-docs/${path}" target="_blank" style="color:var(--blue);font-size:12px;font-weight:600;text-decoration:none;">Ver</a>` : '';
-    const uploadBtn = byRH ? `<label style="cursor:pointer;color:var(--blue);font-size:12px;font-weight:600;">${has?'Substituir':'Anexar'}<input type="file" accept="image/*,application/pdf" style="display:none" onchange="panelUploadDoc('${k}',this)"></label>` : '';
+    const uploadBtn = `<label style="cursor:pointer;color:var(--blue);font-size:12px;font-weight:600;">${has?'Substituir':'Anexar'}<input type="file" accept="image/*,application/pdf" style="display:none" onchange="panelUploadDoc('${k}',this)"></label>`;
     return `<div class="panel-doc-item ${has?'has-file':''}">
       <span class="panel-doc-name">${label}${byRH?' <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(RH)</span>':''}</span>
       <span class="panel-doc-status">${has ? 'Enviado ✓' : 'Não enviado'}</span>
@@ -1049,7 +1049,7 @@ async function panelUploadDoc(key, input) {
   const path = `${token}/${key}.${ext}`;
   const res = await fetch(`${SB_URL}/storage/v1/object/admissao-docs/${path}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${SB_KEY}`, 'Content-Type': file.type, 'x-upsert': 'true' },
+    headers: { 'apikey': SB_KEY, 'Content-Type': file.type, 'x-upsert': 'true' },
     body: file
   });
   if (!res.ok) { const err = await res.text(); alert('Erro ao enviar arquivo.\n' + res.status + ': ' + err); return; }
