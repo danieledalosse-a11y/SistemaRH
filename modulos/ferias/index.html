@@ -655,8 +655,8 @@
     transition: filter 0.12s, box-shadow 0.12s;
   }
   .gantt-bar:hover { filter: brightness(0.90); box-shadow: 0 3px 10px rgba(0,0,0,0.28); }
-  .gantt-bar-label { font-size: 10px; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.1px; }
-  .gantt-bar.pendente { border: 2px dashed !important; box-shadow: none !important; opacity: 0.75; }
+  .gantt-bar-label { font-size: 10px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.1px; }
+  .gantt-bar.pendente { border: 2px dashed !important; box-shadow: none !important; background: transparent !important; }
 
   .gantt-empty { text-align: center; padding: 64px 24px; color: var(--text-sec); font-size: 13px; }
   .gantt-legend { display: flex; gap: 20px; flex-wrap: wrap; padding: 12px 20px 16px; border-top: 1px solid var(--border); margin-top: 0; }
@@ -4158,8 +4158,13 @@ function renderTimeline() {
   }
 
   // helpers de avatar (mesmos do renderListaAnual)
-  const AV_COLORS = ['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C','#1D4ED8'];
-  const avColor = name => { let h=0; for(let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))&0xFFFFFF; return AV_COLORS[Math.abs(h)%AV_COLORS.length]; };
+  const AV_COLORS  = ['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C','#1D4ED8'];
+  const BAR_BG     = ['#DBEAFE','#CFFAFE','#EDE9FE','#FEF3C7','#DCFCE7','#FCE7F3','#FFEDD5','#EFF6FF'];
+  const BAR_TEXT   = ['#1E40AF','#0E7490','#5B21B6','#92400E','#15803D','#9D174D','#9A3412','#1D4ED8'];
+  const avIdx  = name => { let h=0; for(let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))&0xFFFFFF; return Math.abs(h)%AV_COLORS.length; };
+  const avColor = name => AV_COLORS[avIdx(name)];
+  const barBg   = name => BAR_BG[avIdx(name)];
+  const barText = name => BAR_TEXT[avIdx(name)];
   const avInit  = name => name.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');
 
   // pré-calcula dia-da-semana e se é fim de semana para cada dia
@@ -4226,13 +4231,15 @@ function renderTimeline() {
         else if (colsTotal >= 3) label = `${l.dias}d`;
 
         const W_CELL = 32; // px por coluna — bate com min-width do th
+        const bg   = barBg(c.nome);
+        const txt  = barText(c.nome);
         const bgStyle = l.aprovado
-          ? `background:${cor};`
-          : `background:transparent;border-color:${cor};`;
+          ? `background:${bg};`
+          : `background:transparent;border-color:${txt};`;
         barHtml += `<div class="gantt-bar ${statusCls}"
           style="left:1px;width:${colsTotal * W_CELL - 4}px;${bgStyle}"
           title="${c.nome}: ${l.inicio} → ${l.fim} · ${l.dias}d${l.aprovado?'':' (pendente aprovação)'}">
-          <span class="gantt-bar-label" style="${l.aprovado?'':'color:'+cor+';"'}>${label}</span>
+          <span class="gantt-bar-label" style="color:${txt};">${label}</span>
         </div>`;
       });
 
