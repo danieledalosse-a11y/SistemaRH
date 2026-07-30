@@ -658,6 +658,55 @@
   .real-btn-add { display: flex; align-items: center; gap: 5px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--blue); background: none; border: none; cursor: pointer; font-family: inherit; border-top: 1px solid var(--border); width: 100%; }
   .real-btn-add:hover { background: var(--blue-bg); }
   .real-empty { padding: 14px; font-size: 12px; color: var(--text-ter); text-align: center; }
+
+  /* ── Filter bar (inline, full-width) ── */
+  .filter-bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+  .filter-bar input, .filter-bar select { height:36px; padding:0 10px; border:1px solid var(--border); border-radius:8px; font-size:13px; background:var(--surface); color:var(--text); font-family:inherit; }
+  .filter-bar input { min-width:220px; }
+  .btn-link { background:none; border:none; font-size:12px; color:var(--text-ter); cursor:pointer; padding:4px 8px; border-radius:6px; font-family:inherit; }
+  .btn-link:hover { color:var(--text-sec); background:var(--border); }
+
+  /* ── Alerts row ── */
+  .alerts-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+  .alert-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:all 0.15s; box-shadow:var(--shadow-sm); }
+  .alert-card:hover { box-shadow:var(--shadow-md); transform:translateY(-1px); }
+  .alert-red   { border-left:4px solid var(--red); }
+  .alert-amber { border-left:4px solid #F79009; }
+  .alert-title { font-size:16px; font-weight:700; }
+  .alert-desc  { font-size:12px; color:var(--text-sec); margin-top:2px; }
+  .alert-cta   { margin-left:auto; font-size:13px; font-weight:600; color:var(--text-sec); }
+  .alert-icon  { font-size:24px; }
+
+  /* ── View tabs (Lista / Timeline / Analytics) ── */
+  .view-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); background:var(--surface); border-radius:var(--radius) var(--radius) 0 0; padding:0 16px; }
+  .view-tab { padding:14px 20px; font-size:13px; font-weight:500; color:var(--text-sec); border:none; border-bottom:2px solid transparent; background:none; cursor:pointer; font-family:inherit; transition:all 0.15s; white-space:nowrap; }
+  .view-tab:hover { color:var(--text); }
+  .view-tab.active { color:var(--text); border-bottom-color:var(--text); font-weight:600; }
+  .view-tab .vis-cnt { display:inline-flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.07);border-radius:20px;padding:1px 8px;font-size:12px;font-weight:700;min-width:22px;color:inherit;margin-left:6px; }
+
+  /* ── Status tabs ── */
+  .status-tabs { display:flex; gap:2px; margin-bottom:16px; background:var(--bg); border-radius:10px; padding:4px; width:fit-content; flex-wrap:wrap; }
+  .status-tab { padding:7px 14px; font-size:12px; font-weight:500; border-radius:8px; border:none; background:transparent; color:var(--text-sec); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .status-tab:hover { color:var(--text); background:rgba(255,255,255,0.6); }
+  .status-tab.active { background:var(--surface); color:var(--text); font-weight:600; box-shadow:var(--shadow-sm); }
+  .status-tab .cnt { display:inline-block; background:#E9ECEF; border-radius:10px; padding:1px 6px; margin-left:4px; font-size:11px; }
+
+  /* ── Analytics ── */
+  .analytics-grid { display:grid; grid-template-columns:220px 1fr; gap:20px; margin-bottom:20px; }
+  .analytics-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:20px; }
+  .analytics-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow-sm); }
+  .analytics-card-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-ter); margin-bottom:12px; }
+  .analytics-kpi-num { font-size:32px; font-weight:700; line-height:1; letter-spacing:-0.02em; }
+  .analytics-kpi-label { font-size:12px; color:var(--text-sec); margin-top:6px; }
+  .bar-month { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px; }
+  .bar-month-label { width:28px; color:var(--text-sec); flex-shrink:0; }
+  .bar-month-track { flex:1; height:14px; background:#EAECF0; border-radius:99px; overflow:hidden; }
+  .bar-month-fill { height:100%; border-radius:99px; background:var(--blue); transition:width 0.4s; }
+  .bar-month-val { width:24px; text-align:right; font-weight:600; color:var(--text-sec); flex-shrink:0; }
+  .donut-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .donut-legend { display:flex; flex-direction:column; gap:6px; width:100%; }
+  .donut-legend-item { display:flex; align-items:center; gap:8px; font-size:12px; }
+  .donut-legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -731,61 +780,55 @@
       </div>
     </div>
 
-    <!-- Layout sidebar + conteúdo principal -->
-    <div class="ferias-layout">
+    <!-- Ocultos para compatibilidade com lógica existente -->
+    <select id="sidebarEmpresa" onchange="renderAll()" style="display:none;"><option value="">Todas as empresas</option></select>
+    <select id="sidebarSetor" onchange="renderAll()" style="display:none;"><option value="">Todos os setores</option></select>
+    <select id="sidebarAtivo" onchange="renderAll()" style="display:none;"><option value="ativo">Somente ativos</option><option value="">Todos</option><option value="inativo">Somente inativos</option></select>
+    <span id="sc2-todos" style="display:none;"></span><span id="sc2-hoje" style="display:none;"></span><span id="sc2-sem" style="display:none;"></span><span id="sc2-risco" style="display:none;"></span><span id="sc2-pend" style="display:none;"></span>
+    <span id="sc2-cnt-todos" style="display:none;"></span><span id="sc2-cnt-hoje" style="display:none;"></span><span id="sc2-cnt-sem" style="display:none;"></span><span id="sc2-cnt-risco" style="display:none;"></span><span id="sc2-cnt-pend" style="display:none;"></span>
+    <div id="sidebarAlertas" style="display:none;"><div id="sidebarAlertasInner"></div></div>
 
-    <!-- ═ SIDEBAR ═ -->
-    <aside class="ferias-sidebar">
+    <!-- ═ FILTER BAR ═ -->
+    <div class="filter-bar">
+      <input type="text" id="buscaColab" placeholder="Buscar colaborador..." oninput="aplicarFiltros()">
+      <select id="filtroEmpresaGlobal" onchange="aplicarFiltros()"><option value="">Todas as empresas</option></select>
+      <select id="filtroSetorGlobal" onchange="aplicarFiltros()"><option value="">Todos os setores</option></select>
+      <select id="filtroAnoGlobal" onchange="aplicarFiltros()">
+        <option value="2024">2024</option>
+        <option value="2025">2025</option>
+        <option value="2026" selected>2026</option>
+        <option value="2027">2027</option>
+      </select>
+      <select id="filtroAtivoGlobal" onchange="aplicarFiltros()">
+        <option value="ativo">Somente ativos</option>
+        <option value="">Todos</option>
+        <option value="inativo">Somente inativos</option>
+      </select>
+      <button onclick="limparFiltrosGlobal()" class="btn-link">✕ Limpar filtros</button>
+    </div>
 
-      <!-- Filtros -->
-      <div class="sidebar-card">
-        <div class="sidebar-title">Filtros</div>
-
-        <div class="sidebar-filter-row">
-          <label class="sidebar-filter-label">Empresa</label>
-          <select class="sidebar-select" id="sidebarEmpresa" onchange="renderAll()">
-            <option value="">Todas as empresas</option>
-          </select>
+    <!-- ═ ALERTS ROW ═ -->
+    <div class="alerts-row rh-only">
+      <div class="alert-card alert-red" id="alertDobra" onclick="setStatusFiltro('risco')">
+        <div class="alert-icon">⚠</div>
+        <div>
+          <div class="alert-title" id="alertDobraCount">—</div>
+          <div class="alert-desc">com risco de dobra de férias</div>
         </div>
-
-        <div class="sidebar-filter-row">
-          <label class="sidebar-filter-label">Setor</label>
-          <select class="sidebar-select" id="sidebarSetor" onchange="renderAll()">
-            <option value="">Todos os setores</option>
-          </select>
-        </div>
-
-        <div class="sidebar-filter-row">
-          <label class="sidebar-filter-label">Colaboradores</label>
-          <select class="sidebar-select" id="sidebarAtivo" onchange="renderAll()">
-            <option value="ativo">Somente ativos</option>
-            <option value="">Todos</option>
-            <option value="inativo">Somente inativos</option>
-          </select>
-        </div>
-
-        <div class="sidebar-title" style="margin-top:14px;">Situação</div>
-        <div class="sidebar-chips">
-          <button class="sidebar-chip active" id="sc2-todos" onclick="setSidebarStatus('todos')">Todos <span class="chip-cnt" id="sc2-cnt-todos">0</span></button>
-          <button class="sidebar-chip" id="sc2-hoje" onclick="setSidebarStatus('hoje')"><span style="color:var(--blue)">●</span> Em férias hoje <span class="chip-cnt" id="sc2-cnt-hoje">0</span></button>
-          <button class="sidebar-chip" id="sc2-sem" onclick="setSidebarStatus('sem')"><span style="color:#F79009">●</span> Sem agendamento <span class="chip-cnt" id="sc2-cnt-sem">0</span></button>
-          <button class="sidebar-chip" id="sc2-risco" onclick="setSidebarStatus('risco')"><span style="color:var(--red)">●</span> Risco de dobra <span class="chip-cnt" id="sc2-cnt-risco">0</span></button>
-          <button class="sidebar-chip rh-only" id="sc2-pend" onclick="setSidebarStatus('pend')"><span style="color:var(--amber)">●</span> Aguard. aprovação <span class="chip-cnt" id="sc2-cnt-pend">0</span></button>
-        </div>
+        <div class="alert-cta">Ver →</div>
       </div>
-
-      <!-- Alertas -->
-      <div class="sidebar-card rh-only" id="sidebarAlertas">
-        <div class="sidebar-title">Alertas</div>
-        <div id="sidebarAlertasInner">
-          <div style="font-size:12px;color:var(--text-ter);">Carregando...</div>
+      <div class="alert-card alert-amber" id="alertSem" onclick="setStatusFiltro('sem')">
+        <div class="alert-icon">📅</div>
+        <div>
+          <div class="alert-title" id="alertSemCount">—</div>
+          <div class="alert-desc">sem férias agendadas em <span id="alertSemAno">2026</span></div>
         </div>
+        <div class="alert-cta">Ver →</div>
       </div>
-
-    </aside>
+    </div>
 
     <!-- ═ CONTEÚDO PRINCIPAL ═ -->
-    <div class="ferias-main">
+    <div class="ferias-main" style="width:100%;min-width:0;">
 
     <!-- Barra de ação -->
     <div class="action-bar">
@@ -831,22 +874,21 @@
 
     <div class="card" style="padding:0;overflow:hidden;">
 
-      <!-- Abas proeminentes: segmented toggle -->
-      <div class="vis-tabs">
-        <div class="vis-tabs-inner">
-          <button class="vis-tab" id="vt-timeline" onclick="setVisTab('timeline')">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="9" width="5" height="6" rx="1"/><rect x="10" y="5" width="5" height="14" rx="1"/><rect x="17" y="11" width="5" height="4" rx="1"/><line x1="1" y1="20" x2="23" y2="20"/></svg>
-            Timeline <span class="vis-cnt" id="cnt-timeline">0</span>
-          </button>
-          <button class="vis-tab active" id="vt-lista" onclick="setVisTab('lista-anual')">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            Lista anual <span class="vis-cnt" id="cnt-lista">0</span>
-          </button>
-          <button class="vis-tab" id="vt-cal" onclick="setVisTab('calendario')" style="display:none;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Calendário <span class="vis-cnt" id="cnt-cal">0</span>
-          </button>
-        </div>
+      <!-- View tabs: Lista | Timeline | Analytics -->
+      <div class="view-tabs">
+        <button class="view-tab active" id="vt-lista" onclick="setVisTab('lista-anual')">
+          Lista <span class="vis-cnt" id="cnt-lista">0</span>
+        </button>
+        <button class="view-tab" id="vt-timeline" onclick="setVisTab('timeline')">
+          Timeline <span class="vis-cnt" id="cnt-timeline">0</span>
+        </button>
+        <button class="view-tab rh-only" id="vt-analytics" onclick="setVisTab('analytics')">
+          Analytics
+        </button>
+        <!-- oculto mas mantido para compatibilidade -->
+        <button class="view-tab" id="vt-cal" onclick="setVisTab('calendario')" style="display:none;">
+          Calendário <span class="vis-cnt" id="cnt-cal">0</span>
+        </button>
       </div>
 
       <!-- ── PAINEL: Timeline (Gantt) ── -->
@@ -887,21 +929,24 @@
           <div class="tab-filter-sep"></div>
           <button class="tab-filter-clear" onclick="limparFiltrosLista()">✕ Limpar filtros</button>
         </div>
-        <!-- Barra de ano + status chips -->
-        <div class="lista-ctx-bar">
-          <span class="ctx-ano-label">Ano</span>
-          <select class="ctx-ano-sel" id="listaAnualAno" onchange="ANO_REF=parseInt(this.value);renderListaAnual()">
-            <option value="2024">2024</option>
-            <option value="2025">2025</option>
-            <option value="2026" selected>2026</option>
-            <option value="2027">2027</option>
-          </select>
-          <div class="ctx-sep"></div>
-          <button class="qf-chip chip-todos ativo" id="sc-todos"  onclick="setStatusFiltro('todos')">Todos</button>
-          <button class="qf-chip chip-hoje"  id="sc-hoje"  onclick="setStatusFiltro('hoje')"><span class="qf-dot" style="background:var(--blue)"></span> Em férias hoje <span class="cnt" style="background:var(--blue-bg);color:var(--blue);" id="cnt-hoje">0</span></button>
-          <button class="qf-chip chip-sem"   id="sc-sem"   onclick="setStatusFiltro('sem')"><span class="qf-dot" style="background:#F79009"></span> Sem agendamento <span class="cnt" style="background:var(--amber-bg);color:var(--amber);" id="cnt-sem">0</span></button>
-          <button class="qf-chip chip-risco" id="sc-risco" onclick="setStatusFiltro('risco')"><span class="qf-dot" style="background:var(--red)"></span> Risco de dobra <span class="cnt" style="background:var(--red-bg);color:var(--red);" id="cnt-dobra">0</span></button>
-          <button class="qf-chip chip-sem"   id="sc-ok"    onclick="setStatusFiltro('ok')" style="border-color:#FEC84B;color:var(--amber);"><span class="qf-dot" style="background:var(--amber)"></span> Aguard. aprovação <span class="cnt" style="background:var(--amber-bg);color:var(--amber);" id="cnt-pend">0</span></button>
+        <!-- Status tabs + seletor de ano -->
+        <div class="lista-ctx-bar" style="flex-wrap:wrap;gap:12px;">
+          <div class="status-tabs" id="statusTabs">
+            <button class="status-tab active" id="sc-todos" onclick="setStatusFiltro('todos')" data-val="todos">Todos <span class="cnt" id="cntTodos"></span></button>
+            <button class="status-tab" id="sc-hoje" onclick="setStatusFiltro('hoje')" data-val="hoje">Em férias hoje <span class="cnt" id="cnt-hoje">0</span></button>
+            <button class="status-tab" id="sc-sem"   onclick="setStatusFiltro('sem')" data-val="sem">Sem agendamento <span class="cnt" id="cnt-sem">0</span></button>
+            <button class="status-tab" id="sc-risco" onclick="setStatusFiltro('risco')" data-val="risco">Risco de dobra <span class="cnt" id="cnt-dobra">0</span></button>
+            <button class="status-tab" id="sc-ok" onclick="setStatusFiltro('ok')" data-val="ok">Aguard. aprovação <span class="cnt" id="cnt-pend">0</span></button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+            <span class="ctx-ano-label">Ano</span>
+            <select class="ctx-ano-sel" id="listaAnualAno" onchange="ANO_REF=parseInt(this.value);if(document.getElementById('filtroAnoGlobal'))document.getElementById('filtroAnoGlobal').value=this.value;renderListaAnual()">
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026" selected>2026</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
         </div>
         <div style="padding:16px;" id="listaAnualContent"></div>
       </div>
@@ -930,13 +975,49 @@
         </div>
       </div>
 
+      <!-- ── PAINEL: Analytics ── -->
+      <div id="sub-analytics" style="display:none;padding:24px;" class="rh-only">
+        <!-- KPIs -->
+        <div class="analytics-kpis" id="analyticsKpis">
+          <div class="analytics-card">
+            <div class="analytics-card-title">Colaboradores ativos</div>
+            <div class="analytics-kpi-num" id="anKpiTotal">—</div>
+          </div>
+          <div class="analytics-card">
+            <div class="analytics-card-title">Com PA vigente</div>
+            <div class="analytics-kpi-num" id="anKpiPA">—</div>
+          </div>
+          <div class="analytics-card">
+            <div class="analytics-card-title">Dias agendados no ano</div>
+            <div class="analytics-kpi-num" id="anKpiDias">—</div>
+          </div>
+          <div class="analytics-card">
+            <div class="analytics-card-title">Saldo médio (dias)</div>
+            <div class="analytics-kpi-num" id="anKpiSaldo">—</div>
+          </div>
+        </div>
+        <!-- Donut + barras mensais -->
+        <div class="analytics-grid">
+          <div class="analytics-card">
+            <div class="analytics-card-title">Situação dos colaboradores</div>
+            <div class="donut-wrap">
+              <canvas id="chartDonut" width="160" height="160"></canvas>
+              <div class="donut-legend" id="donutLegend"></div>
+            </div>
+          </div>
+          <div class="analytics-card">
+            <div class="analytics-card-title">Colaboradores em férias por mês (<span id="anAnoRef">2026</span>)</div>
+            <div id="barrasMensais"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Painéis ocultos (mantidos para compatibilidade com renderDobra/Sem/Pendentes) -->
       <div id="sub-dobra" style="display:none;"><div id="dobraContent"></div></div>
       <div id="sub-sem-agendado" style="display:none;"><div id="semContent"></div></div>
       <div id="sub-pendentes" style="display:none;"><div id="pendContent"></div></div>
     </div><!-- /card -->
     </div><!-- /ferias-main -->
-    </div><!-- /ferias-layout -->
   </div><!-- /visaoContent -->
 </div><!-- /sec-visao-rh -->
 
@@ -1177,11 +1258,14 @@
     </div>
     <div class="drawer-tabs">
       <button class="drawer-tab active" onclick="setDrawerTab('historico',this)">Histórico</button>
-      <button class="drawer-tab rh-only" onclick="setDrawerTab('realizacoes',this)">Realizações</button>
+      <button class="drawer-tab rh-only" onclick="setDrawerTab('realizacoes',this)">Acordos</button>
       <button class="drawer-tab" onclick="setDrawerTab('lancar',this)">Lançar</button>
     </div>
   </div>
   <div class="drawer-body">
+    <div id="alertaGestorAcordo" class="gestor-only" style="display:none;background:var(--blue-bg);border:1px solid #BFDBFE;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--blue);margin-bottom:8px;">
+      ℹ Este colaborador possui dias a acertar com o RH.
+    </div>
     <div id="drawerHistorico"></div>
     <div id="drawerRealizacoes" style="display:none;"></div>
     <div id="drawerLancar" style="display:none;"></div>
@@ -1382,6 +1466,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
         empresa:       colabDados.empresa_registro_nome || colabDados.empresa_registro || '',
         empresaAtuacao:colabDados.empresa_atuacao_nome  || colabDados.empresa_atuacao  || '',
         ativo:         !colabDados.data_demissao,
+        gestor:        colabDados.gestor || '',
         registros: [],
       });
     }
@@ -1400,7 +1485,7 @@ async function carregarDoSupabase() {
   try {
     const [feriasRows, colaborRows] = await Promise.all([
       sbGet('ferias', 'select=*&order=matricula_colaborador,ano'),
-      sbGet('colaboradores', 'select=id,matricula,nome,cargo,setor,empresa_registro,empresa_registro_nome,empresa_atuacao,empresa_atuacao_nome,data_demissao'),
+      sbGet('colaboradores', 'select=id,matricula,nome,cargo,setor,empresa_registro,empresa_registro_nome,empresa_atuacao,empresa_atuacao_nome,data_demissao,gestor'),
     ]);
     setLoadingMsg('Processando dados...');
     supabaseParaModelo(feriasRows, colaborRows);
@@ -2005,6 +2090,18 @@ function imprimirHistoricoDrawer() {
 }
 
 function renderDrawerHistorico(colab) {
+  // alerta gestor: mostrar se houver acordos pendentes (realizacoes incompletas)
+  const alertaBanner = document.getElementById('alertaGestorAcordo');
+  if (alertaBanner) {
+    const temAcordoPendente = colab.registros.some(r => {
+      const lancDias = r.lancamentos.reduce((s, l) => s + (Number(l.dias)||0), 0);
+      const realDias = (r.realizacoes||[]).reduce((s, rv) => s + (Number(rv.dias)||0), 0);
+      return lancDias > 0 && realDias < lancDias;
+    });
+    const modoGestor = document.body.classList.contains('modo-gestor');
+    alertaBanner.style.display = (modoGestor && temAcordoPendente) ? '' : 'none';
+  }
+
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const regs = [...colab.registros].reverse();
   if (!regs.length) {
@@ -2195,16 +2292,18 @@ let _visTab = 'lista-anual';
 
 function setVisTab(nome) {
   _visTab = nome;
-  ['lista-anual','calendario','timeline'].forEach(t => {
+  ['lista-anual','calendario','timeline','analytics'].forEach(t => {
     const el = document.getElementById('sub-' + t);
     if (el) el.style.display = t === nome ? '' : 'none';
   });
   document.getElementById('vt-lista')?.classList.toggle('active', nome === 'lista-anual');
   document.getElementById('vt-cal')?.classList.toggle('active', nome === 'calendario');
   document.getElementById('vt-timeline')?.classList.toggle('active', nome === 'timeline');
+  document.getElementById('vt-analytics')?.classList.toggle('active', nome === 'analytics');
   if (nome === 'lista-anual') renderListaAnual();
   if (nome === 'calendario')  { renderMesSeletor(); renderCalendario(); }
   if (nome === 'timeline')    renderTimeline();
+  if (nome === 'analytics')   renderAnalytics();
 }
 
 function setSubTab(nome, btn) {
@@ -2229,6 +2328,7 @@ function renderAll() {
   renderMinhaEquipe();
   if (document.getElementById('sub-lista-anual')?.style.display !== 'none') renderListaAnual();
   if (document.getElementById('sub-timeline')?.style.display !== 'none') renderTimeline();
+  if (document.getElementById('sub-analytics')?.style.display !== 'none') renderAnalytics();
   atualizarSidebarContadores();
 }
 
@@ -2238,16 +2338,42 @@ function getColabsVisao(contexto) {
   const s   = ctx === 'calendario' ? 'Cal' : 'Lista';
   const empresasSel = MS_INSTANCES['msEmpresa' + s]?.getValues() || [];
   const setoresSel  = MS_INSTANCES['msSetor'   + s]?.getValues() || [];
-  const ativoVal    = document.getElementById('filtroAtivo' + s)?.value ?? 'ativo';
+  const ativoVal    = _filtroGlobalAtivo !== undefined ? _filtroGlobalAtivo
+                    : (document.getElementById('filtroAtivo' + s)?.value ?? 'ativo');
   const modoVal     = document.getElementById('filtroModoEmpresa' + s)?.value ?? 'registro';
+
+  // gestor: filtrar colaboradores do próprio gestor
+  const perfilStr = localStorage.getItem('sb_perfil');
+  const perfil = perfilStr ? JSON.parse(perfilStr) : null;
+  const modoGestor = document.body.classList.contains('modo-gestor');
+  const gestorNome = perfil?.nome?.trim().toLowerCase() || '';
+
   return COLABORADORES.filter(c => {
+    // filtro ativo
     if (ativoVal === 'ativo'   && c.ativo === false) return false;
     if (ativoVal === 'inativo' && c.ativo !== false) return false;
-    if (empresasSel.length) {
+    // filtro gestor
+    if (modoGestor && gestorNome && (c.gestor || '').trim().toLowerCase() !== gestorNome) return false;
+    // filtro empresa (ms ou filter bar)
+    const empFb = _filtroGlobalEmpresa || '';
+    if (empFb) {
+      const campo = modoVal === 'atuacao' ? (c.empresaAtuacao || '') : (c.empresa || '');
+      if (!campo.toLowerCase().includes(empFb.toLowerCase())) return false;
+    } else if (empresasSel.length) {
       const campo = modoVal === 'atuacao' ? (c.empresaAtuacao || '') : (c.empresa || '');
       if (!empresasSel.includes(limparNomeEmpresa(campo))) return false;
     }
-    if (setoresSel.length && !setoresSel.includes(normSetor(c.setor))) return false;
+    // filtro setor
+    const setFb = _filtroGlobalSetor || '';
+    if (setFb) {
+      if ((c.setor || '').toLowerCase() !== setFb.toLowerCase()) return false;
+    } else if (setoresSel.length && !setoresSel.includes(normSetor(c.setor))) return false;
+    // filtro busca texto
+    if (_filtroGlobalBusca) {
+      const q = _filtroGlobalBusca;
+      const match = c.nome.toLowerCase().includes(q) || (c.registro||'').toLowerCase().includes(q) || (c.cargo||'').toLowerCase().includes(q);
+      if (!match) return false;
+    }
     return true;
   });
 }
@@ -2769,10 +2895,14 @@ function renderListaAnual() {
           })();
 
           const nomeCell = isFirst
-            ? `<td rowspan="${pasDoAno.length}" style="vertical-align:top;padding-top:14px;">
-                <strong>${c.nome}</strong>
-                ${c.registro ? `<br><span style="font-size:11px;color:var(--text-ter);">Mat. ${c.registro}</span>` : ''}
-                <br><span style="font-size:11px;color:var(--text-sec);">${c.cargo || '—'}</span>
+            ? `<td rowspan="${pasDoAno.length}" style="vertical-align:top;padding-top:12px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;">${initials(c.nome)}</div>
+                  <div>
+                    <div style="font-weight:600;">${c.nome}</div>
+                    <div style="font-size:11px;color:var(--text-sec);">${c.cargo || '—'}${c.registro ? ` · Mat. ${c.registro}` : ''}</div>
+                  </div>
+                </div>
               </td>`
             : '';
 
@@ -3411,6 +3541,17 @@ function renderKPI() {
   document.getElementById('kpiRisco').textContent = nRisco;
   document.getElementById('kpiRow').style.display = '';
 
+  // atualiza alert cards do topo
+  const elDobraCount = document.getElementById('alertDobraCount');
+  const elSemCount   = document.getElementById('alertSemCount');
+  const elSemAno     = document.getElementById('alertSemAno');
+  if (elDobraCount) elDobraCount.textContent = nRisco + (nRisco === 1 ? ' colaborador' : ' colaboradores');
+  if (elSemCount)   elSemCount.textContent   = nSem   + (nSem === 1   ? ' colaborador' : ' colaboradores');
+  if (elSemAno)     elSemAno.textContent     = ANO_REF;
+  // atualiza contador "Todos" no status-tab
+  const elTodos = document.getElementById('cntTodos');
+  if (elTodos) elTodos.textContent = lista.length;
+
   // atualiza contadores nos chips de status
   const elHoje  = document.getElementById('cnt-hoje');
   const elSem   = document.getElementById('cnt-sem');
@@ -3439,10 +3580,13 @@ let _statusFiltro = 'todos';
 function setStatusFiltro(tipo) {
   _statusFiltro = tipo;
 
-  // atualiza chips de status (id="sc-*")
+  // atualiza status-tabs (novo design)
   ['todos','hoje','sem','risco','ok'].forEach(t => {
     const el = document.getElementById('sc-' + t);
-    if (el) el.classList.toggle('ativo', t === tipo);
+    if (el) {
+      el.classList.toggle('active', t === tipo);
+      el.classList.toggle('ativo', t === tipo); // compatibilidade legada
+    }
   });
   // atualiza chips do bloco quickFilters (id="qf-*") se existirem
   ['todos','hoje','sem','risco','ok'].forEach(t => {
@@ -3796,6 +3940,155 @@ function popularSidebarFiltros() {
   if (relEmp && relEmp.options.length <= 1) {
     empresas.forEach(e => { const o = document.createElement('option'); o.value = e; o.textContent = e; relEmp.appendChild(o); });
   }
+  // popular filter bar global (usa c.empresa, campo correto no modelo)
+  const empresasFb = [...new Set(COLABORADORES.map(c => c.empresa || '').filter(Boolean))].sort();
+  const fbEmp = document.getElementById('filtroEmpresaGlobal');
+  const fbSet = document.getElementById('filtroSetorGlobal');
+  if (fbEmp && fbEmp.options.length <= 1) {
+    empresasFb.forEach(e => { const o = document.createElement('option'); o.value = e; o.textContent = e; fbEmp.appendChild(o); });
+  }
+  if (fbSet && fbSet.options.length <= 1) {
+    setores.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; fbSet.appendChild(o); });
+  }
+}
+
+// ── Filtros globais (filter bar) ──────────────────────────────────────────────
+let _filtroGlobalBusca = '', _filtroGlobalEmpresa = '', _filtroGlobalSetor = '', _filtroGlobalAtivo = 'ativo';
+
+function aplicarFiltros() {
+  _filtroGlobalBusca   = (document.getElementById('buscaColab')?.value || '').toLowerCase().trim();
+  _filtroGlobalEmpresa = document.getElementById('filtroEmpresaGlobal')?.value || '';
+  _filtroGlobalSetor   = document.getElementById('filtroSetorGlobal')?.value   || '';
+  _filtroGlobalAtivo   = document.getElementById('filtroAtivoGlobal')?.value   ?? 'ativo';
+  // sincroniza seletor de ano
+  const anoVal = parseInt(document.getElementById('filtroAnoGlobal')?.value || ANO_REF);
+  if (anoVal && anoVal !== ANO_REF) {
+    ANO_REF = anoVal;
+    const selAno = document.getElementById('listaAnualAno');
+    if (selAno) selAno.value = String(ANO_REF);
+  }
+  renderAll();
+}
+
+function limparFiltrosGlobal() {
+  const fb = document.getElementById('buscaColab'); if (fb) fb.value = '';
+  const fe = document.getElementById('filtroEmpresaGlobal'); if (fe) fe.value = '';
+  const fs = document.getElementById('filtroSetorGlobal'); if (fs) fs.value = '';
+  const fa = document.getElementById('filtroAtivoGlobal'); if (fa) fa.value = 'ativo';
+  _filtroGlobalBusca = ''; _filtroGlobalEmpresa = ''; _filtroGlobalSetor = ''; _filtroGlobalAtivo = 'ativo';
+  renderAll();
+}
+
+// ── Helpers avatar ────────────────────────────────────────────────────────────
+function avatarColor(n) {
+  const cols = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#06b6d4','#ec4899'];
+  let h = 0;
+  for (let c of (n || '')) h = (h * 31 + c.charCodeAt(0)) % cols.length;
+  return cols[h];
+}
+function initials(n) {
+  return (n || '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+function renderAnalytics() {
+  const lista = COLABORADORES.filter(c => c.ativo !== false);
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const mesAtual = HOJE.slice(0, 7);
+
+  // KPIs
+  let nPA = 0, nDias = 0, totalSaldo = 0;
+  lista.forEach(c => {
+    const regsOk = c.registros.filter(r => !excluir.has(r.status));
+    const paVig = regsOk.find(r => r.paInicio && r.paFim && HOJE >= r.paInicio && HOJE <= r.paFim);
+    if (paVig) nPA++;
+    regsOk.forEach(r => {
+      r.lancamentos.forEach(l => { if (l.inicio && l.inicio.startsWith(String(ANO_REF))) nDias += Number(l.dias)||0; });
+      totalSaldo += Math.max(0, calcSaldo(r));
+    });
+  });
+  const mediaS = lista.length ? Math.round(totalSaldo / lista.length) : 0;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('anKpiTotal', lista.length);
+  set('anKpiPA', nPA);
+  set('anKpiDias', nDias);
+  set('anKpiSaldo', mediaS);
+  set('anAnoRef', ANO_REF);
+
+  // situação para donut
+  let nOk = 0, nSem = 0, nRisco = 0, nHoje = 0;
+  lista.forEach(c => {
+    if (isRiscoDobra(c)) { nRisco++; return; }
+    const emFerias = c.registros.filter(r => !excluir.has(r.status)).some(r =>
+      r.lancamentos.some(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim));
+    if (emFerias) { nHoje++; return; }
+    if (isSemAgendadoAno(c, ANO_REF)) { nSem++; return; }
+    nOk++;
+  });
+  desenharDonut(nOk, nSem, nRisco, nHoje);
+
+  // barras mensais
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const contagens = meses.map((_, mi) => {
+    const mesStr = `${ANO_REF}-${String(mi+1).padStart(2,'0')}`;
+    return lista.filter(c =>
+      c.registros.filter(r => !excluir.has(r.status)).some(r =>
+        r.lancamentos.some(l => l.inicio && l.fim && l.inicio.slice(0,7) <= mesStr && l.fim.slice(0,7) >= mesStr)
+      )
+    ).length;
+  });
+  const maxVal = Math.max(...contagens, 1);
+  const el = document.getElementById('barrasMensais');
+  if (el) el.innerHTML = meses.map((m, i) => `
+    <div class="bar-month">
+      <span class="bar-month-label">${m}</span>
+      <div class="bar-month-track"><div class="bar-month-fill" style="width:${Math.round(contagens[i]/maxVal*100)}%"></div></div>
+      <span class="bar-month-val">${contagens[i]}</span>
+    </div>`).join('');
+}
+
+function desenharDonut(nOk, nSem, nRisco, nHoje) {
+  const canvas = document.getElementById('chartDonut');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const total = nOk + nSem + nRisco + nHoje || 1;
+  const segs = [
+    { v: nOk,   color: '#027A48', label: 'OK' },
+    { v: nHoje, color: '#1849A9', label: 'Em férias hoje' },
+    { v: nSem,  color: '#92400E', label: 'Sem agendamento' },
+    { v: nRisco,color: '#B42318', label: 'Risco de dobra' },
+  ].filter(s => s.v > 0);
+  const cx = canvas.width / 2, cy = canvas.height / 2, r = cx * 0.8, ri = cx * 0.45;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  let startAngle = -Math.PI / 2;
+  segs.forEach(s => {
+    const slice = (s.v / total) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, startAngle, startAngle + slice);
+    ctx.closePath();
+    ctx.fillStyle = s.color;
+    ctx.fill();
+    startAngle += slice;
+  });
+  // anel interno (buraco)
+  ctx.beginPath();
+  ctx.arc(cx, cy, ri, 0, 2 * Math.PI);
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--surface') || '#fff';
+  ctx.fill();
+  // total no centro
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text') || '#101828';
+  ctx.font = `bold ${Math.round(cx * 0.38)}px Inter, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(nOk + nSem + nRisco + nHoje, cx, cy);
+  // legenda
+  const leg = document.getElementById('donutLegend');
+  if (leg) leg.innerHTML = segs.map(s => `
+    <div class="donut-legend-item">
+      <span class="donut-legend-dot" style="background:${s.color}"></span>
+      <span>${s.label}</span><span style="margin-left:auto;font-weight:700;">${s.v}</span>
+    </div>`).join('');
 }
 
 function renderSidebarAlertas(risco, pend) {
