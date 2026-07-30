@@ -1023,7 +1023,23 @@ async function submitForm() {
     const r1 = await fetch(`${SB_URL}/rest/v1/admissao_fichas`, {
       method: 'POST', headers: SB_HEADERS, body: JSON.stringify(fichaPayload)
     });
-    if (!r1.ok) throw new Error('Erro ao salvar ficha');
+    if (!r1.ok) {
+      let detalhe = '';
+      try { const j = await r1.json(); detalhe = j.message || j.details || j.hint || JSON.stringify(j); } catch(_) {}
+      // token duplicado (já enviou antes) — trata como sucesso
+      if (r1.status === 409 || (detalhe && detalhe.toLowerCase().includes('duplicate'))) {
+        await fetch(`${SB_URL}/rest/v1/admissao_convites?token=eq.${convite.token}`, {
+          method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ status: 'preenchido' })
+        }).catch(() => {});
+        root.innerHTML = `<div class="screen-center">
+          <div class="screen-icon success"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+          <div class="screen-title">Ficha já recebida!</div>
+          <p class="screen-text">Sua ficha já foi enviada anteriormente. Nossa equipe irá analisar em breve.</p>
+        </div>`;
+        return;
+      }
+      throw new Error(`[${r1.status}] ${detalhe || 'falha ao salvar ficha'}`);
+    }
 
     await fetch(`${SB_URL}/rest/v1/admissao_convites?token=eq.${convite.token}`, {
       method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ status: 'preenchido' })
@@ -1039,7 +1055,8 @@ async function submitForm() {
   } catch(e) {
     btn.disabled = false;
     btn.textContent = 'Enviar Ficha';
-    document.getElementById('alertEnvio').innerHTML = '<div class="alert alert-error">Erro ao enviar ficha. Tente novamente.</div>';
+    document.getElementById('alertEnvio').innerHTML = `<div class="alert alert-error">Erro ao enviar ficha: ${e.message}</div>`;
+    console.error('submitForm error:', e);
   }
 }
 
