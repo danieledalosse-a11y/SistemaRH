@@ -1713,16 +1713,15 @@ function isRiscoDobra(colab) {
   });
 }
 
-function isSemAgendadoAno(colab, ano) {
-  // há saldo disponível em algum PA válido, mas nenhum lançamento em `ano`
+function isSemAgendadoAno(colab) {
+  // Regra: tem PA vigente hoje, saldo > 0, e nenhum lançamento futuro ou em curso (fim >= HOJE)
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const validos = colab.registros.filter(r => !excluir.has(r.status));
-  const temSaldo = validos.some(r => calcSaldo(r) > 0);
-  if (!temSaldo) return false;
-  const temAgendado = validos.some(r =>
-    r.lancamentos.some(l => l.inicio && l.inicio.startsWith(String(ano)))
-  );
-  return !temAgendado;
+  const paVigente = validos.find(r => r.paInicio && r.paFim && HOJE >= r.paInicio && HOJE <= r.paFim);
+  if (!paVigente) return false;
+  if (calcSaldo(paVigente) <= 0) return false;
+  const temFuturo = paVigente.lancamentos.some(l => l.fim && l.fim >= HOJE);
+  return !temFuturo;
 }
 
 function proximoPA(reg) {
@@ -2316,7 +2315,7 @@ function renderMetricas() {
   const total         = base.length;
   const deFeriasAgora = base.filter(c => deFeriasNoPeriodo(c, anoMes).length > 0).length;
   const riscoDobra    = base.filter(c => isRiscoDobra(c)).length;
-  const semAgendado   = base.filter(c => isSemAgendadoAno(c, ANO_REF)).length;
+  const semAgendado   = base.filter(c => isSemAgendadoAno(c)).length;
   const pendentes     = getPendentes().length;
 
   document.getElementById('cnt-cal').textContent   = deFeriasAgora;
@@ -2578,7 +2577,7 @@ function renderDobra() {
 // ─── Sem agendado ────────────────────────────────────────────────────────────
 function renderSemAgendado() {
   const lista = getColabsVisao()
-    .filter(c => isSemAgendadoAno(c, ANO_REF))
+    .filter(c => isSemAgendadoAno(c))
     .map(c => {
       const reg = getRegistroAtual(c);
       const saldo = calcSaldo(reg);
@@ -2853,7 +2852,7 @@ function renderMinhaEquipe() {
       const reg = getRegistroAtual(c);
       if (!reg) return false;
       const risco = isRiscoDobra(c);
-      const semAg = isSemAgendadoAno(c, ANO_REF);
+      const semAg = isSemAgendadoAno(c);
       if (situacaoFiltro === 'risco')        return risco;
       if (situacaoFiltro === 'sem-agendado') return !risco && semAg;
       if (situacaoFiltro === 'ok')           return !risco && !semAg;
@@ -2869,7 +2868,7 @@ function renderMinhaEquipe() {
     const prox = reg.lancamentos.filter(l => l.inicio > HOJE).sort((a,b) => a.inicio.localeCompare(b.inicio));
     const proxLanc = prox[0];
     const risco = isRiscoDobra(c);
-    const semAg  = isSemAgendadoAno(c, ANO_REF);
+    const semAg  = isSemAgendadoAno(c);
 
     let situBadge = '';
     if (deFeriasHoje.length) {
@@ -3412,9 +3411,7 @@ function renderKPI() {
     if (emFerias) nHoje++;
     // risco de dobra
     if (isRiscoDobra(c)) nRisco++;
-    // sem agendamento no PA vigente
-    const paVigente = regsValidos.find(r => r.paInicio && r.paFim && HOJE >= r.paInicio && HOJE <= r.paFim);
-    if (paVigente && paVigente.lancamentos.length === 0 && calcSaldo(paVigente) > 0) nSem++;
+    if (isSemAgendadoAno(c)) nSem++;
   });
   nPend = getPendentes().length;
 
@@ -3773,7 +3770,7 @@ function atualizarSidebarContadores() {
     const reg = c.registros.find(r => r.ano === ANO_REF) || c.registros[c.registros.length-1];
     if (!reg) return;
     if (reg.lancamentos.some(l => l.inicio <= hoje && l.fim >= hoje)) hj++;
-    if (isSemAgendadoAno(c, ANO_REF)) sem++;
+    if (isSemAgendadoAno(c)) sem++;
     if (isRiscoDobra(c)) risco++;
     if (reg.status === 'Pendente' && reg._novoLanc) pend++;
   });
@@ -3950,7 +3947,7 @@ function renderAnalytics() {
     const e = setorMap.get(setor);
     e.total++;
     if (isRiscoDobra(c))            e.risco++;
-    else if (isSemAgendadoAno(c, ano)) e.sem++;
+    else if (isSemAgendadoAno(c)) e.sem++;
   });
   const ranking = [...setorMap.entries()]
     .map(([nome, d]) => ({ nome, ...d, pctAtencao: d.total > 0 ? (d.risco + d.sem) / d.total : 0 }))
@@ -4316,7 +4313,7 @@ function _getDadosRelatorio() {
         if (reg.status === 'Aprovado' && chkAprov) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresaRegistro||c.unidade||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Aprovado' });
         else if (reg.status === 'Pendente' && chkPend) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresaRegistro||c.unidade||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Pend. aprovação' });
       });
-      if (chkRisco && isSemAgendadoAno(c, anoR || ANO_REF)) {
+      if (chkRisco && isSemAgendadoAno(c)) {
         if (!linhas.find(x => x.nome === c.nome)) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresaRegistro||c.unidade||'', inicio: '—', fim: '—', dias: '—', status: 'Sem agendamento' });
       }
     });
