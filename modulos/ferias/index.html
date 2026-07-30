@@ -622,6 +622,42 @@
 
   /* Sidebar contador de aguardando aprovação */
   .sidebar-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; font-size: 11px; font-weight: 700; background: var(--amber-bg); color: var(--amber); border: 1px solid #FEC84B; }
+
+  /* ── Realizações (gozo real) ── */
+  .real-section { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+  .real-section-hdr { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .real-section-title { font-size: 12px; font-weight: 700; color: var(--text); }
+  .real-saldo-badge { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+  .real-saldo-badge.zerado  { background: var(--green-bg); color: var(--green); }
+  .real-saldo-badge.parcial { background: var(--amber-bg); color: var(--amber); }
+  .real-saldo-badge.excesso { background: var(--red-bg);   color: var(--red); }
+  .real-oficial { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .real-oficial-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-ter); margin-bottom: 5px; }
+  .real-oficial-row { display: flex; align-items: center; gap: 10px; }
+  .real-oficial-periodo { font-size: 13px; font-weight: 600; }
+  .real-oficial-dias { font-size: 12px; color: var(--text-sec); }
+  .real-obs { padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--amber-bg); font-size: 12px; color: var(--amber); line-height: 1.4; }
+  .real-obs strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+  .real-list { padding: 0; }
+  .real-row { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border-light); font-size: 13px; }
+  .real-row:last-child { border-bottom: none; }
+  .real-row-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-ter); padding: 8px 14px 4px; }
+  .real-row-dates { font-size: 12px; }
+  .real-row-dias { font-size: 12px; font-weight: 600; color: var(--text-sec); white-space: nowrap; }
+  .real-row-del { background: none; border: none; cursor: pointer; color: var(--text-ter); font-size: 14px; padding: 2px 4px; border-radius: 4px; }
+  .real-row-del:hover { color: var(--red); background: var(--red-bg); }
+  .real-add-form { padding: 12px 14px; background: var(--bg); border-top: 1px solid var(--border); display: none; flex-direction: column; gap: 8px; }
+  .real-add-form.open { display: flex; }
+  .real-add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .real-add-row.three { grid-template-columns: 1fr 1fr auto; }
+  .real-add-label { font-size: 11px; font-weight: 600; color: var(--text-sec); margin-bottom: 3px; }
+  .real-add-input { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; font-family: inherit; }
+  .real-add-actions { display: flex; gap: 6px; }
+  .btn-real-save { flex: 1; padding: 7px; background: var(--text); color: #fff; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-real-cancel { padding: 7px 12px; background: none; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .real-btn-add { display: flex; align-items: center; gap: 5px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--blue); background: none; border: none; cursor: pointer; font-family: inherit; border-top: 1px solid var(--border); width: 100%; }
+  .real-btn-add:hover { background: var(--blue-bg); }
+  .real-empty { padding: 14px; font-size: 12px; color: var(--text-ter); text-align: center; }
 </style>
 </head>
 <body>
@@ -1141,11 +1177,13 @@
     </div>
     <div class="drawer-tabs">
       <button class="drawer-tab active" onclick="setDrawerTab('historico',this)">Histórico</button>
+      <button class="drawer-tab rh-only" onclick="setDrawerTab('realizacoes',this)">Realizações</button>
       <button class="drawer-tab" onclick="setDrawerTab('lancar',this)">Lançar</button>
     </div>
   </div>
   <div class="drawer-body">
     <div id="drawerHistorico"></div>
+    <div id="drawerRealizacoes" style="display:none;"></div>
     <div id="drawerLancar" style="display:none;"></div>
   </div>
 </div>
@@ -1324,7 +1362,9 @@ function supabaseParaModelo(feriasRows, colaborRows) {
       lancamentos,
       abonoPecuniario: abono,
       diasAntecipados: Number(f.dias_antecipados) || 0,
-      _notaLivre: f.nota_livre || null,
+      _notaLivre:       f.nota_livre    || null,
+      _obsGestor:       f.obs_gestor    || null,
+      realizacoes:      Array.isArray(f.realizacoes) ? f.realizacoes : [],
       _novoLanc: null,
       _motivoRejeicao: null,
     };
@@ -1866,10 +1906,15 @@ function fecharDrawer() {
 }
 
 function setDrawerTab(tab, btn) {
-  document.getElementById('drawerHistorico').style.display = tab === 'historico' ? '' : 'none';
-  document.getElementById('drawerLancar').style.display    = tab === 'lancar'    ? '' : 'none';
+  document.getElementById('drawerHistorico').style.display    = tab === 'historico'    ? '' : 'none';
+  document.getElementById('drawerRealizacoes').style.display  = tab === 'realizacoes'  ? '' : 'none';
+  document.getElementById('drawerLancar').style.display       = tab === 'lancar'       ? '' : 'none';
   document.querySelectorAll('.drawer-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
+  if (tab === 'realizacoes') {
+    const colab = COLABORADORES.find(c => c.__key === _drawerKey);
+    if (colab) renderDrawerRealizacoes(colab);
+  }
 }
 
 function renderDrawerResumo(colab) {
@@ -2064,6 +2109,11 @@ function renderDrawerLancar(colab) {
         <label>Motivo / observação</label>
         <textarea id="dMotivo" placeholder="Ex: Coletivas da empresa" style="min-height:60px;"></textarea>
       </div>
+      <div class="field">
+        <label>Acordo informal (opcional)</label>
+        <textarea id="dObsGestor" placeholder="Ex: Oficialmente 14 dias, 2 dias ficam como saldo para uso posterior" style="min-height:60px;color:var(--amber);"></textarea>
+        <div style="font-size:11px;color:var(--text-ter);margin-top:3px;">Visível apenas para o RH na aba Realizações</div>
+      </div>
       <div id="dAlerta"></div>
       <button class="btn btn-primary" onclick="confirmarDrawerLancamento()" style="width:100%;">Enviar para aprovação</button>
     </div>
@@ -2112,10 +2162,17 @@ function confirmarDrawerLancamento() {
   if (!ini || !dias) { toast('Preencha início e número de dias'); return; }
   const fim  = addDays(ini, dias - 1);
   const dt   = parseInt(document.getElementById('dDiasTrabalhar')?.value) || null;
-  const mot  = document.getElementById('dMotivo')?.value.trim() || null;
+  const mot      = document.getElementById('dMotivo')?.value.trim()    || null;
+  const obsGest  = document.getElementById('dObsGestor')?.value.trim() || null;
 
-  reg._novoLanc = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
-  reg.status = 'Pendente';
+  reg._novoLanc  = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
+  reg.status     = 'Pendente';
+  if (obsGest) reg._obsGestor = obsGest;
+
+  // persiste obs_gestor imediatamente (campo informacional, não depende da aprovação)
+  if (obsGest && reg._sbId) {
+    sbPatch('ferias', `id=eq.${reg._sbId}`, { obs_gestor: obsGest }).catch(() => {});
+  }
 
   toast(`✓ Lançamento enviado para aprovação — ${colab.nome}`);
   fecharDrawer();
@@ -3517,6 +3574,166 @@ function searchGlobalKeydown(e) {
     items[_searchIdx]?.click();
   } else if (e.key === 'Escape') {
     fecharSearchDD();
+  }
+}
+
+// ─── Realizações (gozo real vs. período oficial) ─────────────────────────────
+
+function renderDrawerRealizacoes(colab) {
+  const el = document.getElementById('drawerRealizacoes');
+  if (!el) return;
+
+  // pega apenas registros aprovados com pelo menos 1 lançamento
+  const regs = colab.registros.filter(r => r.status === 'Aprovado' && r.lancamentos.length > 0);
+
+  if (!regs.length) {
+    el.innerHTML = '<div class="real-empty">Nenhum período aprovado para registrar realizações.</div>';
+    return;
+  }
+
+  el.innerHTML = regs.map(r => renderRealSection(colab.__key, r)).join('');
+}
+
+function renderRealSection(key, reg) {
+  const realizacoes = reg.realizacoes || [];
+  const diasOficiais = reg.lancamentos.reduce((s, l) => s + (l.dias || 0), 0);
+  const diasRealizados = realizacoes.reduce((s, r) => s + (Number(r.dias) || 0), 0);
+  const saldoRestante = diasOficiais - diasRealizados;
+
+  const badgeCls = saldoRestante === 0 ? 'zerado' : saldoRestante < 0 ? 'excesso' : 'parcial';
+  const badgeTxt = saldoRestante === 0 ? 'Saldo zerado' : saldoRestante < 0 ? `Excesso ${Math.abs(saldoRestante)}d` : `Saldo ${saldoRestante}d`;
+
+  const oficialHtml = reg.lancamentos.map(l =>
+    `<div class="real-oficial-row">
+      <span class="real-oficial-periodo">${formatDate(l.inicio)} → ${formatDate(l.fim)}</span>
+      <span class="real-oficial-dias">${l.dias}d</span>
+    </div>`
+  ).join('');
+
+  const obsHtml = reg._obsGestor
+    ? `<div class="real-obs"><strong>Observação do gestor</strong>${reg._obsGestor}</div>`
+    : '';
+
+  const listaHtml = realizacoes.length
+    ? `<div class="real-row-label">Utilizações registradas</div>` +
+      realizacoes.map((r, i) => `
+        <div class="real-row">
+          <div class="real-row-dates">${formatDate(r.saida)} → ${formatDate(r.retorno)}</div>
+          <div class="real-row-dias">${r.dias}d${r.obs ? ` · <span style="font-weight:400;color:var(--text-sec)">${r.obs}</span>` : ''}</div>
+          <div></div>
+          <button class="real-row-del" onclick="removerRealizacao('${key}','${reg._sbId}',${i})" title="Remover">✕</button>
+        </div>`).join('')
+    : `<div class="real-empty">Nenhuma utilização registrada ainda.</div>`;
+
+  return `<div class="real-section" id="real-sec-${reg._sbId}">
+    <div class="real-section-hdr">
+      <div class="real-section-title">PA ${reg.ano} · ${diasOficiais}d oficiais</div>
+      <span class="real-saldo-badge ${badgeCls}">${badgeTxt}</span>
+    </div>
+    <div class="real-oficial">
+      <div class="real-oficial-label">Período oficial (documento)</div>
+      ${oficialHtml}
+    </div>
+    ${obsHtml}
+    <div class="real-list">${listaHtml}</div>
+    <div class="real-add-form" id="real-form-${reg._sbId}">
+      <div class="real-add-row">
+        <div>
+          <div class="real-add-label">Data de saída</div>
+          <input class="real-add-input" type="date" id="real-saida-${reg._sbId}">
+        </div>
+        <div>
+          <div class="real-add-label">Data de retorno</div>
+          <input class="real-add-input" type="date" id="real-retorno-${reg._sbId}" oninput="calcDiasReal('${reg._sbId}')">
+        </div>
+      </div>
+      <div class="real-add-row three">
+        <div>
+          <div class="real-add-label">Dias</div>
+          <input class="real-add-input" type="number" id="real-dias-${reg._sbId}" min="1" placeholder="Auto">
+        </div>
+        <div>
+          <div class="real-add-label">Observação (opcional)</div>
+          <input class="real-add-input" type="text" id="real-obs-${reg._sbId}" placeholder="Ex: voltou 2 dias antes">
+        </div>
+      </div>
+      <div class="real-add-actions">
+        <button class="btn-real-cancel" onclick="fecharFormReal('${reg._sbId}')">Cancelar</button>
+        <button class="btn-real-save" onclick="salvarRealizacao('${key}','${reg._sbId}')">Salvar utilização</button>
+      </div>
+    </div>
+    <button class="real-btn-add" onclick="abrirFormReal('${reg._sbId}')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Adicionar utilização
+    </button>
+  </div>`;
+}
+
+function abrirFormReal(sbId) {
+  document.getElementById(`real-form-${sbId}`)?.classList.add('open');
+}
+function fecharFormReal(sbId) {
+  const f = document.getElementById(`real-form-${sbId}`);
+  if (!f) return;
+  f.classList.remove('open');
+  ['saida','retorno','dias','obs'].forEach(k => {
+    const el = document.getElementById(`real-${k}-${sbId}`);
+    if (el) el.value = '';
+  });
+}
+
+function calcDiasReal(sbId) {
+  const saida   = document.getElementById(`real-saida-${sbId}`)?.value;
+  const retorno = document.getElementById(`real-retorno-${sbId}`)?.value;
+  const diasEl  = document.getElementById(`real-dias-${sbId}`);
+  if (saida && retorno && diasEl && !diasEl.value) {
+    const d = diffDays(saida, retorno);
+    if (d > 0) diasEl.value = d;
+  }
+}
+
+async function salvarRealizacao(key, sbId) {
+  const saida   = document.getElementById(`real-saida-${sbId}`)?.value;
+  const retorno = document.getElementById(`real-retorno-${sbId}`)?.value;
+  const diasVal = document.getElementById(`real-dias-${sbId}`)?.value;
+  const obsVal  = document.getElementById(`real-obs-${sbId}`)?.value?.trim();
+
+  if (!saida || !retorno) { alert('Informe a data de saída e de retorno.'); return; }
+  const dias = Number(diasVal) || diffDays(saida, retorno);
+  if (dias <= 0) { alert('A data de retorno deve ser posterior à saída.'); return; }
+
+  const colab = COLABORADORES.find(c => c.__key === key);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+
+  const novaRealizacao = { saida, retorno, dias, obs: obsVal || null, criadoEm: new Date().toISOString() };
+  const novaLista = [...(reg.realizacoes || []), novaRealizacao];
+
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: novaLista });
+    reg.realizacoes = novaLista;
+    fecharFormReal(sbId);
+    renderDrawerRealizacoes(colab);
+    toast(`✓ Utilização registrada — ${dias}d`);
+  } catch(e) {
+    alert('Erro ao salvar: ' + e.message);
+  }
+}
+
+async function removerRealizacao(key, sbId, idx) {
+  if (!confirm('Remover esta utilização?')) return;
+  const colab = COLABORADORES.find(c => c.__key === key);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+
+  const novaLista = reg.realizacoes.filter((_, i) => i !== idx);
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: novaLista });
+    reg.realizacoes = novaLista;
+    renderDrawerRealizacoes(colab);
+    toast('Utilização removida');
+  } catch(e) {
+    alert('Erro ao remover: ' + e.message);
   }
 }
 
