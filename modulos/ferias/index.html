@@ -846,6 +846,16 @@
   .proto-search-clear:hover { background: #98A2B3; }
   .proto-search-clear.visible { display: flex; }
   .proto-fsep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+  .filter-wrap { position: relative; display: inline-flex; align-items: center; }
+  .filter-clear {
+    position: absolute; right: 28px; top: 50%; transform: translateY(-50%);
+    display: none; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%; border: none;
+    background: #D0D5DD; color: #fff; font-size: 10px; cursor: pointer;
+    z-index: 1; padding: 0; transition: background 0.12s;
+  }
+  .filter-clear:hover { background: #98A2B3; }
+  .filter-clear.visible { display: flex; }
   .proto-fsel {
     height: 38px; padding: 0 28px 0 12px;
     border: 1.5px solid var(--border); border-radius: 8px;
@@ -1043,12 +1053,21 @@
             <div class="search-colab-dd" id="searchColabBarDD"></div>
           </div>
           <div class="proto-fsep"></div>
-          <select class="proto-fsel" id="sidebarEmpresa" onchange="renderAll()"><option value="">Todas as empresas</option></select>
-          <select class="proto-fsel" id="sidebarSetor" onchange="renderAll()"><option value="">Todos os setores</option></select>
-          <select class="proto-fsel" id="listaAnualAno" onchange="ANO_REF=parseInt(this.value);renderListaAnual()">
-            <option value="2024">2024</option><option value="2025">2025</option>
-            <option value="2026" selected>2026</option><option value="2027">2027</option>
-          </select>
+          <div class="filter-wrap">
+            <select class="proto-fsel" id="sidebarEmpresa" onchange="renderAll();syncFilterClear('sidebarEmpresa','')"><option value="">Todas as empresas</option></select>
+            <button class="filter-clear" id="clr-sidebarEmpresa" onclick="clearFilter('sidebarEmpresa','',()=>{renderAll()})" tabindex="-1" title="Limpar filtro">✕</button>
+          </div>
+          <div class="filter-wrap">
+            <select class="proto-fsel" id="sidebarSetor" onchange="renderAll();syncFilterClear('sidebarSetor','')"><option value="">Todos os setores</option></select>
+            <button class="filter-clear" id="clr-sidebarSetor" onclick="clearFilter('sidebarSetor','',()=>{renderAll()})" tabindex="-1" title="Limpar filtro">✕</button>
+          </div>
+          <div class="filter-wrap">
+            <select class="proto-fsel" id="listaAnualAno" onchange="ANO_REF=parseInt(this.value);renderListaAnual();syncFilterClear('listaAnualAno','2026')">
+              <option value="2024">2024</option><option value="2025">2025</option>
+              <option value="2026" selected>2026</option><option value="2027">2027</option>
+            </select>
+            <button class="filter-clear" id="clr-listaAnualAno" onclick="clearFilter('listaAnualAno','2026',()=>{ANO_REF=2026;renderListaAnual()})" tabindex="-1" title="Limpar filtro">✕</button>
+          </div>
           <div class="proto-fsep"></div>
           <button class="proto-btn-report rh-only" onclick="abrirModalRelatorio()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -1093,9 +1112,12 @@
             </button>
             <div class="gantt-nav-filters">
               <span class="gantt-filter-label">Setor</span>
-              <select id="ganttFiltroSetor" class="gantt-filter-select" onchange="renderTimeline()">
-                <option value="">Todos</option>
-              </select>
+              <div class="filter-wrap">
+                <select id="ganttFiltroSetor" class="gantt-filter-select" onchange="renderTimeline();syncFilterClear('ganttFiltroSetor','')">
+                  <option value="">Todos os setores</option>
+                </select>
+                <button class="filter-clear" id="clr-ganttFiltroSetor" onclick="clearFilter('ganttFiltroSetor','',()=>{renderTimeline()})" tabindex="-1" title="Limpar filtro" style="right:22px;">✕</button>
+              </div>
             </div>
           </div>
           <div id="ganttContent"></div>
@@ -4033,6 +4055,21 @@ function fecharSearchColabBar() {
   document.getElementById('searchColabBarDD')?.classList.remove('open');
 }
 
+// ─── Filtros com botão X ──────────────────────────────────────────────────────
+function syncFilterClear(selectId, defaultVal) {
+  const sel = document.getElementById(selectId);
+  const btn = document.getElementById('clr-' + selectId);
+  if (!sel || !btn) return;
+  btn.classList.toggle('visible', sel.value !== defaultVal);
+}
+
+function clearFilter(selectId, defaultVal, callback) {
+  const sel = document.getElementById(selectId);
+  if (sel) sel.value = defaultVal;
+  syncFilterClear(selectId, defaultVal);
+  if (callback) callback();
+}
+
 function limparSearchColabBar() {
   _searchColabText = '';
   _searchColabSel  = null;
@@ -4370,6 +4407,7 @@ function renderTimeline() {
         setoresUnicos.map(s => `<option value="${s}"${s === ganttSetorFiltro ? ' selected' : ''}>${s}</option>`).join('');
     }
   } catch(e) { console.warn('ganttFiltroSetor populate error:', e); }
+  syncFilterClear('ganttFiltroSetor', '');
 
   const filtrados = COLABORADORES.filter(c => {
     if (sbAtivo === 'ativo'   && c.ativo === false) return false;
