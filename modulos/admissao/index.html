@@ -1558,19 +1558,38 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const BLOCO_COLAB = ['foto3x4','rg_frente','cpf_doc','pis_doc','titulo','cnh_doc','ctps','comp_res','cert_nasc','rg_conjuge','cpf_conjuge','comp_banco','cart_vt','exame_admissional','antecedentes_criminais'];
   const OBRIGATORIOS = ['foto3x4','rg_frente','cpf_doc','comp_res','ctps','cert_nasc'];
 
-  // Gerar entradas de certidão por dependente (cert_dep_0, cert_dep_1, ...)
+  // Gerar entradas de documentos por dependente (certidão, CPF e docs JSONB)
   const deps = Array.isArray(f.dependentes) ? f.dependentes : [];
   const certDepEntries = await Promise.all(
     deps.map(async (dep, i) => {
       const k = `cert_dep_${i}`;
-      const kLegado = i === 0 ? 'cert_dep' : null; // compatibilidade com chave antiga
+      const kLegado = i === 0 ? 'cert_dep' : null;
       const path = docs[k] || (kLegado ? docs[kLegado] : null);
       const label = `Certidão — ${dep.nome || ('Dependente ' + (i + 1))}`;
-      if (!path) return { k, label, b64: null };
-      const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
-      const b64 = await docUrlToBase64(url);
-      return { k, label, b64 };
+      if (!path) return { k, label, b64: null, depIdx: i };
+      const b64 = await docUrlToBase64(`${SB_URL}/storage/v1/object/public/admissao-docs/${path}`);
+      return { k, label, b64, depIdx: i };
     })
+  );
+  const cpfDepEntries = await Promise.all(
+    deps.map(async (dep, i) => {
+      const k = `cpf_dep_${i}`;
+      const path = docs[k];
+      const label = `CPF — ${dep.nome || ('Dependente ' + (i + 1))}`;
+      if (!path) return { k, label, b64: null, depIdx: i };
+      const b64 = await docUrlToBase64(`${SB_URL}/storage/v1/object/public/admissao-docs/${path}`);
+      return { k, label, b64, depIdx: i };
+    })
+  );
+  const jsonbDepEntries = await Promise.all(
+    deps.flatMap((dep, i) =>
+      (dep.docs || []).map(async (d, j) => {
+        const label = `${d.label || 'Documento'} — ${dep.nome || ('Dependente ' + (i + 1))}`;
+        if (!d.path) return { k: `dep_${i}_${j}`, label, b64: null, depIdx: i };
+        const b64 = await docUrlToBase64(`${SB_URL}/storage/v1/object/public/admissao-docs/${d.path}`);
+        return { k: `dep_${i}_${j}`, label, b64, depIdx: i };
+      })
+    )
   );
   const cart_vacina_path = docs['cart_vacina'];
   const cartVacinaEntry = cart_vacina_path
@@ -1618,7 +1637,16 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
 
   // Monta seção de documentos dos dependentes com título integrado ao primeiro item
   const renderDepSection = () => {
-    const all = [...certDepEntries.filter(e => e.b64), ...(cartVacinaEntry?.b64 ? [cartVacinaEntry] : [])];
+    // Agrupa por dependente: certidão + CPF + docs JSONB, depois carteira de vacinação
+    const all = [];
+    deps.forEach((dep, i) => {
+      const cert = certDepEntries[i];
+      if (cert?.b64) all.push(cert);
+      const cpf = cpfDepEntries[i];
+      if (cpf?.b64) all.push(cpf);
+      jsonbDepEntries.filter(e => e.depIdx === i && e.b64).forEach(e => all.push(e));
+    });
+    if (cartVacinaEntry?.b64) all.push(cartVacinaEntry);
     if (!all.length) return '';
     return all.map((e, i) => {
       const sectionTitle = i === 0
