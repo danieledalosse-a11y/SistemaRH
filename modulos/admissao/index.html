@@ -875,6 +875,21 @@ function fiCheck(id, label, val) {
 }
 function fv(id) { const el = document.getElementById('pf_'+id); if (!el) return ''; if (el.type==='checkbox') return el.checked; if (el.tagName==='SELECT' && (el.id==='pf_vale_transporte'||el.id==='pf_primeiro_emprego')) return el.value==='Sim'; return el.value.trim(); }
 
+async function buscarCepRevisao(cep) {
+  const c = cep.replace(/\D/g,'');
+  if (c.length !== 8) return;
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${c}/json/`);
+    const d = await r.json();
+    if (d.erro) return;
+    const set = (id, val) => { const el = document.getElementById('pf_'+id); if (el && !el.value) el.value = val || ''; };
+    set('endereco', d.logradouro);
+    set('bairro',   d.bairro);
+    set('cidade',   d.localidade);
+    set('uf',       d.uf);
+  } catch(e) {}
+}
+
 function renderPanelPessoal(f) {
   document.getElementById('ptab-pessoal').innerHTML = `
     <div class="data-section"><div class="data-section-title">Identificação</div><div class="data-grid">
@@ -893,8 +908,10 @@ function renderPanelPessoal(f) {
       ${fi('cnh_validade','Validade',f.cnh_validade,'date')}
     </div></div>
     <div class="data-section"><div class="data-section-title">Endereço e Contato</div><div class="data-grid">
-      ${fi('endereco','Endereço',f.endereco)} ${fi('cep','CEP',f.cep)}
+      ${fi('endereco','Endereço',f.endereco)}
+      <div class="data-row"><label class="data-label" for="pf_cep">CEP</label><input class="form-control-sm" id="pf_cep" type="text" value="${esc(f.cep||'')}" onblur="buscarCepRevisao(this.value)"></div>
       ${fi('cidade','Cidade',f.cidade)} ${fi('uf','UF',f.uf)}
+      ${fi('bairro','Bairro',f.bairro)}
       ${fi('celular','Celular',f.celular)} ${fi('tel_recado','Tel. Recado',f.tel_recado)}
       ${fi('tel_recado_nome','Nome Recado',f.tel_recado_nome)} ${fi('email','E-mail',f.email,'email')}
     </div></div>`;
