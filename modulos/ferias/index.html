@@ -4222,6 +4222,16 @@ function renderTimeline() {
   const sbSet   = document.getElementById('sidebarSetor')?.value   || '';
   const sbAtivo = document.getElementById('sidebarAtivo')?.value ?? 'ativo';
 
+  // popula filtro de setor (mantém seleção atual) — deve vir ANTES de filtrados
+  const ganttSetorSel = document.getElementById('ganttFiltroSetor');
+  if (ganttSetorSel) {
+    const valorAtual = ganttSetorSel.value;
+    const setoresUnicos = [...new Set(COLABORADORES.filter(c => c.ativo !== false && c.setor).map(c => normSetor(c.setor)))].filter(Boolean).sort();
+    ganttSetorSel.innerHTML = '<option value="">Todos os setores</option>' +
+      setoresUnicos.map(s => `<option value="${s}"${s === valorAtual ? ' selected' : ''}>${s}</option>`).join('');
+  }
+  const ganttSetorFiltro = ganttSetorSel?.value || '';
+
   const filtrados = COLABORADORES.filter(c => {
     if (sbAtivo === 'ativo'   && c.ativo === false) return false;
     if (sbAtivo === 'inativo' && c.ativo !== false) return false;
@@ -4258,16 +4268,6 @@ function renderTimeline() {
     const dow = new Date(ds + 'T12:00:00').getDay(); // 0=dom,6=sab
     diasInfo.push({ d, ds, dow, weekend: dow===0, isHoje: ds===hoje }); // só domingo é sombreado
   }
-
-  // popula filtro de setor (mantém seleção atual)
-  const ganttSetorSel = document.getElementById('ganttFiltroSetor');
-  if (ganttSetorSel) {
-    const valorAtual = ganttSetorSel.value;
-    const setoresUnicos = [...new Set(COLABORADORES.filter(c => c.ativo !== false && c.setor).map(c => normSetor(c.setor)))].filter(Boolean).sort();
-    ganttSetorSel.innerHTML = '<option value="">Todos os setores</option>' +
-      setoresUnicos.map(s => `<option value="${s}"${s === valorAtual ? ' selected' : ''}>${s}</option>`).join('');
-  }
-  const ganttSetorFiltro = ganttSetorSel?.value || '';
 
   // thead
   let thDias = `<th class="gantt-name-col" style="padding-left:16px;font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.6px;">Colaborador</th>`;
