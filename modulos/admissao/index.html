@@ -1204,7 +1204,8 @@ function renderPanelDocs(f) {
   const candRows = DOC_CAND
     .filter(d => (!d.depOnly || hasDeps) && (!d.conjOnly || conjVisible))
     .map(d => docRow(d.key, d.label, d.req, false)).join('') + certDepRows;
-  const rhRows = docRow('exame_admissional', 'Exame Admissional', false, true);
+  const rhRows = docRow('exame_admissional', 'Exame Admissional', false, true)
+              + docRow('antecedentes_criminais', 'Antecedentes Criminais', false, true);
 
   document.getElementById('ptab-docs').innerHTML = `
     <div class="panel-doc-list">
@@ -1510,18 +1511,23 @@ async function docUrlToBase64(url) {
 
 async function gerarPDFFicha(f, c, dadosAdm = {}) {
   const DOC_LABELS = {
-    foto3x4:     'Foto 3x4',
-    rg_frente:   'RG',
-    cpf_doc:     'CPF',
-    comp_res:    'Comprovante de Residência',
-    ctps:        'CTPS',
-    cert_nasc:   'Certidão de Nascimento/Casamento',
-    titulo:      'Título de Eleitor',
-    pis_doc:     'PIS/PASEP',
-    cnh_doc:     'CNH',
-    cert_dep:    'Certidão dos Dependentes',
-    cart_vacina: 'Carteira de Vacinação',
-    exame_admissional: 'Exame Admissional',
+    foto3x4:               'Foto 3x4',
+    rg_frente:             'RG',
+    cpf_doc:               'CPF',
+    comp_res:              'Comprovante de Residência',
+    ctps:                  'CTPS',
+    cert_nasc:             'Certidão de Nascimento/Casamento',
+    titulo:                'Título de Eleitor',
+    pis_doc:               'PIS/PASEP',
+    cnh_doc:               'CNH',
+    rg_conjuge:            'RG do Cônjuge',
+    cpf_conjuge:           'CPF do Cônjuge',
+    comp_banco:            'Comprovante de Conta Bancária',
+    cart_vt:               'Cartão de Vale-Transporte',
+    cert_dep:              'Certidão dos Dependentes',
+    cart_vacina:           'Carteira de Vacinação',
+    exame_admissional:     'Exame Admissional',
+    antecedentes_criminais:'Antecedentes Criminais',
   };
   const docs = f.docs || {};
 
@@ -1549,7 +1555,7 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   };
 
   // Blocos: colaborador e dependentes (certidão por dependente individualmente)
-  const BLOCO_COLAB = ['foto3x4','rg_frente','cpf_doc','pis_doc','titulo','cnh_doc','ctps','comp_res','cert_nasc','exame_admissional'];
+  const BLOCO_COLAB = ['foto3x4','rg_frente','cpf_doc','pis_doc','titulo','cnh_doc','ctps','comp_res','cert_nasc','rg_conjuge','cpf_conjuge','comp_banco','cart_vt','exame_admissional','antecedentes_criminais'];
   const OBRIGATORIOS = ['foto3x4','rg_frente','cpf_doc','comp_res','ctps','cert_nasc'];
 
   // Gerar entradas de certidão por dependente (cert_dep_0, cert_dep_1, ...)
@@ -1761,7 +1767,8 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
   <div class="sec">
     <div class="sec-head"><div class="sec-accent"></div><div class="sec-title">Endereço e Contato</div></div>
     <table>
-      ${row('Endereço', [f.endereco, f.cep ? 'CEP: '+f.cep : '', f.cidade, f.uf].filter(Boolean).join(' — '))}
+      ${row('Endereço', [f.endereco, f.numero, f.complemento, f.bairro].filter(Boolean).join(', '))}
+      ${row('CEP / Cidade / UF', [f.cep ? 'CEP: '+f.cep : '', f.cidade, f.uf].filter(Boolean).join(' — '))}
       ${row('Celular', f.celular)}
       ${row('Tel. Recado', f.tel_recado ? f.tel_recado + (f.tel_recado_nome ? ' ('+f.tel_recado_nome+')' : '') : '')}
       ${row('E-mail', f.email)}
