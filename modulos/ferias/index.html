@@ -505,16 +505,34 @@
 
   @media print {
     body > *:not(#printArea) { display: none !important; }
-    #printArea { display: block !important; font-family: Arial, sans-serif; color: #222; padding: 24px; }
-    #printArea h2 { margin: 0 0 2px; font-size: 18px; }
-    #printArea .pr-sub { font-size: 12px; color: #666; margin-bottom: 20px; }
-    #printArea .pr-pa { margin-bottom: 16px; page-break-inside: avoid; }
-    #printArea .pr-pa-hdr { display: flex; justify-content: space-between; background: #f5f5f5; padding: 6px 10px; border-radius: 4px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-    #printArea table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    #printArea th { text-align: left; padding: 4px 8px; border-bottom: 1px solid #ddd; color: #555; }
-    #printArea td { padding: 4px 8px; border-bottom: 1px solid #eee; }
-    #printArea .pr-empty { font-size: 12px; color: #888; padding: 4px 0; }
-    #printArea .pr-footer { margin-top: 24px; font-size: 11px; color: #aaa; }
+    #printArea { display: block !important; font-family: 'Inter', Arial, sans-serif; color: #111; padding: 28px 32px; }
+    /* cabeçalho */
+    #printArea .pr-meta { font-size: 9px; color: #999; margin-bottom: 12px; letter-spacing: 0.3px; }
+    #printArea .pr-nome { font-size: 20px; font-weight: 700; margin: 0 0 3px; letter-spacing: -0.3px; }
+    #printArea .pr-sub  { font-size: 11px; color: #667085; margin-bottom: 22px; }
+    #printArea .pr-divider { border: none; border-top: 1px solid #E4E7EC; margin: 0 0 18px; }
+    /* cards de PA */
+    #printArea .pr-pa { border: 1px solid #E4E7EC; border-radius: 8px; margin-bottom: 12px; page-break-inside: avoid; overflow: hidden; }
+    #printArea .pr-pa-hdr { display: flex; justify-content: space-between; align-items: center; background: #F9FAFB; padding: 8px 14px; border-bottom: 1px solid #E4E7EC; }
+    #printArea .pr-pa-title { font-size: 13px; font-weight: 600; color: #111; }
+    #printArea .pr-pa-period { font-size: 11px; color: #667085; margin-left: 6px; }
+    #printArea .pr-pa-right { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #667085; }
+    #printArea .pr-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+    #printArea .pr-badge.verde  { background: #DCFCE7; color: #15803D; }
+    #printArea .pr-badge.amber  { background: #FEF3C7; color: #B45309; }
+    #printArea .pr-badge.azul   { background: #DBEAFE; color: #1849A9; }
+    #printArea .pr-badge.cinza  { background: #F1F5F9; color: #64748B; }
+    /* body do PA */
+    #printArea .pr-pa-body { padding: 10px 14px; }
+    #printArea .pr-tl-item { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px solid #F1F5F9; }
+    #printArea .pr-tl-item:last-child { border-bottom: none; }
+    #printArea .pr-tl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    #printArea .pr-tl-dates { font-size: 12px; font-weight: 500; color: #111; }
+    #printArea .pr-tl-dias  { font-size: 12px; color: #667085; }
+    #printArea .pr-tl-nota  { font-size: 10px; color: #98A2B3; margin-top: 1px; }
+    #printArea .pr-empty { font-size: 11px; color: #98A2B3; padding: 6px 0; }
+    /* rodapé */
+    #printArea .pr-footer { margin-top: 28px; font-size: 10px; color: #C0C9D8; text-align: center; }
   }
 
   /* ── Cores por empresa ── */
@@ -818,6 +836,15 @@
     font-size: 13px; color: var(--text); width: 100%; font-family: inherit;
   }
   .proto-search-inp::placeholder { color: #98A2B3; }
+  .proto-search-clear {
+    display: none; align-items: center; justify-content: center;
+    width: 18px; height: 18px; flex-shrink: 0;
+    background: #D0D5DD; border-radius: 50%; border: none; cursor: pointer;
+    color: #fff; font-size: 11px; line-height: 1; padding: 0;
+    transition: background 0.12s;
+  }
+  .proto-search-clear:hover { background: #98A2B3; }
+  .proto-search-clear.visible { display: flex; }
   .proto-fsep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
   .proto-fsel {
     height: 38px; padding: 0 28px 0 12px;
@@ -1012,6 +1039,7 @@
               onfocus="searchColabBarInput(this.value)"
               onblur="setTimeout(()=>fecharSearchColabBar(),200)"
               onkeydown="searchColabBarKeydown(event)">
+            <button class="proto-search-clear" id="searchColabClear" onclick="limparSearchColabBar()" tabindex="-1" title="Limpar busca">✕</button>
             <div class="search-colab-dd" id="searchColabBarDD"></div>
           </div>
           <div class="proto-fsep"></div>
@@ -2143,26 +2171,64 @@ function imprimirHistoricoDrawer() {
   const colab = COLABORADORES.find(c => c.__key === _drawerKey);
   if (!colab) return;
   const regs = [...colab.registros].reverse();
+
   const rows = regs.map(r => {
-    const saldo = calcSaldo(r);
-    const lancs = r.lancamentos.length
-      ? `<table><thead><tr><th>Início</th><th>Fim</th><th>Dias</th><th>Obs</th></tr></thead><tbody>` +
-        r.lancamentos.map(l => `<tr><td>${formatDate(l.inicio)}</td><td>${formatDate(l.fim)}</td><td>${l.dias}d</td><td>${l.nota || '—'}</td></tr>`).join('') +
-        `</tbody></table>`
-      : `<p class="pr-empty">Sem lançamentos neste PA.</p>`;
+    const saldo   = calcSaldo(r);
+    const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+
+    // badge de situação
+    let badgeCls = 'cinza', badgeTxt = r.status || '—';
+    if (r.status === 'Pendente')                           { badgeCls = 'amber'; badgeTxt = 'Pendente aprovação'; }
+    else if (r.status === 'Rejeitado')                     { badgeCls = 'cinza'; badgeTxt = 'Rejeitado'; }
+    else if (r.status === 'Cancelado' || r.status === 'Descartado') { badgeCls = 'cinza'; badgeTxt = r.status; }
+    else if (!excluir.has(r.status) && r.lancamentos.length === 0 && saldo > 0) { badgeCls = 'amber'; badgeTxt = 'Sem agendamento'; }
+    else if (saldo === 0)                                  { badgeCls = 'verde'; badgeTxt = 'Concluído'; }
+    else if (!excluir.has(r.status))                       { badgeCls = 'azul';  badgeTxt = 'Em andamento'; }
+
+    const itens = r.lancamentos.map(l => {
+      const passado = l.fim && l.fim < HOJE;
+      const dotColor = passado ? '#C0C9D8' : '#12B76A';
+      return `<div class="pr-tl-item">
+        <div class="pr-tl-dot" style="background:${dotColor};"></div>
+        <div>
+          <div class="pr-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} <span class="pr-tl-dias">· ${l.dias}d</span></div>
+          ${l.nota ? `<div class="pr-tl-nota">${l.nota}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    const abonoPec = r.abonoPecuniario || 0;
+    const abonoHtml = abonoPec > 0
+      ? `<div class="pr-tl-item"><div class="pr-tl-dot" style="background:#C0C9D8;"></div><div><div class="pr-tl-dates" style="color:#667085;">Abono pecuniário <span class="pr-tl-dias">· ${abonoPec}d</span></div></div></div>`
+      : '';
+
+    const corpo = (itens || abonoHtml)
+      ? itens + abonoHtml
+      : `<div class="pr-empty">Sem lançamentos neste PA.</div>`;
+
     return `<div class="pr-pa">
       <div class="pr-pa-hdr">
-        <span>PA ${r.ano} · ${formatDate(r.paInicio)} → ${formatDate(r.paFim)}</span>
-        <span>Saldo: ${saldo}/${r.totalDias}d</span>
+        <div>
+          <span class="pr-pa-title">PA ${r.ano}</span>
+          <span class="pr-pa-period">· ${formatDate(r.paInicio)} → ${formatDate(r.paFim)}</span>
+        </div>
+        <div class="pr-pa-right">
+          Saldo ${saldo}/${r.totalDias}d
+          <span class="pr-badge ${badgeCls}">${badgeTxt}</span>
+        </div>
       </div>
-      ${lancs}
+      <div class="pr-pa-body">${corpo}</div>
     </div>`;
   }).join('');
 
-  const sub = [colab.cargo, colab.setor, colab.unidade, colab.registro ? 'Mat. ' + colab.registro : ''].filter(Boolean).join(' · ');
+  const sub  = [colab.cargo, colab.setor, colab.unidade, colab.registro ? 'Mat. ' + colab.registro : ''].filter(Boolean).join(' · ');
+  const agora = new Date().toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
+
   document.getElementById('printArea').innerHTML = `
-    <h2>${colab.nome}</h2>
+    <div class="pr-meta">Férias — Sistema RH &nbsp;·&nbsp; ${agora}</div>
+    <div class="pr-nome">${colab.nome}</div>
     <div class="pr-sub">${sub}</div>
+    <hr class="pr-divider">
     ${rows}
     <div class="pr-footer">Sistema RH · ${new Date().toLocaleDateString('pt-BR')}</div>`;
   window.print();
@@ -3938,6 +4004,8 @@ function searchColabBarInput(val) {
   _searchColabSel = null;
   _searchColabIdx = -1;
   _searchColabText = val.trim();
+  const clrBtn = document.getElementById('searchColabClear');
+  if (clrBtn) clrBtn.classList.toggle('visible', _searchColabText.length > 0);
   const dd = document.getElementById('searchColabBarDD');
   if (!dd) return;
   const q = val.toLowerCase().trim();
@@ -3974,6 +4042,7 @@ function limparSearchColabBar() {
   _searchColabSel  = null;
   const inp = document.getElementById('searchColabBar');
   if (inp) inp.value = '';
+  document.getElementById('searchColabClear')?.classList.remove('visible');
   fecharSearchColabBar();
   renderListaAnual();
 }
