@@ -2677,16 +2677,21 @@ function renderListaAnual() {
     const regs = c.registros.filter(r => !excl.has(r.status));
     if (_statusFiltro === 'hoje')  return regs.some(reg => reg.lancamentos.some(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim));
     if (_statusFiltro === 'risco') return isRiscoDobra(c);
-    if (_statusFiltro === 'sem')   return regs.some(reg => reg.paInicio && reg.paFim && HOJE >= reg.paInicio && HOJE <= reg.paFim && reg.lancamentos.length === 0 && calcSaldo(reg) > 0);
+    if (_statusFiltro === 'sem')   return isSemAgendadoAno(c);
     if (_statusFiltro === 'ok')    return getPendentes().some(p => p.__key === c.__key);
     return true;
   });
+
+  // Filtro de texto (barra de busca)
+  const baseSearch = _searchColabText
+    ? baseFiltrada.filter(c => c.nome.toLowerCase().includes(_searchColabText.toLowerCase()))
+    : baseFiltrada;
 
   // Para cada colaborador, coleta os PAs relevantes para o ano selecionado
   // No filtro "risco": mostra os PAs que têm saldo em risco de dobra (independente do ano)
   // Nos demais: PAs que se sobrepõem ao ANO_REF
   const items = [];
-  baseFiltrada.forEach(c => {
+  baseSearch.forEach(c => {
     let pasDoAno;
     if (_statusFiltro === 'risco') {
       // apenas PAs com saldo em risco de dobra (qualquer ano)
@@ -3817,16 +3822,20 @@ function renderSidebarAlertas(risco, pend) {
 // ─── Search na barra de ação ──────────────────────────────────────────────────
 let _searchColabIdx = -1;
 let _searchColabSel = null;
+let _searchColabText = '';   // texto livre para filtrar a lista
 
 function searchColabBarInput(val) {
   _searchColabSel = null;
   _searchColabIdx = -1;
+  _searchColabText = val.trim();
   const dd = document.getElementById('searchColabBarDD');
   if (!dd) return;
   const q = val.toLowerCase().trim();
+  // filtra a lista em tempo real
+  renderListaAnual();
   if (!q) { dd.classList.remove('open'); dd.innerHTML = ''; return; }
   const lista = COLABORADORES.filter(c =>
-    c.nome.toLowerCase().includes(q) || c.registro.toLowerCase().includes(q)
+    c.nome.toLowerCase().includes(q) || (c.registro||'').toLowerCase().includes(q)
   ).slice(0, 8);
   if (!lista.length) { dd.innerHTML = '<div class="search-colab-item" style="color:var(--text-ter)">Nenhum resultado</div>'; dd.classList.add('open'); return; }
   dd.innerHTML = lista.map((c, i) => `
@@ -3839,23 +3848,46 @@ function searchColabBarInput(val) {
 
 function selecionarColabBar(idx) {
   _searchColabSel = COLABORADORES[idx];
+  _searchColabText = _searchColabSel.nome;
   const input = document.getElementById('searchColabBar');
   if (input && _searchColabSel) input.value = _searchColabSel.nome;
   fecharSearchColabBar();
+  renderListaAnual();
 }
 
 function fecharSearchColabBar() {
   document.getElementById('searchColabBarDD')?.classList.remove('open');
 }
 
+function limparSearchColabBar() {
+  _searchColabText = '';
+  _searchColabSel  = null;
+  const inp = document.getElementById('searchColabBar');
+  if (inp) inp.value = '';
+  fecharSearchColabBar();
+  renderListaAnual();
+}
+
 function searchColabBarKeydown(e) {
-  const dd = document.getElementById('searchColabBarDD');
+  const dd    = document.getElementById('searchColabBarDD');
   const items = dd?.querySelectorAll('.search-colab-item') || [];
-  if (!items.length) return;
-  if (e.key === 'ArrowDown') { e.preventDefault(); _searchColabIdx = Math.min(_searchColabIdx+1, items.length-1); items.forEach((el,i) => el.style.background = i===_searchColabIdx?'var(--bg)':''); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); _searchColabIdx = Math.max(_searchColabIdx-1, 0); items.forEach((el,i) => el.style.background = i===_searchColabIdx?'var(--bg)':''); }
-  else if (e.key === 'Enter' && _searchColabIdx >= 0) { items[_searchColabIdx]?.dispatchEvent(new MouseEvent('mousedown')); }
-  else if (e.key === 'Escape') { fecharSearchColabBar(); }
+  if (e.key === 'Escape') { limparSearchColabBar(); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); _searchColabIdx = Math.min(_searchColabIdx+1, items.length-1); items.forEach((el,i) => el.style.background = i===_searchColabIdx?'var(--bg)':''); return; }
+  if (e.key === 'ArrowUp')   { e.preventDefault(); _searchColabIdx = Math.max(_searchColabIdx-1, 0); items.forEach((el,i) => el.style.background = i===_searchColabIdx?'var(--bg)':''); return; }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_searchColabIdx >= 0 && items[_searchColabIdx]) {
+      items[_searchColabIdx].dispatchEvent(new MouseEvent('mousedown'));
+    } else if (_searchColabSel) {
+      fecharSearchColabBar();
+      abrirDrawer(_searchColabSel.__key);
+    } else {
+      // abre o drawer do primeiro resultado filtrado
+      const q = _searchColabText.toLowerCase();
+      const primeiro = q ? COLABORADORES.find(c => c.nome.toLowerCase().includes(q)) : null;
+      if (primeiro) { fecharSearchColabBar(); abrirDrawer(primeiro.__key); }
+    }
+  }
 }
 
 function abrirAgendarDireto() {
