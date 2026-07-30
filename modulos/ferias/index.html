@@ -4493,10 +4493,13 @@ function renderTimeline() {
         const drawDay = l.inicio >= mesInicio ? l.inicio : mesInicio;
         if (ds !== drawDay) return;
 
-        const contLeft  = l.inicio < mesInicio; // veio do mês anterior
-        const contRight = l.fim > mesFim;        // continua no próximo mês
+        const contLeft  = l.inicio < mesInicio;
+        const contRight = l.fim > mesFim;
         const endDs     = contRight ? mesFim : l.fim;
-        const colsTotal = Math.max(1, Math.round((new Date(endDs+'T12:00:00') - new Date(drawDay+'T12:00:00')) / 86400000) + 1);
+        const diaInicio = parseInt(drawDay.slice(-2));
+        const maxCols   = diasNoMes - diaInicio + 1; // colunas disponíveis até o fim do mês
+        const colsCalc  = Math.max(1, Math.round((new Date(endDs+'T12:00:00') - new Date(drawDay+'T12:00:00')) / 86400000) + 1);
+        const colsTotal = Math.min(colsCalc, maxCols);
         const statusCls = l.aprovado ? '' : 'pendente';
 
         // label: datas completas se ≥ 9 cols, só dias se ≥ 4, vazio se menor
