@@ -1020,8 +1020,11 @@ async function submitForm() {
       docs: formData.docs, preenchido_em: new Date().toISOString()
     };
 
+    const anonJwt = await getAnonToken();
+    const headersPost = { ...SB_HEADERS, 'Authorization': 'Bearer ' + anonJwt };
+
     const r1 = await fetch(`${SB_URL}/rest/v1/admissao_fichas`, {
-      method: 'POST', headers: SB_HEADERS, body: JSON.stringify(fichaPayload)
+      method: 'POST', headers: headersPost, body: JSON.stringify(fichaPayload)
     });
     if (!r1.ok) {
       let detalhe = '';
@@ -1029,7 +1032,7 @@ async function submitForm() {
       // token duplicado (já enviou antes) — trata como sucesso
       if (r1.status === 409 || (detalhe && detalhe.toLowerCase().includes('duplicate'))) {
         await fetch(`${SB_URL}/rest/v1/admissao_convites?token=eq.${convite.token}`, {
-          method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ status: 'preenchido' })
+          method: 'PATCH', headers: headersPost, body: JSON.stringify({ status: 'preenchido' })
         }).catch(() => {});
         root.innerHTML = `<div class="screen-center">
           <div class="screen-icon success"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
@@ -1042,7 +1045,7 @@ async function submitForm() {
     }
 
     await fetch(`${SB_URL}/rest/v1/admissao_convites?token=eq.${convite.token}`, {
-      method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ status: 'preenchido' })
+      method: 'PATCH', headers: headersPost, body: JSON.stringify({ status: 'preenchido' })
     });
 
     root.innerHTML = `<div class="screen-center">
