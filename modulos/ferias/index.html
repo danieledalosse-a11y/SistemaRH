@@ -612,7 +612,8 @@
     .an-row-bar, .an-row-bottom { grid-template-columns: 1fr; }
   }
   /* ── Gantt / Timeline ──────────────────────────────────────────── */
-  .gantt-wrap { overflow-x: auto; }
+  .gantt-wrap { overflow-x: auto; overflow-y: visible; }
+  .gantt-scroll { overflow-x: auto; padding: 16px 0 0; }
   .gantt-nav { display: flex; align-items: center; gap: 0; padding: 16px 20px 0; }
   .gantt-nav-btn { background: none; border: 1px solid var(--border); border-radius: 8px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; color: var(--text-sec); transition: all 0.15s; }
   .gantt-nav-btn:hover { background: var(--bg); border-color: #C4C9D4; color: var(--text); }
@@ -644,40 +645,18 @@
   .gantt-cell-today   { background: rgba(24,73,169,0.06) !important; }
   .gantt-today-marker { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: #1849A9; opacity: 0.55; pointer-events: none; transform: translateX(-50%); z-index: 3; }
 
-  /* ── Barras sólidas com texto branco ── */
+  /* ── Barras sólidas — cor definida inline via avatar color ── */
   .gantt-bar {
     position: absolute; top: 12px; height: 32px;
     border-radius: 6px; display: flex; align-items: center;
     padding: 0 9px; white-space: nowrap; overflow: hidden;
     z-index: 2; cursor: pointer;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.20);
     transition: filter 0.12s, box-shadow 0.12s;
   }
-  .gantt-bar:hover { filter: brightness(0.92); box-shadow: 0 2px 8px rgba(0,0,0,0.24); }
+  .gantt-bar:hover { filter: brightness(0.90); box-shadow: 0 3px 10px rgba(0,0,0,0.28); }
   .gantt-bar-label { font-size: 10px; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.1px; }
-  .gantt-bar.aprovado { border: none; }
-  .gantt-bar.pendente { border: 2px dashed !important; box-shadow: none; }
-  .gantt-bar.pendente .gantt-bar-label { color: inherit; }
-
-  /* Porto Rico — azul */
-  .gantt-bar.porto         { background: linear-gradient(135deg, #1849A9 0%, #1D4ED8 100%); }
-  .gantt-bar.porto.pendente { background: rgba(59,130,246,0.10) !important; border-color: #3B82F6 !important; color: #1849A9; }
-  .gantt-bar.porto.pendente .gantt-bar-label { color: #1849A9; }
-
-  /* Revest — verde-escuro */
-  .gantt-bar.revest         { background: linear-gradient(135deg, #065F46 0%, #059669 100%); }
-  .gantt-bar.revest.pendente { background: rgba(16,185,129,0.10) !important; border-color: #10B981 !important; color: #065F46; }
-  .gantt-bar.revest.pendente .gantt-bar-label { color: #065F46; }
-
-  /* Matriz — roxo */
-  .gantt-bar.matriz         { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 100%); }
-  .gantt-bar.matriz.pendente { background: rgba(124,58,237,0.10) !important; border-color: #7C3AED !important; color: #5B21B6; }
-  .gantt-bar.matriz.pendente .gantt-bar-label { color: #5B21B6; }
-
-  /* Outra — cinza-ardósia */
-  .gantt-bar.outro         { background: linear-gradient(135deg, #374151 0%, #6B7280 100%); }
-  .gantt-bar.outro.pendente { background: rgba(107,114,128,0.10) !important; border-color: #9CA3AF !important; color: #374151; }
-  .gantt-bar.outro.pendente .gantt-bar-label { color: #374151; }
+  .gantt-bar.pendente { border: 2px dashed !important; box-shadow: none !important; opacity: 0.75; }
 
   .gantt-empty { text-align: center; padding: 64px 24px; color: var(--text-sec); font-size: 13px; }
   .gantt-legend { display: flex; gap: 20px; flex-wrap: wrap; padding: 12px 20px 16px; border-top: 1px solid var(--border); margin-top: 0; }
@@ -980,11 +959,8 @@
           </div>
           <div id="ganttContent"></div>
           <div class="gantt-legend">
-            <span class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:#EFF6FF;"></span>Porto Rico</span>
-            <span class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:#ECFDF5;"></span>Revest</span>
-            <span class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:#F5F3FF;"></span>Matriz</span>
-            <span class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:#F1F5F9;"></span>Outra</span>
-            <span class="gantt-legend-item" style="margin-left:8px;"><span class="gantt-legend-dash" style="border-color:#93C5FD;"></span>Pendente aprovação</span>
+            <span class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:#1849A9;border-radius:3px;"></span>Aprovado</span>
+            <span class="gantt-legend-item"><span class="gantt-legend-dash" style="border-color:#6B7280;"></span>Pendente aprovação</span>
           </div>
         </div>
       </div><!-- /sub-timeline -->
@@ -4250,10 +4226,13 @@ function renderTimeline() {
         else if (colsTotal >= 3) label = `${l.dias}d`;
 
         const W_CELL = 32; // px por coluna — bate com min-width do th
-        barHtml += `<div class="gantt-bar ${cls} ${statusCls}"
-          style="left:1px;width:${colsTotal * W_CELL - 4}px;"
+        const bgStyle = l.aprovado
+          ? `background:${cor};`
+          : `background:transparent;border-color:${cor};`;
+        barHtml += `<div class="gantt-bar ${statusCls}"
+          style="left:1px;width:${colsTotal * W_CELL - 4}px;${bgStyle}"
           title="${c.nome}: ${l.inicio} → ${l.fim} · ${l.dias}d${l.aprovado?'':' (pendente aprovação)'}">
-          <span class="gantt-bar-label">${label}</span>
+          <span class="gantt-bar-label" style="${l.aprovado?'':'color:'+cor+';"'}>${label}</span>
         </div>`;
       });
 
@@ -4263,7 +4242,7 @@ function renderTimeline() {
     rows += `</tr>`;
   });
 
-  content.innerHTML = `<div style="overflow-x:auto;padding:16px 0 0;">
+  content.innerHTML = `<div class="gantt-scroll">
     <table class="gantt-table">
       <thead><tr>${thDias}</tr></thead>
       <tbody>${rows}</tbody>
