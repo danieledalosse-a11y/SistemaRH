@@ -522,13 +522,34 @@ function buildStep2() {
 function buildDepRow(i, d) {
   const tipoOpts = ['Filho(a)','Enteado(a)','Outro'].map(o =>
     `<option value="${o}" ${d.tipo===o?'selected':''}>${o}</option>`).join('');
+  const docsHtml = (d.docs||[]).map((doc,j)=>`<div data-j="${j}" style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 0;border-bottom:1px solid #f3f4f6;">
+    <span style="color:#22c55e;">✓</span>
+    <span style="flex:1;">${doc.desc||doc.filename||''}</span>
+    <span style="font-size:11px;color:#9ca3af;">${doc.filename||''}</span>
+    <button type="button" onclick="remDepDoc(${i},${j})" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:14px;padding:0 4px;">✕</button>
+  </div>`).join('');
   return `<div class="dep-row" data-dep="${i}">
     <div class="form-group"><label class="form-label">Nome</label><input class="form-control dep-nome" type="text" value="${d.nome||''}" placeholder="Nome completo"></div>
     <div class="form-group"><label class="form-label">Tipo</label><select class="form-control dep-tipo"><option value="">Selecione</option>${tipoOpts}</select></div>
-    <div class="form-group dep-cpf"><label class="form-label">CPF</label><input class="form-control dep-cpfval" type="text" value="${d.cpf||''}" placeholder="000.000.000-00"></div>
+    <div class="form-group dep-cpf"><label class="form-label">CPF</label><input class="form-control dep-cpfval" type="text" value="${fmtCPFdep(d.cpf||'')}" placeholder="000.000.000-00"></div>
     <div class="form-group"><label class="form-label">Data de Nascimento</label><input class="form-control date-mask dep-nascimento" type="text" inputmode="numeric" value="${d.nascimento ? d.nascimento.split('-').reverse().join('/') : ''}" placeholder="DD/MM/AAAA" maxlength="10"></div>
     <div class="form-group"><label class="form-label">Cidade de Nascimento</label><input class="form-control dep-cidade-nasc" type="text" value="${d.cidade_nascimento||''}" placeholder="Ex: São Paulo - SP"></div>
     <button class="btn-rem" data-dep="${i}">✕</button>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
+      <div style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Documentos do dependente</div>
+      <div id="dep-docs-${i}">${docsHtml}</div>
+      <div id="dep-doc-form-${i}" style="display:none;margin-top:8px;">
+        <input type="text" id="dep-doc-desc-${i}" class="form-control" placeholder="Descrição (ex: Certidão de nascimento, CPF)" style="margin-bottom:6px;font-size:13px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 14px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;background:#f9fafb;">
+            Escolher arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.gif" style="display:none" onchange="addDepDoc(${i},this)">
+          </label>
+          <span id="dep-doc-status-${i}" style="font-size:12px;color:#6b7280;"></span>
+          <button type="button" onclick="cancelDepDocForm(${i})" style="font-size:12px;background:none;border:none;cursor:pointer;color:#9ca3af;margin-left:auto;">Cancelar</button>
+        </div>
+      </div>
+      <button type="button" id="dep-doc-btn-${i}" onclick="showDepDocForm(${i})" style="font-size:12px;padding:4px 12px;border:1px dashed #d1d5db;border-radius:6px;background:transparent;color:#6b7280;cursor:pointer;margin-top:8px;font-family:inherit;">+ Adicionar documento</button>
+    </div>
   </div>`;
 }
 
@@ -840,6 +861,61 @@ function bindStepEvents() {
   });
 
   bindDepEvents();
+}
+
+function fmtCPFdep(v) { if (!v) return ''; const d = String(v).replace(/\D/g,''); if (d.length!==11) return v; return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'); }
+
+let _depDocSeq = 0;
+function showDepDocForm(i) {
+  document.getElementById('dep-doc-form-'+i).style.display = 'block';
+  document.getElementById('dep-doc-btn-'+i).style.display = 'none';
+}
+function cancelDepDocForm(i) {
+  document.getElementById('dep-doc-form-'+i).style.display = 'none';
+  document.getElementById('dep-doc-status-'+i).textContent = '';
+  document.getElementById('dep-doc-btn-'+i).style.display = '';
+}
+async function addDepDoc(depIdx, fileInput) {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const descEl = document.getElementById('dep-doc-desc-'+depIdx);
+  const statusEl = document.getElementById('dep-doc-status-'+depIdx);
+  const desc = descEl.value.trim() || file.name;
+  statusEl.textContent = 'Enviando...';
+  try {
+    const seq = ++_depDocSeq;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const path = await uploadDoc(convite.token, `dep_${depIdx}_${seq}`, file);
+    const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
+    if (!formData.dependentes[depIdx]) formData.dependentes[depIdx] = {};
+    if (!formData.dependentes[depIdx].docs) formData.dependentes[depIdx].docs = [];
+    formData.dependentes[depIdx].docs.push({ desc, path, filename: file.name, url });
+    const j = formData.dependentes[depIdx].docs.length - 1;
+    const listEl = document.getElementById('dep-docs-'+depIdx);
+    listEl.insertAdjacentHTML('beforeend', `<div data-j="${j}" style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 0;border-bottom:1px solid #f3f4f6;">
+      <span style="color:#22c55e;">✓</span>
+      <span style="flex:1;">${desc}</span>
+      <span style="font-size:11px;color:#9ca3af;">${file.name}</span>
+      <button type="button" onclick="remDepDoc(${depIdx},${j})" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:14px;padding:0 4px;">✕</button>
+    </div>`);
+    descEl.value = ''; fileInput.value = ''; statusEl.textContent = '';
+    cancelDepDocForm(depIdx);
+  } catch(e) {
+    statusEl.textContent = 'Erro no envio. Tente novamente.';
+  }
+}
+function remDepDoc(depIdx, docIdx) {
+  if (!formData.dependentes[depIdx]?.docs) return;
+  formData.dependentes[depIdx].docs.splice(docIdx, 1);
+  const listEl = document.getElementById('dep-docs-'+depIdx);
+  if (!listEl) return;
+  const docs = formData.dependentes[depIdx].docs;
+  listEl.innerHTML = docs.map((doc,j)=>`<div data-j="${j}" style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 0;border-bottom:1px solid #f3f4f6;">
+    <span style="color:#22c55e;">✓</span>
+    <span style="flex:1;">${doc.desc||doc.filename}</span>
+    <span style="font-size:11px;color:#9ca3af;">${doc.filename||''}</span>
+    <button type="button" onclick="remDepDoc(${depIdx},${j})" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:14px;padding:0 4px;">✕</button>
+  </div>`).join('');
 }
 
 function bindCpfMasks() {

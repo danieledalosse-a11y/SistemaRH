@@ -875,6 +875,73 @@ function fiCheck(id, label, val) {
 }
 function fv(id) { const el = document.getElementById('pf_'+id); if (!el) return ''; if (el.type==='checkbox') return el.checked; if (el.tagName==='SELECT' && (el.id==='pf_vale_transporte'||el.id==='pf_primeiro_emprego')) return el.value==='Sim'; return el.value.trim(); }
 function fmtCPF(v) { if (!v) return ''; const d = String(v).replace(/\D/g,''); if (d.length!==11) return v; return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'); }
+function cpfMaskRH(el) {
+  let v = el.value.replace(/\D/g,'').slice(0,11);
+  if (v.length > 9) v = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);
+  else if (v.length > 6) v = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);
+  else if (v.length > 3) v = v.slice(0,3)+'.'+v.slice(3);
+  el.value = v;
+}
+function depDocShowForm(btn) {
+  btn.style.display = 'none';
+  btn.previousElementSibling.style.display = 'block';
+}
+function depDocCancelForm(btn) {
+  const form = btn.closest('.dep-doc-add-form');
+  form.style.display = 'none';
+  const addBtn = form.nextElementSibling;
+  if (addBtn) addBtn.style.display = '';
+}
+async function rhDepDocUpload(fileInput) {
+  const form = fileInput.closest('.dep-doc-add-form');
+  const row  = fileInput.closest('.panel-dep-row');
+  const descInp = form.querySelector('.dep-doc-desc-inp');
+  const statusEl = form.querySelector('.dep-doc-status');
+  const file = fileInput.files[0];
+  if (!file) return;
+  const desc = descInp.value.trim() || file.name;
+  statusEl.textContent = 'Enviando...';
+  try {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const path = `${currentFicha.id}/dep_${Date.now()}.${ext}`;
+    const res = await fetch(`${SB_URL}/storage/v1/object/admissao-docs/${path}`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': SB_HEADERS.Authorization,
+                 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true' },
+      body: file
+    });
+    if (!res.ok) throw new Error();
+    const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
+    const docs = JSON.parse(row.dataset.docs || '[]');
+    docs.push({ desc, path, filename: file.name, url });
+    row.dataset.docs = JSON.stringify(docs);
+    rhRenderDepDocs(row, docs);
+    descInp.value = ''; fileInput.value = ''; statusEl.textContent = '';
+    form.style.display = 'none';
+    const addBtn = form.nextElementSibling;
+    if (addBtn) addBtn.style.display = '';
+  } catch(e) {
+    statusEl.textContent = 'Erro no envio. Tente novamente.';
+  }
+}
+function rhRenderDepDocs(row, docs) {
+  const list = row.querySelector('.dep-doc-list');
+  if (!list) return;
+  list.innerHTML = docs.map((doc,j)=>`
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);">
+      <span style="color:#22c55e;flex-shrink:0;">✓</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(doc.desc||doc.filename||'')}</span>
+      ${doc.url?`<a href="${esc(doc.url)}" target="_blank" style="font-size:11px;color:var(--text-ter);flex-shrink:0;text-decoration:none;">${esc(doc.filename||'')}</a>`:''}
+      <button type="button" onclick="rhRemDepDoc(this,${j})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;padding:0 2px;flex-shrink:0;">✕</button>
+    </div>`).join('');
+}
+function rhRemDepDoc(btn, j) {
+  const row = btn.closest('.panel-dep-row');
+  const docs = JSON.parse(row.dataset.docs || '[]');
+  docs.splice(j, 1);
+  row.dataset.docs = JSON.stringify(docs);
+  rhRenderDepDocs(row, docs);
+}
 
 async function buscarCepRevisao(cep) {
   const c = cep.replace(/\D/g,'');
@@ -950,16 +1017,39 @@ function renderPanelFamilia(f) {
 function panelDepRow(d, i) {
   const tipoOpts = ['Filho(a)','Enteado(a)','Outro'].map(o =>
     `<option value="${o}"${d.tipo===o?' selected':''}>${o}</option>`).join('');
-  return `<div class="panel-dep-row" data-dep="${i}" style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;position:relative;">
+  const docs = d.docs || [];
+  const docsHtml = docs.map((doc,j)=>`
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);">
+      <span style="color:#22c55e;flex-shrink:0;">✓</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(doc.desc||doc.filename||'')}</span>
+      ${doc.url?`<a href="${esc(doc.url)}" target="_blank" style="font-size:11px;color:var(--text-ter);flex-shrink:0;text-decoration:none;">${esc(doc.filename||'')}</a>`:''}
+      <button type="button" onclick="rhRemDepDoc(this,${j})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;padding:0 2px;flex-shrink:0;">✕</button>
+    </div>`).join('');
+  return `<div class="panel-dep-row" data-dep="${i}" data-docs="${esc(JSON.stringify(docs))}" style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;position:relative;">
     <div style="font-size:11px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Dependente ${i+1}
       <button onclick="panelRemDep(${i})" style="position:absolute;right:10px;top:10px;background:none;border:none;cursor:pointer;color:var(--red);font-size:16px;line-height:1;" title="Remover">✕</button>
     </div>
     <div class="data-grid">
       <div class="data-row"><label class="data-label">Nome</label><input class="form-control-sm dep-p-nome" type="text" value="${esc(d.nome||'')}"></div>
       <div class="data-row"><label class="data-label">Tipo</label><select class="form-control-sm dep-p-tipo"><option value="">Selecione</option>${tipoOpts}</select></div>
-      <div class="data-row"><label class="data-label">CPF</label><input class="form-control-sm dep-p-cpf" type="text" value="${esc(d.cpf||'')}" placeholder="000.000.000-00"></div>
+      <div class="data-row"><label class="data-label">CPF</label><input class="form-control-sm dep-p-cpf" type="text" value="${esc(fmtCPF(d.cpf||''))}" placeholder="000.000.000-00" oninput="cpfMaskRH(this)"></div>
       <div class="data-row"><label class="data-label">Nascimento</label><input class="form-control-sm dep-p-nasc" type="date" value="${d.nascimento||''}"></div>
       <div class="data-row" style="grid-column:1/-1"><label class="data-label">Cidade de Nascimento</label><input class="form-control-sm dep-p-cidade" type="text" value="${esc(d.cidade_nascimento||'')}" placeholder="Ex: São Paulo - SP"></div>
+    </div>
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Documentos</div>
+      <div class="dep-doc-list">${docsHtml}</div>
+      <div class="dep-doc-add-form" style="display:none;margin-top:8px;">
+        <input type="text" class="dep-doc-desc-inp form-control-sm" placeholder="Descrição (ex: Certidão de nascimento)" style="width:100%;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label style="font-size:12px;padding:3px 12px;border:1px solid var(--border);border-radius:5px;cursor:pointer;background:var(--bg-card);font-family:inherit;">
+            Escolher arquivo<input type="file" class="dep-doc-file-inp" accept=".pdf,.jpg,.jpeg,.png,.gif" style="display:none" onchange="rhDepDocUpload(this)">
+          </label>
+          <span class="dep-doc-status" style="font-size:12px;color:var(--text-sec);"></span>
+          <button type="button" onclick="depDocCancelForm(this)" style="font-size:12px;background:none;border:none;cursor:pointer;color:var(--text-ter);margin-left:auto;font-family:inherit;">Cancelar</button>
+        </div>
+      </div>
+      <button type="button" onclick="depDocShowForm(this)" style="font-size:12px;padding:3px 10px;border:1px dashed var(--border);border-radius:5px;background:transparent;color:var(--text-sec);cursor:pointer;margin-top:6px;font-family:inherit;">+ Adicionar documento</button>
     </div>
   </div>`;
 }
@@ -1001,6 +1091,7 @@ function getPanelDeps() {
     cpf:              r.querySelector('.dep-p-cpf')?.value?.trim() || '',
     nascimento:       r.querySelector('.dep-p-nasc')?.value || '',
     cidade_nascimento:r.querySelector('.dep-p-cidade')?.value?.trim() || '',
+    docs:             JSON.parse(r.dataset.docs || '[]'),
   })).filter(d => d.nome);
 }
 
