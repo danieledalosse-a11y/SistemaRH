@@ -575,6 +575,42 @@
 
   /* ── Timeline (Gantt) ── */
   .vis-tab#vt-timeline.active { background: #7c3aed; color: #fff; box-shadow: 0 2px 8px rgba(124,58,237,0.25); }
+  /* ── Analytics ─────────────────────────────────────────────────── */
+  .an-wrap { padding: 24px 20px 28px; }
+  .an-kpi-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 18px; }
+  .an-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .an-kpi-num { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+  .an-kpi-label { font-size: 12px; font-weight: 600; color: var(--text-sec); margin-top: 6px; }
+  .an-kpi-sub { font-size: 11px; color: var(--text-ter); margin-top: 3px; line-height: 1.4; }
+  .an-charts-row { display: grid; gap: 14px; margin-bottom: 14px; }
+  .an-row-bar { grid-template-columns: 2fr 1fr; }
+  .an-row-bottom { grid-template-columns: 1fr 1fr; }
+  .an-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .an-card-title { font-size: 13px; font-weight: 700; color: var(--text); }
+  .an-card-sub { font-size: 11px; color: var(--text-ter); margin-top: 2px; margin-bottom: 14px; }
+  .an-bar-chart { overflow-x: auto; padding-bottom: 4px; }
+  .an-donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 4px; }
+  .an-donut-legend { display: flex; gap: 20px; }
+  .an-donut-leg-num { font-size: 18px; font-weight: 800; }
+  .an-donut-leg-label { font-size: 10px; color: var(--text-ter); margin-top: 2px; }
+  .an-sector-row { display: grid; grid-template-columns: 150px 1fr 52px; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--border-light); }
+  .an-sector-row:last-child { border-bottom: none; }
+  .an-sector-name { font-size: 11px; color: var(--text-sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .an-sector-track { height: 7px; background: #F1F5F9; border-radius: 4px; overflow: hidden; }
+  .an-sector-fill { height: 7px; border-radius: 4px; transition: width 0.4s; }
+  .an-sector-pct { font-size: 11px; font-weight: 700; text-align: right; }
+  .an-risk-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border-light); cursor: pointer; }
+  .an-risk-row:last-child { border-bottom: none; }
+  .an-risk-row:hover { background: #F8FAFC; margin: 0 -20px; padding: 9px 20px; }
+  .an-risk-nome { font-size: 12px; font-weight: 600; color: var(--text); }
+  .an-risk-detail { font-size: 11px; color: var(--text-ter); margin-top: 1px; }
+  .an-risk-saldo { font-size: 11px; color: var(--text-ter); white-space: nowrap; }
+  .an-risk-badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+  .an-empty { font-size: 12px; color: var(--text-ter); padding: 20px 0; text-align: center; }
+  @media (max-width: 900px) {
+    .an-kpi-row { grid-template-columns: repeat(2,1fr); }
+    .an-row-bar, .an-row-bottom { grid-template-columns: 1fr; }
+  }
   /* ── Gantt / Timeline ──────────────────────────────────────────── */
   .gantt-wrap { overflow-x: auto; }
   .gantt-nav { display: flex; align-items: center; gap: 0; padding: 16px 20px 0; }
@@ -2211,6 +2247,7 @@ function setVisTab(nome) {
   if (nome === 'lista-anual') renderListaAnual();
   if (nome === 'calendario')  { renderMesSeletor(); renderCalendario(); }
   if (nome === 'timeline')    renderTimeline();
+  if (nome === 'analytics')   renderAnalytics();
 }
 
 function setSubTab(nome, btn) {
@@ -3812,6 +3849,255 @@ function abrirAgendarDireto() {
     setVisTab('lista-anual');
     document.getElementById('searchColabBar')?.focus();
   }
+}
+
+// ─── Analytics ───────────────────────────────────────────────────────────────
+function renderAnalytics() {
+  const content = document.getElementById('analyticsContent');
+  if (!content) return;
+
+  const ano     = ANO_REF;
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const anoIni  = `${ano}-01-01`;
+  const anoFim  = `${ano}-12-31`;
+  const ativos  = COLABORADORES.filter(c => c.ativo !== false);
+
+  // colaboradores com pelo menos um PA válido no ano
+  const comPA = ativos.filter(c =>
+    c.registros.some(r => !excluir.has(r.status) &&
+      (!r.paFim || r.paFim >= anoIni) && (!r.paInicio || r.paInicio <= anoFim))
+  );
+  const total = comPA.length;
+  if (!total) {
+    content.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text-ter);font-size:13px;">Carregue dados para visualizar o Analytics.</div>`;
+    return;
+  }
+
+  // ── 1. Cobertura de agendamento
+  const comAgend = comPA.filter(c =>
+    c.registros.some(r => !excluir.has(r.status) && r.lancamentos.length > 0 &&
+      (!r.paFim || r.paFim >= anoIni) && (!r.paInicio || r.paInicio <= anoFim))
+  ).length;
+  const semAgend  = total - comAgend;
+  const pctCob    = total > 0 ? Math.round(comAgend / total * 100) : 0;
+
+  // ── 2. Risco de dobra
+  const emRisco = ativos.filter(c => isRiscoDobra(c));
+  const nRisco  = emRisco.length;
+
+  // ── 3. Saldo médio por PA ativo
+  let totalSaldo = 0, countSaldo = 0;
+  comPA.forEach(c => {
+    c.registros.filter(r => !excluir.has(r.status) &&
+      (!r.paFim || r.paFim >= anoIni) && (!r.paInicio || r.paInicio <= anoFim))
+    .forEach(r => {
+      const s = calcSaldo(r);
+      if (s > 0) { totalSaldo += s; countSaldo++; }
+    });
+  });
+  const saldoMedio = countSaldo > 0 ? Math.round(totalSaldo / countSaldo) : 0;
+
+  // ── 4. Em férias hoje
+  const emFeriasHoje = ativos.filter(c =>
+    c.registros.some(r => !excluir.has(r.status) &&
+      r.lancamentos.some(l => l.inicio <= HOJE && l.fim >= HOJE))
+  ).length;
+
+  // ── 5. Distribuição mensal (colaboradores únicos com ao menos 1 dia por mês)
+  const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const distSets = Array.from({length: 12}, () => new Set());
+  ativos.forEach(c => {
+    c.registros.filter(r => !excluir.has(r.status)).forEach(reg => {
+      reg.lancamentos.forEach(l => {
+        const ini = new Date(l.inicio + 'T12:00:00');
+        const fim = new Date(l.fim    + 'T12:00:00');
+        for (let m = 0; m < 12; m++) {
+          const mIni = new Date(ano, m, 1);
+          const mFim = new Date(ano, m + 1, 0);
+          if (ini <= mFim && fim >= mIni) distSets[m].add(c.__key);
+        }
+      });
+    });
+  });
+  const distMensal = distSets.map(s => s.size);
+  const mesAtual   = new Date().getMonth();
+  const anoAtual   = new Date().getFullYear();
+
+  // ── 6. Ranking por setor/empresa (% sem agendamento + risco)
+  const setorMap = new Map();
+  comPA.forEach(c => {
+    const setor = normSetor(c.setor) || c.unidade || 'Sem setor';
+    if (!setorMap.has(setor)) setorMap.set(setor, { total:0, risco:0, sem:0 });
+    const e = setorMap.get(setor);
+    e.total++;
+    if (isRiscoDobra(c))            e.risco++;
+    else if (isSemAgendadoAno(c, ano)) e.sem++;
+  });
+  const ranking = [...setorMap.entries()]
+    .map(([nome, d]) => ({ nome, ...d, pctAtencao: d.total > 0 ? (d.risco + d.sem) / d.total : 0 }))
+    .filter(e => e.total >= 2)
+    .sort((a, b) => b.pctAtencao - a.pctAtencao)
+    .slice(0, 10);
+  const maxPct = ranking.length > 0 ? ranking[0].pctAtencao : 1;
+
+  // ── 7. Top colaboradores em risco (ordenados por urgência)
+  const topRisco = emRisco.map(c => {
+    let minDpd = 999, worstReg = null;
+    c.registros.filter(r => !excluir.has(r.status)).forEach(r => {
+      const dpd = diasParaDobra(r);
+      if (dpd !== null && dpd < minDpd) { minDpd = dpd; worstReg = r; }
+    });
+    return { c, dpd: minDpd, reg: worstReg };
+  }).sort((a, b) => a.dpd - b.dpd).slice(0, 9);
+
+  // ═══ SVG: gráfico de barras mensais ════════════════════════════
+  const BAR_W = 36, GAP = 12, BAR_H_MAX = 108, CHART_H = 160, PAD_L = 8;
+  const CHART_W = 12 * (BAR_W + GAP) + PAD_L;
+  const maxVal  = Math.max(...distMensal, 1);
+
+  const svgBars = distMensal.map((v, i) => {
+    const x      = PAD_L + i * (BAR_W + GAP);
+    const bH     = maxVal > 0 ? Math.round(v / maxVal * BAR_H_MAX) : 0;
+    const y      = CHART_H - 26 - bH;
+    const isCur  = i === mesAtual && ano === anoAtual;
+    const fill   = isCur ? '#1849A9' : (v === 0 ? '#F1F5F9' : '#BFDBFE');
+    const tColor = isCur ? '#1849A9' : '#64748B';
+    return `
+      <rect x="${x}" y="${y}" width="${BAR_W}" height="${Math.max(bH,2)}" rx="4" fill="${fill}"/>
+      ${v > 0 ? `<text x="${x+BAR_W/2}" y="${y-5}" text-anchor="middle" font-size="9.5" font-weight="700" fill="${tColor}">${v}</text>` : ''}
+      <text x="${x+BAR_W/2}" y="${CHART_H-6}" text-anchor="middle" font-size="10" fill="${isCur?'#1849A9':'#94A3B8'}">${MESES_ABREV[i]}</text>
+    `;
+  }).join('');
+
+  // linha de referência no meio
+  const yRef = CHART_H - 26 - BAR_H_MAX / 2;
+  const halfV = Math.round(maxVal / 2);
+  const svgChart = `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:420px;overflow:visible;">
+    <line x1="${PAD_L}" y1="${yRef}" x2="${CHART_W}" y2="${yRef}" stroke="#E2E8F0" stroke-dasharray="4,3"/>
+    <text x="${PAD_L}" y="${yRef-3}" font-size="9" fill="#CBD5E1">${halfV}</text>
+    ${svgBars}
+  </svg>`;
+
+  // ═══ SVG: donut de cobertura ════════════════════════════════════
+  const R = 52, CX = 70, CY = 72;
+  const CIRC = 2 * Math.PI * R;
+  const dash  = (pctCob / 100 * CIRC).toFixed(1);
+  const svgDonut = `<svg viewBox="0 0 140 144" xmlns="http://www.w3.org/2000/svg" style="width:130px;height:130px;">
+    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#F1F5F9" stroke-width="13"/>
+    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#1849A9" stroke-width="13"
+      stroke-dasharray="${dash} ${CIRC.toFixed(1)}" stroke-linecap="round"
+      transform="rotate(-90 ${CX} ${CY})"/>
+    ${semAgend > 0 ? `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#FEF3C7" stroke-width="13"
+      stroke-dasharray="${((semAgend/total)*CIRC).toFixed(1)} ${CIRC.toFixed(1)}" stroke-linecap="round"
+      transform="rotate(${(-90 + pctCob*3.6).toFixed(1)} ${CX} ${CY})" opacity="0.7"/>` : ''}
+    <text x="${CX}" y="${CY+6}" text-anchor="middle" font-size="20" font-weight="800" fill="#0F172A">${pctCob}%</text>
+    <text x="${CX}" y="${CY+20}" text-anchor="middle" font-size="10" fill="#94A3B8">agendados</text>
+  </svg>`;
+
+  // ═══ HTML: ranking por setor ═══════════════════════════════════
+  const rankingHtml = ranking.length === 0
+    ? `<div class="an-empty">Dados insuficientes para exibir ranking</div>`
+    : ranking.map(e => {
+        const pct = Math.round(e.pctAtencao * 100);
+        const w   = maxPct > 0 ? Math.round(e.pctAtencao / maxPct * 100) : 0;
+        const [fill, color] = pct > 50 ? ['#FEE2E2','#DC2626'] : pct > 25 ? ['#FEF3C7','#D97706'] : ['#D1FAE5','#059669'];
+        const riscoTag = e.risco > 0 ? `<span style="font-size:9px;background:#FEE2E2;color:#DC2626;border-radius:4px;padding:1px 5px;margin-left:4px;">${e.risco} dobra</span>` : '';
+        const semTag   = e.sem   > 0 ? `<span style="font-size:9px;background:#FEF9C3;color:#B45309;border-radius:4px;padding:1px 5px;margin-left:4px;">${e.sem} sem ag.</span>` : '';
+        return `<div class="an-sector-row">
+          <div class="an-sector-name" title="${e.nome}">${e.nome}${riscoTag}${semTag}</div>
+          <div class="an-sector-track"><div class="an-sector-fill" style="width:${w}%;background:${pct > 50 ? '#EF4444' : pct > 25 ? '#F59E0B' : '#10B981'};"></div></div>
+          <div class="an-sector-pct" style="color:${pct > 50 ? '#DC2626' : pct > 25 ? '#D97706' : '#059669'};">${pct}%</div>
+        </div>`;
+      }).join('');
+
+  // ═══ HTML: top risco ════════════════════════════════════════════
+  const topRiscoHtml = topRisco.length === 0
+    ? `<div class="an-empty">Nenhum colaborador em risco de dobra</div>`
+    : topRisco.map(({ c, dpd, reg }) => {
+        const saldo  = reg ? calcSaldo(reg) : '—';
+        const setor  = normSetor(c.setor) || c.unidade || '—';
+        const [bgC, txC] = dpd <= 30 ? ['#FEF2F2','#B91C1C'] : dpd <= 90 ? ['#FEF3C7','#B45309'] : ['#FFFBEB','#92400E'];
+        const urgLabel = dpd <= 30 ? 'Crítico' : dpd <= 90 ? 'Alto' : 'Atenção';
+        return `<div class="an-risk-row" onclick="abrirDrawer('${c.__key.replace(/'/g,"\\'")}')">
+          <div>
+            <div class="an-risk-nome">${c.nome}</div>
+            <div class="an-risk-detail">${setor} · ${c.cargo || '—'}</div>
+          </div>
+          <div class="an-risk-saldo">${saldo}d saldo</div>
+          <div class="an-risk-badge" style="background:${bgC};color:${txC};">${urgLabel} · ${dpd}d</div>
+        </div>`;
+      }).join('');
+
+  // ═══ Monta o HTML final ═════════════════════════════════════════
+  content.innerHTML = `<div class="an-wrap">
+
+    <!-- KPIs executivos -->
+    <div class="an-kpi-row">
+      <div class="an-kpi" style="border-top:3px solid #1849A9;">
+        <div class="an-kpi-num" style="color:#1849A9;">${pctCob}%</div>
+        <div class="an-kpi-label">Cobertura de agendamento</div>
+        <div class="an-kpi-sub">${comAgend} de ${total} colaboradores com férias agendadas em ${ano}</div>
+      </div>
+      <div class="an-kpi" style="border-top:3px solid ${nRisco > 0 ? '#EF4444' : '#10B981'};">
+        <div class="an-kpi-num" style="color:${nRisco > 0 ? '#EF4444' : '#10B981'};">${nRisco}</div>
+        <div class="an-kpi-label">Em risco de dobra</div>
+        <div class="an-kpi-sub">PA vencendo nos próximos 180 dias sem cobertura total</div>
+      </div>
+      <div class="an-kpi" style="border-top:3px solid #64748B;">
+        <div class="an-kpi-num" style="color:#475569;">${saldoMedio}d</div>
+        <div class="an-kpi-label">Saldo médio por colaborador</div>
+        <div class="an-kpi-sub">Média de dias restantes nos períodos aquisitivos de ${ano}</div>
+      </div>
+      <div class="an-kpi" style="border-top:3px solid #0E7490;">
+        <div class="an-kpi-num" style="color:#0E7490;">${emFeriasHoje}</div>
+        <div class="an-kpi-label">Em férias hoje</div>
+        <div class="an-kpi-sub">${HOJE.split('-').reverse().join('/')} — de ${ativos.length} colaboradores ativos</div>
+      </div>
+    </div>
+
+    <!-- Distribuição mensal + donut -->
+    <div class="an-charts-row an-row-bar">
+      <div class="an-card">
+        <div class="an-card-title">Férias por mês — ${ano}</div>
+        <div class="an-card-sub">Colaboradores únicos com ao menos um dia de férias em cada mês</div>
+        <div class="an-bar-chart">${svgChart}</div>
+      </div>
+      <div class="an-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
+        <div>
+          <div class="an-card-title">Taxa de cobertura</div>
+          <div class="an-card-sub">Agendamentos no PA vigente — ${ano}</div>
+        </div>
+        <div class="an-donut-wrap">
+          ${svgDonut}
+          <div class="an-donut-legend">
+            <div>
+              <div class="an-donut-leg-num" style="color:#1849A9;">${comAgend}</div>
+              <div class="an-donut-leg-label">agendados</div>
+            </div>
+            <div>
+              <div class="an-donut-leg-num" style="color:#D97706;">${semAgend}</div>
+              <div class="an-donut-leg-label">sem agendamento</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ranking setores + top risco -->
+    <div class="an-charts-row an-row-bottom">
+      <div class="an-card">
+        <div class="an-card-title">Situação por setor</div>
+        <div class="an-card-sub">% de colaboradores em risco de dobra ou sem agendamento — setores com ≥ 2 pessoas</div>
+        ${rankingHtml}
+      </div>
+      <div class="an-card">
+        <div class="an-card-title">Urgência de agendamento</div>
+        <div class="an-card-sub">Colaboradores com PA vencendo em breve — clique para abrir o drawer</div>
+        ${topRiscoHtml}
+      </div>
+    </div>
+
+  </div>`;
 }
 
 // ─── Timeline / Gantt ────────────────────────────────────────────────────────
