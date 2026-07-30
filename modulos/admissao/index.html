@@ -1025,7 +1025,7 @@ function panelDepRow(d, i) {
       ${doc.url?`<a href="${esc(doc.url)}" target="_blank" style="font-size:11px;color:var(--text-ter);flex-shrink:0;text-decoration:none;">${esc(doc.filename||'')}</a>`:''}
       <button type="button" onclick="rhRemDepDoc(this,${j})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;padding:0 2px;flex-shrink:0;">✕</button>
     </div>`).join('');
-  return `<div class="panel-dep-row" data-dep="${i}" data-docs="${esc(JSON.stringify(docs))}" style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;position:relative;">
+  return `<div class="panel-dep-row" data-dep="${i}" style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;position:relative;">
     <div style="font-size:11px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Dependente ${i+1}
       <button onclick="panelRemDep(${i})" style="position:absolute;right:10px;top:10px;background:none;border:none;cursor:pointer;color:var(--red);font-size:16px;line-height:1;" title="Remover">✕</button>
     </div>
@@ -1035,21 +1035,6 @@ function panelDepRow(d, i) {
       <div class="data-row"><label class="data-label">CPF</label><input class="form-control-sm dep-p-cpf" type="text" value="${esc(fmtCPF(d.cpf||''))}" placeholder="000.000.000-00" oninput="cpfMaskRH(this)"></div>
       <div class="data-row"><label class="data-label">Nascimento</label><input class="form-control-sm dep-p-nasc" type="date" value="${d.nascimento||''}"></div>
       <div class="data-row" style="grid-column:1/-1"><label class="data-label">Cidade de Nascimento</label><input class="form-control-sm dep-p-cidade" type="text" value="${esc(d.cidade_nascimento||'')}" placeholder="Ex: São Paulo - SP"></div>
-    </div>
-    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
-      <div style="font-size:11px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Documentos</div>
-      <div class="dep-doc-list">${docsHtml}</div>
-      <div class="dep-doc-add-form" style="display:none;margin-top:8px;">
-        <input type="text" class="dep-doc-desc-inp form-control-sm" placeholder="Descrição (ex: Certidão de nascimento)" style="width:100%;margin-bottom:6px;">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <label style="font-size:12px;padding:3px 12px;border:1px solid var(--border);border-radius:5px;cursor:pointer;background:var(--bg-card);font-family:inherit;">
-            Escolher arquivo<input type="file" class="dep-doc-file-inp" accept=".pdf,.jpg,.jpeg,.png,.gif" style="display:none" onchange="rhDepDocUpload(this)">
-          </label>
-          <span class="dep-doc-status" style="font-size:12px;color:var(--text-sec);"></span>
-          <button type="button" onclick="depDocCancelForm(this)" style="font-size:12px;background:none;border:none;cursor:pointer;color:var(--text-ter);margin-left:auto;font-family:inherit;">Cancelar</button>
-        </div>
-      </div>
-      <button type="button" onclick="depDocShowForm(this)" style="font-size:12px;padding:3px 10px;border:1px dashed var(--border);border-radius:5px;background:transparent;color:var(--text-sec);cursor:pointer;margin-top:6px;font-family:inherit;">+ Adicionar documento</button>
     </div>
   </div>`;
 }
@@ -1091,7 +1076,6 @@ function getPanelDeps() {
     cpf:              r.querySelector('.dep-p-cpf')?.value?.trim() || '',
     nascimento:       r.querySelector('.dep-p-nasc')?.value || '',
     cidade_nascimento:r.querySelector('.dep-p-cidade')?.value?.trim() || '',
-    docs:             JSON.parse(r.dataset.docs || '[]'),
   })).filter(d => d.nome);
 }
 
@@ -1150,6 +1134,8 @@ function renderPanelDocs(f) {
   const docs = f.docs || {};
   const hasDeps = Array.isArray(f.dependentes) && f.dependentes.length > 0;
 
+  const conjVisible = ['Casado(a)','União Estável'].includes(f.estado_civil);
+
   const DOC_CAND = [
     { key:'foto3x4',    label:'Foto 3x4',                              req: true },
     { key:'rg_frente',  label:'RG',                                    req: true },
@@ -1160,6 +1146,10 @@ function renderPanelDocs(f) {
     { key:'titulo',     label:'Título de Eleitor',                     req: false },
     { key:'pis_doc',    label:'PIS/PASEP',                             req: false },
     { key:'cnh_doc',    label:'CNH',                                   req: false },
+    { key:'rg_conjuge', label:'RG do Cônjuge',                         req: false, conjOnly: true },
+    { key:'cpf_conjuge',label:'CPF do Cônjuge',                        req: false, conjOnly: true },
+    { key:'comp_banco', label:'Comprovante de Conta Bancária',         req: false },
+    { key:'cart_vt',    label:'Cartão de Vale-Transporte',             req: false },
     { key:'cart_vacina',label:'Carteira de Vacinação (dep. < 6 anos)', req: false, depOnly: true },
   ];
 
@@ -1186,15 +1176,34 @@ function renderPanelDocs(f) {
     </div>`;
   };
 
+  const depJSONBDocRow = (doc, depIdx, docIdx) => {
+    const url = doc.url || (doc.path ? `${SB_URL}/storage/v1/object/public/admissao-docs/${doc.path}` : '');
+    const viewBtn = url ? `<a href="${esc(url)}" target="_blank" title="Ver documento" style="color:var(--blue);display:flex;align-items:center;padding:4px 5px;border-radius:4px;transition:opacity .15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${icoEye}</a>` : '';
+    const delBtn = iconBtn('Excluir anexo', 'var(--red)', icoTrash, `panelDeleteDepJSONBDoc(${depIdx},${docIdx})`);
+    return `<div class="panel-doc-item has-file">
+      <span class="panel-doc-name">${esc(doc.desc||doc.filename||'Documento')} <span style="font-size:10px;color:var(--text-ter);font-weight:400;">opcional</span></span>
+      <span class="panel-doc-status">Enviado ✓</span>
+      <span style="display:flex;align-items:center;gap:2px;">${viewBtn}${delBtn}</span>
+    </div>`;
+  };
+
   const certDepRows = hasDeps ? depsDocs.map((dep, i) => {
-    const k = `cert_dep_${i}`;
-    const pathLegado = i === 0 && docs['cert_dep'] && !docs[k] ? docs['cert_dep'] : null;
-    if (pathLegado) docs[k] = pathLegado;
     const nome = dep.nome || `Dependente ${i + 1}`;
-    return docRow(k, `Certidão — ${nome}`, false, false);
+    const kCert = `cert_dep_${i}`;
+    const kCpf  = `cpf_dep_${i}`;
+    const pathLegado = i === 0 && docs['cert_dep'] && !docs[kCert] ? docs['cert_dep'] : null;
+    if (pathLegado) docs[kCert] = pathLegado;
+    const header = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);padding:10px 0 4px;">${esc(nome)}</div>`;
+    const candDepDocs = (dep.docs || []).map((d, j) => depJSONBDocRow(d, i, j)).join('');
+    return header
+      + docRow(kCert, 'Certidão de Nascimento', false, false)
+      + docRow(kCpf,  'CPF', false, false)
+      + candDepDocs;
   }).join('') : '';
 
-  const candRows = DOC_CAND.filter(d => !d.depOnly || hasDeps).map(d => docRow(d.key, d.label, d.req, false)).join('') + certDepRows;
+  const candRows = DOC_CAND
+    .filter(d => (!d.depOnly || hasDeps) && (!d.conjOnly || conjVisible))
+    .map(d => docRow(d.key, d.label, d.req, false)).join('') + certDepRows;
   const rhRows = docRow('exame_admissional', 'Exame Admissional', false, true);
 
   document.getElementById('ptab-docs').innerHTML = `
@@ -1204,6 +1213,19 @@ function renderPanelDocs(f) {
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);padding:12px 0 6px;">Anexados pelo RH</div>
       ${rhRows}
     </div>`;
+}
+
+async function panelDeleteDepJSONBDoc(depIdx, docIdx) {
+  if (!confirm('Excluir este anexo?')) return;
+  const deps = JSON.parse(JSON.stringify(currentFicha.dependentes || []));
+  if (!deps[depIdx]?.docs) return;
+  deps[depIdx].docs.splice(docIdx, 1);
+  const res = await fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${currentFicha.id}`, {
+    method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ dependentes: deps })
+  });
+  if (!res.ok) { alert('Erro ao excluir.'); return; }
+  currentFicha.dependentes = deps;
+  renderPanelDocs(currentFicha);
 }
 
 async function panelDeleteDoc(key) {
