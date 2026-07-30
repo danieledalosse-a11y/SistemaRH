@@ -628,8 +628,8 @@
   .gantt-nav-btn:active { transform: translateY(0); box-shadow: none; }
   .gantt-nav-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .gantt-nav-center { flex: 1; text-align: center; }
-  .gantt-nav-month { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
-  .gantt-nav-year  { font-size: 14px; color: var(--text-ter); margin-left: 6px; font-weight: 400; letter-spacing: 0; }
+  .gantt-nav-month { font-size: 17px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
+  .gantt-nav-year  { font-size: 13px; color: var(--text-ter); margin-left: 8px; font-weight: 500; letter-spacing: 0.2px; padding: 2px 8px; background: var(--bg); border-radius: 5px; }
   .gantt-nav-filters { display: flex; align-items: center; gap: 8px; }
   .gantt-filter-select {
     height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px;
@@ -4222,15 +4222,16 @@ function renderTimeline() {
   const sbSet   = document.getElementById('sidebarSetor')?.value   || '';
   const sbAtivo = document.getElementById('sidebarAtivo')?.value ?? 'ativo';
 
-  // popula filtro de setor (mantém seleção atual) — deve vir ANTES de filtrados
-  const ganttSetorSel = document.getElementById('ganttFiltroSetor');
-  if (ganttSetorSel) {
-    const valorAtual = ganttSetorSel.value;
-    const setoresUnicos = [...new Set(COLABORADORES.filter(c => c.ativo !== false && c.setor).map(c => normSetor(c.setor)))].filter(Boolean).sort();
-    ganttSetorSel.innerHTML = '<option value="">Todos os setores</option>' +
-      setoresUnicos.map(s => `<option value="${s}"${s === valorAtual ? ' selected' : ''}>${s}</option>`).join('');
-  }
+  // popula filtro de setor — lê valor ANTES de sobrescrever innerHTML
+  const ganttSetorSel   = document.getElementById('ganttFiltroSetor');
   const ganttSetorFiltro = ganttSetorSel?.value || '';
+  try {
+    if (ganttSetorSel) {
+      const setoresUnicos = [...new Set(COLABORADORES.filter(c => c.ativo !== false && c.setor).map(c => normSetor(c.setor)))].filter(Boolean).sort();
+      ganttSetorSel.innerHTML = '<option value="">Todos os setores</option>' +
+        setoresUnicos.map(s => `<option value="${s}"${s === ganttSetorFiltro ? ' selected' : ''}>${s}</option>`).join('');
+    }
+  } catch(e) { console.warn('ganttFiltroSetor populate error:', e); }
 
   const filtrados = COLABORADORES.filter(c => {
     if (sbAtivo === 'ativo'   && c.ativo === false) return false;
