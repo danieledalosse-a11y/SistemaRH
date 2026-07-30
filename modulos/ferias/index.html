@@ -615,12 +615,27 @@
   /* ── Timeline / Gantt ── */
   .gantt-wrap   { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .gantt-scroll { padding: 12px 0 0; }
-  .gantt-nav { display: flex; align-items: center; padding: 16px 20px 0; }
-  .gantt-nav-btn { background: none; border: 1px solid var(--border); border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px; color: var(--text-sec); transition: all 0.15s; }
-  .gantt-nav-btn:hover { background: var(--bg); color: var(--text); }
+  .gantt-nav { display: flex; align-items: center; padding: 18px 20px 14px; gap: 12px; border-bottom: 1px solid var(--border); }
+  .gantt-nav-btn {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--text-sec); transition: all 0.15s; flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .gantt-nav-btn:hover { background: var(--bg); color: var(--text); border-color: var(--text-ter); box-shadow: 0 2px 6px rgba(0,0,0,0.1); transform: translateY(-1px); }
+  .gantt-nav-btn:active { transform: translateY(0); box-shadow: none; }
+  .gantt-nav-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .gantt-nav-center { flex: 1; text-align: center; }
-  .gantt-nav-month { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -0.2px; }
-  .gantt-nav-year  { font-size: 12px; color: var(--text-ter); margin-left: 4px; font-weight: 400; }
+  .gantt-nav-month { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+  .gantt-nav-year  { font-size: 14px; color: var(--text-ter); margin-left: 6px; font-weight: 400; letter-spacing: 0; }
+  .gantt-nav-filters { display: flex; align-items: center; gap: 8px; }
+  .gantt-filter-select {
+    height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 12px; color: var(--text-sec); background: var(--surface); cursor: pointer;
+    outline: none; font-family: inherit; transition: border-color 0.15s;
+  }
+  .gantt-filter-select:focus { border-color: #1849A9; }
+  .gantt-filter-label { font-size: 11px; font-weight: 500; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
 
   /* Tabela sem width:100% — colunas respeitam largura fixa do JS (W_CELL) */
   .gantt-table { border-collapse: collapse; table-layout: fixed; }
@@ -964,11 +979,21 @@
       <div id="sub-timeline" style="display:none;">
         <div class="gantt-wrap">
           <div class="gantt-nav">
-            <button class="gantt-nav-btn" onclick="ganttMesAnterior()" title="Mês anterior">&#8592;</button>
+            <button class="gantt-nav-btn" onclick="ganttMesAnterior()" title="Mês anterior">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
             <div class="gantt-nav-center">
               <span id="ganttMesTitulo" class="gantt-nav-month">—</span>
             </div>
-            <button class="gantt-nav-btn" onclick="ganttMesProximo()" title="Próximo mês">&#8594;</button>
+            <button class="gantt-nav-btn" onclick="ganttMesProximo()" title="Próximo mês">
+              <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <div class="gantt-nav-filters">
+              <span class="gantt-filter-label">Setor</span>
+              <select id="ganttFiltroSetor" class="gantt-filter-select" onchange="renderTimeline()">
+                <option value="">Todos</option>
+              </select>
+            </div>
           </div>
           <div id="ganttContent"></div>
           <div class="gantt-legend">
@@ -1714,14 +1739,13 @@ function isRiscoDobra(colab) {
 }
 
 function isSemAgendadoAno(colab) {
-  // Regra: tem PA vigente hoje, saldo > 0, e nenhum lançamento futuro ou em curso (fim >= HOJE)
-  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
-  const validos = colab.registros.filter(r => !excluir.has(r.status));
-  const paVigente = validos.find(r => r.paInicio && r.paFim && HOJE >= r.paInicio && HOJE <= r.paFim);
+  // Regra: PA Aprovado vigente hoje, saldo > 0, nenhum lançamento com fim >= HOJE
+  const aprovados = colab.registros.filter(r => r.status === 'Aprovado');
+  const paVigente = aprovados.find(r => r.paInicio && r.paFim && HOJE >= r.paInicio && HOJE <= r.paFim);
   if (!paVigente) return false;
   if (calcSaldo(paVigente) <= 0) return false;
-  const temFuturo = paVigente.lancamentos.some(l => l.fim && l.fim >= HOJE);
-  return !temFuturo;
+  const temAgendado = paVigente.lancamentos.some(l => l.fim && l.fim >= HOJE);
+  return !temAgendado;
 }
 
 function proximoPA(reg) {
@@ -4190,6 +4214,7 @@ function renderTimeline() {
     if (sbAtivo === 'inativo' && c.ativo !== false) return false;
     if (sbEmp && (c.empresaRegistro||c.unidade||'') !== sbEmp) return false;
     if (sbSet && c.setor !== sbSet) return false;
+    if (ganttSetorFiltro && normSetor(c.setor) !== ganttSetorFiltro) return false;
     return c.registros.some(reg => {
       const lans = [...reg.lancamentos, ...(reg._novoLanc ? [reg._novoLanc] : [])];
       return lans.some(l => l.inicio <= mesFim && l.fim >= mesInicio);
@@ -4221,8 +4246,18 @@ function renderTimeline() {
     diasInfo.push({ d, ds, dow, weekend: dow===0, isHoje: ds===hoje }); // só domingo é sombreado
   }
 
+  // popula filtro de setor (mantém seleção atual)
+  const ganttSetorSel = document.getElementById('ganttFiltroSetor');
+  if (ganttSetorSel) {
+    const valorAtual = ganttSetorSel.value;
+    const setoresUnicos = [...new Set(COLABORADORES.filter(c => c.ativo !== false && c.setor).map(c => normSetor(c.setor)))].filter(Boolean).sort();
+    ganttSetorSel.innerHTML = '<option value="">Todos os setores</option>' +
+      setoresUnicos.map(s => `<option value="${s}"${s === valorAtual ? ' selected' : ''}>${s}</option>`).join('');
+  }
+  const ganttSetorFiltro = ganttSetorSel?.value || '';
+
   // thead
-  let thDias = `<th class="gantt-name-col">Colaborador</th>`;
+  let thDias = `<th class="gantt-name-col" style="padding-left:16px;font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.6px;">Colaborador</th>`;
   diasInfo.forEach(({ d, ds, dow, weekend, isHoje }) => {
     const cls = [isHoje ? 'gantt-th-today' : '', weekend ? 'gantt-th-weekend' : ''].filter(Boolean).join(' ');
     const num = isHoje
