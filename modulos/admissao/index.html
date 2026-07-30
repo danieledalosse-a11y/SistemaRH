@@ -929,11 +929,21 @@ function renderPanelFamilia(f) {
       ${fi('conjuge_nome','Cônjuge',f.conjuge_nome)} ${fi('conjuge_cpf','CPF Cônjuge',fmtCPF(f.conjuge_cpf))}
       ${fi('conjuge_rg','RG Cônjuge',f.conjuge_rg)} ${fi('conjuge_nascimento','Nasc. Cônjuge',f.conjuge_nascimento,'date')}
     </div></div>
-    <div class="data-section"><div class="data-section-title" style="display:flex;justify-content:space-between;align-items:center;">Dependentes<button onclick="panelAddDep()" style="font-size:11px;padding:2px 10px;border:1px solid #fff;border-radius:4px;background:rgba(255,255,255,0.15);color:#fff;cursor:pointer;font-family:inherit;">+ Adicionar</button></div>
-      <div id="panel-dep-list">
-      ${deps.length ? deps.map((d,i) => panelDepRow(d,i)).join('') : ''}
+    <div class="data-section">
+      <div class="data-section-title">Dependentes</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <span style="font-size:13px;color:var(--text-sec);">Possui dependentes?</span>
+        <button id="btn-dep-sim" onclick="panelToggleDep(true)"
+          style="font-size:12px;padding:4px 16px;border-radius:20px;border:2px solid ${deps.length ? 'var(--primary)' : 'var(--border)'};background:${deps.length ? 'var(--primary)' : 'transparent'};color:${deps.length ? '#fff' : 'var(--text-sec)'};cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s;">Sim</button>
+        <button id="btn-dep-nao" onclick="panelToggleDep(false)"
+          style="font-size:12px;padding:4px 16px;border-radius:20px;border:2px solid ${!deps.length ? 'var(--primary)' : 'var(--border)'};background:${!deps.length ? 'var(--primary)' : 'transparent'};color:${!deps.length ? '#fff' : 'var(--text-sec)'};cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s;">Não</button>
       </div>
-      ${!deps.length ? '<p id="panel-no-dep" style="font-size:13px;color:var(--text-ter);padding:8px 0;">Sem dependentes informados. Use &quot;+ Adicionar&quot; acima para incluir.</p>' : ''}
+      <div id="panel-dep-container" style="display:${deps.length ? 'block' : 'none'}">
+        <div id="panel-dep-list">
+          ${deps.map((d,i) => panelDepRow(d,i)).join('')}
+        </div>
+        <button onclick="panelAddDep()" style="font-size:12px;padding:5px 14px;border:1px dashed var(--border);border-radius:6px;background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;margin-top:4px;">+ Adicionar dependente</button>
+      </div>
     </div>`;
 }
 
@@ -954,9 +964,23 @@ function panelDepRow(d, i) {
   </div>`;
 }
 
+function panelToggleDep(sim) {
+  document.getElementById('panel-dep-container').style.display = sim ? 'block' : 'none';
+  const btnSim = document.getElementById('btn-dep-sim');
+  const btnNao = document.getElementById('btn-dep-nao');
+  btnSim.style.background = sim ? 'var(--primary)' : 'transparent';
+  btnSim.style.color = sim ? '#fff' : 'var(--text-sec)';
+  btnSim.style.borderColor = sim ? 'var(--primary)' : 'var(--border)';
+  btnNao.style.background = !sim ? 'var(--primary)' : 'transparent';
+  btnNao.style.color = !sim ? '#fff' : 'var(--text-sec)';
+  btnNao.style.borderColor = !sim ? 'var(--primary)' : 'var(--border)';
+  if (sim) {
+    const list = document.getElementById('panel-dep-list');
+    if (!list.querySelector('.panel-dep-row')) panelAddDep();
+  }
+}
+
 function panelAddDep() {
-  const noMsg = document.getElementById('panel-no-dep');
-  if (noMsg) noMsg.remove();
   const list = document.getElementById('panel-dep-list');
   const i = list.querySelectorAll('.panel-dep-row').length;
   list.insertAdjacentHTML('beforeend', panelDepRow({}, i));
