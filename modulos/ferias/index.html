@@ -851,7 +851,9 @@
   .real-row-simple-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .real-row-simple-add { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: none; border: 1.5px solid var(--border); border-radius: 6px; color: var(--text-ter); cursor: pointer; padding: 0; transition: border-color 0.15s, color 0.15s, background 0.15s; }
   .real-row-simple-add:hover { border-color: #1849A9; color: #1849A9; background: #EFF4FF; }
-  .real-inline-form { border: 1.5px solid #1849A9; border-radius: 8px; margin-bottom: 8px; background: var(--surface); overflow: hidden; }
+  .real-row-wrap { margin-bottom: 8px; }
+  .real-row-wrap .real-row-simple { margin-bottom: 0; }
+  .real-inline-form { border: 1.5px solid #1849A9; border-radius: 8px; background: var(--surface); overflow: hidden; display: none; }
   .real-inline-form-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: #EFF4FF; border-bottom: 1px solid #C7D7F9; }
   .real-inline-form-title { font-size: 12px; font-weight: 600; color: #1849A9; }
   .real-inline-close { background: none; border: none; font-size: 14px; color: #1849A9; cursor: pointer; padding: 0 2px; line-height: 1; opacity: 0.7; }
@@ -4035,43 +4037,45 @@ function renderRealSection(key, reg) {
   // ── PA sem conteúdo: linha compacta ──────────────────────────────────────
   if (!temConteudo) {
     return `
-    <div class="real-row-simple" id="real-sec-${reg._sbId}">
-      <div class="real-row-simple-left">
-        <span class="real-row-simple-ano">PA ${reg.ano}</span>
-        <span class="real-row-simple-periodos">${diasOficiais}d de férias</span>
-      </div>
-      <div class="real-row-simple-right">
-        <button class="real-row-simple-add" onclick="expandirFormInline('${key}','${reg._sbId}')" title="Registrar gozo real">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-        </button>
-      </div>
-    </div>
-    <div class="real-inline-form" id="real-inline-${reg._sbId}" style="display:none;">
-      <div class="real-inline-form-header">
-        <span class="real-inline-form-title">Registrar gozo real · PA ${reg.ano}</span>
-        <button class="real-inline-close" onclick="fecharFormInline('${key}','${reg._sbId}')">✕</button>
-      </div>
-      <div class="real-add-grid" style="padding:10px 14px 4px;">
-        <div class="real-add-field">
-          <label class="real-add-label">Saída</label>
-          <input class="real-add-input" type="date" id="real-saida-${reg._sbId}" oninput="calcRetornoReal('${reg._sbId}')">
+    <div class="real-row-wrap" id="real-sec-${reg._sbId}">
+      <div class="real-row-simple">
+        <div class="real-row-simple-left">
+          <span class="real-row-simple-ano">PA ${reg.ano}</span>
+          <span class="real-row-simple-periodos">${diasOficiais}d de férias</span>
         </div>
-        <div class="real-add-field">
-          <label class="real-add-label">Dias</label>
-          <input class="real-add-input" type="number" id="real-dias-${reg._sbId}" min="1" placeholder="Qtd" oninput="calcRetornoReal('${reg._sbId}')">
-        </div>
-        <div class="real-add-field">
-          <label class="real-add-label">Retorno <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(auto)</span></label>
-          <input class="real-add-input" type="date" id="real-retorno-${reg._sbId}" readonly style="background:#F9FAFB;color:var(--text-sec);">
-        </div>
-        <div class="real-add-field">
-          <label class="real-add-label">Obs.</label>
-          <input class="real-add-input" type="text" id="real-obs-${reg._sbId}" placeholder="opcional">
+        <div class="real-row-simple-right">
+          <button class="real-row-simple-add" onclick="expandirFormInline('${reg._sbId}')" title="Registrar gozo real">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </button>
         </div>
       </div>
-      <div class="real-add-actions" style="padding:0 14px 10px;">
-        <button class="btn-real-cancel" onclick="fecharFormInline('${key}','${reg._sbId}')">Cancelar</button>
-        <button class="btn-real-save" onclick="salvarRealizacaoInline('${key}','${reg._sbId}')">Salvar utilização</button>
+      <div class="real-inline-form" id="real-inline-${reg._sbId}">
+        <div class="real-inline-form-header">
+          <span class="real-inline-form-title">Registrar gozo real · PA ${reg.ano}</span>
+          <button class="real-inline-close" onclick="fecharFormInline('${reg._sbId}')">✕</button>
+        </div>
+        <div class="real-add-grid" style="padding:10px 14px 4px;">
+          <div class="real-add-field">
+            <label class="real-add-label">Saída</label>
+            <input class="real-add-input" type="date" id="real-saida-${reg._sbId}" oninput="calcRetornoReal('${reg._sbId}')">
+          </div>
+          <div class="real-add-field">
+            <label class="real-add-label">Dias</label>
+            <input class="real-add-input" type="number" id="real-dias-${reg._sbId}" min="1" placeholder="Qtd" oninput="calcRetornoReal('${reg._sbId}')">
+          </div>
+          <div class="real-add-field">
+            <label class="real-add-label">Retorno <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(auto)</span></label>
+            <input class="real-add-input" type="date" id="real-retorno-${reg._sbId}" readonly style="background:#F9FAFB;color:var(--text-sec);">
+          </div>
+          <div class="real-add-field">
+            <label class="real-add-label">Obs.</label>
+            <input class="real-add-input" type="text" id="real-obs-${reg._sbId}" placeholder="opcional">
+          </div>
+        </div>
+        <div class="real-add-actions" style="padding:0 14px 10px;">
+          <button class="btn-real-cancel" onclick="fecharFormInline('${reg._sbId}')">Cancelar</button>
+          <button class="btn-real-save" onclick="salvarRealizacaoInline('${key}','${reg._sbId}')">Salvar utilização</button>
+        </div>
       </div>
     </div>`;
   }
@@ -4213,18 +4217,22 @@ function renderRealSection(key, reg) {
   </div>`;
 }
 
-function expandirFormInline(key, sbId) {
-  document.getElementById(`real-sec-${sbId}`).style.display = 'none';
-  const f = document.getElementById(`real-inline-${sbId}`);
+function expandirFormInline(sbId) {
+  const wrap = document.getElementById(`real-sec-${sbId}`);
+  if (!wrap) return;
+  wrap.querySelector('.real-row-simple').style.display = 'none';
+  const f = wrap.querySelector('.real-inline-form');
   if (f) { f.style.display = ''; f.querySelector('input[type="date"]')?.focus(); }
 }
-function fecharFormInline(key, sbId) {
-  const f = document.getElementById(`real-inline-${sbId}`);
+function fecharFormInline(sbId) {
+  const wrap = document.getElementById(`real-sec-${sbId}`);
+  if (!wrap) return;
+  const f = wrap.querySelector('.real-inline-form');
   if (f) {
     f.style.display = 'none';
     ['saida','retorno','dias','obs'].forEach(k => { const el = document.getElementById(`real-${k}-${sbId}`); if (el) el.value = ''; });
   }
-  document.getElementById(`real-sec-${sbId}`).style.display = '';
+  wrap.querySelector('.real-row-simple').style.display = '';
 }
 async function salvarRealizacaoInline(key, sbId) {
   await salvarRealizacao(key, sbId);
