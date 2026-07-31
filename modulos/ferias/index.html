@@ -854,12 +854,27 @@
   .real-row-wrap { margin-bottom: 8px; }
   .real-row-wrap .real-row-simple { margin-bottom: 0; }
   .drawer-tl-dates-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .hist-gozo-btn { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #1849A9; background: none; border: 1px dashed #93B4F9; border-radius: 4px; padding: 1px 8px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
+  .hist-gozo-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #1849A9; background: none; border: 1.5px dashed #93B4F9; border-radius: 5px; padding: 2px 10px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
   .hist-gozo-btn:hover { background: #EFF4FF; border-color: #1849A9; }
-  .hist-gozo-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #027A48; background: #ECFDF3; border: 1px solid #6CE9A6; border-radius: 4px; padding: 1px 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
-  .hist-gozo-chip:hover { background: #D1FAE5; }
+  .hist-gozo-progress { margin-top: 6px; }
+  .hist-gozo-bar-wrap { height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 5px; }
+  .hist-gozo-bar-fill { height: 100%; border-radius: 99px; transition: width 0.3s; }
+  .hist-gozo-progress-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .hist-gozo-progress-txt { font-size: 11px; font-weight: 600; }
+  .hist-gozo-toggle-btn { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-sec); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .hist-gozo-toggle-btn:hover { background: var(--bg); }
+  .hist-gozo-lista { margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .hist-gozo-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .hist-gozo-item:last-child { border-bottom: none; }
+  .hist-gozo-item-left { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .hist-gozo-item-dates { font-size: 12px; font-weight: 600; color: var(--text); }
+  .hist-gozo-item-obs { font-size: 11px; color: var(--text-ter); }
+  .hist-gozo-del { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--text-ter); cursor: pointer; padding: 0; flex-shrink: 0; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+  .hist-gozo-del:hover { color: #C4150A; border-color: #FECACA; background: #FEF2F2; }
   .hist-gozo-form { display: none; margin-top: 8px; padding: 10px 12px 8px; background: #F8FAFF; border: 1.5px solid #C7D7F9; border-radius: 6px; }
   .hist-gozo-form.open { display: block; }
+  .hist-gozo-form-bar-wrap { height: 5px; background: #DBEAFE; border-radius: 99px; overflow: hidden; margin: 4px 0 8px; }
+  .hist-gozo-form-bar-fill { height: 100%; border-radius: 99px; background: #1849A9; transition: width 0.2s; }
   .real-inline-form { border: 1.5px solid #1849A9; border-radius: 8px; background: var(--surface); overflow: hidden; display: none; }
   .real-inline-form-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: #EFF4FF; border-bottom: 1px solid #C7D7F9; }
   .real-inline-form-title { font-size: 12px; font-weight: 600; color: #1849A9; }
@@ -2432,61 +2447,74 @@ function renderDrawerHistorico(colab) {
     const excluirPA = excluir.has(r.status);
     const realizacoes = (r.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
 
-    // resumo de gozo real no nível do PA
-    const totalAgendado = r.lancamentos.reduce((s, l) => s + (l.dias || 0), 0);
-    const totalGozado   = realizacoes.reduce((s, rx) => s + Number(rx.dias), 0);
-    const saldoGozo     = totalAgendado - totalGozado;
-    const temAlgumGozo  = realizacoes.length > 0;
-    const gozoResumoHtml = (temAlgumGozo && !excluirPA) ? (() => {
-      const cor = saldoGozo > 0 ? '#D97706' : saldoGozo < 0 ? '#C4150A' : '#027A48';
-      const txt = saldoGozo > 0 ? `${totalGozado}d gozados · ${saldoGozo}d ainda a tirar`
-                : saldoGozo < 0 ? `${totalGozado}d gozados · excedeu ${Math.abs(saldoGozo)}d`
-                : `${totalGozado}d gozados · completo`;
-      return `<div style="display:flex;align-items:center;gap:5px;margin-top:4px;padding:4px 10px;background:${saldoGozo===0?'#ECFDF3':saldoGozo>0?'#FFFBEB':'#FEF2F2'};border-radius:5px;border:1px solid ${saldoGozo===0?'#6CE9A6':saldoGozo>0?'#FDE68A':'#FECACA'};">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="${cor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${saldoGozo===0?'<polyline points="20 6 9 17 4 12"/>':'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'}</svg>
-        <span style="font-size:11px;font-weight:600;color:${cor};">Gozo real: ${txt}</span>
-      </div>`;
-    })() : '';
 
     const lancsHtml = r.lancamentos.map((l, lancIdx) => {
-      const gozo = realizacoes.find(rx => Number(rx.lancIdx) === lancIdx) ||
-                   (lancIdx === 0 && realizacoes.find(rx => rx.lancIdx == null));
-      const saldoPeriodo = (l.dias || 0) - (gozo ? Number(gozo.dias) : 0);
+      const gozosDoLanc = realizacoes.filter(rx =>
+        Number(rx.lancIdx) === lancIdx || (lancIdx === 0 && rx.lancIdx == null)
+      );
+      const totalGozadoPeriodo = gozosDoLanc.reduce((s, rx) => s + Number(rx.dias), 0);
+      const saldoPeriodo = (l.dias || 0) - totalGozadoPeriodo;
+      const pct = Math.min(100, l.dias > 0 ? Math.round(totalGozadoPeriodo / l.dias * 100) : 0);
+      const expandKey = `${r._sbId}-${lancIdx}`;
+      const isExpanded = _gozoExpanded.has(expandKey);
 
-      let gozoArea = '';
-      if (!excluirPA && IS_RH) {
-        if (gozo) {
-          const saldoBadge = saldoPeriodo > 0
-            ? `<span style="font-size:10px;font-weight:600;color:#D97706;background:#FFFBEB;border:1px solid #FDE68A;border-radius:3px;padding:0 5px;white-space:nowrap;">${saldoPeriodo}d a tirar</span>`
-            : saldoPeriodo < 0
-            ? `<span style="font-size:10px;font-weight:600;color:#C4150A;background:#FEF2F2;border:1px solid #FECACA;border-radius:3px;padding:0 5px;white-space:nowrap;">+${Math.abs(saldoPeriodo)}d excedido</span>`
-            : '';
-          gozoArea = `<span class="hist-gozo-chip" onclick="editarGozoHist('${key}','${r._sbId}',${lancIdx})" title="Clique para editar o gozo real">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            ${gozo.dias}d gozados · ${formatDate(gozo.saida)} → ${formatDate(gozo.retorno)}
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:2px;opacity:0.7;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-          </span>${saldoBadge}`;
-        } else {
-          gozoArea = `<button class="hist-gozo-btn" onclick="expandirGozoHist('${r._sbId}',${lancIdx})">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Registrar gozo real
-          </button>`;
-        }
+      // ── botão + Acordo (sempre visível para RH se PA não excluído)
+      const btnAcordo = (!excluirPA && IS_RH) ? `<button class="hist-gozo-btn" onclick="expandirGozoHist('${r._sbId}',${lancIdx})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Acordo
+      </button>` : '';
+
+      // ── barra de progresso + toggle (só aparece quando há gozos)
+      let progressHtml = '';
+      let listaHtml = '';
+      if (gozosDoLanc.length > 0) {
+        const barCor = saldoPeriodo < 0 ? '#C4150A' : saldoPeriodo === 0 ? '#027A48' : '#1849A9';
+        const txtCor = saldoPeriodo < 0 ? '#C4150A' : saldoPeriodo === 0 ? '#027A48' : '#D97706';
+        const saldoTxt = saldoPeriodo > 0 ? `${saldoPeriodo}d restantes`
+                       : saldoPeriodo < 0 ? `excedeu ${Math.abs(saldoPeriodo)}d`
+                       : 'Completo ✓';
+        const nAcordos = gozosDoLanc.length;
+        progressHtml = `<div class="hist-gozo-progress">
+          <div class="hist-gozo-bar-wrap"><div class="hist-gozo-bar-fill" style="width:${pct}%;background:${barCor};"></div></div>
+          <div class="hist-gozo-progress-row">
+            <span class="hist-gozo-progress-txt" style="color:${txtCor};">${totalGozadoPeriodo}d / ${l.dias}d gozados · ${saldoTxt}</span>
+            <button class="hist-gozo-toggle-btn" onclick="toggleGozoLista('${r._sbId}',${lancIdx})">
+              <svg id="hist-lista-chevron-${r._sbId}-${lancIdx}" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform 0.2s;${isExpanded ? 'transform:rotate(180deg);' : ''}"><polyline points="6 9 12 15 18 9"/></svg>
+              ${nAcordos} ${nAcordos === 1 ? 'acordo' : 'acordos'}
+            </button>
+          </div>
+        </div>`;
+
+        const itensHtml = gozosDoLanc.map((gx, gi) => {
+          const delBtn = IS_RH ? `<button class="hist-gozo-del" onclick="removerGozoHist('${key}','${r._sbId}',${lancIdx},${gi})" title="Remover acordo">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>` : '';
+          return `<div class="hist-gozo-item">
+            <div class="hist-gozo-item-left">
+              <span class="hist-gozo-item-dates">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span>
+              ${gx.obs ? `<span class="hist-gozo-item-obs">${gx.obs}</span>` : ''}
+            </div>
+            ${delBtn}
+          </div>`;
+        }).join('');
+        listaHtml = `<div class="hist-gozo-lista" id="hist-lista-${r._sbId}-${lancIdx}" style="${isExpanded ? '' : 'display:none;'}">${itensHtml}</div>`;
       }
 
+      // ── form inline
       const inlineForm = (!excluirPA && IS_RH) ? `
         <div class="hist-gozo-form" id="hist-gozo-${r._sbId}-${lancIdx}">
           <div style="font-size:10px;font-weight:700;color:#1849A9;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">
-            Gozo real · ${lancIdx + 1}º período (agendado: ${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d)
+            Novo acordo · ${lancIdx + 1}º período &nbsp;·&nbsp; Agendado: ${formatDate(l.inicio)} → ${formatDate(l.fim)} (${l.dias}d)
           </div>
+          <div class="hist-gozo-form-bar-wrap"><div class="hist-gozo-form-bar-fill" id="hg-bar-${r._sbId}-${lancIdx}" style="width:0%;"></div></div>
           <div class="real-add-grid" style="padding:0 0 6px;">
             <div class="real-add-field">
               <label class="real-add-label">Saída real</label>
-              <input class="real-add-input" type="date" id="hg-saida-${r._sbId}-${lancIdx}" min="${l.inicio}" oninput="calcRetornoGozo('${r._sbId}',${lancIdx})">
+              <input class="real-add-input" type="date" id="hg-saida-${r._sbId}-${lancIdx}" min="${l.inicio}" oninput="calcRetornoGozo('${r._sbId}',${lancIdx},${l.dias})">
             </div>
             <div class="real-add-field">
-              <label class="real-add-label">Dias gozados</label>
-              <input class="real-add-input" type="number" id="hg-dias-${r._sbId}-${lancIdx}" min="1" max="${l.dias}" placeholder="${l.dias}" oninput="calcRetornoGozo('${r._sbId}',${lancIdx})">
+              <label class="real-add-label">Dias gozados <span style="font-weight:400;color:var(--text-ter);">/ ${l.dias}d</span></label>
+              <input class="real-add-input" type="number" id="hg-dias-${r._sbId}-${lancIdx}" min="1" placeholder="Qtd" oninput="calcRetornoGozo('${r._sbId}',${lancIdx},${l.dias})">
             </div>
             <div class="real-add-field">
               <label class="real-add-label">Retorno <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(auto)</span></label>
@@ -2494,12 +2522,12 @@ function renderDrawerHistorico(colab) {
             </div>
             <div class="real-add-field">
               <label class="real-add-label">Obs.</label>
-              <input class="real-add-input" type="text" id="hg-obs-${r._sbId}-${lancIdx}" placeholder="ex: férias coletivas, negociado parcial…">
+              <input class="real-add-input" type="text" id="hg-obs-${r._sbId}-${lancIdx}" placeholder="ex: férias coletivas, parcial…">
             </div>
           </div>
           <div class="real-add-actions" style="padding:0;">
             <button class="btn-real-cancel" onclick="fecharGozoHist('${r._sbId}',${lancIdx})">Cancelar</button>
-            <button class="btn-real-save" onclick="salvarGozoHist('${key}','${r._sbId}',${lancIdx})">Salvar gozo real</button>
+            <button class="btn-real-save" onclick="salvarGozoHist('${key}','${r._sbId}',${lancIdx})">Salvar acordo</button>
           </div>
         </div>` : '';
 
@@ -2508,9 +2536,11 @@ function renderDrawerHistorico(colab) {
         <div class="drawer-tl-info" style="flex:1;min-width:0;">
           <div class="drawer-tl-dates-row">
             <span class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>
-            ${gozoArea}
+            ${btnAcordo}
           </div>
           ${l.nota ? `<div class="drawer-tl-meta">${l.nota}</div>` : ''}
+          ${progressHtml}
+          ${listaHtml}
           ${inlineForm}
         </div>
       </div>`;
@@ -2530,7 +2560,7 @@ function renderDrawerHistorico(colab) {
         <div>
           <span class="drawer-hist-pa-year">PA ${r.ano}</span>
           <span class="drawer-hist-pa-period"> · ${formatDate(r.paInicio)} → ${formatDate(r.paFim)}</span>
-          ${gozoResumoHtml}
+
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
           <span style="font-size:12px;color:var(--text-sec);">Saldo ${saldo}/${r.totalDias}d</span>
@@ -2686,9 +2716,12 @@ async function confirmarDrawerLancamento() {
   }
 }
 
-// ─── Gozo real (inline no Histórico) ─────────────────────────────────────────
+// ─── Gozo real / Acordos (inline no Histórico) ────────────────────────────────
+const _gozoExpanded = new Set(); // keys: `${sbId}-${lancIdx}`
+
 function expandirGozoHist(sbId, lancIdx) {
   document.getElementById(`hist-gozo-${sbId}-${lancIdx}`)?.classList.add('open');
+  document.getElementById(`hg-saida-${sbId}-${lancIdx}`)?.focus();
 }
 function fecharGozoHist(sbId, lancIdx) {
   const f = document.getElementById(`hist-gozo-${sbId}-${lancIdx}`);
@@ -2698,12 +2731,26 @@ function fecharGozoHist(sbId, lancIdx) {
     const el = document.getElementById(`hg-${k}-${sbId}-${lancIdx}`);
     if (el) el.value = '';
   });
+  const bar = document.getElementById(`hg-bar-${sbId}-${lancIdx}`);
+  if (bar) bar.style.width = '0%';
 }
-function calcRetornoGozo(sbId, lancIdx) {
+function calcRetornoGozo(sbId, lancIdx, diasLanc) {
   const saida = document.getElementById(`hg-saida-${sbId}-${lancIdx}`)?.value;
   const dias  = parseInt(document.getElementById(`hg-dias-${sbId}-${lancIdx}`)?.value);
   const ret   = document.getElementById(`hg-retorno-${sbId}-${lancIdx}`);
+  const bar   = document.getElementById(`hg-bar-${sbId}-${lancIdx}`);
   if (saida && dias > 0 && ret) ret.value = addDays(saida, dias);
+  if (bar && diasLanc > 0) bar.style.width = Math.min(100, Math.round(dias / diasLanc * 100)) + '%';
+}
+function toggleGozoLista(sbId, lancIdx) {
+  const k       = `${sbId}-${lancIdx}`;
+  const lista   = document.getElementById(`hist-lista-${sbId}-${lancIdx}`);
+  const chevron = document.getElementById(`hist-lista-chevron-${sbId}-${lancIdx}`);
+  if (!lista) return;
+  const abrindo = lista.style.display === 'none';
+  lista.style.display = abrindo ? '' : 'none';
+  if (abrindo) { _gozoExpanded.add(k); if (chevron) chevron.style.transform = 'rotate(180deg)'; }
+  else         { _gozoExpanded.delete(k); if (chevron) chevron.style.transform = ''; }
 }
 async function salvarGozoHist(key, sbId, lancIdx) {
   const saida   = document.getElementById(`hg-saida-${sbId}-${lancIdx}`)?.value;
@@ -2716,34 +2763,39 @@ async function salvarGozoHist(key, sbId, lancIdx) {
   const colab = COLABORADORES.find(c => c.__key === key);
   const reg   = colab?.registros.find(r => r._sbId == sbId);
   if (!reg) return;
-  const idx = Number(lancIdx);
+  const idx   = Number(lancIdx);
   const lista = (reg.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
-  const filtrada = lista.filter(rx => Number(rx.lancIdx) !== idx);
-  filtrada.push({ saida, retorno, dias, obs: obs || null, lancIdx: idx });
+  lista.push({ saida, retorno, dias, obs: obs || null, lancIdx: idx });
   try {
-    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: filtrada });
-    reg.realizacoes = filtrada;
+    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: lista });
+    reg.realizacoes = lista;
+    _gozoExpanded.add(`${sbId}-${lancIdx}`); // manter lista aberta após salvar
     renderDrawerHistorico(colab);
-    toast('✓ Gozo real salvo!');
+    toast('✓ Acordo salvo!');
   } catch(e) { toast('Erro ao salvar: ' + (e.message || e)); }
 }
-function editarGozoHist(key, sbId, lancIdx) {
+async function removerGozoHist(key, sbId, lancIdx, gozoIdx) {
+  if (!confirm('Remover este acordo?')) return;
   const colab = COLABORADORES.find(c => c.__key === key);
   const reg   = colab?.registros.find(r => r._sbId == sbId);
   if (!reg) return;
-  const idx  = Number(lancIdx);
+  const idx   = Number(lancIdx);
   const lista = (reg.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
-  const gozo  = lista.find(rx => Number(rx.lancIdx) === idx) ||
-                (idx === 0 && lista.find(rx => rx.lancIdx == null));
-  if (!gozo) return;
-  expandirGozoHist(sbId, lancIdx);
-  setTimeout(() => {
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-    set(`hg-saida-${sbId}-${lancIdx}`,   gozo.saida);
-    set(`hg-dias-${sbId}-${lancIdx}`,    gozo.dias);
-    set(`hg-retorno-${sbId}-${lancIdx}`, gozo.retorno);
-    set(`hg-obs-${sbId}-${lancIdx}`,     gozo.obs);
-  }, 30);
+  // encontra o gozoIdx-ésimo item deste período e remove
+  let count = 0;
+  const nova = lista.filter(rx => {
+    const desteP = Number(rx.lancIdx) === idx || (idx === 0 && rx.lancIdx == null);
+    if (desteP) { if (count++ === Number(gozoIdx)) return false; }
+    return true;
+  });
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: nova });
+    reg.realizacoes = nova;
+    if (nova.filter(rx => Number(rx.lancIdx) === idx).length > 0)
+      _gozoExpanded.add(`${sbId}-${lancIdx}`);
+    renderDrawerHistorico(colab);
+    toast('Acordo removido.');
+  } catch(e) { toast('Erro: ' + (e.message || e)); }
 }
 
 // ─── Navegação ───────────────────────────────────────────────────────────────
