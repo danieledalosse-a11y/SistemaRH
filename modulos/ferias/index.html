@@ -814,6 +814,16 @@
   /* ── Acordos (gozo real) ── */
   /* ── Acordos / Realizações ── */
   .real-section { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+  .real-section--destaque { border-color: #D97706; }
+  .real-section--destaque .real-section-hdr { background: #FFFBEB; border-bottom-color: #FDE68A; }
+  /* PA sem conteúdo: linha compacta */
+  .real-row-simple { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--surface); }
+  .real-row-simple-left { display: flex; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; }
+  .real-row-simple-ano { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
+  .real-row-simple-periodos { font-size: 11px; color: var(--text-ter); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .real-row-simple-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .real-row-simple-add { background: none; border: none; font-size: 12px; font-weight: 500; color: #1849A9; cursor: pointer; padding: 2px 0; white-space: nowrap; }
+  .real-row-simple-add:hover { text-decoration: underline; }
   .real-section-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
   .real-section-meta { display: flex; flex-direction: column; gap: 2px; }
   .real-section-title { font-size: 13px; font-weight: 700; color: var(--text); }
@@ -3978,31 +3988,44 @@ function renderDrawerRealizacoes(colab) {
 
 function renderRealSection(key, reg) {
   const realizacoes = reg.realizacoes || [];
-  const diasOficiais = reg.lancamentos.reduce((s, l) => s + (l.dias || 0), 0);
-  const diasRealizados = realizacoes.reduce((s, r) => s + (Number(r.dias) || 0), 0);
-  const saldoRestante = diasOficiais - diasRealizados;
+  const temAcordo   = !!reg._obsGestor;
+  const temUso      = realizacoes.length > 0;
+  const temConteudo = temAcordo || temUso || reg._expandido;
 
+  const diasOficiais  = reg.lancamentos.reduce((s, l) => s + (l.dias || 0), 0);
+  const diasRealizados = realizacoes.reduce((s, r) => s + (Number(r.dias) || 0), 0);
+  const saldoRestante  = diasOficiais - diasRealizados;
   const badgeCls = saldoRestante === 0 ? 'zerado' : saldoRestante < 0 ? 'excesso' : 'parcial';
   const badgeTxt = saldoRestante === 0 ? 'Zerado' : saldoRestante < 0 ? `+${Math.abs(saldoRestante)}d excesso` : `Saldo ${saldoRestante}d`;
 
-  // períodos oficiais resumidos no cabeçalho
-  const periodosStr = reg.lancamentos.map(l => `${formatDate(l.inicio)} → ${formatDate(l.fim)} (${l.dias}d)`).join('  ·  ');
+  // ── PA sem conteúdo: linha compacta ──────────────────────────────────────
+  if (!temConteudo) {
+    const periodosStr = reg.lancamentos.map(l => `${formatDate(l.inicio)} → ${formatDate(l.fim)} (${l.dias}d)`).join('  ·  ');
+    return `
+    <div class="real-row-simple" id="real-sec-${reg._sbId}">
+      <div class="real-row-simple-left">
+        <span class="real-row-simple-ano">PA ${reg.ano}</span>
+        <span class="real-row-simple-periodos">${periodosStr}</span>
+      </div>
+      <div class="real-row-simple-right">
+        <span class="real-saldo-badge ${badgeCls}">${badgeTxt}</span>
+        <button class="real-row-simple-add" onclick="expandirRealSection('${key}','${reg._sbId}')">+ Registrar</button>
+      </div>
+    </div>`;
+  }
 
-  // lista de utilizações compacta
-  const listaHtml = realizacoes.length
-    ? realizacoes.map((r, i) => `
-        <div class="real-row">
-          <div class="real-row-info">
-            <span class="real-row-dates">${formatDate(r.saida)} → ${formatDate(r.retorno)}</span>
-            ${r.obs ? `<span class="real-row-obs">${r.obs}</span>` : ''}
-          </div>
-          <span class="real-row-dias">${r.dias}d</span>
-          <button class="real-row-del" onclick="removerRealizacao('${key}','${reg._sbId}',${i})" title="Remover">×</button>
-        </div>`).join('')
-    : `<div class="real-empty">Nenhuma utilização registrada.</div>`;
+  // ── PA com conteúdo: card completo com destaque ───────────────────────────
+  const listaHtml = realizacoes.map((r, i) => `
+    <div class="real-row">
+      <div class="real-row-info">
+        <span class="real-row-dates">${formatDate(r.saida)} → ${formatDate(r.retorno)}</span>
+        ${r.obs ? `<span class="real-row-obs">${r.obs}</span>` : ''}
+      </div>
+      <span class="real-row-dias">${r.dias}d</span>
+      <button class="real-row-del" onclick="removerRealizacao('${key}','${reg._sbId}',${i})" title="Remover">×</button>
+    </div>`).join('');
 
-  // acordo: nota compacta ou link
-  const acordoHtml = reg._obsGestor ? `
+  const acordoHtml = temAcordo ? `
     <div id="real-acordo-wrap-${reg._sbId}" style="padding:8px 14px;border-top:1px solid var(--border);">
       <div id="real-acordo-view-${reg._sbId}">
         <div class="real-acordo-nota">
@@ -4031,15 +4054,18 @@ function renderRealSection(key, reg) {
       </div>
     </div>`;
 
-  return `<div class="real-section" id="real-sec-${reg._sbId}">
+  const iconAcordo = temAcordo
+    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" title="Tem acordo"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
+    : '';
+
+  return `<div class="real-section real-section--destaque" id="real-sec-${reg._sbId}">
     <div class="real-section-hdr">
       <div class="real-section-meta">
-        <div class="real-section-title">PA ${reg.ano}</div>
-        <div class="real-section-periodos">${periodosStr}</div>
+        <div class="real-section-title">${iconAcordo} PA ${reg.ano}</div>
       </div>
       <span class="real-saldo-badge ${badgeCls}">${badgeTxt}</span>
     </div>
-    <div class="real-list">${listaHtml}</div>
+    ${listaHtml ? `<div class="real-list">${listaHtml}</div>` : ''}
     <div class="real-add-form" id="real-form-${reg._sbId}">
       <div class="real-add-grid">
         <div class="real-add-field">
@@ -4070,9 +4096,22 @@ function renderRealSection(key, reg) {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Adicionar utilização
       </button>
-      ${!reg._obsGestor ? `<button class="real-acordo-link" onclick="editarAcordo('${reg._sbId}')">+ Acordo informal</button>` : ''}
+      ${!temAcordo ? `<button class="real-acordo-link" onclick="editarAcordo('${reg._sbId}')">+ Acordo informal</button>` : ''}
     </div>
   </div>`;
+}
+
+function expandirRealSection(key, sbId) {
+  const colab = COLABORADORES.find(c => c.__key === key);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  const el = document.getElementById(`real-sec-${sbId}`);
+  if (!el) return;
+  reg._expandido = true;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = renderRealSection(key, reg);
+  el.replaceWith(tmp.firstElementChild);
+  abrirFormReal(sbId);
 }
 
 function abrirFormReal(sbId) {
