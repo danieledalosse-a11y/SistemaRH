@@ -305,12 +305,12 @@
   .dform-acordo-badge { font-size: 10px; background: #FEF3C7; color: #D97706; border-radius: 4px; padding: 1px 6px; font-weight: 600; margin-left: auto; }
   .dform-submit-wrap { padding: 12px 20px; border-top: 1px solid var(--border); }
   .dform-btn-submit {
-    width: 100%; padding: 12px; background: #111827; color: #fff;
+    width: 100%; padding: 12px; background: #1849A9; color: #fff;
     border: none; border-radius: 9px; font-size: 14px; font-weight: 600;
-    font-family: inherit; cursor: pointer; letter-spacing: 0.2px;
+    font-family: inherit; cursor: pointer; letter-spacing: 0.1px;
     transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
   }
-  .dform-btn-submit:hover { background: #1F2937; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
+  .dform-btn-submit:hover { background: #1239A0; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(24,73,169,0.25); }
   .dform-btn-submit:active { transform: none; box-shadow: none; }
   .dform-btn-submit:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
@@ -833,6 +833,8 @@
   .real-acordo-text { font-size: 12px; color: #78350F; line-height: 1.5; }
   .real-acordo-edit-btn { background: none; border: none; cursor: pointer; font-size: 11px; color: #D97706; font-weight: 600; padding: 0; font-family: inherit; }
   .real-acordo-edit-btn:hover { text-decoration: underline; }
+  .real-acordo-link { background: none; border: none; cursor: pointer; font-size: 12px; color: #6B7280; font-weight: 500; padding: 0; font-family: inherit; }
+  .real-acordo-link:hover { color: #D97706; }
   .real-acordo-textarea { width: 100%; border: 1.5px solid #FCD34D; border-radius: 6px; padding: 7px 10px; font-size: 12px; font-family: inherit; background: #fff; min-height: 52px; resize: vertical; }
   .real-acordo-textarea:focus { outline: none; border-color: #F59E0B; box-shadow: 0 0 0 3px rgba(245,158,11,0.12); }
   .real-acordo-actions { display: flex; gap: 6px; margin-top: 6px; }
@@ -3947,7 +3949,7 @@ function renderRealSection(key, reg) {
     </div>`
   ).join('');
 
-  const obsHtml = `
+  const obsHtml = reg._obsGestor ? `
     <div class="real-acordo-wrap" id="real-acordo-wrap-${reg._sbId}">
       <div class="real-acordo-hdr">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -3955,15 +3957,25 @@ function renderRealSection(key, reg) {
         <span class="real-acordo-badge">Apenas RH</span>
       </div>
       <div id="real-acordo-view-${reg._sbId}">
-        ${reg._obsGestor
-          ? `<div class="real-acordo-text">${reg._obsGestor}</div>
-             <button class="real-acordo-edit-btn" onclick="editarAcordo('${reg._sbId}')" style="margin-top:4px;">Editar</button>`
-          : `<button class="real-acordo-edit-btn" onclick="editarAcordo('${reg._sbId}')">+ Registrar acordo</button>`
-        }
+        <div class="real-acordo-text">${reg._obsGestor}</div>
+        <button class="real-acordo-edit-btn" onclick="editarAcordo('${reg._sbId}')" style="margin-top:4px;">Editar</button>
       </div>
       <div id="real-acordo-form-${reg._sbId}" style="display:none;">
-        <textarea class="real-acordo-textarea" id="real-acordo-txt-${reg._sbId}" placeholder="Ex: Colaborador tirou 10 dias reais — 2 dias ficam como saldo para uso posterior">${reg._obsGestor || ''}</textarea>
+        <textarea class="real-acordo-textarea" id="real-acordo-txt-${reg._sbId}" placeholder="Ex: Colaborador tirou 10 dias reais — 2 dias ficam como saldo para uso posterior">${reg._obsGestor}</textarea>
         <div class="real-acordo-actions">
+          <button class="real-acordo-save" onclick="salvarAcordoInline('${key}','${reg._sbId}')">Salvar</button>
+          <button class="real-acordo-cancel" onclick="cancelarAcordoInline('${reg._sbId}')">Cancelar</button>
+        </div>
+      </div>
+    </div>` : `
+    <div id="real-acordo-wrap-${reg._sbId}" style="padding:0 14px 10px;">
+      <div id="real-acordo-view-${reg._sbId}">
+        <button class="real-acordo-link" onclick="editarAcordo('${reg._sbId}')">+ Registrar acordo informal</button>
+      </div>
+      <div id="real-acordo-form-${reg._sbId}" style="display:none;padding:10px;background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:8px;margin-top:4px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#92400E;margin-bottom:6px;">Acordo informal · Apenas RH</div>
+        <textarea class="real-acordo-textarea" id="real-acordo-txt-${reg._sbId}" placeholder="Ex: Colaborador tirou 10 dias reais — 2 dias ficam como saldo para uso posterior"></textarea>
+        <div class="real-acordo-actions" style="margin-top:6px;">
           <button class="real-acordo-save" onclick="salvarAcordoInline('${key}','${reg._sbId}')">Salvar</button>
           <button class="real-acordo-cancel" onclick="cancelarAcordoInline('${reg._sbId}')">Cancelar</button>
         </div>
