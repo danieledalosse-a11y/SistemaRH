@@ -2195,8 +2195,16 @@ function abrirDrawer(key) {
   document.getElementById('drawerCargo').textContent = colab.cargo || '';
 
   const chips = [];
-  if (colab.setor)   chips.push(`<span class="drawer-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>${colab.setor}</span>`);
-  if (colab.unidade) chips.push(`<span class="drawer-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${colab.unidade}</span>`);
+  if (colab.setor) chips.push(`<span class="drawer-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>${colab.setor}</span>`);
+  if (colab.unidade) {
+    const cor = corDaUnidade(colab.unidade);
+    const branco = cor && contrasteTextoBranco(cor);
+    const style = cor
+      ? `background:${cor};border-color:${cor};color:${branco?'#fff':'#fff'};`
+      : '';
+    const svgStroke = cor ? (branco ? 'rgba(255,255,255,0.85)' : '#fff') : 'var(--text-ter)';
+    chips.push(`<span class="drawer-chip" style="${style}"><svg viewBox="0 0 24 24" fill="none" stroke="${svgStroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${colab.unidade}</span>`);
+  }
   document.getElementById('drawerChips').innerHTML = chips.join('');
 
   renderDrawerHistorico(colab);
@@ -2672,6 +2680,37 @@ function renderMetricas() {
       <div class="metric-sub">${ANO_REF}</div>
     </div>
   `;
+}
+
+// ─── Cores por unidade ───────────────────────────────────────────────────────
+const UNIDADE_COR = {
+  'Matriz Adm':  '#1849A9',
+  'Matriz':      '#1849A9',
+  'Filial':      '#027A48',
+  'CD':          '#5925DC',
+  'Loja':        '#C4500A',
+};
+const _unidadeCorCiclo = ['#1849A9','#027A48','#5925DC','#C4500A','#344054'];
+const _unidadeCorMap   = new Map();
+
+function corDaUnidade(unidade) {
+  if (!unidade) return null;
+  const chave = Object.keys(UNIDADE_COR).find(k => unidade.toLowerCase().includes(k.toLowerCase()));
+  if (chave) return UNIDADE_COR[chave];
+  if (!_unidadeCorMap.has(unidade)) {
+    _unidadeCorMap.set(unidade, _unidadeCorCiclo[_unidadeCorMap.size % _unidadeCorCiclo.length]);
+  }
+  return _unidadeCorMap.get(unidade);
+}
+
+function hexParaRgb(hex) {
+  const h = hex.replace('#','');
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+function contrasteTextoBranco(hex) {
+  const [r,g,b] = hexParaRgb(hex);
+  const L = 0.2126*(r/255)**2.2 + 0.7152*(g/255)**2.2 + 0.0722*(b/255)**2.2;
+  return L < 0.18; // branco quando fundo escuro
 }
 
 // ─── Cores fixas por setor ───────────────────────────────────────────────────
