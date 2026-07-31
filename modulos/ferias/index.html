@@ -818,6 +818,17 @@
   .real-section { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
   .real-section--destaque { border-color: #D97706; }
   .real-section--destaque .real-section-hdr { background: #FFFBEB; border-bottom-color: #FDE68A; }
+  .real-section-hdr--btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px; background: #FFFBEB; border: none; border-bottom: 1px solid #FDE68A; cursor: pointer; text-align: left; font-family: inherit; }
+  .real-section-hdr--btn:hover { background: #FEF3C7; }
+  .real-hdr-badges { display: inline-flex; gap: 5px; margin-left: 8px; vertical-align: middle; }
+  .real-badge-ind { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 20px; }
+  .real-badge-ind.uso    { background: #EFF4FF; color: #1849A9; }
+  .real-badge-ind.acordo { background: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; }
+  .real-badge-ind svg    { flex-shrink: 0; }
+  .real-chevron { flex-shrink: 0; stroke: var(--text-ter); transition: transform 0.2s; }
+  .real-chevron.open { transform: rotate(180deg); }
+  .real-card-body { display: none; }
+  .real-card-body.open { display: block; }
   .real-resumo { padding: 10px 14px 12px; border-bottom: 1px solid var(--border); }
   .real-resumo-periodo { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
   .real-resumo-periodo-label { font-size: 10px; font-weight: 700; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
@@ -4107,12 +4118,22 @@ function renderRealSection(key, reg) {
       </div>
     </div>`;
 
+  const aberto = !!reg._cardAberto;
+  const indicadores = [];
+  if (temUso)    indicadores.push(`<span class="real-badge-ind uso">${diasRealizados}d gozados</span>`);
+  if (temAcordo) indicadores.push(`<span class="real-badge-ind acordo"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Acordo</span>`);
+
   return `<div class="real-section real-section--destaque" id="real-sec-${reg._sbId}">
-    <div class="real-section-hdr">
+    <button class="real-section-hdr real-section-hdr--btn" onclick="toggleRealCard('${key}','${reg._sbId}')" aria-expanded="${aberto}">
       <div class="real-section-meta">
-        <div class="real-section-title">${iconAcordo} PA ${reg.ano}</div>
+        <div class="real-section-title">PA ${reg.ano}
+          <span class="real-hdr-badges">${indicadores.join('')}</span>
+        </div>
+        <div class="real-resumo-periodo-label" style="font-size:10px;margin-top:2px;">${periodosOficiais}</div>
       </div>
-    </div>
+      <svg class="real-chevron ${aberto ? 'open' : ''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="real-card-body ${aberto ? 'open' : ''}">
     ${resumoHtml}
     ${listaHtml ? `
     <div class="real-list-header">
@@ -4152,7 +4173,21 @@ function renderRealSection(key, reg) {
       </button>
       ${!temAcordo ? `<button class="real-acordo-link" onclick="editarAcordo('${reg._sbId}')">+ Acordo informal</button>` : ''}
     </div>
+    </div>
   </div>`;
+}
+
+function toggleRealCard(key, sbId) {
+  const colab = COLABORADORES.find(c => c.__key === key);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  reg._cardAberto = !reg._cardAberto;
+  const body    = document.querySelector(`#real-sec-${sbId} .real-card-body`);
+  const chevron = document.querySelector(`#real-sec-${sbId} .real-chevron`);
+  const btn     = document.querySelector(`#real-sec-${sbId} .real-section-hdr--btn`);
+  if (body)    body.classList.toggle('open', reg._cardAberto);
+  if (chevron) chevron.classList.toggle('open', reg._cardAberto);
+  if (btn)     btn.setAttribute('aria-expanded', reg._cardAberto);
 }
 
 function expandirRealSection(key, sbId) {
