@@ -449,11 +449,11 @@
   .drawer-tl-info { flex: 1; }
   .drawer-tl-dates { font-size: 13px; font-weight: 500; }
   .drawer-tl-meta { font-size: 11px; color: var(--text-sec); margin-top: 2px; }
-  .drawer-hist-pa { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
-  .drawer-hist-pa-hdr { background: var(--bg); padding: 9px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
-  .drawer-hist-pa-year { font-size: 13px; font-weight: 600; }
+  .drawer-hist-pa { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .drawer-hist-pa-hdr { background: var(--bg); padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+  .drawer-hist-pa-year { font-size: 13px; font-weight: 700; }
   .drawer-hist-pa-period { font-size: 11px; color: var(--text-sec); }
-  .drawer-hist-pa-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .drawer-hist-pa-body { padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
   .drawer-form { display: flex; flex-direction: column; gap: 12px; }
   .drawer-aviso { background: var(--amber-bg); border: 1px solid var(--amber-bg); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--amber); line-height: 1.5; }
   /* ── multi-select ── */
@@ -866,7 +866,12 @@
   .hist-acordo-icon.completo .hist-acordo-badge { background: #027A48; }
 
   /* Seção expansível de acordo */
-  .hist-gozo-section { margin-top: 8px; }
+  .hist-gozo-section { margin-top: 10px; background: #F4F7FF; border: 1.5px solid #C7D7F9; border-radius: 8px; overflow: hidden; }
+  .hist-gozo-section-hdr { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px 5px; border-bottom: 1px solid #DBEAFE; }
+  .hist-gozo-section-title { font-size: 10px; font-weight: 700; color: #1849A9; text-transform: uppercase; letter-spacing: 0.06em; }
+  .hist-gozo-section-close { display: inline-flex; align-items: center; gap: 3px; background: none; border: none; font-size: 10px; color: #6B82C0; cursor: pointer; font-family: inherit; padding: 0; }
+  .hist-gozo-section-close:hover { color: #1849A9; }
+  .hist-gozo-section-body { padding: 8px 10px 10px; }
   /* Barra de progresso */
   .hist-gozo-bar-wrap { height: 6px; background: #E5E7EB; border-radius: 99px; overflow: hidden; margin-bottom: 5px; }
   .hist-gozo-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s; }
@@ -891,6 +896,12 @@
   .hist-gozo-form.open { display: block; }
   .hist-gozo-form-bar-wrap { height: 5px; background: #DBEAFE; border-radius: 99px; overflow: hidden; margin: 4px 0 8px; }
   .hist-gozo-form-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#3B82F6,#1849A9); transition: width 0.2s; }
+  /* Abono pecuniário — chip âmbar separado */
+  .drawer-abono-row { padding: 6px 0 2px; }
+  .drawer-abono-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px; }
+  .drawer-abono-chip-icon { width: 18px; height: 18px; background: #F59E0B; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .drawer-abono-chip-label { font-size: 12px; font-weight: 500; color: #92400E; }
+  .drawer-abono-chip-dias { font-size: 12px; font-weight: 700; color: #78350F; }
   /* Saldo pill no cabeçalho do PA */
   .hist-pa-saldo-gozo { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 99px; white-space: nowrap; }
   .hist-pa-saldo-gozo.restante { background: #FEF3C7; color: #B45309; border: 1px solid #FDE68A; }
@@ -2545,10 +2556,17 @@ function renderDrawerHistorico(colab) {
           </div>
         </div>`;
 
-        secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="${(isExpanded || (!temGozos && false)) ? '' : 'display:none;'}">
-          ${progressHtml}
-          ${listaHtml}
-          ${formHtml}
+        secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="${isExpanded ? '' : 'display:none;'}">
+          <div class="hist-gozo-section-hdr">
+            <span class="hist-gozo-section-title">Gozo real</span>
+            <button class="hist-gozo-section-close" onclick="toggleGozoSecao('${r._sbId}',${lancIdx})">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+              Recolher
+            </button>
+          </div>
+          <div class="hist-gozo-section-body">
+            ${progressHtml}${listaHtml}${formHtml}
+          </div>
         </div>`;
       } else if (temGozos) {
         // gestor: só leitura
@@ -2561,9 +2579,18 @@ function renderDrawerHistorico(colab) {
             ${gx.obs ? `<span class="hist-gozo-item-obs">${gx.obs}</span>` : ''}
           </div></div>`).join('');
         secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="${isExpanded ? '' : 'display:none;'}">
-          <div class="hist-gozo-bar-wrap"><div class="hist-gozo-bar-fill ${barCls}" style="width:${pct}%;"></div></div>
-          <div class="hist-gozo-progress-row"><span class="hist-gozo-progress-txt" style="color:${txtCor};">${totalGozadoPeriodo}d de ${l.dias}d gozados · ${saldoTxt}</span></div>
-          <div class="hist-gozo-lista">${itensHtml}</div>
+          <div class="hist-gozo-section-hdr">
+            <span class="hist-gozo-section-title">Gozo real</span>
+            <button class="hist-gozo-section-close" onclick="toggleGozoSecao('${r._sbId}',${lancIdx})">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+              Recolher
+            </button>
+          </div>
+          <div class="hist-gozo-section-body">
+            <div class="hist-gozo-bar-wrap"><div class="hist-gozo-bar-fill ${barCls}" style="width:${pct}%;"></div></div>
+            <div class="hist-gozo-progress-row"><span class="hist-gozo-progress-txt" style="color:${txtCor};">${totalGozadoPeriodo}d de ${l.dias}d gozados · ${saldoTxt}</span></div>
+            <div class="hist-gozo-lista">${itensHtml}</div>
+          </div>
         </div>`;
       }
 
@@ -2582,14 +2609,18 @@ function renderDrawerHistorico(colab) {
       </div>`;
     }).join('');
 
-    const abonoHtml = abonoPec > 0 ? `<div class="drawer-tl-item">
-          <div class="drawer-tl-dot" style="background:var(--text-ter)"></div>
-          <div class="drawer-tl-info">
-            <div class="drawer-tl-dates" style="color:var(--text-sec);">Abono pecuniário · ${abonoPec}d</div>
-          </div>
-        </div>` : '';
-    const lancs = (lancsHtml || abonoHtml)
-      ? lancsHtml + abonoHtml
+    const abonoChipHtml = abonoPec > 0 ? `<div class="drawer-abono-row">
+      <div class="drawer-abono-chip">
+        <div class="drawer-abono-chip-icon">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <span class="drawer-abono-chip-label">Abono pecuniário</span>
+        <span class="drawer-abono-chip-dias">· ${abonoPec}d</span>
+      </div>
+    </div>` : '';
+    const timelineHtml = lancsHtml ? `<div class="drawer-timeline">${lancsHtml}</div>` : '';
+    const lancs = (timelineHtml || abonoChipHtml)
+      ? (timelineHtml || '') + (abonoChipHtml || '')
       : '<p style="font-size:12px;color:var(--text-sec);padding:4px 0;">Sem lançamentos neste PA.</p>';
     // pill de gozo real no cabeçalho
     const totalAgendadoPA = r.lancamentos.reduce((s, l) => s + (l.dias || 0), 0);
@@ -2616,7 +2647,7 @@ function renderDrawerHistorico(colab) {
           ${situBadge}
         </div>
       </div>
-      <div class="drawer-hist-pa-body"><div class="drawer-timeline">${lancs}</div></div>
+      <div class="drawer-hist-pa-body">${lancs}</div>
     </div>`;
   }).join('');
 }
