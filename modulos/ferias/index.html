@@ -861,10 +861,10 @@
   .hist-acordo-icon:hover { color: #1849A9; border-color: #93B4F9; background: #EFF4FF; }
   .hist-acordo-icon.ativo { color: #1849A9; border-color: #93B4F9; background: #EFF4FF; }
   .hist-acordo-icon.completo { color: #027A48; border-color: #6CE9A6; background: #ECFDF3; }
-  .hist-acordo-icon.excedido { color: #C4150A; border-color: #FECACA; background: #FEF2F2; }
+
   .hist-acordo-badge { position: absolute; top: -6px; right: -6px; min-width: 14px; height: 14px; padding: 0 3px; background: #1849A9; color: #fff; font-size: 9px; font-weight: 700; border-radius: 99px; display: flex; align-items: center; justify-content: center; line-height: 1; }
   .hist-acordo-icon.completo .hist-acordo-badge { background: #027A48; }
-  .hist-acordo-icon.excedido .hist-acordo-badge { background: #C4150A; }
+
   /* Seção expansível de acordo */
   .hist-gozo-section { margin-top: 8px; }
   /* Barra de progresso */
@@ -872,7 +872,6 @@
   .hist-gozo-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s; }
   .hist-gozo-bar-fill.parcial  { background: linear-gradient(90deg, #3B82F6 0%, #1849A9 100%); }
   .hist-gozo-bar-fill.completo { background: #059669; }
-  .hist-gozo-bar-fill.excedido { background: #DC2626; }
   /* Stats + ações */
   .hist-gozo-progress-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
   .hist-gozo-progress-txt { font-size: 11px; font-weight: 600; }
@@ -896,7 +895,6 @@
   .hist-pa-saldo-gozo { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 99px; white-space: nowrap; }
   .hist-pa-saldo-gozo.restante { background: #FEF3C7; color: #B45309; border: 1px solid #FDE68A; }
   .hist-pa-saldo-gozo.completo { background: #ECFDF3; color: #027A48; border: 1px solid #6CE9A6; }
-  .hist-pa-saldo-gozo.excedido { background: #FEF2F2; color: #C4150A; border: 1px solid #FECACA; }
   .real-inline-form { border: 1.5px solid #1849A9; border-radius: 8px; background: var(--surface); overflow: hidden; display: none; }
   .real-inline-form-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: #EFF4FF; border-bottom: 1px solid #C7D7F9; }
   .real-inline-form-title { font-size: 12px; font-weight: 600; color: #1849A9; }
@@ -2483,7 +2481,7 @@ function renderDrawerHistorico(colab) {
 
       // ── ícone de acordo — sempre presente, muda de estado
       let iconCls = 'hist-acordo-icon';
-      if (temGozos) iconCls += saldoPeriodo < 0 ? ' excedido' : saldoPeriodo === 0 ? ' completo' : ' ativo';
+      if (temGozos) iconCls += saldoPeriodo === 0 ? ' completo' : ' ativo';
       const badgeHtml = temGozos ? `<span class="hist-acordo-badge">${gozosDoLanc.length}</span>` : '';
       const iconTitle = temGozos ? 'Ver acordos registrados' : 'Registrar acordo de gozo';
       const iconOnclick = temGozos
@@ -2499,11 +2497,9 @@ function renderDrawerHistorico(colab) {
         let progressHtml = '';
         let listaHtml = '';
         if (temGozos) {
-          const barCls  = saldoPeriodo < 0 ? 'excedido' : saldoPeriodo === 0 ? 'completo' : 'parcial';
-          const txtCor  = saldoPeriodo < 0 ? '#C4150A'  : saldoPeriodo === 0 ? '#027A48'  : '#D97706';
-          const saldoTxt = saldoPeriodo > 0 ? `${saldoPeriodo}d restantes`
-                         : saldoPeriodo < 0 ? `excedeu ${Math.abs(saldoPeriodo)}d`
-                         : 'Período concluído ✓';
+          const barCls  = saldoPeriodo === 0 ? 'completo' : 'parcial';
+          const txtCor  = saldoPeriodo === 0 ? '#027A48' : '#D97706';
+          const saldoTxt = saldoPeriodo > 0 ? `${saldoPeriodo}d restantes` : 'Período concluído ✓';
           const itensHtml = gozosDoLanc.map((gx, gi) => `<div class="hist-gozo-item">
               <div class="hist-gozo-item-left">
                 <span class="hist-gozo-item-dates">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span>
@@ -2556,9 +2552,9 @@ function renderDrawerHistorico(colab) {
         </div>`;
       } else if (temGozos) {
         // gestor: só leitura
-        const barCls = saldoPeriodo < 0 ? 'excedido' : saldoPeriodo === 0 ? 'completo' : 'parcial';
-        const txtCor = saldoPeriodo < 0 ? '#C4150A' : saldoPeriodo === 0 ? '#027A48' : '#D97706';
-        const saldoTxt = saldoPeriodo > 0 ? `${saldoPeriodo}d restantes` : saldoPeriodo < 0 ? `excedeu ${Math.abs(saldoPeriodo)}d` : 'Concluído ✓';
+        const barCls = saldoPeriodo === 0 ? 'completo' : 'parcial';
+        const txtCor = saldoPeriodo === 0 ? '#027A48' : '#D97706';
+        const saldoTxt = saldoPeriodo > 0 ? `${saldoPeriodo}d restantes` : 'Concluído ✓';
         const itensHtml = gozosDoLanc.map(gx => `<div class="hist-gozo-item">
           <div class="hist-gozo-item-left">
             <span class="hist-gozo-item-dates">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span>
@@ -2606,7 +2602,6 @@ function renderDrawerHistorico(colab) {
       else if (saldoGozoPA === 0 && totalGozadoPA > 0)
         gozoPillHtml = `<span class="hist-pa-saldo-gozo completo">✓ Tudo gozado</span>`;
       else if (saldoGozoPA < 0)
-        gozoPillHtml = `<span class="hist-pa-saldo-gozo excedido">+${Math.abs(saldoGozoPA)}d excedido</span>`;
     }
     return `<div class="drawer-hist-pa">
       <div class="drawer-hist-pa-hdr">
@@ -2829,8 +2824,14 @@ async function salvarGozoHist(key, sbId, lancIdx) {
   const colab = COLABORADORES.find(c => c.__key === key);
   const reg   = colab?.registros.find(r => r._sbId == sbId);
   if (!reg) return;
-  const idx   = Number(lancIdx);
-  const lista = (reg.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
+  const idx      = Number(lancIdx);
+  const lanc     = reg.lancamentos[idx];
+  const lista    = (reg.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
+  const jaGozado = lista.filter(rx => Number(rx.lancIdx) === idx).reduce((s, rx) => s + Number(rx.dias), 0);
+  if (lanc && (jaGozado + dias) > lanc.dias) {
+    toast(`Limite: ${lanc.dias}d agendados, já há ${jaGozado}d registrados. Máximo a adicionar: ${lanc.dias - jaGozado}d.`);
+    return;
+  }
   lista.push({ saida, retorno, dias, obs: obs || null, lancIdx: idx });
   try {
     await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: lista });
