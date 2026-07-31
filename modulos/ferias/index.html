@@ -4024,7 +4024,7 @@ function renderRealSection(key, reg) {
   const realizacoes = reg.realizacoes || [];
   const temAcordo   = !!reg._obsGestor;
   const temUso      = realizacoes.length > 0;
-  const temConteudo = temAcordo || temUso || reg._expandido;
+  const temConteudo = temAcordo || temUso;
 
   const diasOficiais  = reg.lancamentos.reduce((s, l) => s + (l.dias || 0), 0);
   const diasRealizados = realizacoes.reduce((s, r) => s + (Number(r.dias) || 0), 0);
@@ -4244,16 +4244,8 @@ function toggleRealCard(key, sbId) {
 }
 
 function expandirRealSection(key, sbId) {
-  const colab = COLABORADORES.find(c => c.__key === key);
-  const reg   = colab?.registros.find(r => r._sbId == sbId);
-  if (!reg) return;
-  const el = document.getElementById(`real-sec-${sbId}`);
-  if (!el) return;
-  reg._expandido = true;
-  const tmp = document.createElement('div');
-  tmp.innerHTML = renderRealSection(key, reg);
-  el.replaceWith(tmp.firstElementChild);
-  abrirFormReal(sbId);
+  // redireciona para o form inline (não usa mais _expandido)
+  expandirFormInline(key, sbId);
 }
 
 function abrirFormReal(sbId) {
@@ -4267,18 +4259,6 @@ function fecharFormReal(sbId) {
     const el = document.getElementById(`real-${k}-${sbId}`);
     if (el) el.value = '';
   });
-  // se foi expandido via "+ Registrar" mas não tem conteúdo, volta para linha compacta
-  const colab = COLABORADORES.find(c => c.registros?.some(r => r._sbId == sbId));
-  const reg   = colab?.registros.find(r => r._sbId == sbId);
-  if (reg && reg._expandido && !reg._obsGestor && !(reg.realizacoes?.length)) {
-    reg._expandido = false;
-    const card = document.getElementById(`real-sec-${sbId}`);
-    if (card) {
-      const tmp = document.createElement('div');
-      tmp.innerHTML = renderRealSection(colab.__key, reg);
-      card.replaceWith(tmp.firstElementChild);
-    }
-  }
 }
 
 function calcRetornoReal(sbId) {
