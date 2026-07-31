@@ -4125,6 +4125,18 @@ function fecharFormReal(sbId) {
     const el = document.getElementById(`real-${k}-${sbId}`);
     if (el) el.value = '';
   });
+  // se foi expandido via "+ Registrar" mas não tem conteúdo, volta para linha compacta
+  const colab = COLABORADORES.find(c => c.registros?.some(r => r._sbId == sbId));
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (reg && reg._expandido && !reg._obsGestor && !(reg.realizacoes?.length)) {
+    reg._expandido = false;
+    const card = document.getElementById(`real-sec-${sbId}`);
+    if (card) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = renderRealSection(colab.__key, reg);
+      card.replaceWith(tmp.firstElementChild);
+    }
+  }
 }
 
 function calcDiasReal(sbId) {
