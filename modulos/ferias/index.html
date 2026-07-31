@@ -853,6 +853,13 @@
   .real-row-simple-add:hover { border-color: #1849A9; color: #1849A9; background: #EFF4FF; }
   .real-row-wrap { margin-bottom: 8px; }
   .real-row-wrap .real-row-simple { margin-bottom: 0; }
+  .drawer-tl-dates-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .hist-gozo-btn { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #1849A9; background: none; border: 1px dashed #93B4F9; border-radius: 4px; padding: 1px 8px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
+  .hist-gozo-btn:hover { background: #EFF4FF; border-color: #1849A9; }
+  .hist-gozo-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #027A48; background: #ECFDF3; border: 1px solid #6CE9A6; border-radius: 4px; padding: 1px 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+  .hist-gozo-chip:hover { background: #D1FAE5; }
+  .hist-gozo-form { display: none; margin-top: 8px; padding: 10px 12px 8px; background: #F8FAFF; border: 1.5px solid #C7D7F9; border-radius: 6px; }
+  .hist-gozo-form.open { display: block; }
   .real-inline-form { border: 1.5px solid #1849A9; border-radius: 8px; background: var(--surface); overflow: hidden; display: none; }
   .real-inline-form-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: #EFF4FF; border-bottom: 1px solid #C7D7F9; }
   .real-inline-form-title { font-size: 12px; font-weight: 600; color: #1849A9; }
@@ -1520,14 +1527,12 @@
     </div>
     <div class="drawer-tabs">
       <button class="drawer-tab active" onclick="setDrawerTab('historico',this)">Histórico</button>
-      <button class="drawer-tab rh-only" id="tabAcordos" onclick="setDrawerTab('acordos',this)">Acordos</button>
       <button class="drawer-tab" onclick="setDrawerTab('lancar',this)">Lançar</button>
     </div>
     <div class="drawer-tabs-line"></div>
   </div>
   <div class="drawer-body">
     <div id="drawerHistorico"></div>
-    <div id="drawerAcordos" style="display:none;"></div>
     <div id="drawerLancar" style="display:none;"></div>
   </div>
 </div>
@@ -2256,8 +2261,6 @@ function abrirDrawer(key) {
   renderDrawerHistorico(colab);
   renderDrawerLancar(colab);
 
-  renderDrawerRealizacoes(colab);
-
   setDrawerTab('historico', document.querySelectorAll('.drawer-tab')[0]);
 
   document.getElementById('drawer').classList.add('open');
@@ -2271,15 +2274,10 @@ function fecharDrawer() {
 }
 
 function setDrawerTab(tab, btn) {
-  document.getElementById('drawerHistorico').style.display    = tab === 'historico'    ? '' : 'none';
-  document.getElementById('drawerAcordos').style.display  = tab === 'acordos'  ? '' : 'none';
-  document.getElementById('drawerLancar').style.display       = tab === 'lancar'       ? '' : 'none';
+  document.getElementById('drawerHistorico').style.display = tab === 'historico' ? '' : 'none';
+  document.getElementById('drawerLancar').style.display    = tab === 'lancar'    ? '' : 'none';
   document.querySelectorAll('.drawer-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  if (tab === 'acordos') {
-    const colab = COLABORADORES.find(c => c.__key === _drawerKey);
-    if (colab) renderDrawerRealizacoes(colab);
-  }
 }
 
 function renderDrawerResumo(colab) {
@@ -2419,9 +2417,9 @@ function renderDrawerHistorico(colab) {
       🖨 Imprimir / PDF
     </button>
   </div>`;
+  const key = colab.__key;
   document.getElementById('drawerHistorico').innerHTML = btnPrint + regs.map(r => {
     const saldo = calcSaldo(r);
-    // badge de situação das férias (separado do status do PA)
     let situBadge = '';
     if (r.status === 'Pendente')    situBadge = `<span class="badge badge-amber">Pendente aprovação</span>`;
     else if (r.status === 'Rejeitado') situBadge = `<span class="badge badge-vermelho">Rejeitado</span>`;
@@ -2431,13 +2429,64 @@ function renderDrawerHistorico(colab) {
     else situBadge = `<span class="badge badge-azul">Em andamento</span>`;
 
     const abonoPec = r.abonoPecuniario || 0;
-    const lancsHtml = r.lancamentos.map(l => `<div class="drawer-tl-item">
-          <div class="drawer-tl-dot" style="background:${l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)'}"></div>
-          <div class="drawer-tl-info">
-            <div class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</div>
-            ${l.nota ? `<div class="drawer-tl-meta">${l.nota}</div>` : ''}
+    const excluirPA = excluir.has(r.status);
+    const realizacoes = (r.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
+
+    const lancsHtml = r.lancamentos.map((l, lancIdx) => {
+      const gozo = realizacoes.find(rx => Number(rx.lancIdx) === lancIdx) ||
+                   (lancIdx === 0 && realizacoes.find(rx => rx.lancIdx == null));
+      let gozoArea = '';
+      if (!excluirPA && IS_RH) {
+        if (gozo) {
+          gozoArea = `<span class="hist-gozo-chip" onclick="editarGozoHist('${key}','${r._sbId}',${lancIdx})">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            ${gozo.dias}d gozados · ${formatDate(gozo.saida)} → ${formatDate(gozo.retorno)}
+          </span>`;
+        } else {
+          gozoArea = `<button class="hist-gozo-btn" onclick="expandirGozoHist('${r._sbId}',${lancIdx})">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Gozo real
+          </button>`;
+        }
+      }
+      const inlineForm = (!excluirPA && IS_RH) ? `
+        <div class="hist-gozo-form" id="hist-gozo-${r._sbId}-${lancIdx}">
+          <div class="real-add-grid" style="padding:0 0 6px;">
+            <div class="real-add-field">
+              <label class="real-add-label">Saída</label>
+              <input class="real-add-input" type="date" id="hg-saida-${r._sbId}-${lancIdx}" oninput="calcRetornoGozo('${r._sbId}',${lancIdx})">
+            </div>
+            <div class="real-add-field">
+              <label class="real-add-label">Dias</label>
+              <input class="real-add-input" type="number" id="hg-dias-${r._sbId}-${lancIdx}" min="1" placeholder="Qtd" oninput="calcRetornoGozo('${r._sbId}',${lancIdx})">
+            </div>
+            <div class="real-add-field">
+              <label class="real-add-label">Retorno <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(auto)</span></label>
+              <input class="real-add-input" type="date" id="hg-retorno-${r._sbId}-${lancIdx}" readonly style="background:#F9FAFB;color:var(--text-sec);">
+            </div>
+            <div class="real-add-field">
+              <label class="real-add-label">Obs.</label>
+              <input class="real-add-input" type="text" id="hg-obs-${r._sbId}-${lancIdx}" placeholder="opcional">
+            </div>
           </div>
-        </div>`).join('');
+          <div class="real-add-actions" style="padding:0;">
+            <button class="btn-real-cancel" onclick="fecharGozoHist('${r._sbId}',${lancIdx})">Cancelar</button>
+            <button class="btn-real-save" onclick="salvarGozoHist('${key}','${r._sbId}',${lancIdx})">Salvar gozo</button>
+          </div>
+        </div>` : '';
+      return `<div class="drawer-tl-item">
+        <div class="drawer-tl-dot" style="background:${l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)'}"></div>
+        <div class="drawer-tl-info" style="flex:1;min-width:0;">
+          <div class="drawer-tl-dates-row">
+            <span class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>
+            ${gozoArea}
+          </div>
+          ${l.nota ? `<div class="drawer-tl-meta">${l.nota}</div>` : ''}
+          ${inlineForm}
+        </div>
+      </div>`;
+    }).join('');
+
     const abonoHtml = abonoPec > 0 ? `<div class="drawer-tl-item">
           <div class="drawer-tl-dot" style="background:var(--text-ter)"></div>
           <div class="drawer-tl-info">
@@ -2605,6 +2654,66 @@ async function confirmarDrawerLancamento() {
     fecharDrawer();
     renderAll();
   }
+}
+
+// ─── Gozo real (inline no Histórico) ─────────────────────────────────────────
+function expandirGozoHist(sbId, lancIdx) {
+  document.getElementById(`hist-gozo-${sbId}-${lancIdx}`)?.classList.add('open');
+}
+function fecharGozoHist(sbId, lancIdx) {
+  const f = document.getElementById(`hist-gozo-${sbId}-${lancIdx}`);
+  if (!f) return;
+  f.classList.remove('open');
+  ['saida','dias','retorno','obs'].forEach(k => {
+    const el = document.getElementById(`hg-${k}-${sbId}-${lancIdx}`);
+    if (el) el.value = '';
+  });
+}
+function calcRetornoGozo(sbId, lancIdx) {
+  const saida = document.getElementById(`hg-saida-${sbId}-${lancIdx}`)?.value;
+  const dias  = parseInt(document.getElementById(`hg-dias-${sbId}-${lancIdx}`)?.value);
+  const ret   = document.getElementById(`hg-retorno-${sbId}-${lancIdx}`);
+  if (saida && dias > 0 && ret) ret.value = addDays(saida, dias);
+}
+async function salvarGozoHist(key, sbId, lancIdx) {
+  const saida   = document.getElementById(`hg-saida-${sbId}-${lancIdx}`)?.value;
+  const diasVal = document.getElementById(`hg-dias-${sbId}-${lancIdx}`)?.value;
+  const retorno = document.getElementById(`hg-retorno-${sbId}-${lancIdx}`)?.value;
+  const obs     = document.getElementById(`hg-obs-${sbId}-${lancIdx}`)?.value?.trim();
+  if (!saida || !diasVal) { toast('Preencha saída e dias.'); return; }
+  const dias = Number(diasVal);
+  if (!dias || dias < 1) { toast('Dias inválido.'); return; }
+  const colab = COLABORADORES.find(c => c.__key === key);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  const idx = Number(lancIdx);
+  const lista = (reg.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
+  const filtrada = lista.filter(rx => Number(rx.lancIdx) !== idx);
+  filtrada.push({ saida, retorno, dias, obs: obs || null, lancIdx: idx });
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: filtrada });
+    reg.realizacoes = filtrada;
+    renderDrawerHistorico(colab);
+    toast('✓ Gozo real salvo!');
+  } catch(e) { toast('Erro ao salvar: ' + (e.message || e)); }
+}
+function editarGozoHist(key, sbId, lancIdx) {
+  const colab = COLABORADORES.find(c => c.__key === key);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  const idx  = Number(lancIdx);
+  const lista = (reg.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
+  const gozo  = lista.find(rx => Number(rx.lancIdx) === idx) ||
+                (idx === 0 && lista.find(rx => rx.lancIdx == null));
+  if (!gozo) return;
+  expandirGozoHist(sbId, lancIdx);
+  setTimeout(() => {
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+    set(`hg-saida-${sbId}-${lancIdx}`,   gozo.saida);
+    set(`hg-dias-${sbId}-${lancIdx}`,    gozo.dias);
+    set(`hg-retorno-${sbId}-${lancIdx}`, gozo.retorno);
+    set(`hg-obs-${sbId}-${lancIdx}`,     gozo.obs);
+  }, 30);
 }
 
 // ─── Navegação ───────────────────────────────────────────────────────────────
@@ -3990,367 +4099,6 @@ function searchGlobalKeydown(e) {
     items[_searchIdx]?.click();
   } else if (e.key === 'Escape') {
     fecharSearchDD();
-  }
-}
-
-// ─── Realizações (gozo real vs. período oficial) ─────────────────────────────
-
-function renderDrawerRealizacoes(colab) {
-  const el = document.getElementById('drawerAcordos');
-  if (!el) return;
-
-  // pega apenas registros aprovados com pelo menos 1 lançamento
-  const regs = colab.registros.filter(r => r.status === 'Aprovado' && r.lancamentos.length > 0);
-
-  if (!regs.length) {
-    el.innerHTML = `
-      <div style="padding:32px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;">
-        <div style="width:44px;height:44px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-ter)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/>
-          </svg>
-        </div>
-        <div style="font-size:14px;font-weight:600;color:var(--text);">Nenhum acordo registrado</div>
-        <div style="font-size:12px;color:var(--text-sec);line-height:1.6;max-width:300px;">
-          Este colaborador não possui acordos informais registrados. Quando houver um ajuste entre gestor e colaborador sobre o período real de gozo, registre no campo <strong>Acordo informal</strong> na aba Lançar.
-        </div>
-      </div>`;
-    return;
-  }
-
-  const regsOrdenados = [...regs].sort((a, b) => (b.ano || 0) - (a.ano || 0));
-  el.innerHTML = regsOrdenados.map(r => renderRealSection(colab.__key, r)).join('');
-}
-
-function renderRealSection(key, reg) {
-  const realizacoes = (reg.realizacoes || []).filter(r => r.saida && Number(r.dias) > 0);
-  const temAcordo   = !!reg._obsGestor;
-  const temUso      = realizacoes.length > 0;
-  const temConteudo = temAcordo || temUso;
-
-  const diasOficiais  = reg.lancamentos.reduce((s, l) => s + (l.dias || 0), 0);
-  const diasRealizados = realizacoes.reduce((s, r) => s + (Number(r.dias) || 0), 0);
-  const saldoRestante  = diasOficiais - diasRealizados;
-  const badgeCls = saldoRestante === 0 ? 'zerado' : saldoRestante < 0 ? 'excesso' : 'parcial';
-  const badgeTxt = saldoRestante === 0 ? 'Zerado' : saldoRestante < 0 ? `+${Math.abs(saldoRestante)}d excesso` : `Saldo ${saldoRestante}d`;
-
-  // ── PA sem conteúdo: linha compacta ──────────────────────────────────────
-  if (!temConteudo) {
-    return `
-    <div class="real-row-wrap" id="real-sec-${reg._sbId}">
-      <div class="real-row-simple">
-        <div class="real-row-simple-left">
-          <span class="real-row-simple-ano">PA ${reg.ano}</span>
-          <span class="real-row-simple-periodos">${diasOficiais}d de férias</span>
-        </div>
-        <div class="real-row-simple-right">
-          <button class="real-row-simple-add" onclick="expandirFormInline('${reg._sbId}')" title="Registrar gozo real">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-          </button>
-        </div>
-      </div>
-      <div class="real-inline-form" id="real-inline-${reg._sbId}">
-        <div class="real-inline-form-header">
-          <span class="real-inline-form-title">Registrar gozo real · PA ${reg.ano}</span>
-          <button class="real-inline-close" onclick="fecharFormInline('${reg._sbId}')">✕</button>
-        </div>
-        ${reg.lancamentos.length > 0 ? `<div style="padding:5px 14px 6px;background:#F0F4FF;border-bottom:1px solid #C7D7F9;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span style="font-size:10px;font-weight:700;color:#1849A9;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;">Períodos agendados:</span>
-          ${reg.lancamentos.map((l,i) => `<span style="font-size:11px;color:#1849A9;background:#fff;border:1px solid #C7D7F9;border-radius:4px;padding:1px 7px;white-space:nowrap;">${i+1}º&nbsp;${fmtDate(l.inicio)} a ${fmtDate(l.fim)} (${l.dias}d)</span>`).join('')}
-        </div>` : ''}
-        <div class="real-add-grid" style="padding:10px 14px 4px;">
-          <div class="real-add-field">
-            <label class="real-add-label">Saída</label>
-            <input class="real-add-input" type="date" id="real-saida-${reg._sbId}" oninput="calcRetornoReal('${reg._sbId}')">
-          </div>
-          <div class="real-add-field">
-            <label class="real-add-label">Dias</label>
-            <input class="real-add-input" type="number" id="real-dias-${reg._sbId}" min="1" placeholder="Qtd" oninput="calcRetornoReal('${reg._sbId}')">
-          </div>
-          <div class="real-add-field">
-            <label class="real-add-label">Retorno <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(auto)</span></label>
-            <input class="real-add-input" type="date" id="real-retorno-${reg._sbId}" readonly style="background:#F9FAFB;color:var(--text-sec);">
-          </div>
-          <div class="real-add-field">
-            <label class="real-add-label">Obs.</label>
-            <input class="real-add-input" type="text" id="real-obs-${reg._sbId}" placeholder="opcional">
-          </div>
-        </div>
-        <div class="real-add-actions" style="padding:0 14px 10px;">
-          <button class="btn-real-cancel" onclick="fecharFormInline('${reg._sbId}')">Cancelar</button>
-          <button class="btn-real-save" onclick="salvarRealizacaoInline('${key}','${reg._sbId}')">Salvar utilização</button>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  // ── PA com conteúdo: card completo com destaque ───────────────────────────
-  const listaHtml = realizacoes.map((r, i) => `
-    <div class="real-row">
-      <div class="real-row-info">
-        <span class="real-row-dates">${formatDate(r.saida)} → ${formatDate(r.retorno)}</span>
-        ${r.obs ? `<span class="real-row-obs">${r.obs}</span>` : ''}
-      </div>
-      <span class="real-row-dias">${r.dias}d</span>
-      <button class="real-row-del" onclick="removerRealizacao('${key}','${reg._sbId}',${i})" title="Remover">×</button>
-    </div>`).join('');
-
-  const acordoHtml = temAcordo ? `
-    <div id="real-acordo-wrap-${reg._sbId}" style="padding:8px 14px;border-top:1px solid var(--border);">
-      <div id="real-acordo-view-${reg._sbId}">
-        <div class="real-acordo-nota">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span class="real-acordo-nota-txt">${reg._obsGestor}</span>
-          <button class="real-acordo-edit-btn" onclick="editarAcordo('${reg._sbId}')">Editar</button>
-        </div>
-      </div>
-      <div id="real-acordo-form-${reg._sbId}" style="display:none;margin-top:6px;">
-        <textarea class="real-acordo-textarea" id="real-acordo-txt-${reg._sbId}">${reg._obsGestor}</textarea>
-        <div class="real-acordo-actions">
-          <button class="real-acordo-save" onclick="salvarAcordoInline('${key}','${reg._sbId}')">Salvar</button>
-          <button class="real-acordo-cancel" onclick="cancelarAcordoInline('${reg._sbId}')">Cancelar</button>
-        </div>
-      </div>
-    </div>` : `
-    <div id="real-acordo-wrap-${reg._sbId}">
-      <div id="real-acordo-view-${reg._sbId}"></div>
-      <div id="real-acordo-form-${reg._sbId}" style="display:none;padding:10px 14px;border-top:1px solid var(--border);background:#FFFBEB;">
-        <div style="font-size:11px;font-weight:600;color:#92400E;margin-bottom:6px;">Acordo informal · Apenas RH</div>
-        <textarea class="real-acordo-textarea" id="real-acordo-txt-${reg._sbId}" placeholder="Ex: Colaborador tirou 10 dias reais — 2 dias ficam como saldo para uso posterior"></textarea>
-        <div class="real-acordo-actions">
-          <button class="real-acordo-save" onclick="salvarAcordoInline('${key}','${reg._sbId}')">Salvar</button>
-          <button class="real-acordo-cancel" onclick="cancelarAcordoInline('${reg._sbId}')">Cancelar</button>
-        </div>
-      </div>
-    </div>`;
-
-  const iconAcordo = temAcordo
-    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" title="Tem acordo"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
-    : '';
-
-  const pct = diasOficiais > 0 ? Math.min(100, Math.round((diasRealizados / diasOficiais) * 100)) : 0;
-  const barColor = saldoRestante < 0 ? '#F04438' : saldoRestante === 0 ? '#12B76A' : '#F79009';
-  const periodosOficiais = reg.lancamentos.map(l => `${formatDate(l.inicio)} a ${formatDate(l.fim)}`).join(' · ');
-  const saldoLabel = saldoRestante < 0 ? 'Excedido' : saldoRestante === 0 ? 'Zerado' : 'Disponível';
-
-  const resumoHtml = `
-    <div class="real-resumo">
-      <div class="real-resumo-periodo">
-        <span class="real-resumo-periodo-label">Período gerado</span>
-        <span class="real-resumo-periodo-datas">${periodosOficiais}</span>
-      </div>
-      <div class="real-resumo-bar-wrap">
-        <div class="real-resumo-bar-fill" style="width:${pct}%;background:${barColor};"></div>
-      </div>
-      <div class="real-resumo-stats">
-        <div class="real-resumo-stat">
-          <span class="real-resumo-num">${diasOficiais}d</span>
-          <span class="real-resumo-label">Férias geradas</span>
-        </div>
-        <div class="real-resumo-divider"></div>
-        <div class="real-resumo-stat">
-          <span class="real-resumo-num">${diasRealizados}d</span>
-          <span class="real-resumo-label">Já gozados</span>
-        </div>
-        <div class="real-resumo-divider"></div>
-        <div class="real-resumo-stat real-resumo-stat--destaque">
-          <span class="real-resumo-num" style="color:${barColor};font-size:20px;">${Math.abs(saldoRestante)}d</span>
-          <span class="real-resumo-label" style="color:${barColor};font-weight:600;">${saldoLabel}</span>
-        </div>
-      </div>
-    </div>`;
-
-  const aberto = !!reg._cardAberto;
-  const saldoBadgeCls = saldoRestante < 0 ? 'excesso' : saldoRestante === 0 ? 'zerado' : 'parcial';
-  const saldoBadgeTxt = saldoRestante < 0 ? `+${Math.abs(saldoRestante)}d excesso` : saldoRestante === 0 ? 'Zerado' : `${saldoRestante}d disponível`;
-  const indicadores = [];
-  if (temUso)    indicadores.push(`<span class="real-saldo-badge ${saldoBadgeCls}" style="margin-top:0;font-size:10px;padding:1px 8px;">${saldoBadgeTxt}</span>`);
-  if (temAcordo) indicadores.push(`<span class="real-badge-ind acordo"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Acordo</span>`);
-
-  return `<div class="real-section real-section--destaque" id="real-sec-${reg._sbId}">
-    <button class="real-section-hdr real-section-hdr--btn" onclick="toggleRealCard('${key}','${reg._sbId}')" aria-expanded="${aberto}">
-      <div class="real-section-meta">
-        <div class="real-section-title">PA ${reg.ano}
-          <span class="real-hdr-badges">${indicadores.join('')}</span>
-        </div>
-        <div class="real-resumo-periodo-label" style="font-size:10px;margin-top:2px;">${periodosOficiais}</div>
-      </div>
-      <svg class="real-chevron ${aberto ? 'open' : ''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-    </button>
-    <div class="real-card-body ${aberto ? 'open' : ''}">
-    ${resumoHtml}
-    ${listaHtml ? `
-    <div class="real-list-header">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      Dias efetivamente gozados
-    </div>
-    <div class="real-list">${listaHtml}</div>` : ''}
-    <div class="real-add-form" id="real-form-${reg._sbId}">
-      <div class="real-add-grid">
-        <div class="real-add-field">
-          <label class="real-add-label">Saída</label>
-          <input class="real-add-input" type="date" id="real-saida-${reg._sbId}" oninput="calcRetornoReal('${reg._sbId}')">
-        </div>
-        <div class="real-add-field">
-          <label class="real-add-label">Dias</label>
-          <input class="real-add-input" type="number" id="real-dias-${reg._sbId}" min="1" placeholder="Qtd" oninput="calcRetornoReal('${reg._sbId}')">
-        </div>
-        <div class="real-add-field">
-          <label class="real-add-label">Retorno <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(automático)</span></label>
-          <input class="real-add-input" type="date" id="real-retorno-${reg._sbId}" readonly style="background:#F9FAFB;color:var(--text-sec);">
-        </div>
-        <div class="real-add-field">
-          <label class="real-add-label">Obs. <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(opcional)</span></label>
-          <input class="real-add-input" type="text" id="real-obs-${reg._sbId}" placeholder="Ex: voltou antes">
-        </div>
-      </div>
-      <div class="real-add-actions">
-        <button class="btn-real-cancel" onclick="fecharFormReal('${reg._sbId}')">Cancelar</button>
-        <button class="btn-real-save" onclick="salvarRealizacao('${key}','${reg._sbId}')">Salvar utilização</button>
-      </div>
-    </div>
-    ${acordoHtml}
-    <div class="real-card-footer">
-      <button class="real-btn-add" onclick="abrirFormReal('${reg._sbId}')">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Adicionar utilização
-      </button>
-      ${!temAcordo ? `<button class="real-acordo-link" onclick="editarAcordo('${reg._sbId}')">+ Acordo informal</button>` : ''}
-    </div>
-    </div>
-  </div>`;
-}
-
-function expandirFormInline(sbId) {
-  const wrap = document.getElementById(`real-sec-${sbId}`);
-  if (!wrap) return;
-  wrap.querySelector('.real-row-simple').style.display = 'none';
-  const f = wrap.querySelector('.real-inline-form');
-  if (f) { f.style.display = 'block'; f.querySelector('input[type="date"]')?.focus(); }
-}
-function fecharFormInline(sbId) {
-  const wrap = document.getElementById(`real-sec-${sbId}`);
-  if (!wrap) return;
-  const f = wrap.querySelector('.real-inline-form');
-  if (f) {
-    f.style.display = 'none';
-    ['saida','retorno','dias','obs'].forEach(k => { const el = document.getElementById(`real-${k}-${sbId}`); if (el) el.value = ''; });
-  }
-  wrap.querySelector('.real-row-simple').style.display = '';
-}
-async function salvarRealizacaoInline(key, sbId) {
-  await salvarRealizacao(key, sbId);
-}
-
-function toggleRealCard(key, sbId) {
-  const colab = COLABORADORES.find(c => c.__key === key);
-  const reg   = colab?.registros.find(r => r._sbId == sbId);
-  if (!reg) return;
-  reg._cardAberto = !reg._cardAberto;
-  const body    = document.querySelector(`#real-sec-${sbId} .real-card-body`);
-  const chevron = document.querySelector(`#real-sec-${sbId} .real-chevron`);
-  const btn     = document.querySelector(`#real-sec-${sbId} .real-section-hdr--btn`);
-  if (body)    body.classList.toggle('open', reg._cardAberto);
-  if (chevron) chevron.classList.toggle('open', reg._cardAberto);
-  if (btn)     btn.setAttribute('aria-expanded', reg._cardAberto);
-}
-
-function expandirRealSection(key, sbId) {
-  // redireciona para o form inline (não usa mais _expandido)
-  expandirFormInline(key, sbId);
-}
-
-function abrirFormReal(sbId) {
-  document.getElementById(`real-form-${sbId}`)?.classList.add('open');
-}
-function fecharFormReal(sbId) {
-  const f = document.getElementById(`real-form-${sbId}`);
-  if (!f) return;
-  f.classList.remove('open');
-  ['saida','retorno','dias','obs'].forEach(k => {
-    const el = document.getElementById(`real-${k}-${sbId}`);
-    if (el) el.value = '';
-  });
-}
-
-function calcRetornoReal(sbId) {
-  const saida  = document.getElementById(`real-saida-${sbId}`)?.value;
-  const dias   = parseInt(document.getElementById(`real-dias-${sbId}`)?.value);
-  const retEl  = document.getElementById(`real-retorno-${sbId}`);
-  if (saida && dias > 0 && retEl) {
-    retEl.value = addDays(saida, dias);
-  }
-}
-
-async function salvarRealizacao(key, sbId) {
-  const saida   = document.getElementById(`real-saida-${sbId}`)?.value;
-  const retorno = document.getElementById(`real-retorno-${sbId}`)?.value;
-  const diasVal = document.getElementById(`real-dias-${sbId}`)?.value;
-  const obsVal  = document.getElementById(`real-obs-${sbId}`)?.value?.trim();
-
-  if (!saida || !retorno) { alert('Informe a data de saída e de retorno.'); return; }
-  const dias = Number(diasVal) || diffDays(saida, retorno);
-  if (dias <= 0) { alert('A data de retorno deve ser posterior à saída.'); return; }
-
-  const colab = COLABORADORES.find(c => c.__key === key);
-  const reg   = colab?.registros.find(r => r._sbId == sbId);
-  if (!reg) return;
-
-  const novaRealizacao = { saida, retorno, dias, obs: obsVal || null, criadoEm: new Date().toISOString() };
-  const novaLista = [...(reg.realizacoes || []), novaRealizacao];
-
-  try {
-    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: novaLista });
-    reg.realizacoes = novaLista;
-    fecharFormReal(sbId);
-    renderDrawerRealizacoes(colab);
-    toast(`✓ Utilização registrada — ${dias}d`);
-  } catch(e) {
-    alert('Erro ao salvar: ' + e.message);
-  }
-}
-
-async function removerRealizacao(key, sbId, idx) {
-  if (!confirm('Remover esta utilização?')) return;
-  const colab = COLABORADORES.find(c => c.__key === key);
-  const reg   = colab?.registros.find(r => r._sbId == sbId);
-  if (!reg) return;
-
-  const novaLista = reg.realizacoes.filter((_, i) => i !== idx);
-  try {
-    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: novaLista });
-    reg.realizacoes = novaLista;
-    renderDrawerRealizacoes(colab);
-    toast('Utilização removida');
-  } catch(e) {
-    alert('Erro ao remover: ' + e.message);
-  }
-}
-
-// ─── Acordo informal inline ───────────────────────────────────────────────────
-function editarAcordo(sbId) {
-  document.getElementById(`real-acordo-view-${sbId}`).style.display = 'none';
-  document.getElementById(`real-acordo-form-${sbId}`).style.display = '';
-  document.getElementById(`real-acordo-txt-${sbId}`)?.focus();
-}
-
-function cancelarAcordoInline(sbId) {
-  document.getElementById(`real-acordo-form-${sbId}`).style.display = 'none';
-  document.getElementById(`real-acordo-view-${sbId}`).style.display = '';
-}
-
-async function salvarAcordoInline(key, sbId) {
-  const txt = document.getElementById(`real-acordo-txt-${sbId}`)?.value.trim() || null;
-  const colab = COLABORADORES.find(c => c.__key === key);
-  const reg   = colab?.registros.find(r => r._sbId == sbId);
-  if (!reg) return;
-  try {
-    await sbPatch('ferias', `id=eq.${sbId}`, { obs_gestor: txt });
-    reg._obsGestor = txt;
-    renderDrawerRealizacoes(colab);
-    toast('✓ Acordo salvo');
-  } catch(e) {
-    alert('Erro ao salvar acordo: ' + e.message);
   }
 }
 
