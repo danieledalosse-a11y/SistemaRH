@@ -426,6 +426,8 @@
   .drawer-chip svg { width: 11px; height: 11px; stroke: var(--text-ter); flex-shrink: 0; }
   .drawer-chip.mat { background: rgba(24,73,169,0.06); border-color: rgba(24,73,169,0.18); color: #1849A9; }
   .drawer-chip.mat svg { stroke: #1849A9; }
+  .drawer-chip.colored { background: var(--chip-bg, var(--bg)); border-color: var(--chip-bg, var(--border)); color: #fff; font-weight: 600; }
+  .drawer-chip.colored svg { stroke: rgba(255,255,255,0.85); }
   .drawer-close-btn { background: none; border: none; font-size: 18px; color: var(--text-sec); cursor: pointer; padding: 2px 4px; border-radius: 4px; line-height: 1; flex-shrink: 0; }
   .drawer-close-btn:hover { background: var(--bg); color: var(--text); }
   .drawer-tabs { display: flex; gap: 4px; padding: 10px 20px 0; border-bottom: none; }
@@ -845,6 +847,7 @@
   .real-saldo-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
   .real-saldo-badge.zerado  { background: var(--green-bg); color: var(--green); }
   .real-saldo-badge.parcial { background: var(--amber-bg); color: var(--amber); }
+  .real-saldo-badge.neutro  { background: var(--bg); color: var(--text-ter); font-weight: 500; border: 1px solid var(--border); }
   .real-saldo-badge.excesso { background: var(--red-bg);   color: var(--red); }
   .real-list { padding: 0; }
   .real-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
@@ -2226,8 +2229,9 @@ function abrirDrawer(key) {
     const style = cor
       ? `background:${cor};border-color:${cor};color:${branco?'#fff':'#fff'};`
       : '';
-    const svgStroke = cor ? (branco ? 'rgba(255,255,255,0.85)' : '#fff') : 'var(--text-ter)';
-    chips.push(`<span class="drawer-chip" style="${style}"><svg viewBox="0 0 24 24" fill="none" stroke="${svgStroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${colab.unidade}</span>`);
+    const chipStyle = cor ? `--chip-bg:${cor};` : '';
+    const chipClass = cor ? 'drawer-chip colored' : 'drawer-chip';
+    chips.push(`<span class="${chipClass}" style="${chipStyle}"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${colab.unidade}</span>`);
   }
   document.getElementById('drawerChips').innerHTML = chips.join('');
 
@@ -4021,7 +4025,7 @@ function renderRealSection(key, reg) {
         <span class="real-row-simple-periodos">${diasOficiais}d</span>
       </div>
       <div class="real-row-simple-right">
-        <span class="real-saldo-badge ${badgeCls}">${badgeTxt}</span>
+        <span class="real-saldo-badge neutro">${diasOficiais}d</span>
         <button class="real-row-simple-add" onclick="expandirRealSection('${key}','${reg._sbId}')">+ Registrar</button>
       </div>
     </div>`;
