@@ -246,6 +246,71 @@
   .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--text); }
   .field textarea { resize: vertical; min-height: 60px; }
 
+  /* ── drawer form redesign ── */
+  .dform-section { padding: 16px 20px; }
+  .dform-section + .dform-section { border-top: 1px solid var(--border); }
+  .dform-section-title {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-ter); margin-bottom: 12px;
+  }
+  .dform-field { display: flex; flex-direction: column; gap: 4px; }
+  .dform-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-ter);
+  }
+  .dform-input {
+    border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    font-size: 14px; font-weight: 500; font-family: inherit;
+    background: var(--surface); color: var(--text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    width: 100%;
+  }
+  .dform-input:focus { outline: none; border-color: #1849A9; box-shadow: 0 0 0 3px rgba(24,73,169,0.10); }
+  .dform-input.readonly {
+    background: var(--bg); color: var(--text-sec); border-style: dashed;
+    cursor: default; font-weight: 400;
+  }
+  .dform-input.readonly:focus { border-color: var(--border); box-shadow: none; }
+  .dform-textarea {
+    border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text);
+    resize: vertical; min-height: 64px; width: 100%;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .dform-textarea:focus { outline: none; border-color: #1849A9; box-shadow: 0 0 0 3px rgba(24,73,169,0.10); }
+  .dform-hint { font-size: 11px; color: var(--text-ter); margin-top: 2px; }
+  .dform-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .dform-result-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; margin-top: 4px;
+  }
+  .dform-result-bar svg { flex-shrink: 0; stroke: var(--text-ter); }
+  .dform-result-label { font-size: 11px; color: var(--text-ter); }
+  .dform-result-val { font-size: 13px; font-weight: 600; color: var(--text); margin-left: auto; }
+  .dform-result-bar.filled { border-color: #1849A9; background: rgba(24,73,169,0.04); }
+  .dform-result-bar.filled .dform-result-label { color: #1849A9; }
+  .dform-result-bar.filled svg { stroke: #1849A9; }
+  .dform-acordo-box {
+    background: #FFFBEB; border: 1.5px solid #FDE68A; border-radius: 10px; padding: 14px 16px;
+  }
+  .dform-acordo-box .dform-textarea { background: #fff; border-color: #FCD34D; }
+  .dform-acordo-box .dform-textarea:focus { border-color: #F59E0B; box-shadow: 0 0 0 3px rgba(245,158,11,0.12); }
+  .dform-acordo-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .dform-acordo-icon { color: #D97706; }
+  .dform-acordo-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #92400E; }
+  .dform-acordo-badge { font-size: 10px; background: #FEF3C7; color: #D97706; border-radius: 4px; padding: 1px 6px; font-weight: 600; margin-left: auto; }
+  .dform-submit-wrap { padding: 16px 20px; border-top: 1px solid var(--border); }
+  .dform-btn-submit {
+    width: 100%; padding: 12px; background: #111827; color: #fff;
+    border: none; border-radius: 9px; font-size: 14px; font-weight: 600;
+    font-family: inherit; cursor: pointer; letter-spacing: 0.2px;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  }
+  .dform-btn-submit:hover { background: #1F2937; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
+  .dform-btn-submit:active { transform: none; box-shadow: none; }
+  .dform-btn-submit:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
   .alerta-form { border-radius: 8px; padding: 10px 14px; font-size: 12px; margin-top: 8px; }
   .alerta-form.erro  { background: var(--red-bg);   color: var(--red); }
   .alerta-form.aviso { background: var(--amber-bg); color: var(--amber); }
@@ -1378,7 +1443,7 @@
     </div>
     <div class="drawer-tabs">
       <button class="drawer-tab active" onclick="setDrawerTab('historico',this)">Histórico</button>
-      <button class="drawer-tab rh-only" id="tabAcordos" onclick="setDrawerTab('acordos',this)" style="display:none;">Acordos</button>
+      <button class="drawer-tab rh-only" id="tabAcordos" onclick="setDrawerTab('acordos',this)">Acordos</button>
       <button class="drawer-tab" onclick="setDrawerTab('lancar',this)">Lançar</button>
     </div>
     <div class="drawer-tabs-line"></div>
@@ -2093,15 +2158,7 @@ function abrirDrawer(key) {
   renderDrawerHistorico(colab);
   renderDrawerLancar(colab);
 
-  // mostra aba Acordos só se houver realizações ou obs do gestor em algum PA aprovado
-  const tabAcordos = document.getElementById('tabAcordos');
-  if (tabAcordos) {
-    const temAcordos = colab.registros.some(r =>
-      r.status === 'Aprovado' && r.lancamentos.length > 0 &&
-      ((r.realizacoes && r.realizacoes.length > 0) || r._obsGestor)
-    );
-    tabAcordos.style.display = temAcordos ? '' : 'none';
-  }
+  renderDrawerRealizacoes(colab);
 
   setDrawerTab('historico', document.querySelectorAll('.drawer-tab')[0]);
 
@@ -2321,49 +2378,72 @@ function renderDrawerLancar(colab) {
   }
 
   document.getElementById('drawerLancar').innerHTML = `
-    <div class="drawer-pa-card" style="margin-bottom:4px;">
+    <div class="drawer-pa-card" style="margin:16px 20px 0;">
       <div>
         <div class="drawer-pa-label">PA ${reg ? reg.ano : ''}</div>
         <div class="drawer-pa-val">${reg ? `${formatDate(reg.paInicio)} → ${formatDate(reg.paFim)}` : '—'}</div>
-        ${dlim ? `<div class="drawer-pa-label" style="margin-top:6px;">Dobra em ${formatDate(dlim)}</div>` : ''}
+        ${dlim ? `<div class="drawer-pa-label" style="margin-top:4px;">Dobra em ${formatDate(dlim)}</div>` : ''}
       </div>
       <div style="text-align:right;">
-        <div class="drawer-pa-label">Saldo</div>
-        <div class="drawer-saldo" style="color:var(--green);font-size:24px;">${saldo}d</div>
+        <div class="drawer-pa-label">Saldo disponível</div>
+        <div class="drawer-saldo" style="color:var(--green);font-size:26px;">${saldo}d</div>
       </div>
     </div>
-    <div class="drawer-form">
-      <div class="form-grid">
-        <div class="field">
-          <label>Início das férias</label>
-          <input type="date" id="dInicio" oninput="calcDrawerFim()">
+
+    <!-- Seção: Período -->
+    <div class="dform-section">
+      <div class="dform-section-title">Período de gozo</div>
+      <div class="dform-row" style="margin-bottom:12px;">
+        <div class="dform-field">
+          <label class="dform-label">Início das férias <span style="color:#B42318;">*</span></label>
+          <input type="date" id="dInicio" class="dform-input" oninput="calcDrawerFim()">
         </div>
-        <div class="field">
-          <label>Número de dias</label>
-          <input type="number" id="dDias" min="1" max="${saldo}" value="${saldo}" oninput="calcDrawerFim()">
-        </div>
-      </div>
-      <div class="form-grid">
-        <div class="field">
-          <label>Fim (calculado)</label>
-          <input type="date" id="dFim" readonly style="background:#f5f5f5;">
-        </div>
-        <div class="field">
-          <label>Dias trabalhando (acordo)</label>
-          <input type="number" id="dDiasTrabalhar" min="0" placeholder="0 = sem acordo">
+        <div class="dform-field">
+          <label class="dform-label">Número de dias <span style="color:#B42318;">*</span></label>
+          <input type="number" id="dDias" class="dform-input" min="1" max="${saldo}" value="${saldo}" oninput="calcDrawerFim()">
+          <span class="dform-hint">Máx. ${saldo} dias de saldo</span>
         </div>
       </div>
-      <div class="field">
-        <label>Motivo / observação</label>
-        <textarea id="dMotivo" placeholder="Ex: Coletivas da empresa" style="min-height:60px;"></textarea>
+      <div class="dform-result-bar" id="dResultBar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span class="dform-result-label">Término das férias</span>
+        <span class="dform-result-val" id="dFimDisplay">Preencha a data de início</span>
+        <input type="date" id="dFim" style="display:none;">
       </div>
-      <div class="field">
-        <label>Acordo informal (opcional)</label>
-        <textarea id="dObsGestor" placeholder="Ex: Oficialmente 14 dias, 2 dias ficam como saldo para uso posterior" style="min-height:60px;color:var(--amber);"></textarea>
-        <div style="font-size:11px;color:var(--text-ter);margin-top:3px;">Visível apenas para o RH na aba Realizações</div>
+    </div>
+
+    <!-- Seção: Observação -->
+    <div class="dform-section">
+      <div class="dform-section-title">Observação <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-ter);">(opcional)</span></div>
+      <div class="dform-field">
+        <label class="dform-label">Motivo</label>
+        <textarea id="dMotivo" class="dform-textarea" placeholder="Ex: Coletivas da empresa, solicitação do colaborador…"></textarea>
       </div>
-      <div id="dAlerta"></div>
-      <button class="btn btn-primary" onclick="confirmarDrawerLancamento()" style="width:100%;">Enviar para aprovação</button>
+    </div>
+
+    <!-- Seção: Acordo informal (RH only) -->
+    <div class="dform-section">
+      <div class="dform-acordo-box">
+        <div class="dform-acordo-header">
+          <svg class="dform-acordo-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span class="dform-acordo-title">Acordo informal</span>
+          <span class="dform-acordo-badge">Apenas RH</span>
+        </div>
+        <div class="dform-field">
+          <label class="dform-label" style="color:#92400E;">Registro do acordo entre gestor e colaborador</label>
+          <textarea id="dObsGestor" class="dform-textarea" placeholder="Ex: Oficialmente 14 dias, 2 dias ficam como saldo para uso posterior"></textarea>
+          <span class="dform-hint" style="color:#B45309;">Visível somente para o RH na aba Realizações.</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="dAlerta" style="padding:0 20px;"></div>
+    <div class="dform-submit-wrap">
+      <button class="dform-btn-submit" onclick="confirmarDrawerLancamento()">Enviar para aprovação</button>
     </div>
   `;
 }
@@ -2371,8 +2451,18 @@ function renderDrawerLancar(colab) {
 function calcDrawerFim() {
   const ini  = document.getElementById('dInicio')?.value;
   const dias = parseInt(document.getElementById('dDias')?.value) || 0;
+  const fimEl = document.getElementById('dFim');
+  const fimDisplay = document.getElementById('dFimDisplay');
+  const bar = document.getElementById('dResultBar');
   if (ini && dias > 0) {
-    document.getElementById('dFim').value = addDays(ini, dias - 1);
+    const fimVal = addDays(ini, dias - 1);
+    if (fimEl) fimEl.value = fimVal;
+    if (fimDisplay) fimDisplay.textContent = formatDate(fimVal) + ' (' + dias + ' dias)';
+    if (bar) bar.classList.add('filled');
+  } else {
+    if (fimEl) fimEl.value = '';
+    if (fimDisplay) fimDisplay.textContent = 'Preencha a data de início';
+    if (bar) bar.classList.remove('filled');
   }
   validarDrawerForm();
 }
@@ -3792,7 +3882,18 @@ function renderDrawerRealizacoes(colab) {
   const regs = colab.registros.filter(r => r.status === 'Aprovado' && r.lancamentos.length > 0);
 
   if (!regs.length) {
-    el.innerHTML = '<div class="real-empty">Nenhum período aprovado para registrar realizações.</div>';
+    el.innerHTML = `
+      <div style="padding:32px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;">
+        <div style="width:44px;height:44px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-ter)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/>
+          </svg>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:var(--text);">Nenhum acordo registrado</div>
+        <div style="font-size:12px;color:var(--text-sec);line-height:1.6;max-width:300px;">
+          Este colaborador não possui acordos informais registrados. Quando houver um ajuste entre gestor e colaborador sobre o período real de gozo, registre no campo <strong>Acordo informal</strong> na aba Lançar.
+        </div>
+      </div>`;
     return;
   }
 
