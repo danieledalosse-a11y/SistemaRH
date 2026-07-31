@@ -247,49 +247,52 @@
   .field textarea { resize: vertical; min-height: 60px; }
 
   /* ── drawer form redesign ── */
-  .dform-section { padding: 12px 20px; }
+  .dform-section { padding: 14px 20px; }
   .dform-section + .dform-section { border-top: 1px solid var(--border); }
   .dform-section-title {
-    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
-    color: var(--text-ter); margin-bottom: 8px;
+    font-size: 11px; font-weight: 600; color: var(--text-sec);
+    margin-bottom: 10px; letter-spacing: 0;
   }
-  .dform-field { display: flex; flex-direction: column; gap: 4px; }
+  .dform-field { display: flex; flex-direction: column; gap: 5px; }
   .dform-label {
-    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
-    color: var(--text-ter);
+    font-size: 13px; font-weight: 500; color: #374151;
   }
+  .dform-label .req { color: #B42318; margin-left: 2px; }
+  .dform-label .hint { font-size: 12px; font-weight: 400; color: var(--text-ter); margin-left: 4px; }
   .dform-input {
-    border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 12px;
-    font-size: 14px; font-weight: 500; font-family: inherit;
-    background: var(--surface); color: var(--text);
+    border: 1.5px solid #D0D5DD; border-radius: 8px; padding: 10px 14px;
+    font-size: 14px; font-weight: 400; font-family: inherit;
+    background: #fff; color: #111827;
     transition: border-color 0.15s, box-shadow 0.15s;
     width: 100%;
   }
-  .dform-input:focus { outline: none; border-color: #1849A9; box-shadow: 0 0 0 3px rgba(24,73,169,0.10); }
+  .dform-input:hover { border-color: #98A2B3; }
+  .dform-input:focus { outline: none; border-color: #1849A9; box-shadow: 0 0 0 4px rgba(24,73,169,0.08); }
   .dform-input.readonly {
-    background: var(--bg); color: var(--text-sec); border-style: dashed;
-    cursor: default; font-weight: 400;
+    background: #F9FAFB; color: var(--text-sec); border-color: #E4E7EC;
+    cursor: default;
   }
-  .dform-input.readonly:focus { border-color: var(--border); box-shadow: none; }
+  .dform-input.readonly:focus { border-color: #E4E7EC; box-shadow: none; }
   .dform-textarea {
-    border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 12px;
-    font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text);
-    resize: vertical; min-height: 44px; width: 100%;
+    border: 1.5px solid #D0D5DD; border-radius: 8px; padding: 10px 14px;
+    font-size: 13px; font-family: inherit; background: #fff; color: #111827;
+    resize: vertical; min-height: 52px; width: 100%;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .dform-textarea:focus { outline: none; border-color: #1849A9; box-shadow: 0 0 0 3px rgba(24,73,169,0.10); }
-  .dform-hint { font-size: 11px; color: var(--text-ter); margin-top: 2px; }
+  .dform-textarea:hover { border-color: #98A2B3; }
+  .dform-textarea:focus { outline: none; border-color: #1849A9; box-shadow: 0 0 0 4px rgba(24,73,169,0.08); }
   .dform-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .dform-result-bar {
     display: flex; align-items: center; gap: 10px;
-    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px 14px; margin-top: 4px;
+    background: #F9FAFB; border: 1.5px solid #E4E7EC; border-radius: 8px;
+    padding: 10px 14px; margin-top: 2px;
   }
-  .dform-result-bar svg { flex-shrink: 0; stroke: var(--text-ter); }
-  .dform-result-label { font-size: 11px; color: var(--text-ter); }
-  .dform-result-val { font-size: 13px; font-weight: 600; color: var(--text); margin-left: auto; }
-  .dform-result-bar.filled { border-color: #1849A9; background: rgba(24,73,169,0.04); }
+  .dform-result-bar svg { flex-shrink: 0; stroke: #98A2B3; }
+  .dform-result-label { font-size: 12px; color: #6B7280; font-weight: 500; }
+  .dform-result-val { font-size: 13px; font-weight: 600; color: #374151; margin-left: auto; }
+  .dform-result-bar.filled { border-color: #1849A9; background: #EFF4FF; }
   .dform-result-bar.filled .dform-result-label { color: #1849A9; }
+  .dform-result-bar.filled .dform-result-val { color: #1849A9; }
   .dform-result-bar.filled svg { stroke: #1849A9; }
   .dform-acordo-box {
     background: #FFFBEB; border: 1.5px solid #FDE68A; border-radius: 8px; padding: 10px 12px;
@@ -1572,6 +1575,14 @@ let SB_HEADERS = {};
   } catch(_) { window.location.href = '../../login.html'; }
 })();
 
+let IS_RH = true; // padrão RH; gestor é setado por setRole()
+(function() {
+  try {
+    const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    IS_RH = (p.perfil || 'rh') !== 'gestor';
+  } catch(_) {}
+})();
+
 function logoutFerias() {
   localStorage.removeItem('sb_session');
   localStorage.removeItem('sb_perfil');
@@ -2420,13 +2431,13 @@ function renderDrawerLancar(colab) {
     <!-- Seção: Período -->
     <div class="dform-section">
       <div class="dform-section-title">Período de gozo</div>
-      <div class="dform-row" style="margin-bottom:8px;">
+      <div class="dform-row" style="margin-bottom:10px;">
         <div class="dform-field">
-          <label class="dform-label">Início <span style="color:#B42318;">*</span></label>
+          <label class="dform-label">Data de início <span class="req">*</span></label>
           <input type="date" id="dInicio" class="dform-input" oninput="calcDrawerFim()">
         </div>
         <div class="dform-field">
-          <label class="dform-label">Dias <span style="color:#B42318;">*</span> <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-ter);">(máx. ${saldo})</span></label>
+          <label class="dform-label">Quantidade de dias <span class="req">*</span> <span class="hint">máx. ${saldo}</span></label>
           <input type="number" id="dDias" class="dform-input" min="1" max="${saldo}" value="${saldo}" oninput="calcDrawerFim()">
         </div>
       </div>
@@ -2434,7 +2445,7 @@ function renderDrawerLancar(colab) {
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
         </svg>
-        <span class="dform-result-label">Término</span>
+        <span class="dform-result-label">Data de retorno ao trabalho</span>
         <span class="dform-result-val" id="dFimDisplay">—</span>
         <input type="date" id="dFim" style="display:none;">
       </div>
@@ -2443,14 +2454,16 @@ function renderDrawerLancar(colab) {
     <!-- Seção: Observação -->
     <div class="dform-section">
       <div class="dform-field">
-        <label class="dform-label">Observação <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-ter);">(opcional)</span></label>
-        <textarea id="dMotivo" class="dform-textarea" placeholder="Ex: Coletivas da empresa, férias coletivas de fim de ano…"></textarea>
+        <label class="dform-label">Observação <span class="hint">(opcional)</span></label>
+        <textarea id="dMotivo" class="dform-textarea" placeholder="Ex: Férias coletivas de fim de ano, solicitação do colaborador…"></textarea>
       </div>
     </div>
 
-    <div id="dAlerta" style="padding:0 20px;"></div>
+    <div id="dAlerta" style="padding:0 20px 8px;"></div>
     <div class="dform-submit-wrap">
-      <button class="dform-btn-submit" onclick="confirmarDrawerLancamento()">Enviar para aprovação</button>
+      <button class="dform-btn-submit" onclick="confirmarDrawerLancamento()">
+        ${IS_RH ? 'Confirmar lançamento' : 'Enviar para aprovação'}
+      </button>
     </div>
   `;
 }
@@ -2497,7 +2510,7 @@ function validarDrawerForm() {
   el.innerHTML = alertas.map(a => `<div class="alerta-form ${a.tipo === 'erro' ? 'erro' : 'aviso'}">${a.msg}</div>`).join('');
 }
 
-function confirmarDrawerLancamento() {
+async function confirmarDrawerLancamento() {
   const colab = COLABORADORES.find(c => c.__key === _lancarKey);
   if (!colab) return;
   const reg  = getRegistroParaLancar(colab);
@@ -2509,12 +2522,30 @@ function confirmarDrawerLancamento() {
   const dt   = parseInt(document.getElementById('dDiasTrabalhar')?.value) || null;
   const mot = document.getElementById('dMotivo')?.value.trim() || null;
 
-  reg._novoLanc = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
-  reg.status    = 'Pendente';
+  const novoLanc = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
 
-  toast(`✓ Lançamento enviado para aprovação — ${colab.nome}`);
-  fecharDrawer();
-  renderAll();
+  if (IS_RH && reg._sbId) {
+    // RH lança direto como Aprovado — persiste imediatamente
+    const lancamentos = [...reg.lancamentos, { inicio: ini, fim, dias }];
+    const campo = reg.lancamentos.length === 0 ? { periodo1_inicio: ini, periodo1_fim: fim, dias1: dias, status: 'Aprovado' }
+                                                : { periodo2_inicio: ini, periodo2_fim: fim, dias2: dias, status: 'Aprovado' };
+    try {
+      await sbPatch('ferias', `id=eq.${reg._sbId}`, campo);
+      reg.lancamentos.push({ inicio: ini, fim, dias });
+      reg.status = 'Aprovado';
+      toast(`✓ Férias lançadas — ${colab.nome}`);
+      fecharDrawer();
+      renderAll();
+    } catch(e) {
+      toast('Erro ao salvar: ' + (e.message || e));
+    }
+  } else {
+    reg._novoLanc = novoLanc;
+    reg.status    = 'Pendente';
+    toast(`✓ Lançamento enviado para aprovação — ${colab.nome}`);
+    fecharDrawer();
+    renderAll();
+  }
 }
 
 // ─── Navegação ───────────────────────────────────────────────────────────────
