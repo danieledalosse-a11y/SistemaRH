@@ -816,6 +816,16 @@
   .real-section { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
   .real-section--destaque { border-color: #D97706; }
   .real-section--destaque .real-section-hdr { background: #FFFBEB; border-bottom-color: #FDE68A; }
+  .real-resumo { padding: 10px 14px 8px; border-bottom: 1px solid var(--border); }
+  .real-resumo-stats { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .real-resumo-stat { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .real-resumo-num { font-size: 18px; font-weight: 700; color: var(--text); line-height: 1; }
+  .real-resumo-num.used { color: #344054; }
+  .real-resumo-num.saldo { font-size: 16px; }
+  .real-resumo-label { font-size: 10px; font-weight: 500; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.04em; }
+  .real-resumo-sep { font-size: 16px; font-weight: 300; color: var(--text-ter); padding: 0 2px; margin-top: -8px; }
+  .real-resumo-bar-wrap { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .real-resumo-bar-fill { height: 100%; border-radius: 99px; transition: width 0.3s; }
   /* PA sem conteúdo: linha compacta */
   .real-row-simple { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--surface); }
   .real-row-simple-left { display: flex; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; }
@@ -4057,13 +4067,38 @@ function renderRealSection(key, reg) {
     ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" title="Tem acordo"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
     : '';
 
+  const pct = diasOficiais > 0 ? Math.min(100, Math.round((diasRealizados / diasOficiais) * 100)) : 0;
+  const barColor = saldoRestante < 0 ? '#F04438' : saldoRestante === 0 ? '#12B76A' : '#F79009';
+  const resumoHtml = `
+    <div class="real-resumo">
+      <div class="real-resumo-stats">
+        <div class="real-resumo-stat">
+          <span class="real-resumo-num">${diasOficiais}d</span>
+          <span class="real-resumo-label">Direito</span>
+        </div>
+        <div class="real-resumo-sep">−</div>
+        <div class="real-resumo-stat">
+          <span class="real-resumo-num used">${diasRealizados}d</span>
+          <span class="real-resumo-label">Gozados</span>
+        </div>
+        <div class="real-resumo-sep">=</div>
+        <div class="real-resumo-stat">
+          <span class="real-resumo-num saldo" style="color:${barColor}">${Math.abs(saldoRestante)}d${saldoRestante < 0 ? ' excesso' : ' restantes'}</span>
+          <span class="real-resumo-label">Saldo</span>
+        </div>
+      </div>
+      <div class="real-resumo-bar-wrap">
+        <div class="real-resumo-bar-fill" style="width:${pct}%;background:${barColor};"></div>
+      </div>
+    </div>`;
+
   return `<div class="real-section real-section--destaque" id="real-sec-${reg._sbId}">
     <div class="real-section-hdr">
       <div class="real-section-meta">
         <div class="real-section-title">${iconAcordo} PA ${reg.ano}</div>
       </div>
-      <span class="real-saldo-badge ${badgeCls}">${badgeTxt}</span>
     </div>
+    ${resumoHtml}
     ${listaHtml ? `<div class="real-list">${listaHtml}</div>` : ''}
     <div class="real-add-form" id="real-form-${reg._sbId}">
       <div class="real-add-grid">
