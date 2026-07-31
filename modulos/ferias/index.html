@@ -823,6 +823,19 @@
   .real-oficial-dias { font-size: 12px; color: var(--text-sec); }
   .real-obs { padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--amber-bg); font-size: 12px; color: var(--amber); line-height: 1.4; }
   .real-obs strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+  .real-acordo-wrap { padding: 10px 14px; border-bottom: 1px solid var(--border); background: #FFFBEB; }
+  .real-acordo-hdr { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .real-acordo-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #92400E; flex: 1; }
+  .real-acordo-badge { font-size: 10px; background: #FEF3C7; color: #D97706; border-radius: 4px; padding: 1px 6px; font-weight: 600; }
+  .real-acordo-text { font-size: 12px; color: #78350F; line-height: 1.5; }
+  .real-acordo-edit-btn { background: none; border: none; cursor: pointer; font-size: 11px; color: #D97706; font-weight: 600; padding: 0; font-family: inherit; }
+  .real-acordo-edit-btn:hover { text-decoration: underline; }
+  .real-acordo-textarea { width: 100%; border: 1.5px solid #FCD34D; border-radius: 6px; padding: 7px 10px; font-size: 12px; font-family: inherit; background: #fff; min-height: 52px; resize: vertical; }
+  .real-acordo-textarea:focus { outline: none; border-color: #F59E0B; box-shadow: 0 0 0 3px rgba(245,158,11,0.12); }
+  .real-acordo-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .real-acordo-save { padding: 5px 14px; background: #92400E; color: #fff; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .real-acordo-save:hover { background: #78350F; }
+  .real-acordo-cancel { padding: 5px 10px; background: none; border: 1px solid #FCD34D; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; color: #92400E; }
   .real-list { padding: 0; }
   .real-row { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border-light); font-size: 13px; }
   .real-row:last-child { border-bottom: none; }
@@ -2427,22 +2440,11 @@ function renderDrawerLancar(colab) {
       </div>
     </div>
 
-    <!-- Seção: Observação + Acordo -->
+    <!-- Seção: Observação -->
     <div class="dform-section">
-      <div class="dform-section-title">Observações <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-ter);">(opcionais)</span></div>
-      <div class="dform-field" style="margin-bottom:8px;">
-        <label class="dform-label">Motivo / observação do gestor</label>
-        <textarea id="dMotivo" class="dform-textarea" placeholder="Ex: Coletivas da empresa, dias fracionados do saldo restante…"></textarea>
-      </div>
-      <div class="dform-acordo-box">
-        <div class="dform-acordo-header">
-          <svg class="dform-acordo-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          <span class="dform-acordo-title">Acordo informal</span>
-          <span class="dform-acordo-badge">Apenas RH</span>
-        </div>
-        <textarea id="dObsGestor" class="dform-textarea" placeholder="Ex: Oficialmente 14 dias — 2 dias ficam como saldo para uso posterior"></textarea>
+      <div class="dform-field">
+        <label class="dform-label">Observação <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-ter);">(opcional)</span></label>
+        <textarea id="dMotivo" class="dform-textarea" placeholder="Ex: Coletivas da empresa, férias coletivas de fim de ano…"></textarea>
       </div>
     </div>
 
@@ -2505,17 +2507,10 @@ function confirmarDrawerLancamento() {
   if (!ini || !dias) { toast('Preencha início e número de dias'); return; }
   const fim  = addDays(ini, dias - 1);
   const dt   = parseInt(document.getElementById('dDiasTrabalhar')?.value) || null;
-  const mot      = document.getElementById('dMotivo')?.value.trim()    || null;
-  const obsGest  = document.getElementById('dObsGestor')?.value.trim() || null;
+  const mot = document.getElementById('dMotivo')?.value.trim() || null;
 
-  reg._novoLanc  = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
-  reg.status     = 'Pendente';
-  if (obsGest) reg._obsGestor = obsGest;
-
-  // persiste obs_gestor imediatamente (campo informacional, não depende da aprovação)
-  if (obsGest && reg._sbId) {
-    sbPatch('ferias', `id=eq.${reg._sbId}`, { obs_gestor: obsGest }).catch(() => {});
-  }
+  reg._novoLanc = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
+  reg.status    = 'Pendente';
 
   toast(`✓ Lançamento enviado para aprovação — ${colab.nome}`);
   fecharDrawer();
@@ -3921,9 +3916,28 @@ function renderRealSection(key, reg) {
     </div>`
   ).join('');
 
-  const obsHtml = reg._obsGestor
-    ? `<div class="real-obs"><strong>Observação do gestor</strong>${reg._obsGestor}</div>`
-    : '';
+  const obsHtml = `
+    <div class="real-acordo-wrap" id="real-acordo-wrap-${reg._sbId}">
+      <div class="real-acordo-hdr">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span class="real-acordo-title">Acordo informal</span>
+        <span class="real-acordo-badge">Apenas RH</span>
+      </div>
+      <div id="real-acordo-view-${reg._sbId}">
+        ${reg._obsGestor
+          ? `<div class="real-acordo-text">${reg._obsGestor}</div>
+             <button class="real-acordo-edit-btn" onclick="editarAcordo('${reg._sbId}')" style="margin-top:4px;">Editar</button>`
+          : `<button class="real-acordo-edit-btn" onclick="editarAcordo('${reg._sbId}')">+ Registrar acordo</button>`
+        }
+      </div>
+      <div id="real-acordo-form-${reg._sbId}" style="display:none;">
+        <textarea class="real-acordo-textarea" id="real-acordo-txt-${reg._sbId}" placeholder="Ex: Colaborador tirou 10 dias reais — 2 dias ficam como saldo para uso posterior">${reg._obsGestor || ''}</textarea>
+        <div class="real-acordo-actions">
+          <button class="real-acordo-save" onclick="salvarAcordoInline('${key}','${reg._sbId}')">Salvar</button>
+          <button class="real-acordo-cancel" onclick="cancelarAcordoInline('${reg._sbId}')">Cancelar</button>
+        </div>
+      </div>
+    </div>`;
 
   const listaHtml = realizacoes.length
     ? `<div class="real-row-label">Utilizações registradas</div>` +
@@ -4045,6 +4059,33 @@ async function removerRealizacao(key, sbId, idx) {
     toast('Utilização removida');
   } catch(e) {
     alert('Erro ao remover: ' + e.message);
+  }
+}
+
+// ─── Acordo informal inline ───────────────────────────────────────────────────
+function editarAcordo(sbId) {
+  document.getElementById(`real-acordo-view-${sbId}`).style.display = 'none';
+  document.getElementById(`real-acordo-form-${sbId}`).style.display = '';
+  document.getElementById(`real-acordo-txt-${sbId}`)?.focus();
+}
+
+function cancelarAcordoInline(sbId) {
+  document.getElementById(`real-acordo-form-${sbId}`).style.display = 'none';
+  document.getElementById(`real-acordo-view-${sbId}`).style.display = '';
+}
+
+async function salvarAcordoInline(key, sbId) {
+  const txt = document.getElementById(`real-acordo-txt-${sbId}`)?.value.trim() || null;
+  const colab = COLABORADORES.find(c => c.__key === key);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, { obs_gestor: txt });
+    reg._obsGestor = txt;
+    renderDrawerRealizacoes(colab);
+    toast('✓ Acordo salvo');
+  } catch(e) {
+    alert('Erro ao salvar acordo: ' + e.message);
   }
 }
 
