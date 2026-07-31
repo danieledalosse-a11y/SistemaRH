@@ -4069,18 +4069,18 @@ function renderRealSection(key, reg) {
       <div class="real-add-grid">
         <div class="real-add-field">
           <label class="real-add-label">Saída</label>
-          <input class="real-add-input" type="date" id="real-saida-${reg._sbId}" oninput="calcDiasReal('${reg._sbId}')">
-        </div>
-        <div class="real-add-field">
-          <label class="real-add-label">Retorno</label>
-          <input class="real-add-input" type="date" id="real-retorno-${reg._sbId}" oninput="calcDiasReal('${reg._sbId}')">
+          <input class="real-add-input" type="date" id="real-saida-${reg._sbId}" oninput="calcRetornoReal('${reg._sbId}')">
         </div>
         <div class="real-add-field">
           <label class="real-add-label">Dias</label>
-          <input class="real-add-input" type="number" id="real-dias-${reg._sbId}" min="1" placeholder="Auto">
+          <input class="real-add-input" type="number" id="real-dias-${reg._sbId}" min="1" placeholder="Qtd" oninput="calcRetornoReal('${reg._sbId}')">
         </div>
         <div class="real-add-field">
-          <label class="real-add-label">Obs. (opcional)</label>
+          <label class="real-add-label">Retorno <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(automático)</span></label>
+          <input class="real-add-input" type="date" id="real-retorno-${reg._sbId}" readonly style="background:#F9FAFB;color:var(--text-sec);">
+        </div>
+        <div class="real-add-field">
+          <label class="real-add-label">Obs. <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(opcional)</span></label>
           <input class="real-add-input" type="text" id="real-obs-${reg._sbId}" placeholder="Ex: voltou antes">
         </div>
       </div>
@@ -4138,13 +4138,12 @@ function fecharFormReal(sbId) {
   }
 }
 
-function calcDiasReal(sbId) {
-  const saida   = document.getElementById(`real-saida-${sbId}`)?.value;
-  const retorno = document.getElementById(`real-retorno-${sbId}`)?.value;
-  const diasEl  = document.getElementById(`real-dias-${sbId}`);
-  if (saida && retorno && diasEl && !diasEl.value) {
-    const d = diffDays(saida, retorno);
-    if (d > 0) diasEl.value = d;
+function calcRetornoReal(sbId) {
+  const saida  = document.getElementById(`real-saida-${sbId}`)?.value;
+  const dias   = parseInt(document.getElementById(`real-dias-${sbId}`)?.value);
+  const retEl  = document.getElementById(`real-retorno-${sbId}`);
+  if (saida && dias > 0 && retEl) {
+    retEl.value = addDays(saida, dias);
   }
 }
 
