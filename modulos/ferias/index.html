@@ -411,8 +411,18 @@
   .drawer.open { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: all; }
   .drawer-hdr { padding: 20px 20px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .drawer-hdr-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
-  .drawer-nome { font-size: 16px; font-weight: 600; }
-  .drawer-sub { font-size: 12px; color: var(--text-sec); margin-top: 3px; }
+  .drawer-nome { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; color: var(--text); }
+  .drawer-cargo { font-size: 13px; font-weight: 400; color: var(--text-sec); margin-top: 2px; }
+  .drawer-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .drawer-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 500; color: var(--text-sec);
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 5px; padding: 2px 8px; line-height: 1.5;
+  }
+  .drawer-chip svg { width: 11px; height: 11px; stroke: var(--text-ter); flex-shrink: 0; }
+  .drawer-chip.mat { background: rgba(24,73,169,0.06); border-color: rgba(24,73,169,0.18); color: #1849A9; }
+  .drawer-chip.mat svg { stroke: #1849A9; }
   .drawer-close-btn { background: none; border: none; font-size: 18px; color: var(--text-sec); cursor: pointer; padding: 2px 4px; border-radius: 4px; line-height: 1; flex-shrink: 0; }
   .drawer-close-btn:hover { background: var(--bg); color: var(--text); }
   .drawer-tabs { display: flex; gap: 4px; padding: 10px 20px 0; border-bottom: none; }
@@ -1435,9 +1445,10 @@
 <div class="drawer" id="drawer">
   <div class="drawer-hdr">
     <div class="drawer-hdr-top">
-      <div>
+      <div style="min-width:0;">
         <div class="drawer-nome" id="drawerNome">—</div>
-        <div class="drawer-sub" id="drawerSub">—</div>
+        <div class="drawer-cargo" id="drawerCargo"></div>
+        <div class="drawer-chips" id="drawerChips"></div>
       </div>
       <button class="drawer-close-btn" onclick="fecharDrawer()">✕</button>
     </div>
@@ -2152,8 +2163,13 @@ function abrirDrawer(key) {
   _lancarKey = key;
 
   document.getElementById('drawerNome').textContent = colab.nome;
-  document.getElementById('drawerSub').textContent =
-    [colab.cargo, colab.setor, colab.unidade, colab.registro ? 'Mat. ' + colab.registro : ''].filter(Boolean).join(' · ');
+  document.getElementById('drawerCargo').textContent = colab.cargo || '';
+
+  const chips = [];
+  if (colab.setor)    chips.push(`<span class="drawer-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>${colab.setor}</span>`);
+  if (colab.unidade)  chips.push(`<span class="drawer-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${colab.unidade}</span>`);
+  if (colab.registro) chips.push(`<span class="drawer-chip mat"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>Mat. ${colab.registro}</span>`);
+  document.getElementById('drawerChips').innerHTML = chips.join('');
 
   renderDrawerHistorico(colab);
   renderDrawerLancar(colab);
