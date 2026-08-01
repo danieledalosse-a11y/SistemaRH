@@ -896,6 +896,7 @@
   .hist-gozo-form.open { display: block; }
   .hist-gozo-form-bar-wrap { height: 5px; background: #DBEAFE; border-radius: 99px; overflow: hidden; margin: 4px 0 8px; }
   .hist-gozo-form-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#3B82F6,#1849A9); transition: width 0.2s; }
+  .drawer-tl-gozo-resumo { font-size: 11px; font-weight: 600; margin-top: 2px; }
   /* Abono pecuniário — chip âmbar separado */
   .drawer-abono-row { padding: 6px 0 2px; }
   .drawer-abono-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; background: #F5F3FF; border: 1px solid #DDD6FE; border-radius: 6px; }
@@ -2594,6 +2595,16 @@ function renderDrawerHistorico(colab) {
         </div>`;
       }
 
+      // resumo inline de gozo (só quando há acordos)
+      let gozoResumoHtml = '';
+      if (temGozos) {
+        const cor = saldoPeriodo === 0 ? '#027A48' : '#D97706';
+        const txt = saldoPeriodo === 0
+          ? `${totalGozadoPeriodo}d de ${l.dias}d gozados ✓`
+          : `${totalGozadoPeriodo}d de ${l.dias}d gozados · ${saldoPeriodo}d restantes`;
+        gozoResumoHtml = `<div class="drawer-tl-gozo-resumo" style="color:${cor};">${txt}</div>`;
+      }
+
       return `<div class="drawer-tl-item">
         <div class="drawer-tl-dot" style="background:${l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)'}"></div>
         <div class="drawer-tl-info" style="flex:1;min-width:0;">
@@ -2604,6 +2615,7 @@ function renderDrawerHistorico(colab) {
             ${iconoAcordo}
           </div>
           ${l.nota ? `<div class="drawer-tl-meta">${l.nota}</div>` : ''}
+          ${gozoResumoHtml}
           ${secaoHtml}
         </div>
       </div>`;
@@ -2622,25 +2634,11 @@ function renderDrawerHistorico(colab) {
     const lancs = (timelineHtml || abonoChipHtml)
       ? (timelineHtml || '') + (abonoChipHtml || '')
       : '<p style="font-size:12px;color:var(--text-sec);padding:4px 0;">Sem lançamentos neste PA.</p>';
-    // pill de gozo real no cabeçalho
-    const totalAgendadoPA = r.lancamentos.reduce((s, l) => s + (l.dias || 0), 0);
-    const totalGozadoPA   = realizacoes.reduce((s, rx) => s + Number(rx.dias), 0);
-    const saldoGozoPA     = totalAgendadoPA - totalGozadoPA;
-    let gozoPillHtml = '';
-    if (totalAgendadoPA > 0 && !excluirPA && totalGozadoPA > 0) {
-      if (saldoGozoPA > 0)
-        gozoPillHtml = `<span class="hist-pa-saldo-gozo restante">Saldo: ${saldoGozoPA}d</span>`;
-      else if (saldoGozoPA === 0)
-        gozoPillHtml = `<span class="hist-pa-saldo-gozo completo">✓ Tudo gozado</span>`;
-    }
     return `<div class="drawer-hist-pa">
       <div class="drawer-hist-pa-hdr">
-        <div style="display:flex;flex-direction:column;gap:4px;">
-          <div>
-            <span class="drawer-hist-pa-year">PA ${r.ano}</span>
-            <span class="drawer-hist-pa-period"> · ${formatDate(r.paInicio)} → ${formatDate(r.paFim)}</span>
-          </div>
-          ${gozoPillHtml}
+        <div>
+          <span class="drawer-hist-pa-year">PA ${r.ano}</span>
+          <span class="drawer-hist-pa-period"> · ${formatDate(r.paInicio)} → ${formatDate(r.paFim)}</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
           <span style="font-size:12px;color:var(--text-sec);">Saldo ${saldo}/${r.totalDias}d</span>
