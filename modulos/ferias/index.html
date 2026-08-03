@@ -896,7 +896,10 @@
   .hist-gozo-form.open { display: block; }
   .hist-gozo-form-bar-wrap { height: 5px; background: #DBEAFE; border-radius: 99px; overflow: hidden; margin: 4px 0 8px; }
   .hist-gozo-form-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#3B82F6,#1849A9); transition: width 0.2s; }
-  .drawer-tl-gozo-resumo { font-size: 11px; font-weight: 600; margin-top: 2px; }
+  .drawer-tl-gozo-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 99px; margin-top: 3px; white-space: nowrap; }
+  .drawer-tl-gozo-chip.pendente { background: #FEF3C7; color: #B45309; border: 0.5px solid #FDE68A; }
+  .drawer-tl-gozo-chip.ok       { background: #ECFDF3; color: #027A48; border: 0.5px solid #6CE9A6; }
+  .drawer-hist-pa-pendente-dot  { width: 7px; height: 7px; border-radius: 50%; background: #D97706; flex-shrink: 0; display: inline-block; margin-right: 6px; vertical-align: middle; }
   /* Abono pecuniário — chip âmbar separado */
   .drawer-abono-row { padding: 6px 0 2px; }
   .drawer-abono-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; background: #F5F3FF; border: 1px solid #DDD6FE; border-radius: 6px; }
@@ -2585,14 +2588,13 @@ function renderDrawerHistorico(colab) {
         </div>`;
       }
 
-      // resumo inline de gozo (só quando há acordos)
+      // chip de status de gozo (só quando há acordos)
       let gozoResumoHtml = '';
       if (temGozos) {
-        const cor = saldoPeriodo === 0 ? '#027A48' : '#D97706';
-        const txt = saldoPeriodo === 0
-          ? `${totalGozadoPeriodo}d de ${l.dias}d gozados ✓`
-          : `${totalGozadoPeriodo}d de ${l.dias}d gozados · ${saldoPeriodo}d restantes`;
-        gozoResumoHtml = `<div class="drawer-tl-gozo-resumo" style="color:${cor};">${txt}</div>`;
+        if (saldoPeriodo === 0)
+          gozoResumoHtml = `<div><span class="drawer-tl-gozo-chip ok">✓ Registrado</span></div>`;
+        else
+          gozoResumoHtml = `<div><span class="drawer-tl-gozo-chip pendente">⚠ ${saldoPeriodo}d a registrar</span></div>`;
       }
 
       return `<div class="drawer-tl-item">
@@ -2624,9 +2626,14 @@ function renderDrawerHistorico(colab) {
     const lancs = (timelineHtml || abonoChipHtml)
       ? (timelineHtml || '') + (abonoChipHtml || '')
       : '<p style="font-size:12px;color:var(--text-sec);padding:4px 0;">Sem lançamentos neste PA.</p>';
+    const temPendenciaPA = !excluirPA && realizacoes.length > 0 && r.lancamentos.some((l, li) => {
+      const gozados = realizacoes.filter(rx => Number(rx.lancIdx) === li || (li === 0 && rx.lancIdx == null)).reduce((s, rx) => s + Number(rx.dias), 0);
+      return gozados > 0 && gozados < (l.dias || 0);
+    });
     return `<div class="drawer-hist-pa">
       <div class="drawer-hist-pa-hdr">
-        <div>
+        <div style="display:flex;align-items:center;">
+          ${temPendenciaPA ? '<span class="drawer-hist-pa-pendente-dot"></span>' : ''}
           <span class="drawer-hist-pa-year">PA ${r.ano}</span>
           <span class="drawer-hist-pa-period"> · ${formatDate(r.paInicio)} → ${formatDate(r.paFim)}</span>
         </div>
