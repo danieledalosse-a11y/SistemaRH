@@ -152,6 +152,7 @@
   .badge-verde   { background: var(--green-bg);  color: var(--green); }
   .badge-vermelho{ background: var(--red-bg);    color: var(--red); }
   .badge-orange  { background: #FEF0E6;          color: #C4500A; }
+  .badge-blue-sm { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
   .badge-amber   { background: var(--amber-bg);  color: var(--amber); }
   .badge-azul    { background: var(--blue-bg);   color: var(--blue); }
   .badge-roxo    { background: var(--purple-bg); color: var(--purple); }
@@ -1590,7 +1591,7 @@ const HOJE  = new Date().toISOString().slice(0, 10);
 const REGRAS_FERIAS = {
   // Prazo de dobra: PAFim + 1 ano + 1 dia
   diasAlertaDobra: 180,  // alertar quando restar até N dias para dobra
-  diasCriticoDobra: 30,  // sub-grupo crítico
+  diasCriticoDobra: 60,  // sub-grupo crítico
   minDiasPrimeiroPeriodo: 14,
   minDiasOutrosPeriodos: 5,
   maxPeriodosPorPA: 3,
@@ -2030,18 +2031,19 @@ function diasParaDobra(reg) {
 
 function nivelRisco(dpd) {
   if (dpd === null || dpd > 180) return null;
-  if (dpd <= 30)  return 'critico';
-  if (dpd <= 90)  return 'alto';
-  return 'atencao';
+  if (dpd < 60)   return 'critico';
+  if (dpd <= 120) return 'atencao';
+  return 'noradar';
 }
 
-function riscoBadgeHtml(dpd, compacto = false) {
+function riscoBadgeHtml(dpd, compacto = false, dlim = null) {
   const nivel = nivelRisco(dpd);
   if (!nivel) return '';
+  const vence = dlim ? ` · Vence em ${formatDate(dlim)}` : '';
   const cfg = {
-    critico: { cls: 'badge-vermelho', label: compacto ? 'Dobra iminente' : `Dobra iminente · ${dpd}d` },
-    alto:    { cls: 'badge-orange',   label: compacto ? 'Risco alto'      : `Risco alto · ${dpd}d` },
-    atencao: { cls: 'badge-amber',    label: compacto ? 'Risco de dobra'  : `Risco de dobra · ${dpd}d` },
+    critico: { cls: 'badge-vermelho', label: compacto ? 'Crítico'   : `Crítico${vence}` },
+    atencao: { cls: 'badge-amber',    label: compacto ? 'Atenção'   : `Atenção${vence}` },
+    noradar: { cls: 'badge-blue-sm',  label: compacto ? 'No radar'  : `No radar${vence}` },
   }[nivel];
   return `<span class="badge ${cfg.cls}">${cfg.label}</span>`;
 }
@@ -2365,7 +2367,7 @@ function renderDrawerResumo(colab) {
         <div class="drawer-pa-val">${reg ? `${formatDate(reg.paInicio)} → ${formatDate(reg.paFim)}` : '—'}</div>
         <div style="margin-top:8px;">
           <div class="drawer-pa-label">Dobra em</div>
-          <div class="drawer-pa-val" style="color:${dpd!==null&&dpd<=30?'var(--red)':dpd!==null&&dpd<=180?'var(--amber)':'inherit'}">${dlim ? formatDate(dlim) : '—'}</div>
+          <div class="drawer-pa-val" style="color:${dpd!==null&&dpd<60?'var(--red)':dpd!==null&&dpd<=180?'var(--amber)':'inherit'}">${dlim ? formatDate(dlim) : '—'}</div>
         </div>
       </div>
       <div style="text-align:right;">
@@ -3416,8 +3418,21 @@ function renderListaAnual() {
     pasDoAno = pasDoAno.sort((a, b) => (a.paInicio || '').localeCompare(b.paInicio || ''));
 
     if (!pasDoAno.length) return;
-    items.push({ c, pasDoAno });
+    // dpd mínimo deste colaborador (PA mais urgente)
+    const minDpd = pasDoAno.reduce((m, reg) => {
+      const d = diasParaDobra(reg); return (d !== null && (m === null || d < m)) ? d : m;
+    }, null);
+    items.push({ c, pasDoAno, minDpd });
   });
+
+  // Quando filtro risco: ordenar do mais urgente (menor dpd) para o menos urgente
+  if (_statusFiltro === 'risco') {
+    items.sort((a, b) => {
+      const da = a.minDpd !== null ? a.minDpd : 9999;
+      const db = b.minDpd !== null ? b.minDpd : 9999;
+      return da - db;
+    });
+  }
 
   // Contagens globais para o resumo (por colaborador, não por PA)
   const colabsSet = new Set();
@@ -3463,9 +3478,10 @@ function renderListaAnual() {
     const risco = saldo > 0 && diasDobra !== null && diasDobra <= 180;
     if (risco) {
       const nivel = nivelRisco(diasDobra);
-      if (nivel === 'critico') return `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Dobra iminente · ${diasDobra}d</span>`;
-      if (nivel === 'alto')    return `<span class="badge-status-r" style="background:#FEF0E6;color:#C4500A;border:1.5px solid #F9DBCA;font-weight:600;"><span class="la-dot" style="background:#E07B39;"></span>Risco alto · ${diasDobra}d</span>`;
-      return `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;"><span class="la-dot" style="background:#F79009;"></span>Risco de dobra · ${diasDobra}d</span>`;
+      const venceLabel = dlim ? `Vence em ${formatDate(dlim)}` : `${diasDobra}d`;
+      if (nivel === 'critico') return `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Crítico · ${venceLabel}</span>`;
+      if (nivel === 'atencao') return `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção · ${venceLabel}</span>`;
+      return `<span class="badge-status-r" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;"><span class="la-dot" style="background:#3B82F6;"></span>No radar · ${venceLabel}</span>`;
     }
     if (saldo <= 0)              return `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
     if (!reg.lancamentos.length) return `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
@@ -3578,7 +3594,8 @@ function renderMinhaEquipe() {
       situBadge = `<span class="badge badge-azul">De férias</span>`;
     } else if (risco) {
       const dpd = diasParaDobra(reg);
-      situBadge = riscoBadgeHtml(dpd);
+      const dlimR = dataLimiteDobra(reg);
+      situBadge = riscoBadgeHtml(dpd, false, dlimR);
     } else if (semAg) {
       situBadge = `<span class="badge badge-amber">Sem agendado ${ANO_REF}</span>`;
     } else {
