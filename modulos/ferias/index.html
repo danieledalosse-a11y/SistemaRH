@@ -3402,7 +3402,13 @@ function renderListaAnual() {
         const dpd = diasParaDobra(reg);
         return dpd !== null && dpd <= REGRAS_FERIAS.diasAlertaDobra;
       });
-    } else if (_statusFiltro === 'sem' || _statusFiltro === 'hoje') {
+    } else if (_statusFiltro === 'hoje') {
+      // PAs com ao menos um lançamento cobrindo hoje (qualquer ano)
+      pasDoAno = c.registros.filter(reg => {
+        if (excluir.has(reg.status)) return false;
+        return reg.lancamentos.some(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim);
+      });
+    } else if (_statusFiltro === 'sem') {
       // PA vigente hoje E com ano === ANO_REF
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
