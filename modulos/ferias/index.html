@@ -3504,6 +3504,13 @@ function renderListaAnual() {
         <div class="proto-th">Saldo a tirar</div>
         <div class="proto-th">Vencimento da dobra</div>
         <div class="proto-th">Nível de risco</div>`;
+    } else if (_statusFiltro === 'hoje') {
+      thead.innerHTML = `
+        <div class="proto-th">Colaborador</div>
+        <div class="proto-th">Empresa / Setor</div>
+        <div class="proto-th">Período ativo</div>
+        <div class="proto-th">Retorna em</div>
+        <div class="proto-th">Dias restantes</div>`;
     } else {
       thead.innerHTML = `
         <div class="proto-th">Colaborador</div>
@@ -3566,6 +3573,53 @@ function renderListaAnual() {
           <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">PA ${paAno} · dobra em</span>
         </div>
         <div class="proto-td">${paBadge(reg)}</div>
+      </div>`;
+    } else if (_statusFiltro === 'hoje') {
+      // ── Layout especial para Em férias hoje ──────────────────────────────
+      // Período ativo = lançamento que cobre hoje
+      const ativo = reg.lancamentos.find(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim);
+      const periodoHtml = ativo
+        ? `<span style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;">${formatDate(ativo.inicio)} → ${formatDate(ativo.fim)}</span>
+           <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:1px;">${ativo.dias}d</span>`
+        : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
+
+      const retornaData = ativo ? ativo.fim : null;
+      const diasRestantes = retornaData ? Math.round((new Date(retornaData) - new Date(HOJE)) / 86400000) : null;
+      const retornaHtml = retornaData
+        ? `<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;">${formatDate(retornaData)}</span>`
+        : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
+
+      let diasChip = '';
+      if (diasRestantes !== null) {
+        if (diasRestantes === 0)      diasChip = `<span style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#ECFDF3;color:#027A48;border:1px solid #6CE9A6;">Retorna hoje</span>`;
+        else if (diasRestantes <= 3)  diasChip = `<span style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#FEF3C7;color:#B45309;border:1px solid #FDE68A;">Volta em ${diasRestantes}d</span>`;
+        else                          diasChip = `<span style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:10px;font-weight:500;padding:2px 8px;border-radius:99px;background:#F1F5F9;color:#64748B;">Volta em ${diasRestantes}d</span>`;
+      }
+
+      html += `<div class="proto-table-row" onclick="abrirDrawer('${key}')" style="border-left:4px solid var(--green);padding-left:12px;">
+        <div class="proto-colab-cell">
+          <div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>
+          <div>
+            <div class="proto-emp-name">${c.nome}</div>
+            <div class="proto-emp-detail">${c.cargo || '—'}</div>
+          </div>
+        </div>
+        <div class="proto-td">
+          <span style="font-size:11px;font-weight:600;color:var(--text);">${emp}</span>
+          <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:1px;">${setor}</span>
+        </div>
+        <div class="proto-td">${periodoHtml}</div>
+        <div class="proto-td">
+          ${retornaHtml}
+          ${diasChip}
+        </div>
+        <div class="proto-td">
+          <div class="proto-saldo-val" style="color:var(--text-sec);">${diasRestantes !== null ? diasRestantes : '—'}d</div>
+          <div class="proto-saldo-sub">restantes</div>
+          <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:60px;">
+            <div style="height:3px;border-radius:2px;background:var(--green);width:${ativo ? Math.min(100, Math.round(((ativo.dias - (diasRestantes||0)) / ativo.dias) * 100)) : 0}%;"></div>
+          </div>
+        </div>
       </div>`;
     } else {
       // ── Layout padrão ─────────────────────────────────────────────────────
