@@ -3494,8 +3494,32 @@ function renderListaAnual() {
     return `<span class="badge-status-v"><span class="la-dot la-dot-v"></span>Agendado</span>`;
   };
 
+  // Atualiza headers conforme o filtro ativo
+  const thead = document.querySelector('.proto-table-head');
+  if (thead) {
+    if (_statusFiltro === 'risco') {
+      thead.innerHTML = `
+        <div class="proto-th">Colaborador</div>
+        <div class="proto-th">Empresa / Setor</div>
+        <div class="proto-th">Saldo a tirar</div>
+        <div class="proto-th">Vencimento da dobra</div>
+        <div class="proto-th">Férias futuras</div>
+        <div class="proto-th">Nível de risco</div>`;
+    } else {
+      thead.innerHTML = `
+        <div class="proto-th">Colaborador</div>
+        <div class="proto-th">Empresa / Setor</div>
+        <div class="proto-th">PA vigente</div>
+        <div class="proto-th">Agendamentos</div>
+        <div class="proto-th">Saldo</div>
+        <div class="proto-th">Situação</div>`;
+    }
+  }
+
   // tabela flat — uma linha por colaborador (PA vigente ou mais recente)
-  const sortedItems = items.slice().sort((a, b) => a.c.nome.localeCompare(b.c.nome));
+  const sortedItems = _statusFiltro === 'risco'
+    ? items  // já ordenado por urgência
+    : items.slice().sort((a, b) => a.c.nome.localeCompare(b.c.nome));
   let html = '';
 
   sortedItems.forEach(({ c, pasDoAno }) => {
@@ -3508,38 +3532,86 @@ function renderListaAnual() {
     const setor  = normSetor(c.setor) || '—';
     const paAno  = reg.paFim ? reg.paFim.slice(0,4) : String(ano);
     const paStr  = reg.paInicio && reg.paFim ? `${formatDate(reg.paInicio)} → ${formatDate(reg.paFim)}` : '—';
+    const cor    = avatarColor(c.nome);
+    const key    = c.__key.replace(/'/g,"\\'");
 
-    const agendHtml = reg.lancamentos.length
-      ? reg.lancamentos.map(l => `<span style="display:block;font-size:11px;white-space:nowrap;">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>`).join('')
-      : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
+    if (_statusFiltro === 'risco') {
+      // ── Layout especial para Risco de Dobra ──────────────────────────────
+      const dlim      = dataLimiteDobra(reg);
+      const dpd       = diasParaDobra(reg);
+      const nivel     = nivelRisco(dpd);
+      const borderClr = nivel === 'critico' ? '#D92D20' : nivel === 'atencao' ? '#F79009' : '#3B82F6';
+      const venceCor  = nivel === 'critico' ? '#D92D20' : nivel === 'atencao' ? '#B54708' : '#1D4ED8';
 
-    const cor = avatarColor(c.nome);
-    html += `<div class="proto-table-row" onclick="abrirDrawer('${c.__key.replace(/'/g,"\\'")}')">
-      <div class="proto-colab-cell">
-        <div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>
-        <div>
-          <div class="proto-emp-name">${c.nome}</div>
-          <div class="proto-emp-detail">${c.cargo || '—'}</div>
+      // Férias futuras: próximo lançamento com início >= hoje
+      const futuras = reg.lancamentos
+        .filter(l => l.inicio && l.fim && l.inicio >= HOJE)
+        .sort((a, b) => a.inicio.localeCompare(b.inicio));
+      const proxima = futuras[0];
+      const futurasHtml = proxima
+        ? `<span style="font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;">${formatDate(proxima.inicio)} → ${formatDate(proxima.fim)}</span>
+           <span style="display:block;font-size:10px;color:var(--text-ter);">${proxima.dias}d agendados</span>`
+        : `<span style="font-size:12px;color:var(--text-ter);">Nenhuma</span>`;
+
+      html += `<div class="proto-table-row" onclick="abrirDrawer('${key}')" style="border-left:4px solid ${borderClr};padding-left:12px;">
+        <div class="proto-colab-cell">
+          <div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>
+          <div>
+            <div class="proto-emp-name">${c.nome}</div>
+            <div class="proto-emp-detail">${c.cargo || '—'}</div>
+          </div>
         </div>
-      </div>
-      <div class="proto-td">
-        <span style="font-size:11px;font-weight:600;color:var(--text);">${emp}</span>
-        <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:1px;">${setor}</span>
-      </div>
-      <div class="proto-td">
-        <span style="display:block;font-size:10px;font-weight:600;color:var(--text-ter);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:2px;">PA ${paAno}</span>
-        <span style="font-size:11px;color:var(--text-sec);white-space:nowrap;">${paStr}</span>
-      </div>
-      <div class="proto-td">${agendHtml}</div>
-      <div class="proto-td">
-        <div class="proto-saldo-val" style="color:${saldoColor};">${saldo}d</div>
-        <div class="proto-saldo-sub">de ${total}d</div>
-        <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:60px;">
-          <div style="height:3px;border-radius:2px;background:${saldo<=0?'var(--green)':saldo<=5?'var(--red)':'var(--blue)'};width:${pct}%;"></div>
+        <div class="proto-td">
+          <span style="font-size:11px;font-weight:600;color:var(--text);">${emp}</span>
+          <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:1px;">${setor}</span>
         </div>
-      </div>
-      <div class="proto-td">${paBadge(reg)}</div>
-    </div>`;
+        <div class="proto-td">
+          <div class="proto-saldo-val" style="color:${venceCor};font-size:22px;">${saldo}d</div>
+          <div class="proto-saldo-sub">de ${total}d a gozar</div>
+          <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:60px;">
+            <div style="height:3px;border-radius:2px;background:${borderClr};width:${100 - pct}%;"></div>
+          </div>
+        </div>
+        <div class="proto-td">
+          <span style="font-size:13px;font-weight:700;color:${venceCor};white-space:nowrap;">${dlim ? formatDate(dlim) : '—'}</span>
+          <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">PA ${paAno} · dobra em</span>
+        </div>
+        <div class="proto-td">${futurasHtml}</div>
+        <div class="proto-td">${paBadge(reg)}</div>
+      </div>`;
+    } else {
+      // ── Layout padrão ─────────────────────────────────────────────────────
+      const agendHtml = reg.lancamentos.length
+        ? reg.lancamentos.map(l => `<span style="display:block;font-size:11px;white-space:nowrap;">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>`).join('')
+        : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
+
+      html += `<div class="proto-table-row" onclick="abrirDrawer('${key}')">
+        <div class="proto-colab-cell">
+          <div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>
+          <div>
+            <div class="proto-emp-name">${c.nome}</div>
+            <div class="proto-emp-detail">${c.cargo || '—'}</div>
+          </div>
+        </div>
+        <div class="proto-td">
+          <span style="font-size:11px;font-weight:600;color:var(--text);">${emp}</span>
+          <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:1px;">${setor}</span>
+        </div>
+        <div class="proto-td">
+          <span style="display:block;font-size:10px;font-weight:600;color:var(--text-ter);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:2px;">PA ${paAno}</span>
+          <span style="font-size:11px;color:var(--text-sec);white-space:nowrap;">${paStr}</span>
+        </div>
+        <div class="proto-td">${agendHtml}</div>
+        <div class="proto-td">
+          <div class="proto-saldo-val" style="color:${saldoColor};">${saldo}d</div>
+          <div class="proto-saldo-sub">de ${total}d</div>
+          <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:60px;">
+            <div style="height:3px;border-radius:2px;background:${saldo<=0?'var(--green)':saldo<=5?'var(--red)':'var(--blue)'};width:${pct}%;"></div>
+          </div>
+        </div>
+        <div class="proto-td">${paBadge(reg)}</div>
+      </div>`;
+    }
   });
 
   document.getElementById('listaAnualContent').innerHTML = html;
