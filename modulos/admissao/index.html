@@ -1294,13 +1294,13 @@ async function panelUploadDoc(key, input) {
 
 // ─── Efetivar ────────────────────────────────────────────
 async function efetivarContratacao(f) {
-  // pré-preencher modal
-  const savedPDF = JSON.parse(localStorage.getItem(pdfStorageKey()) || 'null');
-  document.getElementById('ef_cargo').value    = savedPDF?.cargo    || currentConvite?.cargo_pretendido || '';
-  document.getElementById('ef_unidade').value  = savedPDF?.empresa  || currentConvite?.unidade || '';
-  document.getElementById('ef_admissao').value = savedPDF?.data     || '';
-  document.getElementById('ef_contrato').value = savedPDF?.contrato || '';
-  document.getElementById('ef_salario').value  = savedPDF?.salario  || '';
+  // pré-preencher modal — prioridade: dados_rh (Supabase) > localStorage > convite
+  const _rh = currentFicha?.dados_rh || JSON.parse(localStorage.getItem(pdfStorageKey()) || 'null');
+  document.getElementById('ef_cargo').value    = _rh?.cargo    || currentConvite?.cargo_pretendido || '';
+  document.getElementById('ef_unidade').value  = _rh?.empresa  || currentConvite?.unidade || '';
+  document.getElementById('ef_admissao').value = _rh?.data     || '';
+  document.getElementById('ef_contrato').value = _rh?.contrato || '';
+  document.getElementById('ef_salario').value  = _rh?.salario  || '';
   document.getElementById('efError').style.display = 'none';
 
   // gerar próxima matrícula
@@ -1475,7 +1475,7 @@ function pdfStorageKey() {
 }
 
 function abrirModalPDF(c) {
-  const saved = JSON.parse(localStorage.getItem(pdfStorageKey()) || 'null');
+  const saved = currentFicha?.dados_rh || JSON.parse(localStorage.getItem(pdfStorageKey()) || 'null');
   document.getElementById('pdf_empresa').value      = saved?.empresa      ?? (c.unidade || '');
   document.getElementById('pdf_cargo').value        = saved?.cargo        ?? (c.cargo_pretendido || '');
   document.getElementById('pdf_departamento').value = saved?.departamento ?? '';
@@ -1496,6 +1496,15 @@ async function confirmarGerarPDF() {
     contrato:     document.getElementById('pdf_contrato').value,
     carga:        document.getElementById('pdf_carga').value,
   };
+  // persiste no Supabase e mantém localStorage como fallback
+  if (currentFicha?.id) {
+    fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${currentFicha.id}`, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ dados_rh: dadosAdm }),
+    }).catch(() => {});
+    currentFicha.dados_rh = dadosAdm;
+  }
   localStorage.setItem(pdfStorageKey(), JSON.stringify(dadosAdm));
   closeModal('modalPDF');
   const btn = document.getElementById('btnGerarPDF');
