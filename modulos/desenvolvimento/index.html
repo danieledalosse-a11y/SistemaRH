@@ -494,24 +494,32 @@ async function sbDelete(path)       { const r = await fetch(SB_URL+path,{method:
 /* ─────────────────────────────────────────────
    AUTH
 ───────────────────────────────────────────── */
-const SESSION_KEY = 'sistemarh_session';
 let _perfil = 'rh';
 
 function getSession() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session') || 'null');
+    const perf = JSON.parse(localStorage.getItem('sb_perfil') || 'null');
+    if (!sess) return null;
+    if (sess.expires_at < Date.now()) { localStorage.clear(); return null; }
+    return { ...sess, ...(perf || {}) };
+  } catch { return null; }
 }
 function logout() {
-  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem('sb_session');
+  localStorage.removeItem('sb_perfil');
   window.location.href = '../../login.html';
 }
 function initAuth() {
   const s = getSession();
   if (!s) { window.location.href = '../../login.html'; return; }
   _perfil = s.perfil || 'rh';
+  const nome = s.nome || s.email || '—';
+  const iniciais = nome.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
   const av = document.getElementById('userAvatar');
   const un = document.getElementById('userName');
-  if (av) av.textContent = (s.nome||'?')[0].toUpperCase();
-  if (un) un.textContent = s.nome || s.email || '—';
+  if (av) av.textContent = iniciais || '?';
+  if (un) un.textContent = nome.split(' ')[0] || '—';
 }
 
 /* ─────────────────────────────────────────────
