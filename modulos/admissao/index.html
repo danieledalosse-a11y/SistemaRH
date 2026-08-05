@@ -1347,6 +1347,33 @@ async function confirmarEfetivar() {
 
   const up = s => s ? String(s).toUpperCase() : null;
 
+  // ── Historico inicial do processo de admissão ──────────────────────────────
+  const _perf = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  const _usuarioRH = _perf.nome || '';
+  const _historico = [];
+  if (currentConvite?.created_at) {
+    _historico.push({
+      tipo: 'admissao_link',
+      detalhe: 'Link de admissão gerado',
+      data: currentConvite.created_at,
+      usuario: currentConvite.enviado_por || _usuarioRH,
+    });
+  }
+  if (f.preenchido_em) {
+    _historico.push({
+      tipo: 'ficha_preenchida',
+      detalhe: 'Candidato preencheu a ficha online',
+      data: f.preenchido_em,
+      usuario: up(f.nome) || '',
+    });
+  }
+  _historico.push({
+    tipo: 'efetivacao',
+    detalhe: 'Colaborador efetivado',
+    data: new Date().toISOString(),
+    usuario: _usuarioRH,
+  });
+
   const colaborador = {
     matricula,
     nome:              up(f.nome),
@@ -1408,6 +1435,7 @@ async function confirmarEfetivar() {
     salario:           salario ? parseFloat(salario.replace(/[^\d,]/g,'').replace(',','.')) || null : null,
     ativo:             true,
     comissionado:      /vendedor/i.test(cargo),
+    historico:         _historico,
   };
 
   try {

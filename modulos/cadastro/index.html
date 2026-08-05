@@ -1312,7 +1312,7 @@ function supabaseToJS(row) {
     fotoUrl:          row.foto_url || '',
     situacao:         ativo ? 'Ativo' : 'Inativo',
     aprendiz:         isAprendiz(cargo),
-    historico:        [],
+    historico:        Array.isArray(row.historico) ? row.historico : [],
     dependentesLista: row.dependentes_lista || [],
   };
 }
@@ -2283,17 +2283,25 @@ function salvarFicha() {
   const hoje = new Date().toISOString().slice(0, 10);
 
   // detecta movimentações antes de sobrescrever
-  const novoCargo  = document.getElementById('df-cargo').value.trim();
-  const novoSetor  = document.getElementById('df-setor').value.trim();
-  const novoGestor = document.getElementById('df-gestor').value.trim();
+  const novoCargo   = document.getElementById('df-cargo').value.trim();
+  const novoSetor   = document.getElementById('df-setor').value.trim();
+  const novoGestor  = document.getElementById('df-gestor').value.trim();
+  const novaEmpresa = document.getElementById('df-empresa').value.trim();
+  const novoNome    = document.getElementById('df-nome').value.trim().toUpperCase();
+  const novaAdm     = document.getElementById('df-admissao').value;
+  const novaDem     = document.getElementById('df-demissao').value;
   if (!c.historico) c.historico = [];
+  const _uAtual = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil')||'{}').nome||'Sistema'; } catch(_){return 'Sistema';} })();
+  const _h = (tipo, de, para) => c.historico.unshift({ tipo, de: de||'—', para: para||'—', data: hoje, usuario: _uAtual });
 
-  if (novoCargo && novoCargo !== c.cargo)
-    c.historico.unshift({ tipo: 'cargo',  de: c.cargo  || '—', para: novoCargo,  data: hoje });
-  if (novoSetor && novoSetor !== (c.setor || ''))
-    c.historico.unshift({ tipo: 'setor',  de: c.setor  || '—', para: novoSetor,  data: hoje });
+  if (novoCargo  && novoCargo  !== (c.cargo  || '')) _h('cargo',   c.cargo  || '—', novoCargo);
+  if (novoSetor  && novoSetor  !== (c.setor  || '')) _h('setor',   c.setor  || '—', novoSetor);
   if (novoGestor !== (c.gestor || '') && (novoGestor || c.gestor))
-    c.historico.unshift({ tipo: 'gestor', de: c.gestor || '—', para: novoGestor || '—', data: hoje });
+                                                      _h('gestor',  c.gestor || '—', novoGestor || '—');
+  if (novoNome   && novoNome   !== (c.nome   || '')) _h('nome',    c.nome   || '—', novoNome);
+  if (novaEmpresa && novaEmpresa !== (c.empresa || '')) _h('empresa', c.empresa || '—', novaEmpresa);
+  if (novaAdm    && novaAdm    !== (c.dataAdmissao || '')) _h('admissao', fmtDateBR(c.dataAdmissao) || '—', fmtDateBR(novaAdm));
+  if (novaDem    && novaDem    !== (c.dataDemissao || '')) _h('demissao', fmtDateBR(c.dataDemissao) || '—', fmtDateBR(novaDem));
 
   const up = s => s ? String(s).trim().toUpperCase() : s;
   // Geral
@@ -2488,6 +2496,7 @@ function salvarFicha() {
       // Dependentes
       dependentes_lista:  c.dependentesLista?.length ? c.dependentesLista : null,
       ativo:              c.situacao === 'Ativo',
+      historico:          c.historico?.length ? c.historico : null,
     };
     const alteracoes = [];
     if (novoCargo  && novoCargo  !== c.cargo)            alteracoes.push(`Cargo: "${c.cargo||'—'}" → "${novoCargo}"`);
@@ -2633,20 +2642,48 @@ function renderHistoricoFicha() {
   const el = document.getElementById('historicoList');
 
   if (!lista.length) {
-    el.innerHTML = '<p class="hist-vazio">Nenhuma movimentação registrada ainda.<br>Alterações de cargo, setor e gestor serão listadas aqui após salvar.</p>';
+    el.innerHTML = '<p class="hist-vazio">Nenhuma movimentação registrada ainda.</p>';
     return;
   }
 
-  const labels = { cargo: 'Cargo', setor: 'Setor', gestor: 'Gestor' };
-  el.innerHTML = lista.map(h => `
+  const META = {
+    admissao_link:   { label: 'Link de admissão gerado',      cor: '#7c3aed' },
+    ficha_preenchida:{ label: 'Ficha preenchida pelo candidato', cor: '#0891b2' },
+    efetivacao:      { label: 'Colaborador efetivado',         cor: '#16a34a' },
+    cargo:           { label: 'Cargo alterado',                cor: '#d97706' },
+    setor:           { label: 'Setor alterado',                cor: '#d97706' },
+    gestor:          { label: 'Gestor alterado',               cor: '#d97706' },
+    nome:            { label: 'Nome alterado',                 cor: '#6366f1' },
+    empresa:         { label: 'Empresa alterada',              cor: '#6366f1' },
+    admissao:        { label: 'Data de admissão alterada',     cor: '#6366f1' },
+    demissao:        { label: 'Desligamento registrado',       cor: '#dc2626' },
+  };
+
+  const fmtData = d => {
+    if (!d) return '—';
+    if (d.includes('T')) {
+      const dt = new Date(d);
+      return dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+    return fmtDateBR(d);
+  };
+
+  el.innerHTML = lista.map(h => {
+    const m = META[h.tipo] || { label: h.tipo, cor: '#64748b' };
+    const detalhe = h.detalhe
+      ? `<div class="hist-detalhe">${h.detalhe}</div>`
+      : (h.de && h.para ? `<div class="hist-detalhe"><span style="color:var(--text-sec)">${h.de}</span> → <strong>${h.para}</strong></div>` : '');
+    const usuario = h.usuario ? `<span style="font-weight:600;">${h.usuario}</span> · ` : '';
+    return `
     <div class="hist-item">
-      <div class="hist-dot ${h.tipo}"></div>
+      <div class="hist-dot" style="background:${m.cor};flex-shrink:0;"></div>
       <div class="hist-info">
-        <div class="hist-tipo">${labels[h.tipo] || h.tipo}</div>
-        <div class="hist-detalhe"><span style="color:var(--text-sec);">${h.de}</span> → <strong>${h.para}</strong></div>
-        <div class="hist-data">${fmtDateBR(h.data)}</div>
+        <div class="hist-tipo" style="color:${m.cor};">${m.label}</div>
+        ${detalhe}
+        <div class="hist-data">${usuario}${fmtData(h.data)}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ─── CEP ─────────────────────────────────────────────────────────────────────
