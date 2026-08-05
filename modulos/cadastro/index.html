@@ -2035,6 +2035,8 @@ function abrirFicha(idx) {
 
 // ── CROP MODAL ─────────────────────────────────────────────────────────────────
 let _cropFile = null, _cropX = 0, _cropY = 0, _cropW = 0, _cropH = 0, _cropBaseW = 0, _cropBaseH = 0;
+let _cropSavedX = 0, _cropSavedY = 0, _cropSavedW = 0, _cropSavedH = 0;
+let _cropSavedBaseW = 0, _cropSavedBaseH = 0, _cropSavedZoom = 100;
 const CROP_PX = 280;
 
 function uploadFotoColaborador(input) {
@@ -2084,6 +2086,10 @@ async function confirmarCropFoto() {
   if (!_cropFile) return;
   const c = COLABORADORES[_fichaIdx];
   if (!c || !c.codigo) return;
+  _cropSavedX = _cropX; _cropSavedY = _cropY;
+  _cropSavedW = _cropW; _cropSavedH = _cropH;
+  _cropSavedBaseW = _cropBaseW; _cropSavedBaseH = _cropBaseH;
+  _cropSavedZoom = parseInt(document.getElementById('cropZoom').value);
   document.getElementById('cropOverlay').style.display = 'none';
   const canvas = document.createElement('canvas');
   canvas.width = 400; canvas.height = 400;
@@ -2149,7 +2155,21 @@ async function excluirFotoColaborador() {
 }
 
 function reposicionarFotoColaborador() {
-  document.getElementById('fotoInput').click();
+  if (!_cropFile) {
+    mostrarToast('Selecione a foto novamente para editar.');
+    document.getElementById('fotoInput').click();
+    return;
+  }
+  const img = document.getElementById('cropImg');
+  img.onload = () => {
+    _cropX = _cropSavedX; _cropY = _cropSavedY;
+    _cropW = _cropSavedW; _cropH = _cropSavedH;
+    _cropBaseW = _cropSavedBaseW; _cropBaseH = _cropSavedBaseH;
+    document.getElementById('cropZoom').value = _cropSavedZoom;
+    _applyCropImg();
+    document.getElementById('cropOverlay').style.display = 'flex';
+  };
+  img.src = URL.createObjectURL(_cropFile);
 }
 
 function overlayClick(e) {
