@@ -18,6 +18,9 @@ Backend: **Supabase** (PostgreSQL + REST API). Cada módulo é um `index.html` c
 ```
 SistemaRH/
 ├── CLAUDE.md
+├── index.html               # Home — cards de módulos
+├── login.html               # Tela de login (auth via Supabase)
+├── admissao-online.html     # Formulário do candidato (sem login)
 ├── docs/
 │   ├── empresas.md          # CNPJs e razões sociais das 11 empresas do grupo
 │   ├── estrutura.md         # Roadmap de módulos
@@ -26,11 +29,21 @@ SistemaRH/
 │   ├── cadastro/
 │   │   ├── CLAUDE.md
 │   │   └── index.html       # Módulo de cadastro de colaboradores
-│   └── ferias/
-│       ├── CLAUDE.md        # Regras detalhadas do módulo férias
-│       ├── index.html       # Módulo principal (~3.200 linhas, CSS+JS inline)
-│       └── index.BACKUP.html
-└── .claude/launch.json
+│   ├── ferias/
+│   │   ├── CLAUDE.md        # Regras detalhadas do módulo férias
+│   │   ├── index.html       # Módulo principal (~3.500 linhas, CSS+JS inline)
+│   │   └── index.BACKUP.html
+│   ├── admissao/
+│   │   └── index.html       # Painel RH de admissão (review de fichas, efetivar)
+│   └── desenvolvimento/
+│       └── index.html       # Módulo Desenvolvimento & Performance
+├── scripts/
+│   └── setup_desenvolvimento.py  # Seed das competências iniciais (rodar 1x)
+└── .claude/
+    ├── launch.json
+    └── agents/
+        ├── ferias.md
+        └── admissao.md
 ```
 
 ## Empresas do grupo
@@ -72,16 +85,28 @@ Ver `docs/empresas.md` para CNPJs completos.
 - Chave de identidade entre módulos: matrícula do colaborador
 - Matrículas **podem se repetir entre empresas diferentes** — identificação correta requer matrícula + nome
 
+## Deploy
+
+- **GitHub Pages** — branch `main` do repositório `danieledalosse-a11y/SistemaRH`
+- URL: `https://danieledalosse-a11y.github.io/SistemaRH`
+- Deploy automático após push (1–3 min de delay)
+- **Não usar Netlify** — migrado para GitHub Pages
+
 ## Módulos implementados
 
-1. **Cadastro** — consulta e ficha de colaboradores (`modulos/cadastro/`)
-2. **Férias** — períodos aquisitivos, lançamentos e aprovações (`modulos/ferias/`)
+| # | Módulo | Caminho | Skill |
+|---|---|---|---|
+| 1 | Cadastro | `modulos/cadastro/index.html` | — |
+| 2 | Férias | `modulos/ferias/index.html` | `ferias` |
+| 3 | Admissão Online (candidato) | `admissao-online.html` | `admissao` |
+| 4 | Admissão (painel RH) | `modulos/admissao/index.html` | `admissao` |
+| 5 | Desenvolvimento & Performance | `modulos/desenvolvimento/index.html` | `desenvolvimento` |
 
 ## Módulos planejados
 
-3. Painel de Colaboradores + Indicadores
-4. Medicina e Segurança / Treinamentos / Benefícios
-5. Ponto, Folha, Comissões
+- Indicadores (turnover, headcount, absenteísmo)
+- Medicina e Segurança / Treinamentos
+- Ponto, Folha, Comissões
 
 ## Preferências da usuária (RH)
 

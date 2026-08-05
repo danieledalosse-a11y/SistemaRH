@@ -47,11 +47,18 @@ calcSaldo(reg) = reg.totalDias - usado - reg.diasAntecipados - reg.abonoPecuniar
 
 ## Risco de dobra
 
-| Nível | Condição | Visual |
-|---|---|---|
-| critico | diasDobra ≤ 30 | fundo vermelho `#D92D20`, texto branco |
-| alto | diasDobra ≤ 90 | fundo `#FEF0E6`, borda laranja, texto `#C4500A` |
-| atencao | diasDobra ≤ 180 | fundo `#FFFAEB`, texto âmbar `#B54708` |
+Função `nivelRisco(dpd)` — `dpd` = dias até o prazo de dobra:
+
+| Nível | Condição | Badge | Visual inline |
+|---|---|---|---|
+| `critico` | dpd < 60 | "Crítico" | fundo `#D92D20`, texto branco |
+| `atencao` | dpd <= 120 | "Atenção" | fundo `#FFFAEB`, texto `#B54708` |
+| `noradar` | dpd <= 180 | "No radar" | fundo `#EFF6FF`, texto `#1D4ED8` |
+| — | dpd > 180 | não exibe | — |
+
+**Regra de exibição no badge:** na aba Risco de Dobra, o badge mostra apenas o nome do nível ("Crítico" etc.). A data de vencimento fica em coluna separada ("Vencimento da dobra").
+
+**Ordenação:** na aba Risco de Dobra, lista é ordenada por `minDpd` ascendente (mais urgente primeiro).
 
 ## Filtros independentes por sub-aba
 
@@ -80,8 +87,40 @@ sb = create_client("https://rujtbxwssiofiialnbbg.supabase.co", SUPABASE_SECRET_K
 
 Para matrículas duplicadas entre empresas, match por `matricula + nome` (exato, depois parcial).
 
+## Layout da lista — grades dinâmicas
+
+O CSS usa classes de grid **aplicadas via JS** conforme o filtro ativo (`_statusFiltro`):
+
+| Filtro | Classe CSS | Colunas |
+|---|---|---|
+| `risco` | `proto-grid-5` | Colaborador · Empresa/Setor · Saldo a tirar · Vencimento da dobra · Nível de risco |
+| `hoje` | `proto-grid-4` | Colaborador · Empresa/Setor · Período ativo · Retorno |
+| demais | padrão 6 colunas | Colaborador · Empresa/Setor · PA/Situação · Agendamento · Saldo · Status |
+
+Classes CSS:
+```css
+.proto-grid-4 { grid-template-columns:2.5fr 1.2fr 1.8fr 1.4fr !important; }
+.proto-grid-5 { grid-template-columns:2.5fr 1.2fr 0.9fr 1.4fr 1.1fr !important; }
+```
+
+## Badges de status
+
+| Badge | Cor | Significado |
+|---|---|---|
+| Concluído | verde (`#027A48`, bg `#ECFDF3`) | Férias gozadas |
+| Agendado | **azul** (`#1849A9`, bg `#EFF6FF`) | Período futuro lançado |
+| Sem agendamento | âmbar | PA vigente sem lançamento |
+
+**Regra crítica:** Agendado é azul (não verde) para diferenciar de Concluído.
+
+## Filtro "Em férias hoje"
+
+`pasDoAno = c.registros.filter(reg => reg.lancamentos.some(l => HOJE >= l.inicio && HOJE <= l.fim))`
+
+Não filtra por ano — procura qualquer lançamento cujo período engloba o dia de hoje.
+Na linha exibe **somente o lancamento ativo** (não todos os lançamentos do PA).
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
 - Aprovação em lote
-- Alinhamento contagem chip "Risco de dobra" vs. barra de resumo
