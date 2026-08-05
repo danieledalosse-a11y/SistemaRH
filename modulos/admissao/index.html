@@ -1374,6 +1374,25 @@ async function confirmarEfetivar() {
     usuario: _usuarioRH,
   });
 
+  // atualiza dados_rh com qualquer alteração feita no modal de efetivação
+  const _dadosRhAtualizado = {
+    ...(currentFicha?.dados_rh || {}),
+    empresa:  unidade,
+    data:     admissao,
+    cargo,
+    contrato: contrato || (currentFicha?.dados_rh?.contrato || ''),
+    salario:  salario  || (currentFicha?.dados_rh?.salario  || ''),
+  };
+  if (currentFicha?.id) {
+    fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${currentFicha.id}`, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ dados_rh: _dadosRhAtualizado }),
+    }).catch(() => {});
+    currentFicha.dados_rh = _dadosRhAtualizado;
+    localStorage.setItem(pdfStorageKey(), JSON.stringify(_dadosRhAtualizado));
+  }
+
   const colaborador = {
     matricula,
     nome:              up(f.nome),
