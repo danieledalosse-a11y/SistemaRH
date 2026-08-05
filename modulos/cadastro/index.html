@@ -718,6 +718,7 @@
               <option value="Sim">Sim</option>
             </select>
           </div>
+          <div class="field"><label>Data do casamento</label><input type="date" id="df-dataCasamento"></div>
         </div>
       </div>
       <div class="drawer-section">
@@ -1250,12 +1251,12 @@ function supabaseToJS(row) {
     rgOrgao:          row.rg_orgao || '',
     rgData:           row.rg_data || '',
     pis:              row.pis || '',
-    cnh:              row.cnh || '',
+    cnhNumero:        row.cnh_numero || '',
     cnhCategoria:     row.cnh_categoria || '',
     cnhPrimeiraHab:   row.cnh_primeira_hab || '',
     cnhEmissao:       row.cnh_emissao || '',
     cnhValidade:      row.cnh_validade || '',
-    ctps:             row.ctps || '',
+    ctpsNumero:       row.ctps_numero || '',
     ctpsSerie:        row.ctps_serie || '',
     titulo:           row.titulo_eleitor || '',
     tituloZona:       row.titulo_zona || '',
@@ -1266,25 +1267,26 @@ function supabaseToJS(row) {
     conjugeNascimento: row.conjuge_nascimento || '',
     mae:              row.nome_mae || '',
     pai:              row.nome_pai || '',
-    naturalidade:     row.cidade_nascimento || row.naturalidade || '',
+    naturalidade:     row.naturalidade || '',
     natEstado:        row.estado_naturalidade || '',
     paisNascimento:   row.pais_nascimento || '',
     nacionalidade:    row.nacionalidade ? (row.nacionalidade.startsWith('Bras') ? 'Brasileiro(a)' : 'Estrangeiro(a)') : '',
-    celular:          row.telefone || '',
+    celular:          row.celular || '',
     whatsapp:         row.whatsapp || '',
     telRecado:        row.tel_recado || '',
-    nomeRecado:       row.nome_recado || '',
+    telRecadoNome:    row.tel_recado_nome || '',
     email:            row.email || '',
     cep:              row.cep || '',
-    rua:              row.logradouro || '',
-    numero:           row.numero_end || '',
+    logradouro:       row.logradouro || '',
+    numero:           row.numero || '',
     complemento:      row.complemento || '',
     bairro:           row.bairro || '',
     cidade:           row.cidade || '',
-    estado:           row.estado_end || '',
+    uf:               row.uf || '',
     estadoCivil:      row.estado_civil || '',
-    possuiFilhos:     row.possui_filhos || '',
-    cor:              row.raca || '',
+    dataCasamento:    row.data_casamento || '',
+    temFilhos:        row.tem_filhos || '',
+    corRaca:          row.cor_raca || '',
     escolaridade:     normEscolaridade(row.escolaridade),
     nomeComercial:    row.nome_comercial || '',
     pcd:              !!row.pcd,
@@ -1299,7 +1301,7 @@ function supabaseToJS(row) {
     dataAviso:        row.data_aviso || '',
     vencAviso:        row.venc_aviso || '',
     historicoSalarial: row.historico_salarial || [],
-    vt:               row.vt || '',
+    valeTransporte:   row.vale_transporte || '',
     vtPasses:         row.vt_passes || '',
     vtLinha:          row.vt_linha || '',
     vtCartao:         row.vt_cartao || '',
@@ -1842,7 +1844,7 @@ function novoColaborador() {
    'df-cep','df-estado','df-rua','df-numero','df-complemento','df-bairro','df-cidade',
    'df-pai','df-mae','df-salario','df-cbo','df-dataAviso','df-vencAviso',
    'df-vtPasses','df-vtLinha','df-vtCartao','df-banco','df-agencia','df-conta','df-hobby',
-   'df-conjugeNome','df-conjugeCpf','df-conjugeRg','df-conjugeNascimento']
+   'df-dataCasamento','df-conjugeNome','df-conjugeCpf','df-conjugeRg','df-conjugeNascimento']
   .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 
   // Selects → valor padrão
@@ -1954,7 +1956,7 @@ function abrirFicha(idx) {
   document.getElementById('df-paisNascimento').value = c.paisNascimento || '';
   togglePaisNascimento();
   carregarEstadosNat().then(() => preencherNaturalidade(c.natEstado || '', c.naturalidade || ''));
-  document.getElementById('df-cor').value           = c.cor || '';
+  document.getElementById('df-cor').value           = c.corRaca || '';
   document.getElementById('df-escolaridade').value  = c.escolaridade || '';
   document.getElementById('df-pcd').checked         = c.pcd || false;
   document.getElementById('df-inss').checked        = c.afastadoINSS || false;
@@ -1965,11 +1967,11 @@ function abrirFicha(idx) {
   document.getElementById('df-celular').value       = c.celular || '';
   document.getElementById('df-whatsapp').value      = c.whatsapp || '';
   document.getElementById('df-telRecado').value     = c.telRecado || '';
-  document.getElementById('df-nomeRecado').value    = c.nomeRecado || '';
+  document.getElementById('df-nomeRecado').value    = c.telRecadoNome || '';
   document.getElementById('df-email').value         = c.email || '';
   document.getElementById('df-cep').value           = c.cep || '';
-  document.getElementById('df-estado').value        = c.estado || '';
-  document.getElementById('df-rua').value           = c.rua || '';
+  document.getElementById('df-estado').value        = c.uf || '';
+  document.getElementById('df-rua').value           = c.logradouro || '';
   document.getElementById('df-numero').value        = c.numero || '';
   document.getElementById('df-complemento').value   = c.complemento || '';
   document.getElementById('df-bairro').value        = c.bairro || '';
@@ -1981,12 +1983,12 @@ function abrirFicha(idx) {
   document.getElementById('df-rgOrgao').value       = c.rgOrgao || '';
   document.getElementById('df-rgData').value        = c.rgData || '';
   document.getElementById('df-pis').value           = c.pis || '';
-  document.getElementById('df-cnh').value           = c.cnh || '';
+  document.getElementById('df-cnh').value           = c.cnhNumero || '';
   document.getElementById('df-cnhCategoria').value  = c.cnhCategoria || '';
   document.getElementById('df-cnhPrimeiraHab').value = c.cnhPrimeiraHab || '';
   document.getElementById('df-cnhEmissao').value    = c.cnhEmissao || '';
   document.getElementById('df-cnhValidade').value   = c.cnhValidade || '';
-  document.getElementById('df-ctps').value          = c.ctps || '';
+  document.getElementById('df-ctps').value          = c.ctpsNumero || '';
   document.getElementById('df-ctpsSerie').value     = c.ctpsSerie || '';
   document.getElementById('df-titulo').value        = c.titulo || '';
   document.getElementById('df-tituloZona').value    = c.tituloZona || '';
@@ -1996,7 +1998,8 @@ function abrirFicha(idx) {
   document.getElementById('df-pai').value           = c.pai || '';
   document.getElementById('df-mae').value           = c.mae || '';
   document.getElementById('df-estadoCivil').value   = c.estadoCivil || '';
-  document.getElementById('df-possuiFilhos').value  = c.possuiFilhos || '';
+  document.getElementById('df-possuiFilhos').value  = c.temFilhos || '';
+  document.getElementById('df-dataCasamento').value = c.dataCasamento || '';
   document.getElementById('df-conjugeNome').value      = c.conjugeNome || '';
   document.getElementById('df-conjugeCpf').value       = c.conjugeCpf || '';
   document.getElementById('df-conjugeRg').value        = c.conjugeRg || '';
@@ -2015,7 +2018,7 @@ function abrirFicha(idx) {
   renderSalarios(c.historicoSalarial || []);
 
   // Aba Benefícios
-  document.getElementById('df-vt').value            = c.vt || '';
+  document.getElementById('df-vt').value            = c.valeTransporte || '';
   document.getElementById('df-vtPasses').value      = c.vtPasses || '';
   document.getElementById('df-vtLinha').value       = c.vtLinha || '';
   document.getElementById('df-vtCartao').value      = c.vtCartao || '';
@@ -2241,10 +2244,10 @@ function salvarFicha() {
       cpf:             document.getElementById('df-cpf').value.trim() || null,
       rg:              document.getElementById('df-rg').value.trim() || null,
       pis:             document.getElementById('df-pis').value.trim() || null,
-      telefone:        document.getElementById('df-celular').value.trim() || null,
+      celular:         document.getElementById('df-celular').value.trim() || null,
       email:           document.getElementById('df-email').value.trim() || null,
       estado_civil:    document.getElementById('df-estadoCivil').value || null,
-      raca:            document.getElementById('df-cor').value || null,
+      cor_raca:        document.getElementById('df-cor').value || null,
       escolaridade:    document.getElementById('df-escolaridade').value || null,
       nome_mae:        document.getElementById('df-mae').value.trim() || null,
       nome_pai:        document.getElementById('df-pai').value.trim() || null,
@@ -2327,7 +2330,7 @@ function salvarFicha() {
   c.paisNascimento    = up(document.getElementById('df-paisNascimento').value);
   c.natEstado         = document.getElementById('df-natEstado').value;
   c.naturalidade      = up(document.getElementById('df-naturalidade').value);
-  c.cor               = document.getElementById('df-cor').value;
+  c.corRaca           = document.getElementById('df-cor').value;
   c.escolaridade      = document.getElementById('df-escolaridade').value;
   c.pcd               = document.getElementById('df-pcd').checked;
   c.afastadoINSS      = document.getElementById('df-inss').checked;
@@ -2337,11 +2340,11 @@ function salvarFicha() {
   c.celular           = document.getElementById('df-celular').value.trim();
   c.whatsapp          = document.getElementById('df-whatsapp').value.trim();
   c.telRecado         = document.getElementById('df-telRecado').value.trim();
-  c.nomeRecado        = up(document.getElementById('df-nomeRecado').value);
+  c.telRecadoNome     = up(document.getElementById('df-nomeRecado').value);
   c.email             = document.getElementById('df-email').value.trim().toLowerCase();
   c.cep               = document.getElementById('df-cep').value.trim();
-  c.estado            = document.getElementById('df-estado').value.trim().toUpperCase();
-  c.rua               = up(document.getElementById('df-rua').value);
+  c.uf                = document.getElementById('df-estado').value.trim().toUpperCase();
+  c.logradouro        = up(document.getElementById('df-rua').value);
   c.numero            = document.getElementById('df-numero').value.trim();
   c.complemento       = up(document.getElementById('df-complemento').value);
   c.bairro            = up(document.getElementById('df-bairro').value);
@@ -2352,8 +2355,8 @@ function salvarFicha() {
   c.rgOrgao           = up(document.getElementById('df-rgOrgao').value);
   c.rgData            = document.getElementById('df-rgData').value;
   c.pis               = document.getElementById('df-pis').value.trim();
-  c.cnh               = document.getElementById('df-cnh').value.trim();
-  c.ctps              = document.getElementById('df-ctps').value.trim();
+  c.cnhNumero         = document.getElementById('df-cnh').value.trim();
+  c.ctpsNumero        = document.getElementById('df-ctps').value.trim();
   c.ctpsSerie         = document.getElementById('df-ctpsSerie').value.trim();
   c.titulo            = document.getElementById('df-titulo').value.trim();
   c.tituloZona        = document.getElementById('df-tituloZona').value.trim();
@@ -2366,7 +2369,8 @@ function salvarFicha() {
   c.pai               = up(document.getElementById('df-pai').value);
   c.mae               = up(document.getElementById('df-mae').value);
   c.estadoCivil       = document.getElementById('df-estadoCivil').value;
-  c.possuiFilhos      = document.getElementById('df-possuiFilhos').value;
+  c.temFilhos         = document.getElementById('df-possuiFilhos').value;
+  c.dataCasamento     = document.getElementById('df-dataCasamento').value;
   c.conjugeNome       = up(document.getElementById('df-conjugeNome').value);
   c.conjugeCpf        = document.getElementById('df-conjugeCpf').value.trim();
   c.conjugeRg         = up(document.getElementById('df-conjugeRg').value);
@@ -2387,7 +2391,7 @@ function salvarFicha() {
     data:  row.querySelector('.sal-data')?.value || ''
   })).filter(s => s.valor);
   // Benefícios
-  c.vt                = document.getElementById('df-vt').value;
+  c.valeTransporte    = document.getElementById('df-vt').value;
   c.vtPasses          = document.getElementById('df-vtPasses').value;
   c.vtLinha           = document.getElementById('df-vtLinha').value.trim();
   c.vtCartao          = document.getElementById('df-vtCartao').value.trim();
@@ -2427,10 +2431,11 @@ function salvarFicha() {
       nacionalidade:      c.nacionalidade || null,
       pais_nascimento:    c.paisNascimento || null,
       estado_naturalidade: c.natEstado || null,
-      cidade_nascimento:  c.naturalidade || null,
+      naturalidade:       c.naturalidade || null,
       estado_civil:       c.estadoCivil || null,
-      possui_filhos:      c.possuiFilhos || null,
-      raca:               c.cor || null,
+      data_casamento:     c.dataCasamento || null,
+      tem_filhos:         c.temFilhos || null,
+      cor_raca:           c.corRaca || null,
       escolaridade:       c.escolaridade || null,
       nome_mae:           c.mae || null,
       nome_pai:           c.pai || null,
@@ -2439,27 +2444,27 @@ function salvarFicha() {
       primeiro_emprego:   !!c.primeiroEmprego,
       comissionado:       !!c.comissionado,
       // Contato
-      telefone:           c.celular || null,
+      celular:            c.celular || null,
       whatsapp:           c.whatsapp || null,
       tel_recado:         c.telRecado || null,
-      nome_recado:        c.nomeRecado || null,
+      tel_recado_nome:    c.telRecadoNome || null,
       email:              c.email || null,
       // Endereço
       cep:                c.cep || null,
-      logradouro:         c.rua || null,
-      numero_end:         c.numero || null,
+      logradouro:         c.logradouro || null,
+      numero:             c.numero || null,
       complemento:        c.complemento || null,
       bairro:             c.bairro || null,
       cidade:             c.cidade || null,
-      estado_end:         c.estado || null,
+      uf:                 c.uf || null,
       // Documentos
       cpf:                c.cpf || null,
       rg:                 c.rg || null,
       rg_orgao:           c.rgOrgao || null,
       rg_data:            c.rgData || null,
       pis:                c.pis || null,
-      cnh:                c.cnh || null,
-      ctps:               c.ctps || null,
+      cnh_numero:         c.cnhNumero || null,
+      ctps_numero:        c.ctpsNumero || null,
       ctps_serie:         c.ctpsSerie || null,
       titulo_eleitor:     c.titulo || null,
       titulo_zona:        c.tituloZona || null,
@@ -2483,7 +2488,7 @@ function salvarFicha() {
       data_aviso:         c.dataAviso || null,
       venc_aviso:         c.vencAviso || null,
       // Benefícios
-      vt:                 c.vt || null,
+      vale_transporte:    c.valeTransporte || null,
       vt_passes:          c.vtPasses ? parseInt(c.vtPasses) : null,
       vt_linha:           c.vtLinha || null,
       vt_cartao:          c.vtCartao || null,
