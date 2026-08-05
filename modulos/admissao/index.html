@@ -844,7 +844,14 @@ async function abrirRevisao(id) {
 
   document.getElementById('panelOverlay').classList.add('open');
 
-  document.getElementById('btnEfetivar').onclick = () => efetivarContratacao(f);
+  const jaEfetivado = (currentConvite?.status || st) === 'efetivado';
+  const btnEf = document.getElementById('btnEfetivar');
+  btnEf.disabled = jaEfetivado;
+  btnEf.textContent = jaEfetivado ? '✓ Efetivado' : 'Efetivar Contratação';
+  btnEf.style.opacity = jaEfetivado ? '0.5' : '';
+  btnEf.style.cursor  = jaEfetivado ? 'not-allowed' : '';
+  if (!jaEfetivado) btnEf.onclick = () => efetivarContratacao(f);
+
   document.getElementById('btnGerarPDF').onclick = () => abrirModalPDF(currentConvite);
   document.getElementById('btnSalvarFicha').onclick = savePanel;
 }
@@ -1288,11 +1295,12 @@ async function panelUploadDoc(key, input) {
 // ─── Efetivar ────────────────────────────────────────────
 async function efetivarContratacao(f) {
   // pré-preencher modal
-  document.getElementById('ef_cargo').value    = currentConvite?.cargo_pretendido || '';
-  document.getElementById('ef_unidade').value  = currentConvite?.unidade || '';
-  document.getElementById('ef_admissao').value = '';
-  document.getElementById('ef_contrato').value = '';
-  document.getElementById('ef_salario').value  = '';
+  const savedPDF = JSON.parse(localStorage.getItem(pdfStorageKey()) || 'null');
+  document.getElementById('ef_cargo').value    = savedPDF?.cargo    || currentConvite?.cargo_pretendido || '';
+  document.getElementById('ef_unidade').value  = savedPDF?.empresa  || currentConvite?.unidade || '';
+  document.getElementById('ef_admissao').value = savedPDF?.data     || '';
+  document.getElementById('ef_contrato').value = savedPDF?.contrato || '';
+  document.getElementById('ef_salario').value  = savedPDF?.salario  || '';
   document.getElementById('efError').style.display = 'none';
 
   // gerar próxima matrícula
@@ -1399,6 +1407,7 @@ async function confirmarEfetivar() {
     tipo_contrato:     contrato || null,
     salario:           salario ? parseFloat(salario.replace(/[^\d,]/g,'').replace(',','.')) || null : null,
     ativo:             true,
+    comissionado:      /vendedor/i.test(cargo),
   };
 
   try {
