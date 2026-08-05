@@ -379,6 +379,10 @@
           <svg id="fotoCam" style="opacity:0;transition:opacity .18s;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </div>
       </div>
+      <button id="btnReposicionarFoto" onclick="reposicionarFotoColaborador()" title="Reposicionar foto"
+        style="display:none;position:absolute;bottom:-2px;left:-2px;width:18px;height:18px;border-radius:50%;background:#3b82f6;border:2px solid #fff;cursor:pointer;align-items:center;justify-content:center;padding:0;">
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
       <button id="btnExcluirFoto" onclick="excluirFotoColaborador()" title="Remover foto"
         style="display:none;position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;border-radius:50%;background:#ef4444;border:2px solid #fff;cursor:pointer;align-items:center;justify-content:center;padding:0;">
         <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1910,6 +1914,8 @@ function abrirFicha(idx) {
   }
   const btnExc = document.getElementById('btnExcluirFoto');
   if (btnExc) btnExc.style.display = c.fotoUrl ? 'flex' : 'none';
+  const btnRep = document.getElementById('btnReposicionarFoto');
+  if (btnRep) btnRep.style.display = c.fotoUrl ? 'flex' : 'none';
   document.getElementById('drw-nome').textContent = c.nome;
   document.getElementById('drw-sub').textContent = (c.cargo || '—') + ' · ' + (c.setor?.replace(/^\d+\s*-\s*/,'') || '—');
 
@@ -2114,6 +2120,8 @@ async function _doUploadFoto(blob, c) {
     av.style.background = 'none';
     const btnExc = document.getElementById('btnExcluirFoto');
     if (btnExc) btnExc.style.display = 'flex';
+    const btnRep2 = document.getElementById('btnReposicionarFoto');
+    if (btnRep2) btnRep2.style.display = 'flex';
     mostrarToast('Foto atualizada!');
   } catch(e) { alert('Erro inesperado: ' + e.message); }
   finally { statusEl.style.display = 'none'; }
@@ -2136,7 +2144,32 @@ async function excluirFotoColaborador() {
   av.textContent = iniciais(c.nome);
   av.style.background = '';
   document.getElementById('btnExcluirFoto').style.display = 'none';
+  document.getElementById('btnReposicionarFoto').style.display = 'none';
   mostrarToast('Foto removida.');
+}
+
+async function reposicionarFotoColaborador() {
+  const c = COLABORADORES[_fichaIdx];
+  if (!c || !c.fotoUrl) return;
+  try {
+    const resp = await fetch(c.fotoUrl);
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const img = document.getElementById('cropImg');
+    img.onload = () => {
+      const ratio = img.naturalWidth / img.naturalHeight;
+      if (ratio >= 1) { _cropW = CROP_PX; _cropH = CROP_PX / ratio; }
+      else            { _cropH = CROP_PX; _cropW = CROP_PX * ratio; }
+      _cropBaseW = _cropW; _cropBaseH = _cropH;
+      _cropX = (CROP_PX - _cropW) / 2; _cropY = (CROP_PX - _cropH) / 2;
+      _applyCropImg();
+      document.getElementById('cropZoom').value = 100;
+      document.getElementById('cropOverlay').style.display = 'flex';
+      URL.revokeObjectURL(objUrl);
+    };
+    img.src = objUrl;
+    _cropFile = blob;
+  } catch(e) { mostrarToast('Não foi possível carregar a foto.'); }
 }
 
 function overlayClick(e) {
