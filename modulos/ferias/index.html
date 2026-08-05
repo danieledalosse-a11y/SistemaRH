@@ -1565,10 +1565,21 @@
 <div class="drawer" id="drawer">
   <div class="drawer-hdr">
     <div class="drawer-hdr-top">
-      <div style="min-width:0;">
-        <div class="drawer-nome" id="drawerNome">—</div>
-        <div class="drawer-cargo" id="drawerCargo"></div>
-        <div class="drawer-chips" id="drawerChips"></div>
+      <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+        <div style="position:relative;flex-shrink:0;" id="feriasAvatarWrap">
+          <div style="cursor:pointer;" onclick="document.getElementById('feriasAvatarWrap').querySelector('input').click()">
+            <div id="feriasDrawerAvatar" class="proto-avatar" style="width:44px;height:44px;font-size:14px;font-weight:700;"></div>
+          </div>
+          <input type="file" accept="image/*" style="display:none;" onchange="feriasFotoUpload(this)">
+          <button id="feriasBtnExcluirFoto" onclick="feriasExcluirFoto()" style="display:none;position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;border-radius:50%;background:#ef4444;border:2px solid #fff;cursor:pointer;padding:0;align-items:center;justify-content:center;">
+            <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
+          </button>
+        </div>
+        <div style="min-width:0;">
+          <div class="drawer-nome" id="drawerNome">—</div>
+          <div class="drawer-cargo" id="drawerCargo"></div>
+          <div class="drawer-chips" id="drawerChips"></div>
+        </div>
       </div>
       <button class="drawer-close-btn" onclick="fecharDrawer()">✕</button>
     </div>
@@ -1794,6 +1805,8 @@ function supabaseParaModelo(feriasRows, colaborRows) {
         empresa:       colabDados.empresa_registro_nome || colabDados.empresa_registro || '',
         empresaAtuacao:colabDados.empresa_atuacao_nome  || colabDados.empresa_atuacao  || '',
         ativo:         !colabDados.data_demissao,
+        fotoUrl:       colabDados.foto_url || null,
+        matricula:     colabDados.matricula || mat,
         registros: [],
       });
     }
@@ -1812,7 +1825,7 @@ async function carregarDoSupabase() {
   try {
     const [feriasRows, colaborRows] = await Promise.all([
       sbGet('ferias', 'select=*&order=matricula_colaborador,ano'),
-      sbGet('colaboradores', 'select=id,matricula,nome,cargo,setor,empresa_registro,empresa_registro_nome,empresa_atuacao,empresa_atuacao_nome,data_demissao'),
+      sbGet('colaboradores', 'select=id,matricula,nome,cargo,setor,empresa_registro,empresa_registro_nome,empresa_atuacao,empresa_atuacao_nome,data_demissao,foto_url'),
     ]);
     setLoadingMsg('Processando dados...');
     supabaseParaModelo(feriasRows, colaborRows);
@@ -2299,6 +2312,21 @@ function abrirDrawer(key) {
 
   document.getElementById('drawerNome').textContent = colab.nome;
   document.getElementById('drawerCargo').textContent = colab.cargo || '';
+
+  // avatar
+  const feriasAvEl = document.getElementById('feriasDrawerAvatar');
+  const feriasBtnExc = document.getElementById('feriasBtnExcluirFoto');
+  if (feriasAvEl) {
+    const cor = avatarColor(colab.nome);
+    if (colab.fotoUrl) {
+      feriasAvEl.style.cssText = `width:44px;height:44px;font-size:14px;font-weight:700;background:${cor};padding:0;overflow:hidden;`;
+      feriasAvEl.innerHTML = `<img src="${colab.fotoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">`;
+    } else {
+      feriasAvEl.style.cssText = `width:44px;height:44px;font-size:14px;font-weight:700;background:${cor};`;
+      feriasAvEl.textContent = initials(colab.nome);
+    }
+  }
+  if (feriasBtnExc) feriasBtnExc.style.display = colab.fotoUrl ? 'flex' : 'none';
 
   const chips = [];
   if (colab.setor) chips.push(`<span class="drawer-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>${colab.setor}</span>`);
@@ -3572,7 +3600,7 @@ function renderListaAnual() {
 
       html += `<div class="proto-table-row proto-grid-5" onclick="abrirDrawer('${key}')" style="border-left:4px solid ${borderClr};">
         <div class="proto-colab-cell">
-          <div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>
+          ${c.fotoUrl ? `<img src="${c.fotoUrl}" class="proto-avatar" style="object-fit:cover;background:${cor};" alt="">` : `<div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>`}
           <div>
             <div class="proto-emp-name">${c.nome}</div>
             <div class="proto-emp-detail">${c.cargo || '—'}</div>
@@ -3618,7 +3646,7 @@ function renderListaAnual() {
 
       html += `<div class="proto-table-row proto-grid-4" onclick="abrirDrawer('${key}')" style="border-left:4px solid var(--green);">
         <div class="proto-colab-cell">
-          <div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>
+          ${c.fotoUrl ? `<img src="${c.fotoUrl}" class="proto-avatar" style="object-fit:cover;background:${cor};" alt="">` : `<div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>`}
           <div>
             <div class="proto-emp-name">${c.nome}</div>
             <div class="proto-emp-detail">${c.cargo || '—'}</div>
@@ -3646,7 +3674,7 @@ function renderListaAnual() {
 
       html += `<div class="proto-table-row" onclick="abrirDrawer('${key}')">
         <div class="proto-colab-cell">
-          <div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>
+          ${c.fotoUrl ? `<img src="${c.fotoUrl}" class="proto-avatar" style="object-fit:cover;background:${cor};" alt="">` : `<div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>`}
           <div>
             <div class="proto-emp-name">${c.nome}</div>
             <div class="proto-emp-detail">${c.cargo || '—'}</div>
@@ -5115,6 +5143,162 @@ function exportarRelatorioPDF() {
 document.addEventListener('DOMContentLoaded', () => {
   carregarDoSupabase();
 });
+
+// ─── Foto do colaborador (Férias) ────────────────────────────────────────────
+let _feriasCropFile = null, _feriasCropX = 0, _feriasCropY = 0;
+let _feriasCropW = 0, _feriasCropH = 0, _feriasCropBaseW = 0, _feriasCropBaseH = 0;
+const FERIAS_CROP_PX = 280;
+
+function feriasFotoUpload(input) {
+  const file = input.files[0];
+  input.value = '';
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('Selecione uma imagem'); return; }
+  _feriasCropFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('feriasCropImg');
+    img.onload = () => {
+      const ratio = img.naturalWidth / img.naturalHeight;
+      if (ratio >= 1) { _feriasCropW = FERIAS_CROP_PX; _feriasCropH = FERIAS_CROP_PX / ratio; }
+      else            { _feriasCropH = FERIAS_CROP_PX; _feriasCropW = FERIAS_CROP_PX * ratio; }
+      _feriasCropBaseW = _feriasCropW; _feriasCropBaseH = _feriasCropH;
+      _feriasCropX = (FERIAS_CROP_PX - _feriasCropW) / 2; _feriasCropY = (FERIAS_CROP_PX - _feriasCropH) / 2;
+      _feriasCropApplyImg();
+      document.getElementById('feriasCropZoom').value = 100;
+      document.getElementById('feriasCropOverlay').style.display = 'flex';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function _feriasCropApplyImg() {
+  const img = document.getElementById('feriasCropImg');
+  img.style.width  = _feriasCropW + 'px';
+  img.style.height = _feriasCropH + 'px';
+  img.style.left   = _feriasCropX + 'px';
+  img.style.top    = _feriasCropY + 'px';
+}
+
+function feriasCropZoomChange(val) {
+  const scale = val / 100;
+  const cx = FERIAS_CROP_PX / 2, cy = FERIAS_CROP_PX / 2;
+  const nx = _feriasCropBaseW * scale, ny = _feriasCropBaseH * scale;
+  _feriasCropX = cx - (cx - _feriasCropX) * (nx / _feriasCropW);
+  _feriasCropY = cy - (cy - _feriasCropY) * (ny / _feriasCropH);
+  _feriasCropW = nx; _feriasCropH = ny;
+  _feriasCropApplyImg();
+}
+
+function feriasCancelarCrop() {
+  document.getElementById('feriasCropOverlay').style.display = 'none';
+  _feriasCropFile = null;
+}
+
+async function feriasConfirmarCrop() {
+  const img = document.getElementById('feriasCropImg');
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 400;
+  const ctx = canvas.getContext('2d');
+  ctx.beginPath(); ctx.arc(200, 200, 200, 0, Math.PI * 2); ctx.clip();
+  const scale = 400 / FERIAS_CROP_PX;
+  ctx.drawImage(img, _feriasCropX * scale, _feriasCropY * scale, _feriasCropW * scale, _feriasCropH * scale);
+  canvas.toBlob(async blob => {
+    document.getElementById('feriasCropOverlay').style.display = 'none';
+    await _feriasDoUploadFoto(blob);
+  }, 'image/jpeg', 0.9);
+}
+
+async function _feriasDoUploadFoto(blob) {
+  const colab = COLABORADORES.find(c => c.__key === _drawerKey);
+  if (!colab) return;
+  const mat = colab.matricula || colab.registro;
+  const path = `fotos-colaboradores/${mat}.jpg`;
+  toast('Enviando foto...');
+  try {
+    const r = await fetch(`${SB_URL}/storage/v1/object/${path}`, {
+      method: 'PUT',
+      headers: { ...SB_HEADERS, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
+      body: blob,
+    });
+    if (!r.ok) { toast('Erro ao enviar foto'); return; }
+    const pub = `${SB_URL}/storage/v1/object/public/${path}?t=${Date.now()}`;
+    await fetch(`${SB_URL}/rest/v1/colaboradores?matricula=eq.${encodeURIComponent(mat)}`, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ foto_url: pub }),
+    });
+    colab.fotoUrl = pub;
+    // atualiza avatar no drawer
+    const feriasAvEl = document.getElementById('feriasDrawerAvatar');
+    const cor = avatarColor(colab.nome);
+    if (feriasAvEl) {
+      feriasAvEl.style.cssText = `width:44px;height:44px;font-size:14px;font-weight:700;background:${cor};padding:0;overflow:hidden;`;
+      feriasAvEl.innerHTML = `<img src="${pub}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">`;
+    }
+    const feriasBtnExc = document.getElementById('feriasBtnExcluirFoto');
+    if (feriasBtnExc) feriasBtnExc.style.display = 'flex';
+    toast('Foto atualizada');
+    renderAll();
+  } catch(e) { toast('Erro ao enviar foto'); }
+}
+
+async function feriasExcluirFoto() {
+  const colab = COLABORADORES.find(c => c.__key === _drawerKey);
+  if (!colab) return;
+  const mat = colab.matricula || colab.registro;
+  await fetch(`${SB_URL}/rest/v1/colaboradores?matricula=eq.${encodeURIComponent(mat)}`, {
+    method: 'PATCH',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ foto_url: null }),
+  });
+  colab.fotoUrl = null;
+  const feriasAvEl = document.getElementById('feriasDrawerAvatar');
+  const cor = avatarColor(colab.nome);
+  if (feriasAvEl) {
+    feriasAvEl.style.cssText = `width:44px;height:44px;font-size:14px;font-weight:700;background:${cor};`;
+    feriasAvEl.textContent = initials(colab.nome);
+  }
+  const feriasBtnExc = document.getElementById('feriasBtnExcluirFoto');
+  if (feriasBtnExc) feriasBtnExc.style.display = 'none';
+  toast('Foto removida');
+  renderAll();
+}
+</script>
+
+<!-- Crop modal (Férias) -->
+<div id="feriasCropOverlay" onclick="if(event.target===this)feriasCancelarCrop()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:28px;width:360px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <p style="margin:0 0 16px;font-weight:600;font-size:15px;color:#101828;">Posicionar foto</p>
+    <div id="feriasCropContainer" style="width:280px;height:280px;border-radius:50%;overflow:hidden;border:3px solid var(--blue);margin:0 auto 16px;position:relative;cursor:grab;user-select:none;background:#f0f2f5;">
+      <img id="feriasCropImg" src="" alt="" style="position:absolute;left:0;top:0;pointer-events:none;">
+    </div>
+    <input type="range" id="feriasCropZoom" min="100" max="300" value="100" oninput="feriasCropZoomChange(this.value)" style="width:100%;margin-bottom:20px;">
+    <div style="display:flex;gap:10px;">
+      <button onclick="feriasCancelarCrop()" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:600;">Cancelar</button>
+      <button onclick="feriasConfirmarCrop()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--blue);color:#fff;cursor:pointer;font-weight:600;">Salvar foto</button>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  let drag = false, sx = 0, sy = 0;
+  const c = () => document.getElementById('feriasCropContainer');
+  function start(x, y) { drag = true; sx = x; sy = y; if(c()) c().style.cursor='grabbing'; }
+  function move(x, y) {
+    if (!drag) return;
+    _feriasCropX += x - sx; _feriasCropY += y - sy; sx = x; sy = y;
+    _feriasCropApplyImg();
+  }
+  function end() { drag = false; if(c()) c().style.cursor='grab'; }
+  document.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+  document.addEventListener('mouseup', end);
+  document.addEventListener('touchmove', e => { if(drag){ e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY); }}, {passive:false});
+  document.addEventListener('touchend', end);
+  document.addEventListener('mousedown', e => { if(e.target.closest('#feriasCropContainer')) start(e.clientX, e.clientY); });
+  document.addEventListener('touchstart', e => { if(e.target.closest('#feriasCropContainer')) start(e.touches[0].clientX, e.touches[0].clientY); });
+})();
 </script>
 </body>
 </html>

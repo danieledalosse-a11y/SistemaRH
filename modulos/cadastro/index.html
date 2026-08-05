@@ -193,6 +193,13 @@
   tbody tr.selected { background: #f0f4ff; }
   tbody tr { cursor: pointer; }
 
+  /* ── Crop modal ── */
+  #cropOverlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:300; align-items:center; justify-content:center; }
+  .crop-box { background:#fff; border-radius:16px; padding:28px; width:360px; max-width:95vw; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+  #cropContainer { width:280px; height:280px; border-radius:50%; overflow:hidden; border:3px solid var(--blue); margin:0 auto 20px; position:relative; cursor:grab; user-select:none; background:var(--bg); }
+  #cropImg { position:absolute; left:0; top:0; pointer-events:none; }
+  #cropZoom { flex:1; accent-color:var(--blue); }
+
   @media (max-width: 640px) {
     .container { padding: 16px 12px; }
     .topbar { padding: 0 16px; }
@@ -363,13 +370,19 @@
 <div class="drawer-overlay" id="drawerOverlay" onclick="overlayClick(event)">
 <div class="drawer" id="drawer">
   <div class="drawer-header">
-    <div style="position:relative;flex-shrink:0;cursor:pointer;" onclick="document.getElementById('fotoInput').click()" title="Clique para alterar a foto">
-      <div class="avatar avatar-n" id="drw-avatar" style="width:52px;height:52px;font-size:17px;margin:0;overflow:hidden;"></div>
-      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,0);display:flex;align-items:center;justify-content:center;transition:background .18s;" id="fotoHover"
-           onmouseover="this.style.background='rgba(0,0,0,0.35)';document.getElementById('fotoCam').style.opacity='1'"
-           onmouseout="this.style.background='rgba(0,0,0,0)';document.getElementById('fotoCam').style.opacity='0'">
-        <svg id="fotoCam" style="opacity:0;transition:opacity .18s;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    <div style="position:relative;flex-shrink:0;" id="avatarWrap">
+      <div style="cursor:pointer;" onclick="document.getElementById('fotoInput').click()" title="Clique para alterar a foto">
+        <div class="avatar avatar-n" id="drw-avatar" style="width:52px;height:52px;font-size:17px;margin:0;overflow:hidden;"></div>
+        <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,0);display:flex;align-items:center;justify-content:center;transition:background .18s;" id="fotoHover"
+             onmouseover="this.style.background='rgba(0,0,0,0.35)';document.getElementById('fotoCam').style.opacity='1'"
+             onmouseout="this.style.background='rgba(0,0,0,0)';document.getElementById('fotoCam').style.opacity='0'">
+          <svg id="fotoCam" style="opacity:0;transition:opacity .18s;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
       </div>
+      <button id="btnExcluirFoto" onclick="excluirFotoColaborador()" title="Remover foto"
+        style="display:none;position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;border-radius:50%;background:#ef4444;border:2px solid #fff;cursor:pointer;align-items:center;justify-content:center;padding:0;">
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
     <input type="file" id="fotoInput" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadFotoColaborador(this)">
     <div class="drawer-header-info">
@@ -1718,9 +1731,12 @@ function renderTabela() {
     const tempoInfo = ativo
       ? `${fmtDateBR(c.dataAdmissao)}<br><span style="font-size:11px;color:#999;">${calcTempoEmpresa(c.dataAdmissao)}</span>`
       : `<span style="color:var(--red);font-size:12px;">Saída: ${fmtDateBR(c.dataDemissao)}</span>`;
+    const listAvatar = c.fotoUrl
+      ? `<img src="${c.fotoUrl}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;margin-right:8px;vertical-align:middle;display:inline-block;flex-shrink:0;" alt="">`
+      : `<span class="avatar ${avatarCls}">${iniciais(c.nome)}</span>`;
     return `<tr onclick="abrirFicha(${idxGlobal})" title="Clique para abrir a ficha">
       <td class="td-nome">
-        <span class="avatar ${avatarCls}">${iniciais(c.nome)}</span>${c.nome}<span class="td-sec">${sexoIcon}</span>
+        ${listAvatar}${c.nome}<span class="td-sec">${sexoIcon}</span>
       </td>
       <td class="td-sec">${c.codigo || '—'}</td>
       <td class="td-sec">${c.cargo || '—'}${badgeApr}</td>
@@ -1862,6 +1878,8 @@ function abrirFicha(idx) {
     av.textContent = iniciais(c.nome);
     av.style.background = '';
   }
+  const btnExc = document.getElementById('btnExcluirFoto');
+  if (btnExc) btnExc.style.display = c.fotoUrl ? 'flex' : 'none';
   document.getElementById('drw-nome').textContent = c.nome;
   document.getElementById('drw-sub').textContent = (c.cargo || '—') + ' · ' + (c.setor?.replace(/^\d+\s*-\s*/,'') || '—');
 
@@ -1968,67 +1986,116 @@ function abrirFicha(idx) {
   document.getElementById('drawer').classList.add('open');
 }
 
-async function uploadFotoColaborador(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { alert('A imagem deve ter no máximo 5 MB.'); return; }
+// ── CROP MODAL ─────────────────────────────────────────────────────────────────
+let _cropFile = null, _cropX = 0, _cropY = 0, _cropW = 0, _cropH = 0, _cropBaseW = 0, _cropBaseH = 0;
+const CROP_PX = 280;
 
+function uploadFotoColaborador(input) {
+  const file = input.files[0]; if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert('A imagem deve ter no máximo 5 MB.'); input.value = ''; return; }
+  _cropFile = file;
+  const img = document.getElementById('cropImg');
+  img.onload = () => {
+    const scale = CROP_PX / Math.min(img.naturalWidth, img.naturalHeight);
+    _cropBaseW = img.naturalWidth * scale;
+    _cropBaseH = img.naturalHeight * scale;
+    _cropW = _cropBaseW; _cropH = _cropBaseH;
+    _cropX = (CROP_PX - _cropW) / 2;
+    _cropY = (CROP_PX - _cropH) / 2;
+    document.getElementById('cropZoom').value = 100;
+    _applyCropImg();
+    document.getElementById('cropOverlay').style.display = 'flex';
+  };
+  img.src = URL.createObjectURL(file);
+  input.value = '';
+}
+
+function _applyCropImg() {
+  const img = document.getElementById('cropImg');
+  img.style.width  = _cropW + 'px';
+  img.style.height = _cropH + 'px';
+  img.style.left   = _cropX + 'px';
+  img.style.top    = _cropY + 'px';
+}
+
+function cropZoomChange(val) {
+  const factor = val / 100;
+  const cx = CROP_PX / 2, cy = CROP_PX / 2;
+  const newW = _cropBaseW * factor, newH = _cropBaseH * factor;
+  _cropX = cx - (cx - _cropX) * (newW / _cropW);
+  _cropY = cy - (cy - _cropY) * (newH / _cropH);
+  _cropW = newW; _cropH = newH;
+  _applyCropImg();
+}
+
+function cancelarCrop() {
+  document.getElementById('cropOverlay').style.display = 'none';
+  _cropFile = null;
+}
+
+async function confirmarCropFoto() {
+  if (!_cropFile) return;
   const c = COLABORADORES[_fichaIdx];
   if (!c || !c.codigo) return;
+  document.getElementById('cropOverlay').style.display = 'none';
+  const canvas = document.createElement('canvas');
+  canvas.width = 400; canvas.height = 400;
+  const ctx = canvas.getContext('2d');
+  const img = document.getElementById('cropImg');
+  const ratio = 400 / CROP_PX;
+  ctx.drawImage(img, _cropX * ratio, _cropY * ratio, _cropW * ratio, _cropH * ratio);
+  canvas.toBlob(blob => _doUploadFoto(blob, c), 'image/jpeg', 0.92);
+}
 
-  const ext    = file.name.split('.').pop().toLowerCase() || 'jpg';
+async function _doUploadFoto(blob, c) {
   const bucket = 'fotos-colaboradores';
-  const path   = `${c.codigo}.${ext}`;
-
+  const path   = `${c.codigo}.jpg`;
   const statusEl = document.getElementById('fotoStatus');
   statusEl.style.display = 'flex';
-
   const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
   const authToken = sess.access_token || SB_KEY;
-
   try {
     const upResp = await fetch(`${SB_URL}/storage/v1/object/${bucket}/${path}`, {
       method: 'PUT',
-      headers: {
-        'apikey': SB_KEY,
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': file.type,
-        'x-upsert': 'true',
-      },
-      body: file,
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
+      body: blob,
     });
-
-    if (!upResp.ok) {
-      const err = await upResp.text();
-      statusEl.style.display = 'none';
-      alert('Erro HTTP ' + upResp.status + ':\n' + err);
-      return;
-    }
-
+    if (!upResp.ok) { const err = await upResp.text(); alert('Erro HTTP ' + upResp.status + ':\n' + err); return; }
     const fotoUrl = `${SB_URL}/storage/v1/object/public/${bucket}/${path}?t=${Date.now()}`;
-
-    // salvar no banco
     await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${c._sbId}`, {
       method: 'PATCH',
       headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ foto_url: fotoUrl }),
     });
-
-    // atualizar local
     c.fotoUrl = fotoUrl;
-
-    // atualizar avatar no drawer
     const av = document.getElementById('drw-avatar');
     av.innerHTML = `<img src="${fotoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="${c.nome}">`;
     av.style.background = 'none';
+    const btnExc = document.getElementById('btnExcluirFoto');
+    if (btnExc) btnExc.style.display = 'flex';
+    showToast('Foto atualizada!');
+  } catch(e) { alert('Erro inesperado: ' + e.message); }
+  finally { statusEl.style.display = 'none'; }
+}
 
-  } catch (e) {
-    console.error(e);
-    alert('Erro inesperado ao salvar a foto.');
-  } finally {
-    statusEl.style.display = 'none';
-    input.value = '';
-  }
+async function excluirFotoColaborador() {
+  const c = COLABORADORES[_fichaIdx];
+  if (!c || !c._sbId) return;
+  if (!confirm('Remover a foto de ' + c.nome + '?')) return;
+  await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${c._sbId}`, {
+    method: 'PATCH',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ foto_url: null }),
+  });
+  c.fotoUrl = '';
+  const avatarCls = c.sexo === 'M' ? 'avatar-m' : c.sexo === 'F' ? 'avatar-f' : 'avatar-n';
+  const av = document.getElementById('drw-avatar');
+  av.className = 'avatar ' + avatarCls;
+  av.innerHTML = '';
+  av.textContent = iniciais(c.nome);
+  av.style.background = '';
+  document.getElementById('btnExcluirFoto').style.display = 'none';
+  showToast('Foto removida.');
 }
 
 function overlayClick(e) {
@@ -2885,6 +2952,42 @@ function logout() {
   localStorage.removeItem('sb_perfil');
   window.location.href = '../../login.html';
 }
+</script>
+
+<!-- Crop modal -->
+<div id="cropOverlay" onclick="if(event.target===this)cancelarCrop()">
+  <div class="crop-box">
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Posicionar foto</div>
+    <div style="font-size:13px;color:var(--text-sec);margin-bottom:20px;">Arraste para centralizar. Use o controle abaixo para ajustar o zoom.</div>
+    <div id="cropContainer">
+      <img id="cropImg" src="" alt="">
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-ter)" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+      <input type="range" id="cropZoom" min="100" max="300" value="100" oninput="cropZoomChange(this.value)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-ter)" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="cancelarCrop()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarCropFoto()">Salvar foto</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  let drag = false, sx = 0, sy = 0;
+  document.addEventListener('DOMContentLoaded', () => {
+    const cont = document.getElementById('cropContainer');
+    if (!cont) return;
+    cont.addEventListener('mousedown', e => { drag=true; sx=e.clientX-_cropX; sy=e.clientY-_cropY; cont.style.cursor='grabbing'; e.preventDefault(); });
+    window.addEventListener('mousemove', e => { if (!drag) return; _cropX=e.clientX-sx; _cropY=e.clientY-sy; _applyCropImg(); });
+    window.addEventListener('mouseup', () => { if(drag){ drag=false; const c=document.getElementById('cropContainer'); if(c) c.style.cursor='grab'; }});
+    cont.addEventListener('touchstart', e => { drag=true; sx=e.touches[0].clientX-_cropX; sy=e.touches[0].clientY-_cropY; e.preventDefault(); }, {passive:false});
+    window.addEventListener('touchmove', e => { if(!drag) return; _cropX=e.touches[0].clientX-sx; _cropY=e.touches[0].clientY-sy; _applyCropImg(); }, {passive:false});
+    window.addEventListener('touchend', () => { drag=false; });
+  });
+})();
 </script>
 </body>
 </html>
