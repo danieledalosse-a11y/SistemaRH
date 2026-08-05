@@ -1090,8 +1090,11 @@
 
   /* ── PROTO: tabela flat ── */
   .proto-table-head { display:grid; grid-template-columns:2.5fr 1.2fr 1.4fr 1.6fr 80px 130px; padding:10px 16px; border-bottom:2px solid var(--border); background:#FAFBFC; }
-  .proto-th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-ter); }
+  .proto-th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-ter); white-space:nowrap; }
   .proto-table-row { display:grid; grid-template-columns:2.5fr 1.2fr 1.4fr 1.6fr 80px 130px; padding:12px 16px; border-bottom:1px solid var(--border-light); cursor:pointer; transition:background .12s; align-items:center; }
+  /* grids dinâmicos por filtro */
+  .proto-grid-4 { grid-template-columns:2.5fr 1.2fr 1.8fr 1.4fr !important; }
+  .proto-grid-5 { grid-template-columns:2.5fr 1.2fr 0.9fr 1.4fr 1.1fr !important; }
   .proto-table-row:last-child { border-bottom:none; }
   .proto-table-row:hover { background:#F8FAFC; }
   .proto-colab-cell { display:flex; align-items:center; gap:10px; }
@@ -3494,10 +3497,12 @@ function renderListaAnual() {
     return `<span class="badge-status-v"><span class="la-dot la-dot-v"></span>Agendado</span>`;
   };
 
-  // Atualiza headers conforme o filtro ativo
+  // Atualiza headers e grid conforme o filtro ativo
   const thead = document.querySelector('.proto-table-head');
   if (thead) {
+    thead.classList.remove('proto-grid-4','proto-grid-5');
     if (_statusFiltro === 'risco') {
+      thead.classList.add('proto-grid-5');
       thead.innerHTML = `
         <div class="proto-th">Colaborador</div>
         <div class="proto-th">Empresa / Setor</div>
@@ -3505,12 +3510,12 @@ function renderListaAnual() {
         <div class="proto-th">Vencimento da dobra</div>
         <div class="proto-th">Nível de risco</div>`;
     } else if (_statusFiltro === 'hoje') {
+      thead.classList.add('proto-grid-4');
       thead.innerHTML = `
         <div class="proto-th">Colaborador</div>
         <div class="proto-th">Empresa / Setor</div>
         <div class="proto-th">Período ativo</div>
-        <div class="proto-th">Retorna em</div>
-        <div class="proto-th">Dias restantes</div>`;
+        <div class="proto-th">Retorno</div>`;
     } else {
       thead.innerHTML = `
         <div class="proto-th">Colaborador</div>
@@ -3542,14 +3547,19 @@ function renderListaAnual() {
     const key    = c.__key.replace(/'/g,"\\'");
 
     if (_statusFiltro === 'risco') {
-      // ── Layout especial para Risco de Dobra ──────────────────────────────
+      // ── Layout Risco de Dobra ─────────────────────────────────────────────
       const dlim      = dataLimiteDobra(reg);
       const dpd       = diasParaDobra(reg);
       const nivel     = nivelRisco(dpd);
       const borderClr = nivel === 'critico' ? '#D92D20' : nivel === 'atencao' ? '#F79009' : '#3B82F6';
       const venceCor  = nivel === 'critico' ? '#D92D20' : nivel === 'atencao' ? '#B54708' : '#1D4ED8';
+      const nivelBadge = nivel === 'critico'
+        ? `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Crítico</span>`
+        : nivel === 'atencao'
+        ? `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção</span>`
+        : `<span class="badge-status-r" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;"><span class="la-dot" style="background:#3B82F6;"></span>No radar</span>`;
 
-      html += `<div class="proto-table-row" onclick="abrirDrawer('${key}')" style="border-left:4px solid ${borderClr};padding-left:12px;">
+      html += `<div class="proto-table-row proto-grid-5" onclick="abrirDrawer('${key}')" style="border-left:4px solid ${borderClr};">
         <div class="proto-colab-cell">
           <div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>
           <div>
@@ -3562,41 +3572,40 @@ function renderListaAnual() {
           <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:1px;">${setor}</span>
         </div>
         <div class="proto-td">
-          <div class="proto-saldo-val" style="color:${venceCor};font-size:22px;">${saldo}d</div>
-          <div class="proto-saldo-sub">de ${total}d a gozar</div>
-          <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:60px;">
+          <div class="proto-saldo-val" style="color:${venceCor};">${saldo}d</div>
+          <div class="proto-saldo-sub">de ${total}d</div>
+          <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:52px;">
             <div style="height:3px;border-radius:2px;background:${borderClr};width:${100 - pct}%;"></div>
           </div>
         </div>
         <div class="proto-td">
           <span style="font-size:13px;font-weight:700;color:${venceCor};white-space:nowrap;">${dlim ? formatDate(dlim) : '—'}</span>
-          <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">PA ${paAno} · dobra em</span>
+          <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">PA ${paAno}</span>
         </div>
-        <div class="proto-td">${paBadge(reg)}</div>
+        <div class="proto-td">${nivelBadge}</div>
       </div>`;
+
     } else if (_statusFiltro === 'hoje') {
-      // ── Layout especial para Em férias hoje ──────────────────────────────
-      // Período ativo = lançamento que cobre hoje
+      // ── Layout Em férias hoje ─────────────────────────────────────────────
       const ativo = reg.lancamentos.find(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim);
       const periodoHtml = ativo
         ? `<span style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;">${formatDate(ativo.inicio)} → ${formatDate(ativo.fim)}</span>
            <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:1px;">${ativo.dias}d</span>`
         : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
 
-      const retornaData = ativo ? ativo.fim : null;
-      const diasRestantes = retornaData ? Math.round((new Date(retornaData) - new Date(HOJE)) / 86400000) : null;
-      const retornaHtml = retornaData
-        ? `<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;">${formatDate(retornaData)}</span>`
+      const retornaData    = ativo ? ativo.fim : null;
+      const diasRestantes  = retornaData ? Math.round((new Date(retornaData) - new Date(HOJE)) / 86400000) : null;
+      const retornaDataFmt = retornaData ? formatDate(retornaData) : '—';
+      let chipCls = 'background:#F1F5F9;color:#64748B;';
+      if (diasRestantes === 0)     chipCls = 'background:#ECFDF3;color:#027A48;border:1px solid #6CE9A6;font-weight:600;';
+      else if (diasRestantes <= 3) chipCls = 'background:#FEF3C7;color:#B45309;border:1px solid #FDE68A;font-weight:600;';
+      const chipTxt = diasRestantes === 0 ? 'Retorna hoje' : diasRestantes !== null ? `Volta em ${diasRestantes}d` : '';
+      const retornoHtml = retornaData
+        ? `<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;">${retornaDataFmt}</span>
+           <span style="display:inline-flex;align-items:center;margin-top:5px;font-size:10px;padding:2px 8px;border-radius:99px;${chipCls}">${chipTxt}</span>`
         : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
 
-      let diasChip = '';
-      if (diasRestantes !== null) {
-        if (diasRestantes === 0)      diasChip = `<span style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#ECFDF3;color:#027A48;border:1px solid #6CE9A6;">Retorna hoje</span>`;
-        else if (diasRestantes <= 3)  diasChip = `<span style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#FEF3C7;color:#B45309;border:1px solid #FDE68A;">Volta em ${diasRestantes}d</span>`;
-        else                          diasChip = `<span style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:10px;font-weight:500;padding:2px 8px;border-radius:99px;background:#F1F5F9;color:#64748B;">Volta em ${diasRestantes}d</span>`;
-      }
-
-      html += `<div class="proto-table-row" onclick="abrirDrawer('${key}')" style="border-left:4px solid var(--green);padding-left:12px;">
+      html += `<div class="proto-table-row proto-grid-4" onclick="abrirDrawer('${key}')" style="border-left:4px solid var(--green);">
         <div class="proto-colab-cell">
           <div class="proto-avatar" style="background:${cor};">${initials(c.nome)}</div>
           <div>
@@ -3609,22 +3618,19 @@ function renderListaAnual() {
           <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:1px;">${setor}</span>
         </div>
         <div class="proto-td">${periodoHtml}</div>
-        <div class="proto-td">
-          ${retornaHtml}
-          ${diasChip}
-        </div>
-        <div class="proto-td">
-          <div class="proto-saldo-val" style="color:var(--text-sec);">${diasRestantes !== null ? diasRestantes : '—'}d</div>
-          <div class="proto-saldo-sub">restantes</div>
-          <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:60px;">
-            <div style="height:3px;border-radius:2px;background:var(--green);width:${ativo ? Math.min(100, Math.round(((ativo.dias - (diasRestantes||0)) / ativo.dias) * 100)) : 0}%;"></div>
-          </div>
-        </div>
+        <div class="proto-td">${retornoHtml}</div>
       </div>`;
+
     } else {
-      // ── Layout padrão ─────────────────────────────────────────────────────
-      const agendHtml = reg.lancamentos.length
-        ? reg.lancamentos.map(l => `<span style="display:block;font-size:11px;white-space:nowrap;">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>`).join('')
+      // ── Layout padrão (Todos / Sem agendamento / Aguard. aprovação) ───────
+      // Agendamento mais relevante: ativo hoje > próximo futuro > último
+      const ativo   = reg.lancamentos.find(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim);
+      const futuro  = reg.lancamentos.filter(l => l.inicio && l.inicio > HOJE).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
+      const passado = reg.lancamentos.filter(l => l.fim && l.fim < HOJE).sort((a,b) => b.fim.localeCompare(a.fim))[0];
+      const lRef    = ativo || futuro || passado;
+      const agendHtml = lRef
+        ? `<span style="font-size:11px;white-space:nowrap;">${formatDate(lRef.inicio)} → ${formatDate(lRef.fim)} · ${lRef.dias}d</span>
+           ${reg.lancamentos.length > 1 ? `<span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">+${reg.lancamentos.length - 1} período${reg.lancamentos.length > 2 ? 's' : ''}</span>` : ''}`
         : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
 
       html += `<div class="proto-table-row" onclick="abrirDrawer('${key}')">
@@ -3640,14 +3646,14 @@ function renderListaAnual() {
           <span style="display:block;font-size:10px;color:var(--text-ter);margin-top:1px;">${setor}</span>
         </div>
         <div class="proto-td">
-          <span style="display:block;font-size:10px;font-weight:600;color:var(--text-ter);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:2px;">PA ${paAno}</span>
+          <span style="display:block;font-size:10px;color:var(--text-ter);margin-bottom:2px;">PA ${paAno}</span>
           <span style="font-size:11px;color:var(--text-sec);white-space:nowrap;">${paStr}</span>
         </div>
         <div class="proto-td">${agendHtml}</div>
         <div class="proto-td">
           <div class="proto-saldo-val" style="color:${saldoColor};">${saldo}d</div>
           <div class="proto-saldo-sub">de ${total}d</div>
-          <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:60px;">
+          <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:52px;">
             <div style="height:3px;border-radius:2px;background:${saldo<=0?'var(--green)':saldo<=5?'var(--red)':'var(--blue)'};width:${pct}%;"></div>
           </div>
         </div>
