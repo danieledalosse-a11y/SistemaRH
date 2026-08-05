@@ -668,6 +668,10 @@
           <div class="field"><label>Data expedição RG</label><input type="date" id="df-rgData"></div>
           <div class="field"><label>PIS / PASEP</label><input type="text" id="df-pis" placeholder="000.00000.00-0" maxlength="14" oninput="mascaraPIS(this)"></div>
           <div class="field"><label>CNH (nº)</label><input type="text" id="df-cnh" placeholder="Não possui"></div>
+          <div class="field"><label>CNH categoria</label><input type="text" id="df-cnhCategoria" placeholder="Ex: AB"></div>
+          <div class="field"><label>CNH 1ª habilitação</label><input type="date" id="df-cnhPrimeiraHab"></div>
+          <div class="field"><label>CNH emissão</label><input type="date" id="df-cnhEmissao"></div>
+          <div class="field"><label>CNH validade</label><input type="date" id="df-cnhValidade"></div>
         </div>
       </div>
       <div class="drawer-section">
@@ -676,7 +680,8 @@
           <div class="field"><label>CTPS (nº)</label><input type="text" id="df-ctps" placeholder="Número"></div>
           <div class="field"><label>CTPS (série)</label><input type="text" id="df-ctpsSerie" placeholder="Série"></div>
           <div class="field"><label>Título de eleitor</label><input type="text" id="df-titulo" placeholder="Número"></div>
-          <div class="field"><label>Zona / Seção</label><input type="text" id="df-tituloZona" placeholder="Ex: 192 / 0212"></div>
+          <div class="field"><label>Zona eleitoral</label><input type="text" id="df-tituloZona" placeholder="Ex: 192"></div>
+          <div class="field"><label>Seção eleitoral</label><input type="text" id="df-tituloSecao" placeholder="Ex: 0212"></div>
         </div>
       </div>
     </div>
@@ -710,6 +715,15 @@
         </div>
       </div>
       <div class="drawer-section">
+        <div class="drawer-section-title">Cônjuge / Companheiro(a)</div>
+        <div class="field-grid">
+          <div class="field"><label>Nome</label><input type="text" id="df-conjugeNome" placeholder="Nome completo"></div>
+          <div class="field"><label>CPF</label><input type="text" id="df-conjugeCpf" placeholder="000.000.000-00"></div>
+          <div class="field"><label>RG</label><input type="text" id="df-conjugeRg" placeholder="Número do RG"></div>
+          <div class="field"><label>Data de nascimento</label><input type="date" id="df-conjugeNascimento"></div>
+        </div>
+      </div>
+      <div class="drawer-section">
         <div class="drawer-section-title">Dependentes / Filhos</div>
         <div class="dep-list" id="depList"></div>
         <button class="btn-add-dep" onclick="adicionarDependente()">+ Adicionar dependente</button>
@@ -729,6 +743,7 @@
             </select>
           </div>
           <div class="field"><label>Passes por dia</label><input type="number" id="df-vtPasses" placeholder="Ex: 2" min="0" max="10"></div>
+          <div class="field"><label>Nº do cartão VT</label><input type="text" id="df-vtCartao" placeholder="Número do cartão"></div>
         </div>
         <div class="field-grid full" style="margin-top:12px;">
           <div class="field"><label>Linha / Itinerário</label><input type="text" id="df-vtLinha" placeholder="Ex: Maringá-Sarandi"></div>
@@ -1225,10 +1240,19 @@ function supabaseToJS(row) {
     rgData:           row.rg_data || '',
     pis:              row.pis || '',
     cnh:              row.cnh || '',
+    cnhCategoria:     row.cnh_categoria || '',
+    cnhPrimeiraHab:   row.cnh_primeira_hab || '',
+    cnhEmissao:       row.cnh_emissao || '',
+    cnhValidade:      row.cnh_validade || '',
     ctps:             row.ctps || '',
     ctpsSerie:        row.ctps_serie || '',
     titulo:           row.titulo_eleitor || '',
     tituloZona:       row.titulo_zona || '',
+    tituloSecao:      row.titulo_secao || '',
+    conjugeNome:      row.conjuge_nome || '',
+    conjugeCpf:       row.conjuge_cpf || '',
+    conjugeRg:        row.conjuge_rg || '',
+    conjugeNascimento: row.conjuge_nascimento || '',
     mae:              row.nome_mae || '',
     pai:              row.nome_pai || '',
     naturalidade:     row.cidade_nascimento || row.naturalidade || '',
@@ -1266,6 +1290,7 @@ function supabaseToJS(row) {
     vt:               row.vt || '',
     vtPasses:         row.vt_passes || '',
     vtLinha:          row.vt_linha || '',
+    vtCartao:         row.vt_cartao || '',
     banco:            row.banco || '',
     bancoCodigo:      row.banco_codigo || '',
     agencia:          row.agencia || '',
@@ -1799,11 +1824,13 @@ function novoColaborador() {
   ['df-codigo','df-admissao','df-demissao','df-motivo','df-nome','df-cargo',
    'df-setor','df-empresa-atuacao','df-gestor','df-nascimento',
    'df-cpf','df-rg','df-rgOrgao','df-rgData','df-pis','df-cnh',
-   'df-ctps','df-ctpsSerie','df-titulo','df-tituloZona',
+   'df-cnhCategoria','df-cnhPrimeiraHab','df-cnhEmissao','df-cnhValidade',
+   'df-ctps','df-ctpsSerie','df-titulo','df-tituloZona','df-tituloSecao',
    'df-celular','df-whatsapp','df-telRecado','df-nomeRecado','df-email',
    'df-cep','df-estado','df-rua','df-numero','df-complemento','df-bairro','df-cidade',
    'df-pai','df-mae','df-salario','df-cbo','df-dataAviso','df-vencAviso',
-   'df-vtPasses','df-vtLinha','df-banco','df-agencia','df-conta','df-hobby']
+   'df-vtPasses','df-vtLinha','df-vtCartao','df-banco','df-agencia','df-conta','df-hobby',
+   'df-conjugeNome','df-conjugeCpf','df-conjugeRg','df-conjugeNascimento']
   .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 
   // Selects → valor padrão
@@ -1940,16 +1967,25 @@ function abrirFicha(idx) {
   document.getElementById('df-rgData').value        = c.rgData || '';
   document.getElementById('df-pis').value           = c.pis || '';
   document.getElementById('df-cnh').value           = c.cnh || '';
+  document.getElementById('df-cnhCategoria').value  = c.cnhCategoria || '';
+  document.getElementById('df-cnhPrimeiraHab').value = c.cnhPrimeiraHab || '';
+  document.getElementById('df-cnhEmissao').value    = c.cnhEmissao || '';
+  document.getElementById('df-cnhValidade').value   = c.cnhValidade || '';
   document.getElementById('df-ctps').value          = c.ctps || '';
   document.getElementById('df-ctpsSerie').value     = c.ctpsSerie || '';
   document.getElementById('df-titulo').value        = c.titulo || '';
   document.getElementById('df-tituloZona').value    = c.tituloZona || '';
+  document.getElementById('df-tituloSecao').value   = c.tituloSecao || '';
 
   // Aba Família
   document.getElementById('df-pai').value           = c.pai || '';
   document.getElementById('df-mae').value           = c.mae || '';
   document.getElementById('df-estadoCivil').value   = c.estadoCivil || '';
   document.getElementById('df-possuiFilhos').value  = c.possuiFilhos || '';
+  document.getElementById('df-conjugeNome').value      = c.conjugeNome || '';
+  document.getElementById('df-conjugeCpf').value       = c.conjugeCpf || '';
+  document.getElementById('df-conjugeRg').value        = c.conjugeRg || '';
+  document.getElementById('df-conjugeNascimento').value = c.conjugeNascimento || '';
   renderDependentes(c.dependentesLista || []);
 
   // Aba Remuneração
@@ -1967,6 +2003,7 @@ function abrirFicha(idx) {
   document.getElementById('df-vt').value            = c.vt || '';
   document.getElementById('df-vtPasses').value      = c.vtPasses || '';
   document.getElementById('df-vtLinha').value       = c.vtLinha || '';
+  document.getElementById('df-vtCartao').value      = c.vtCartao || '';
   document.getElementById('df-banco').value          = c.banco || '';
   document.getElementById('df-bancoCodigo').value   = c.bancoCodigo || '';
   const bi = document.getElementById('df-bancoInfo');
@@ -2268,11 +2305,20 @@ function salvarFicha() {
   c.ctpsSerie         = document.getElementById('df-ctpsSerie').value.trim();
   c.titulo            = document.getElementById('df-titulo').value.trim();
   c.tituloZona        = document.getElementById('df-tituloZona').value.trim();
+  c.tituloSecao       = document.getElementById('df-tituloSecao').value.trim();
+  c.cnhCategoria      = document.getElementById('df-cnhCategoria').value.trim();
+  c.cnhPrimeiraHab    = document.getElementById('df-cnhPrimeiraHab').value;
+  c.cnhEmissao        = document.getElementById('df-cnhEmissao').value;
+  c.cnhValidade       = document.getElementById('df-cnhValidade').value;
   // Família
   c.pai               = document.getElementById('df-pai').value.trim();
   c.mae               = document.getElementById('df-mae').value.trim();
   c.estadoCivil       = document.getElementById('df-estadoCivil').value;
   c.possuiFilhos      = document.getElementById('df-possuiFilhos').value;
+  c.conjugeNome       = document.getElementById('df-conjugeNome').value.trim();
+  c.conjugeCpf        = document.getElementById('df-conjugeCpf').value.trim();
+  c.conjugeRg         = document.getElementById('df-conjugeRg').value.trim();
+  c.conjugeNascimento = document.getElementById('df-conjugeNascimento').value;
   c.dependentesLista  = coletarDependentes();
   c.dependentes       = c.dependentesLista.length || parseInt(c.dependentes) || 0;
   // Remuneração
@@ -2292,6 +2338,7 @@ function salvarFicha() {
   c.vt                = document.getElementById('df-vt').value;
   c.vtPasses          = document.getElementById('df-vtPasses').value;
   c.vtLinha           = document.getElementById('df-vtLinha').value.trim();
+  c.vtCartao          = document.getElementById('df-vtCartao').value.trim();
   c.banco             = document.getElementById('df-banco').value.trim();
   c.bancoCodigo       = document.getElementById('df-bancoCodigo').value;
   c.agencia           = document.getElementById('df-agencia').value.trim();
@@ -2363,6 +2410,15 @@ function salvarFicha() {
       ctps_serie:         c.ctpsSerie || null,
       titulo_eleitor:     c.titulo || null,
       titulo_zona:        c.tituloZona || null,
+      titulo_secao:       c.tituloSecao || null,
+      cnh_categoria:      c.cnhCategoria || null,
+      cnh_primeira_hab:   c.cnhPrimeiraHab || null,
+      cnh_emissao:        c.cnhEmissao || null,
+      cnh_validade:       c.cnhValidade || null,
+      conjuge_nome:       c.conjugeNome || null,
+      conjuge_cpf:        c.conjugeCpf || null,
+      conjuge_rg:         c.conjugeRg || null,
+      conjuge_nascimento: c.conjugeNascimento || null,
       // Remuneração
       cbo:                c.cbo || null,
       jornada:            c.jornada || null,
@@ -2377,6 +2433,7 @@ function salvarFicha() {
       vt:                 c.vt || null,
       vt_passes:          c.vtPasses ? parseInt(c.vtPasses) : null,
       vt_linha:           c.vtLinha || null,
+      vt_cartao:          c.vtCartao || null,
       banco:              c.banco || null,
       banco_codigo:       c.bancoCodigo || null,
       agencia:            c.agencia || null,
