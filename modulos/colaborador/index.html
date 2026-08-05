@@ -238,8 +238,12 @@
 /* ── Supabase ── */
 const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1anRieHdzc2lvZmlpYWxuYmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNjMxMzUsImV4cCI6MjA2MDkzOTEzNX0.KdWamfJDm3i0mPJN59-OKqFCzR4h4GVgxJCwvknH7SA';
-const HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
-async function sbGet(path) { const r = await fetch(SB_URL+path,{headers:HDR}); return r.ok ? r.json() : []; }
+function getAuthHeaders() {
+  const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+  const token = sess.access_token || SB_KEY;
+  return { apikey: SB_KEY, Authorization: `Bearer ${token}` };
+}
+async function sbGet(path) { const r = await fetch(SB_URL+path,{headers:getAuthHeaders()}); return r.ok ? r.json() : []; }
 
 /* ── Auth ── */
 function getSession() {
