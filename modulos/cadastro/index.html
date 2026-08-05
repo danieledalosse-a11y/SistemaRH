@@ -359,10 +359,22 @@
 <div class="drawer-overlay" id="drawerOverlay" onclick="overlayClick(event)">
 <div class="drawer" id="drawer">
   <div class="drawer-header">
-    <div class="avatar avatar-n" id="drw-avatar"></div>
+    <div style="position:relative;flex-shrink:0;cursor:pointer;" onclick="document.getElementById('fotoInput').click()" title="Clique para alterar a foto">
+      <div class="avatar avatar-n" id="drw-avatar" style="width:44px;height:44px;font-size:15px;margin:0;overflow:hidden;"></div>
+      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,0);display:flex;align-items:center;justify-content:center;transition:background .18s;" id="fotoHover"
+           onmouseover="this.style.background='rgba(0,0,0,0.35)';document.getElementById('fotoCam').style.opacity='1'"
+           onmouseout="this.style.background='rgba(0,0,0,0)';document.getElementById('fotoCam').style.opacity='0'">
+        <svg id="fotoCam" style="opacity:0;transition:opacity .18s;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      </div>
+    </div>
+    <input type="file" id="fotoInput" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadFotoColaborador(this)">
     <div class="drawer-header-info">
       <h2 id="drw-nome"></h2>
       <span id="drw-sub"></span>
+    </div>
+    <div id="fotoStatus" style="font-size:11px;color:#667085;margin-right:8px;display:none;align-items:center;gap:4px;">
+      <div style="width:12px;height:12px;border:2px solid #E4E7EC;border-top-color:#101828;border-radius:50%;animation:spin .7s linear infinite;"></div>
+      Salvando...
     </div>
     <button class="drawer-close" onclick="fecharFicha()" title="Fechar">
       <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1243,6 +1255,7 @@ function supabaseToJS(row) {
     conta:            row.conta || '',
     tipoConta:        row.tipo_conta || '',
     hobby:            row.hobby || '',
+    fotoUrl:          row.foto_url || '',
     situacao:         ativo ? 'Ativo' : 'Inativo',
     aprendiz:         isAprendiz(cargo),
     historico:        [],
@@ -1837,7 +1850,14 @@ function abrirFicha(idx) {
   const avatarCls = c.sexo === 'M' ? 'avatar-m' : c.sexo === 'F' ? 'avatar-f' : 'avatar-n';
   const av = document.getElementById('drw-avatar');
   av.className = 'avatar ' + avatarCls;
-  av.textContent = iniciais(c.nome);
+  if (c.fotoUrl) {
+    av.innerHTML = `<img src="${c.fotoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="${c.nome}">`;
+    av.style.background = 'none';
+  } else {
+    av.innerHTML = '';
+    av.textContent = iniciais(c.nome);
+    av.style.background = '';
+  }
   document.getElementById('drw-nome').textContent = c.nome;
   document.getElementById('drw-sub').textContent = (c.cargo || '—') + ' · ' + (c.setor?.replace(/^\d+\s*-\s*/,'') || '—');
 
@@ -1942,6 +1962,70 @@ function abrirFicha(idx) {
 
   document.getElementById('drawerOverlay').classList.add('open');
   document.getElementById('drawer').classList.add('open');
+}
+
+async function uploadFotoColaborador(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert('A imagem deve ter no máximo 5 MB.'); return; }
+
+  const c = COLABORADORES[_fichaIdx];
+  if (!c || !c.codigo) return;
+
+  const ext    = file.name.split('.').pop().toLowerCase() || 'jpg';
+  const bucket = 'fotos-colaboradores';
+  const path   = `${c.codigo}.${ext}`;
+
+  const statusEl = document.getElementById('fotoStatus');
+  statusEl.style.display = 'flex';
+
+  const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+  const authKey = sess.access_token || SB_KEY;
+
+  try {
+    const upResp = await fetch(`${SB_URL}/storage/v1/object/${bucket}/${path}`, {
+      method: 'PUT',
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': `Bearer ${authKey}`,
+        'Content-Type': file.type,
+        'x-upsert': 'true',
+      },
+      body: file,
+    });
+
+    if (!upResp.ok) {
+      const err = await upResp.text();
+      console.error('Upload erro:', err);
+      statusEl.style.display = 'none';
+      alert('Erro ao enviar a foto. Verifique se o bucket "fotos-colaboradores" existe no Supabase com acesso público.');
+      return;
+    }
+
+    const fotoUrl = `${SB_URL}/storage/v1/object/public/${bucket}/${path}?t=${Date.now()}`;
+
+    // salvar no banco
+    await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${c._sbId}`, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ foto_url: fotoUrl }),
+    });
+
+    // atualizar local
+    c.fotoUrl = fotoUrl;
+
+    // atualizar avatar no drawer
+    const av = document.getElementById('drw-avatar');
+    av.innerHTML = `<img src="${fotoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="${c.nome}">`;
+    av.style.background = 'none';
+
+  } catch (e) {
+    console.error(e);
+    alert('Erro inesperado ao salvar a foto.');
+  } finally {
+    statusEl.style.display = 'none';
+    input.value = '';
+  }
 }
 
 function overlayClick(e) {
