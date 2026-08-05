@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Desenvolvimento & Performance — Sistema RH</title>
+<style>
+  :root {
+    --bg: #F0F2F5;
+    --surface: #ffffff;
+    --border: #E4E7EC;
+    --border-light: #F0F2F5;
+    --text: #101828;
+    --text-sec: #667085;
+    --text-ter: #98A2B3;
+    --accent: #101828;
+    --green: #027A48;  --green-bg: #ECFDF3;
+    --red:   #B42318;  --red-bg:   #FEF3F2;
+    --blue:  #1849A9;  --blue-bg:  #EFF4FF;
+    --amber: #92400E;  --amber-bg: #FFFAEB;
+    --purple:#5925DC;  --purple-bg:#F4F3FF;
+    --radius: 12px;
+    --shadow-sm: 0 1px 2px rgba(16,24,40,0.05);
+    --shadow-md: 0 4px 8px -2px rgba(16,24,40,0.1), 0 2px 4px -2px rgba(16,24,40,0.06);
+    --shadow-xl: 0 20px 40px -8px rgba(16,24,40,0.18), 0 8px 16px -4px rgba(16,24,40,0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; -webkit-font-smoothing: antialiased; }
+
+  /* ── topbar ── */
+  .topbar { background: var(--accent); color: #fff; padding: 0 28px; height: 56px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 0 rgba(255,255,255,0.08); }
+  .topbar-left { display: flex; align-items: center; gap: 8px; }
+  .topbar-logo { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; text-decoration: none; color: rgba(255,255,255,0.7); transition: color 0.15s; }
+  .topbar-logo:hover { color: #fff; }
+  .topbar-sep { color: rgba(255,255,255,0.25); font-size: 16px; margin: 0 4px; }
+  .topbar-mod { font-size: 15px; font-weight: 600; color: #fff; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .topbar-user-name { font-size: 13px; color: rgba(255,255,255,0.6); }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: #1570EF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .btn-icon-top { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.5); display: flex; align-items: center; padding: 4px; border-radius: 6px; transition: color 0.15s; }
+  .btn-icon-top:hover { color: #fff; }
+
+  /* ── tabs ── */
+  .mod-tabs { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; display: flex; gap: 0; box-shadow: var(--shadow-sm); }
+  .mod-tab { padding: 15px 18px; font-size: 13px; font-weight: 500; color: var(--text-sec); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; transition: color 0.15s; }
+  .mod-tab:hover { color: var(--text); }
+  .mod-tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+  .mod-tab .tab-badge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--red-bg); color: var(--red); font-size: 10px; font-weight: 700; margin-left: 6px; }
+
+  /* ── container ── */
+  .container { max-width: 1320px; margin: 0 auto; padding: 28px 24px; }
+
+  /* ── section ── */
+  .sec { display: none; }
+  .sec.active { display: block; }
+
+  /* ── cards ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .card-sub { font-size: 13px; color: var(--text-sec); margin-bottom: 20px; }
+
+  /* ── metrics ── */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 24px; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
+  .metric::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .metric.m-purple::before { background: var(--purple); }
+  .metric.m-green::before  { background: var(--green); }
+  .metric.m-amber::before  { background: #F79009; }
+  .metric.m-blue::before   { background: var(--blue); }
+  .metric.m-red::before    { background: var(--red); }
+  .metric-val { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; margin-top: 4px; }
+  .metric-label { font-size: 12px; color: var(--text-sec); margin-top: 6px; font-weight: 500; }
+  .c-purple { color: var(--purple); }
+  .c-green  { color: var(--green); }
+  .c-amber  { color: var(--amber); }
+  .c-blue   { color: var(--blue); }
+  .c-red    { color: var(--red); }
+
+  /* ── ciclo selector ── */
+  .ciclo-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .ciclo-bar label { font-size: 13px; font-weight: 500; color: var(--text-sec); white-space: nowrap; }
+  .ciclo-select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface); cursor: pointer; }
+  .ciclo-select:focus { outline: none; border-color: var(--accent); }
+  .ciclo-badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .ciclo-badge.aberto    { background: #ECFDF3; color: var(--green); }
+  .ciclo-badge.fechado   { background: var(--border-light); color: var(--text-ter); }
+  .ciclo-badge.rascunho  { background: var(--amber-bg); color: var(--amber); }
+
+  /* ── toolbar ── */
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .search-box { flex: 1; min-width: 200px; max-width: 320px; display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+  .search-box svg { flex-shrink: 0; color: var(--text-ter); }
+  .search-box input { border: none; outline: none; font-size: 13px; font-family: inherit; color: var(--text); width: 100%; background: transparent; }
+  .search-box input::placeholder { color: var(--text-ter); }
+  .filter-select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface); cursor: pointer; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; transition: all 0.15s; border: none; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #1D2939; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--bg); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .ml-auto { margin-left: auto; }
+
+  /* ── proto-table ── */
+  .proto-table { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .proto-header { display: grid; background: #F9FAFB; border-bottom: 1px solid var(--border); }
+  .proto-th { padding: 10px 16px; font-size: 11px; font-weight: 600; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+  .proto-row { display: grid; border-bottom: 1px solid var(--border-light); padding: 14px 16px; align-items: center; cursor: pointer; transition: background 0.12s; }
+  .proto-row:last-child { border-bottom: none; }
+  .proto-row:hover { background: #FAFAFA; }
+  .grid-colab { grid-template-columns: 2.2fr 1.5fr 1fr 1fr 1fr 1fr; }
+
+  /* ── person cell ── */
+  .person-cell { display: flex; align-items: center; gap: 10px; }
+  .person-avatar { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; object-fit: cover; background: var(--blue-bg); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--blue); }
+  .person-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .person-cargo { font-size: 12px; color: var(--text-sec); }
+
+  /* ── status badge ── */
+  .sbadge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .sbadge-green  { background: var(--green-bg); color: var(--green); }
+  .sbadge-amber  { background: var(--amber-bg); color: var(--amber); }
+  .sbadge-blue   { background: var(--blue-bg);  color: var(--blue); }
+  .sbadge-red    { background: var(--red-bg);   color: var(--red); }
+  .sbadge-gray   { background: var(--bg);       color: var(--text-ter); border: 1px solid var(--border); }
+  .sbadge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* ── empty ── */
+  .empty-state { text-align: center; padding: 60px 24px; color: var(--text-sec); }
+  .empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; stroke: var(--text-ter); }
+  .empty-state p { font-size: 13px; }
+
+  /* ── ciclos list ── */
+  .ciclo-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 12px; box-shadow: var(--shadow-sm); display: flex; align-items: center; gap: 16px; }
+  .ciclo-info { flex: 1; min-width: 0; }
+  .ciclo-nome { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+  .ciclo-meta { font-size: 12px; color: var(--text-sec); }
+  .ciclo-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .ciclo-progress { margin-top: 10px; display: flex; gap: 20px; }
+  .ciclo-prog-item { font-size: 12px; color: var(--text-sec); }
+  .ciclo-prog-item strong { color: var(--text); font-weight: 600; }
+
+  /* ── competencias grid ── */
+  .comp-area { margin-bottom: 24px; }
+  .comp-area-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-ter); margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border-light); }
+  .comp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+  .comp-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; display: flex; align-items: flex-start; gap: 10px; box-shadow: var(--shadow-sm); }
+  .comp-item.inativo { opacity: 0.45; }
+  .comp-body { flex: 1; min-width: 0; }
+  .comp-nome { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .comp-desc { font-size: 12px; color: var(--text-sec); line-height: 1.5; }
+  .comp-toggle { background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--text-ter); transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
+  .comp-toggle:hover { background: var(--bg); color: var(--text); }
+
+  /* ── drawer overlay ── */
+  .drawer-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.3); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.22s; }
+  .drawer-overlay.open { opacity: 1; pointer-events: all; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 620px; max-width: 95vw; background: var(--surface); box-shadow: var(--shadow-xl); z-index: 101; transform: translateX(100%); transition: transform 0.28s cubic-bezier(0.4,0,0.2,1); display: flex; flex-direction: column; }
+  .drawer.open { transform: translateX(0); }
+
+  .drawer-head { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 14px; flex-shrink: 0; }
+  .drawer-person-photo { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; background: var(--blue-bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: var(--blue); border: 2px solid var(--border); }
+  .drawer-person-info { flex: 1; min-width: 0; }
+  .drawer-person-name { font-size: 17px; font-weight: 700; margin-bottom: 2px; }
+  .drawer-person-sub { font-size: 13px; color: var(--text-sec); }
+  .drawer-close { background: none; border: none; cursor: pointer; color: var(--text-ter); padding: 4px; border-radius: 6px; display: flex; align-items: center; transition: color 0.15s; flex-shrink: 0; margin-top: 2px; }
+  .drawer-close:hover { color: var(--text); }
+
+  .drawer-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 24px; flex-shrink: 0; }
+  .drawer-tab { padding: 12px 16px; font-size: 13px; font-weight: 500; color: var(--text-sec); border-bottom: 2px solid transparent; cursor: pointer; background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; white-space: nowrap; transition: color 0.15s; }
+  .drawer-tab:hover { color: var(--text); }
+  .drawer-tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+
+  .drawer-body { flex: 1; overflow-y: auto; padding: 24px; }
+  .drawer-sec { display: none; }
+  .drawer-sec.active { display: block; }
+  .drawer-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+
+  /* ── avaliação form ── */
+  .av-ciclo-label { font-size: 12px; color: var(--text-sec); margin-bottom: 16px; }
+  .av-ciclo-label strong { color: var(--text); }
+  .comp-eval-area { margin-bottom: 24px; }
+  .comp-eval-area-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-ter); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-light); }
+  .comp-eval-item { margin-bottom: 16px; }
+  .comp-eval-nome { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .comp-eval-desc { font-size: 12px; color: var(--text-sec); margin-bottom: 8px; }
+  .scale-row { display: flex; gap: 6px; }
+  .scale-btn { flex: 1; padding: 8px 4px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-ter); text-align: center; transition: all 0.15s; line-height: 1.3; }
+  .scale-btn:hover { border-color: #C4C9D4; color: var(--text); }
+  .scale-btn.sel-1 { border-color: var(--red);    background: var(--red-bg);    color: var(--red); }
+  .scale-btn.sel-2 { border-color: #F79009;        background: #FFFAEB;          color: #B45309; }
+  .scale-btn.sel-3 { border-color: #0BA5EC;        background: #F0F9FF;          color: #026AA2; }
+  .scale-btn.sel-4 { border-color: #16B364;        background: #F6FEF9;          color: #027A48; }
+  .scale-btn.sel-5 { border-color: var(--purple);  background: var(--purple-bg); color: var(--purple); }
+  .scale-label { font-size: 10px; display: block; margin-top: 2px; font-weight: 500; }
+  .obs-field { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; font-family: inherit; color: var(--text); resize: vertical; min-height: 72px; transition: border-color 0.15s; }
+  .obs-field:focus { outline: none; border-color: var(--accent); }
+  .obs-label { font-size: 12px; font-weight: 500; color: var(--text-sec); margin-bottom: 6px; margin-top: 20px; display: block; }
+  .av-status-info { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 14px; background: var(--bg); border-radius: 8px; }
+  .av-status-info span { font-size: 12px; color: var(--text-sec); }
+
+  /* ── PDI ── */
+  .pdi-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .pdi-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; display: flex; align-items: flex-start; gap: 10px; }
+  .pdi-check { width: 18px; height: 18px; border: 2px solid var(--border); border-radius: 5px; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin-top: 1px; }
+  .pdi-check.done { background: var(--green); border-color: var(--green); }
+  .pdi-check.done svg { display: block; }
+  .pdi-check svg { display: none; width: 10px; height: 10px; stroke: #fff; stroke-width: 3; }
+  .pdi-body { flex: 1; min-width: 0; }
+  .pdi-acao { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .pdi-acao.done-text { text-decoration: line-through; color: var(--text-ter); }
+  .pdi-meta { font-size: 12px; color: var(--text-sec); }
+  .pdi-del { background: none; border: none; cursor: pointer; color: var(--text-ter); padding: 2px; border-radius: 4px; transition: color 0.15s; display: flex; align-items: center; }
+  .pdi-del:hover { color: var(--red); }
+  .pdi-add-form { border: 1.5px dashed var(--border); border-radius: 8px; padding: 14px 16px; }
+  .pdi-add-form input, .pdi-add-form select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface); margin-bottom: 8px; }
+  .pdi-add-form input:focus, .pdi-add-form select:focus { outline: none; border-color: var(--accent); }
+  .pdi-add-row { display: flex; gap: 8px; }
+
+  /* ── histórico timeline ── */
+  .hist-timeline { position: relative; padding-left: 24px; }
+  .hist-timeline::before { content: ''; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--border); border-radius: 2px; }
+  .hist-item { position: relative; margin-bottom: 20px; }
+  .hist-dot { position: absolute; left: -24px; top: 4px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; }
+  .hist-dot.tipo-avaliacao { border-color: var(--purple); background: var(--purple-bg); }
+  .hist-dot.tipo-pdi       { border-color: var(--blue);   background: var(--blue-bg); }
+  .hist-dot.tipo-admissao  { border-color: var(--green);  background: var(--green-bg); }
+  .hist-dot.tipo-ferias    { border-color: #F79009;       background: #FFFAEB; }
+  .hist-dot.tipo-geral     { border-color: var(--text-ter); }
+  .hist-dot svg { width: 8px; height: 8px; }
+  .hist-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; box-shadow: var(--shadow-sm); }
+  .hist-titulo { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .hist-desc   { font-size: 12px; color: var(--text-sec); margin-bottom: 4px; }
+  .hist-date   { font-size: 11px; color: var(--text-ter); }
+
+  /* ── modal ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.35); z-index: 200; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius); padding: 28px; width: 500px; max-width: 95vw; box-shadow: var(--shadow-xl); }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .modal-sub   { font-size: 13px; color: var(--text-sec); margin-bottom: 20px; }
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text-sec); margin-bottom: 6px; display: block; }
+  .form-input { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 13px; font-family: inherit; color: var(--text); transition: border-color 0.15s; }
+  .form-input:focus { outline: none; border-color: var(--accent); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+  /* ── loader ── */
+  .loader { display: flex; align-items: center; justify-content: center; padding: 48px; }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── toast ── */
+  #toast { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .toast-item { padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 500; color: #fff; box-shadow: var(--shadow-md); animation: slideIn 0.25s ease; pointer-events: none; }
+  .toast-item.ok  { background: #101828; }
+  .toast-item.err { background: var(--red); }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── notas resumo ── */
+  .notas-mini { display: flex; gap: 4px; flex-wrap: wrap; }
+  .nota-chip { width: 22px; height: 22px; border-radius: 5px; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .nota-1 { background: var(--red-bg);    color: var(--red); }
+  .nota-2 { background: #FFFAEB;          color: #B45309; }
+  .nota-3 { background: #F0F9FF;          color: #026AA2; }
+  .nota-4 { background: #F6FEF9;          color: var(--green); }
+  .nota-5 { background: var(--purple-bg); color: var(--purple); }
+  .nota-vazia { background: var(--bg);    color: var(--text-ter); border: 1px solid var(--border); }
+  .media-chip { padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+
+  /* ── responsive ── */
+  @media (max-width: 900px) {
+    .grid-colab { grid-template-columns: 1.5fr 1fr 1fr; }
+    .grid-colab .col-hide { display: none; }
+    .drawer { width: 100%; }
+    .form-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a class="topbar-logo" href="../../index.html">Sistema RH</a>
+    <span class="topbar-sep">/</span>
+    <span class="topbar-mod">Desenvolvimento & Performance</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user-name" id="userName">—</span>
+    <div class="avatar" id="userAvatar">?</div>
+    <button class="btn-icon-top" onclick="logout()" title="Sair">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="mod-tabs">
+  <button class="mod-tab active" onclick="showSec('colaboradores',this)">Colaboradores</button>
+  <button class="mod-tab" onclick="showSec('ciclos',this)">Ciclos de Avaliação</button>
+  <button class="mod-tab" onclick="showSec('competencias',this)">Competências</button>
+</div>
+
+<div class="container">
+
+  <!-- ══ SEC: COLABORADORES ══ -->
+  <div id="sec-colaboradores" class="sec active">
+
+    <!-- métricas -->
+    <div class="metrics" id="metricsBar">
+      <div class="metric m-purple"><div class="metric-val c-purple" id="m-total">—</div><div class="metric-label">Colaboradores</div></div>
+      <div class="metric m-green" ><div class="metric-val c-green"  id="m-concluidos">—</div><div class="metric-label">Avaliações concluídas</div></div>
+      <div class="metric m-amber" ><div class="metric-val c-amber"  id="m-parciais">—</div><div class="metric-label">Em andamento</div></div>
+      <div class="metric m-red"   ><div class="metric-val c-red"    id="m-pendentes">—</div><div class="metric-label">Sem avaliação</div></div>
+    </div>
+
+    <!-- seletor de ciclo -->
+    <div class="ciclo-bar">
+      <label>Ciclo:</label>
+      <select class="ciclo-select" id="cicloSelect" onchange="onCicloChange()">
+        <option value="">— Selecione um ciclo —</option>
+      </select>
+      <span class="ciclo-badge" id="cicloBadge" style="display:none"></span>
+    </div>
+
+    <!-- toolbar -->
+    <div class="toolbar">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" placeholder="Buscar colaborador..." oninput="renderColabList()">
+      </div>
+      <select class="filter-select" id="filterStatus" onchange="renderColabList()">
+        <option value="">Todos os status</option>
+        <option value="concluido">Concluído</option>
+        <option value="parcial">Em andamento</option>
+        <option value="pendente">Pendente</option>
+      </select>
+      <select class="filter-select" id="filterSetor" onchange="renderColabList()">
+        <option value="">Todos os setores</option>
+      </select>
+    </div>
+
+    <!-- tabela -->
+    <div class="proto-table">
+      <div class="proto-header grid-colab">
+        <div class="proto-th">Colaborador</div>
+        <div class="proto-th">Setor / Empresa</div>
+        <div class="proto-th col-hide">Auto-avaliação</div>
+        <div class="proto-th col-hide">Avaliação gestor</div>
+        <div class="proto-th">Status</div>
+        <div class="proto-th">Média</div>
+      </div>
+      <div id="colabList">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SEC: CICLOS ══ -->
+  <div id="sec-ciclos" class="sec">
+    <div class="toolbar">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:600;margin-bottom:2px">Ciclos de Avaliação</div>
+        <div style="font-size:13px;color:var(--text-sec)">Gerencie os ciclos de avaliação de desempenho.</div>
+      </div>
+      <button class="btn btn-primary" onclick="abrirModalCiclo()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo ciclo
+      </button>
+    </div>
+    <div id="ciclosList">
+      <div class="loader"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- ══ SEC: COMPETÊNCIAS ══ -->
+  <div id="sec-competencias" class="sec">
+    <div class="toolbar">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:600;margin-bottom:2px">Biblioteca de Competências</div>
+        <div style="font-size:13px;color:var(--text-sec)">Competências disponíveis para os ciclos de avaliação.</div>
+      </div>
+    </div>
+    <div id="competenciasList">
+      <div class="loader"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ══ DRAWER: COLABORADOR ══ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="fecharDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="drawer-person-photo" id="drPhoto"></div>
+    <div class="drawer-person-info">
+      <div class="drawer-person-name" id="drNome">—</div>
+      <div class="drawer-person-sub" id="drSub">—</div>
+    </div>
+    <button class="drawer-close" onclick="fecharDrawer()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-tabs">
+    <button class="drawer-tab active" onclick="showDrawerTab('avaliacao',this)">Avaliação</button>
+    <button class="drawer-tab" onclick="showDrawerTab('pdi',this)">PDI</button>
+    <button class="drawer-tab" onclick="showDrawerTab('historico',this)">Histórico</button>
+  </div>
+  <div class="drawer-body">
+
+    <!-- tab: Avaliação -->
+    <div id="dtab-avaliacao" class="drawer-sec active">
+      <div id="avForm">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- tab: PDI -->
+    <div id="dtab-pdi" class="drawer-sec">
+      <div id="pdiForm">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- tab: Histórico -->
+    <div id="dtab-historico" class="drawer-sec">
+      <div id="histForm">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-secondary" onclick="fecharDrawer()">Fechar</button>
+    <button class="btn btn-primary" id="btnSalvarAv" onclick="salvarAvaliacao()">Salvar avaliação</button>
+  </div>
+</div>
+
+<!-- ══ MODAL: NOVO CICLO ══ -->
+<div class="modal-overlay" id="modalCiclo">
+  <div class="modal">
+    <div class="modal-title" id="modalCicloTitle">Novo Ciclo de Avaliação</div>
+    <div class="modal-sub">Defina o período e prazos do ciclo.</div>
+    <input type="hidden" id="cicloEditId">
+    <div class="form-group">
+      <label class="form-label">Nome do ciclo *</label>
+      <input class="form-input" id="cicloNome" placeholder="Ex: Avaliação Semestral 2025.2">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Início do período</label>
+        <input class="form-input" type="date" id="cicloPeriodoInicio">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fim do período</label>
+        <input class="form-input" type="date" id="cicloPeriodoFim">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Prazo auto-avaliação</label>
+        <input class="form-input" type="date" id="cicloPrazoAuto">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prazo avaliação gestor</label>
+        <input class="form-input" type="date" id="cicloPrazoGestor">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModalCiclo()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCiclo()">Salvar ciclo</button>
+    </div>
+  </div>
+</div>
+
+<!-- toast container -->
+<div id="toast"></div>
+
+<script>
+/* ─────────────────────────────────────────────
+   CONFIG SUPABASE
+───────────────────────────────────────────── */
+const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1anRieHdzc2lvZmlpYWxuYmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNjMxMzUsImV4cCI6MjA2MDkzOTEzNX0.KdWamfJDm3i0mPJN59-OKqFCzR4h4GVgxJCwvknH7SA';
+const HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
+
+async function sbGet(path)          { const r = await fetch(SB_URL+path,{headers:HDR}); return r.ok ? r.json() : []; }
+async function sbPost(path,body)    { const r = await fetch(SB_URL+path,{method:'POST',  headers:HDR,body:JSON.stringify(body)}); return r.ok ? r.json() : null; }
+async function sbPatch(path,body)   { const r = await fetch(SB_URL+path,{method:'PATCH', headers:HDR,body:JSON.stringify(body)}); return r.ok ? r.json() : null; }
+async function sbDelete(path)       { const r = await fetch(SB_URL+path,{method:'DELETE',headers:{...HDR,Prefer:'return=minimal'}}); return r.ok; }
+
+/* ─────────────────────────────────────────────
+   AUTH
+───────────────────────────────────────────── */
+const SESSION_KEY = 'sistemarh_session';
+let _perfil = 'rh';
+
+function getSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
+}
+function logout() {
+  localStorage.removeItem(SESSION_KEY);
+  window.location.href = '../../login.html';
+}
+function initAuth() {
+  const s = getSession();
+  if (!s) { window.location.href = '../../login.html'; return; }
+  _perfil = s.perfil || 'rh';
+  const av = document.getElementById('userAvatar');
+  const un = document.getElementById('userName');
+  if (av) av.textContent = (s.nome||'?')[0].toUpperCase();
+  if (un) un.textContent = s.nome || s.email || '—';
+}
+
+/* ─────────────────────────────────────────────
+   ESTADO GLOBAL
+───────────────────────────────────────────── */
+let _colaboradores = [];
+let _ciclos        = [];
+let _cicloAtivo    = null;
+let _avaliacoes    = {};   // matricula -> avaliacao record
+let _competencias  = [];
+let _drawerMatricula = null;
+let _avNotas       = {};   // competencia_id -> nota atual no drawer
+let _avObs         = '';
+let _pdiAcoes      = [];   // [{acao,prazo,done}]
+let _historico     = [];
+
+/* ─────────────────────────────────────────────
+   NAVEGAÇÃO
+───────────────────────────────────────────── */
+function showSec(id, btn) {
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.mod-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'ciclos')        renderCiclos();
+  if (id === 'competencias')  renderCompetencias();
+}
+function showDrawerTab(id, btn) {
+  document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.drawer-sec').forEach(s => s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('dtab-'+id).classList.add('active');
+  const footerBtn = document.getElementById('btnSalvarAv');
+  if (footerBtn) footerBtn.style.display = id === 'avaliacao' ? '' : 'none';
+  if (id === 'pdi')      renderPDI();
+  if (id === 'historico') renderHistorico();
+}
+
+/* ─────────────────────────────────────────────
+   INIT
+───────────────────────────────────────────── */
+async function init() {
+  initAuth();
+  await Promise.all([
+    loadColaboradores(),
+    loadCiclos(),
+    loadCompetencias()
+  ]);
+  populateSetorFilter();
+  renderColabList();
+}
+
+async function loadColaboradores() {
+  _colaboradores = await sbGet('/rest/v1/colaboradores?select=matricula,nome,cargo,setor,empresa,situacao,foto_url&order=nome.asc');
+  _colaboradores = (_colaboradores || []).filter(c => c.situacao === 'ativo' || !c.situacao);
+}
+
+async function loadCiclos() {
+  _ciclos = await sbGet('/rest/v1/dev_ciclos?order=created_at.desc');
+  _ciclos = _ciclos || [];
+  populateCicloSelect();
+}
+
+async function loadCompetencias() {
+  _competencias = await sbGet('/rest/v1/dev_competencias?order=tipo.asc,area.asc,nome.asc');
+  _competencias = _competencias || [];
+}
+
+async function loadAvaliacoesCiclo(cicloId) {
+  if (!cicloId) { _avaliacoes = {}; return; }
+  const rows = await sbGet(`/rest/v1/dev_avaliacoes?ciclo_id=eq.${cicloId}&select=*`);
+  _avaliacoes = {};
+  (rows || []).forEach(r => { _avaliacoes[r.matricula_colaborador] = r; });
+}
+
+/* ─────────────────────────────────────────────
+   CICLO SELECT
+───────────────────────────────────────────── */
+function populateCicloSelect() {
+  const sel = document.getElementById('cicloSelect');
+  sel.innerHTML = '<option value="">— Selecione um ciclo —</option>';
+  _ciclos.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.nome;
+    if (c.status === 'aberto') opt.textContent += ' (ativo)';
+    sel.appendChild(opt);
+  });
+  // auto-selecionar ciclo aberto
+  const aberto = _ciclos.find(c => c.status === 'aberto');
+  if (aberto) { sel.value = aberto.id; onCicloChange(); }
+}
+
+async function onCicloChange() {
+  const id = document.getElementById('cicloSelect').value;
+  _cicloAtivo = _ciclos.find(c => String(c.id) === String(id)) || null;
+  const badge = document.getElementById('cicloBadge');
+  if (_cicloAtivo) {
+    badge.style.display = '';
+    badge.className = `ciclo-badge ${_cicloAtivo.status}`;
+    const labels = { aberto:'Ativo', fechado:'Encerrado', rascunho:'Rascunho' };
+    badge.textContent = labels[_cicloAtivo.status] || _cicloAtivo.status;
+  } else {
+    badge.style.display = 'none';
+  }
+  await loadAvaliacoesCiclo(id);
+  renderColabList();
+}
+
+/* ─────────────────────────────────────────────
+   LISTA DE COLABORADORES
+───────────────────────────────────────────── */
+function populateSetorFilter() {
+  const setores = [...new Set(_colaboradores.map(c => c.setor).filter(Boolean))].sort();
+  const sel = document.getElementById('filterSetor');
+  sel.innerHTML = '<option value="">Todos os setores</option>';
+  setores.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    sel.appendChild(opt);
+  });
+}
+
+function statusAvaliacao(matricula) {
+  const av = _avaliacoes[matricula];
+  if (!av) return 'pendente';
+  const notasAuto   = Object.keys(av.notas_auto   || {}).length;
+  const notasGestor = Object.keys(av.notas_gestor || {}).length;
+  if (av.status === 'concluido') return 'concluido';
+  if (notasAuto > 0 || notasGestor > 0) return 'parcial';
+  return 'pendente';
+}
+
+function mediaNotas(notas) {
+  const vals = Object.values(notas || {}).map(Number).filter(n => n > 0);
+  if (!vals.length) return null;
+  return (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);
+}
+
+function mediaBadge(media) {
+  if (!media) return '<span style="color:var(--text-ter);font-size:12px">—</span>';
+  const n = parseFloat(media);
+  const cls = n >= 4.5 ? 'nota-5' : n >= 3.5 ? 'nota-4' : n >= 2.5 ? 'nota-3' : n >= 1.5 ? 'nota-2' : 'nota-1';
+  return `<span class="media-chip ${cls}">${media}</span>`;
+}
+
+function renderColabList() {
+  const q     = (document.getElementById('searchInput').value||'').toLowerCase();
+  const fSt   = document.getElementById('filterStatus').value;
+  const fSet  = document.getElementById('filterSetor').value;
+
+  let list = _colaboradores.filter(c => {
+    if (q && !(c.nome||'').toLowerCase().includes(q) && !(c.cargo||'').toLowerCase().includes(q)) return false;
+    if (fSet && c.setor !== fSet) return false;
+    if (fSt) {
+      const st = statusAvaliacao(c.matricula);
+      if (st !== fSt) return false;
+    }
+    return true;
+  });
+
+  // métricas
+  let concluidos=0, parciais=0, pendentes=0;
+  _colaboradores.forEach(c => {
+    const st = statusAvaliacao(c.matricula);
+    if (st==='concluido') concluidos++;
+    else if (st==='parcial') parciais++;
+    else pendentes++;
+  });
+  document.getElementById('m-total').textContent     = _colaboradores.length;
+  document.getElementById('m-concluidos').textContent = concluidos;
+  document.getElementById('m-parciais').textContent   = parciais;
+  document.getElementById('m-pendentes').textContent  = pendentes;
+
+  if (!list.length) {
+    document.getElementById('colabList').innerHTML = `
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <p>Nenhum colaborador encontrado.</p>
+      </div>`;
+    return;
+  }
+
+  const html = list.map(c => {
+    const st   = statusAvaliacao(c.matricula);
+    const av   = _avaliacoes[c.matricula];
+    const ini  = c.nome ? c.nome.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() : '?';
+    const foto = c.foto_url
+      ? `<img src="${c.foto_url}" class="person-avatar" style="background:none;" alt="${c.nome}">`
+      : `<div class="person-avatar">${ini}</div>`;
+
+    const stBadge = {
+      concluido: `<span class="sbadge sbadge-green"><span class="sbadge-dot"></span>Concluído</span>`,
+      parcial:   `<span class="sbadge sbadge-amber"><span class="sbadge-dot"></span>Em andamento</span>`,
+      pendente:  `<span class="sbadge sbadge-gray"><span class="sbadge-dot"></span>Pendente</span>`,
+    }[st];
+
+    const notasAuto   = av ? av.notas_auto   : {};
+    const notasGestor = av ? av.notas_gestor : {};
+    const autoStatus  = Object.keys(notasAuto).length   > 0 ? `<span class="sbadge sbadge-blue" style="font-size:11px">Preenchida</span>`  : `<span style="color:var(--text-ter);font-size:12px">—</span>`;
+    const gestStatus  = Object.keys(notasGestor).length > 0 ? `<span class="sbadge sbadge-blue" style="font-size:11px">Preenchida</span>`  : `<span style="color:var(--text-ter);font-size:12px">—</span>`;
+
+    const mediaAuto   = mediaNotas(notasAuto);
+    const mediaGestor = mediaNotas(notasGestor);
+    const mediaFinal  = mediaGestor || mediaAuto;
+
+    return `<div class="proto-row grid-colab" onclick="abrirDrawer('${c.matricula}')">
+      <div class="person-cell">
+        ${foto}
+        <div>
+          <div class="person-name">${c.nome||'—'}</div>
+          <div class="person-cargo">${c.cargo||'—'}</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:500">${c.setor||'—'}</div>
+        <div style="font-size:12px;color:var(--text-sec)">${c.empresa||'—'}</div>
+      </div>
+      <div class="col-hide">${autoStatus}</div>
+      <div class="col-hide">${gestStatus}</div>
+      <div>${stBadge}</div>
+      <div>${mediaBadge(mediaFinal)}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('colabList').innerHTML = html;
+}
+
+/* ─────────────────────────────────────────────
+   DRAWER COLABORADOR
+───────────────────────────────────────────── */
+async function abrirDrawer(matricula) {
+  _drawerMatricula = matricula;
+  const c = _colaboradores.find(x => x.matricula === matricula);
+  if (!c) return;
+
+  // header
+  const ini = (c.nome||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const photoEl = document.getElementById('drPhoto');
+  if (c.foto_url) {
+    photoEl.innerHTML = `<img src="${c.foto_url}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;" alt="${c.nome}">`;
+  } else {
+    photoEl.textContent = ini;
+  }
+  document.getElementById('drNome').textContent = c.nome || '—';
+  document.getElementById('drSub').textContent  = [c.cargo, c.setor, c.empresa].filter(Boolean).join(' · ');
+
+  // abrir
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // reset tabs
+  document.querySelectorAll('.drawer-tab').forEach((t,i) => t.classList.toggle('active', i===0));
+  document.querySelectorAll('.drawer-sec').forEach((s,i) => s.classList.toggle('active', i===0));
+  document.getElementById('btnSalvarAv').style.display = '';
+
+  // carregar avaliação
+  await renderAvForm();
+}
+
+function fecharDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  document.body.style.overflow = '';
+  _drawerMatricula = null;
+}
+
+/* ─────────────────────────────────────────────
+   AVALIAÇÃO — FORM
+───────────────────────────────────────────── */
+async function renderAvForm() {
+  const el = document.getElementById('avForm');
+  if (!_cicloAtivo) {
+    el.innerHTML = `<div class="empty-state"><p>Selecione um ciclo de avaliação para avaliar este colaborador.</p></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
+
+  // competências do ciclo (ou todas se ciclo não tiver lista restrita)
+  const idsRestrito = _cicloAtivo.competencias_ids || [];
+  const compsCiclo  = idsRestrito.length
+    ? _competencias.filter(c => idsRestrito.includes(c.id) && c.ativo)
+    : _competencias.filter(c => c.ativo);
+
+  // notas atuais
+  const av = _avaliacoes[_drawerMatricula];
+  _avNotas = { ...(av ? av.notas_auto : {}) };
+  _avObs   = av ? (av.obs_auto || '') : '';
+
+  if (!compsCiclo.length) {
+    el.innerHTML = `<div class="empty-state"><p>Nenhuma competência ativa neste ciclo.</p></div>`;
+    return;
+  }
+
+  // agrupar por área
+  const areas = {};
+  compsCiclo.forEach(c => {
+    const k = c.tipo === 'comportamental' ? '⬥ Comportamentais' : (c.area || 'Outras');
+    if (!areas[k]) areas[k] = [];
+    areas[k].push(c);
+  });
+
+  const LABELS = ['','Insatisfatório','Em desenvolvimento','Dentro do esperado','Acima do esperado','Referência'];
+
+  let html = `<div class="av-ciclo-label">Ciclo: <strong>${_cicloAtivo.nome}</strong></div>`;
+  if (av) {
+    const st = av.status === 'concluido' ? '<span class="sbadge sbadge-green"><span class="sbadge-dot"></span>Concluído</span>' : '<span class="sbadge sbadge-amber"><span class="sbadge-dot"></span>Em andamento</span>';
+    html += `<div class="av-status-info"><span>Status da avaliação</span>${st}</div>`;
+  }
+
+  Object.entries(areas).forEach(([area, comps]) => {
+    html += `<div class="comp-eval-area"><div class="comp-eval-area-title">${area}</div>`;
+    comps.forEach(comp => {
+      const nota = parseInt(_avNotas[comp.id] || 0);
+      html += `<div class="comp-eval-item">
+        <div class="comp-eval-nome">${comp.nome}</div>
+        ${comp.descricao ? `<div class="comp-eval-desc">${comp.descricao}</div>` : ''}
+        <div class="scale-row">
+          ${[1,2,3,4,5].map(n => {
+            const sel = nota === n ? `sel-${n}` : '';
+            return `<button class="scale-btn ${sel}" onclick="selecionarNota(${comp.id},${n},this)">
+              ${n}<span class="scale-label">${LABELS[n]}</span>
+            </button>`;
+          }).join('')}
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  html += `<label class="obs-label">Observações (auto-avaliação)</label>
+    <textarea class="obs-field" id="avObs" placeholder="Comentários gerais sobre seu desempenho no período...">${_avObs}</textarea>`;
+
+  el.innerHTML = html;
+}
+
+function selecionarNota(compId, nota, btnEl) {
+  _avNotas[compId] = nota;
+  // atualiza visual dos botões do grupo
+  const row = btnEl.closest('.scale-row');
+  row.querySelectorAll('.scale-btn').forEach((b, i) => {
+    b.className = 'scale-btn' + (i+1 === nota ? ` sel-${nota}` : '');
+  });
+}
+
+async function salvarAvaliacao() {
+  if (!_cicloAtivo || !_drawerMatricula) return;
+  _avObs = (document.getElementById('avObs') ? document.getElementById('avObs').value : '');
+  const btn = document.getElementById('btnSalvarAv');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  const av = _avaliacoes[_drawerMatricula];
+  const body = {
+    ciclo_id: _cicloAtivo.id,
+    matricula_colaborador: _drawerMatricula,
+    notas_auto: _avNotas,
+    obs_auto: _avObs,
+    status: 'em_andamento',
+    updated_at: new Date().toISOString()
+  };
+
+  let ok;
+  if (av) {
+    ok = await sbPatch(`/rest/v1/dev_avaliacoes?id=eq.${av.id}`, body);
+  } else {
+    ok = await sbPost('/rest/v1/dev_avaliacoes', body);
+  }
+
+  btn.disabled = false; btn.textContent = 'Salvar avaliação';
+
+  if (ok) {
+    toast('Avaliação salva.');
+    await loadAvaliacoesCiclo(_cicloAtivo.id);
+    renderColabList();
+  } else {
+    toast('Erro ao salvar.', true);
+  }
+}
+
+/* ─────────────────────────────────────────────
+   PDI
+───────────────────────────────────────────── */
+async function renderPDI() {
+  const el = document.getElementById('pdiForm');
+  el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
+
+  const rows = await sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${_drawerMatricula}&select=*`);
+  const pdiRec = (rows || [])[0] || null;
+  _pdiAcoes = pdiRec ? (pdiRec.acoes || []) : [];
+
+  renderPDIHtml(el, pdiRec);
+}
+
+function renderPDIHtml(el, pdiRec) {
+  let html = `<div class="pdi-list" id="pdiItens">`;
+  if (!_pdiAcoes.length) {
+    html += `<div class="empty-state" style="padding:32px 0;"><p>Nenhuma ação de desenvolvimento cadastrada.</p></div>`;
+  } else {
+    _pdiAcoes.forEach((a, i) => {
+      const doneClass = a.done ? 'done' : '';
+      const textClass = a.done ? 'done-text' : '';
+      html += `<div class="pdi-item">
+        <div class="pdi-check ${doneClass}" onclick="togglePDIItem(${i})">
+          <svg viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3"/></svg>
+        </div>
+        <div class="pdi-body">
+          <div class="pdi-acao ${textClass}">${a.acao}</div>
+          <div class="pdi-meta">${a.prazo ? '📅 Prazo: ' + formatDate(a.prazo) : 'Sem prazo definido'}${a.area ? ' · ' + a.area : ''}</div>
+        </div>
+        <button class="pdi-del" onclick="deletePDIItem(${i})" title="Remover">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>`;
+    });
+  }
+  html += `</div>`;
+  html += `<div class="pdi-add-form" id="pdiAddForm">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text-sec)">Nova ação de desenvolvimento</div>
+    <input type="text" id="pdiNovaAcao" placeholder="Descrição da ação (ex: Participar do treinamento de liderança)">
+    <div class="pdi-add-row">
+      <input type="date" id="pdiNovaPrazo" style="flex:1">
+      <select id="pdiNovaArea" style="flex:1">
+        <option value="">Área (opcional)</option>
+        <option>Comportamental</option>
+        <option>Técnica</option>
+        <option>Liderança</option>
+        <option>Comunicação</option>
+        <option>Processos</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="adicionarPDIItem()">Adicionar</button>
+    </div>
+  </div>`;
+  el.innerHTML = html;
+}
+
+async function salvarPDI() {
+  const rows = await sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${_drawerMatricula}&select=id`);
+  const pdiRec = (rows || [])[0] || null;
+  const body = {
+    matricula_colaborador: _drawerMatricula,
+    ciclo_id: _cicloAtivo ? _cicloAtivo.id : null,
+    acoes: _pdiAcoes,
+    updated_at: new Date().toISOString()
+  };
+  if (pdiRec) {
+    await sbPatch(`/rest/v1/dev_pdi?id=eq.${pdiRec.id}`, body);
+  } else {
+    await sbPost('/rest/v1/dev_pdi', body);
+  }
+}
+
+function adicionarPDIItem() {
+  const acao  = (document.getElementById('pdiNovaAcao').value||'').trim();
+  const prazo = document.getElementById('pdiNovaPrazo').value;
+  const area  = document.getElementById('pdiNovaArea').value;
+  if (!acao) { toast('Informe a descrição da ação.', true); return; }
+  _pdiAcoes.push({ acao, prazo, area, done: false });
+  salvarPDI().then(() => { renderPDIHtml(document.getElementById('pdiForm'), null); toast('Ação adicionada.'); });
+}
+
+function togglePDIItem(i) {
+  _pdiAcoes[i].done = !_pdiAcoes[i].done;
+  salvarPDI().then(() => renderPDIHtml(document.getElementById('pdiForm'), null));
+}
+
+function deletePDIItem(i) {
+  _pdiAcoes.splice(i, 1);
+  salvarPDI().then(() => { renderPDIHtml(document.getElementById('pdiForm'), null); toast('Ação removida.'); });
+}
+
+/* ─────────────────────────────────────────────
+   HISTÓRICO
+───────────────────────────────────────────── */
+async function renderHistorico() {
+  const el = document.getElementById('histForm');
+  el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
+
+  const rows = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${_drawerMatricula}&order=data.desc&limit=50`);
+  _historico = rows || [];
+
+  if (!_historico.length) {
+    el.innerHTML = `<div class="empty-state"><p>Nenhum registro no histórico deste colaborador.</p></div>`;
+    return;
+  }
+
+  const TIPO_ICONS = {
+    avaliacao: `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 11.08 12 2 2 11.08"/><path d="M2 11l10 10 10-10"/></svg>`,
+    pdi:       `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+    admissao:  `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>`,
+    ferias:    `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+    geral:     `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="4"/></svg>`,
+  };
+
+  let html = `<div class="hist-timeline">`;
+  _historico.forEach(h => {
+    const tipo  = h.tipo || 'geral';
+    const icon  = TIPO_ICONS[tipo] || TIPO_ICONS.geral;
+    html += `<div class="hist-item">
+      <div class="hist-dot tipo-${tipo}">${icon}</div>
+      <div class="hist-content">
+        <div class="hist-titulo">${h.titulo}</div>
+        ${h.descricao ? `<div class="hist-desc">${h.descricao}</div>` : ''}
+        <div class="hist-date">${formatDate(h.data)}${h.created_by ? ' · ' + h.created_by : ''}</div>
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+/* ─────────────────────────────────────────────
+   CICLOS — RENDER
+───────────────────────────────────────────── */
+async function renderCiclos() {
+  await loadCiclos();
+  const el = document.getElementById('ciclosList');
+  if (!_ciclos.length) {
+    el.innerHTML = `<div class="empty-state"><p>Nenhum ciclo cadastrado. Crie o primeiro ciclo de avaliação.</p></div>`;
+    return;
+  }
+  const STATUS_LABEL = { aberto:'Ativo', fechado:'Encerrado', rascunho:'Rascunho' };
+  el.innerHTML = _ciclos.map(c => {
+    const dt = [c.periodo_inicio, c.periodo_fim].filter(Boolean).map(formatDate).join(' → ');
+    return `<div class="ciclo-card">
+      <div class="ciclo-info">
+        <div class="ciclo-nome">${c.nome}</div>
+        <div class="ciclo-meta">${dt || 'Período não definido'}${c.prazo_auto_avaliacao ? ' · Auto-avaliação até ' + formatDate(c.prazo_auto_avaliacao) : ''}</div>
+      </div>
+      <div class="ciclo-actions">
+        <span class="ciclo-badge ${c.status}">${STATUS_LABEL[c.status]||c.status}</span>
+        ${c.status === 'rascunho' ? `<button class="btn btn-secondary btn-sm" onclick="mudarStatusCiclo(${c.id},'aberto')">Ativar</button>` : ''}
+        ${c.status === 'aberto'   ? `<button class="btn btn-secondary btn-sm" onclick="mudarStatusCiclo(${c.id},'fechado')">Encerrar</button>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="editarCiclo(${c.id})">Editar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalCiclo() {
+  document.getElementById('cicloEditId').value = '';
+  document.getElementById('modalCicloTitle').textContent = 'Novo Ciclo de Avaliação';
+  ['cicloNome','cicloEditId','cicloPeriodoInicio','cicloPeriodoFim','cicloPrazoAuto','cicloPrazoGestor'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('modalCiclo').classList.add('open');
+}
+
+function editarCiclo(id) {
+  const c = _ciclos.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('cicloEditId').value        = c.id;
+  document.getElementById('modalCicloTitle').textContent = 'Editar Ciclo';
+  document.getElementById('cicloNome').value           = c.nome || '';
+  document.getElementById('cicloPeriodoInicio').value  = c.periodo_inicio || '';
+  document.getElementById('cicloPeriodoFim').value     = c.periodo_fim || '';
+  document.getElementById('cicloPrazoAuto').value      = c.prazo_auto_avaliacao || '';
+  document.getElementById('cicloPrazoGestor').value    = c.prazo_gestor || '';
+  document.getElementById('modalCiclo').classList.add('open');
+}
+
+function fecharModalCiclo() {
+  document.getElementById('modalCiclo').classList.remove('open');
+}
+
+async function salvarCiclo() {
+  const nome = (document.getElementById('cicloNome').value||'').trim();
+  if (!nome) { toast('Informe o nome do ciclo.', true); return; }
+  const id = document.getElementById('cicloEditId').value;
+  const body = {
+    nome,
+    periodo_inicio:       document.getElementById('cicloPeriodoInicio').value || null,
+    periodo_fim:          document.getElementById('cicloPeriodoFim').value    || null,
+    prazo_auto_avaliacao: document.getElementById('cicloPrazoAuto').value     || null,
+    prazo_gestor:         document.getElementById('cicloPrazoGestor').value   || null,
+  };
+  let ok;
+  if (id) {
+    ok = await sbPatch(`/rest/v1/dev_ciclos?id=eq.${id}`, body);
+  } else {
+    ok = await sbPost('/rest/v1/dev_ciclos', body);
+  }
+  if (ok) {
+    toast('Ciclo salvo.');
+    fecharModalCiclo();
+    renderCiclos();
+    loadCiclos().then(() => populateCicloSelect());
+  } else {
+    toast('Erro ao salvar ciclo.', true);
+  }
+}
+
+async function mudarStatusCiclo(id, status) {
+  const ok = await sbPatch(`/rest/v1/dev_ciclos?id=eq.${id}`, { status });
+  if (ok) {
+    toast(status === 'aberto' ? 'Ciclo ativado.' : 'Ciclo encerrado.');
+    renderCiclos();
+    loadCiclos().then(() => { populateCicloSelect(); onCicloChange(); });
+  } else {
+    toast('Erro ao atualizar ciclo.', true);
+  }
+}
+
+/* ─────────────────────────────────────────────
+   COMPETÊNCIAS — RENDER
+───────────────────────────────────────────── */
+async function renderCompetencias() {
+  await loadCompetencias();
+  const el = document.getElementById('competenciasList');
+
+  const areas = {};
+  _competencias.forEach(c => {
+    const k = c.tipo === 'comportamental' ? '⬥ Comportamentais' : (c.area || 'Outras');
+    if (!areas[k]) areas[k] = [];
+    areas[k].push(c);
+  });
+
+  let html = '';
+  Object.entries(areas).forEach(([area, comps]) => {
+    html += `<div class="comp-area">
+      <div class="comp-area-title">${area}</div>
+      <div class="comp-grid">`;
+    comps.forEach(c => {
+      html += `<div class="comp-item ${c.ativo ? '' : 'inativo'}">
+        <div class="comp-body">
+          <div class="comp-nome">${c.nome}</div>
+          ${c.descricao ? `<div class="comp-desc">${c.descricao}</div>` : ''}
+        </div>
+        <button class="comp-toggle" onclick="toggleComp(${c.id},${!c.ativo})">${c.ativo ? 'Desativar' : 'Ativar'}</button>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  el.innerHTML = html || `<div class="empty-state"><p>Nenhuma competência cadastrada.</p></div>`;
+}
+
+async function toggleComp(id, ativo) {
+  await sbPatch(`/rest/v1/dev_competencias?id=eq.${id}`, { ativo });
+  toast(ativo ? 'Competência ativada.' : 'Competência desativada.');
+  renderCompetencias();
+}
+
+/* ─────────────────────────────────────────────
+   UTILS
+───────────────────────────────────────────── */
+function formatDate(d) {
+  if (!d) return '—';
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+
+function toast(msg, err=false) {
+  const c = document.getElementById('toast');
+  const t = document.createElement('div');
+  t.className = `toast-item ${err ? 'err' : 'ok'}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+/* ─────────────────────────────────────────────
+   START
+───────────────────────────────────────────── */
+init();
+</script>
+</body>
+</html>
