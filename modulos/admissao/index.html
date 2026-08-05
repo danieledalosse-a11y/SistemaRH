@@ -64,15 +64,18 @@ if (typeof pdfjsLib !== 'undefined') {
   .btn-icon-cancel:hover { background: #fee2e2; color: #dc2626; }
   .card-obs { font-size: 11px; color: var(--text-ter); margin-top: 2px; }
 
-  /* ── Summary strip ───────────────────────────────────────── */
-  .summary-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
-  .summary-pill { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; border: 1px solid transparent; cursor: default; }
-  .summary-pill.urgent { background: #fff7ed; color: #9a3412; border-color: #fdba74; cursor: pointer; }
-  .summary-pill.urgent:hover { background: #ffedd5; }
-  .summary-pill.neutral { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
-  .summary-pill-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  .summary-pill.urgent .summary-pill-dot { background: #f97316; animation: pulse-dot 1.5s infinite; }
-  .summary-pill.neutral .summary-pill-dot { background: #94a3b8; }
+  /* ── Summary cards ───────────────────────────────────────── */
+  .summary-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .summary-card { flex: 1; min-width: 160px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; cursor: default; transition: box-shadow 0.15s, border-color 0.15s; position: relative; overflow: hidden; }
+  .summary-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .summary-card.sc-revisar::before { background: #f97316; }
+  .summary-card.sc-aguardando::before { background: #94a3b8; }
+  .summary-card.sc-efetivar::before { background: var(--green); }
+  .summary-card-num { font-size: 32px; font-weight: 800; line-height: 1; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+  .summary-card.sc-revisar .summary-card-num { color: #f97316; }
+  .summary-card.sc-aguardando .summary-card-num { color: #64748b; }
+  .summary-card.sc-efetivar .summary-card-num { color: var(--green); }
+  .summary-card-label { font-size: 12px; font-weight: 600; color: var(--text-sec); line-height: 1.4; }
 
   /* ── Page toolbar ────────────────────────────────────────── */
   .page-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -496,6 +499,7 @@ if (typeof pdfjsLib !== 'undefined') {
       <div class="panel-tab-pane" id="ptab-docs"></div>
     </div>
     <div class="panel-footer">
+      <button class="btn btn-orange" id="btnAprovar">Aprovar ficha</button>
       <button class="btn btn-success" id="btnEfetivar">Efetivar Contratação</button>
       <button class="btn btn-secondary" id="btnGerarPDF">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -603,10 +607,14 @@ function renderCard(c) {
       <button class="btn btn-secondary btn-sm" onclick="copiarLink('${link}')">Copiar link</button>
       <button class="btn btn-secondary btn-sm" onclick="editarConvite(${c.id},'${nomeSafe}','${cargoSafe}','${unidSafe}')">Editar</button>
       <button class="btn-icon-cancel" onclick="cancelarConvite(${c.id})" title="Cancelar convite">×</button>`;
-  } else if (podeRevisar) {
+  } else if (c.status === 'preenchido') {
     actions = `
       <button class="btn btn-orange btn-sm" onclick="verFicha('${c.token}')">Revisar ficha</button>
       <button class="btn btn-secondary btn-sm" onclick="copiarLink('${link}')">Copiar link</button>`;
+  } else if (c.status === 'aprovado') {
+    actions = `
+      <button class="btn btn-success btn-sm" onclick="verFicha('${c.token}')">Efetivar</button>
+      <button class="btn btn-secondary btn-sm" onclick="verFicha('${c.token}')">Ver ficha</button>`;
   } else if (c.status === 'efetivado') {
     actions = `<button class="btn btn-secondary btn-sm" onclick="verFicha('${c.token}')">Ver ficha</button>`;
   } else if (c.status === 'cancelado') {
@@ -789,24 +797,24 @@ function statusBadge(status) {
 }
 
 function updateSummary() {
-  const paraRevisar   = allConvites.filter(c => c.status === 'preenchido').length;
-  const aguardando    = allConvites.filter(c => c.status === 'pendente').length;
+  const paraRevisar  = allConvites.filter(c => c.status === 'preenchido').length;
+  const aguardando   = allConvites.filter(c => c.status === 'pendente').length;
+  const paraEfetivar = allConvites.filter(c => c.status === 'aprovado').length;
   const strip = document.getElementById('summaryStrip');
-  let html = '';
-  if (paraRevisar > 0) {
-    html += `<div class="summary-pill urgent">
-      <span class="summary-pill-dot"></span>
-      ${paraRevisar} ficha${paraRevisar > 1 ? 's' : ''} aguardando revisão
+  strip.innerHTML = `
+    <div class="summary-card sc-revisar">
+      <div class="summary-card-num">${paraRevisar}</div>
+      <div class="summary-card-label">Fichas para revisar</div>
+    </div>
+    <div class="summary-card sc-aguardando">
+      <div class="summary-card-num">${aguardando}</div>
+      <div class="summary-card-label">Aguardando candidato</div>
+    </div>
+    <div class="summary-card sc-efetivar">
+      <div class="summary-card-num">${paraEfetivar}</div>
+      <div class="summary-card-label">Aprovados para efetivar</div>
     </div>`;
-  }
-  if (aguardando > 0) {
-    html += `<div class="summary-pill neutral">
-      <span class="summary-pill-dot"></span>
-      ${aguardando} convite${aguardando > 1 ? 's' : ''} aguardando candidato
-    </div>`;
-  }
-  strip.innerHTML = html;
-  strip.style.display = html ? 'flex' : 'none';
+  strip.style.display = 'flex';
 }
 
 function renderFichas() {
@@ -836,19 +844,49 @@ async function abrirRevisao(id) {
 
   document.getElementById('panelOverlay').classList.add('open');
 
-  const jaEfetivado = (currentConvite?.status || st) === 'efetivado';
+  const status = currentConvite?.status || st;
+  const btnAp = document.getElementById('btnAprovar');
   const btnEf = document.getElementById('btnEfetivar');
-  btnEf.disabled = jaEfetivado;
+
+  // Aprovar — visível e ativo só para "preenchido"
+  btnAp.style.display  = status === 'preenchido' ? '' : 'none';
+  btnAp.onclick = () => aprovarFicha(f);
+
+  // Efetivar — ativo só para "aprovado"
+  const podeEfetivar = status === 'aprovado';
+  const jaEfetivado  = status === 'efetivado';
+  btnEf.disabled = !podeEfetivar;
   btnEf.textContent = jaEfetivado ? '✓ Efetivado' : 'Efetivar Contratação';
-  btnEf.style.opacity = jaEfetivado ? '0.5' : '';
-  btnEf.style.cursor  = jaEfetivado ? 'not-allowed' : '';
-  if (!jaEfetivado) btnEf.onclick = () => efetivarContratacao(f);
+  btnEf.style.opacity = podeEfetivar ? '' : '0.45';
+  btnEf.style.cursor  = podeEfetivar ? '' : 'not-allowed';
+  if (podeEfetivar) btnEf.onclick = () => efetivarContratacao(f);
 
   document.getElementById('btnGerarPDF').onclick = () => abrirModalPDF(currentConvite);
   document.getElementById('btnSalvarFicha').onclick = savePanel;
 }
 
 function closePanel() { document.getElementById('panelOverlay').classList.remove('open'); }
+
+async function aprovarFicha(f) {
+  const conviteId = f.admissao_convites?.id || currentConvite?.id;
+  if (!conviteId) return;
+  const btnAp = document.getElementById('btnAprovar');
+  btnAp.disabled = true;
+  btnAp.textContent = 'Aprovando...';
+  try {
+    await fetch(`${SB_URL}/rest/v1/admissao_convites?id=eq.${conviteId}`, {
+      method: 'PATCH', headers: SB_HEADERS,
+      body: JSON.stringify({ status: 'aprovado' })
+    });
+    closePanel();
+    await loadConvites();
+    await loadFichas();
+  } catch(e) {
+    alert('Erro ao aprovar. Tente novamente.');
+    btnAp.disabled = false;
+    btnAp.textContent = 'Aprovar ficha';
+  }
+}
 
 document.querySelectorAll('.panel-tab').forEach(btn => {
   btn.addEventListener('click', () => {
