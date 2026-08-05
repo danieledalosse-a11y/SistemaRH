@@ -868,13 +868,13 @@ async function abrirRevisao(id) {
 function closePanel() { document.getElementById('panelOverlay').classList.remove('open'); }
 
 async function aprovarFicha(f) {
-  const conviteId = f.admissao_convites?.id || currentConvite?.id;
-  if (!conviteId) return;
+  const token = currentConvite?.token || f.admissao_convites?.token;
+  if (!token) { alert('Não foi possível identificar o convite.'); return; }
   const btnAp = document.getElementById('btnAprovar');
   btnAp.disabled = true;
   btnAp.textContent = 'Aprovando...';
   try {
-    await fetch(`${SB_URL}/rest/v1/admissao_convites?id=eq.${conviteId}`, {
+    await fetch(`${SB_URL}/rest/v1/admissao_convites?token=eq.${token}`, {
       method: 'PATCH', headers: SB_HEADERS,
       body: JSON.stringify({ status: 'aprovado' })
     });
