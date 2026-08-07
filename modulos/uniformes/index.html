@@ -204,11 +204,12 @@
     <!-- busca -->
     <div class="card" style="margin-bottom:16px;">
       <div class="card-title" style="margin-bottom:12px;">Buscar colaborador</div>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <div class="search-bar" style="flex:1;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="buscaColab" placeholder="Nome ou código do colaborador…" oninput="buscarColabs()">
-        </div>
+      <div style="position:relative;flex:1;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-ter);pointer-events:none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="buscaColab" placeholder="Nome do colaborador…" oninput="buscarColabs();toggleLimparColab()" style="width:100%;padding:9px 36px 9px 36px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border-color .15s;">
+        <button id="btnLimparColab" onclick="limparBuscaColab()" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-ter);padding:4px;line-height:1;" title="Limpar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div id="listaColabs" style="margin-top:10px;display:flex;flex-direction:column;gap:4px;"></div>
     </div>
@@ -606,6 +607,17 @@ let _buscaTimer = null;
 function buscarColabs() {
   clearTimeout(_buscaTimer);
   _buscaTimer = setTimeout(_executarBusca, 300);
+}
+function toggleLimparColab() {
+  const val = document.getElementById('buscaColab').value;
+  document.getElementById('btnLimparColab').style.display = val ? '' : 'none';
+}
+function limparBuscaColab() {
+  document.getElementById('buscaColab').value = '';
+  document.getElementById('btnLimparColab').style.display = 'none';
+  document.getElementById('listaColabs').innerHTML = '';
+  document.getElementById('colabDetalhe').style.display = 'none';
+  _colabAtual = null;
 }
 async function _executarBusca() {
   const q = document.getElementById('buscaColab').value.trim();
