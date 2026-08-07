@@ -395,16 +395,35 @@ if (typeof pdfjsLib !== 'undefined') {
 
 <!-- Modal Efetivar -->
 <div class="modal-overlay" id="modalEfetivar" style="z-index:500;">
-  <div class="modal" style="width:540px;">
-    <div class="modal-header">
-      <span class="modal-title">Efetivar Contratação</span>
+  <div class="modal" style="width:640px;max-height:90vh;display:flex;flex-direction:column;">
+    <div class="modal-header" style="flex-shrink:0;">
+      <div>
+        <span class="modal-title" id="efModalTitle">Efetivar Contratação</span>
+        <div id="efStepIndicator" style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+          <span id="efStep1Dot" style="width:20px;height:20px;border-radius:50%;background:var(--primary);color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;">1</span>
+          <span style="font-size:11px;color:var(--text-sec);" id="efStep1Label">Conferência da ficha</span>
+          <span style="width:24px;height:1px;background:var(--border);display:inline-block;margin:0 2px;"></span>
+          <span id="efStep2Dot" style="width:20px;height:20px;border-radius:50%;background:var(--border);color:var(--text-ter);font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;">2</span>
+          <span style="font-size:11px;color:var(--text-ter);" id="efStep2Label">Dados do RH</span>
+        </div>
+      </div>
       <button class="modal-close" onclick="closeModal('modalEfetivar')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-    <div class="modal-body">
+
+    <!-- Etapa 1: Conferência da ficha -->
+    <div id="efStep1" class="modal-body" style="overflow-y:auto;flex:1;">
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1d4ed8;margin-bottom:16px;">
+        Confira os dados preenchidos pelo candidato antes de prosseguir. Você poderá corrigir qualquer campo diretamente.
+      </div>
+      <div id="efFichaResumo"></div>
+    </div>
+
+    <!-- Etapa 2: Dados do RH -->
+    <div id="efStep2" class="modal-body" style="display:none;overflow-y:auto;flex:1;">
       <div style="background:var(--green-bg,#f0fdf4);border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;font-size:12px;color:#15803d;margin-bottom:16px;">
-        Os dados da ficha serão copiados automaticamente para o cadastro. Preencha apenas as informações de contratação abaixo.
+        Preencha as informações de contratação. Os dados da ficha já foram importados automaticamente.
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
@@ -415,13 +434,25 @@ if (typeof pdfjsLib !== 'undefined') {
           <label class="form-label">Data de Admissão <span style="color:var(--danger,#dc2626)">*</span></label>
           <input class="form-control" id="ef_admissao" type="date">
         </div>
-        <div class="form-group" style="grid-column:1/-1;">
-          <label class="form-label">Empresa / Unidade <span style="color:var(--danger,#dc2626)">*</span></label>
-          <input class="form-control" id="ef_unidade" type="text">
+        <div class="form-group">
+          <label class="form-label">Empresa (registro) <span style="color:var(--danger,#dc2626)">*</span></label>
+          <select class="form-control" id="ef_unidade"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Empresa (atuação)</label>
+          <select class="form-control" id="ef_empresa_atuacao"></select>
         </div>
         <div class="form-group" style="grid-column:1/-1;">
           <label class="form-label">Cargo <span style="color:var(--danger,#dc2626)">*</span></label>
-          <input class="form-control" id="ef_cargo" type="text">
+          <select class="form-control" id="ef_cargo"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Setor</label>
+          <select class="form-control" id="ef_setor"><option value="">Selecione o setor</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gestor</label>
+          <select class="form-control" id="ef_gestor"><option value="">Selecione o gestor</option></select>
         </div>
         <div class="form-group">
           <label class="form-label">Tipo de Contrato</label>
@@ -441,9 +472,13 @@ if (typeof pdfjsLib !== 'undefined') {
       </div>
       <div id="efError" style="display:none;margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;font-size:13px;color:#dc2626;"></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modalEfetivar')">Cancelar</button>
-      <button class="btn btn-success" onclick="confirmarEfetivar()">
+
+    <div class="modal-footer" style="flex-shrink:0;">
+      <button class="btn btn-secondary" id="efBtnCancelar" onclick="closeModal('modalEfetivar')">Cancelar</button>
+      <div style="flex:1;"></div>
+      <button class="btn btn-secondary" id="efBtnVoltar" style="display:none;" onclick="efVoltar()">← Voltar</button>
+      <button class="btn btn-primary" id="efBtnProximo" onclick="efProximo()">Próximo →</button>
+      <button class="btn btn-success" id="efBtnConfirmar" style="display:none;" onclick="confirmarEfetivar()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
         Confirmar Efetivação
       </button>
@@ -1323,15 +1358,75 @@ async function panelUploadDoc(key, input) {
 }
 
 // ─── Efetivar ────────────────────────────────────────────
+// ─── Efetivação em 2 etapas ──────────────────────────────
+function _efRow(label, value) {
+  if (!value) return '';
+  return `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">
+    <span style="font-size:12px;color:var(--text-sec);min-width:160px;flex-shrink:0;">${label}</span>
+    <span style="font-size:12px;font-weight:500;color:var(--text);">${value}</span>
+  </div>`;
+}
+function _efSection(title, rows) {
+  const content = rows.join('');
+  if (!content) return '';
+  return `<div style="margin-bottom:16px;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);margin-bottom:6px;">${title}</div>
+    ${content}
+  </div>`;
+}
+
 async function efetivarContratacao(f) {
-  // pré-preencher modal — prioridade: dados_rh (Supabase) > localStorage > convite
-  const _rh = currentFicha?.dados_rh || JSON.parse(localStorage.getItem(pdfStorageKey()) || 'null');
-  document.getElementById('ef_cargo').value    = _rh?.cargo    || currentConvite?.cargo_pretendido || '';
-  document.getElementById('ef_unidade').value  = _rh?.empresa  || currentConvite?.unidade || '';
-  document.getElementById('ef_admissao').value = _rh?.data     || '';
-  document.getElementById('ef_contrato').value = _rh?.contrato || '';
-  document.getElementById('ef_salario').value  = _rh?.salario  || '';
   document.getElementById('efError').style.display = 'none';
+  // montar resumo da ficha (etapa 1)
+  const resumo = [
+    _efSection('Identificação', [
+      _efRow('Nome', f.nome),
+      _efRow('CPF', f.cpf),
+      _efRow('RG', f.rg ? `${f.rg} ${f.orgao_rg||''} ${f.data_rg ? '— emitido '+fmtDate(f.data_rg) : ''}`.trim() : ''),
+      _efRow('Nascimento', fmtDate(f.data_nascimento)),
+      _efRow('Sexo', f.sexo),
+      _efRow('Naturalidade', f.naturalidade),
+      _efRow('Nacionalidade', f.nacionalidade),
+      _efRow('Cor/Raça', f.cor_raca),
+      _efRow('Escolaridade', f.escolaridade),
+      _efRow('PIS/PASEP', f.pis),
+    ]),
+    _efSection('Documentos', [
+      _efRow('CTPS nº', f.ctps_numero ? `${f.ctps_numero} série ${f.ctps_serie||'—'}` : ''),
+      _efRow('CNH', f.cnh_numero ? `${f.cnh_numero} — Cat. ${f.cnh_categoria||'—'} — val. ${fmtDate(f.cnh_validade)}` : ''),
+      _efRow('Título Eleitor', f.titulo_eleitor ? `${f.titulo_eleitor} Zona ${f.zona||'—'} Seção ${f.secao||'—'}` : ''),
+    ]),
+    _efSection('Contato e Endereço', [
+      _efRow('Celular', f.celular),
+      _efRow('E-mail', f.email),
+      _efRow('Tel. recado', f.tel_recado ? `${f.tel_recado} (${f.tel_recado_nome||''})` : ''),
+      _efRow('Endereço', f.logradouro ? `${f.logradouro}, ${f.numero||'s/n'} — ${f.bairro||''}, ${f.cidade||''}/${f.uf||''} — CEP ${f.cep||''}` : ''),
+    ]),
+    _efSection('Família', [
+      _efRow('Estado civil', f.estado_civil),
+      _efRow('Cônjuge', f.conjuge_nome),
+      _efRow('Tem filhos', f.tem_filhos ? 'Sim' : 'Não'),
+      _efRow('Dependentes', f.dependentes?.length ? `${f.dependentes.length} dependente(s)` : ''),
+    ]),
+    _efSection('Benefícios', [
+      _efRow('Vale transporte', f.vale_transporte ? `Sim — ${f.vt_passes||0} passes` : 'Não'),
+      _efRow('Banco', f.banco ? `${f.banco} — Ag. ${f.agencia||'—'} — Conta ${f.conta||'—'}` : ''),
+    ]),
+  ].join('');
+  document.getElementById('efFichaResumo').innerHTML = resumo || '<p style="color:var(--text-sec);font-size:13px;">Sem dados da ficha para exibir.</p>';
+
+  // carregar selects da etapa 2
+  await _efCarregarSelects();
+
+  // pré-preencher etapa 2
+  const _rh = currentFicha?.dados_rh || JSON.parse(localStorage.getItem(pdfStorageKey()) || 'null');
+  const unidadeConvite = currentConvite?.unidade || '';
+  _efSetSelect('ef_unidade',         _rh?.empresa        || unidadeConvite);
+  _efSetSelect('ef_empresa_atuacao', _rh?.empresa_atuacao || unidadeConvite);
+  _efSetSelect('ef_cargo',           _rh?.cargo           || currentConvite?.cargo_pretendido || '');
+  document.getElementById('ef_admissao').value = _rh?.data     || '';
+  document.getElementById('ef_contrato').value = _rh?.contrato || f.tipo_contrato || '';
+  document.getElementById('ef_salario').value  = _rh?.salario  || '';
 
   // gerar próxima matrícula
   try {
@@ -1339,7 +1434,6 @@ async function efetivarContratacao(f) {
     const rows = await r.json();
     let nextMat = '1';
     if (Array.isArray(rows) && rows.length > 0) {
-      // pega o maior valor numérico entre as matrículas
       const nums = rows.map(x => parseInt((x.matricula||'').replace(/\D/g,''))).filter(n => !isNaN(n));
       if (nums.length > 0) {
         const max = Math.max(...nums);
@@ -1353,17 +1447,98 @@ async function efetivarContratacao(f) {
     document.getElementById('ef_matricula').value = '';
   }
 
+  _efIrStep(1);
   openModal('modalEfetivar');
 }
 
+function _efSetSelect(id, value) {
+  const sel = document.getElementById(id);
+  if (!sel || !value) return;
+  // tenta match exato, depois case-insensitive
+  const opt = [...sel.options].find(o => o.value === value || o.value.toUpperCase() === value.toUpperCase());
+  if (opt) sel.value = opt.value;
+}
+
+async function _efCarregarSelects() {
+  try {
+    const [rEmp, rCargo, rSetor, rGestor] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/param_empresa?select=nome_simplificado&ativo=eq.true&order=ordem`, { headers: SB_HEADERS }),
+      fetch(`${SB_URL}/rest/v1/param_cargo?select=nome&ativo=eq.true&order=nome`, { headers: SB_HEADERS }),
+      fetch(`${SB_URL}/rest/v1/param_setor?select=nome&ativo=eq.true&order=nome`, { headers: SB_HEADERS }).catch(()=>null),
+      fetch(`${SB_URL}/rest/v1/colaboradores?select=nome&cargo=ilike.*gestor*&ativo=eq.true&order=nome`, { headers: SB_HEADERS }).catch(()=>null),
+    ]);
+    const empresas = await rEmp.json();
+    const cargos   = await rCargo.json();
+
+    ['ef_unidade','ef_empresa_atuacao'].forEach(id => {
+      const sel = document.getElementById(id);
+      sel.innerHTML = '<option value="">Selecione</option>';
+      if (Array.isArray(empresas)) empresas.forEach(e => {
+        const o = document.createElement('option'); o.value = e.nome_simplificado; o.textContent = e.nome_simplificado; sel.appendChild(o);
+      });
+    });
+
+    const selCargo = document.getElementById('ef_cargo');
+    selCargo.innerHTML = '<option value="">Selecione o cargo</option>';
+    if (Array.isArray(cargos)) cargos.forEach(e => {
+      const o = document.createElement('option'); o.value = e.nome; o.textContent = e.nome; selCargo.appendChild(o);
+    });
+
+    if (rSetor) {
+      const setores = await rSetor.json();
+      const selSetor = document.getElementById('ef_setor');
+      selSetor.innerHTML = '<option value="">Selecione o setor</option>';
+      if (Array.isArray(setores)) setores.forEach(e => {
+        const o = document.createElement('option'); o.value = e.nome; o.textContent = e.nome; selSetor.appendChild(o);
+      });
+    }
+
+    if (rGestor) {
+      const gestores = await rGestor.json();
+      const selGestor = document.getElementById('ef_gestor');
+      selGestor.innerHTML = '<option value="">Selecione o gestor</option>';
+      if (Array.isArray(gestores)) gestores.forEach(e => {
+        const o = document.createElement('option'); o.value = e.nome; o.textContent = e.nome; selGestor.appendChild(o);
+      });
+    }
+  } catch(_) {}
+}
+
+function _efIrStep(step) {
+  const isStep1 = step === 1;
+  document.getElementById('efStep1').style.display    = isStep1 ? '' : 'none';
+  document.getElementById('efStep2').style.display    = isStep1 ? 'none' : '';
+  document.getElementById('efBtnProximo').style.display   = isStep1 ? '' : 'none';
+  document.getElementById('efBtnVoltar').style.display    = isStep1 ? 'none' : '';
+  document.getElementById('efBtnConfirmar').style.display = isStep1 ? 'none' : '';
+  // step indicator
+  const s1d = document.getElementById('efStep1Dot');
+  const s2d = document.getElementById('efStep2Dot');
+  const s1l = document.getElementById('efStep1Label');
+  const s2l = document.getElementById('efStep2Label');
+  s1d.style.background = isStep1 ? 'var(--primary)' : 'var(--green)';
+  s1d.style.color = '#fff';
+  s1d.textContent = isStep1 ? '1' : '✓';
+  s2d.style.background = isStep1 ? 'var(--border)' : 'var(--primary)';
+  s2d.style.color = isStep1 ? 'var(--text-ter)' : '#fff';
+  s1l.style.color = isStep1 ? 'var(--text-sec)' : 'var(--green)';
+  s2l.style.color = isStep1 ? 'var(--text-ter)' : 'var(--text-sec)';
+}
+
+function efProximo() { _efIrStep(2); }
+function efVoltar()  { _efIrStep(1); }
+
 async function confirmarEfetivar() {
-  const matricula  = document.getElementById('ef_matricula').value.trim();
-  const admissao   = document.getElementById('ef_admissao').value;
-  const unidade    = document.getElementById('ef_unidade').value.trim();
-  const cargo      = document.getElementById('ef_cargo').value.trim();
-  const contrato   = document.getElementById('ef_contrato').value;
-  const salario    = document.getElementById('ef_salario').value.trim();
-  const errEl      = document.getElementById('efError');
+  const matricula       = document.getElementById('ef_matricula').value.trim();
+  const admissao        = document.getElementById('ef_admissao').value;
+  const unidade         = document.getElementById('ef_unidade').value;
+  const empresaAtuacao  = document.getElementById('ef_empresa_atuacao').value || unidade;
+  const cargo           = document.getElementById('ef_cargo').value;
+  const setor           = document.getElementById('ef_setor').value;
+  const gestor          = document.getElementById('ef_gestor').value;
+  const contrato        = document.getElementById('ef_contrato').value;
+  const salario         = document.getElementById('ef_salario').value.trim();
+  const errEl           = document.getElementById('efError');
 
   if (!matricula || !admissao || !unidade || !cargo) {
     errEl.textContent = 'Preencha os campos obrigatórios: Matrícula, Data de Admissão, Empresa e Cargo.';
@@ -1477,8 +1652,10 @@ async function confirmarEfetivar() {
     primeiro_emprego:  f.primeiro_emprego || false,
     hobby:             up(f.hobby),
     cargo:             cargo || null,
-    empresa_atuacao: up(unidade),
-    empresa_registro: up(unidade),
+    setor:             setor || null,
+    gestor:            gestor || null,
+    empresa_atuacao:   up(empresaAtuacao),
+    empresa_registro:  up(unidade),
     data_admissao:     admissao,
     tipo_contrato:     contrato || null,
     salario:           salario ? parseFloat(salario.replace(/[^\d,]/g,'').replace(',','.')) || null : null,
