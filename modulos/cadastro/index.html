@@ -211,6 +211,35 @@
     .drawer { width: 100vw; }
     .field-grid { grid-template-columns: 1fr; }
   }
+
+  /* ── Notificações ──────────────────────────────────────────── */
+  .notif-btn { position:relative; background:none; border:none; cursor:pointer; color:rgba(255,255,255,0.55); padding:6px; display:flex; align-items:center; border-radius:8px; transition:color .15s,background .15s; }
+  .notif-btn:hover { color:#fff; background:rgba(255,255,255,0.1); }
+  .notif-badge { position:absolute; top:1px; right:1px; min-width:16px; height:16px; background:#F04438; color:#fff; border-radius:8px; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; padding:0 4px; border:2px solid #101828; line-height:1; }
+  .notif-panel { position:fixed; top:56px; right:12px; width:370px; max-height:520px; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 32px rgba(16,24,40,0.16); z-index:2000; display:none; flex-direction:column; overflow:hidden; }
+  .notif-panel.open { display:flex; }
+  .notif-header { padding:14px 18px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  .notif-header-title { font-size:13px; font-weight:700; color:var(--text); }
+  .notif-header-count { font-size:11px; color:var(--text-sec); background:var(--bg); padding:2px 8px; border-radius:20px; }
+  .notif-body { overflow-y:auto; flex:1; }
+  .notif-group-title { padding:12px 18px 4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-ter); }
+  .notif-item { display:flex; align-items:center; gap:10px; padding:10px 18px; cursor:pointer; border-bottom:1px solid var(--border-light); transition:background .12s; }
+  .notif-item:hover { background:#F9FAFB; }
+  .notif-item:last-of-type { border-bottom:none; }
+  .notif-avatar-sm { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; color:#fff; }
+  .notif-info { flex:1; min-width:0; }
+  .notif-info-nome { font-size:12px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .notif-info-sub { font-size:11px; color:var(--text-sec); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .notif-chip { font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; flex-shrink:0; white-space:nowrap; }
+  .notif-chip-orange { background:#FFF4ED; color:#C4320A; }
+  .notif-chip-amber  { background:#FFFAEB; color:#92400E; }
+  .notif-more { padding:6px 18px 10px; font-size:11px; color:var(--text-ter); }
+  .notif-empty { padding:32px 18px; text-align:center; }
+  .notif-empty svg { opacity:.3; margin-bottom:8px; }
+  .notif-empty-txt { font-size:12px; color:var(--text-ter); }
+  .btn-conferido { background:none; border:1px solid #ABEFC6; color:#067647; border-radius:8px; padding:7px 14px; font-size:12px; font-weight:600; font-family:inherit; cursor:pointer; display:none; align-items:center; gap:6px; transition:background .15s; }
+  .btn-conferido:hover { background:#ECFDF3; }
+  .conferido-stamp { display:none; align-items:center; gap:5px; font-size:11px; color:var(--green); margin-right:auto; }
 </style>
 </head>
 <body>
@@ -233,10 +262,23 @@
     <span id="userNomeTopbar" style="font-size:13px;color:rgba(255,255,255,0.6);"></span>
     <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);display:none;" id="btnExportar" onclick="exportarExcel()">Exportar</button>
     <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);display:none;" id="btnRecarregar" onclick="recarregar()">↺ Recarregar</button>
+    <button class="notif-btn" id="btnNotif" onclick="toggleNotificacoes()" title="Pendências">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="notif-badge" id="notifBadge" style="display:none;"></span>
+    </button>
     <button onclick="logout()" title="Sair" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.45);padding:4px;display:flex;align-items:center;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.45)'">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     </button>
   </div>
+</div>
+
+<!-- Painel de notificações -->
+<div class="notif-panel" id="notifPanel">
+  <div class="notif-header">
+    <span class="notif-header-title">Pendências</span>
+    <span class="notif-header-count" id="notifHeaderCount"></span>
+  </div>
+  <div class="notif-body" id="notifBody"></div>
 </div>
 
 <!-- Tela de seleção de empresa -->
@@ -867,6 +909,14 @@
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
       Ver ficha completa
     </a>
+    <span class="conferido-stamp" id="conferidoStamp">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <span id="conferidoStampTxt"></span>
+    </span>
+    <button class="btn-conferido" id="btnMarcarConferido" onclick="marcarConferido()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      Marcar como conferido
+    </button>
     <button class="btn btn-outline" onclick="fecharFicha()">Fechar</button>
     <button class="btn btn-success" id="btnConfirmarEfetivacao" style="display:none;" onclick="confirmarEfetivacaoCadastro()">✓ Confirmar Efetivação</button>
     <button class="btn btn-primary" id="btnSalvarFicha" onclick="salvarFicha()">Salvar alterações</button>
@@ -1256,6 +1306,8 @@ function supabaseToJS(row) {
     dependentes:      parseInt(row.dependentes) || 0,
     proLabore:            !!row.pro_labore,
     efetivacaoPendente:   !!row.efetivacao_pendente,
+    cadastroConferidoEm:  row.cadastro_conferido_em || null,
+    cadastroConferidoPor: row.cadastro_conferido_por || null,
     sexo:             parseSexo(row.sexo),
     dataNascimento:   row.data_nascimento || '',
     cpf:              row.cpf || '',
@@ -1505,6 +1557,7 @@ async function carregarDoSupabase() {
     renderTelaEmpresas();
     const ativos = COLABORADORES.filter(c => !c.proLabore && c.situacao === 'Ativo').length;
     document.getElementById('statusConexao').textContent = `${ativos} colaboradores ativos`;
+    atualizarNotificacoes();
 
     // verificar redirect de efetivação (banner controlado por efetivacaoPendente em abrirFicha)
     const _efId = new URLSearchParams(window.location.search).get('efetivar');
@@ -1957,6 +2010,24 @@ function abrirFicha(idx) {
     _btnEf.style.display  = 'none';
   }
 
+  // botão / stamp de conferência
+  const _btnConf  = document.getElementById('btnMarcarConferido');
+  const _stamp    = document.getElementById('conferidoStamp');
+  const _stampTxt = document.getElementById('conferidoStampTxt');
+  if (c.efetivacaoPendente) {
+    // aguardando efetivação — conferência não se aplica ainda
+    _btnConf.style.display = 'none';
+    _stamp.style.display   = 'none';
+  } else if (c.cadastroConferidoEm) {
+    _btnConf.style.display = 'none';
+    _stamp.style.display   = 'flex';
+    const dt = new Date(c.cadastroConferidoEm).toLocaleDateString('pt-BR');
+    _stampTxt.textContent  = `Conferido em ${dt} por ${c.cadastroConferidoPor || '—'}`;
+  } else {
+    _btnConf.style.display = 'flex';
+    _stamp.style.display   = 'none';
+  }
+
   // Aba Geral
   document.getElementById('df-codigo').value        = c.codigo || '';
   document.getElementById('df-situacao').value      = c.situacao || 'Ativo';
@@ -2221,15 +2292,20 @@ async function confirmarEfetivacaoCadastro() {
   await salvarFicha();
   await sbPatch('colaboradores', `id=eq.${c._sbId}`, { efetivacao_pendente: false });
   c.efetivacaoPendente = false;
-  document.getElementById('efetivacaoBanner').style.display = 'none';
+  document.getElementById('efetivacaoBanner').style.display    = 'none';
   document.getElementById('btnConfirmarEfetivacao').style.display = 'none';
+  // exibe botão de conferência agora que a efetivação foi concluída
+  document.getElementById('btnMarcarConferido').style.display  = 'flex';
+  atualizarNotificacoes();
   mostrarToast('Efetivação concluída! Cadastro completo.');
 }
 
 function fecharFicha() {
   document.getElementById('drawerOverlay').classList.remove('open');
-  document.getElementById('efetivacaoBanner').style.display = 'none';
+  document.getElementById('efetivacaoBanner').style.display    = 'none';
   document.getElementById('btnConfirmarEfetivacao').style.display = 'none';
+  document.getElementById('btnMarcarConferido').style.display  = 'none';
+  document.getElementById('conferidoStamp').style.display      = 'none';
   document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
   _fichaIdx = null;
   if (_modoNovo) {
@@ -3140,6 +3216,130 @@ function logout() {
   localStorage.removeItem('sb_perfil');
   window.location.href = '../../login.html';
 }
+
+// ── Notificações ────────────────────────────────────────────────────────────
+
+function atualizarNotificacoes() {
+  const efetivando   = COLABORADORES.filter(c => !c.proLabore && c.efetivacaoPendente);
+  const naoConferido = COLABORADORES.filter(c => !c.proLabore && !c.efetivacaoPendente && !c.cadastroConferidoEm && c.situacao === 'Ativo');
+  const total = efetivando.length + naoConferido.length;
+  const badge = document.getElementById('notifBadge');
+  if (!badge) return;
+  badge.textContent    = total > 99 ? '99+' : String(total);
+  badge.style.display  = total > 0 ? 'flex' : 'none';
+  if (document.getElementById('notifPanel')?.classList.contains('open')) renderPainelNotificacoes();
+}
+
+function renderPainelNotificacoes() {
+  const efetivando   = COLABORADORES.filter(c => !c.proLabore && c.efetivacaoPendente);
+  const naoConferido = COLABORADORES.filter(c => !c.proLabore && !c.efetivacaoPendente && !c.cadastroConferidoEm && c.situacao === 'Ativo');
+  const total = efetivando.length + naoConferido.length;
+  const LIMIT = 8;
+
+  document.getElementById('notifHeaderCount').textContent =
+    total === 0 ? 'tudo em dia' : `${total} pendência${total !== 1 ? 's' : ''}`;
+
+  const avatarCor = c => c.sexo === 'F' ? '#9E77ED' : c.sexo === 'M' ? '#1570EF' : '#667085';
+
+  const itemHtml = (c, chip, chipCls) => {
+    const idx = COLABORADORES.indexOf(c);
+    const ini = iniciais(c.nome);
+    return `<div class="notif-item" onclick="fecharNotificacoes();abrirFichaNotif(${idx})">
+      <div class="notif-avatar-sm" style="background:${avatarCor(c)}">${ini}</div>
+      <div class="notif-info">
+        <div class="notif-info-nome">${c.nome}</div>
+        <div class="notif-info-sub">${c.cargo || '—'} · ${(c.empresaAtuacao || c.empresa || '—').replace(/^REVEST\s+/i,'')}</div>
+      </div>
+      <span class="notif-chip ${chipCls}">${chip}</span>
+    </div>`;
+  };
+
+  let html = '';
+
+  if (efetivando.length > 0) {
+    html += `<div class="notif-group-title">Efetivação pendente</div>`;
+    html += efetivando.slice(0, LIMIT).map(c => itemHtml(c, 'Efetivar', 'notif-chip-orange')).join('');
+    if (efetivando.length > LIMIT) html += `<div class="notif-more">e mais ${efetivando.length - LIMIT} colaborador(es)…</div>`;
+  }
+
+  if (naoConferido.length > 0) {
+    html += `<div class="notif-group-title">Cadastro não conferido</div>`;
+    html += naoConferido.slice(0, LIMIT).map(c => itemHtml(c, 'Conferir', 'notif-chip-amber')).join('');
+    if (naoConferido.length > LIMIT) html += `<div class="notif-more">e mais ${naoConferido.length - LIMIT} colaborador(es)…</div>`;
+  }
+
+  if (total === 0) {
+    html = `<div class="notif-empty">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      <div class="notif-empty-txt">Nenhuma pendência no momento.</div>
+    </div>`;
+  }
+
+  document.getElementById('notifBody').innerHTML = html;
+}
+
+function toggleNotificacoes() {
+  const panel = document.getElementById('notifPanel');
+  const aberto = panel.classList.toggle('open');
+  if (aberto) renderPainelNotificacoes();
+}
+
+function fecharNotificacoes() {
+  document.getElementById('notifPanel')?.classList.remove('open');
+}
+
+function abrirFichaNotif(idx) {
+  const c = COLABORADORES[idx];
+  if (!c) return;
+  // garante que a tela de lista está visível
+  document.getElementById('telaEmpresas').style.display = 'none';
+  document.getElementById('telaLista').style.display    = 'block';
+  document.getElementById('tableCard').style.display    = 'block';
+  document.getElementById('importCard').style.display   = 'none';
+  _filtroEmpresa = '';
+  document.getElementById('busca').value = c.nome;
+  aplicarFiltros();
+  setTimeout(() => abrirFicha(idx), 50);
+}
+
+async function marcarConferido() {
+  const c = COLABORADORES[_fichaIdx];
+  if (!c) return;
+  const _perf   = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  const usuario = _perf.nome || '';
+  const agora   = new Date().toISOString();
+  const _hist   = Array.isArray(c.historico) ? [...c.historico] : [];
+  _hist.push({ tipo: 'cadastro_conferido', detalhe: 'Cadastro revisado e marcado como conferido', data: agora, usuario });
+
+  await sbPatch('colaboradores', `id=eq.${c._sbId}`, {
+    cadastro_conferido_em:  agora,
+    cadastro_conferido_por: usuario,
+    historico: _hist,
+  });
+
+  c.cadastroConferidoEm  = agora;
+  c.cadastroConferidoPor = usuario;
+  c.historico = _hist;
+
+  document.getElementById('btnMarcarConferido').style.display = 'none';
+  const stamp    = document.getElementById('conferidoStamp');
+  const stampTxt = document.getElementById('conferidoStampTxt');
+  const dt = new Date(agora).toLocaleDateString('pt-BR');
+  stampTxt.textContent = `Conferido em ${dt} por ${usuario || '—'}`;
+  stamp.style.display  = 'flex';
+
+  atualizarNotificacoes();
+  mostrarToast('Cadastro marcado como conferido.');
+}
+
+// fecha o painel ao clicar fora
+document.addEventListener('click', e => {
+  const panel = document.getElementById('notifPanel');
+  const btn   = document.getElementById('btnNotif');
+  if (panel?.classList.contains('open') && !panel.contains(e.target) && !btn?.contains(e.target)) {
+    fecharNotificacoes();
+  }
+});
 </script>
 
 <!-- Crop modal -->
