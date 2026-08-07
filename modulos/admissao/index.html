@@ -1308,22 +1308,7 @@ async function efetivarContratacao(f) {
   const _rh = currentFicha?.dados_rh || JSON.parse(localStorage.getItem(pdfStorageKey()) || 'null');
   document.getElementById('ef_admissao').value = _rh?.data || '';
 
-  // sugerir próxima matrícula
-  try {
-    const r = await fetch(`${SB_URL}/rest/v1/colaboradores?select=matricula&order=matricula.desc&limit=10`, { headers: SB_HEADERS });
-    const rows = await r.json();
-    let nextMat = '1';
-    if (Array.isArray(rows) && rows.length > 0) {
-      const nums = rows.map(x => parseInt((x.matricula||'').replace(/\D/g,''))).filter(n => !isNaN(n));
-      if (nums.length > 0) {
-        const max = Math.max(...nums);
-        const sample = rows.find(x => parseInt((x.matricula||'').replace(/\D/g,'')) === max)?.matricula || '';
-        const digits = sample.replace(/\D/g,'').length;
-        nextMat = String(max + 1).padStart(digits, '0');
-      }
-    }
-    document.getElementById('ef_matricula').value = nextMat;
-  } catch(_) { document.getElementById('ef_matricula').value = ''; }
+  document.getElementById('ef_matricula').value = '';
 
   openModal('modalEfetivar');
 }
