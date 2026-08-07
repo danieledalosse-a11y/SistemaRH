@@ -61,6 +61,16 @@ Ver `docs/empresas.md` para CNPJs completos.
 | 0584 | JP | JP Revestimentos Ltda |
 | 0392 | Log | Revestlog Acabamentos Ltda |
 
+## Premissa obrigatória — Rastreabilidade e Auditoria
+
+**Todo módulo deve registrar histórico de movimentações.** Isso é uma premissa do sistema, não opcional.
+
+- Qualquer alteração relevante (criação, edição de campos, mudança de status, aprovação, efetivação, lançamento de férias, avaliação, demissão) deve gerar um registro de auditoria
+- Cada entrada deve conter: `tipo`, `detalhe`, `data` (ISO), `usuario` (nome de quem fez)
+- O histórico fica na coluna `historico JSONB` do registro principal (ex: `colaboradores.historico`)
+- Exibido na aba "Histórico" da ficha do colaborador no módulo Cadastro
+- Novos módulos devem gravar no `historico` do colaborador afetado sempre que fizerem uma movimentação
+
 ## Padrões de código
 
 - Arquivo único por módulo (`index.html`) — CSS e JS inline
