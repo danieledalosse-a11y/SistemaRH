@@ -2653,14 +2653,15 @@ function renderDrawerHistorico(colab) {
 
       const editBtnHtml = (!excluirPA && IS_RH) ? `<button class="hist-edit-btn" onclick="abrirEditLanc('${r._sbId}',${lancIdx})" title="Editar período"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '';
       const editFormHtml = (!excluirPA && IS_RH) ? `<div class="hist-edit-form" id="hist-edit-${r._sbId}-${lancIdx}" style="display:none;margin-top:8px;">
-        <div class="real-add-grid" style="padding:0 0 6px;">
+        <div class="real-add-grid" style="padding:0 0 6px;grid-template-columns:repeat(3,1fr);">
           <div class="real-add-field"><label class="real-add-label">Início</label><input class="real-add-input" type="date" id="hedit-ini-${r._sbId}-${lancIdx}" oninput="calcFimEditLanc('${r._sbId}',${lancIdx})"></div>
           <div class="real-add-field"><label class="real-add-label">Dias</label><input class="real-add-input" type="number" id="hedit-dias-${r._sbId}-${lancIdx}" min="1" oninput="calcFimEditLanc('${r._sbId}',${lancIdx})"></div>
           <div class="real-add-field"><label class="real-add-label">Fim <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(auto)</span></label><input class="real-add-input" type="date" id="hedit-fim-${r._sbId}-${lancIdx}" readonly style="background:#F9FAFB;color:var(--text-sec);"></div>
-          <div class="real-add-field"><label class="real-add-label">Obs.</label><input class="real-add-input" type="text" id="hedit-nota-${r._sbId}-${lancIdx}" placeholder="observação…"></div>
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:2px;"><button style="padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;border:1.5px solid #D0D5DD;border-radius:6px;background:none;color:#374151;" onclick="fecharEditLanc('${r._sbId}',${lancIdx})">Cancelar</button><button style="padding:5px 14px;font-size:12px;font-family:inherit;font-weight:600;cursor:pointer;border:none;border-radius:6px;background:#1849A9;color:#fff;" onclick="salvarEditLanc('${key}','${r._sbId}',${lancIdx})">Salvar</button></div>
+        <div class="real-add-field" style="margin-bottom:8px;"><label class="real-add-label">Observação</label><input class="real-add-input" type="text" id="hedit-nota-${r._sbId}-${lancIdx}" placeholder="observação opcional…" style="width:100%;box-sizing:border-box;"></div>
+        <div style="display:flex;justify-content:flex-end;gap:6px;"><button style="padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;border:1.5px solid #D0D5DD;border-radius:6px;background:none;color:#374151;" onclick="fecharEditLanc('${r._sbId}',${lancIdx})">Cancelar</button><button style="padding:5px 14px;font-size:12px;font-family:inherit;font-weight:600;cursor:pointer;border:none;border-radius:6px;background:#1849A9;color:#fff;" onclick="salvarEditLanc('${key}','${r._sbId}',${lancIdx})">Salvar</button></div>
       </div>` : '';
+      const notaVisivelHtml = l.nota && !(!excluirPA && IS_RH) ? `<div class="drawer-tl-meta">${l.nota}</div>` : l.nota ? `<div class="drawer-tl-meta" id="hist-nota-${r._sbId}-${lancIdx}">${l.nota}</div>` : '';
       return `<div class="drawer-tl-item">
         <div class="drawer-tl-dot" style="background:${l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)'}"></div>
         <div class="drawer-tl-info" style="flex:1;min-width:0;">
@@ -2671,7 +2672,7 @@ function renderDrawerHistorico(colab) {
             <div style="display:flex;align-items:center;gap:4px;">${editBtnHtml}${iconoAcordo}</div>
           </div>
           ${editFormHtml}
-          ${l.nota ? `<div class="drawer-tl-meta">${l.nota}</div>` : ''}
+          ${notaVisivelHtml}
           ${gozoResumoHtml}
           ${secaoHtml}
         </div>
@@ -2871,11 +2872,15 @@ function abrirEditLanc(sbId, lancIdx) {
   document.getElementById(`hedit-fim-${sbId}-${lancIdx}`).value  = l.fim    || '';
   document.getElementById(`hedit-nota-${sbId}-${lancIdx}`).value = l.nota   || '';
   form.style.display = '';
+  const notaEl = document.getElementById(`hist-nota-${sbId}-${lancIdx}`);
+  if (notaEl) notaEl.style.display = 'none';
 }
 
 function fecharEditLanc(sbId, lancIdx) {
   const form = document.getElementById(`hist-edit-${sbId}-${lancIdx}`);
   if (form) form.style.display = 'none';
+  const notaEl = document.getElementById(`hist-nota-${sbId}-${lancIdx}`);
+  if (notaEl) notaEl.style.display = '';
 }
 
 function calcFimEditLanc(sbId, lancIdx) {
