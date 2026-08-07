@@ -892,6 +892,8 @@
   .hist-gozo-item-obs { font-size: 11px; color: var(--text-ter); }
   .hist-gozo-del { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--text-ter); cursor: pointer; padding: 0; flex-shrink: 0; transition: color 0.15s, border-color 0.15s, background 0.15s; }
   .hist-gozo-del:hover { color: #C4150A; border-color: #FECACA; background: #FEF2F2; }
+  .hist-edit-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--text-ter); cursor: pointer; padding: 0; flex-shrink: 0; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+  .hist-edit-btn:hover { color: #1849A9; border-color: #C7D7F9; background: var(--blue-bg); }
   /* Form inline */
   .hist-gozo-form { display: none; padding: 10px 12px 8px; background: #F8FAFF; border: 1.5px solid #C7D7F9; border-radius: 6px; }
   .hist-gozo-form.open { display: block; }
@@ -1810,6 +1812,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
         ativo:         !colabDados.data_demissao,
         fotoUrl:       colabDados.foto_url || null,
         matricula:     colabDados.matricula || mat,
+        _sbColabId:    colabDados.id || null,
         registros: [],
       });
     }
@@ -2648,6 +2651,16 @@ function renderDrawerHistorico(colab) {
           gozoResumoHtml = `<div><span class="drawer-tl-gozo-chip pendente">⚠ ${saldoPeriodo}d a registrar</span></div>`;
       }
 
+      const editBtnHtml = (!excluirPA && IS_RH) ? `<button class="hist-edit-btn" onclick="abrirEditLanc('${r._sbId}',${lancIdx})" title="Editar período"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '';
+      const editFormHtml = (!excluirPA && IS_RH) ? `<div class="hist-edit-form" id="hist-edit-${r._sbId}-${lancIdx}" style="display:none;margin-top:8px;">
+        <div class="real-add-grid" style="padding:0 0 6px;">
+          <div class="real-add-field"><label class="real-add-label">Início</label><input class="real-add-input" type="date" id="hedit-ini-${r._sbId}-${lancIdx}" oninput="calcFimEditLanc('${r._sbId}',${lancIdx})"></div>
+          <div class="real-add-field"><label class="real-add-label">Dias</label><input class="real-add-input" type="number" id="hedit-dias-${r._sbId}-${lancIdx}" min="1" oninput="calcFimEditLanc('${r._sbId}',${lancIdx})"></div>
+          <div class="real-add-field"><label class="real-add-label">Fim <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(auto)</span></label><input class="real-add-input" type="date" id="hedit-fim-${r._sbId}-${lancIdx}" readonly style="background:#F9FAFB;color:var(--text-sec);"></div>
+          <div class="real-add-field"><label class="real-add-label">Obs.</label><input class="real-add-input" type="text" id="hedit-nota-${r._sbId}-${lancIdx}" placeholder="observação…"></div>
+        </div>
+        <div class="real-add-actions" style="padding:0;"><button class="btn-real-cancel" onclick="fecharEditLanc('${r._sbId}',${lancIdx})">Cancelar</button><button class="btn-real-save" onclick="salvarEditLanc('${key}','${r._sbId}',${lancIdx})">Salvar</button></div>
+      </div>` : '';
       return `<div class="drawer-tl-item">
         <div class="drawer-tl-dot" style="background:${l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)'}"></div>
         <div class="drawer-tl-info" style="flex:1;min-width:0;">
@@ -2655,8 +2668,9 @@ function renderDrawerHistorico(colab) {
             <div class="drawer-tl-dates-left">
               <span class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>
             </div>
-            ${iconoAcordo}
+            <div style="display:flex;align-items:center;gap:4px;">${editBtnHtml}${iconoAcordo}</div>
           </div>
+          ${editFormHtml}
           ${l.nota ? `<div class="drawer-tl-meta">${l.nota}</div>` : ''}
           ${gozoResumoHtml}
           ${secaoHtml}
@@ -2839,6 +2853,84 @@ async function confirmarDrawerLancamento() {
     toast(`✓ Lançamento enviado para aprovação — ${colab.nome}`);
     fecharDrawer();
     renderAll();
+  }
+}
+
+// ─── Edição de período de férias ──────────────────────────────────────────────
+function abrirEditLanc(sbId, lancIdx) {
+  const colab = COLABORADORES.find(c => c.__key === _drawerKey);
+  if (!colab) return;
+  const reg = colab.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  const l = reg.lancamentos[lancIdx];
+  if (!l) return;
+  const form = document.getElementById(`hist-edit-${sbId}-${lancIdx}`);
+  if (!form) return;
+  document.getElementById(`hedit-ini-${sbId}-${lancIdx}`).value  = l.inicio || '';
+  document.getElementById(`hedit-dias-${sbId}-${lancIdx}`).value = l.dias   || '';
+  document.getElementById(`hedit-fim-${sbId}-${lancIdx}`).value  = l.fim    || '';
+  document.getElementById(`hedit-nota-${sbId}-${lancIdx}`).value = l.nota   || '';
+  form.style.display = '';
+}
+
+function fecharEditLanc(sbId, lancIdx) {
+  const form = document.getElementById(`hist-edit-${sbId}-${lancIdx}`);
+  if (form) form.style.display = 'none';
+}
+
+function calcFimEditLanc(sbId, lancIdx) {
+  const inicio = document.getElementById(`hedit-ini-${sbId}-${lancIdx}`).value;
+  const dias   = parseInt(document.getElementById(`hedit-dias-${sbId}-${lancIdx}`).value);
+  if (inicio && dias > 0) {
+    document.getElementById(`hedit-fim-${sbId}-${lancIdx}`).value = addDays(inicio, dias - 1);
+  }
+}
+
+async function salvarEditLanc(chave, sbId, lancIdx) {
+  const inicio = document.getElementById(`hedit-ini-${sbId}-${lancIdx}`).value;
+  const dias   = parseInt(document.getElementById(`hedit-dias-${sbId}-${lancIdx}`).value);
+  const nota   = document.getElementById(`hedit-nota-${sbId}-${lancIdx}`).value.trim();
+  if (!inicio || !dias || dias < 1) { toast('Preencha início e dias.'); return; }
+  const fim = addDays(inicio, dias - 1);
+
+  const colab = COLABORADORES.find(c => c.__key === chave);
+  if (!colab) return;
+  const reg = colab.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  const l = reg.lancamentos[lancIdx];
+  const antigo = `${l.inicio} → ${l.fim} · ${l.dias}d`;
+  const novo   = `${inicio} → ${fim} · ${dias}d`;
+
+  const n = lancIdx + 1;
+  const payload = {
+    [`periodo${n}_inicio`]: inicio,
+    [`periodo${n}_fim`]:    fim,
+    [`dias${n}`]:           dias,
+    [`nota${n}`]:           nota || null,
+  };
+
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, payload);
+
+    // Audit trail no colaborador
+    if (colab._sbColabId) {
+      const rows = await sbGet('colaboradores', `id=eq.${colab._sbColabId}&select=historico`);
+      const hist = Array.isArray(rows[0]?.historico) ? rows[0].historico : [];
+      const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+      hist.push({ tipo: 'ferias_periodo_editado', detalhe: `${n}º período: ${antigo} → ${novo}`, data: new Date().toISOString(), usuario: perfil.nome || 'RH' });
+      await sbPatch('colaboradores', `id=eq.${colab._sbColabId}`, { historico: hist });
+    }
+
+    // Atualiza modelo em memória
+    l.inicio = inicio;
+    l.fim    = fim;
+    l.dias   = dias;
+    l.nota   = nota || null;
+
+    toast('✓ Período atualizado');
+    renderDrawerHistorico(colab);
+  } catch(e) {
+    toast('Erro: ' + e.message);
   }
 }
 
