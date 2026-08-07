@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uniformes & EPI — Sistema RH</title>
+<style>
+  :root {
+    --bg: #F0F2F5;
+    --surface: #ffffff;
+    --border: #E4E7EC;
+    --border-light: #F0F2F5;
+    --text: #101828;
+    --text-sec: #667085;
+    --text-ter: #98A2B3;
+    --accent: #101828;
+    --green: #027A48;  --green-bg: #ECFDF3;  --green-mid: #6CE9A6;
+    --red:   #B42318;  --red-bg:   #FEF3F2;
+    --blue:  #1849A9;  --blue-bg:  #EFF4FF;
+    --amber: #92400E;  --amber-bg: #FFFAEB;
+    --purple:#5925DC;  --purple-bg:#F4F3FF;
+    --radius: 12px;
+    --shadow-sm: 0 1px 2px rgba(16,24,40,0.05);
+    --shadow-md: 0 4px 8px -2px rgba(16,24,40,0.1), 0 2px 4px -2px rgba(16,24,40,0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; -webkit-font-smoothing: antialiased; }
+
+  /* ── topbar ── */
+  .topbar { background: var(--accent); color: #fff; padding: 0 28px; height: 56px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 0 rgba(255,255,255,0.08); }
+  .topbar-left { display: flex; align-items: center; gap: 8px; }
+  .topbar-logo { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; text-decoration: none; color: rgba(255,255,255,0.7); transition: color 0.15s; }
+  .topbar-logo:hover { color: #fff; }
+  .topbar-sep { color: rgba(255,255,255,0.25); font-size: 16px; margin: 0 4px; }
+  .topbar-mod { font-size: 15px; font-weight: 600; color: #fff; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .topbar-user { font-size: 13px; color: rgba(255,255,255,0.75); }
+  .btn-logout { background: none; border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.8); padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; transition: all .15s; }
+  .btn-logout:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+  /* ── module tabs ── */
+  .mod-tabs { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; display: flex; gap: 0; box-shadow: var(--shadow-sm); overflow-x: auto; }
+  .mod-tab { padding: 15px 18px; font-size: 13px; font-weight: 500; color: var(--text-sec); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; transition: color .15s; }
+  .mod-tab:hover { color: var(--text); }
+  .mod-tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+
+  /* ── container ── */
+  .container { max-width: 1320px; margin: 0 auto; padding: 28px 24px; }
+
+  /* ── cards ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .card-sub { font-size: 13px; color: var(--text-sec); margin-bottom: 20px; }
+  .card-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .card-hdr-left { display: flex; flex-direction: column; gap: 2px; }
+
+  /* ── buttons ── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; transition: all .15s; }
+  .btn-primary { background: var(--text); color: #fff; }
+  .btn-primary:hover { background: #1D2939; }
+  .btn-outline { background: none; border: 1px solid var(--border); color: var(--text-sec); }
+  .btn-outline:hover { border-color: #98A2B3; color: var(--text); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-danger { background: var(--red-bg); color: var(--red); border: 1px solid #FECDC9; }
+  .btn-danger:hover { background: #FEE4E2; }
+  .btn-blue { background: var(--blue); color: #fff; }
+  .btn-blue:hover { background: #1239A0; }
+
+  /* ── table ── */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-ter); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid var(--border-light); transition: background .1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #FAFBFC; }
+  tbody td { padding: 12px 14px; color: var(--text); vertical-align: middle; }
+
+  /* ── badges ── */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .badge-uniforme { background: var(--blue-bg); color: var(--blue); }
+  .badge-epi      { background: var(--amber-bg); color: var(--amber); }
+  .badge-ativo    { background: var(--green-bg); color: var(--green); }
+  .badge-inativo  { background: var(--border-light); color: var(--text-ter); }
+
+  /* ── form ── */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field.full { grid-column: 1 / -1; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text-sec); }
+  .form-input, .form-select, .form-textarea {
+    padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface);
+    transition: border-color .15s; outline: none;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #1849A9; }
+  .form-input::placeholder { color: var(--text-ter); }
+  .form-textarea { resize: vertical; min-height: 72px; }
+  .req { color: var(--red); }
+
+  /* ── modal ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; display: none; align-items: center; justify-content: center; padding: 24px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 16px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.2); }
+  .modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; }
+  .modal-title { font-size: 16px; font-weight: 700; }
+  .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-ter); padding: 4px; line-height: 1; }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* ── tamanho tags ── */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 99px; font-size: 12px; font-weight: 600; }
+  .tag-rm { background: none; border: none; cursor: pointer; color: var(--text-ter); font-size: 14px; line-height: 1; padding: 0 2px; }
+  .tag-rm:hover { color: var(--red); }
+
+  /* ── kit section ── */
+  .kit-cargo-sel { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
+  .kit-cargo-sel select { flex: 1; }
+  .kit-items-list { display: flex; flex-direction: column; gap: 8px; }
+  .kit-item-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg); border-radius: 8px; font-size: 13px; }
+  .kit-item-nome { flex: 1; font-weight: 500; }
+  .kit-item-tipo { min-width: 80px; }
+  .kit-item-qty { width: 60px; }
+  .kit-item-qty input { width: 60px; padding: 4px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; text-align: center; }
+  .kit-item-rm { background: none; border: none; cursor: pointer; color: var(--text-ter); padding: 4px; }
+  .kit-item-rm:hover { color: var(--red); }
+
+  /* ── empty state ── */
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--text-sec); }
+  .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; }
+
+  /* ── coming soon ── */
+  .coming-soon { text-align: center; padding: 80px 24px; }
+  .coming-soon .icon { font-size: 40px; margin-bottom: 16px; opacity: .4; }
+  .coming-soon h3 { font-size: 16px; font-weight: 600; color: var(--text-sec); margin-bottom: 8px; }
+  .coming-soon p { font-size: 13px; color: var(--text-ter); }
+
+  /* ── search ── */
+  .search-bar { position: relative; }
+  .search-bar input { width: 100%; padding: 9px 12px 9px 36px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; transition: border-color .15s; }
+  .search-bar input:focus { border-color: #1849A9; }
+  .search-bar svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-ter); pointer-events: none; }
+
+  /* ── filtros ── */
+  .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .filters select, .filters input { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; }
+
+  /* ── toast ── */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(16px); background: #101828; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 999; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── divider ── */
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  /* ── section tabs (dentro de card) ── */
+  .sec-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+  .sec-tab { padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: none; font-family: inherit; color: var(--text-sec); transition: all .15s; }
+  .sec-tab:hover { background: var(--bg); }
+  .sec-tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- ═══ Topbar ═══ -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="../../index.html" class="topbar-logo">Sistema RH</a>
+    <span class="topbar-sep">/</span>
+    <span class="topbar-mod">Uniformes &amp; EPI</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="unifUserNome"></span>
+    <button class="btn-logout" onclick="logout()">Sair</button>
+  </div>
+</div>
+
+<!-- ═══ Module tabs ═══ -->
+<div class="mod-tabs">
+  <button class="mod-tab" id="tab-painel"        onclick="setTab('painel')">Painel</button>
+  <button class="mod-tab" id="tab-colaboradores" onclick="setTab('colaboradores')">Colaboradores</button>
+  <button class="mod-tab" id="tab-estoque"       onclick="setTab('estoque')">Estoque</button>
+  <button class="mod-tab active" id="tab-catalogo" onclick="setTab('catalogo')">Catálogo</button>
+  <button class="mod-tab" id="tab-solicitacoes"  onclick="setTab('solicitacoes')">Solicitações</button>
+</div>
+
+<!-- ═══ Seções ═══ -->
+<div class="container">
+
+  <!-- PAINEL -->
+  <div id="sec-painel" style="display:none;">
+    <div class="coming-soon">
+      <div class="icon">📊</div>
+      <h3>Painel em desenvolvimento</h3>
+      <p>Disponível após o cadastro do catálogo e estoque inicial.</p>
+    </div>
+  </div>
+
+  <!-- COLABORADORES -->
+  <div id="sec-colaboradores" style="display:none;">
+    <div class="coming-soon">
+      <div class="icon">👔</div>
+      <h3>Histórico por colaborador em desenvolvimento</h3>
+      <p>Disponível na Fase 2.</p>
+    </div>
+  </div>
+
+  <!-- ESTOQUE -->
+  <div id="sec-estoque" style="display:none;">
+    <div class="coming-soon">
+      <div class="icon">📦</div>
+      <h3>Gestão de estoque em desenvolvimento</h3>
+      <p>Disponível na Fase 2.</p>
+    </div>
+  </div>
+
+  <!-- CATÁLOGO -->
+  <div id="sec-catalogo">
+
+    <!-- Tabs internas -->
+    <div class="sec-tabs">
+      <button class="sec-tab active" id="stab-itens" onclick="setSecTab('itens')">Itens</button>
+      <button class="sec-tab" id="stab-kits" onclick="setSecTab('kits')">Kits por Cargo</button>
+    </div>
+
+    <!-- ── Itens ── -->
+    <div id="ssec-itens">
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-hdr-left">
+            <div class="card-title">Catálogo de Uniformes e EPIs</div>
+            <div class="card-sub" style="margin:0;">Gerencie os itens disponíveis para entrega</div>
+          </div>
+          <button class="btn btn-primary" onclick="abrirModalItem()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo item
+          </button>
+        </div>
+
+        <div class="filters">
+          <div class="search-bar" style="flex:1;min-width:200px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="buscaItem" placeholder="Buscar item…" oninput="renderItens()">
+          </div>
+          <select id="filtroTipo" onchange="renderItens()">
+            <option value="">Todos os tipos</option>
+            <option value="uniforme">Uniforme</option>
+            <option value="epi">EPI</option>
+          </select>
+          <select id="filtroAtivo" onchange="renderItens()">
+            <option value="1">Ativos</option>
+            <option value="0">Inativos</option>
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Categoria</th>
+                <th>Tamanhos</th>
+                <th>CA</th>
+                <th>Prazo troca</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbodyItens">
+              <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-ter);">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Kits por Cargo ── -->
+    <div id="ssec-kits" style="display:none;">
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-hdr-left">
+            <div class="card-title">Kits por Cargo</div>
+            <div class="card-sub" style="margin:0;">Defina o kit padrão entregue na admissão de cada cargo</div>
+          </div>
+        </div>
+
+        <div class="kit-cargo-sel">
+          <select id="selCargo" class="form-select" style="flex:1;" onchange="carregarKit()">
+            <option value="">Selecione um cargo…</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="abrirModalNovoCargo()">
+            + Novo cargo
+          </button>
+        </div>
+
+        <div id="kitConteudo">
+          <div class="empty-state">
+            <div class="icon">👆</div>
+            <p>Selecione um cargo para ver ou editar o kit</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sec-catalogo -->
+
+  <!-- SOLICITAÇÕES -->
+  <div id="sec-solicitacoes" style="display:none;">
+    <div class="coming-soon">
+      <div class="icon">📋</div>
+      <h3>Solicitações em desenvolvimento</h3>
+      <p>Disponível após a implementação do portal do colaborador.</p>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ═══ Modal: Item ═══ -->
+<div class="modal-overlay" id="modalItem">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title" id="modalItemTitulo">Novo item</span>
+      <button class="modal-close" onclick="fecharModalItem()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:16px;">
+        <div class="form-field full">
+          <label class="form-label">Nome <span class="req">*</span></label>
+          <input class="form-input" type="text" id="iNome" placeholder="ex: Camiseta polo manga curta">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Tipo <span class="req">*</span></label>
+          <select class="form-select" id="iTipo" onchange="toggleCampoCA()">
+            <option value="uniforme">Uniforme</option>
+            <option value="epi">EPI</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Categoria</label>
+          <input class="form-input" type="text" id="iCategoria" placeholder="ex: camisa, calça, bota…">
+        </div>
+        <div class="form-field" id="campoCA" style="display:none;">
+          <label class="form-label">Nº do CA <span class="req">*</span></label>
+          <input class="form-input" type="text" id="iCA" placeholder="ex: 12345">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Sistema de tamanho <span class="req">*</span></label>
+          <select class="form-select" id="iSistemaTamanho" onchange="renderTagsInput()">
+            <option value="letra">Letra (P / M / G / GG / XG)</option>
+            <option value="numerico">Numérico (34, 36, 38…)</option>
+            <option value="unico">Tamanho único</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Prazo de troca (meses)</label>
+          <input class="form-input" type="number" id="iPrazo" value="24" min="1">
+        </div>
+      </div>
+
+      <!-- Tamanhos disponíveis -->
+      <div id="bloccoTamanhos" style="margin-bottom:16px;">
+        <div class="form-label" style="margin-bottom:8px;">Tamanhos disponíveis <span class="req">*</span></div>
+        <div id="tamanhosSugeridos" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="form-input" type="text" id="iTagInput" placeholder="Digite e pressione Enter…" style="flex:1;" onkeydown="adicionarTag(event)">
+          <button class="btn btn-outline btn-sm" onclick="adicionarTagBtn()">+ Adicionar</button>
+        </div>
+        <div class="tag-list" id="tagList" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="form-field">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="iAtivo" checked style="width:15px;height:15px;accent-color:var(--blue);">
+          Item ativo
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModalItem()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarItem()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: Novo Cargo ═══ -->
+<div class="modal-overlay" id="modalNovoCargo">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-hdr">
+      <span class="modal-title">Adicionar cargo</span>
+      <button class="modal-close" onclick="fecharModalNovoCargo()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field">
+        <label class="form-label">Nome do cargo <span class="req">*</span></label>
+        <input class="form-input" type="text" id="novoCargoNome" placeholder="ex: Vendedor(a) Externo">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModalNovoCargo()">Cancelar</button>
+      <button class="btn btn-primary" onclick="adicionarCargo()">Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Supabase ─────────────────────────────────────────────────────────────────
+const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
+let SB_HEADERS = {};
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+(function () {
+  const sess = localStorage.getItem('sb_session');
+  if (!sess) { window.location.href = '../../login.html'; return; }
+  try {
+    const s = JSON.parse(sess);
+    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' };
+    const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    const el = document.getElementById('unifUserNome');
+    if (el) el.textContent = (p.nome || s.email || '').split(' ')[0];
+  } catch (_) { window.location.href = '../../login.html'; }
+})();
+
+function logout() {
+  localStorage.removeItem('sb_session');
+  localStorage.removeItem('sb_perfil');
+  window.location.href = '../../login.html';
+}
+
+// ─── Helpers Supabase ─────────────────────────────────────────────────────────
+async function sbGet(tabela, params) {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${params}`, { headers: SB_HEADERS });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPost(tabela, dados) {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}`, {
+    method: 'POST', headers: { ...SB_HEADERS, 'Prefer': 'return=representation' }, body: JSON.stringify(dados)
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPatch(tabela, filtro, dados) {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${filtro}`, {
+    method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(dados)
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function sbDelete(tabela, filtro) {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${filtro}`, {
+    method: 'DELETE', headers: SB_HEADERS
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ─── Estado global ────────────────────────────────────────────────────────────
+let ITENS      = [];  // catálogo completo
+let KITS       = [];  // kits de todos os cargos
+let CARGOS     = [];  // lista de cargos únicos
+let _editItemId = null; // null = novo, string = editando
+
+// ─── Navegação principal ──────────────────────────────────────────────────────
+const TABS = ['painel','colaboradores','estoque','catalogo','solicitacoes'];
+function setTab(tab) {
+  TABS.forEach(t => {
+    document.getElementById(`sec-${t}`).style.display   = t === tab ? '' : 'none';
+    document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'catalogo') renderItens();
+}
+
+// ─── Sub-navegação (Catálogo) ─────────────────────────────────────────────────
+function setSecTab(sub) {
+  ['itens','kits'].forEach(s => {
+    document.getElementById(`ssec-${s}`).style.display    = s === sub ? '' : 'none';
+    document.getElementById(`stab-${s}`).classList.toggle('active', s === sub);
+  });
+  if (sub === 'kits') renderSelCargo();
+}
+
+// ─── Carregamento inicial ─────────────────────────────────────────────────────
+async function init() {
+  try {
+    const [itens, kits] = await Promise.all([
+      sbGet('unif_catalogo', 'select=*&order=nome'),
+      sbGet('unif_kits',     'select=*,item:unif_catalogo(id,nome,tipo)'),
+    ]);
+    ITENS  = itens;
+    KITS   = kits;
+    CARGOS = [...new Set(kits.map(k => k.cargo))].sort();
+    renderItens();
+    renderSelCargo();
+  } catch (e) {
+    toast('Erro ao carregar dados: ' + e.message);
+  }
+}
+
+// ─── Tabela de Itens ──────────────────────────────────────────────────────────
+function renderItens() {
+  const busca  = (document.getElementById('buscaItem')?.value || '').toLowerCase();
+  const tipo   = document.getElementById('filtroTipo')?.value  || '';
+  const ativo  = document.getElementById('filtroAtivo')?.value;
+
+  let lista = ITENS.filter(i => {
+    if (busca && !i.nome.toLowerCase().includes(busca) && !(i.categoria || '').toLowerCase().includes(busca)) return false;
+    if (tipo  && i.tipo !== tipo) return false;
+    if (ativo === '1' && !i.ativo) return false;
+    if (ativo === '0' &&  i.ativo) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('tbodyItens');
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">📋</div><p>Nenhum item encontrado</p></div></td></tr>`;
+    return;
+  }
+
+  const tam = t => (Array.isArray(t) && t.length ? t.map(x => `<span class="tag" style="padding:2px 6px;font-size:11px;">${x}</span>`).join('') : '<span style="color:var(--text-ter);font-size:12px;">—</span>');
+
+  tbody.innerHTML = lista.map(i => `
+    <tr>
+      <td style="font-weight:600;">${i.nome}</td>
+      <td><span class="badge badge-${i.tipo}">${i.tipo === 'epi' ? 'EPI' : 'Uniforme'}</span></td>
+      <td style="color:var(--text-sec);">${i.categoria || '—'}</td>
+      <td>${tam(i.tamanhos_disponiveis)}</td>
+      <td style="color:var(--text-sec);font-size:12px;">${i.ca_numero || '—'}</td>
+      <td style="color:var(--text-sec);">${i.prazo_troca_meses || 24} meses</td>
+      <td><span class="badge ${i.ativo ? 'badge-ativo' : 'badge-inativo'}">${i.ativo ? 'Ativo' : 'Inativo'}</span></td>
+      <td>
+        <div style="display:flex;gap:6px;justify-content:flex-end;">
+          <button class="btn btn-outline btn-sm" onclick="abrirModalItem('${i.id}')">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmarExcluirItem('${i.id}','${i.nome.replace(/'/g,"\\'")}')">Excluir</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+// ─── Modal de Item ────────────────────────────────────────────────────────────
+const TAGS_SUGERIDAS = {
+  letra:    ['P','M','G','GG','XG'],
+  numerico: ['34','36','38','40','42','44','46','48','50'],
+  unico:    [],
+};
+let _tags = [];
+
+function abrirModalItem(id) {
+  _editItemId = id || null;
+  _tags = [];
+  document.getElementById('modalItemTitulo').textContent = id ? 'Editar item' : 'Novo item';
+
+  if (id) {
+    const item = ITENS.find(i => i.id === id);
+    if (!item) return;
+    document.getElementById('iNome').value            = item.nome;
+    document.getElementById('iTipo').value            = item.tipo;
+    document.getElementById('iCategoria').value       = item.categoria || '';
+    document.getElementById('iCA').value              = item.ca_numero || '';
+    document.getElementById('iSistemaTamanho').value  = item.sistema_tamanho;
+    document.getElementById('iPrazo').value           = item.prazo_troca_meses || 24;
+    document.getElementById('iAtivo').checked         = item.ativo;
+    _tags = Array.isArray(item.tamanhos_disponiveis) ? [...item.tamanhos_disponiveis] : [];
+  } else {
+    document.getElementById('iNome').value            = '';
+    document.getElementById('iTipo').value            = 'uniforme';
+    document.getElementById('iCategoria').value       = '';
+    document.getElementById('iCA').value              = '';
+    document.getElementById('iSistemaTamanho').value  = 'letra';
+    document.getElementById('iPrazo').value           = '24';
+    document.getElementById('iAtivo').checked         = true;
+  }
+
+  toggleCampoCA();
+  renderTagsInput();
+  document.getElementById('modalItem').classList.add('open');
+}
+
+function fecharModalItem() {
+  document.getElementById('modalItem').classList.remove('open');
+}
+
+function toggleCampoCA() {
+  const isEpi = document.getElementById('iTipo').value === 'epi';
+  document.getElementById('campoCA').style.display = isEpi ? '' : 'none';
+}
+
+function renderTagsInput() {
+  const sistema = document.getElementById('iSistemaTamanho').value;
+  const bloco   = document.getElementById('bloccoTamanhos');
+  const sugs    = TAGS_SUGERIDAS[sistema] || [];
+
+  bloco.style.display = sistema === 'unico' ? 'none' : '';
+  if (sistema === 'unico') { _tags = []; return; }
+
+  // Sugestões clicáveis
+  document.getElementById('tamanhosSugeridos').innerHTML = sugs.map(s =>
+    `<button type="button" onclick="adicionarTagValor('${s}')" style="padding:3px 9px;border:1px solid var(--border);border-radius:99px;font-size:12px;font-weight:600;background:none;cursor:pointer;color:var(--text-sec);transition:all .1s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">${s}</button>`
+  ).join('');
+
+  renderTags();
+}
+
+function renderTags() {
+  document.getElementById('tagList').innerHTML = _tags.map((t, i) =>
+    `<span class="tag">${t}<button class="tag-rm" onclick="_tags.splice(${i},1);renderTags()">×</button></span>`
+  ).join('');
+}
+
+function adicionarTagValor(val) {
+  const v = val.trim().toUpperCase();
+  if (v && !_tags.includes(v)) { _tags.push(v); renderTags(); }
+}
+
+function adicionarTag(e) {
+  if (e.key === 'Enter') { e.preventDefault(); adicionarTagBtn(); }
+}
+
+function adicionarTagBtn() {
+  const inp = document.getElementById('iTagInput');
+  adicionarTagValor(inp.value);
+  inp.value = '';
+}
+
+async function salvarItem() {
+  const nome     = document.getElementById('iNome').value.trim();
+  const tipo     = document.getElementById('iTipo').value;
+  const sistema  = document.getElementById('iSistemaTamanho').value;
+  const ca       = document.getElementById('iCA').value.trim();
+  const prazo    = parseInt(document.getElementById('iPrazo').value) || 24;
+  const ativo    = document.getElementById('iAtivo').checked;
+  const categoria = document.getElementById('iCategoria').value.trim();
+
+  if (!nome) { toast('Informe o nome do item.'); return; }
+  if (tipo === 'epi' && !ca) { toast('Informe o número do CA para EPIs.'); return; }
+  if (sistema !== 'unico' && !_tags.length) { toast('Adicione ao menos um tamanho.'); return; }
+
+  const tamanhos = sistema === 'unico' ? [] : _tags;
+  const payload = { nome, tipo, categoria: categoria || null, sistema_tamanho: sistema, tamanhos_disponiveis: tamanhos, ca_numero: ca || null, prazo_troca_meses: prazo, ativo, updated_at: new Date().toISOString() };
+
+  try {
+    if (_editItemId) {
+      await sbPatch('unif_catalogo', `id=eq.${_editItemId}`, payload);
+      const idx = ITENS.findIndex(i => i.id === _editItemId);
+      if (idx >= 0) ITENS[idx] = { ...ITENS[idx], ...payload };
+      toast('✓ Item atualizado');
+    } else {
+      const [novo] = await sbPost('unif_catalogo', payload);
+      ITENS.push(novo);
+      toast('✓ Item criado');
+    }
+    fecharModalItem();
+    renderItens();
+  } catch (e) {
+    toast('Erro: ' + e.message);
+  }
+}
+
+async function confirmarExcluirItem(id, nome) {
+  if (!confirm(`Excluir "${nome}"?\n\nEssa ação removerá o item do catálogo e de todos os kits.`)) return;
+  try {
+    await sbDelete('unif_catalogo', `id=eq.${id}`);
+    ITENS = ITENS.filter(i => i.id !== id);
+    KITS  = KITS.filter(k => k.item_id !== id);
+    renderItens();
+    toast('✓ Item excluído');
+  } catch (e) {
+    toast('Erro: ' + e.message);
+  }
+}
+
+// ─── Kits por Cargo ───────────────────────────────────────────────────────────
+function renderSelCargo() {
+  const sel = document.getElementById('selCargo');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Selecione um cargo…</option>' +
+    CARGOS.map(c => `<option value="${c.replace(/"/g,'&quot;')}"${c === cur ? ' selected' : ''}>${c}</option>`).join('');
+}
+
+function carregarKit() {
+  const cargo = document.getElementById('selCargo').value;
+  const box   = document.getElementById('kitConteudo');
+
+  if (!cargo) {
+    box.innerHTML = `<div class="empty-state"><div class="icon">👆</div><p>Selecione um cargo para ver ou editar o kit</p></div>`;
+    return;
+  }
+
+  const itensDoKit = KITS.filter(k => k.cargo === cargo);
+  const itensAtivos = ITENS.filter(i => i.ativo);
+
+  // Itens disponíveis para adicionar ao kit (que ainda não estão nele)
+  const idsNoKit  = new Set(itensDoKit.map(k => k.item_id));
+  const disponiveis = itensAtivos.filter(i => !idsNoKit.has(i.id));
+
+  box.innerHTML = `
+    <div class="kit-items-list" id="kitItemsList">
+      ${itensDoKit.length ? itensDoKit.map(k => kitItemRow(k)).join('') :
+        '<p style="font-size:13px;color:var(--text-ter);padding:12px 0;">Nenhum item no kit. Adicione abaixo.</p>'}
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:10px;align-items:flex-end;">
+      <div class="form-field" style="flex:1;">
+        <label class="form-label">Adicionar item ao kit</label>
+        <select class="form-select" id="selNovoItemKit">
+          <option value="">Selecione um item…</option>
+          ${disponiveis.map(i => `<option value="${i.id}">${i.nome} <span style="color:var(--text-ter)">(${i.tipo === 'epi' ? 'EPI' : 'Uniforme'})</span></option>`).join('')}
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Qtd.</label>
+        <input class="form-input" type="number" id="qtdNovoItemKit" value="1" min="1" style="width:72px;">
+      </div>
+      <button class="btn btn-blue" onclick="adicionarItemKit('${cargo.replace(/'/g,"\\'")}')">Adicionar</button>
+    </div>`;
+}
+
+function kitItemRow(k) {
+  const item = k.item || ITENS.find(i => i.id === k.item_id) || {};
+  return `<div class="kit-item-row" id="kit-row-${k.id}">
+    <div class="kit-item-nome">${item.nome || '—'}</div>
+    <div class="kit-item-tipo"><span class="badge badge-${item.tipo || 'uniforme'}">${item.tipo === 'epi' ? 'EPI' : 'Uniforme'}</span></div>
+    <div class="kit-item-qty">
+      <input type="number" value="${k.quantidade}" min="1"
+        onchange="atualizarQtdKit('${k.id}', this.value)">
+    </div>
+    <button class="kit-item-rm" onclick="removerItemKit('${k.id}','${k.cargo.replace(/'/g,"\\'")}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+    </button>
+  </div>`;
+}
+
+async function adicionarItemKit(cargo) {
+  const itemId = document.getElementById('selNovoItemKit').value;
+  const qtd    = parseInt(document.getElementById('qtdNovoItemKit').value) || 1;
+  if (!itemId) { toast('Selecione um item.'); return; }
+
+  try {
+    const [novo] = await sbPost('unif_kits', { cargo, item_id: itemId, quantidade: qtd });
+    const item   = ITENS.find(i => i.id === itemId);
+    novo.item    = item;
+    KITS.push(novo);
+    if (!CARGOS.includes(cargo)) { CARGOS.push(cargo); CARGOS.sort(); renderSelCargo(); }
+    carregarKit();
+    toast('✓ Item adicionado ao kit');
+  } catch (e) {
+    toast('Erro: ' + e.message);
+  }
+}
+
+async function atualizarQtdKit(kitId, val) {
+  const qtd = parseInt(val) || 1;
+  try {
+    await sbPatch('unif_kits', `id=eq.${kitId}`, { quantidade: qtd });
+    const kit = KITS.find(k => k.id === kitId);
+    if (kit) kit.quantidade = qtd;
+  } catch (e) {
+    toast('Erro: ' + e.message);
+  }
+}
+
+async function removerItemKit(kitId, cargo) {
+  try {
+    await sbDelete('unif_kits', `id=eq.${kitId}`);
+    KITS = KITS.filter(k => k.id !== kitId);
+    // Remove cargo da lista se ficou sem itens
+    if (!KITS.some(k => k.cargo === cargo)) {
+      CARGOS = CARGOS.filter(c => c !== cargo);
+      renderSelCargo();
+      document.getElementById('selCargo').value = '';
+    }
+    carregarKit();
+    toast('✓ Item removido do kit');
+  } catch (e) {
+    toast('Erro: ' + e.message);
+  }
+}
+
+// ─── Modal: Novo Cargo ────────────────────────────────────────────────────────
+function abrirModalNovoCargo() {
+  document.getElementById('novoCargoNome').value = '';
+  document.getElementById('modalNovoCargo').classList.add('open');
+  setTimeout(() => document.getElementById('novoCargoNome').focus(), 50);
+}
+function fecharModalNovoCargo() {
+  document.getElementById('modalNovoCargo').classList.remove('open');
+}
+function adicionarCargo() {
+  const nome = document.getElementById('novoCargoNome').value.trim();
+  if (!nome) { toast('Informe o nome do cargo.'); return; }
+  if (CARGOS.includes(nome)) { toast('Cargo já existe.'); return; }
+  CARGOS.push(nome);
+  CARGOS.sort();
+  renderSelCargo();
+  document.getElementById('selCargo').value = nome;
+  fecharModalNovoCargo();
+  carregarKit();
+}
+
+// Fechar modais ao clicar fora
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
