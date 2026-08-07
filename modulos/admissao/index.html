@@ -613,7 +613,7 @@ function renderCard(c) {
       <button class="btn btn-secondary btn-sm" onclick="copiarLink('${link}')">Copiar link</button>`;
   } else if (c.status === 'aprovado') {
     actions = `
-      <button class="btn btn-success btn-sm" onclick="verFicha('${c.token}')">Efetivar</button>
+      <button class="btn btn-success btn-sm" onclick="efetivarDireto('${c.token}')">Efetivar</button>
       <button class="btn btn-secondary btn-sm" onclick="verFicha('${c.token}')">Ver ficha</button>`;
   } else if (c.status === 'efetivado') {
     actions = `<button class="btn btn-secondary btn-sm" onclick="verFicha('${c.token}')">Ver ficha</button>`;
@@ -1484,7 +1484,6 @@ async function confirmarEfetivar() {
     salario:           salario ? parseFloat(salario.replace(/[^\d,]/g,'').replace(',','.')) || null : null,
     ativo:             true,
     comissionado:      /vendedor/i.test(cargo),
-    historico:         _historico,
   };
 
   try {
@@ -1987,6 +1986,15 @@ async function verFicha(token) {
   await loadFichas();
   const f = allFichas.find(x => x.token === token);
   if (f) { abrirRevisao(f.id); }
+}
+
+async function efetivarDireto(token) {
+  await loadFichas();
+  const f = allFichas.find(x => x.token === token);
+  if (!f) return;
+  currentFicha   = f;
+  currentConvite = f.admissao_convites || {};
+  efetivarContratacao(f);
 }
 
 function fmtDate(iso) {
