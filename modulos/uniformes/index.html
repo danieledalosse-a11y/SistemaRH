@@ -161,6 +161,19 @@
   .sec-tab { padding: 8px 18px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: 1.5px solid var(--border); background: none; font-family: inherit; color: var(--text-sec); transition: all .15s; }
   .sec-tab:hover { background: var(--bg); }
   .sec-tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+
+  /* ── gênero pills ── */
+  .genero-pill { padding: 8px 18px; border-radius: 99px; border: 1.5px solid var(--border); background: none; font-size: 14px; font-weight: 500; color: var(--text-sec); cursor: pointer; font-family: inherit; transition: all .15s; }
+  .genero-pill:hover { border-color: #667085; color: var(--text); }
+  .genero-pill.active { background: var(--text); color: #fff; border-color: var(--text); font-weight: 600; }
+
+  /* ── tamanho chips (toggle) ── */
+  .tam-chip { padding: 7px 14px; border-radius: 8px; border: 1.5px solid var(--border); background: none; font-size: 13px; font-weight: 600; color: var(--text-sec); cursor: pointer; font-family: inherit; transition: all .15s; }
+  .tam-chip:hover { border-color: #667085; color: var(--text); }
+  .tam-chip.sel { background: var(--text); color: #fff; border-color: var(--text); }
+  .tam-chip-custom { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px 7px 14px; border-radius: 8px; border: 1.5px solid var(--blue); background: #EFF4FF; font-size: 13px; font-weight: 600; color: #1849A9; }
+  .tam-chip-custom button { background: none; border: none; cursor: pointer; color: #1849A9; font-size: 15px; line-height: 1; padding: 0 2px; opacity: .7; }
+  .tam-chip-custom button:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -511,81 +524,77 @@
       <span class="modal-title" id="modalItemTitulo">Novo item</span>
       <button class="modal-close" onclick="fecharModalItem()">×</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:20px;">
 
-      <!-- Linha 1: Nome (full) -->
-      <div class="form-grid" style="margin-bottom:0;">
-        <div class="form-field full">
+      <!-- ── 1. Identificação ── -->
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);margin-bottom:12px;">Identificação</div>
+        <div class="form-field" style="margin-bottom:12px;">
           <label class="form-label">Nome <span class="req">*</span></label>
           <input class="form-input" type="text" id="iNome" placeholder="ex: Camiseta polo manga curta">
         </div>
-      </div>
-
-      <!-- Linha 2: Tipo / Gênero / Prazo / CA -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div class="form-field" style="margin:0;">
-          <label class="form-label">Tipo <span class="req">*</span></label>
-          <select class="form-select" id="iTipo" onchange="toggleCampoCA()">
-            <option value="uniforme">Uniforme</option>
-            <option value="epi">EPI</option>
-          </select>
-        </div>
-        <div class="form-field" style="margin:0;">
-          <label class="form-label">Gênero</label>
-          <select class="form-select" id="iGenero">
-            <option value="unissex">Unissex</option>
-            <option value="masculino">Masculino</option>
-            <option value="feminino">Feminino</option>
-          </select>
-        </div>
-        <div class="form-field" style="margin:0;">
-          <label class="form-label">Prazo de troca (meses)</label>
-          <input class="form-input" type="number" id="iPrazo" value="24" min="1">
-        </div>
-        <div class="form-field" id="campoCA" style="margin:0;display:none;">
-          <label class="form-label">Nº do CA <span class="req">*</span></label>
-          <input class="form-input" type="text" id="iCA" placeholder="ex: 12345">
-        </div>
-      </div>
-
-      <!-- Linha 3: Categorias (múltipla) + Sistema tamanho -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div>
-          <div class="form-label" style="margin-bottom:8px;">Categorias</div>
-          <div id="categoriasSugeridas" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
-          <div style="display:flex;gap:8px;">
-            <input class="form-input" type="text" id="iCatInput" placeholder="ex: manga curta, com forro…" style="flex:1;" onkeydown="adicionarCategoria(event)">
-            <button class="btn btn-outline btn-sm" onclick="adicionarCategoriaBtn()">+ Add</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div class="form-field">
+            <label class="form-label">Tipo <span class="req">*</span></label>
+            <select class="form-select" id="iTipo" onchange="toggleCampoCA()">
+              <option value="uniforme">Uniforme</option>
+              <option value="epi">EPI</option>
+            </select>
           </div>
-          <div class="tag-list" id="catList" style="margin-top:8px;"></div>
+          <div class="form-field">
+            <label class="form-label">Prazo de troca (meses)</label>
+            <input class="form-input" type="number" id="iPrazo" value="24" min="1">
+          </div>
+          <div class="form-field" id="campoCA" style="display:none;">
+            <label class="form-label">Nº do CA <span class="req">*</span></label>
+            <input class="form-input" type="text" id="iCA" placeholder="ex: 12345">
+          </div>
         </div>
-        <div>
-          <div class="form-label" style="margin-bottom:8px;">Sistema de tamanho <span class="req">*</span></div>
-          <select class="form-select" id="iSistemaTamanho" onchange="renderTagsInput()">
-            <option value="letra">Letra (PP / P / M / G / GG / XG / G1 / G2 / EGG / E3G / ESP)</option>
+      </div>
+
+      <div style="height:1px;background:var(--border-light);"></div>
+
+      <!-- ── 2. Gênero ── -->
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);margin-bottom:10px;">Gênero</div>
+        <div style="display:flex;gap:8px;" id="generoToggle">
+          <button type="button" data-val="unissex"   onclick="_setGenero('unissex')"   class="genero-pill active">👥 Unissex</button>
+          <button type="button" data-val="feminino"  onclick="_setGenero('feminino')"  class="genero-pill">♀ Feminino</button>
+          <button type="button" data-val="masculino" onclick="_setGenero('masculino')" class="genero-pill">♂ Masculino</button>
+        </div>
+        <input type="hidden" id="iGenero" value="unissex">
+      </div>
+
+      <div style="height:1px;background:var(--border-light);"></div>
+
+      <!-- ── 3. Tamanhos ── -->
+      <div id="bloccoTamanhos">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);">Tamanhos disponíveis para entrega <span class="req">*</span></div>
+          <select id="iSistemaTamanho" onchange="renderTagsInput()" style="font-size:12px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-sec);font-family:inherit;cursor:pointer;">
+            <option value="letra">Letras (PP, P, M, G…)</option>
             <option value="numerico">Numérico (34, 36, 38…)</option>
             <option value="unico">Tamanho único</option>
           </select>
         </div>
-      </div>
-
-      <!-- Linha 4: Tamanhos disponíveis -->
-      <div id="bloccoTamanhos" style="margin-bottom:16px;">
-        <div class="form-label" style="margin-bottom:8px;">Tamanhos disponíveis <span class="req">*</span></div>
-        <div id="tamanhosSugeridos" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input class="form-input" type="text" id="iTagInput" placeholder="Digite e pressione Enter…" style="flex:1;" onkeydown="adicionarTag(event)">
-          <button class="btn btn-outline btn-sm" onclick="adicionarTagBtn()">+ Adicionar</button>
+        <div style="font-size:12px;color:var(--text-ter);margin-bottom:12px;">Selecione os tamanhos que este item possui. Eles ficarão disponíveis ao registrar uma entrega.</div>
+        <div id="tamanhosSugeridos" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"></div>
+        <div id="tagList" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+        <div id="customTagRow" style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+          <input class="form-input" type="text" id="iTagInput" placeholder="Tamanho personalizado (pressione Enter)…" style="font-size:13px;padding:7px 10px;" onkeydown="adicionarTag(event)">
         </div>
-        <div class="tag-list" id="tagList" style="margin-top:8px;"></div>
       </div>
 
-      <div class="form-field">
-        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-          <input type="checkbox" id="iAtivo" checked style="width:15px;height:15px;accent-color:var(--blue);">
-          Item ativo
+      <div style="height:1px;background:var(--border-light);"></div>
+
+      <!-- ── 4. Status ── -->
+      <div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:500;">
+          <input type="checkbox" id="iAtivo" checked style="width:16px;height:16px;accent-color:var(--blue);">
+          Item ativo — visível para entregas e no catálogo
         </label>
       </div>
+
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="fecharModalItem()">Cancelar</button>
@@ -1845,7 +1854,6 @@ function abrirModalItem(id) {
     if (!item) return;
     document.getElementById('iNome').value           = item.nome;
     document.getElementById('iTipo').value           = item.tipo;
-    document.getElementById('iGenero').value         = item.genero || 'unissex';
     document.getElementById('iCA').value             = item.ca_numero || '';
     document.getElementById('iSistemaTamanho').value = item.sistema_tamanho;
     document.getElementById('iPrazo').value          = item.prazo_troca_meses || 24;
@@ -1853,42 +1861,30 @@ function abrirModalItem(id) {
     _tags = Array.isArray(item.tamanhos_disponiveis) ? [...item.tamanhos_disponiveis] : [];
     _cats = Array.isArray(item.categoria) ? [...item.categoria]
           : (item.categoria ? [item.categoria] : []);
+    _setGenero(item.genero || 'unissex');
   } else {
     document.getElementById('iNome').value           = '';
     document.getElementById('iTipo').value           = 'uniforme';
-    document.getElementById('iGenero').value         = 'unissex';
     document.getElementById('iCA').value             = '';
     document.getElementById('iSistemaTamanho').value = 'letra';
     document.getElementById('iPrazo').value          = '24';
     document.getElementById('iAtivo').checked        = true;
+    _tags = [];
+    _cats = [];
+    _setGenero('unissex');
   }
 
   toggleCampoCA();
   renderTagsInput();
-  renderCategorias();
   document.getElementById('modalItem').classList.add('open');
 }
 
 // ─── Categorias (múltipla) ────────────────────────────────────────────────────
-function renderCategorias() {
-  document.getElementById('categoriasSugeridas').innerHTML = CATS_SUGERIDAS.map(c =>
-    `<button type="button" onclick="adicionarCatValor('${c}')" style="padding:3px 9px;border:1px solid var(--border);border-radius:99px;font-size:12px;font-weight:500;background:none;cursor:pointer;color:var(--text-sec);transition:all .1s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">${c}</button>`
-  ).join('');
-  document.getElementById('catList').innerHTML = _cats.map((c, i) =>
-    `<span class="tag">${c}<button class="tag-rm" onclick="_cats.splice(${i},1);renderCategorias()">×</button></span>`
-  ).join('');
-}
-function adicionarCatValor(val) {
-  const v = val.trim();
-  if (v && !_cats.includes(v)) { _cats.push(v); renderCategorias(); }
-}
-function adicionarCategoria(e) {
-  if (e.key === 'Enter') { e.preventDefault(); adicionarCategoriaBtn(); }
-}
-function adicionarCategoriaBtn() {
-  const inp = document.getElementById('iCatInput');
-  adicionarCatValor(inp.value);
-  inp.value = '';
+function _setGenero(val) {
+  document.getElementById('iGenero').value = val;
+  document.querySelectorAll('.genero-pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.val === val);
+  });
 }
 
 function fecharModalItem() {
@@ -1903,23 +1899,37 @@ function toggleCampoCA() {
 function renderTagsInput() {
   const sistema = document.getElementById('iSistemaTamanho').value;
   const bloco   = document.getElementById('bloccoTamanhos');
-  const sugs    = TAGS_SUGERIDAS[sistema] || [];
 
   bloco.style.display = sistema === 'unico' ? 'none' : '';
   if (sistema === 'unico') { _tags = []; return; }
-
-  // Sugestões clicáveis
-  document.getElementById('tamanhosSugeridos').innerHTML = sugs.map(s =>
-    `<button type="button" onclick="adicionarTagValor('${s}')" style="padding:3px 9px;border:1px solid var(--border);border-radius:99px;font-size:12px;font-weight:600;background:none;cursor:pointer;color:var(--text-sec);transition:all .1s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">${s}</button>`
-  ).join('');
 
   renderTags();
 }
 
 function renderTags() {
-  document.getElementById('tagList').innerHTML = _tags.map((t, i) =>
-    `<span class="tag">${t}<button class="tag-rm" onclick="_tags.splice(${i},1);renderTags()">×</button></span>`
+  const sistema = document.getElementById('iSistemaTamanho').value;
+  const sugs    = TAGS_SUGERIDAS[sistema] || [];
+  // chips sugeridos com estado toggle
+  document.getElementById('tamanhosSugeridos').innerHTML = sugs.map(s => {
+    const sel = _tags.includes(s);
+    return `<button type="button" class="tam-chip${sel ? ' sel' : ''}" onclick="_toggleTag('${s}')">${s}</button>`;
+  }).join('');
+  // chips personalizados (não estão nas sugestões)
+  const custom = _tags.filter(t => !sugs.includes(t));
+  document.getElementById('tagList').innerHTML = custom.map((t, i) =>
+    `<span class="tam-chip-custom">${t}<button onclick="_removeCustomTag('${t}')">×</button></span>`
   ).join('');
+}
+
+function _toggleTag(val) {
+  const idx = _tags.indexOf(val);
+  if (idx >= 0) _tags.splice(idx, 1); else _tags.push(val);
+  renderTags();
+}
+
+function _removeCustomTag(val) {
+  _tags = _tags.filter(t => t !== val);
+  renderTags();
 }
 
 function adicionarTagValor(val) {
@@ -1928,13 +1938,12 @@ function adicionarTagValor(val) {
 }
 
 function adicionarTag(e) {
-  if (e.key === 'Enter') { e.preventDefault(); adicionarTagBtn(); }
-}
-
-function adicionarTagBtn() {
-  const inp = document.getElementById('iTagInput');
-  adicionarTagValor(inp.value);
-  inp.value = '';
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const inp = document.getElementById('iTagInput');
+    adicionarTagValor(inp.value);
+    inp.value = '';
+  }
 }
 
 async function salvarItem() {
