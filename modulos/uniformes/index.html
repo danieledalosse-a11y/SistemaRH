@@ -761,7 +761,7 @@ let ENTRADAS = [];
 async function carregarEstoque() {
   try {
     const [estoq, entrad] = await Promise.all([
-      sbGet('unif_estoque', 'select=*,item:unif_catalogo(id,nome,tipo,genero),almox:unif_almoxarifados(id,nome)&order=item_id'),
+      sbGet('unif_estoque', 'select=*,item:unif_catalogo(id,nome,tipo,genero,variante,logo),almox:unif_almoxarifados(id,nome)&order=item_id'),
       sbGet('unif_entradas', 'select=*,item:unif_catalogo(nome),almox:unif_almoxarifados(nome)&order=data_entrada.desc&limit=200'),
     ]);
     ESTOQUE  = estoq;
@@ -805,28 +805,22 @@ function renderEstoque() {
     return;
   }
 
-  // agrupa por item_id
+  // agrupa por item_id + variante + logo (combinação única de produto)
   const grupos = new Map();
   for (const e of lista) {
-    const key = e.item_id;
+    const key = `${e.item_id}|${e.item?.variante||''}|${e.item?.logo||''}`;
     if (!grupos.has(key)) grupos.set(key, { item: e.item, linhas: [] });
     grupos.get(key).linhas.push(e);
-  }
-
-  // logos por item+tamanho vindas das entradas
-  const logoMap = {};
-  for (const ent of ENTRADAS) {
-    if (ent.logo_bordada) logoMap[`${ent.item_id}|${ent.tamanho}`] = true;
   }
 
   const genLabel = { masculino:'M', feminino:'F', unissex:'U' };
   const genColor = { masculino:'#1849A9', feminino:'#9D174D', unissex:'#374151' };
 
   grid.innerHTML = [...grupos.values()].map((g, gi) => {
-    const totalQtd   = g.linhas.reduce((s, l) => s + (l.quantidade || 0), 0);
+    const totalQtd    = g.linhas.reduce((s, l) => s + (l.quantidade || 0), 0);
     const totalValorG = g.linhas.reduce((s, l) => s + (l.quantidade || 0) * (l.custo_medio || 0), 0);
-    const temZerado  = g.linhas.some(l => l.quantidade === 0);
-    const temBaixo   = g.linhas.some(l => l.quantidade > 0 && l.quantidade <= (l.estoque_minimo || 2));
+    const temZerado   = g.linhas.some(l => l.quantidade === 0);
+    const temBaixo    = g.linhas.some(l => l.quantidade > 0 && l.quantidade <= (l.estoque_minimo || 2));
     const statusGlobal = totalQtd === 0 ? 'zerado' : temZerado || temBaixo ? 'atencao' : 'ok';
     const statusBadge = statusGlobal === 'zerado'
       ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#FEF3F2;color:#B42318;font-weight:600;">Zerado</span>`
@@ -837,15 +831,19 @@ function renderEstoque() {
     const gen = g.item?.genero || 'unissex';
     const genBadge = `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;border:1px solid ${genColor[gen]};color:${genColor[gen]};">${genLabel[gen]}</span>`;
 
+    // badges de variante e logo abaixo do nome
+    const varianteBadge = g.item?.variante
+      ? `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#F4F3FF;color:#5925DC;font-weight:600;">${g.item.variante}</span>` : '';
+    const logoBadge = g.item?.logo
+      ? `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">🪡 ${g.item.logo}</span>` : '';
+    const subBadges = (varianteBadge || logoBadge)
+      ? `<div style="display:flex;gap:5px;margin-top:3px;">${varianteBadge}${logoBadge}</div>` : '';
+
     const tamLinhas = g.linhas.map(l => {
-      const qtd    = l.quantidade || 0;
-      const temLogo = logoMap[`${l.item_id}|${l.tamanho}`];
+      const qtd = l.quantidade || 0;
       const qtdColor = qtd === 0 ? '#B42318' : qtd <= (l.estoque_minimo||2) ? '#92400E' : '#101828';
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-light);">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:13px;font-weight:600;min-width:36px;">${l.tamanho}</span>
-          ${temLogo ? `<span title="Logo bordada" style="font-size:10px;padding:1px 6px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">🪡 Logo</span>` : ''}
-        </div>
+        <span style="font-size:13px;font-weight:600;min-width:36px;">${l.tamanho}</span>
         <div style="display:flex;align-items:center;gap:16px;">
           <span style="font-size:13px;font-weight:700;color:${qtdColor};">${qtd} un.</span>
           <span style="font-size:11px;color:var(--text-ter);">R$ ${(l.custo_medio||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
@@ -857,7 +855,10 @@ function renderEstoque() {
       <div onclick="toggleEstoqueCard(${gi})" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;user-select:none;">
         <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
           ${genBadge}
-          <span style="font-weight:700;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${g.item?.nome || '—'}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${g.item?.nome || '—'}</div>
+            ${subBadges}
+          </div>
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
           <span style="font-size:13px;font-weight:700;">${totalQtd} un.</span>
