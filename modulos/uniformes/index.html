@@ -699,9 +699,10 @@
         </div>
         <div class="form-field">
           <label class="form-label">Tamanho <span class="req">*</span></label>
-          <select class="form-select" id="eTamanho">
+          <select class="form-select" id="eTamanho" onchange="mostrarCustoMedioEntrega()">
             <option value="">—</option>
           </select>
+          <div id="custoMedioBadge" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sec);"></div>
         </div>
         <div class="form-field">
           <label class="form-label">Quantidade</label>
@@ -987,7 +988,6 @@ function renderEstoque() {
         <span style="font-size:13px;font-weight:600;min-width:36px;">${l.tamanho}</span>
         <div style="display:flex;align-items:center;gap:16px;">
           <span style="font-size:13px;font-weight:700;color:${qtdColor};">${qtd} un.</span>
-          <span style="font-size:11px;color:var(--text-ter);">R$ ${(l.custo_medio||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
         </div>
       </div>`;
     }).join('');
@@ -1003,7 +1003,6 @@ function renderEstoque() {
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
           <span style="font-size:13px;font-weight:700;">${totalQtd} un.</span>
-          <span style="font-size:12px;color:var(--text-ter);">R$ ${totalValorG.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
           ${statusBadge}
           <svg id="chevron-est-${gi}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-ter);transition:transform .2s;"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
@@ -1300,6 +1299,22 @@ function atualizarTamanhosEntrega() {
     selT.innerHTML = tamanhos.map(t => `<option value="${t}">${t}</option>`).join('');
   } else {
     selT.innerHTML = '<option value="">Sem tamanhos cadastrados</option>';
+  }
+  mostrarCustoMedioEntrega();
+}
+
+function mostrarCustoMedioEntrega() {
+  const itemId  = document.getElementById('eItem').value;
+  const tamanho = document.getElementById('eTamanho').value;
+  const almoxId = document.getElementById('eAlmox').value;
+  const badge   = document.getElementById('custoMedioBadge');
+  if (!itemId || !tamanho) { badge.style.display = 'none'; return; }
+  const reg = ESTOQUE.find(e => e.item_id == itemId && e.tamanho === tamanho && (!almoxId || e.almoxarifado_id == almoxId));
+  if (reg && reg.custo_medio) {
+    badge.textContent = `Custo médio: R$ ${reg.custo_medio.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
   }
 }
 
