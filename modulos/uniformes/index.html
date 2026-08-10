@@ -228,7 +228,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
               Emitir documento CD
             </button>
-            <button class="btn btn-primary" onclick="abrirModalEntrega()">
+            <button id="btnRegistrarEntrega" class="btn btn-primary" onclick="abrirModalEntrega()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Registrar entrega
             </button>
@@ -293,7 +293,7 @@
           <div class="card-title">Posição de Estoque</div>
           <div class="card-sub" style="margin:0;" id="estoqueResumo">—</div>
         </div>
-        <button class="btn btn-primary" onclick="abrirModalEntrada()">
+        <button id="btnEntradaLote" class="btn btn-primary" onclick="abrirModalEntrada()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Entrada de lote
         </button>
@@ -738,6 +738,7 @@ let SB_HEADERS = {};
     const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     const el = document.getElementById('unifUserNome');
     if (el) el.textContent = (p.nome || s.email || '').split(' ')[0];
+    window._UNIF_ROLE = p.perfil || 'rh';
   } catch (_) { window.location.href = '../../login.html'; }
 })();
 
@@ -792,6 +793,8 @@ let _colabAtual  = null; // colaborador selecionado na aba Colaboradores
 // ─── Navegação principal ──────────────────────────────────────────────────────
 const TABS = ['painel','colaboradores','estoque','catalogo','solicitacoes'];
 function setTab(tab) {
+  const restritas = ['painel','catalogo','solicitacoes'];
+  if (window._UNIF_ROLE === 'logistica' && restritas.includes(tab)) return;
   TABS.forEach(t => {
     document.getElementById(`sec-${t}`).style.display   = t === tab ? '' : 'none';
     document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
@@ -823,6 +826,15 @@ async function carregarEstoque() {
     const almoxIds = [...new Map(estoq.map(e => [e.almox?.id, e.almox?.nome])).entries()];
     selAlmox.innerHTML = '<option value="">Todos os almoxarifados</option>' +
       almoxIds.filter(([id]) => id).map(([id, nome]) => `<option value="${id}">${nome}</option>`).join('');
+
+    // perfil logistica: fixar filtro no almoxarifado CD e bloquear troca
+    if (window._UNIF_ROLE === 'logistica') {
+      const cdAlmox = ALMOXARIFADOS.find(a => a.nome.toUpperCase().includes('CD'));
+      if (cdAlmox) {
+        selAlmox.value    = cdAlmox.id;
+        selAlmox.disabled = true;
+      }
+    }
 
     renderEstoque();
     renderEntradas();
@@ -1484,10 +1496,39 @@ async function init() {
     ALMOXARIFADOS = almoxs;
     renderItens();
     renderSelCargo();
+    _aplicarControleAcesso();
   } catch (e) {
     toast('Erro ao carregar dados: ' + e.message);
   }
 }
+
+// ─── Controle de acesso por perfil ───────────────────────────────────────────
+function _aplicarControleAcesso() {
+  if (window._UNIF_ROLE !== 'logistica') return;
+
+  // Ocultar abas restritas
+  ['painel', 'catalogo', 'solicitacoes'].forEach(t => {
+    const el = document.getElementById(`tab-${t}`);
+    if (el) el.style.display = 'none';
+  });
+
+  // Ocultar botão "Registrar entrega" (logística só emite documento CD)
+  const btnReg = document.getElementById('btnRegistrarEntrega');
+  if (btnReg) btnReg.style.display = 'none';
+
+  // Ocultar "Entrada de lote" no estoque
+  const btnEnt = document.getElementById('btnEntradaLote');
+  if (btnEnt) btnEnt.style.display = 'none';
+
+  // Ocultar botões de edição do catálogo (por precaução)
+  document.querySelectorAll('.btn-danger, [onclick="abrirModalItem()"]').forEach(el => {
+    if (el.closest('#sec-catalogo')) el.style.display = 'none';
+  });
+
+  // Ir direto para Colaboradores
+  setTab('colaboradores');
+}
+
 
 // ─── Tabela de Itens ──────────────────────────────────────────────────────────
 function renderItens() {
