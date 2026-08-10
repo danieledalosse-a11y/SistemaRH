@@ -377,6 +377,7 @@
           <div class="card-title">Posição de Estoque</div>
           <div class="card-sub" style="margin:0;" id="estoqueResumo">—</div>
         </div>
+        <span id="estoqueAtualizado" style="font-size:11px;color:var(--text-ter);"></span>
         <button id="btnEntradaLote" class="btn btn-primary" onclick="abrirModalEntrada()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Entrada de lote
@@ -453,27 +454,11 @@
             <option value="0">Inativos</option>
             <option value="">Todos</option>
           </select>
+          <span id="catalogoAtualizado" style="font-size:11px;color:var(--text-ter);white-space:nowrap;"></span>
         </div>
 
-        <div class="tbl-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Tipo</th>
-                <th>Gênero</th>
-                <th>Variante / Logo</th>
-                <th>Tamanhos</th>
-                <th>CA</th>
-                <th>Prazo troca</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="tbodyItens">
-              <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-ter);">Carregando…</td></tr>
-            </tbody>
-          </table>
+        <div id="catalogoGrid" style="display:flex;flex-direction:column;gap:8px;">
+          <div style="text-align:center;padding:32px;color:var(--text-ter);">Carregando…</div>
         </div>
       </div>
     </div>
@@ -923,6 +908,8 @@ async function carregarEstoque() {
 
     renderEstoque();
     renderEntradas();
+    const elAt = document.getElementById('estoqueAtualizado');
+    if (elAt) elAt.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   } catch(e) { toast('Erro ao carregar estoque: ' + e.message); }
 }
 
@@ -1028,6 +1015,25 @@ function renderEstoque() {
     </div>`;
   }).join('');
 }
+
+function toggleCatCard(idx) {
+  const det     = document.getElementById(`cat-detail-${idx}`);
+  const chevron = document.getElementById(`chevron-cat-${idx}`);
+  const aberto  = det.style.display !== 'none';
+  det.style.display       = aberto ? 'none' : '';
+  chevron.style.transform = aberto ? '' : 'rotate(180deg)';
+}
+
+function _toggleMenu(evt, id) {
+  evt.stopPropagation();
+  document.querySelectorAll('.item-menu-dd').forEach(m => { if (m.id !== id) m.style.display = 'none'; });
+  const m = document.getElementById(id);
+  if (m) m.style.display = m.style.display === 'none' ? '' : 'none';
+}
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.item-menu-dd').forEach(m => m.style.display = 'none');
+});
 
 function toggleEstoqueCard(idx) {
   const det     = document.getElementById(`est-detail-${idx}`);
@@ -1717,11 +1723,11 @@ function _aplicarControleAcesso() {
 
 // ─── Tabela de Itens ──────────────────────────────────────────────────────────
 function renderItens() {
-  const busca  = (document.getElementById('buscaItem')?.value || '').toLowerCase();
-  const tipo   = document.getElementById('filtroTipo')?.value  || '';
-  const ativo  = document.getElementById('filtroAtivo')?.value;
+  const busca = (document.getElementById('buscaItem')?.value || '').toLowerCase();
+  const tipo  = document.getElementById('filtroTipo')?.value  || '';
+  const ativo = document.getElementById('filtroAtivo')?.value;
 
-  let lista = ITENS.filter(i => {
+  const lista = ITENS.filter(i => {
     if (busca && ![i.nome, i.variante, i.logo, i.genero].some(v => (v||'').toLowerCase().includes(busca))) return false;
     if (tipo  && i.tipo !== tipo) return false;
     if (ativo === '1' && !i.ativo) return false;
@@ -1729,41 +1735,82 @@ function renderItens() {
     return true;
   });
 
-  const tbody = document.getElementById('tbodyItens');
+  const grid = document.getElementById('catalogoGrid');
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">📋</div><p>Nenhum item encontrado</p></div></td></tr>`;
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-ter);">Nenhum item encontrado</div>';
     return;
   }
 
-  const tam = t => (Array.isArray(t) && t.length ? t.map(x => `<span class="tag" style="padding:2px 6px;font-size:11px;">${x}</span>`).join('') : '<span style="color:var(--text-ter);font-size:12px;">—</span>');
+  // Agrupa por nome (case-insensitive)
+  const grupos = new Map();
+  for (const i of lista) {
+    const key = (i.nome || '').toLowerCase();
+    if (!grupos.has(key)) grupos.set(key, { nome: i.nome, tipo: i.tipo, itens: [] });
+    grupos.get(key).itens.push(i);
+  }
 
-  const genLabel = { masculino:'Masculino', feminino:'Feminino', unissex:'Unissex' };
-  const genColor = { masculino:'color:#1849A9;background:#EFF4FF', feminino:'color:#9D174D;background:#FDF2F8', unissex:'color:#374151;background:#F3F4F6' };
+  const genAbrev = { masculino:'M', feminino:'F', unissex:'U' };
+  const genColor = { masculino:'#1849A9', feminino:'#9D174D', unissex:'#374151' };
+  const tam = t => Array.isArray(t) && t.length
+    ? t.map(x => `<span style="display:inline-block;padding:1px 5px;border:1px solid var(--border);border-radius:4px;font-size:10px;font-weight:600;margin:1px 2px;">${x}</span>`).join('')
+    : '<span style="color:var(--text-ter);font-size:12px;">—</span>';
 
-  tbody.innerHTML = lista.map(i => {
-    const gen = i.genero || 'unissex';
-    const genBadge = `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;${genColor[gen]}">${genLabel[gen]}</span>`;
-    const varBadge = i.variante ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;color:#5925DC;background:#F4F3FF;">${i.variante}</span>` : '';
-    const logBadge = i.logo    ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;color:#1849A9;background:#EFF4FF;">🪡 ${i.logo}</span>` : '';
-    const varLogoCell = (varBadge || logBadge) ? `<div style="display:flex;flex-direction:column;gap:4px;">${varBadge}${logBadge}</div>` : `<span style="color:var(--text-ter);font-size:12px;">—</span>`;
+  grid.innerHTML = [...grupos.values()].map((g, gi) => {
+    const tipoBadge = `<span class="badge badge-${g.tipo}" style="font-size:11px;">${g.tipo === 'epi' ? 'EPI' : 'Uniforme'}</span>`;
+    const countLabel = g.itens.length > 1 ? `<span style="font-size:12px;color:var(--text-ter);">${g.itens.length} variantes</span>` : '';
 
-    return `<tr>
-      <td style="font-weight:600;">${i.nome}</td>
-      <td><span class="badge badge-${i.tipo}">${i.tipo === 'epi' ? 'EPI' : 'Uniforme'}</span></td>
-      <td>${genBadge}</td>
-      <td>${varLogoCell}</td>
-      <td>${tam(i.tamanhos_disponiveis)}</td>
-      <td style="color:var(--text-sec);font-size:12px;">${i.ca_numero || '—'}</td>
-      <td style="color:var(--text-sec);">${i.prazo_troca_meses || 24} meses</td>
-      <td><span class="badge ${i.ativo ? 'badge-ativo' : 'badge-inativo'}">${i.ativo ? 'Ativo' : 'Inativo'}</span></td>
-      <td>
-        <div style="display:flex;gap:6px;justify-content:flex-end;">
-          <button class="btn btn-outline btn-sm" onclick="abrirModalItem('${i.id}')">Editar</button>
-          <button class="btn btn-danger btn-sm" onclick="confirmarExcluirItem('${i.id}','${i.nome.replace(/'/g,"\\'")}')">Excluir</button>
+    const subLinhas = g.itens.map(i => {
+      const gen = i.genero || 'unissex';
+      const genBadge = `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;border:1px solid ${genColor[gen]};color:${genColor[gen]};">${genAbrev[gen]}</span>`;
+      const varBadge = i.variante ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;color:#5925DC;background:#F4F3FF;">${i.variante}</span>` : '';
+      const logBadge = i.logo    ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;color:#1849A9;background:#EFF4FF;">🪡 ${i.logo}</span>` : '';
+      const varLogoPart = (varBadge || logBadge) ? `<div style="display:flex;gap:4px;flex-wrap:wrap;">${varBadge}${logBadge}</div>` : `<span style="color:var(--text-ter);font-size:12px;">—</span>`;
+      const statusDot = `<span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${i.ativo ? '#027A48' : '#98A2B3'};" title="${i.ativo ? 'Ativo' : 'Inativo'}"></span>`;
+      const menuId = 'catmenu-' + i.id.replace(/-/g,'');
+      const nomeSafe = i.nome.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+
+      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid var(--border-light);background:var(--bg);">
+        ${genBadge}
+        <div style="flex:1.2;">${varLogoPart}</div>
+        <div style="flex:2;">${tam(i.tamanhos_disponiveis)}</div>
+        ${statusDot}
+        <div style="position:relative;flex-shrink:0;">
+          <button onclick="_toggleMenu(event,'${menuId}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:15px;color:var(--text-sec);font-family:inherit;line-height:1.4;">⋯</button>
+          <div id="${menuId}" class="item-menu-dd" style="display:none;position:absolute;right:0;top:calc(100% + 4px);z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-md);min-width:130px;overflow:hidden;">
+            <div onclick="abrirModalItem('${i.id}')" style="padding:10px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Editar
+            </div>
+            <div onclick="confirmarExcluirItem('${i.id}','${nomeSafe}');document.getElementById('${menuId}').style.display='none'" style="padding:10px 14px;cursor:pointer;font-size:13px;color:var(--red);display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--red-bg)'" onmouseout="this.style.background=''">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              Excluir
+            </div>
+          </div>
         </div>
-      </td>
-    </tr>`;
+      </div>`;
+    }).join('');
+
+    const subHeader = `<div style="display:flex;align-items:center;gap:12px;padding:5px 16px;background:var(--bg);border-top:1px solid var(--border);">
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);flex-shrink:0;">GÊN.</span>
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);flex:1.2;">VARIANTE / LOGO</span>
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);flex:2;">TAMANHOS</span>
+      <span style="width:60px;"></span>
+    </div>`;
+
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div onclick="toggleCatCard(${gi})" style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;user-select:none;">
+        ${tipoBadge}
+        <span style="font-weight:700;font-size:14px;flex:1;">${g.nome}</span>
+        ${countLabel}
+        <svg id="chevron-cat-${gi}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-ter);transition:transform .2s;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="cat-detail-${gi}" style="display:none;">${subHeader}${subLinhas}</div>
+    </div>`;
   }).join('');
+
+  // Indicador de atualização
+  const el = document.getElementById('catalogoAtualizado');
+  if (el) el.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
 }
 
 // ─── Modal de Item ────────────────────────────────────────────────────────────
