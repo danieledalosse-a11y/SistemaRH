@@ -262,6 +262,28 @@
   <!-- ESTOQUE -->
   <div id="sec-estoque" style="display:none;">
 
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;" id="kpiEstoqueRow">
+      <div class="card" style="margin-bottom:0;padding:16px 20px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:8px;">Total de unidades</div>
+        <div id="kpiUnidades" style="font-size:26px;font-weight:700;color:var(--text);">—</div>
+      </div>
+      <div class="card" style="margin-bottom:0;padding:16px 20px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:8px;">Valor do estoque</div>
+        <div id="kpiValor" style="font-size:22px;font-weight:700;color:var(--text);">—</div>
+      </div>
+      <div class="card" style="margin-bottom:0;padding:16px 20px;cursor:pointer;" onclick="document.getElementById('filtroEstoqueStatus').value='baixo';renderEstoque()">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#92400E;margin-bottom:8px;">Estoque baixo</div>
+        <div id="kpiAlerta" style="font-size:26px;font-weight:700;color:#92400E;">—</div>
+        <div style="font-size:11px;color:var(--text-ter);margin-top:4px;">itens com qtd ≤ 2</div>
+      </div>
+      <div class="card" style="margin-bottom:0;padding:16px 20px;cursor:pointer;" onclick="document.getElementById('filtroEstoqueStatus').value='zerado';renderEstoque()">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#B42318;margin-bottom:8px;">Zerados</div>
+        <div id="kpiZerado" style="font-size:26px;font-weight:700;color:#B42318;">—</div>
+        <div style="font-size:11px;color:var(--text-ter);margin-top:4px;">itens sem estoque</div>
+      </div>
+    </div>
+
     <!-- Filtros -->
     <div class="card" style="margin-bottom:16px;">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
@@ -856,10 +878,16 @@ function renderEstoque() {
     return true;
   });
 
-  const totalValor = lista.reduce((s, e) => s + (e.quantidade * (e.custo_medio || 0)), 0);
-  const totalUnid  = lista.reduce((s, e) => s + (e.quantidade || 0), 0);
-  document.getElementById('estoqueResumo').textContent =
-    `${totalUnid} unidades · valor total: R$ ${totalValor.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+  // KPIs calculados sobre o estoque completo (sem filtros)
+  const kpiUnid   = ESTOQUE.reduce((s, e) => s + (e.quantidade || 0), 0);
+  const kpiValor  = ESTOQUE.reduce((s, e) => s + (e.quantidade || 0) * (e.custo_medio || 0), 0);
+  const kpiAlerta = ESTOQUE.filter(e => e.quantidade > 0 && e.quantidade <= (e.estoque_minimo || 2)).length;
+  const kpiZerado = ESTOQUE.filter(e => (e.quantidade || 0) === 0).length;
+  document.getElementById('kpiUnidades').textContent = kpiUnid.toLocaleString('pt-BR');
+  document.getElementById('kpiValor').textContent    = 'R$ ' + kpiValor.toLocaleString('pt-BR', {minimumFractionDigits:2});
+  document.getElementById('kpiAlerta').textContent   = kpiAlerta;
+  document.getElementById('kpiZerado').textContent   = kpiZerado;
+  document.getElementById('estoqueResumo').textContent = '';
 
   const grid = document.getElementById('estoqueGrid');
 
