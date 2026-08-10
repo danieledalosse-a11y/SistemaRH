@@ -1188,13 +1188,13 @@ async function _executarBusca() {
   if (q.length < 2) { lista.innerHTML = ''; return; }
   try {
     const filtroEmpresa = window._UNIF_ROLE === 'logistica' ? '&empresa_atuacao=eq.CD' : '';
-    const rows = await sbGet('colaboradores', `select=id,nome,cargo&nome=ilike.*${encodeURIComponent(q)}*&ativo=eq.true${filtroEmpresa}&order=nome&limit=10`);
+    const rows = await sbGet('colaboradores', `select=id,nome,cargo,genero&nome=ilike.*${encodeURIComponent(q)}*&ativo=eq.true${filtroEmpresa}&order=nome&limit=10`);
     if (!rows.length) {
       lista.innerHTML = '<div style="font-size:13px;color:var(--text-ter);padding:8px 4px;">Nenhum colaborador encontrado</div>';
       return;
     }
     lista.innerHTML = rows.map(r => `
-      <div onclick="selecionarColab(${r.id},'${r.nome.replace(/'/g,"\\'")}','${(r.cargo||'').replace(/'/g,"\\'")}')"
+      <div onclick="selecionarColab(${r.id},'${r.nome.replace(/'/g,"\\'")}','${(r.cargo||'').replace(/'/g,"\\'")}','${r.genero||''}')"
         style="padding:10px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);transition:background .1s;"
         onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='var(--surface)'">
         <div style="width:36px;height:36px;border-radius:50%;background:#E4E7EC;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--text-sec);flex-shrink:0;">
@@ -1208,8 +1208,8 @@ async function _executarBusca() {
   } catch(e) { toast('Erro na busca: ' + e.message); }
 }
 
-async function selecionarColab(id, nome, cargo) {
-  _colabAtual = { id, nome, cargo };
+async function selecionarColab(id, nome, cargo, genero) {
+  _colabAtual = { id, nome, cargo, genero };
   document.getElementById('listaColabs').innerHTML = '';
   document.getElementById('buscaColab').value = nome;
   document.getElementById('colabNomeDetalhe').textContent = nome;
@@ -1248,10 +1248,14 @@ function abrirModalEntrega() {
   document.getElementById('entregaColabNome').textContent = _colabAtual.nome + ' ';
   document.getElementById('entregaColabCargo').textContent = _colabAtual.cargo ? '· ' + _colabAtual.cargo : '';
 
-  // popula itens
+  // popula itens — filtra por compatibilidade de gênero com o colaborador
+  const generoColab = _colabAtual.genero || '';
   const selItem = document.getElementById('eItem');
   selItem.innerHTML = '<option value="">Selecione um item…</option>' +
-    ITENS.filter(i => i.ativo).map(i => `<option value="${i.id}" data-tipo="${i.tipo}" data-tamanhos='${JSON.stringify(i.tamanhos_disponiveis||[])}' data-sistema="${i.sistema_tamanho}">${i.nome} (${i.tipo==='epi'?'EPI':'Uniforme'})</option>`).join('');
+    ITENS.filter(i => i.ativo && (
+      !i.genero || i.genero === 'unissex' ||
+      !generoColab || i.genero === generoColab
+    )).map(i => `<option value="${i.id}" data-tipo="${i.tipo}" data-tamanhos='${JSON.stringify(i.tamanhos_disponiveis||[])}' data-sistema="${i.sistema_tamanho}">${_labelItem(i)}</option>`).join('');
 
   // popula almoxarifados
   const selAlmox = document.getElementById('eAlmox');
