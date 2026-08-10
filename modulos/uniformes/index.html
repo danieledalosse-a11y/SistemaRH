@@ -101,7 +101,8 @@
   /* ── modal ── */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; display: none; align-items: center; justify-content: center; padding: 24px; }
   .modal-overlay.open { display: flex; }
-  .modal { background: var(--surface); border-radius: 16px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.2); }
+  .modal { background: var(--surface); border-radius: 16px; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.2); }
+  .modal.wide { max-width: 760px; }
   .modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; }
   .modal-title { font-size: 16px; font-weight: 700; }
   .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-ter); padding: 4px; line-height: 1; }
@@ -254,11 +255,90 @@
 
   <!-- ESTOQUE -->
   <div id="sec-estoque" style="display:none;">
-    <div class="coming-soon">
-      <div class="icon">📦</div>
-      <h3>Gestão de estoque em desenvolvimento</h3>
-      <p>Disponível na Fase 2.</p>
+
+    <!-- Filtros -->
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <div class="search-bar" style="flex:1;min-width:200px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="buscaEstoque" placeholder="Buscar item…" oninput="renderEstoque()">
+        </div>
+        <select id="filtroEstoqueAlmox" onchange="renderEstoque()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+          <option value="">Todos os almoxarifados</option>
+        </select>
+        <select id="filtroEstoqueGenero" onchange="renderEstoque()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+          <option value="">Todos os gêneros</option>
+          <option value="masculino">Masculino</option>
+          <option value="feminino">Feminino</option>
+          <option value="unissex">Unissex</option>
+        </select>
+        <select id="filtroEstoqueStatus" onchange="renderEstoque()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+          <option value="">Todo o estoque</option>
+          <option value="baixo">Estoque baixo</option>
+          <option value="zerado">Zerado</option>
+        </select>
+      </div>
     </div>
+
+    <!-- Tabela de estoque -->
+    <div class="card">
+      <div class="card-hdr" style="margin-bottom:12px;">
+        <div class="card-hdr-left">
+          <div class="card-title">Posição de Estoque</div>
+          <div class="card-sub" style="margin:0;" id="estoqueResumo">—</div>
+        </div>
+        <button class="btn btn-primary" onclick="abrirModalEntrada()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Entrada de lote
+        </button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Gênero</th>
+              <th>Almoxarifado</th>
+              <th>Tamanho</th>
+              <th style="text-align:right;">Qtd.</th>
+              <th style="text-align:right;">Custo médio</th>
+              <th style="text-align:right;">Valor total</th>
+              <th style="text-align:center;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyEstoque">
+            <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-ter);">Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Histórico de entradas -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title" style="margin-bottom:12px;">Entradas de Lote</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Item</th>
+              <th>Fornecedor</th>
+              <th>Tamanho</th>
+              <th style="text-align:right;">Qtd.</th>
+              <th style="text-align:right;">Valor unit.</th>
+              <th style="text-align:right;">Total</th>
+              <th style="text-align:center;">Logo</th>
+              <th>Almoxarifado</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyEntradas">
+            <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-ter);">Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
   </div>
 
   <!-- CATÁLOGO -->
@@ -366,47 +446,70 @@
 
 <!-- ═══ Modal: Item ═══ -->
 <div class="modal-overlay" id="modalItem">
-  <div class="modal">
+  <div class="modal wide">
     <div class="modal-hdr">
       <span class="modal-title" id="modalItemTitulo">Novo item</span>
       <button class="modal-close" onclick="fecharModalItem()">×</button>
     </div>
     <div class="modal-body">
-      <div class="form-grid" style="margin-bottom:16px;">
+
+      <!-- Linha 1: Nome (full) -->
+      <div class="form-grid" style="margin-bottom:0;">
         <div class="form-field full">
           <label class="form-label">Nome <span class="req">*</span></label>
           <input class="form-input" type="text" id="iNome" placeholder="ex: Camiseta polo manga curta">
         </div>
-        <div class="form-field">
+      </div>
+
+      <!-- Linha 2: Tipo / Gênero / Prazo / CA -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="form-field" style="margin:0;">
           <label class="form-label">Tipo <span class="req">*</span></label>
           <select class="form-select" id="iTipo" onchange="toggleCampoCA()">
             <option value="uniforme">Uniforme</option>
             <option value="epi">EPI</option>
           </select>
         </div>
-        <div class="form-field">
-          <label class="form-label">Categoria</label>
-          <input class="form-input" type="text" id="iCategoria" placeholder="ex: camisa, calça, bota…">
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Gênero</label>
+          <select class="form-select" id="iGenero">
+            <option value="unissex">Unissex</option>
+            <option value="masculino">Masculino</option>
+            <option value="feminino">Feminino</option>
+          </select>
         </div>
-        <div class="form-field" id="campoCA" style="display:none;">
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Prazo de troca (meses)</label>
+          <input class="form-input" type="number" id="iPrazo" value="24" min="1">
+        </div>
+        <div class="form-field" id="campoCA" style="margin:0;display:none;">
           <label class="form-label">Nº do CA <span class="req">*</span></label>
           <input class="form-input" type="text" id="iCA" placeholder="ex: 12345">
         </div>
-        <div class="form-field">
-          <label class="form-label">Sistema de tamanho <span class="req">*</span></label>
+      </div>
+
+      <!-- Linha 3: Categorias (múltipla) + Sistema tamanho -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <div class="form-label" style="margin-bottom:8px;">Categorias</div>
+          <div id="categoriasSugeridas" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+          <div style="display:flex;gap:8px;">
+            <input class="form-input" type="text" id="iCatInput" placeholder="ex: manga curta, com forro…" style="flex:1;" onkeydown="adicionarCategoria(event)">
+            <button class="btn btn-outline btn-sm" onclick="adicionarCategoriaBtn()">+ Add</button>
+          </div>
+          <div class="tag-list" id="catList" style="margin-top:8px;"></div>
+        </div>
+        <div>
+          <div class="form-label" style="margin-bottom:8px;">Sistema de tamanho <span class="req">*</span></div>
           <select class="form-select" id="iSistemaTamanho" onchange="renderTagsInput()">
             <option value="letra">Letra (PP / P / M / G / GG / XG / G1 / G2 / EGG / E3G / ESP)</option>
             <option value="numerico">Numérico (34, 36, 38…)</option>
             <option value="unico">Tamanho único</option>
           </select>
         </div>
-        <div class="form-field">
-          <label class="form-label">Prazo de troca (meses)</label>
-          <input class="form-input" type="number" id="iPrazo" value="24" min="1">
-        </div>
       </div>
 
-      <!-- Tamanhos disponíveis -->
+      <!-- Linha 4: Tamanhos disponíveis -->
       <div id="bloccoTamanhos" style="margin-bottom:16px;">
         <div class="form-label" style="margin-bottom:8px;">Tamanhos disponíveis <span class="req">*</span></div>
         <div id="tamanhosSugeridos" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
@@ -452,6 +555,70 @@
 </div>
 
 <!-- ═══ Modal: Registrar Entrega ═══ -->
+<!-- ═══ Modal: Entrada de Lote ═══ -->
+<div class="modal-overlay" id="modalEntradaLote">
+  <div class="modal wide">
+    <div class="modal-hdr">
+      <span class="modal-title">Entrada de lote</span>
+      <button class="modal-close" onclick="fecharModalEntrada()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Item <span class="req">*</span></label>
+          <select class="form-select" id="entItem" onchange="atualizarTamanhosEntrada()">
+            <option value="">Selecione…</option>
+          </select>
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Almoxarifado <span class="req">*</span></label>
+          <select class="form-select" id="entAlmox">
+            <option value="">Selecione…</option>
+          </select>
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Fornecedor <span class="req">*</span></label>
+          <input class="form-input" type="text" id="entFornecedor" placeholder="ex: VISTA, DEMORGAN…">
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Tamanho <span class="req">*</span></label>
+          <select class="form-select" id="entTamanho">
+            <option value="">Selecione o item primeiro</option>
+          </select>
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Quantidade <span class="req">*</span></label>
+          <input class="form-input" type="number" id="entQtd" min="1" value="1">
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Valor unitário (R$) <span class="req">*</span></label>
+          <input class="form-input" type="number" id="entValor" min="0" step="0.01" placeholder="0,00">
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Data da entrada</label>
+          <input class="form-input" type="date" id="entData">
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Nota fiscal</label>
+          <input class="form-input" type="text" id="entNF" placeholder="opcional">
+        </div>
+        <div class="form-field" style="margin:0;display:flex;align-items:center;gap:10px;padding-top:20px;">
+          <input type="checkbox" id="entLogo" style="width:15px;height:15px;accent-color:var(--blue);">
+          <label class="form-label" style="margin:0;cursor:pointer;" for="entLogo">Logo bordada inclusa</label>
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Observação</label>
+          <input class="form-input" type="text" id="entObs" placeholder="opcional">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModalEntrada()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEntradaLote()">Registrar entrada</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalEntrega">
   <div class="modal" style="max-width:520px;">
     <div class="modal-hdr">
@@ -595,11 +762,212 @@ function setTab(tab) {
     document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
   });
   if (tab === 'catalogo') renderItens();
+  if (tab === 'estoque') carregarEstoque();
   if (tab === 'colaboradores') {
     document.getElementById('buscaColab').value = '';
     document.getElementById('listaColabs').innerHTML = '';
     document.getElementById('colabDetalhe').style.display = 'none';
   }
+}
+
+// ─── Estoque ──────────────────────────────────────────────────────────────────
+let ESTOQUE  = [];
+let ENTRADAS = [];
+
+async function carregarEstoque() {
+  try {
+    const [estoq, entrad] = await Promise.all([
+      sbGet('unif_estoque', 'select=*,item:unif_catalogo(id,nome,tipo,genero),almox:unif_almoxarifados(id,nome)&order=item_id'),
+      sbGet('unif_entradas', 'select=*,item:unif_catalogo(nome),almox:unif_almoxarifados(nome)&order=data_entrada.desc&limit=200'),
+    ]);
+    ESTOQUE  = estoq;
+    ENTRADAS = entrad;
+
+    // popula filtro de almoxarifados
+    const selAlmox = document.getElementById('filtroEstoqueAlmox');
+    const almoxIds = [...new Map(estoq.map(e => [e.almox?.id, e.almox?.nome])).entries()];
+    selAlmox.innerHTML = '<option value="">Todos os almoxarifados</option>' +
+      almoxIds.filter(([id]) => id).map(([id, nome]) => `<option value="${id}">${nome}</option>`).join('');
+
+    renderEstoque();
+    renderEntradas();
+  } catch(e) { toast('Erro ao carregar estoque: ' + e.message); }
+}
+
+function renderEstoque() {
+  const busca  = (document.getElementById('buscaEstoque')?.value || '').toLowerCase();
+  const almoxF = document.getElementById('filtroEstoqueAlmox')?.value || '';
+  const genF   = document.getElementById('filtroEstoqueGenero')?.value || '';
+  const statF  = document.getElementById('filtroEstoqueStatus')?.value || '';
+
+  let lista = ESTOQUE.filter(e => {
+    if (busca  && !(e.item?.nome||'').toLowerCase().includes(busca)) return false;
+    if (almoxF && e.almox?.id !== almoxF) return false;
+    if (genF   && e.item?.genero !== genF) return false;
+    if (statF === 'zerado' && e.quantidade > 0) return false;
+    if (statF === 'baixo'  && e.quantidade > (e.estoque_minimo || 2)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('tbodyEstoque');
+  const totalItens = lista.length;
+  const totalValor = lista.reduce((s, e) => s + (e.quantidade * (e.custo_medio || 0)), 0);
+  document.getElementById('estoqueResumo').textContent =
+    `${totalItens} linha(s) · valor total: R$ ${totalValor.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-ter);">Nenhum item encontrado</td></tr>';
+    return;
+  }
+
+  const genLabel = { masculino:'Masculino', feminino:'Feminino', unissex:'Unissex' };
+
+  tbody.innerHTML = lista.map(e => {
+    const qtd     = e.quantidade || 0;
+    const minimo  = e.estoque_minimo || 2;
+    const custo   = e.custo_medio || 0;
+    const total   = qtd * custo;
+    const status  = qtd === 0 ? 'zerado' : qtd <= minimo ? 'baixo' : 'ok';
+    const statusHtml = status === 'zerado'
+      ? `<span class="badge" style="background:#FEF3F2;color:#B42318;">Zerado</span>`
+      : status === 'baixo'
+      ? `<span class="badge" style="background:#FFFAEB;color:#92400E;">Baixo</span>`
+      : `<span class="badge" style="background:#ECFDF3;color:#027A48;">OK</span>`;
+    return `<tr>
+      <td style="font-weight:600;">${e.item?.nome || '—'}</td>
+      <td style="color:var(--text-sec);font-size:12px;">${genLabel[e.item?.genero] || '—'}</td>
+      <td style="color:var(--text-sec);font-size:12px;">${e.almox?.nome || '—'}</td>
+      <td><span class="tag" style="padding:2px 8px;">${e.tamanho}</span></td>
+      <td style="text-align:right;font-weight:600;">${qtd}</td>
+      <td style="text-align:right;color:var(--text-sec);">R$ ${custo.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td style="text-align:right;">R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td style="text-align:center;">${statusHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderEntradas() {
+  const tbody = document.getElementById('tbodyEntradas');
+  if (!ENTRADAS.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma entrada registrada</td></tr>';
+    return;
+  }
+  tbody.innerHTML = ENTRADAS.map(e => {
+    const total = (e.quantidade * e.valor_unitario).toLocaleString('pt-BR',{minimumFractionDigits:2});
+    const data  = e.data_entrada ? e.data_entrada.split('-').reverse().join('/') : '—';
+    return `<tr>
+      <td style="white-space:nowrap;">${data}</td>
+      <td style="font-weight:600;">${e.item?.nome || '—'}</td>
+      <td>${e.fornecedor}</td>
+      <td><span class="tag" style="padding:2px 8px;">${e.tamanho}</span></td>
+      <td style="text-align:right;">${e.quantidade}</td>
+      <td style="text-align:right;">R$ ${Number(e.valor_unitario).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td style="text-align:right;font-weight:600;">R$ ${total}</td>
+      <td style="text-align:center;">${e.logo_bordada ? '✓' : '—'}</td>
+      <td style="color:var(--text-sec);font-size:12px;">${e.almox?.nome || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Modal: Entrada de lote ───────────────────────────────────────────────────
+function abrirModalEntrada() {
+  const selItem = document.getElementById('entItem');
+  selItem.innerHTML = '<option value="">Selecione…</option>' +
+    ITENS.filter(i => i.ativo).map(i =>
+      `<option value="${i.id}" data-tamanhos='${JSON.stringify(i.tamanhos_disponiveis||[])}' data-sistema="${i.sistema_tamanho}">${i.nome}${i.genero && i.genero!=='unissex' ? ' ('+i.genero+')' : ''}</option>`
+    ).join('');
+
+  const selAlmox = document.getElementById('entAlmox');
+  selAlmox.innerHTML = '<option value="">Selecione…</option>' +
+    ALMOXARIFADOS.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
+
+  document.getElementById('entData').value    = new Date().toISOString().split('T')[0];
+  document.getElementById('entFornecedor').value = '';
+  document.getElementById('entQtd').value     = '1';
+  document.getElementById('entValor').value   = '';
+  document.getElementById('entNF').value      = '';
+  document.getElementById('entObs').value     = '';
+  document.getElementById('entLogo').checked  = false;
+  document.getElementById('entTamanho').innerHTML = '<option value="">Selecione o item primeiro</option>';
+
+  document.getElementById('modalEntradaLote').classList.add('open');
+}
+
+function fecharModalEntrada() {
+  document.getElementById('modalEntradaLote').classList.remove('open');
+}
+
+function atualizarTamanhosEntrada() {
+  const sel  = document.getElementById('entItem');
+  const opt  = sel.options[sel.selectedIndex];
+  const selT = document.getElementById('entTamanho');
+  if (!opt?.value) { selT.innerHTML = '<option value="">Selecione o item primeiro</option>'; return; }
+
+  const sistema  = opt.dataset.sistema;
+  const tamanhos = JSON.parse(opt.dataset.tamanhos || '[]');
+
+  if (sistema === 'unico') {
+    selT.innerHTML = '<option value="Único">Único</option>';
+  } else if (tamanhos.length) {
+    selT.innerHTML = tamanhos.map(t => `<option value="${t}">${t}</option>`).join('');
+  } else {
+    selT.innerHTML = '<option value="">Sem tamanhos cadastrados</option>';
+  }
+}
+
+async function salvarEntradaLote() {
+  const itemId  = document.getElementById('entItem').value;
+  const almoxId = document.getElementById('entAlmox').value;
+  const fornec  = document.getElementById('entFornecedor').value.trim().toUpperCase();
+  const tamanho = document.getElementById('entTamanho').value;
+  const qtd     = parseInt(document.getElementById('entQtd').value) || 0;
+  const valor   = parseFloat(document.getElementById('entValor').value) || 0;
+  const data    = document.getElementById('entData').value;
+  const nf      = document.getElementById('entNF').value.trim();
+  const obs     = document.getElementById('entObs').value.trim();
+  const logo    = document.getElementById('entLogo').checked;
+
+  if (!itemId)  { toast('Selecione o item.');         return; }
+  if (!almoxId) { toast('Selecione o almoxarifado.'); return; }
+  if (!fornec)  { toast('Informe o fornecedor.');     return; }
+  if (!tamanho) { toast('Selecione o tamanho.');      return; }
+  if (qtd < 1)  { toast('Informe a quantidade.');     return; }
+  if (valor < 0){ toast('Informe o valor unitário.');  return; }
+
+  const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+
+  try {
+    // registra entrada
+    await sbPost('unif_entradas', {
+      item_id: itemId, almoxarifado_id: almoxId, fornecedor: fornec,
+      tamanho, quantidade: qtd, valor_unitario: valor,
+      logo_bordada: logo, data_entrada: data,
+      nf: nf || null, obs: obs || null,
+      status: 'ativo', registrado_por: perfil.nome || 'RH',
+    });
+
+    // atualiza estoque (custo médio ponderado)
+    const rows = await sbGet('unif_estoque',
+      `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade,custo_medio`);
+
+    if (rows.length) {
+      const r = rows[0];
+      const qtdAtual   = r.quantidade || 0;
+      const custoAtual = parseFloat(r.custo_medio) || 0;
+      const novaQtd    = qtdAtual + qtd;
+      const novoCusto  = novaQtd > 0 ? ((custoAtual * qtdAtual + valor * qtd) / novaQtd) : valor;
+      await sbPatch('unif_estoque', `id=eq.${r.id}`, { quantidade: novaQtd, custo_medio: Math.round(novoCusto * 100) / 100 });
+    } else {
+      await sbPost('unif_estoque', {
+        almoxarifado_id: almoxId, item_id: itemId, tamanho,
+        quantidade: qtd, custo_medio: valor,
+      });
+    }
+
+    toast('✓ Entrada registrada');
+    fecharModalEntrada();
+    carregarEstoque();
+  } catch(e) { toast('Erro: ' + e.message); }
 }
 
 // ─── Colaboradores: busca ─────────────────────────────────────────────────────
@@ -831,7 +1199,7 @@ function renderItens() {
     <tr>
       <td style="font-weight:600;">${i.nome}</td>
       <td><span class="badge badge-${i.tipo}">${i.tipo === 'epi' ? 'EPI' : 'Uniforme'}</span></td>
-      <td style="color:var(--text-sec);">${i.categoria || '—'}</td>
+      <td style="color:var(--text-sec);">${Array.isArray(i.categoria) ? i.categoria.join(', ') : (i.categoria || '—')}</td>
       <td>${tam(i.tamanhos_disponiveis)}</td>
       <td style="color:var(--text-sec);font-size:12px;">${i.ca_numero || '—'}</td>
       <td style="color:var(--text-sec);">${i.prazo_troca_meses || 24} meses</td>
@@ -852,36 +1220,65 @@ const TAGS_SUGERIDAS = {
   unico:    [],
 };
 let _tags = [];
+let _cats = [];
+
+const CATS_SUGERIDAS = ['Manga Curta','Manga Longa','Com Forro','Sem Forro','Social','Casual'];
 
 function abrirModalItem(id) {
   _editItemId = id || null;
   _tags = [];
+  _cats = [];
   document.getElementById('modalItemTitulo').textContent = id ? 'Editar item' : 'Novo item';
 
   if (id) {
     const item = ITENS.find(i => i.id === id);
     if (!item) return;
-    document.getElementById('iNome').value            = item.nome;
-    document.getElementById('iTipo').value            = item.tipo;
-    document.getElementById('iCategoria').value       = item.categoria || '';
-    document.getElementById('iCA').value              = item.ca_numero || '';
-    document.getElementById('iSistemaTamanho').value  = item.sistema_tamanho;
-    document.getElementById('iPrazo').value           = item.prazo_troca_meses || 24;
-    document.getElementById('iAtivo').checked         = item.ativo;
+    document.getElementById('iNome').value           = item.nome;
+    document.getElementById('iTipo').value           = item.tipo;
+    document.getElementById('iGenero').value         = item.genero || 'unissex';
+    document.getElementById('iCA').value             = item.ca_numero || '';
+    document.getElementById('iSistemaTamanho').value = item.sistema_tamanho;
+    document.getElementById('iPrazo').value          = item.prazo_troca_meses || 24;
+    document.getElementById('iAtivo').checked        = item.ativo;
     _tags = Array.isArray(item.tamanhos_disponiveis) ? [...item.tamanhos_disponiveis] : [];
+    _cats = Array.isArray(item.categoria) ? [...item.categoria]
+          : (item.categoria ? [item.categoria] : []);
   } else {
-    document.getElementById('iNome').value            = '';
-    document.getElementById('iTipo').value            = 'uniforme';
-    document.getElementById('iCategoria').value       = '';
-    document.getElementById('iCA').value              = '';
-    document.getElementById('iSistemaTamanho').value  = 'letra';
-    document.getElementById('iPrazo').value           = '24';
-    document.getElementById('iAtivo').checked         = true;
+    document.getElementById('iNome').value           = '';
+    document.getElementById('iTipo').value           = 'uniforme';
+    document.getElementById('iGenero').value         = 'unissex';
+    document.getElementById('iCA').value             = '';
+    document.getElementById('iSistemaTamanho').value = 'letra';
+    document.getElementById('iPrazo').value          = '24';
+    document.getElementById('iAtivo').checked        = true;
   }
 
   toggleCampoCA();
   renderTagsInput();
+  renderCategorias();
   document.getElementById('modalItem').classList.add('open');
+}
+
+// ─── Categorias (múltipla) ────────────────────────────────────────────────────
+function renderCategorias() {
+  document.getElementById('categoriasSugeridas').innerHTML = CATS_SUGERIDAS.map(c =>
+    `<button type="button" onclick="adicionarCatValor('${c}')" style="padding:3px 9px;border:1px solid var(--border);border-radius:99px;font-size:12px;font-weight:500;background:none;cursor:pointer;color:var(--text-sec);transition:all .1s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">${c}</button>`
+  ).join('');
+  document.getElementById('catList').innerHTML = _cats.map((c, i) =>
+    `<span class="tag">${c}<button class="tag-rm" onclick="_cats.splice(${i},1);renderCategorias()">×</button></span>`
+  ).join('');
+}
+function adicionarCatValor(val) {
+  const v = val.trim();
+  if (v && !_cats.includes(v)) { _cats.push(v); renderCategorias(); }
+}
+function adicionarCategoria(e) {
+  if (e.key === 'Enter') { e.preventDefault(); adicionarCategoriaBtn(); }
+}
+function adicionarCategoriaBtn() {
+  const inp = document.getElementById('iCatInput');
+  adicionarCatValor(inp.value);
+  inp.value = '';
 }
 
 function fecharModalItem() {
@@ -931,20 +1328,29 @@ function adicionarTagBtn() {
 }
 
 async function salvarItem() {
-  const nome     = document.getElementById('iNome').value.trim();
-  const tipo     = document.getElementById('iTipo').value;
-  const sistema  = document.getElementById('iSistemaTamanho').value;
-  const ca       = document.getElementById('iCA').value.trim();
-  const prazo    = parseInt(document.getElementById('iPrazo').value) || 24;
-  const ativo    = document.getElementById('iAtivo').checked;
-  const categoria = document.getElementById('iCategoria').value.trim();
+  const nome    = document.getElementById('iNome').value.trim();
+  const tipo    = document.getElementById('iTipo').value;
+  const genero  = document.getElementById('iGenero').value;
+  const sistema = document.getElementById('iSistemaTamanho').value;
+  const ca      = document.getElementById('iCA').value.trim();
+  const prazo   = parseInt(document.getElementById('iPrazo').value) || 24;
+  const ativo   = document.getElementById('iAtivo').checked;
 
   if (!nome) { toast('Informe o nome do item.'); return; }
   if (tipo === 'epi' && !ca) { toast('Informe o número do CA para EPIs.'); return; }
   if (sistema !== 'unico' && !_tags.length) { toast('Adicione ao menos um tamanho.'); return; }
 
   const tamanhos = sistema === 'unico' ? [] : _tags;
-  const payload = { nome, tipo, categoria: categoria || null, sistema_tamanho: sistema, tamanhos_disponiveis: tamanhos, ca_numero: ca || null, prazo_troca_meses: prazo, ativo, updated_at: new Date().toISOString() };
+  const payload = {
+    nome, tipo, genero,
+    categoria: _cats.length ? _cats : null,
+    sistema_tamanho: sistema,
+    tamanhos_disponiveis: tamanhos,
+    ca_numero: ca || null,
+    prazo_troca_meses: prazo,
+    ativo,
+    updated_at: new Date().toISOString()
+  };
 
   try {
     if (_editItemId) {
