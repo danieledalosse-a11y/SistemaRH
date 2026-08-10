@@ -2002,6 +2002,16 @@ async function confirmarExcluirItem(id, nome) {
   }
 }
 
+function _labelItem(i) {
+  const tipo   = i.tipo === 'epi' ? 'EPI' : 'Uniforme';
+  const genMap = { feminino: 'Fem.', masculino: 'Masc.', unissex: '' };
+  const partes = [i.nome];
+  const detalhe = [i.variante, i.logo, genMap[i.genero]].filter(Boolean);
+  if (detalhe.length) partes.push('— ' + detalhe.join(' · '));
+  partes.push(`(${tipo})`);
+  return partes.join(' ');
+}
+
 // ─── Kits por Cargo ───────────────────────────────────────────────────────────
 function renderSelCargo() {
   const sel = document.getElementById('selCargo');
@@ -2037,7 +2047,7 @@ function carregarKit() {
         <label class="form-label">Adicionar item ao kit</label>
         <select class="form-select" id="selNovoItemKit">
           <option value="">Selecione um item…</option>
-          ${disponiveis.map(i => `<option value="${i.id}">${i.nome} <span style="color:var(--text-ter)">(${i.tipo === 'epi' ? 'EPI' : 'Uniforme'})</span></option>`).join('')}
+          ${disponiveis.map(i => `<option value="${i.id}">${_labelItem(i)}</option>`).join('')}
         </select>
       </div>
       <div class="form-field">
@@ -2050,8 +2060,17 @@ function carregarKit() {
 
 function kitItemRow(k) {
   const item = k.item || ITENS.find(i => i.id === k.item_id) || {};
+  const genMap = { feminino: 'Fem.', masculino: 'Masc.' };
+  const badges = [
+    item.variante ? `<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:#F4F3FF;color:#5925DC;">${item.variante}</span>` : '',
+    item.logo     ? `<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:#EFF4FF;color:#1849A9;">🪡 ${item.logo}</span>` : '',
+    genMap[item.genero] ? `<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:#F2F4F7;color:#344054;">${genMap[item.genero]}</span>` : '',
+  ].filter(Boolean).join('');
   return `<div class="kit-item-row" id="kit-row-${k.id}">
-    <div class="kit-item-nome">${item.nome || '—'}</div>
+    <div class="kit-item-nome" style="display:flex;flex-direction:column;gap:4px;">
+      <span>${item.nome || '—'}</span>
+      ${badges ? `<div style="display:flex;gap:4px;flex-wrap:wrap;">${badges}</div>` : ''}
+    </div>
     <div class="kit-item-tipo"><span class="badge badge-${item.tipo || 'uniforme'}">${item.tipo === 'epi' ? 'EPI' : 'Uniforme'}</span></div>
     <div class="kit-item-qty">
       <input type="number" value="${k.quantidade}" min="1"
