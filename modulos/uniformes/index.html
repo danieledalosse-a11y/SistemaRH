@@ -569,19 +569,23 @@
 
       <!-- ── 3. Tamanhos ── -->
       <div id="bloccoTamanhos">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);">Tamanhos disponíveis para entrega <span class="req">*</span></div>
-          <select id="iSistemaTamanho" onchange="renderTagsInput()" style="font-size:12px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-sec);font-family:inherit;cursor:pointer;">
+          <select id="iSistemaTamanho" onchange="renderTagsInput()" style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-sec);font-family:inherit;cursor:pointer;">
             <option value="letra">Letras (PP, P, M, G…)</option>
             <option value="numerico">Numérico (34, 36, 38…)</option>
             <option value="unico">Tamanho único</option>
           </select>
         </div>
-        <div style="font-size:12px;color:var(--text-ter);margin-bottom:12px;">Selecione os tamanhos que este item possui. Eles ficarão disponíveis ao registrar uma entrega.</div>
-        <div id="tamanhosSugeridos" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"></div>
-        <div id="tagList" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
-        <div id="customTagRow" style="display:flex;gap:8px;align-items:center;margin-top:4px;">
-          <input class="form-input" type="text" id="iTagInput" placeholder="Tamanho personalizado (pressione Enter)…" style="font-size:13px;padding:7px 10px;" onkeydown="adicionarTag(event)">
+        <div style="font-size:12px;color:var(--text-ter);margin-bottom:14px;">Clique nos tamanhos para selecioná-los (ficam escuros). Os marcados ficarão disponíveis ao registrar uma entrega.</div>
+        <div id="tamanhosSugeridos" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;min-height:36px;"></div>
+        <div style="border-top:1px solid var(--border-light);padding-top:14px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text-sec);margin-bottom:8px;">Adicionar tamanho personalizado</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="form-input" type="text" id="iTagInput" placeholder="ex: EGG, 54, XGG, ESP…" style="flex:1;" onkeydown="adicionarTag(event)">
+            <button type="button" class="btn btn-outline" onclick="_adicionarTagBtn()" style="flex-shrink:0;padding:9px 16px;font-size:14px;font-weight:700;" title="Adicionar tamanho">+</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-ter);margin-top:6px;">Digite e pressione Enter ou clique em + para incluir um tamanho fora da lista padrão.</div>
         </div>
       </div>
 
@@ -1909,16 +1913,17 @@ function renderTagsInput() {
 function renderTags() {
   const sistema = document.getElementById('iSistemaTamanho').value;
   const sugs    = TAGS_SUGERIDAS[sistema] || [];
-  // chips sugeridos com estado toggle
-  document.getElementById('tamanhosSugeridos').innerHTML = sugs.map(s => {
+  const custom  = _tags.filter(t => !sugs.includes(t));
+
+  // chips normais (toggle) + chips personalizados (sempre selecionados, com ×) — tudo junto
+  const html = sugs.map(s => {
     const sel = _tags.includes(s);
     return `<button type="button" class="tam-chip${sel ? ' sel' : ''}" onclick="_toggleTag('${s}')">${s}</button>`;
-  }).join('');
-  // chips personalizados (não estão nas sugestões)
-  const custom = _tags.filter(t => !sugs.includes(t));
-  document.getElementById('tagList').innerHTML = custom.map((t, i) =>
-    `<span class="tam-chip-custom">${t}<button onclick="_removeCustomTag('${t}')">×</button></span>`
+  }).join('') + custom.map(t =>
+    `<span class="tam-chip-custom">${t}<button type="button" onclick="_removeCustomTag('${t}')">×</button></span>`
   ).join('');
+
+  document.getElementById('tamanhosSugeridos').innerHTML = html;
 }
 
 function _toggleTag(val) {
@@ -1937,13 +1942,15 @@ function adicionarTagValor(val) {
   if (v && !_tags.includes(v)) { _tags.push(v); renderTags(); }
 }
 
+function _adicionarTagBtn() {
+  const inp = document.getElementById('iTagInput');
+  adicionarTagValor(inp.value);
+  inp.value = '';
+  inp.focus();
+}
+
 function adicionarTag(e) {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    const inp = document.getElementById('iTagInput');
-    adicionarTagValor(inp.value);
-    inp.value = '';
-  }
+  if (e.key === 'Enter') { e.preventDefault(); _adicionarTagBtn(); }
 }
 
 async function salvarItem() {
