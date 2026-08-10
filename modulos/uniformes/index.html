@@ -223,10 +223,16 @@
             <div class="card-title" id="colabNomeDetalhe"></div>
             <div class="card-sub" style="margin:0;" id="colabCargoDetalhe"></div>
           </div>
-          <button class="btn btn-primary" onclick="abrirModalEntrega()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Registrar entrega
-          </button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-outline" onclick="abrirModalDocCD()" title="Gera documento de entrega sem baixa no estoque — para almoxarifado CD">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              Emitir documento CD
+            </button>
+            <button class="btn btn-primary" onclick="abrirModalEntrega()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Registrar entrega
+            </button>
+          </div>
         </div>
 
         <div class="tbl-wrap">
@@ -665,6 +671,50 @@
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="fecharModalEntrega()">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarEntrega()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Documento de Entrega CD -->
+<div class="modal-overlay" id="modalDocCD" style="display:none;">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Documento de Entrega — CD</div>
+        <div id="docCDColabInfo" style="font-size:13px;color:var(--text-sec);margin-top:2px;"></div>
+      </div>
+      <button class="modal-close" onclick="fecharModalDocCD()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--amber-bg);border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:16px;">
+        ℹ️ O estoque do CD é controlado pela Logística. Este documento registra a entrega para assinatura do colaborador <strong>sem baixa automática no estoque</strong>.
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:600;">Itens do kit</div>
+        <div id="docCDKitInfo" style="font-size:12px;color:var(--text-sec);"></div>
+      </div>
+      <div id="docCDItens" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+      <button class="btn btn-outline btn-sm" onclick="_addDocCDItem()" style="width:100%;justify-content:center;margin-bottom:16px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Adicionar item extra
+      </button>
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-label">Data de entrega</label>
+          <input class="form-input" type="date" id="docCDData">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Observação</label>
+          <input class="form-input" type="text" id="docCDObs" placeholder="opcional…">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModalDocCD()">Cancelar</button>
+      <button class="btn btn-primary" onclick="registrarEImprimirCD()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Registrar e Imprimir
+      </button>
     </div>
   </div>
 </div>
@@ -1176,14 +1226,16 @@ async function salvarEntrega() {
   try {
     await sbPost('unif_movimentacoes', payload);
 
-    // baixa automática no estoque
-    const tipo = motivo === 'demissao' ? 'devolucao' : 'entrega';
-    const sinal = tipo === 'devolucao' ? 1 : -1;
-    const estoqRows = await sbGet('unif_estoque',
-      `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
-    if (estoqRows.length) {
-      const novaQtd = Math.max(0, (estoqRows[0].quantidade || 0) + sinal * qtd);
-      await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: novaQtd });
+    // baixa automática no estoque — apenas se não for almoxarifado CD
+    if (!isCDAlmox(almoxId)) {
+      const tipo = motivo === 'demissao' ? 'devolucao' : 'entrega';
+      const sinal = tipo === 'devolucao' ? 1 : -1;
+      const estoqRows = await sbGet('unif_estoque',
+        `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
+      if (estoqRows.length) {
+        const novaQtd = Math.max(0, (estoqRows[0].quantidade || 0) + sinal * qtd);
+        await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: novaQtd });
+      }
     }
 
     toast('✓ Entrega registrada');
@@ -1192,6 +1244,221 @@ async function salvarEntrega() {
   } catch(e) {
     toast('Erro: ' + e.message);
   }
+}
+
+// ─── Fluxo CD ────────────────────────────────────────────────────────────────
+function isCDAlmox(almoxId) {
+  const a = ALMOXARIFADOS.find(x => x.id === almoxId);
+  return !!(a && a.nome.toUpperCase().includes('CD'));
+}
+
+let _docCDLinhas = [];
+
+function abrirModalDocCD() {
+  if (!_colabAtual) return;
+  _docCDLinhas = [];
+  document.getElementById('docCDColabInfo').textContent =
+    _colabAtual.nome + (_colabAtual.cargo ? ' · ' + _colabAtual.cargo : '');
+  document.getElementById('docCDData').value = new Date().toISOString().split('T')[0];
+  document.getElementById('docCDObs').value = '';
+
+  const kitCargo = KITS.filter(k => k.cargo === _colabAtual.cargo);
+  document.getElementById('docCDKitInfo').textContent =
+    kitCargo.length ? `Kit: ${_colabAtual.cargo}` : 'Nenhum kit para este cargo — adicione itens manualmente';
+
+  for (const k of kitCargo) {
+    const item = ITENS.find(i => i.id === k.item_id);
+    if (!item) continue;
+    _docCDLinhas.push({
+      itemId:     item.id,
+      nome:       item.nome + (item.variante ? ` · ${item.variante}` : '') + (item.logo ? ` (${item.logo})` : ''),
+      tamanhos:   Array.isArray(item.tamanhos_disponiveis) ? item.tamanhos_disponiveis : [],
+      tamanhoSel: k.tamanho_padrao || '',
+      qtd:        k.quantidade || 1,
+      isExtra:    false,
+    });
+  }
+  _renderDocCDItens();
+  document.getElementById('modalDocCD').style.display = 'flex';
+}
+
+function fecharModalDocCD() {
+  document.getElementById('modalDocCD').style.display = 'none';
+}
+
+function _docCDSelectItem(idx, itemId) {
+  const item = ITENS.find(i => i.id === itemId);
+  if (!item) return;
+  _docCDLinhas[idx].itemId     = item.id;
+  _docCDLinhas[idx].nome       = item.nome + (item.variante ? ` · ${item.variante}` : '') + (item.logo ? ` (${item.logo})` : '');
+  _docCDLinhas[idx].tamanhos   = Array.isArray(item.tamanhos_disponiveis) ? item.tamanhos_disponiveis : [];
+  _docCDLinhas[idx].tamanhoSel = _docCDLinhas[idx].tamanhos[0] || '';
+  _renderDocCDItens();
+}
+
+function _addDocCDItem() {
+  const primeiroAtivo = ITENS.find(i => i.ativo);
+  _docCDLinhas.push({
+    itemId:     primeiroAtivo?.id || '',
+    nome:       primeiroAtivo ? (primeiroAtivo.nome + (primeiroAtivo.variante ? ` · ${primeiroAtivo.variante}` : '')) : '',
+    tamanhos:   Array.isArray(primeiroAtivo?.tamanhos_disponiveis) ? primeiroAtivo.tamanhos_disponiveis : [],
+    tamanhoSel: primeiroAtivo?.tamanhos_disponiveis?.[0] || '',
+    qtd:        1,
+    isExtra:    true,
+  });
+  _renderDocCDItens();
+}
+
+function _renderDocCDItens() {
+  const cont = document.getElementById('docCDItens');
+  if (!_docCDLinhas.length) {
+    cont.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-ter);font-size:13px;">Nenhum item. Adicione manualmente abaixo.</div>';
+    return;
+  }
+  cont.innerHTML = _docCDLinhas.map((l, idx) => {
+    const nomeParte = l.isExtra
+      ? `<select onchange="_docCDSelectItem(${idx},this.value)" style="flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">
+          ${ITENS.filter(i=>i.ativo).map(i=>`<option value="${i.id}" ${i.id===l.itemId?'selected':''}>${i.nome}${i.variante?' · '+i.variante:''}</option>`).join('')}
+         </select>`
+      : `<span style="flex:1;font-size:13px;font-weight:600;">${l.nome}</span>`;
+
+    const opts = l.tamanhos.map(t=>`<option value="${t}" ${t===l.tamanhoSel?'selected':''}>${t}</option>`).join('');
+    const tamCtrl = l.tamanhos.length
+      ? `<select onchange="_docCDLinhas[${idx}].tamanhoSel=this.value" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">${opts}</select>`
+      : `<input type="text" value="${l.tamanhoSel}" placeholder="Tam." oninput="_docCDLinhas[${idx}].tamanhoSel=this.value" style="width:64px;padding:6px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">`;
+
+    return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg);border-radius:8px;">
+      ${nomeParte}
+      ${tamCtrl}
+      <input type="number" value="${l.qtd}" min="1" oninput="_docCDLinhas[${idx}].qtd=parseInt(this.value)||1"
+        style="width:52px;padding:6px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;text-align:center;">
+      <button onclick="_docCDLinhas.splice(${idx},1);_renderDocCDItens()" title="Remover"
+        style="background:none;border:none;cursor:pointer;color:var(--text-ter);padding:4px;font-size:16px;line-height:1;">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function registrarEImprimirCD() {
+  const linhasValidas = _docCDLinhas.filter(l => l.itemId && l.tamanhoSel);
+  if (!linhasValidas.length) { toast('Adicione pelo menos um item com tamanho.'); return; }
+
+  const data = document.getElementById('docCDData').value || new Date().toISOString().split('T')[0];
+  const obs  = document.getElementById('docCDObs').value.trim();
+  const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+
+  try {
+    for (const l of linhasValidas) {
+      await sbPost('unif_movimentacoes', {
+        colaborador_id:    _colabAtual.id,
+        item_id:           l.itemId,
+        almoxarifado_id:   null,          // CD não tem almox no sistema ainda
+        tipo:              'entrega',
+        motivo:            'kit_admissao',
+        tamanho:           l.tamanhoSel,
+        quantidade:        l.qtd,
+        data_movimentacao: data,
+        confirmado:        true,
+        registrado_por:    perfil.nome || 'RH',
+        obs:               obs || 'Documento CD',
+      });
+    }
+
+    toast('✓ Entrega registrada');
+    fecharModalDocCD();
+    carregarHistoricoColab(_colabAtual.id);
+    _abrirDocumentoImpressao(linhasValidas, data);
+  } catch(e) { toast('Erro: ' + e.message); }
+}
+
+function _abrirDocumentoImpressao(linhas, data) {
+  const dataFmt = new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+  const itensHTML = linhas.map(l => `
+    <tr>
+      <td>${l.nome}</td>
+      <td style="text-align:center;">${l.tamanhoSel}</td>
+      <td style="text-align:center;">${l.qtd}</td>
+      <td style="border-bottom:1px solid #ccc;width:180px;">&nbsp;</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Entrega de Uniformes — ${_colabAtual.nome}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #111; padding: 32px 40px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #111; }
+  .empresa { font-size: 17px; font-weight: 700; }
+  .titulo { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-top: 24px; margin-bottom: 16px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; background: #f5f5f5; padding: 14px 16px; border-radius: 6px; margin-bottom: 24px; }
+  .info-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #666; }
+  .info-val { font-size: 13px; font-weight: 600; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+  thead th { background: #111; color: #fff; padding: 9px 12px; font-size: 11px; text-align: left; text-transform: uppercase; letter-spacing: .04em; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #e5e5e5; font-size: 13px; vertical-align: bottom; }
+  .assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; }
+  .ass-linha { border-bottom: 1.5px solid #111; margin-bottom: 6px; height: 36px; }
+  .ass-label { font-size: 11px; color: #555; }
+  .aviso { font-size: 11px; color: #777; border: 1px solid #ddd; border-radius: 4px; padding: 8px 12px; margin-bottom: 24px; }
+  @media print { body { padding: 20px 28px; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="empresa">Revest do Brasil Acabamentos Ltda</div>
+    <div style="font-size:12px;color:#555;margin-top:3px;">CD — Documento de Entrega de Uniformes</div>
+  </div>
+  <div style="font-size:12px;color:#555;text-align:right;">${dataFmt}</div>
+</div>
+
+<div class="titulo">Comprovante de Recebimento de Uniformes</div>
+
+<div class="info-grid">
+  <div><div class="info-label">Colaborador</div><div class="info-val">${_colabAtual.nome}</div></div>
+  <div><div class="info-label">Cargo</div><div class="info-val">${_colabAtual.cargo || '—'}</div></div>
+  <div><div class="info-label">Data de entrega</div><div class="info-val">${dataFmt}</div></div>
+  <div><div class="info-label">Local</div><div class="info-val">CD — Almoxarifado Central</div></div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th style="text-align:center;width:80px;">Tamanho</th>
+      <th style="text-align:center;width:60px;">Qtd.</th>
+      <th style="width:200px;">Assinatura do colaborador</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${itensHTML}
+  </tbody>
+</table>
+
+<div class="aviso">
+  Declaro que recebi os uniformes listados acima em perfeito estado de conservação, comprometendo-me a utilizá-los somente durante o horário de trabalho e devolvê-los em caso de desligamento.
+</div>
+
+<div class="assinaturas">
+  <div>
+    <div class="ass-linha"></div>
+    <div class="ass-label">Assinatura do colaborador</div>
+    <div style="font-size:12px;margin-top:3px;">${_colabAtual.nome}</div>
+  </div>
+  <div>
+    <div class="ass-linha"></div>
+    <div class="ass-label">Responsável pela entrega / RH</div>
+  </div>
+</div>
+
+<script>window.onload = () => window.print();<\/script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  window.open(url, '_blank');
 }
 
 // ─── Sub-navegação (Catálogo) ─────────────────────────────────────────────────
