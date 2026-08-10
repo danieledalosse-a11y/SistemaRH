@@ -371,7 +371,8 @@
               <tr>
                 <th>Nome</th>
                 <th>Tipo</th>
-                <th>Categoria</th>
+                <th>Gênero</th>
+                <th>Variante / Logo</th>
                 <th>Tamanhos</th>
                 <th>CA</th>
                 <th>Prazo troca</th>
@@ -1228,7 +1229,7 @@ function renderItens() {
   const ativo  = document.getElementById('filtroAtivo')?.value;
 
   let lista = ITENS.filter(i => {
-    if (busca && !i.nome.toLowerCase().includes(busca) && !(i.categoria || '').toLowerCase().includes(busca)) return false;
+    if (busca && ![i.nome, i.variante, i.logo, i.genero].some(v => (v||'').toLowerCase().includes(busca))) return false;
     if (tipo  && i.tipo !== tipo) return false;
     if (ativo === '1' && !i.ativo) return false;
     if (ativo === '0' &&  i.ativo) return false;
@@ -1237,17 +1238,27 @@ function renderItens() {
 
   const tbody = document.getElementById('tbodyItens');
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">📋</div><p>Nenhum item encontrado</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">📋</div><p>Nenhum item encontrado</p></div></td></tr>`;
     return;
   }
 
   const tam = t => (Array.isArray(t) && t.length ? t.map(x => `<span class="tag" style="padding:2px 6px;font-size:11px;">${x}</span>`).join('') : '<span style="color:var(--text-ter);font-size:12px;">—</span>');
 
-  tbody.innerHTML = lista.map(i => `
-    <tr>
+  const genLabel = { masculino:'Masculino', feminino:'Feminino', unissex:'Unissex' };
+  const genColor = { masculino:'color:#1849A9;background:#EFF4FF', feminino:'color:#9D174D;background:#FDF2F8', unissex:'color:#374151;background:#F3F4F6' };
+
+  tbody.innerHTML = lista.map(i => {
+    const gen = i.genero || 'unissex';
+    const genBadge = `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;${genColor[gen]}">${genLabel[gen]}</span>`;
+    const varBadge = i.variante ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;color:#5925DC;background:#F4F3FF;">${i.variante}</span>` : '';
+    const logBadge = i.logo    ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;color:#1849A9;background:#EFF4FF;">🪡 ${i.logo}</span>` : '';
+    const varLogoCell = (varBadge || logBadge) ? `<div style="display:flex;flex-direction:column;gap:4px;">${varBadge}${logBadge}</div>` : `<span style="color:var(--text-ter);font-size:12px;">—</span>`;
+
+    return `<tr>
       <td style="font-weight:600;">${i.nome}</td>
       <td><span class="badge badge-${i.tipo}">${i.tipo === 'epi' ? 'EPI' : 'Uniforme'}</span></td>
-      <td style="color:var(--text-sec);">${Array.isArray(i.categoria) ? i.categoria.join(', ') : (i.categoria || '—')}</td>
+      <td>${genBadge}</td>
+      <td>${varLogoCell}</td>
       <td>${tam(i.tamanhos_disponiveis)}</td>
       <td style="color:var(--text-sec);font-size:12px;">${i.ca_numero || '—'}</td>
       <td style="color:var(--text-sec);">${i.prazo_troca_meses || 24} meses</td>
@@ -1258,7 +1269,8 @@ function renderItens() {
           <button class="btn btn-danger btn-sm" onclick="confirmarExcluirItem('${i.id}','${i.nome.replace(/'/g,"\\'")}')">Excluir</button>
         </div>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 // ─── Modal de Item ────────────────────────────────────────────────────────────
