@@ -192,11 +192,73 @@
 
   <!-- PAINEL -->
   <div id="sec-painel" style="display:none;">
-    <div class="coming-soon">
-      <div class="icon">📊</div>
-      <h3>Painel em desenvolvimento</h3>
-      <p>Disponível após o cadastro do catálogo e estoque inicial.</p>
+
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+      <div class="card" style="margin-bottom:0;padding:18px 20px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:8px;">Total de unidades</div>
+        <div id="pKpiUnid" style="font-size:28px;font-weight:700;">—</div>
+      </div>
+      <div class="card" style="margin-bottom:0;padding:18px 20px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:8px;">Valor do estoque</div>
+        <div id="pKpiValor" style="font-size:22px;font-weight:700;">—</div>
+      </div>
+      <div class="card" style="margin-bottom:0;padding:18px 20px;cursor:pointer;" onclick="setTab('estoque');setTimeout(()=>{document.getElementById('filtroEstoqueStatus').value='baixo';renderEstoque();},200)">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#92400E;margin-bottom:8px;">Estoque baixo ↗</div>
+        <div id="pKpiAlerta" style="font-size:28px;font-weight:700;color:#92400E;">—</div>
+        <div style="font-size:11px;color:var(--text-ter);margin-top:4px;">itens com qtd ≤ 2</div>
+      </div>
+      <div class="card" style="margin-bottom:0;padding:18px 20px;cursor:pointer;" onclick="setTab('estoque');setTimeout(()=>{document.getElementById('filtroEstoqueStatus').value='zerado';renderEstoque();},200)">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#B42318;margin-bottom:8px;">Zerados ↗</div>
+        <div id="pKpiZerado" style="font-size:28px;font-weight:700;color:#B42318;">—</div>
+        <div style="font-size:11px;color:var(--text-ter);margin-top:4px;">itens sem estoque</div>
+      </div>
     </div>
+
+    <!-- Alertas + Kits -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="card" style="margin-bottom:0;">
+        <div class="card-hdr" style="margin-bottom:12px;">
+          <div class="card-title">Alertas de Estoque</div>
+          <button class="btn btn-outline btn-sm" onclick="setTab('estoque')">Ver estoque</button>
+        </div>
+        <div id="painelAlertas"><div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Carregando…</div></div>
+      </div>
+      <div class="card" style="margin-bottom:0;">
+        <div class="card-hdr" style="margin-bottom:12px;">
+          <div class="card-title">Kits por Cargo</div>
+          <button class="btn btn-outline btn-sm" onclick="setTab('catalogo');setTimeout(()=>setSecTab('kits'),100)">Gerenciar</button>
+        </div>
+        <div id="painelKits"><div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Carregando…</div></div>
+      </div>
+    </div>
+
+    <!-- Últimas entregas -->
+    <div class="card">
+      <div class="card-hdr" style="margin-bottom:16px;">
+        <div class="card-title">Últimas Entregas</div>
+        <button class="btn btn-outline btn-sm" onclick="setTab('colaboradores')">Colaboradores</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Colaborador</th>
+              <th>Cargo</th>
+              <th>Item</th>
+              <th>Tamanho</th>
+              <th>Qtd.</th>
+              <th>Registrado por</th>
+            </tr>
+          </thead>
+          <tbody id="painelMovs">
+            <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-ter);">Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
   <!-- COLABORADORES -->
@@ -821,6 +883,7 @@ function setTab(tab) {
     document.getElementById(`sec-${t}`).style.display   = t === tab ? '' : 'none';
     document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
   });
+  if (tab === 'painel') carregarPainel();
   if (tab === 'catalogo') renderItens();
   if (tab === 'estoque') carregarEstoque();
   if (tab === 'colaboradores') {
@@ -1285,6 +1348,98 @@ async function salvarEntrega() {
   } catch(e) {
     toast('Erro: ' + e.message);
   }
+}
+
+// ─── Painel ──────────────────────────────────────────────────────────────────
+async function carregarPainel() {
+  try {
+    // Carrega em paralelo: movimentações recentes + estoque (se ainda vazio)
+    const [movs, estoqFresh] = await Promise.all([
+      sbGet('unif_movimentacoes',
+        'select=*,colaborador:colaboradores(nome,cargo),item:unif_catalogo(nome)&order=data_movimentacao.desc&limit=15'),
+      ESTOQUE.length ? Promise.resolve(ESTOQUE)
+        : sbGet('unif_estoque',
+            'select=*,item:unif_catalogo(id,nome,genero,variante,logo),almox:unif_almoxarifados(id,nome)'),
+    ]);
+    if (!ESTOQUE.length && estoqFresh.length) ESTOQUE = estoqFresh;
+
+    // ── KPIs ──────────────────────────────────────────────────────────────────
+    const totalUnid  = ESTOQUE.reduce((s, e) => s + (e.quantidade || 0), 0);
+    const totalValor = ESTOQUE.reduce((s, e) => s + (e.quantidade || 0) * (e.custo_medio || 0), 0);
+    const emAlerta   = ESTOQUE.filter(e => e.quantidade > 0 && e.quantidade <= (e.estoque_minimo || 2));
+    const zerados    = ESTOQUE.filter(e => (e.quantidade || 0) === 0);
+    document.getElementById('pKpiUnid').textContent   = totalUnid.toLocaleString('pt-BR');
+    document.getElementById('pKpiValor').textContent  = 'R ' + totalValor.toLocaleString('pt-BR', {minimumFractionDigits:2});
+    document.getElementById('pKpiAlerta').textContent = emAlerta.length;
+    document.getElementById('pKpiZerado').textContent = zerados.length;
+
+    // ── Alertas de estoque ────────────────────────────────────────────────────
+    const alertasCombinados = [...zerados, ...emAlerta].slice(0, 10);
+    const elAlertas = document.getElementById('painelAlertas');
+    if (!alertasCombinados.length) {
+      elAlertas.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px 0;color:var(--green);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span style="font-size:13px;font-weight:600;">Estoque sem alertas</span>
+      </div>`;
+    } else {
+      elAlertas.innerHTML = alertasCombinados.map(e => {
+        const isZerado = (e.quantidade || 0) === 0;
+        const [cor, bg] = isZerado ? ['#B42318','#FEF3F2'] : ['#92400E','#FFFAEB'];
+        const label     = e.item?.nome || '—';
+        const sub       = [e.tamanho, e.almox?.nome].filter(Boolean).join(' · ');
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border-light);">
+          <div>
+            <div style="font-size:13px;font-weight:600;">${label}</div>
+            <div style="font-size:12px;color:var(--text-sec);">${sub}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;background:${bg};color:${cor};">
+            ${isZerado ? 'Zerado' : e.quantidade + ' un.'}
+          </span>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Kits por cargo ────────────────────────────────────────────────────────
+    const porCargo = new Map();
+    for (const k of KITS) {
+      if (!porCargo.has(k.cargo)) porCargo.set(k.cargo, 0);
+      porCargo.set(k.cargo, porCargo.get(k.cargo) + 1);
+    }
+    const elKits = document.getElementById('painelKits');
+    if (!porCargo.size) {
+      elKits.innerHTML = `<div style="font-size:13px;color:var(--text-ter);padding:16px 0;">Nenhum kit cadastrado. Use a aba Catálogo → Kits por Cargo.</div>`;
+    } else {
+      const linhas = [...porCargo.entries()].sort((a,b) => a[0].localeCompare(b[0])).map(([cargo, qtd]) =>
+        `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border-light);">
+          <span style="font-size:13px;font-weight:600;">${cargo}</span>
+          <span style="font-size:12px;color:var(--text-sec);">${qtd} ${qtd === 1 ? 'item' : 'itens'}</span>
+        </div>`).join('');
+      elKits.innerHTML = linhas +
+        `<div style="font-size:12px;color:var(--text-ter);padding-top:10px;">${porCargo.size} cargo${porCargo.size > 1 ? 's' : ''} com kit definido</div>`;
+    }
+
+    // ── Últimas entregas ──────────────────────────────────────────────────────
+    const motivoLabel = { admissao:'Admissão', kit_admissao:'Kit CD', troca_programada:'Troca', troca_antecipada:'Troca antecipada', demissao:'Devolução', ajuste:'Ajuste' };
+    const tbody = document.getElementById('painelMovs');
+    if (!movs.length) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma entrega registrada</td></tr>`;
+    } else {
+      tbody.innerHTML = movs.map(m => {
+        const data = m.data_movimentacao
+          ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/')
+          : '—';
+        return `<tr>
+          <td style="white-space:nowrap;color:var(--text-sec);">${data}</td>
+          <td style="font-weight:600;">${m.colaborador?.nome || '—'}</td>
+          <td style="color:var(--text-sec);">${m.colaborador?.cargo || '—'}</td>
+          <td>${m.item?.nome || '—'}</td>
+          <td style="color:var(--text-sec);">${m.tamanho || '—'}</td>
+          <td>${m.quantidade}</td>
+          <td style="color:var(--text-sec);font-size:12px;">${m.registrado_por || '—'}</td>
+        </tr>`;
+      }).join('');
+    }
+  } catch(e) { toast('Erro ao carregar painel: ' + e.message); }
 }
 
 // ─── Fluxo CD ────────────────────────────────────────────────────────────────
