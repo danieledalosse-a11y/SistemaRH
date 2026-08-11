@@ -1880,7 +1880,10 @@ function renderKitEntregaLista() {
   }
   vazio.style.display = 'none';
 
-  lista.innerHTML = itensKit.map((k, idx) => {
+  // datalists renderizados separadamente (fora dos flex containers para evitar remoção pelo parser)
+  let datalistsHtml = '';
+
+  const rowsHtml = itensKit.map((k, idx) => {
     const item = ITENS.find(i => i.id == k.item_id);
     if (!item) return '';
     const tamanhos = item.tamanhos_disponiveis || [];
@@ -1889,15 +1892,10 @@ function renderKitEntregaLista() {
       ? `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#FFF7ED;color:#C4490C;font-weight:600;border:1px solid #FED7AA;">EPI</span>`
       : `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;border:1px solid #C7D7FD;">Uniforme</span>`;
 
-    // sempre campo de texto com sugestões via datalist (aceita digitação livre)
     const listId = `tamList-${idx}`;
-    const opts = (sistema !== 'unico' && tamanhos.length)
-      ? tamanhos.map(t => `<option value="${t}">`).join('')
-      : '';
-    const tamInput = `<input class="form-input" id="kitTam-${idx}" type="text"
-        list="${listId}" placeholder="ex: M, G, 38…" autocomplete="off"
-        style="padding:6px 10px;font-size:13px;min-width:110px;">
-      <datalist id="${listId}">${opts}</datalist>`;
+    if (sistema !== 'unico' && tamanhos.length) {
+      datalistsHtml += `<datalist id="${listId}">${tamanhos.map(t => `<option value="${t}">`).join('')}</datalist>`;
+    }
 
     return `
     <div id="kitRow-${idx}" style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border-light);">
@@ -1909,7 +1907,9 @@ function renderKitEntregaLista() {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        ${tamInput}
+        <input class="form-input" id="kitTam-${idx}" type="text" list="${listId}"
+          placeholder="ex: M, G, 38..." autocomplete="off"
+          style="padding:6px 10px;font-size:13px;min-width:110px;">
         <input class="form-input" id="kitQtd-${idx}" type="number" value="${k.quantidade||1}" min="1"
           style="padding:6px 8px;font-size:13px;text-align:center;width:60px;">
         <button onclick="removerItemKitEntrega(${idx})" title="Remover deste lançamento"
@@ -1918,6 +1918,8 @@ function renderKitEntregaLista() {
       </div>
     </div>`;
   }).join('');
+
+  lista.innerHTML = rowsHtml + datalistsHtml;
 }
 
 function removerItemKitEntrega(idx) {
