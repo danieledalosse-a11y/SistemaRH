@@ -142,7 +142,7 @@
   .cargo-card:last-child { border-bottom: none; }
   .cargo-card:hover { background: #F5F8FF; }
   .cargo-card.active { background: #EFF4FF; border-left: 3px solid var(--blue); padding-left: 13px; }
-  .cargo-card-nome { font-size: 14px; font-weight: 500; color: var(--text); flex: 1; }
+  .cargo-card-nome { font-size: 14px; font-weight: 500; color: var(--text); flex: 1; word-break: break-word; line-height: 1.35; }
   .cargo-card.active .cargo-card-nome { font-weight: 600; color: var(--blue); }
   .cargo-card-count { font-size: 11px; color: var(--text-ter); background: var(--bg); border: 1px solid var(--border); border-radius: 99px; padding: 2px 9px; white-space: nowrap; flex-shrink: 0; font-weight: 600; }
   .cargo-card.active .cargo-card-count { background: #C7D7FD; color: #1849A9; border-color: #C7D7FD; }
@@ -616,16 +616,14 @@
             <p>Selecione um cargo ao lado para ver ou editar o kit</p>
           </div>
           <div id="kitEditorConteudo" style="display:none;">
-            <div class="kits-editor-hdr">
-              <div>
-                <div class="card-title" id="kitCargoNome">—</div>
-                <div class="card-sub" style="margin:0;">Kit padrão de entrega</div>
-              </div>
-              <div style="display:flex;gap:8px;" id="kitGeneroSelector">
-                <button class="genero-pill active" data-val="unissex"   onclick="setKitGenero('unissex')">👥 Unissex</button>
-                <button class="genero-pill"        data-val="feminino"  onclick="setKitGenero('feminino')">♀ Feminino</button>
-                <button class="genero-pill"        data-val="masculino" onclick="setKitGenero('masculino')">♂ Masculino</button>
-              </div>
+            <div style="margin-bottom:14px;">
+              <div class="card-title" id="kitCargoNome" style="margin-bottom:2px;">—</div>
+              <div class="card-sub" style="margin:0;" id="kitEditorSub">Kit padrão de entrega</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;" id="kitGeneroSelector">
+              <button class="genero-pill active" data-val="unissex"   onclick="setKitGenero('unissex')">👥 Unissex</button>
+              <button class="genero-pill"        data-val="feminino"  onclick="setKitGenero('feminino')">♀ Feminino</button>
+              <button class="genero-pill"        data-val="masculino" onclick="setKitGenero('masculino')">♂ Masculino</button>
             </div>
             <div style="font-size:12px;color:var(--text-ter);margin-bottom:14px;">
               Itens unissex aparecem para todos. Itens femininos/masculinos apenas para o gênero correspondente na entrega.
@@ -2420,6 +2418,11 @@ function carregarKit() {
 
   const itensDoKit = KITS.filter(k => k.cargo === cargo && (k.genero || 'unissex') === _kitGeneroAtual);
   const itensAtivos = ITENS.filter(i => i.ativo);
+
+  // Atualiza subtítulo com contagem
+  const totalCargo = KITS.filter(k => k.cargo === cargo).length;
+  const sub = document.getElementById('kitEditorSub');
+  if (sub) sub.innerHTML = `Kit padrão de entrega &nbsp;·&nbsp; <strong>${totalCargo} ${totalCargo === 1 ? 'item' : 'itens'} cadastrados</strong>`;
 
   // Itens disponíveis para adicionar ao kit (que ainda não estão nele)
   const idsNoKit  = new Set(itensDoKit.map(k => k.item_id));
