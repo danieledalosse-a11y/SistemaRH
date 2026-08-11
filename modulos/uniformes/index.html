@@ -883,9 +883,16 @@
 
       <!-- MODO KIT -->
       <div id="painelModoKit">
+        <!-- seletor de cargo — aparece quando não há match exato -->
+        <div id="kitCargoSelector" style="display:none;margin-bottom:14px;">
+          <label class="form-label">Kit do cargo <span style="font-size:11px;color:var(--text-ter);">(cargo da colaboradora não encontrado — selecione o equivalente)</span></label>
+          <select class="form-select" id="selKitCargo" onchange="onKitCargoChange()">
+            <option value="">Selecione…</option>
+          </select>
+        </div>
         <div id="kitEntregaLista"></div>
         <div id="kitEntregaVazio" style="display:none;text-align:center;padding:32px 16px;color:var(--text-ter);font-size:13px;">
-          Nenhum kit configurado para este cargo.<br>
+          Nenhum kit cadastrado.<br>
           <span style="font-size:12px;">Configure em <strong>Kits por Cargo</strong> antes de usar esta opção.</span>
         </div>
       </div>
@@ -1651,6 +1658,7 @@ async function carregarHistoricoColab(colabId) {
 // ─── Modal: Registrar Entrega ─────────────────────────────────────────────────
 
 let _modoEntrega = 'kit'; // 'kit' | 'avulso'
+let _kitCargoSelecionado = ''; // cargo usado na entrega do kit (pode diferir de _colabAtual.cargo)
 
 function _generoKitColab() {
   // colaboradores.sexo usa 'M'/'F'; kits usam 'masculino'/'feminino'/'unissex'
@@ -1658,11 +1666,19 @@ function _generoKitColab() {
   return s === 'F' ? 'feminino' : s === 'M' ? 'masculino' : 'unissex';
 }
 
-function _kitDoColab() {
-  if (!_colabAtual?.cargo) return [];
+function _kitDoColabPorCargo(cargo) {
+  if (!cargo) return [];
   const gen = _generoKitColab();
-  // inclui itens do gênero específico OU unissex
-  return KITS.filter(k => k.cargo === _colabAtual.cargo && (k.genero === gen || k.genero === 'unissex' || !k.genero));
+  return KITS.filter(k => k.cargo === cargo && (k.genero === gen || k.genero === 'unissex' || !k.genero));
+}
+
+function _kitDoColab() {
+  return _kitDoColabPorCargo(_kitCargoSelecionado || _colabAtual?.cargo || '');
+}
+
+function onKitCargoChange() {
+  _kitCargoSelecionado = document.getElementById('selKitCargo').value;
+  renderKitEntregaLista();
 }
 
 function abrirModalEntrega() {
@@ -1726,8 +1742,39 @@ function setModoEntrega(modo) {
 }
 
 function renderKitEntrega() {
-  const lista  = document.getElementById('kitEntregaLista');
-  const vazio  = document.getElementById('kitEntregaVazio');
+  // determina o cargo do kit: match exato ou selector
+  const cargoColab = _colabAtual?.cargo || '';
+  const cargosComKit = [...new Set(KITS.map(k => k.cargo))].sort();
+  const matchExato = cargosComKit.includes(cargoColab);
+
+  const selectorDiv = document.getElementById('kitCargoSelector');
+  const selCargo    = document.getElementById('selKitCargo');
+
+  if (matchExato) {
+    _kitCargoSelecionado = cargoColab;
+    selectorDiv.style.display = 'none';
+  } else if (cargosComKit.length) {
+    // mostra selector para escolher o kit manualmente
+    selectorDiv.style.display = '';
+    selCargo.innerHTML = '<option value="">Selecione o kit…</option>' +
+      cargosComKit.map(c => `<option value="${c}">${c}</option>`).join('');
+    // tenta pré-selecionar por similaridade (ignora maiúsculas/minúsculas)
+    const similar = cargosComKit.find(c => c.toLowerCase().replace(/[^a-z]/g,'').includes(
+      cargoColab.toLowerCase().replace(/[^a-z]/g,'').slice(0,5)
+    ));
+    if (similar) { selCargo.value = similar; _kitCargoSelecionado = similar; }
+    else _kitCargoSelecionado = '';
+  } else {
+    _kitCargoSelecionado = '';
+    selectorDiv.style.display = 'none';
+  }
+
+  renderKitEntregaLista();
+}
+
+function renderKitEntregaLista() {
+  const lista    = document.getElementById('kitEntregaLista');
+  const vazio    = document.getElementById('kitEntregaVazio');
   const itensKit = _kitDoColab();
 
   if (!itensKit.length) {
