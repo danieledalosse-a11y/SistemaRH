@@ -386,6 +386,7 @@
                 <th>Movimento</th>
                 <th>Almoxarifado</th>
                 <th>Registrado por</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="tbodyMovColab">
@@ -1641,6 +1642,11 @@ async function carregarHistoricoColab(colabId) {
         ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#ECFDF3;color:#027A48;font-weight:600;">↩ Devolução</span>`
         : `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">↗ Entrega</span>`;
       const condicao = m.condicao_devolucao ? `<div style="font-size:11px;color:var(--text-ter);">${condicaoLabel[m.condicao_devolucao]||''}</div>` : '';
+      const btnEstorno = `<button onclick="confirmarEstorno(${m.id},'${(m.item?.nome||'').replace(/'/g,"\\'")}',${m.item_id},'${(m.tamanho||'').replace(/'/g,"\\'")}',${m.quantidade},${m.almoxarifado_id},'${m.tipo}')"
+        title="Estornar este lançamento"
+        style="background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-ter);padding:4px 8px;font-size:11px;font-weight:600;transition:all .15s;white-space:nowrap;"
+        onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
+        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)'">Estornar</button>`;
       return `<tr>
         <td style="white-space:nowrap;">${m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '—'}</td>
         <td style="font-weight:600;">${m.item?.nome || '—'}</td>
@@ -1650,6 +1656,7 @@ async function carregarHistoricoColab(colabId) {
         <td>${movBadge}${condicao}<div style="font-size:11px;color:var(--text-ter);margin-top:2px;">${motivoLabel[m.motivo]||m.motivo}</div></td>
         <td style="color:var(--text-sec);font-size:12px;">${m.almox?.nome || '—'}</td>
         <td style="color:var(--text-sec);font-size:12px;">${m.registrado_por || '—'}</td>
+        <td>${btnEstorno}</td>
       </tr>`;
     }).join('');
   } catch(e) { toast('Erro ao carregar histórico: ' + e.message); }
@@ -1778,10 +1785,13 @@ function renderKitEntrega() {
   renderKitEntregaLista();
 }
 
+let _kitItensRemovidosIdx = new Set();
+
 function renderKitEntregaLista() {
   const lista    = document.getElementById('kitEntregaLista');
   const vazio    = document.getElementById('kitEntregaVazio');
   const itensKit = _kitDoColab();
+  _kitItensRemovidosIdx = new Set();
 
   if (!itensKit.length) {
     lista.innerHTML = '';
@@ -1790,28 +1800,51 @@ function renderKitEntregaLista() {
   }
   vazio.style.display = 'none';
 
-  lista.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 160px 80px;gap:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);padding:0 4px 8px;border-bottom:1px solid var(--border);margin-bottom:4px;">
-      <span>Item</span><span>Tamanho</span><span style="text-align:center;">Qtd</span>
-    </div>` +
-    itensKit.map((k, idx) => {
-      const item = ITENS.find(i => i.id == k.item_id);
-      if (!item) return '';
-      const tamanhos = item.tamanhos_disponiveis || [];
-      const sistema  = item.sistema_tamanho;
-      let selOpts;
-      if (sistema === 'unico' || !tamanhos.length) {
-        selOpts = `<option value="Único">Único</option>`;
-      } else {
-        selOpts = tamanhos.map(t => `<option value="${t}">${t}</option>`).join('');
-      }
-      return `
-      <div style="display:grid;grid-template-columns:1fr 160px 80px;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--border-light);">
-        <span style="font-size:13px;font-weight:600;">${item.nome}${item.variante ? ' <span style="font-weight:400;color:var(--text-sec);">· ' + item.variante + '</span>' : ''}</span>
-        <select class="form-select" id="kitTam-${idx}" style="padding:6px 8px;font-size:13px;">${selOpts}</select>
-        <input class="form-input" id="kitQtd-${idx}" type="number" value="${k.quantidade||1}" min="1" style="padding:6px 8px;font-size:13px;text-align:center;">
-      </div>`;
-    }).join('');
+  lista.innerHTML = itensKit.map((k, idx) => {
+    const item = ITENS.find(i => i.id == k.item_id);
+    if (!item) return '';
+    const tamanhos = item.tamanhos_disponiveis || [];
+    const sistema  = item.sistema_tamanho;
+    const tipoBadge = item.tipo === 'epi'
+      ? `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#FFF7ED;color:#C4490C;font-weight:600;border:1px solid #FED7AA;">EPI</span>`
+      : `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;border:1px solid #C7D7FD;">Uniforme</span>`;
+
+    let tamInput;
+    if (sistema !== 'unico' && tamanhos.length) {
+      // item tem tamanhos configurados: dropdown + campo livre
+      tamInput = `<select class="form-select" id="kitTam-${idx}" style="padding:6px 10px;font-size:13px;min-width:100px;">
+        ${tamanhos.map(t => `<option value="${t}">${t}</option>`).join('')}
+      </select>`;
+    } else {
+      // sem tamanhos configurados: campo de texto livre
+      tamInput = `<input class="form-input" id="kitTam-${idx}" type="text" placeholder="ex: M, G, 38…" style="padding:6px 10px;font-size:13px;min-width:100px;">`;
+    }
+
+    return `
+    <div id="kitRow-${idx}" style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border-light);">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+          ${tipoBadge}
+          <span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.nome}</span>
+          ${item.variante ? `<span style="font-size:12px;color:var(--text-sec);white-space:nowrap;">· ${item.variante}</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        ${tamInput}
+        <input class="form-input" id="kitQtd-${idx}" type="number" value="${k.quantidade||1}" min="1"
+          style="padding:6px 8px;font-size:13px;text-align:center;width:60px;">
+        <button onclick="removerItemKitEntrega(${idx})" title="Remover deste lançamento"
+          style="background:none;border:none;cursor:pointer;color:var(--text-ter);padding:4px;line-height:1;font-size:18px;transition:color .15s;"
+          onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-ter)'">×</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function removerItemKitEntrega(idx) {
+  _kitItensRemovidosIdx.add(idx);
+  const row = document.getElementById(`kitRow-${idx}`);
+  if (row) row.remove();
 }
 
 function atualizarTamanhosEntrega() {
@@ -1870,12 +1903,19 @@ async function salvarEntregaKit() {
   if (!almoxId) { toast('Selecione o almoxarifado.'); return; }
 
   const itensKit = _kitDoColab();
-  if (!itensKit.length) { toast('Nenhum item no kit.'); return; }
+  // filtra apenas os itens não removidos
+  const itensAtivos = itensKit.filter((_, idx) => !_kitItensRemovidosIdx.has(idx));
+  if (!itensAtivos.length) { toast('Nenhum item para registrar.'); return; }
 
-  // valida tamanhos
+  // valida tamanhos dos itens ativos
   for (let idx = 0; idx < itensKit.length; idx++) {
-    const tam = document.getElementById(`kitTam-${idx}`)?.value;
-    if (!tam) { toast('Selecione o tamanho de todos os itens.'); return; }
+    if (_kitItensRemovidosIdx.has(idx)) continue;
+    const tam = (document.getElementById(`kitTam-${idx}`)?.value || '').trim();
+    if (!tam) {
+      const item = ITENS.find(i => i.id == itensKit[idx].item_id);
+      toast(`Informe o tamanho de: ${item?.nome || 'item ' + idx}`);
+      return;
+    }
   }
 
   const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
@@ -1885,12 +1925,14 @@ async function salvarEntregaKit() {
   btn.textContent = 'Registrando…';
 
   try {
+    let entregues = 0;
     for (let idx = 0; idx < itensKit.length; idx++) {
-      const k      = itensKit[idx];
-      const tamanho = document.getElementById(`kitTam-${idx}`).value;
+      if (_kitItensRemovidosIdx.has(idx)) continue;
+      const k       = itensKit[idx];
+      const tamanho = (document.getElementById(`kitTam-${idx}`).value || '').trim();
       const qtd     = parseInt(document.getElementById(`kitQtd-${idx}`).value) || 1;
 
-      const payload = {
+      await sbPost('unif_movimentacoes', {
         colaborador_id:    _colabAtual.id,
         item_id:           k.item_id,
         almoxarifado_id:   almoxId,
@@ -1902,8 +1944,7 @@ async function salvarEntregaKit() {
         confirmado:        true,
         registrado_por:    registradoPor,
         obs:               obs || null,
-      };
-      await sbPost('unif_movimentacoes', payload);
+      });
 
       if (!isCDAlmox(almoxId)) {
         const estoqRows = await sbGet('unif_estoque',
@@ -1913,9 +1954,10 @@ async function salvarEntregaKit() {
           await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: novaQtd });
         }
       }
+      entregues++;
     }
 
-    toast(`✓ Kit registrado — ${itensKit.length} ${itensKit.length === 1 ? 'item' : 'itens'} entregues`);
+    toast(`✓ Kit registrado — ${entregues} ${entregues === 1 ? 'item entregue' : 'itens entregues'}`);
     fecharModalEntrega();
     carregarHistoricoColab(_colabAtual.id);
   } catch(e) {
@@ -1975,6 +2017,42 @@ async function salvarEntrega() {
     carregarHistoricoColab(_colabAtual.id);
   } catch(e) {
     toast('Erro: ' + e.message);
+  }
+}
+
+// ─── Estorno de movimentação ─────────────────────────────────────────────────
+function confirmarEstorno(movId, itemNome, itemId, tamanho, qtd, almoxId, tipo) {
+  abrirConfirm({
+    titulo: 'Estornar lançamento',
+    mensagem: `Isso vai remover o registro e ${tipo === 'entrega' ? 'devolver' : 'retirar'} ${qtd} unidade(s) ao estoque.`,
+    destaque: `${itemNome}${tamanho ? ' — ' + tamanho : ''} · ${qtd} un.`,
+    labelOk: 'Estornar',
+    callback: () => executarEstorno(movId, itemId, tamanho, qtd, almoxId, tipo),
+  });
+}
+
+async function executarEstorno(movId, itemId, tamanho, qtd, almoxId, tipo) {
+  try {
+    // exclui o registro
+    await fetch(`${SB_URL}/rest/v1/unif_movimentacoes?id=eq.${movId}`, {
+      method: 'DELETE', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+    });
+
+    // restaura estoque (se não for almoxarifado CD)
+    if (!isCDAlmox(almoxId)) {
+      const sinal = tipo === 'entrega' ? 1 : -1; // entrega: devolve; devolução: retira
+      const estoqRows = await sbGet('unif_estoque',
+        `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
+      if (estoqRows.length) {
+        const novaQtd = Math.max(0, (estoqRows[0].quantidade || 0) + sinal * qtd);
+        await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: novaQtd });
+      }
+    }
+
+    toast('✓ Lançamento estornado');
+    carregarHistoricoColab(_colabAtual.id);
+  } catch(e) {
+    toast('Erro ao estornar: ' + e.message);
   }
 }
 
