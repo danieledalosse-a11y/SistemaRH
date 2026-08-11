@@ -371,98 +371,156 @@
   <!-- ESTOQUE -->
   <div id="sec-estoque" style="display:none;">
 
-    <!-- KPIs Estoque -->
+    <!-- KPIs — sempre visíveis -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;" id="kpiEstoqueRow">
       <div class="metric m-blue">
         <div class="metric-label">Total de unidades</div>
         <div class="metric-val c-blue" id="kpiUnidades">—</div>
       </div>
-      <div class="metric m-amber clickable" onclick="document.getElementById('filtroEstoqueStatus').value='baixo';renderEstoque()">
+      <div class="metric m-amber clickable" onclick="setEstoqueSubTab('alertas');setTimeout(()=>renderAlertas(),50)">
         <div class="metric-label" style="color:var(--amber);">Estoque baixo</div>
         <div class="metric-val c-amber" id="kpiAlerta">—</div>
-        <div class="metric-sub">itens com qtd ≤ 2</div>
+        <div class="metric-sub">clique para ver os itens</div>
       </div>
-      <div class="metric m-red clickable" onclick="document.getElementById('filtroEstoqueStatus').value='zerado';renderEstoque()">
+      <div class="metric m-red clickable" onclick="setEstoqueSubTab('alertas');setTimeout(()=>renderAlertas(),50)">
         <div class="metric-label" style="color:var(--red);">Zerados</div>
         <div class="metric-val c-red" id="kpiZerado">—</div>
-        <div class="metric-sub">itens sem estoque</div>
+        <div class="metric-sub">clique para ver os itens</div>
       </div>
     </div>
 
-    <!-- Filtros -->
-    <div class="card" style="margin-bottom:16px;">
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <div class="search-bar" style="flex:1;min-width:200px;position:relative;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="buscaEstoque" placeholder="Buscar item…" oninput="renderEstoque()">
-          <button id="btnLimparBusca" onclick="document.getElementById('buscaEstoque').value='';renderEstoque()" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;line-height:1;padding:0;">×</button>
+    <!-- Sub-tabs -->
+    <div class="sec-tabs" style="margin-bottom:16px;">
+      <button class="sec-tab active" id="estab-posicao"       onclick="setEstoqueSubTab('posicao')">Posição</button>
+      <button class="sec-tab"        id="estab-movimentacoes" onclick="setEstoqueSubTab('movimentacoes')">Movimentações</button>
+      <button class="sec-tab"        id="estab-alertas"       onclick="setEstoqueSubTab('alertas')">Alertas</button>
+    </div>
+
+    <!-- ── Sub-aba: Posição ── -->
+    <div id="essec-posicao">
+      <!-- Filtros -->
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <div class="search-bar" style="flex:1;min-width:200px;position:relative;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="buscaEstoque" placeholder="Buscar item…" oninput="renderEstoque()">
+            <button id="btnLimparBusca" onclick="document.getElementById('buscaEstoque').value='';renderEstoque()" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;line-height:1;padding:0;">×</button>
+          </div>
+          <div style="position:relative;display:flex;align-items:center;">
+            <select id="filtroEstoqueAlmox" onchange="renderEstoque()" style="padding:8px 32px 8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);appearance:none;-webkit-appearance:none;">
+              <option value="">Todos os almoxarifados</option>
+            </select>
+            <button id="btnLimparAlmox" onclick="document.getElementById('filtroEstoqueAlmox').value='';renderEstoque()" style="display:none;position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;line-height:1;padding:0;">×</button>
+          </div>
+          <div style="position:relative;display:flex;align-items:center;">
+            <select id="filtroEstoqueGenero" onchange="renderEstoque()" style="padding:8px 32px 8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);appearance:none;-webkit-appearance:none;">
+              <option value="">Todos os gêneros</option>
+              <option value="masculino">Masculino</option>
+              <option value="feminino">Feminino</option>
+              <option value="unissex">Unissex</option>
+            </select>
+            <button id="btnLimparGenero" onclick="document.getElementById('filtroEstoqueGenero').value='';renderEstoque()" style="display:none;position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;line-height:1;padding:0;">×</button>
+          </div>
+          <div style="position:relative;display:flex;align-items:center;">
+            <select id="filtroEstoqueStatus" onchange="renderEstoque()" style="padding:8px 32px 8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);appearance:none;-webkit-appearance:none;">
+              <option value="">Todo o estoque</option>
+              <option value="baixo">Estoque baixo</option>
+              <option value="zerado">Zerado</option>
+            </select>
+            <button id="btnLimparStatus" onclick="document.getElementById('filtroEstoqueStatus').value='';renderEstoque()" style="display:none;position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;line-height:1;padding:0;">×</button>
+          </div>
         </div>
-        <div style="position:relative;display:flex;align-items:center;">
-          <select id="filtroEstoqueAlmox" onchange="renderEstoque()" style="padding:8px 32px 8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);appearance:none;-webkit-appearance:none;">
+      </div>
+
+      <!-- Grid de estoque -->
+      <div class="card">
+        <div class="card-hdr" style="margin-bottom:12px;">
+          <div class="card-hdr-left">
+            <div class="card-title">Posição de Estoque</div>
+            <div class="card-sub" style="margin:0;" id="estoqueResumo"></div>
+          </div>
+          <span id="estoqueAtualizado" style="font-size:11px;color:var(--text-ter);"></span>
+        </div>
+        <div id="estoqueGrid" style="display:flex;flex-direction:column;gap:6px;">
+          <div style="text-align:center;padding:32px;color:var(--text-ter);">Carregando…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Sub-aba: Movimentações ── -->
+    <div id="essec-movimentacoes" style="display:none;">
+      <div class="card">
+        <div class="card-hdr" style="margin-bottom:16px;">
+          <div class="card-hdr-left">
+            <div class="card-title">Movimentações de Estoque</div>
+            <div class="card-sub" style="margin:0;">Entradas, devoluções e ajustes registrados</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button id="btnEntradaLote" class="btn btn-primary" onclick="abrirModalEntrada()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              + Entrada de lote
+            </button>
+          </div>
+        </div>
+
+        <!-- Filtros rápidos Movimentações -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+          <div class="search-bar" style="flex:1;min-width:180px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="buscaMovEstoque" placeholder="Buscar item ou fornecedor…" oninput="renderMovimentacoes()">
+          </div>
+          <select id="filtroMovTipo" onchange="renderMovimentacoes()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+            <option value="">Todos os tipos</option>
+            <option value="entrada">Entradas</option>
+            <option value="devolucao">Devoluções ao estoque</option>
+          </select>
+          <select id="filtroMovAlmox" onchange="renderMovimentacoes()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
             <option value="">Todos os almoxarifados</option>
           </select>
-          <button id="btnLimparAlmox" onclick="document.getElementById('filtroEstoqueAlmox').value='';renderEstoque()" style="display:none;position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;line-height:1;padding:0;">×</button>
         </div>
-        <div style="position:relative;display:flex;align-items:center;">
-          <select id="filtroEstoqueGenero" onchange="renderEstoque()" style="padding:8px 32px 8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);appearance:none;-webkit-appearance:none;">
-            <option value="">Todos os gêneros</option>
-            <option value="masculino">Masculino</option>
-            <option value="feminino">Feminino</option>
-            <option value="unissex">Unissex</option>
-          </select>
-          <button id="btnLimparGenero" onclick="document.getElementById('filtroEstoqueGenero').value='';renderEstoque()" style="display:none;position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;line-height:1;padding:0;">×</button>
-        </div>
-        <div style="position:relative;display:flex;align-items:center;">
-          <select id="filtroEstoqueStatus" onchange="renderEstoque()" style="padding:8px 32px 8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);appearance:none;-webkit-appearance:none;">
-            <option value="">Todo o estoque</option>
-            <option value="baixo">Estoque baixo</option>
-            <option value="zerado">Zerado</option>
-          </select>
-          <button id="btnLimparStatus" onclick="document.getElementById('filtroEstoqueStatus').value='';renderEstoque()" style="display:none;position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;line-height:1;padding:0;">×</button>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Item</th>
+                <th>Tamanho</th>
+                <th style="text-align:right;">Qtd.</th>
+                <th style="text-align:right;">Valor unit.</th>
+                <th style="text-align:right;">Total</th>
+                <th>Origem / Fornecedor</th>
+                <th>Almoxarifado</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyMovEstoque">
+              <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-ter);">Carregando…</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    <!-- Tabela de estoque -->
-    <div class="card">
-      <div class="card-hdr" style="margin-bottom:12px;">
-        <div class="card-hdr-left">
-          <div class="card-title">Posição de Estoque</div>
-          <div class="card-sub" style="margin:0;" id="estoqueResumo">—</div>
+    <!-- ── Sub-aba: Alertas ── -->
+    <div id="essec-alertas" style="display:none;">
+      <div id="alertasZerados" class="card" style="margin-bottom:16px;">
+        <div class="card-hdr" style="margin-bottom:12px;">
+          <div class="card-hdr-left">
+            <div class="card-title" style="color:var(--red);">Itens zerados</div>
+            <div class="card-sub" style="margin:0;">Sem nenhuma unidade em estoque</div>
+          </div>
         </div>
-        <span id="estoqueAtualizado" style="font-size:11px;color:var(--text-ter);"></span>
-        <button id="btnEntradaLote" class="btn btn-primary" onclick="abrirModalEntrada()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Entrada de lote
-        </button>
+        <div id="listaZerados"></div>
       </div>
-      <div id="estoqueGrid" style="display:flex;flex-direction:column;gap:8px;">
-        <div style="text-align:center;padding:32px;color:var(--text-ter);">Carregando…</div>
-      </div>
-    </div>
-
-    <!-- Histórico de entradas -->
-    <div class="card" style="margin-top:16px;">
-      <div class="card-title" style="margin-bottom:12px;">Entradas de Lote</div>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Item</th>
-              <th>Fornecedor</th>
-              <th>Tamanho</th>
-              <th style="text-align:right;">Qtd.</th>
-              <th style="text-align:right;">Valor unit.</th>
-              <th style="text-align:right;">Total</th>
-              <th style="text-align:center;">Logo</th>
-              <th>Almoxarifado</th>
-            </tr>
-          </thead>
-          <tbody id="tbodyEntradas">
-            <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-ter);">Carregando…</td></tr>
-          </tbody>
-        </table>
+      <div id="alertasBaixo" class="card">
+        <div class="card-hdr" style="margin-bottom:12px;">
+          <div class="card-hdr-left">
+            <div class="card-title" style="color:var(--amber);">Estoque baixo</div>
+            <div class="card-sub" style="margin:0;">Quantidade igual ou abaixo do mínimo (≤ 2 un.)</div>
+          </div>
+        </div>
+        <div id="listaBaixo"></div>
       </div>
     </div>
 
@@ -985,25 +1043,36 @@ function setTab(tab) {
 }
 
 // ─── Estoque ──────────────────────────────────────────────────────────────────
-let ESTOQUE  = [];
-let ENTRADAS = [];
+let ESTOQUE          = [];
+let ENTRADAS         = [];
+let _estoqueSubTab   = 'posicao';
+let _movsEstoque     = []; // entradas + devoluções ao estoque combinadas
 
 async function carregarEstoque() {
   try {
-    const [estoq, entrad] = await Promise.all([
+    const [estoq, entrad, devols] = await Promise.all([
       sbGet('unif_estoque', 'select=*,item:unif_catalogo(id,nome,tipo,genero,variante,logo),almox:unif_almoxarifados(id,nome)&order=item_id'),
       sbGet('unif_entradas', 'select=*,item:unif_catalogo(nome),almox:unif_almoxarifados(nome)&order=data_entrada.desc&limit=200'),
+      sbGet('unif_movimentacoes', 'select=*,item:unif_catalogo(nome),almox:unif_almoxarifados(nome)&tipo=eq.devolucao&condicao_devolucao=eq.reutilizavel&order=data_movimentacao.desc&limit=200'),
     ]);
-    ESTOQUE  = estoq;
-    ENTRADAS = entrad;
+    ESTOQUE       = estoq;
+    ENTRADAS      = entrad;
+    _movsEstoque  = devols;
 
-    // popula filtro de almoxarifados
+    // popula filtro de almoxarifados (Posição)
     const selAlmox = document.getElementById('filtroEstoqueAlmox');
     const almoxIds = [...new Map(estoq.map(e => [e.almox?.id, e.almox?.nome])).entries()];
     selAlmox.innerHTML = '<option value="">Todos os almoxarifados</option>' +
       almoxIds.filter(([id]) => id).map(([id, nome]) => `<option value="${id}">${nome}</option>`).join('');
 
-    // perfil logistica: fixar filtro no almoxarifado CD e bloquear troca
+    // popula filtro de almox nas movimentações
+    const selMovAlmox = document.getElementById('filtroMovAlmox');
+    if (selMovAlmox) {
+      selMovAlmox.innerHTML = '<option value="">Todos os almoxarifados</option>' +
+        almoxIds.filter(([id]) => id).map(([id, nome]) => `<option value="${id}">${nome}</option>`).join('');
+    }
+
+    // perfil logistica: fixar filtro no almoxarifado CD
     if (window._UNIF_ROLE === 'logistica') {
       const cdAlmox = ALMOXARIFADOS.find(a => a.nome.toUpperCase().includes('CD'));
       if (cdAlmox) {
@@ -1012,11 +1081,135 @@ async function carregarEstoque() {
       }
     }
 
+    // garante que sub-aba ativa esteja visível
+    setEstoqueSubTab(_estoqueSubTab);
     renderEstoque();
-    renderEntradas();
     const elAt = document.getElementById('estoqueAtualizado');
     if (elAt) elAt.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   } catch(e) { toast('Erro ao carregar estoque: ' + e.message); }
+}
+
+// ─── Sub-abas do Estoque ──────────────────────────────────────────────────────
+function setEstoqueSubTab(tab) {
+  _estoqueSubTab = tab;
+  ['posicao','movimentacoes','alertas'].forEach(t => {
+    document.getElementById(`estab-${t}`)?.classList.toggle('active', t === tab);
+    const el = document.getElementById(`essec-${t}`);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  if (tab === 'movimentacoes') {
+    // popula filtro de almox no painel de movimentações
+    const sel = document.getElementById('filtroMovAlmox');
+    if (sel && sel.options.length <= 1) {
+      const almoxIds = [...new Map(ENTRADAS.map(e => [e.almoxarifado_id, e.almox?.nome])).entries()];
+      sel.innerHTML = '<option value="">Todos os almoxarifados</option>' +
+        almoxIds.filter(([id]) => id).map(([id, nome]) => `<option value="${id}">${nome}</option>`).join('');
+    }
+    renderMovimentacoes();
+  }
+  if (tab === 'alertas') renderAlertas();
+}
+
+function renderMovimentacoes() {
+  const busca   = (document.getElementById('buscaMovEstoque')?.value || '').toLowerCase();
+  const tipoF   = document.getElementById('filtroMovTipo')?.value || '';
+  const almoxF  = document.getElementById('filtroMovAlmox')?.value || '';
+
+  // Combina ENTRADAS (compras) + movimentações de devolução que voltaram ao estoque
+  const devEstoque = ESTOQUE.length ? [] : []; // devoluções ao estoque virão de _movsEstoque
+  const rows = [
+    ...ENTRADAS.map(e => ({
+      tipo: 'entrada',
+      data: e.data_entrada,
+      itemNome: e.item?.nome || '—',
+      tamanho: e.tamanho,
+      qtd: e.quantidade,
+      valorUnit: e.valor_unitario,
+      total: e.quantidade * e.valor_unitario,
+      origem: e.fornecedor,
+      almoxNome: e.almox?.nome || '—',
+      almoxId: e.almoxarifado_id,
+    })),
+    ..._movsEstoque.map(m => ({
+      tipo: 'devolucao',
+      data: m.data_movimentacao,
+      itemNome: m.item?.nome || '—',
+      tamanho: m.tamanho,
+      qtd: m.quantidade,
+      valorUnit: null,
+      total: null,
+      origem: 'Devolução colaborador',
+      almoxNome: m.almox?.nome || '—',
+      almoxId: m.almoxarifado_id,
+    })),
+  ].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
+  const lista = rows.filter(r => {
+    if (busca && !r.itemNome.toLowerCase().includes(busca) && !(r.origem||'').toLowerCase().includes(busca)) return false;
+    if (tipoF && r.tipo !== tipoF) return false;
+    if (almoxF && String(r.almoxId) !== almoxF) return false;
+    return true;
+  });
+
+  const tipoBadge = {
+    entrada:   `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--blue-bg);color:var(--blue);font-weight:600;">↓ Entrada</span>`,
+    devolucao: `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600;">↩ Devolução</span>`,
+  };
+
+  const tbody = document.getElementById('tbodyMovEstoque');
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-ter);">Nenhuma movimentação encontrada</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(r => {
+    const data = r.data ? r.data.split('T')[0].split('-').reverse().join('/') : '—';
+    const vUnit = r.valorUnit != null ? `R$ ${Number(r.valorUnit).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
+    const vTotal = r.total != null ? `R$ ${Number(r.total).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
+    return `<tr>
+      <td style="white-space:nowrap;color:var(--text-sec);">${data}</td>
+      <td>${tipoBadge[r.tipo] || r.tipo}</td>
+      <td style="font-weight:600;">${r.itemNome}</td>
+      <td><span style="font-size:11px;padding:2px 8px;border-radius:6px;background:var(--bg);font-weight:600;">${r.tamanho || '—'}</span></td>
+      <td style="text-align:right;font-weight:600;">${r.qtd}</td>
+      <td style="text-align:right;color:var(--text-sec);">${vUnit}</td>
+      <td style="text-align:right;font-weight:600;">${vTotal}</td>
+      <td style="color:var(--text-sec);">${r.origem || '—'}</td>
+      <td style="color:var(--text-sec);font-size:12px;">${r.almoxNome}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAlertas() {
+  const zerados = ESTOQUE.filter(e => (e.quantidade || 0) === 0);
+  const baixo   = ESTOQUE.filter(e => e.quantidade > 0 && e.quantidade <= (e.estoque_minimo || 2));
+
+  const _alertaLinha = (e, cor) => {
+    const nome = e.item?.nome || '—';
+    const tam  = e.tamanho || '—';
+    const almx = e.almox?.nome || '—';
+    return `<div style="display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-light);">
+      <div>
+        <div style="font-size:13px;font-weight:600;">${nome}</div>
+        <div style="font-size:12px;color:var(--text-sec);">Tamanho: ${tam} · ${almx}</div>
+      </div>
+      <span style="font-size:13px;font-weight:700;color:${cor};">${e.quantidade || 0} un.</span>
+      <button class="btn btn-outline btn-sm" onclick="abrirModalEntrada()" title="Registrar entrada">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Entrada
+      </button>
+    </div>`;
+  };
+
+  const elZer = document.getElementById('listaZerados');
+  const elBxo = document.getElementById('listaBaixo');
+
+  elZer.innerHTML = zerados.length
+    ? zerados.map(e => _alertaLinha(e, 'var(--red)')).join('')
+    : '<div style="padding:16px 0;font-size:13px;color:var(--green);">✓ Nenhum item zerado</div>';
+
+  elBxo.innerHTML = baixo.length
+    ? baixo.map(e => _alertaLinha(e, 'var(--amber)')).join('')
+    : '<div style="padding:16px 0;font-size:13px;color:var(--green);">✓ Nenhum item com estoque baixo</div>';
 }
 
 function renderEstoque() {
@@ -1157,29 +1350,6 @@ function toggleEstoqueCard(idx) {
   const aberto  = det.style.display !== 'none';
   det.style.display     = aberto ? 'none' : '';
   chevron.style.transform = aberto ? '' : 'rotate(180deg)';
-}
-
-function renderEntradas() {
-  const tbody = document.getElementById('tbodyEntradas');
-  if (!ENTRADAS.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma entrada registrada</td></tr>';
-    return;
-  }
-  tbody.innerHTML = ENTRADAS.map(e => {
-    const total = (e.quantidade * e.valor_unitario).toLocaleString('pt-BR',{minimumFractionDigits:2});
-    const data  = e.data_entrada ? e.data_entrada.split('-').reverse().join('/') : '—';
-    return `<tr>
-      <td style="white-space:nowrap;">${data}</td>
-      <td style="font-weight:600;">${e.item?.nome || '—'}</td>
-      <td>${e.fornecedor}</td>
-      <td><span class="tag" style="padding:2px 8px;">${e.tamanho}</span></td>
-      <td style="text-align:right;">${e.quantidade}</td>
-      <td style="text-align:right;">R$ ${Number(e.valor_unitario).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-      <td style="text-align:right;font-weight:600;">R$ ${total}</td>
-      <td style="text-align:center;">${e.logo_bordada ? '✓' : '—'}</td>
-      <td style="color:var(--text-sec);font-size:12px;">${e.almox?.nome || '—'}</td>
-    </tr>`;
-  }).join('');
 }
 
 // ─── Modal: Entrada de lote ───────────────────────────────────────────────────
