@@ -1661,14 +1661,20 @@ let _modoEntrega = 'kit'; // 'kit' | 'avulso'
 let _kitCargoSelecionado = ''; // cargo usado na entrega do kit (pode diferir de _colabAtual.cargo)
 
 function _generoKitColab() {
-  // colaboradores.sexo usa 'M'/'F'; kits usam 'masculino'/'feminino'/'unissex'
-  const s = (_colabAtual?.genero || '').toUpperCase();
-  return s === 'F' ? 'feminino' : s === 'M' ? 'masculino' : 'unissex';
+  // sexo pode vir como 'F','M','Feminino','Masculino','feminino','masculino'
+  const s = (_colabAtual?.genero || '').toLowerCase().trim();
+  if (s === 'f' || s.startsWith('fem')) return 'feminino';
+  if (s === 'm' || s.startsWith('mas')) return 'masculino';
+  return null; // desconhecido — não filtrar por gênero
 }
 
 function _kitDoColabPorCargo(cargo) {
   if (!cargo) return [];
   const gen = _generoKitColab();
+  if (!gen) {
+    // gênero desconhecido: mostra todos os itens do cargo
+    return KITS.filter(k => k.cargo === cargo);
+  }
   return KITS.filter(k => k.cargo === cargo && (k.genero === gen || k.genero === 'unissex' || !k.genero));
 }
 
