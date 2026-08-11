@@ -328,6 +328,18 @@
     <!-- histórico do colaborador selecionado -->
     <div id="colabDetalhe" style="display:none;">
 
+      <!-- Itens pendentes do kit -->
+      <div class="card" id="cardKitPendente" style="margin-bottom:16px;display:none;">
+        <div class="card-hdr" style="margin-bottom:12px;">
+          <div class="card-hdr-left">
+            <div class="card-title" style="color:var(--amber);">⚠ Itens pendentes do kit</div>
+            <div class="card-sub" style="margin:0;">Itens do kit do cargo que ainda não foram entregues</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalEntregaKit()">Entregar kit</button>
+        </div>
+        <div id="listaKitPendente"></div>
+      </div>
+
       <!-- Em poder -->
       <div class="card" id="cardEmPoder" style="margin-bottom:16px;display:none;">
         <div class="card-hdr" style="margin-bottom:12px;">
@@ -850,44 +862,73 @@
 </div>
 
 <div class="modal-overlay" id="modalEntrega">
-  <div class="modal" style="max-width:520px;">
+  <div class="modal" style="max-width:580px;">
     <div class="modal-hdr">
       <span class="modal-title">Registrar entrega</span>
       <button class="modal-close" onclick="fecharModalEntrega()">×</button>
     </div>
-    <div class="modal-body">
-      <div style="background:var(--bg);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;">
+    <div class="modal-body" style="padding-top:0;">
+
+      <!-- cabeçalho colaborador -->
+      <div style="background:var(--bg);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;margin-top:16px;">
         <span style="font-weight:600;" id="entregaColabNome"></span>
         <span style="color:var(--text-sec);" id="entregaColabCargo"></span>
       </div>
-      <div class="form-grid" style="margin-bottom:16px;">
-        <div class="form-field full">
-          <label class="form-label">Item <span class="req">*</span></label>
-          <select class="form-select" id="eItem" onchange="atualizarTamanhosEntrega()">
-            <option value="">Selecione um item…</option>
-          </select>
+
+      <!-- abas Kit / Avulso -->
+      <div class="sec-tabs" style="margin-bottom:20px;">
+        <button class="sec-tab active" id="tabModoKit"    onclick="setModoEntrega('kit')">📦 Kit do cargo</button>
+        <button class="sec-tab"        id="tabModoAvulso" onclick="setModoEntrega('avulso')">➕ Item avulso</button>
+      </div>
+
+      <!-- MODO KIT -->
+      <div id="painelModoKit">
+        <div id="kitEntregaLista"></div>
+        <div id="kitEntregaVazio" style="display:none;text-align:center;padding:32px 16px;color:var(--text-ter);font-size:13px;">
+          Nenhum kit configurado para este cargo.<br>
+          <span style="font-size:12px;">Configure em <strong>Kits por Cargo</strong> antes de usar esta opção.</span>
         </div>
-        <div class="form-field">
-          <label class="form-label">Tamanho <span class="req">*</span></label>
-          <select class="form-select" id="eTamanho" onchange="mostrarCustoMedioEntrega()">
-            <option value="">—</option>
-          </select>
-          <div id="custoMedioBadge" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sec);"></div>
+      </div>
+
+      <!-- MODO AVULSO -->
+      <div id="painelModoAvulso" style="display:none;">
+        <div class="form-grid">
+          <div class="form-field full">
+            <label class="form-label">Item <span class="req">*</span></label>
+            <select class="form-select" id="eItem" onchange="atualizarTamanhosEntrega()">
+              <option value="">Selecione um item…</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Tamanho <span class="req">*</span></label>
+            <select class="form-select" id="eTamanho" onchange="mostrarCustoMedioEntrega()">
+              <option value="">—</option>
+            </select>
+            <div id="custoMedioBadge" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sec);"></div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Quantidade</label>
+            <input class="form-input" type="number" id="eQtd" value="1" min="1">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Motivo <span class="req">*</span></label>
+            <select class="form-select" id="eMotivo">
+              <option value="admissao">Admissão</option>
+              <option value="troca_programada">Troca programada</option>
+              <option value="troca_antecipada">Troca antecipada</option>
+              <option value="demissao">Devolução (demissão)</option>
+              <option value="ajuste">Ajuste de estoque</option>
+            </select>
+          </div>
+          <div class="form-field full" id="campoCALote" style="display:none;">
+            <label class="form-label">Nº CA do lote (EPI)</label>
+            <input class="form-input" type="text" id="eCALote" placeholder="ex: 12345/lote A">
+          </div>
         </div>
-        <div class="form-field">
-          <label class="form-label">Quantidade</label>
-          <input class="form-input" type="number" id="eQtd" value="1" min="1">
-        </div>
-        <div class="form-field">
-          <label class="form-label">Motivo <span class="req">*</span></label>
-          <select class="form-select" id="eMotivo">
-            <option value="admissao">Admissão</option>
-            <option value="troca_programada">Troca programada</option>
-            <option value="troca_antecipada">Troca antecipada</option>
-            <option value="demissao">Devolução (demissão)</option>
-            <option value="ajuste">Ajuste de estoque</option>
-          </select>
-        </div>
+      </div>
+
+      <!-- campos comuns (almoxarifado, data, obs) -->
+      <div class="form-grid" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
         <div class="form-field">
           <label class="form-label">Almoxarifado <span class="req">*</span></label>
           <select class="form-select" id="eAlmox">
@@ -898,19 +939,16 @@
           <label class="form-label">Data da entrega</label>
           <input class="form-input" type="date" id="eData">
         </div>
-        <div class="form-field full" id="campoCALote" style="display:none;">
-          <label class="form-label">Nº CA do lote (EPI)</label>
-          <input class="form-input" type="text" id="eCALote" placeholder="ex: 12345/lote A">
-        </div>
         <div class="form-field full">
           <label class="form-label">Observação</label>
           <input class="form-input" type="text" id="eObs" placeholder="opcional…">
         </div>
       </div>
+
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="fecharModalEntrega()">Cancelar</button>
-      <button class="btn btn-primary" onclick="salvarEntrega()">Registrar</button>
+      <button class="btn btn-primary" id="btnSalvarEntrega" onclick="salvarEntregaAtual()">Registrar kit</button>
     </div>
   </div>
 </div>
@@ -1524,12 +1562,46 @@ async function carregarHistoricoColab(colabId) {
 
     // ── Calcular itens em poder ───────────────────────────────────────────────
     const emPoderMap = new Map(); // key: `${item_id}|${tamanho}` → {itemNome, tamanho, qtd, almoxarifado_id}
+    const entregasMap = new Map(); // key: item_id → qtd total entregue (para cálculo de pendências)
     for (const m of movs) {
       const key = `${m.item_id}|${m.tamanho||''}`;
       if (!emPoderMap.has(key)) emPoderMap.set(key, { item_id: m.item_id, itemNome: m.item?.nome||'—', tamanho: m.tamanho||'', qtd: 0, almoxarifado_id: m.almoxarifado_id });
       emPoderMap.get(key).qtd += m.tipo === 'entrega' ? (m.quantidade||0) : -(m.quantidade||0);
+      if (m.tipo === 'entrega') {
+        entregasMap.set(m.item_id, (entregasMap.get(m.item_id) || 0) + (m.quantidade || 0));
+      }
     }
     _devItensEmPoder = [...emPoderMap.values()].filter(x => x.qtd > 0);
+
+    // ── Calcular itens pendentes do kit ───────────────────────────────────────
+    const cardPend  = document.getElementById('cardKitPendente');
+    const listaPend = document.getElementById('listaKitPendente');
+    const kitColab  = (() => {
+      if (!_colabAtual?.cargo) return [];
+      const s = (_colabAtual.genero || '').toUpperCase();
+      const gen = s === 'F' ? 'feminino' : s === 'M' ? 'masculino' : 'unissex';
+      return KITS.filter(k => k.cargo === _colabAtual.cargo && (k.genero === gen || k.genero === 'unissex' || !k.genero));
+    })();
+    const pendentes = kitColab.filter(k => (entregasMap.get(k.item_id) || 0) < (k.quantidade || 1));
+    if (pendentes.length) {
+      cardPend.style.display = '';
+      listaPend.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 80px;gap:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);padding:0 0 6px;border-bottom:1px solid var(--border);">
+          <span>Item</span><span style="text-align:right;">Faltam</span>
+        </div>` +
+        pendentes.map(k => {
+          const item = ITENS.find(i => i.id == k.item_id);
+          const entregue = entregasMap.get(k.item_id) || 0;
+          const faltam = (k.quantidade || 1) - entregue;
+          return `
+          <div style="display:grid;grid-template-columns:1fr 80px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-light);">
+            <span style="font-size:13px;font-weight:600;">${item?.nome || '—'}${item?.variante ? ' <span style="font-weight:400;color:var(--text-sec);">· '+item.variante+'</span>' : ''}</span>
+            <span style="font-size:14px;font-weight:700;color:var(--amber);text-align:right;">${faltam} un.</span>
+          </div>`;
+        }).join('');
+    } else {
+      cardPend.style.display = 'none';
+    }
 
     const cardEmPoder = document.getElementById('cardEmPoder');
     const listaEmPoder = document.getElementById('listaEmPoder');
@@ -1577,39 +1649,116 @@ async function carregarHistoricoColab(colabId) {
 }
 
 // ─── Modal: Registrar Entrega ─────────────────────────────────────────────────
+
+let _modoEntrega = 'kit'; // 'kit' | 'avulso'
+
+function _generoKitColab() {
+  // colaboradores.sexo usa 'M'/'F'; kits usam 'masculino'/'feminino'/'unissex'
+  const s = (_colabAtual?.genero || '').toUpperCase();
+  return s === 'F' ? 'feminino' : s === 'M' ? 'masculino' : 'unissex';
+}
+
+function _kitDoColab() {
+  if (!_colabAtual?.cargo) return [];
+  const gen = _generoKitColab();
+  // inclui itens do gênero específico OU unissex
+  return KITS.filter(k => k.cargo === _colabAtual.cargo && (k.genero === gen || k.genero === 'unissex' || !k.genero));
+}
+
 function abrirModalEntrega() {
   if (!_colabAtual) return;
+  _popularCamposComuns();
+  // abre no modo kit se houver kit; caso contrário, abre em avulso
+  const temKit = _kitDoColab().length > 0;
+  setModoEntrega(temKit ? 'kit' : 'avulso');
+  document.getElementById('modalEntrega').classList.add('open');
+}
+
+function abrirModalEntregaKit() {
+  if (!_colabAtual) return;
+  _popularCamposComuns();
+  setModoEntrega('kit');
+  document.getElementById('modalEntrega').classList.add('open');
+}
+
+function _popularCamposComuns() {
   document.getElementById('entregaColabNome').textContent = _colabAtual.nome + ' ';
   document.getElementById('entregaColabCargo').textContent = _colabAtual.cargo ? '· ' + _colabAtual.cargo : '';
 
-  // popula itens — filtra por compatibilidade de gênero com o colaborador
-  const generoColab = _colabAtual.genero || '';
-  const selItem = document.getElementById('eItem');
-  selItem.innerHTML = '<option value="">Selecione um item…</option>' +
-    ITENS.filter(i => i.ativo && (
-      !i.genero || i.genero === 'unissex' ||
-      !generoColab || i.genero === generoColab
-    )).map(i => `<option value="${i.id}" data-tipo="${i.tipo}" data-tamanhos='${JSON.stringify(i.tamanhos_disponiveis||[])}' data-sistema="${i.sistema_tamanho}">${_labelItem(i)}</option>`).join('');
-
-  // popula almoxarifados
   const selAlmox = document.getElementById('eAlmox');
   selAlmox.innerHTML = '<option value="">Selecione…</option>' +
     ALMOXARIFADOS.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
+  if (ALMOXARIFADOS.length === 1) selAlmox.value = ALMOXARIFADOS[0].id;
 
-  // data hoje
   document.getElementById('eData').value = new Date().toISOString().split('T')[0];
-  document.getElementById('eTamanho').innerHTML = '<option value="">Selecione o item primeiro</option>';
-  document.getElementById('eQtd').value = '1';
-  document.getElementById('eMotivo').value = 'admissao';
-  document.getElementById('eCALote').value = '';
   document.getElementById('eObs').value = '';
-  document.getElementById('campoCALote').style.display = 'none';
-
-  document.getElementById('modalEntrega').classList.add('open');
 }
 
 function fecharModalEntrega() {
   document.getElementById('modalEntrega').classList.remove('open');
+}
+
+function setModoEntrega(modo) {
+  _modoEntrega = modo;
+  document.getElementById('tabModoKit').classList.toggle('active', modo === 'kit');
+  document.getElementById('tabModoAvulso').classList.toggle('active', modo === 'avulso');
+  document.getElementById('painelModoKit').style.display    = modo === 'kit'    ? '' : 'none';
+  document.getElementById('painelModoAvulso').style.display = modo === 'avulso' ? '' : 'none';
+  document.getElementById('btnSalvarEntrega').textContent   = modo === 'kit' ? 'Registrar kit' : 'Registrar';
+
+  if (modo === 'kit') {
+    renderKitEntrega();
+  } else {
+    // popula select de itens no modo avulso
+    const generoColab = _colabAtual?.genero || '';
+    const selItem = document.getElementById('eItem');
+    selItem.innerHTML = '<option value="">Selecione um item…</option>' +
+      ITENS.filter(i => i.ativo && (
+        !i.genero || i.genero === 'unissex' ||
+        !generoColab || i.genero === generoColab
+      )).map(i => `<option value="${i.id}" data-tipo="${i.tipo}" data-tamanhos='${JSON.stringify(i.tamanhos_disponiveis||[])}' data-sistema="${i.sistema_tamanho}">${_labelItem(i)}</option>`).join('');
+    document.getElementById('eTamanho').innerHTML = '<option value="">Selecione o item primeiro</option>';
+    document.getElementById('eQtd').value = '1';
+    document.getElementById('eMotivo').value = 'admissao';
+    document.getElementById('eCALote').value = '';
+    document.getElementById('campoCALote').style.display = 'none';
+  }
+}
+
+function renderKitEntrega() {
+  const lista  = document.getElementById('kitEntregaLista');
+  const vazio  = document.getElementById('kitEntregaVazio');
+  const itensKit = _kitDoColab();
+
+  if (!itensKit.length) {
+    lista.innerHTML = '';
+    vazio.style.display = '';
+    return;
+  }
+  vazio.style.display = 'none';
+
+  lista.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 160px 80px;gap:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);padding:0 4px 8px;border-bottom:1px solid var(--border);margin-bottom:4px;">
+      <span>Item</span><span>Tamanho</span><span style="text-align:center;">Qtd</span>
+    </div>` +
+    itensKit.map((k, idx) => {
+      const item = ITENS.find(i => i.id == k.item_id);
+      if (!item) return '';
+      const tamanhos = item.tamanhos_disponiveis || [];
+      const sistema  = item.sistema_tamanho;
+      let selOpts;
+      if (sistema === 'unico' || !tamanhos.length) {
+        selOpts = `<option value="Único">Único</option>`;
+      } else {
+        selOpts = tamanhos.map(t => `<option value="${t}">${t}</option>`).join('');
+      }
+      return `
+      <div style="display:grid;grid-template-columns:1fr 160px 80px;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--border-light);">
+        <span style="font-size:13px;font-weight:600;">${item.nome}${item.variante ? ' <span style="font-weight:400;color:var(--text-sec);">· ' + item.variante + '</span>' : ''}</span>
+        <select class="form-select" id="kitTam-${idx}" style="padding:6px 8px;font-size:13px;">${selOpts}</select>
+        <input class="form-input" id="kitQtd-${idx}" type="number" value="${k.quantidade||1}" min="1" style="padding:6px 8px;font-size:13px;text-align:center;">
+      </div>`;
+    }).join('');
 }
 
 function atualizarTamanhosEntrega() {
@@ -1624,9 +1773,9 @@ function atualizarTamanhosEntrega() {
     return;
   }
 
-  const sistema   = opt.dataset.sistema;
-  const tamanhos  = JSON.parse(opt.dataset.tamanhos || '[]');
-  const tipo      = opt.dataset.tipo;
+  const sistema  = opt.dataset.sistema;
+  const tamanhos = JSON.parse(opt.dataset.tamanhos || '[]');
+  const tipo     = opt.dataset.tipo;
 
   campoCA.style.display = tipo === 'epi' ? '' : 'none';
 
@@ -1652,6 +1801,75 @@ function mostrarCustoMedioEntrega() {
     badge.style.display = '';
   } else {
     badge.style.display = 'none';
+  }
+}
+
+function salvarEntregaAtual() {
+  if (_modoEntrega === 'kit') salvarEntregaKit();
+  else salvarEntrega();
+}
+
+async function salvarEntregaKit() {
+  const almoxId = document.getElementById('eAlmox').value;
+  const data    = document.getElementById('eData').value;
+  const obs     = document.getElementById('eObs').value.trim();
+
+  if (!almoxId) { toast('Selecione o almoxarifado.'); return; }
+
+  const itensKit = _kitDoColab();
+  if (!itensKit.length) { toast('Nenhum item no kit.'); return; }
+
+  // valida tamanhos
+  for (let idx = 0; idx < itensKit.length; idx++) {
+    const tam = document.getElementById(`kitTam-${idx}`)?.value;
+    if (!tam) { toast('Selecione o tamanho de todos os itens.'); return; }
+  }
+
+  const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  const registradoPor = perfil.nome || 'RH';
+  const btn = document.getElementById('btnSalvarEntrega');
+  btn.disabled = true;
+  btn.textContent = 'Registrando…';
+
+  try {
+    for (let idx = 0; idx < itensKit.length; idx++) {
+      const k      = itensKit[idx];
+      const tamanho = document.getElementById(`kitTam-${idx}`).value;
+      const qtd     = parseInt(document.getElementById(`kitQtd-${idx}`).value) || 1;
+
+      const payload = {
+        colaborador_id:    _colabAtual.id,
+        item_id:           k.item_id,
+        almoxarifado_id:   almoxId,
+        tipo:              'entrega',
+        motivo:            'admissao',
+        tamanho,
+        quantidade:        qtd,
+        data_movimentacao: data || new Date().toISOString().split('T')[0],
+        confirmado:        true,
+        registrado_por:    registradoPor,
+        obs:               obs || null,
+      };
+      await sbPost('unif_movimentacoes', payload);
+
+      if (!isCDAlmox(almoxId)) {
+        const estoqRows = await sbGet('unif_estoque',
+          `almoxarifado_id=eq.${almoxId}&item_id=eq.${k.item_id}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
+        if (estoqRows.length) {
+          const novaQtd = Math.max(0, (estoqRows[0].quantidade || 0) - qtd);
+          await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: novaQtd });
+        }
+      }
+    }
+
+    toast(`✓ Kit registrado — ${itensKit.length} ${itensKit.length === 1 ? 'item' : 'itens'} entregues`);
+    fecharModalEntrega();
+    carregarHistoricoColab(_colabAtual.id);
+  } catch(e) {
+    toast('Erro: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Registrar kit';
   }
 }
 
@@ -1688,7 +1906,6 @@ async function salvarEntrega() {
   try {
     await sbPost('unif_movimentacoes', payload);
 
-    // baixa automática no estoque — apenas se não for almoxarifado CD
     if (!isCDAlmox(almoxId)) {
       const tipo = motivo === 'demissao' ? 'devolucao' : 'entrega';
       const sinal = tipo === 'devolucao' ? 1 : -1;
