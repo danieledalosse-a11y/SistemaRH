@@ -134,8 +134,22 @@
   .tag-rm:hover { color: var(--red); }
 
   /* ── kit section ── */
-  .kit-cargo-sel { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
-  .kit-cargo-sel select { flex: 1; }
+  .kits-layout { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: start; }
+  .kits-sidebar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .kits-sidebar-hdr { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .kits-sidebar-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-ter); }
+  .cargo-card { padding: 11px 16px; cursor: pointer; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; transition: background .15s; gap: 8px; }
+  .cargo-card:last-child { border-bottom: none; }
+  .cargo-card:hover { background: var(--bg); }
+  .cargo-card.active { background: #EFF4FF; border-left: 3px solid var(--blue); padding-left: 13px; }
+  .cargo-card-nome { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; }
+  .cargo-card-count { font-size: 11px; color: var(--text-ter); background: var(--bg); border-radius: 99px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0; }
+  .cargo-card.active .cargo-card-count { background: #C7D7FD; color: #1849A9; }
+  .kits-editor { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; min-height: 280px; }
+  .kits-editor-hdr { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 6px; }
+  .kits-editor-vazio { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; gap: 10px; color: var(--text-ter); }
+  .kits-editor-vazio .icon { font-size: 36px; }
+  .kits-editor-vazio p { font-size: 13px; margin: 0; }
   .kit-items-list { display: flex; flex-direction: column; gap: 8px; }
   .kit-item-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg); border-radius: 8px; font-size: 13px; }
   .kit-item-nome { flex: 1; font-weight: 500; }
@@ -144,6 +158,7 @@
   .kit-item-qty input { width: 60px; padding: 4px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; text-align: center; }
   .kit-item-rm { background: none; border: none; cursor: pointer; color: var(--text-ter); padding: 4px; }
   .kit-item-rm:hover { color: var(--red); }
+  .kits-sidebar-vazio { padding: 20px 16px; text-align: center; font-size: 12px; color: var(--text-ter); }
 
   /* ── empty state ── */
   .empty-state { text-align: center; padding: 48px 24px; color: var(--text-sec); }
@@ -575,36 +590,46 @@
 
     <!-- ── Kits por Cargo ── -->
     <div id="ssec-kits" style="display:none;">
-      <div class="card">
-        <div class="card-hdr">
-          <div class="card-hdr-left">
-            <div class="card-title">Kits por Cargo</div>
-            <div class="card-sub" style="margin:0;">Defina o kit padrão entregue na admissão de cada cargo</div>
+      <!-- cabeçalho da seção -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div>
+          <div class="card-title">Kits por Cargo</div>
+          <div class="card-sub" style="margin:0;">Defina o kit padrão entregue na admissão de cada cargo</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="abrirModalNovoCargo()">+ Novo cargo</button>
+      </div>
+
+      <div class="kits-layout">
+        <!-- sidebar: lista de cargos -->
+        <div class="kits-sidebar">
+          <div class="kits-sidebar-hdr">
+            <span class="kits-sidebar-label">Cargos</span>
           </div>
+          <div id="listaCargos"></div>
         </div>
 
-        <div class="kit-cargo-sel">
-          <select id="selCargo" class="form-select" style="flex:1;" onchange="carregarKit()">
-            <option value="">Selecione um cargo…</option>
-          </select>
-          <button class="btn btn-outline btn-sm" onclick="abrirModalNovoCargo()">
-            + Novo cargo
-          </button>
-        </div>
-
-        <div style="display:flex;gap:8px;margin-top:12px;" id="kitGeneroSelector">
-          <button class="genero-pill active" data-val="unissex"   onclick="setKitGenero('unissex')">👥 Unissex</button>
-          <button class="genero-pill"        data-val="feminino"  onclick="setKitGenero('feminino')">♀ Feminino</button>
-          <button class="genero-pill"        data-val="masculino" onclick="setKitGenero('masculino')">♂ Masculino</button>
-        </div>
-        <div style="font-size:12px;color:var(--text-ter);margin-top:6px;">
-          Itens unissex aparecem para todos. Itens femininos/masculinos apenas para o gênero correspondente na entrega.
-        </div>
-
-        <div id="kitConteudo">
-          <div class="empty-state">
-            <div class="icon">👆</div>
-            <p>Selecione um cargo para ver ou editar o kit</p>
+        <!-- editor do kit -->
+        <div class="kits-editor">
+          <div class="kits-editor-vazio" id="kitEditorVazio">
+            <div class="icon">👈</div>
+            <p>Selecione um cargo ao lado para ver ou editar o kit</p>
+          </div>
+          <div id="kitEditorConteudo" style="display:none;">
+            <div class="kits-editor-hdr">
+              <div>
+                <div class="card-title" id="kitCargoNome">—</div>
+                <div class="card-sub" style="margin:0;">Kit padrão de entrega</div>
+              </div>
+              <div style="display:flex;gap:8px;" id="kitGeneroSelector">
+                <button class="genero-pill active" data-val="unissex"   onclick="setKitGenero('unissex')">👥 Unissex</button>
+                <button class="genero-pill"        data-val="feminino"  onclick="setKitGenero('feminino')">♀ Feminino</button>
+                <button class="genero-pill"        data-val="masculino" onclick="setKitGenero('masculino')">♂ Masculino</button>
+              </div>
+            </div>
+            <div style="font-size:12px;color:var(--text-ter);margin-bottom:14px;">
+              Itens unissex aparecem para todos. Itens femininos/masculinos apenas para o gênero correspondente na entrega.
+            </div>
+            <div id="kitConteudo"></div>
           </div>
         </div>
       </div>
@@ -2014,7 +2039,7 @@ function setSecTab(sub) {
     document.getElementById(`ssec-${s}`).style.display    = s === sub ? '' : 'none';
     document.getElementById(`stab-${s}`).classList.toggle('active', s === sub);
   });
-  if (sub === 'kits') renderSelCargo();
+  if (sub === 'kits') renderCargosCards();
 }
 
 // ─── Carregamento inicial ─────────────────────────────────────────────────────
@@ -2031,7 +2056,7 @@ async function init() {
     ALMOXARIFADOS = almoxs;
     setTab('painel');
     renderItens();
-    renderSelCargo();
+    renderCargosCards();
     _aplicarControleAcesso();
   } catch (e) {
     toast('Erro ao carregar dados: ' + e.message);
@@ -2346,21 +2371,49 @@ function setKitGenero(val) {
   carregarKit();
 }
 
-function renderSelCargo() {
-  const sel = document.getElementById('selCargo');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">Selecione um cargo…</option>' +
-    CARGOS.map(c => `<option value="${c.replace(/"/g,'&quot;')}"${c === cur ? ' selected' : ''}>${c}</option>`).join('');
+let _cargoAtual = '';
+
+function renderCargosCards() {
+  const lista = document.getElementById('listaCargos');
+  if (!lista) return;
+  if (!CARGOS.length) {
+    lista.innerHTML = '<div class="kits-sidebar-vazio">Nenhum cargo cadastrado</div>';
+    return;
+  }
+  lista.innerHTML = CARGOS.map(c => {
+    const total = KITS.filter(k => k.cargo === c).length;
+    const badge = total ? `${total} ${total === 1 ? 'item' : 'itens'}` : 'vazio';
+    return `<div class="cargo-card${c === _cargoAtual ? ' active' : ''}" onclick="selecionarCargo('${c.replace(/'/g,"\\'")}')">
+      <span class="cargo-card-nome">${c}</span>
+      <span class="cargo-card-count">${badge}</span>
+    </div>`;
+  }).join('');
+}
+
+function selecionarCargo(cargo) {
+  _cargoAtual = cargo;
+  renderCargosCards();
+  const vazio    = document.getElementById('kitEditorVazio');
+  const conteudo = document.getElementById('kitEditorConteudo');
+  if (!cargo) {
+    vazio.style.display    = '';
+    conteudo.style.display = 'none';
+    return;
+  }
+  vazio.style.display    = 'none';
+  conteudo.style.display = '';
+  document.getElementById('kitCargoNome').textContent = cargo;
+  // reset gênero para unissex ao trocar de cargo
+  _kitGeneroAtual = 'unissex';
+  document.querySelectorAll('#kitGeneroSelector .genero-pill').forEach(b =>
+    b.classList.toggle('active', b.dataset.val === 'unissex'));
+  carregarKit();
 }
 
 function carregarKit() {
-  const cargo = document.getElementById('selCargo').value;
+  const cargo = _cargoAtual;
   const box   = document.getElementById('kitConteudo');
-
-  if (!cargo) {
-    box.innerHTML = `<div class="empty-state"><div class="icon">👆</div><p>Selecione um cargo para ver ou editar o kit</p></div>`;
-    return;
-  }
+  if (!cargo || !box) return;
 
   const itensDoKit = KITS.filter(k => k.cargo === cargo && (k.genero || 'unissex') === _kitGeneroAtual);
   const itensAtivos = ITENS.filter(i => i.ativo);
@@ -2425,7 +2478,8 @@ async function adicionarItemKit(cargo) {
     const item   = ITENS.find(i => i.id === itemId);
     novo.item    = item;
     KITS.push(novo);
-    if (!CARGOS.includes(cargo)) { CARGOS.push(cargo); CARGOS.sort(); renderSelCargo(); }
+    if (!CARGOS.includes(cargo)) { CARGOS.push(cargo); CARGOS.sort(); }
+    renderCargosCards();
     carregarKit();
     toast('✓ Item adicionado ao kit');
   } catch (e) {
@@ -2451,9 +2505,10 @@ async function removerItemKit(kitId, cargo) {
     // Remove cargo da lista se ficou sem itens
     if (!KITS.some(k => k.cargo === cargo)) {
       CARGOS = CARGOS.filter(c => c !== cargo);
-      renderSelCargo();
-      document.getElementById('selCargo').value = '';
+      _cargoAtual = '';
+      selecionarCargo('');
     }
+    renderCargosCards();
     carregarKit();
     toast('✓ Item removido do kit');
   } catch (e) {
@@ -2476,10 +2531,9 @@ function adicionarCargo() {
   if (CARGOS.includes(nome)) { toast('Cargo já existe.'); return; }
   CARGOS.push(nome);
   CARGOS.sort();
-  renderSelCargo();
-  document.getElementById('selCargo').value = nome;
+  renderCargosCards();
   fecharModalNovoCargo();
-  carregarKit();
+  selecionarCargo(nome);
 }
 
 // ─── Modal: Devolução ─────────────────────────────────────────────────────────
