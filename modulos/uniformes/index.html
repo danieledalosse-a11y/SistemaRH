@@ -292,8 +292,25 @@
 
     <!-- histórico do colaborador selecionado -->
     <div id="colabDetalhe" style="display:none;">
+
+      <!-- Em poder -->
+      <div class="card" id="cardEmPoder" style="margin-bottom:16px;display:none;">
+        <div class="card-hdr" style="margin-bottom:12px;">
+          <div class="card-hdr-left">
+            <div class="card-title">Itens em poder do colaborador</div>
+            <div class="card-sub" style="margin:0;">Saldo atual: entregas menos devoluções já registradas</div>
+          </div>
+          <button class="btn btn-outline" onclick="abrirModalDevolucaoLote()" id="btnDevolverLote">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+            Registrar devolução
+          </button>
+        </div>
+        <div id="listaEmPoder"></div>
+      </div>
+
+      <!-- Histórico -->
       <div class="card">
-        <div class="card-hdr">
+        <div class="card-hdr" style="margin-bottom:12px;">
           <div class="card-hdr-left">
             <div class="card-title" id="colabNomeDetalhe"></div>
             <div class="card-sub" style="margin:0;" id="colabCargoDetalhe"></div>
@@ -319,7 +336,7 @@
                 <th>Tipo</th>
                 <th>Tamanho</th>
                 <th>Qtd.</th>
-                <th>Motivo</th>
+                <th>Movimento</th>
                 <th>Almoxarifado</th>
                 <th>Registrado por</th>
               </tr>
@@ -628,6 +645,60 @@
   </div>
 </div>
 
+<!-- ═══ Modal: Registrar Devolução ═══ -->
+<div class="modal-overlay" id="modalDevolucao">
+  <div class="modal wide">
+    <div class="modal-hdr">
+      <span class="modal-title">Registrar devolução</span>
+      <button class="modal-close" onclick="fecharModalDevolucao()">×</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:0;">
+
+      <!-- colaborador info -->
+      <div style="background:var(--bg);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;">
+        <span style="font-weight:700;" id="devColabNome"></span>
+        <span style="color:var(--text-sec);" id="devColabCargo"></span>
+      </div>
+
+      <!-- lista de itens em poder com qtd a devolver -->
+      <div id="devListaItens" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;max-height:340px;overflow-y:auto;"></div>
+
+      <!-- condição -->
+      <div class="form-field" style="margin-bottom:12px;">
+        <label class="form-label">Condição dos itens devolvidos <span class="req">*</span></label>
+        <div style="display:flex;gap:8px;margin-top:6px;" id="devCondicaoSelector">
+          <button class="genero-pill active" data-val="reutilizavel"  onclick="_setDevCondicao('reutilizavel')">✅ Reutilizável</button>
+          <button class="genero-pill"        data-val="descartado"    onclick="_setDevCondicao('descartado')">🗑 Descartado</button>
+        </div>
+        <div style="font-size:12px;color:var(--text-ter);margin-top:6px;" id="devCondicaoHint">Reutilizável: itens serão recolocados no estoque.</div>
+      </div>
+
+      <!-- almoxarifado destino (só se reutilizável) -->
+      <div class="form-field" id="devCampoAlmox" style="margin-bottom:12px;">
+        <label class="form-label">Retornar para o almoxarifado <span class="req">*</span></label>
+        <select class="form-select" id="devAlmox"></select>
+      </div>
+
+      <!-- data -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Data da devolução</label>
+          <input class="form-input" type="date" id="devData">
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Observação</label>
+          <input class="form-input" type="text" id="devObs" placeholder="Opcional">
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModalDevolucao()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarDevolucao()">Registrar devolução</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Modal: Registrar Entrega ═══ -->
 <!-- ═══ Modal: Entrada de Lote ═══ -->
 <div class="modal-overlay" id="modalEntradaLote">
@@ -872,8 +943,10 @@ let KITS         = [];
 let CARGOS       = [];
 let ALMOXARIFADOS = [];
 let _editItemId      = null;
-let _colabAtual      = null; // colaborador selecionado na aba Colaboradores
+let _colabAtual      = null;
 let _kitGeneroAtual  = 'unissex';
+let _devCondicao     = 'reutilizavel';
+let _devItensEmPoder = []; // [{item_id, itemNome, tamanho, almoxarifado_id, qtdEmPoder}]
 
 // ─── Navegação principal ──────────────────────────────────────────────────────
 const TABS = ['painel','colaboradores','estoque','catalogo','solicitacoes'];
@@ -1251,22 +1324,59 @@ async function carregarHistoricoColab(colabId) {
   tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-ter);">Carregando…</td></tr>';
   try {
     const movs = await sbGet('unif_movimentacoes',
-      `colaborador_id=eq.${colabId}&select=*,item:unif_catalogo(nome,tipo),almox:unif_almoxarifados(nome)&order=data_movimentacao.desc`);
+      `colaborador_id=eq.${colabId}&select=*,item:unif_catalogo(id,nome,tipo),almox:unif_almoxarifados(nome)&order=data_movimentacao.desc`);
+
+    // ── Calcular itens em poder ───────────────────────────────────────────────
+    const emPoderMap = new Map(); // key: `${item_id}|${tamanho}` → {itemNome, tamanho, qtd, almoxarifado_id}
+    for (const m of movs) {
+      const key = `${m.item_id}|${m.tamanho||''}`;
+      if (!emPoderMap.has(key)) emPoderMap.set(key, { item_id: m.item_id, itemNome: m.item?.nome||'—', tamanho: m.tamanho||'', qtd: 0, almoxarifado_id: m.almoxarifado_id });
+      emPoderMap.get(key).qtd += m.tipo === 'entrega' ? (m.quantidade||0) : -(m.quantidade||0);
+    }
+    _devItensEmPoder = [...emPoderMap.values()].filter(x => x.qtd > 0);
+
+    const cardEmPoder = document.getElementById('cardEmPoder');
+    const listaEmPoder = document.getElementById('listaEmPoder');
+    if (_devItensEmPoder.length) {
+      cardEmPoder.style.display = '';
+      listaEmPoder.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);padding:0 0 6px;border-bottom:1px solid var(--border);">
+          <span>Item</span><span style="text-align:center;padding:0 16px;">Tamanho</span><span style="text-align:right;">Em poder</span>
+        </div>` +
+        _devItensEmPoder.map(x => `
+        <div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-light);">
+          <span style="font-size:14px;font-weight:600;">${x.itemNome}</span>
+          <span style="font-size:13px;color:var(--text-sec);padding:0 16px;text-align:center;">${x.tamanho || '—'}</span>
+          <span style="font-size:15px;font-weight:700;color:var(--blue);text-align:right;">${x.qtd} un.</span>
+        </div>`).join('');
+    } else {
+      cardEmPoder.style.display = 'none';
+    }
+
+    // ── Histórico ─────────────────────────────────────────────────────────────
     if (!movs.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma entrega registrada</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma movimentação registrada</td></tr>';
       return;
     }
-    const motivoLabel = { admissao:'Admissão', troca_programada:'Troca programada', troca_antecipada:'Troca antecipada', demissao:'Devolução', ajuste:'Ajuste' };
-    tbody.innerHTML = movs.map(m => `<tr>
-      <td style="white-space:nowrap;">${m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '—'}</td>
-      <td style="font-weight:600;">${m.item?.nome || '—'}</td>
-      <td><span class="badge badge-${m.item?.tipo||'uniforme'}">${m.item?.tipo==='epi'?'EPI':'Uniforme'}</span></td>
-      <td>${m.tamanho || '—'}</td>
-      <td>${m.quantidade}</td>
-      <td style="color:var(--text-sec);">${motivoLabel[m.motivo] || m.motivo}</td>
-      <td style="color:var(--text-sec);font-size:12px;">${m.almox?.nome || '—'}</td>
-      <td style="color:var(--text-sec);font-size:12px;">${m.registrado_por || '—'}</td>
-    </tr>`).join('');
+    const motivoLabel = { admissao:'Admissão', troca_programada:'Troca programada', troca_antecipada:'Troca antecipada', demissao:'Desligamento', ajuste:'Ajuste', devolucao:'Devolução' };
+    const condicaoLabel = { reutilizavel:'✅ Reutilizável', descartado:'🗑 Descartado' };
+    tbody.innerHTML = movs.map(m => {
+      const isDev = m.tipo === 'devolucao';
+      const movBadge = isDev
+        ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#ECFDF3;color:#027A48;font-weight:600;">↩ Devolução</span>`
+        : `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">↗ Entrega</span>`;
+      const condicao = m.condicao_devolucao ? `<div style="font-size:11px;color:var(--text-ter);">${condicaoLabel[m.condicao_devolucao]||''}</div>` : '';
+      return `<tr>
+        <td style="white-space:nowrap;">${m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '—'}</td>
+        <td style="font-weight:600;">${m.item?.nome || '—'}</td>
+        <td><span class="badge badge-${m.item?.tipo||'uniforme'}">${m.item?.tipo==='epi'?'EPI':'Uniforme'}</span></td>
+        <td>${m.tamanho || '—'}</td>
+        <td style="${isDev?'color:#027A48;':''}">${isDev?'−':''}${m.quantidade}</td>
+        <td>${movBadge}${condicao}<div style="font-size:11px;color:var(--text-ter);margin-top:2px;">${motivoLabel[m.motivo]||m.motivo}</div></td>
+        <td style="color:var(--text-sec);font-size:12px;">${m.almox?.nome || '—'}</td>
+        <td style="color:var(--text-sec);font-size:12px;">${m.registrado_por || '—'}</td>
+      </tr>`;
+    }).join('');
   } catch(e) { toast('Erro ao carregar histórico: ' + e.message); }
 }
 
@@ -1726,7 +1836,7 @@ async function init() {
   try {
     const [itens, kits, almoxs] = await Promise.all([
       sbGet('unif_catalogo',    'select=*&order=nome'),
-      sbGet('unif_kits',        'select=*,item:unif_catalogo(id,nome,tipo)'),
+      sbGet('unif_kits',        'select=*,item:unif_catalogo(id,nome,tipo)&ativo=eq.true'),
       sbGet('unif_almoxarifados','select=*&ativo=eq.true&order=nome'),
     ]);
     ITENS         = itens;
@@ -2150,7 +2260,7 @@ async function atualizarQtdKit(kitId, val) {
 
 async function removerItemKit(kitId, cargo) {
   try {
-    await sbDelete('unif_kits', `id=eq.${kitId}`);
+    await sbPatch('unif_kits', `id=eq.${kitId}`, { ativo: false });
     KITS = KITS.filter(k => k.id !== kitId);
     // Remove cargo da lista se ficou sem itens
     if (!KITS.some(k => k.cargo === cargo)) {
@@ -2184,6 +2294,118 @@ function adicionarCargo() {
   document.getElementById('selCargo').value = nome;
   fecharModalNovoCargo();
   carregarKit();
+}
+
+// ─── Modal: Devolução ─────────────────────────────────────────────────────────
+function abrirModalDevolucaoLote() {
+  if (!_colabAtual || !_devItensEmPoder.length) return;
+
+  document.getElementById('devColabNome').textContent = _colabAtual.nome + ' ';
+  document.getElementById('devColabCargo').textContent = _colabAtual.cargo ? '· ' + _colabAtual.cargo : '';
+  document.getElementById('devData').value = new Date().toISOString().split('T')[0];
+  document.getElementById('devObs').value = '';
+
+  // Popula almoxarifados
+  document.getElementById('devAlmox').innerHTML =
+    '<option value="">Selecione o almoxarifado…</option>' +
+    ALMOXARIFADOS.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
+
+  // Inicializa condição
+  _devCondicao = 'reutilizavel';
+  document.querySelectorAll('#devCondicaoSelector .genero-pill').forEach(b =>
+    b.classList.toggle('active', b.dataset.val === 'reutilizavel'));
+  document.getElementById('devCampoAlmox').style.display = '';
+  document.getElementById('devCondicaoHint').textContent = 'Reutilizável: itens serão recolocados no estoque.';
+
+  // Lista de itens com campos de qty
+  document.getElementById('devListaItens').innerHTML = _devItensEmPoder.map((x, i) => `
+    <div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:10px 12px;background:var(--bg);border-radius:8px;">
+      <div>
+        <div style="font-size:14px;font-weight:600;">${x.itemNome}</div>
+        <div style="font-size:12px;color:var(--text-sec);">Tamanho: ${x.tamanho||'—'} · Em poder: ${x.qtd} un.</div>
+      </div>
+      <label style="font-size:12px;color:var(--text-ter);">Devolver</label>
+      <input type="number" id="devQtd_${i}" min="0" max="${x.qtd}" value="${x.qtd}"
+        style="width:64px;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;text-align:center;font-family:inherit;">
+    </div>`).join('');
+
+  document.getElementById('modalDevolucao').classList.add('open');
+}
+
+function fecharModalDevolucao() {
+  document.getElementById('modalDevolucao').classList.remove('open');
+}
+
+function _setDevCondicao(val) {
+  _devCondicao = val;
+  document.querySelectorAll('#devCondicaoSelector .genero-pill').forEach(b =>
+    b.classList.toggle('active', b.dataset.val === val));
+  document.getElementById('devCampoAlmox').style.display = val === 'reutilizavel' ? '' : 'none';
+  document.getElementById('devCondicaoHint').textContent = val === 'reutilizavel'
+    ? 'Reutilizável: itens serão recolocados no estoque.'
+    : 'Descartado: apenas registra a baixa, sem retornar ao estoque.';
+}
+
+async function salvarDevolucao() {
+  const almoxId = document.getElementById('devAlmox').value;
+  const data    = document.getElementById('devData').value;
+  const obs     = document.getElementById('devObs').value.trim();
+
+  if (_devCondicao === 'reutilizavel' && !almoxId) {
+    toast('Selecione o almoxarifado de destino.'); return;
+  }
+
+  const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  const itensADevolver = _devItensEmPoder.map((x, i) => {
+    const qtd = parseInt(document.getElementById(`devQtd_${i}`)?.value) || 0;
+    return { ...x, qtdDevolver: qtd };
+  }).filter(x => x.qtdDevolver > 0);
+
+  if (!itensADevolver.length) { toast('Informe ao menos 1 unidade a devolver.'); return; }
+
+  try {
+    for (const x of itensADevolver) {
+      // Registra movimentação de devolução
+      await sbPost('unif_movimentacoes', {
+        colaborador_id:       _colabAtual.id,
+        item_id:              x.item_id,
+        almoxarifado_id:      almoxId || x.almoxarifado_id || null,
+        tipo:                 'devolucao',
+        motivo:               'devolucao',
+        tamanho:              x.tamanho || null,
+        quantidade:           x.qtdDevolver,
+        condicao_devolucao:   _devCondicao,
+        data_movimentacao:    data || new Date().toISOString().split('T')[0],
+        confirmado:           true,
+        registrado_por:       perfil.nome || 'RH',
+        obs:                  obs || null,
+      });
+
+      // Se reutilizável, recoloca no estoque
+      if (_devCondicao === 'reutilizavel' && almoxId) {
+        const estoqRows = await sbGet('unif_estoque',
+          `almoxarifado_id=eq.${almoxId}&item_id=eq.${x.item_id}&tamanho=eq.${encodeURIComponent(x.tamanho||'')}&select=id,quantidade`);
+        if (estoqRows.length) {
+          const novaQtd = (estoqRows[0].quantidade || 0) + x.qtdDevolver;
+          await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: novaQtd });
+        }
+      }
+    }
+
+    // Atualiza estoque em memória se necessário
+    if (_devCondicao === 'reutilizavel' && ESTOQUE.length) {
+      for (const x of itensADevolver) {
+        const reg = ESTOQUE.find(e => e.item_id == x.item_id && e.tamanho === (x.tamanho||'') && e.almoxarifado_id == almoxId);
+        if (reg) reg.quantidade = (reg.quantidade||0) + x.qtdDevolver;
+      }
+    }
+
+    toast(`✓ Devolução registrada — ${itensADevolver.length} item(ns)`);
+    fecharModalDevolucao();
+    await carregarHistoricoColab(_colabAtual.id);
+  } catch(e) {
+    toast('Erro: ' + e.message);
+  }
 }
 
 // Fechar modais ao clicar fora
