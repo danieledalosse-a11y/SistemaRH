@@ -328,6 +328,18 @@
     <!-- histórico do colaborador selecionado -->
     <div id="colabDetalhe" style="display:none;">
 
+      <!-- Desconto pendente em folha -->
+      <div class="card" id="cardDescontoPendente" style="margin-bottom:16px;display:none;border-left:4px solid #16a34a;">
+        <div class="card-hdr" style="margin-bottom:8px;">
+          <div class="card-hdr-left">
+            <div class="card-title" style="color:#166534;">💰 Desconto pendente em folha</div>
+            <div class="card-sub" style="margin:0;">Uniforme extra adquirido pelo colaborador</div>
+          </div>
+          <div id="totalDescontoPendente" style="font-size:20px;font-weight:700;color:#16a34a;"></div>
+        </div>
+        <div id="listaDescontoPendente"></div>
+      </div>
+
       <!-- Itens pendentes do kit -->
       <div class="card" id="cardKitPendente" style="margin-bottom:16px;display:none;">
         <div class="card-hdr" style="margin-bottom:12px;">
@@ -863,36 +875,40 @@
 </div>
 
 <div class="modal-overlay" id="modalEntrega">
-  <div class="modal" style="max-width:580px;">
+  <div class="modal" style="max-width:600px;">
     <div class="modal-hdr">
       <span class="modal-title">Registrar entrega</span>
       <button class="modal-close" onclick="fecharModalEntrega()">×</button>
     </div>
-    <div class="modal-body" style="padding-top:0;">
+    <div class="modal-body" style="padding:14px 20px 4px;">
 
       <!-- cabeçalho colaborador -->
-      <div style="background:var(--bg);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;margin-top:16px;">
+      <div style="background:var(--bg);border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-ter);flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span style="font-weight:600;" id="entregaColabNome"></span>
         <span style="color:var(--text-sec);" id="entregaColabCargo"></span>
       </div>
 
       <!-- abas Kit / Avulso -->
-      <div class="sec-tabs" style="margin-bottom:20px;">
+      <div class="sec-tabs" style="margin-bottom:14px;">
         <button class="sec-tab active" id="tabModoKit"    onclick="setModoEntrega('kit')">📦 Kit do cargo</button>
-        <button class="sec-tab"        id="tabModoAvulso" onclick="setModoEntrega('avulso')">➕ Item avulso</button>
+        <button class="sec-tab"        id="tabModoAvulso" onclick="setModoEntrega('avulso')">🛒 Item avulso / Extra</button>
       </div>
 
       <!-- MODO KIT -->
       <div id="painelModoKit">
-        <!-- seletor de cargo — aparece quando não há match exato -->
-        <div id="kitCargoSelector" style="display:none;margin-bottom:14px;">
-          <label class="form-label">Kit do cargo <span style="font-size:11px;color:var(--text-ter);">(cargo da colaboradora não encontrado — selecione o equivalente)</span></label>
-          <select class="form-select" id="selKitCargo" onchange="onKitCargoChange()">
-            <option value="">Selecione…</option>
+        <!-- banner de cargo não encontrado — destaque laranja -->
+        <div id="kitCargoSelector" style="display:none;margin-bottom:12px;background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:10px;padding:10px 14px;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C4490C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style="font-weight:700;color:#92400E;font-size:12px;">Cargo "<span id="kitCargoColabLabel"></span>" não tem kit — selecione o equivalente:</span>
+          </div>
+          <select class="form-select" id="selKitCargo" onchange="onKitCargoChange()" style="border-color:#FED7AA;">
+            <option value="">Selecione o kit…</option>
           </select>
         </div>
         <div id="kitEntregaLista"></div>
-        <div id="kitEntregaVazio" style="display:none;text-align:center;padding:32px 16px;color:var(--text-ter);font-size:13px;">
+        <div id="kitEntregaVazio" style="display:none;text-align:center;padding:24px 16px;color:var(--text-ter);font-size:13px;">
           Nenhum kit cadastrado.<br>
           <span style="font-size:12px;">Configure em <strong>Kits por Cargo</strong> antes de usar esta opção.</span>
         </div>
@@ -920,13 +936,23 @@
           </div>
           <div class="form-field">
             <label class="form-label">Motivo <span class="req">*</span></label>
-            <select class="form-select" id="eMotivo">
+            <select class="form-select" id="eMotivo" onchange="onMotivoChange()">
               <option value="admissao">Admissão</option>
+              <option value="extra_desconto_folha">🛒 Extra (desconto em folha)</option>
               <option value="troca_programada">Troca programada</option>
               <option value="troca_antecipada">Troca antecipada</option>
               <option value="demissao">Devolução (demissão)</option>
               <option value="ajuste">Ajuste de estoque</option>
             </select>
+          </div>
+          <!-- campo extra: valor unitário para desconto em folha -->
+          <div class="form-field full" id="campoValorExtra" style="display:none;background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:10px;padding:10px 14px;">
+            <label class="form-label" style="color:#166534;font-weight:700;">💰 Valor a descontar em folha</label>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+              <span style="font-size:13px;color:#166534;font-weight:600;">R$</span>
+              <input class="form-input" type="number" id="eValorExtra" step="0.01" min="0" placeholder="0,00" style="max-width:120px;">
+              <span style="font-size:11px;color:var(--text-sec);" id="custoMedioExtraHint"></span>
+            </div>
           </div>
           <div class="form-field full" id="campoCALote" style="display:none;">
             <label class="form-label">Nº CA do lote (EPI)</label>
@@ -936,7 +962,7 @@
       </div>
 
       <!-- campos comuns (almoxarifado, data, obs) -->
-      <div class="form-grid" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+      <div class="form-grid" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
         <div class="form-field">
           <label class="form-label">Almoxarifado <span class="req">*</span></label>
           <select class="form-select" id="eAlmox">
@@ -1581,6 +1607,29 @@ async function carregarHistoricoColab(colabId) {
     }
     _devItensEmPoder = [...emPoderMap.values()].filter(x => x.qtd > 0);
 
+    // ── Calcular descontos pendentes em folha ─────────────────────────────────
+    const extraMovs = movs.filter(m => m.motivo === 'extra_desconto_folha' && m.tipo === 'entrega');
+    const cardDesc  = document.getElementById('cardDescontoPendente');
+    const listaDesc = document.getElementById('listaDescontoPendente');
+    if (extraMovs.length) {
+      let totalDesc = 0;
+      listaDesc.innerHTML = extraMovs.map(m => {
+        const match = (m.obs || '').match(/\[desconto:([\d.]+)\]/);
+        const valor = match ? parseFloat(match[1]) * (m.quantidade || 1) : 0;
+        totalDesc += valor;
+        const dt = m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '—';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px;">
+          <span>${m.item?.nome || '—'}${m.tamanho ? ' · ' + m.tamanho : ''} <span style="color:var(--text-ter);">(${dt})</span></span>
+          <span style="font-weight:600;color:#16a34a;">${valor > 0 ? 'R$ ' + valor.toLocaleString('pt-BR',{minimumFractionDigits:2}) : '—'}</span>
+        </div>`;
+      }).join('');
+      document.getElementById('totalDescontoPendente').textContent =
+        'R$ ' + totalDesc.toLocaleString('pt-BR', {minimumFractionDigits:2});
+      cardDesc.style.display = '';
+    } else {
+      cardDesc.style.display = 'none';
+    }
+
     // ── Calcular itens pendentes do kit ───────────────────────────────────────
     const cardPend  = document.getElementById('cardKitPendente');
     const listaPend = document.getElementById('listaKitPendente');
@@ -1634,7 +1683,7 @@ async function carregarHistoricoColab(colabId) {
       tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma movimentação registrada</td></tr>';
       return;
     }
-    const motivoLabel = { admissao:'Admissão', troca_programada:'Troca programada', troca_antecipada:'Troca antecipada', demissao:'Desligamento', ajuste:'Ajuste', devolucao:'Devolução' };
+    const motivoLabel = { admissao:'Admissão', extra_desconto_folha:'🛒 Extra (desc. folha)', troca_programada:'Troca programada', troca_antecipada:'Troca antecipada', demissao:'Desligamento', ajuste:'Ajuste', devolucao:'Devolução' };
     const condicaoLabel = { reutilizavel:'✅ Reutilizável', descartado:'🗑 Descartado' };
     tbody.innerHTML = movs.map(m => {
       const isDev = m.tipo === 'devolucao';
@@ -1763,15 +1812,18 @@ function renderKitEntrega() {
   const selectorDiv = document.getElementById('kitCargoSelector');
   const selCargo    = document.getElementById('selKitCargo');
 
+  // preenche label do cargo no banner laranja
+  const labelEl = document.getElementById('kitCargoColabLabel');
+  if (labelEl) labelEl.textContent = cargoColab || 'não informado';
+
   if (matchExato) {
     _kitCargoSelecionado = cargoColab;
     selectorDiv.style.display = 'none';
   } else if (cargosComKit.length) {
-    // mostra selector para escolher o kit manualmente
     selectorDiv.style.display = '';
     selCargo.innerHTML = '<option value="">Selecione o kit…</option>' +
       cargosComKit.map(c => `<option value="${c}">${c}</option>`).join('');
-    // tenta pré-selecionar por similaridade (ignora maiúsculas/minúsculas)
+    // pré-seleciona por similaridade
     const similar = cargosComKit.find(c => c.toLowerCase().replace(/[^a-z]/g,'').includes(
       cargoColab.toLowerCase().replace(/[^a-z]/g,'').slice(0,5)
     ));
@@ -1847,6 +1899,13 @@ function removerItemKitEntrega(idx) {
   if (row) row.remove();
 }
 
+function onMotivoChange() {
+  const motivo = document.getElementById('eMotivo').value;
+  const isExtra = motivo === 'extra_desconto_folha';
+  document.getElementById('campoValorExtra').style.display = isExtra ? '' : 'none';
+  if (isExtra) mostrarCustoMedioEntrega(); // preenche hint de custo
+}
+
 function atualizarTamanhosEntrega() {
   const sel  = document.getElementById('eItem');
   const opt  = sel.options[sel.selectedIndex];
@@ -1880,13 +1939,20 @@ function mostrarCustoMedioEntrega() {
   const tamanho = document.getElementById('eTamanho').value;
   const almoxId = document.getElementById('eAlmox').value;
   const badge   = document.getElementById('custoMedioBadge');
+  const hint    = document.getElementById('custoMedioExtraHint');
   if (!itemId || !tamanho) { badge.style.display = 'none'; return; }
   const reg = ESTOQUE.find(e => e.item_id == itemId && e.tamanho === tamanho && (!almoxId || e.almoxarifado_id == almoxId));
   if (reg && reg.custo_medio) {
-    badge.textContent = `Custo médio: R$ ${reg.custo_medio.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+    const fmt = reg.custo_medio.toLocaleString('pt-BR', {minimumFractionDigits:2});
+    badge.textContent = `Custo médio: R$ ${fmt}`;
     badge.style.display = '';
+    // pré-preenche valor extra e mostra hint
+    const valEl = document.getElementById('eValorExtra');
+    if (valEl && !valEl.value) valEl.value = reg.custo_medio.toFixed(2);
+    if (hint) hint.textContent = `Sugerido pelo custo médio: R$ ${fmt}`;
   } else {
     badge.style.display = 'none';
+    if (hint) hint.textContent = '';
   }
 }
 
@@ -1983,6 +2049,16 @@ async function salvarEntrega() {
   if (!almoxId) { toast('Selecione o almoxarifado.'); return; }
 
   const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+
+  // para extra com desconto em folha, embutimos o valor no campo obs com prefixo parseável
+  let obsFinal = obs || null;
+  if (motivo === 'extra_desconto_folha') {
+    const valorExtra = parseFloat(document.getElementById('eValorExtra')?.value) || 0;
+    if (!valorExtra) { toast('Informe o valor a descontar em folha.'); return; }
+    const valorStr = valorExtra.toFixed(2);
+    obsFinal = `[desconto:${valorStr}]${obs ? ' ' + obs : ''}`;
+  }
+
   const payload = {
     colaborador_id:    _colabAtual.id,
     item_id:           itemId,
@@ -1995,7 +2071,7 @@ async function salvarEntrega() {
     data_movimentacao: data || new Date().toISOString().split('T')[0],
     confirmado:        true,
     registrado_por:    perfil.nome || 'RH',
-    obs:               obs || null,
+    obs:               obsFinal,
   };
 
   try {
