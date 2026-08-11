@@ -659,6 +659,28 @@
   </div>
 </div>
 
+<!-- ═══ Modal: Renomear Kit ═══ -->
+<div class="modal-overlay" id="modalRenomearKit">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-hdr">
+      <span class="modal-title">Renomear kit</span>
+      <button class="modal-close" onclick="fecharRenomearKit()">×</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <label class="form-label">Nome atual</label>
+      <div style="font-size:13px;color:var(--text-sec);margin-bottom:14px;" id="renomearKitNomeAtual"></div>
+      <label class="form-label">Novo nome <span class="req">*</span></label>
+      <input class="form-input" id="renomearKitInput" type="text" placeholder="Nome do cargo/kit…"
+        onkeydown="if(event.key==='Enter') salvarRenomearKit()">
+      <div id="renomearKitErro" style="display:none;color:var(--red);font-size:12px;margin-top:6px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharRenomearKit()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarRenomearKit()">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Modal: Item ═══ -->
 <div class="modal-overlay" id="modalItem">
   <div class="modal wide">
@@ -2802,7 +2824,11 @@ function renderListaCargosKit() {
           const lbl = g==='feminino'?'♀ Feminino':g==='masculino'?'♂ Masculino':'👥 Unissex';
           return `<span class="cargo-kit-gen-badge ${cls}">${lbl}</span>`;
         }).join('')}
-        <button class="btn btn-danger btn-sm" style="margin-left:8px;" onclick="event.stopPropagation();confirmarExcluirKit('${c.replace(/'/g,"\\'")}')">
+        <button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="event.stopPropagation();abrirRenomearKit('${c.replace(/'/g,"\\'")}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Renomear
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();confirmarExcluirKit('${c.replace(/'/g,"\\'")}')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
           Excluir kit
         </button>
@@ -2815,40 +2841,39 @@ function renderListaCargosKit() {
 }
 
 function renderCargoBody(cargo, idx) {
-  const genero     = _cargoGenero[cargo] || 'unissex';
-  const itensDoKit = KITS.filter(k => k.cargo === cargo && (k.genero||'unissex') === genero);
-  const itensAtivos = ITENS.filter(i => i.ativo);
-  const idsNoKit   = new Set(itensDoKit.map(k => k.item_id));
-  const disponiveis = itensAtivos.filter(i => !idsNoKit.has(i.id));
-  const cargoEsc   = cargo.replace(/'/g,"\\'");
+  // mostra TODOS os itens do cargo (todos os gêneros) com badge por item
+  const todosItensKit = KITS.filter(k => k.cargo === cargo);
+  const itensAtivos   = ITENS.filter(i => i.ativo);
+  const idsNoKit      = new Set(todosItensKit.map(k => k.item_id));
+  const disponiveis   = itensAtivos.filter(i => !idsNoKit.has(i.id));
+  const cargoEsc      = cargo.replace(/'/g,"\\'");
+  const generoAdd     = _cargoGenero[cargo] || 'unissex';
 
-  const pills = ['unissex','feminino','masculino'].map(g =>
-    `<button class="genero-pill${genero===g?' active':''}" onclick="setCargoGenero('${cargoEsc}',${idx},'${g}')">
+  const linhas = todosItensKit.length
+    ? todosItensKit.map(k => cargoKitItemRow(k, cargoEsc)).join('')
+    : `<p style="font-size:13px;color:var(--text-ter);padding:8px 0 16px;">Nenhum item cadastrado. Adicione abaixo.</p>`;
+
+  const pillsAdd = ['unissex','feminino','masculino'].map(g =>
+    `<button class="genero-pill${generoAdd===g?' active':''}" onclick="setCargoGenero('${cargoEsc}',${idx},'${g}')">
       ${g==='unissex'?'👥 Unissex':g==='feminino'?'♀ Feminino':'♂ Masculino'}
     </button>`
   ).join('');
 
-  const linhas = itensDoKit.length
-    ? itensDoKit.map(k => cargoKitItemRow(k, cargoEsc)).join('')
-    : `<p style="font-size:13px;color:var(--text-ter);padding:8px 0 16px;">Nenhum item para este gênero. Adicione abaixo.</p>`;
-
   return `
-    <div class="cargo-kit-genero-row">
-      ${pills}
-      <span class="cargo-kit-genero-hint">Itens unissex aparecem para todos. Femininos/masculinos apenas para o gênero correspondente.</span>
-    </div>
     <div class="cargo-kit-items">${linhas}</div>
     <div class="divider"></div>
+    <div style="margin-bottom:8px;">
+      <div class="form-label" style="margin-bottom:6px;">Adicionar item ao kit — gênero:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${pillsAdd}</div>
+    </div>
     <div class="cargo-kit-add">
       <div class="form-field" style="flex:1;min-width:200px;">
-        <label class="form-label">Adicionar item ao kit</label>
         <select class="form-select" id="selNI-${idx}">
           <option value="">Selecione um item…</option>
           ${disponiveis.map(i => `<option value="${i.id}">${_labelItem(i)}</option>`).join('')}
         </select>
       </div>
       <div class="form-field">
-        <label class="form-label">Qtd.</label>
         <input class="form-input" type="number" id="qtdNI-${idx}" value="1" min="1" style="width:72px;">
       </div>
       <button class="btn btn-blue" onclick="adicionarItemKit('${cargoEsc}',${idx})">Adicionar</button>
@@ -2861,10 +2886,16 @@ function cargoKitItemRow(k, cargoEsc) {
   const tipoCls   = item.tipo === 'epi' ? 'badge-epi' : 'badge-uniforme';
   const extras    = [item.variante, item.logo ? `🪡 ${item.logo}` : ''].filter(Boolean).join(' · ');
   const nomeEsc   = (item.nome||'').replace(/'/g,"\\'");
+  const gen       = k.genero || 'unissex';
+  const genCls    = gen === 'feminino' ? 'cargo-kit-gen-f' : gen === 'masculino' ? 'cargo-kit-gen-m' : 'cargo-kit-gen-u';
+  const genLbl    = gen === 'feminino' ? '♀ Feminino' : gen === 'masculino' ? '♂ Masculino' : '👥 Unissex';
   return `<div class="cargo-kit-item-row">
     <div style="flex:1;">
-      <span class="cargo-kit-item-nome">${item.nome||'—'}</span>
-      ${extras ? `<span class="cargo-kit-item-extras">${extras}</span>` : ''}
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="cargo-kit-item-nome">${item.nome||'—'}</span>
+        ${extras ? `<span class="cargo-kit-item-extras">${extras}</span>` : ''}
+        <span class="cargo-kit-gen-badge ${genCls}" style="font-size:11px;">${genLbl}</span>
+      </div>
     </div>
     <span class="badge ${tipoCls}" style="font-size:11px;">${tipoLabel}</span>
     <input class="cargo-kit-item-qty" type="number" value="${k.quantidade}" min="1"
@@ -2936,6 +2967,51 @@ async function removerItemKit(kitId, cargo) {
     renderListaCargosKit();
     toast('✓ Item removido do kit');
   } catch (e) { toast('Erro: ' + e.message); }
+}
+
+// ─── Renomear kit ────────────────────────────────────────────────────────────
+function abrirRenomearKit(cargo) {
+  document.getElementById('renomearKitNomeAtual').textContent = cargo;
+  document.getElementById('renomearKitInput').value = cargo;
+  document.getElementById('renomearKitErro').style.display = 'none';
+  document.getElementById('modalRenomearKit').classList.add('open');
+  setTimeout(() => {
+    const inp = document.getElementById('renomearKitInput');
+    inp.focus(); inp.select();
+  }, 100);
+}
+
+function fecharRenomearKit() {
+  document.getElementById('modalRenomearKit').classList.remove('open');
+}
+
+async function salvarRenomearKit() {
+  const nomeAtual = document.getElementById('renomearKitNomeAtual').textContent;
+  const novoNome  = document.getElementById('renomearKitInput').value.trim();
+  const erroEl    = document.getElementById('renomearKitErro');
+
+  if (!novoNome) { erroEl.textContent = 'Informe o novo nome.'; erroEl.style.display = ''; return; }
+  if (novoNome === nomeAtual) { fecharRenomearKit(); return; }
+  if (CARGOS.includes(novoNome)) { erroEl.textContent = 'Já existe um kit com esse nome.'; erroEl.style.display = ''; return; }
+
+  try {
+    // atualiza todos os registros do cargo no banco
+    await sbPatch('unif_kits', `cargo=eq.${encodeURIComponent(nomeAtual)}`, { cargo: novoNome });
+
+    // atualiza arrays em memória
+    KITS.forEach(k => { if (k.cargo === nomeAtual) k.cargo = novoNome; });
+    const idx = CARGOS.indexOf(nomeAtual);
+    if (idx !== -1) CARGOS[idx] = novoNome;
+    if (_cargoGenero[nomeAtual]) { _cargoGenero[novoNome] = _cargoGenero[nomeAtual]; delete _cargoGenero[nomeAtual]; }
+    if (_cargoAberto[nomeAtual]) { _cargoAberto[novoNome] = _cargoAberto[nomeAtual]; delete _cargoAberto[nomeAtual]; }
+
+    fecharRenomearKit();
+    renderListaCargosKit();
+    toast('✓ Kit renomeado');
+  } catch(e) {
+    erroEl.textContent = 'Erro ao salvar: ' + e.message;
+    erroEl.style.display = '';
+  }
 }
 
 // ─── Excluir kit inteiro ──────────────────────────────────────────────────────
