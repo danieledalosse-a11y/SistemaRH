@@ -233,6 +233,7 @@
   <button class="mod-tab" id="tab-estoque"       onclick="setTab('estoque')">Estoque</button>
   <button class="mod-tab" id="tab-catalogo"      onclick="setTab('catalogo')">Catálogo</button>
   <button class="mod-tab" id="tab-solicitacoes"  onclick="setTab('solicitacoes')">Solicitações</button>
+  <button class="mod-tab" id="tab-configuracoes" onclick="setTab('configuracoes')">Configurações</button>
 </div>
 
 <!-- ═══ Seções ═══ -->
@@ -639,7 +640,103 @@
     </div>
   </div>
 
+  <!-- CONFIGURAÇÕES -->
+  <div id="sec-configuracoes" style="display:none;">
+
+    <!-- Almoxarifados -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-hdr" style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="card-title">Almoxarifados</div>
+          <div class="card-sub" style="margin:0;">Locais de armazenamento de uniformes e EPIs</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalAlmox()">+ Novo almoxarifado</button>
+      </div>
+      <div id="listaAlmoxConfig" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- Fornecedores -->
+    <div class="card">
+      <div class="card-hdr" style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="card-title">Fornecedores</div>
+          <div class="card-sub" style="margin:0;">Empresas fornecedoras de uniformes e EPIs</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalFornecedor()">+ Novo fornecedor</button>
+      </div>
+      <div id="listaFornecedoresConfig" style="margin-top:8px;"></div>
+    </div>
+
+  </div><!-- /sec-configuracoes -->
+
 </div><!-- /container -->
+
+<!-- ═══ Modal: Almoxarifado ═══ -->
+<div class="modal-overlay" id="modalAlmox">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-hdr">
+      <span class="modal-title" id="modalAlmoxTitulo">Novo almoxarifado</span>
+      <button class="modal-close" onclick="fecharModalAlmox()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field">
+        <label class="form-label">Nome <span class="req">*</span></label>
+        <input class="form-input" type="text" id="almoxNome" placeholder="ex: Almoxarifado Matriz">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" id="almoxTipo">
+          <option value="loja">Loja</option>
+          <option value="cd">Centro de distribuição</option>
+          <option value="escritorio">Escritório</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Observação</label>
+        <input class="form-input" type="text" id="almoxObs" placeholder="opcional">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModalAlmox()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAlmox()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: Fornecedor ═══ -->
+<div class="modal-overlay" id="modalFornecedor">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-hdr">
+      <span class="modal-title" id="modalFornecedorTitulo">Novo fornecedor</span>
+      <button class="modal-close" onclick="fecharModalFornecedor()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-field" style="margin:0;grid-column:1/-1;">
+          <label class="form-label">Nome <span class="req">*</span></label>
+          <input class="form-input" type="text" id="fornNome" placeholder="ex: Vista Uniformes">
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">CNPJ</label>
+          <input class="form-input" type="text" id="fornCNPJ" placeholder="opcional">
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Contato</label>
+          <input class="form-input" type="text" id="fornContato" placeholder="telefone ou e-mail">
+        </div>
+        <div class="form-field" style="margin:0;grid-column:1/-1;">
+          <label class="form-label">Observação</label>
+          <input class="form-input" type="text" id="fornObs" placeholder="opcional">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModalFornecedor()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarFornecedor()">Salvar</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ Modal: Confirmação genérica ═══ -->
 <div class="modal-overlay" id="modalConfirm">
@@ -855,7 +952,14 @@
         </div>
         <div class="form-field" style="margin:0;">
           <label class="form-label">Fornecedor <span class="req">*</span></label>
-          <input class="form-input" type="text" id="entFornecedor" placeholder="ex: VISTA, DEMORGAN…">
+          <div style="display:flex;gap:6px;">
+            <select class="form-select" id="entFornecedor" style="flex:1;">
+              <option value="">Selecione…</option>
+            </select>
+            <button class="btn btn-outline btn-sm" title="Cadastrar novo fornecedor"
+              onclick="abrirModalFornecedorInline()" type="button"
+              style="padding:0 10px;font-size:18px;line-height:1;flex-shrink:0;">+</button>
+          </div>
         </div>
         <div class="form-field" style="margin:0;">
           <label class="form-label">Tamanho <span class="req">*</span></label>
@@ -879,9 +983,14 @@
           <label class="form-label">Nota fiscal</label>
           <input class="form-input" type="text" id="entNF" placeholder="opcional">
         </div>
-        <div class="form-field" style="margin:0;display:flex;align-items:center;gap:10px;padding-top:20px;">
-          <input type="checkbox" id="entLogo" style="width:15px;height:15px;accent-color:var(--blue);">
-          <label class="form-label" style="margin:0;cursor:pointer;" for="entLogo">Logo bordada inclusa</label>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Logo bordada</label>
+          <select class="form-select" id="entLogoTipo">
+            <option value="sem_logo">Sem logo</option>
+            <option value="grupo_revest">Logo Grupo Revest</option>
+            <option value="revest_acabamentos">Logo Revest Acabamentos</option>
+            <option value="outra">Outra (descrever na observação)</option>
+          </select>
         </div>
         <div class="form-field" style="margin:0;">
           <label class="form-label">Observação</label>
@@ -1127,16 +1236,19 @@ function toast(msg) {
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 let ITENS        = [];
-let KITS         = [];
-let CARGOS       = [];
+let KITS          = [];
+let CARGOS        = [];
 let ALMOXARIFADOS = [];
+let FORNECEDORES  = [];
+let _almoxEditId     = null;
+let _fornecEditId    = null;
 let _editItemId      = null;
 let _colabAtual      = null;
 let _devCondicao     = 'reutilizavel';
 let _devItensEmPoder = []; // [{item_id, itemNome, tamanho, almoxarifado_id, qtdEmPoder}]
 
 // ─── Navegação principal ──────────────────────────────────────────────────────
-const TABS = ['painel','colaboradores','estoque','catalogo','solicitacoes'];
+const TABS = ['painel','colaboradores','estoque','catalogo','solicitacoes','configuracoes'];
 function setTab(tab) {
   const restritas = ['painel','catalogo','solicitacoes'];
   if (window._UNIF_ROLE === 'logistica' && restritas.includes(tab)) return;
@@ -1147,6 +1259,7 @@ function setTab(tab) {
   if (tab === 'painel') carregarPainel();
   if (tab === 'catalogo') renderItens();
   if (tab === 'estoque') carregarEstoque();
+  if (tab === 'configuracoes') carregarConfiguracoes();
   if (tab === 'colaboradores') {
     document.getElementById('buscaColab').value = '';
     document.getElementById('listaColabs').innerHTML = '';
@@ -1476,13 +1589,17 @@ function abrirModalEntrada() {
   selAlmox.innerHTML = '<option value="">Selecione…</option>' +
     ALMOXARIFADOS.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
 
-  document.getElementById('entData').value    = new Date().toISOString().split('T')[0];
-  document.getElementById('entFornecedor').value = '';
-  document.getElementById('entQtd').value     = '1';
-  document.getElementById('entValor').value   = '';
-  document.getElementById('entNF').value      = '';
-  document.getElementById('entObs').value     = '';
-  document.getElementById('entLogo').checked  = false;
+  // popula fornecedores
+  const selForn = document.getElementById('entFornecedor');
+  selForn.innerHTML = '<option value="">Selecione…</option>' +
+    FORNECEDORES.filter(f => f.ativo).map(f => `<option value="${f.nome}">${f.nome}</option>`).join('');
+
+  document.getElementById('entData').value       = new Date().toISOString().split('T')[0];
+  document.getElementById('entQtd').value        = '1';
+  document.getElementById('entValor').value      = '';
+  document.getElementById('entNF').value         = '';
+  document.getElementById('entObs').value        = '';
+  document.getElementById('entLogoTipo').value   = 'sem_logo';
   document.getElementById('entTamanho').innerHTML = '<option value="">Selecione o item primeiro</option>';
 
   document.getElementById('modalEntradaLote').classList.add('open');
@@ -1513,14 +1630,15 @@ function atualizarTamanhosEntrada() {
 async function salvarEntradaLote() {
   const itemId  = document.getElementById('entItem').value;
   const almoxId = document.getElementById('entAlmox').value;
-  const fornec  = document.getElementById('entFornecedor').value.trim().toUpperCase();
-  const tamanho = document.getElementById('entTamanho').value;
-  const qtd     = parseInt(document.getElementById('entQtd').value) || 0;
-  const valor   = parseFloat(document.getElementById('entValor').value) || 0;
-  const data    = document.getElementById('entData').value;
-  const nf      = document.getElementById('entNF').value.trim();
-  const obs     = document.getElementById('entObs').value.trim();
-  const logo    = document.getElementById('entLogo').checked;
+  const fornec    = document.getElementById('entFornecedor').value;
+  const tamanho   = document.getElementById('entTamanho').value;
+  const qtd       = parseInt(document.getElementById('entQtd').value) || 0;
+  const valor     = parseFloat(document.getElementById('entValor').value) || 0;
+  const data      = document.getElementById('entData').value;
+  const nf        = document.getElementById('entNF').value.trim();
+  const obs       = document.getElementById('entObs').value.trim();
+  const logoTipo  = document.getElementById('entLogoTipo').value;
+  const logo      = logoTipo !== 'sem_logo';
 
   if (!itemId)  { toast('Selecione o item.');         return; }
   if (!almoxId) { toast('Selecione o almoxarifado.'); return; }
@@ -1536,7 +1654,7 @@ async function salvarEntradaLote() {
     await sbPost('unif_entradas', {
       item_id: itemId, almoxarifado_id: almoxId, fornecedor: fornec,
       tamanho, quantidade: qtd, valor_unitario: valor,
-      logo_bordada: logo, data_entrada: data,
+      logo_bordada: logo, logo_tipo: logoTipo, data_entrada: data,
       nf: nf || null, obs: obs || null,
       status: 'ativo', registrado_por: perfil.nome || 'RH',
     });
@@ -1563,6 +1681,161 @@ async function salvarEntradaLote() {
     fecharModalEntrada();
     carregarEstoque();
   } catch(e) { toast('Erro: ' + e.message); }
+}
+
+// ─── Configurações ────────────────────────────────────────────────────────────
+async function carregarConfiguracoes() {
+  try {
+    [ALMOXARIFADOS, FORNECEDORES] = await Promise.all([
+      sbGet('unif_almoxarifados', 'select=*&order=nome'),
+      sbGet('unif_fornecedores',  'select=*&order=nome'),
+    ]);
+  } catch(e) { /* ignora */ }
+  renderAlmoxConfig();
+  renderFornecedoresConfig();
+}
+
+function renderAlmoxConfig() {
+  const el = document.getElementById('listaAlmoxConfig');
+  if (!ALMOXARIFADOS.length) {
+    el.innerHTML = '<p style="color:var(--text-ter);font-size:13px;padding:12px 0;">Nenhum almoxarifado cadastrado.</p>';
+    return;
+  }
+  const TIPO_LABEL = { loja:'Loja', cd:'Centro de distribuição', escritorio:'Escritório', outro:'Outro' };
+  el.innerHTML = ALMOXARIFADOS.map(a => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-light);">
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;">${a.nome}</div>
+        <div style="font-size:12px;color:var(--text-sec);">${TIPO_LABEL[a.tipo] || a.tipo || ''}${a.obs ? ' · ' + a.obs : ''}</div>
+      </div>
+      <span style="font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;
+        background:${a.ativo ? 'var(--green-bg)' : 'var(--bg)'};
+        color:${a.ativo ? 'var(--green)' : 'var(--text-ter)'};">
+        ${a.ativo ? 'Ativo' : 'Inativo'}
+      </span>
+      <button class="btn btn-outline btn-sm" onclick="editarAlmox(${a.id})">Editar</button>
+    </div>`).join('');
+}
+
+function renderFornecedoresConfig() {
+  const el = document.getElementById('listaFornecedoresConfig');
+  if (!FORNECEDORES.length) {
+    el.innerHTML = '<p style="color:var(--text-ter);font-size:13px;padding:12px 0;">Nenhum fornecedor cadastrado.</p>';
+    return;
+  }
+  el.innerHTML = FORNECEDORES.map(f => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-light);">
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;">${f.nome}</div>
+        <div style="font-size:12px;color:var(--text-sec);">
+          ${f.cnpj ? 'CNPJ: ' + f.cnpj : ''}${f.cnpj && f.contato ? ' · ' : ''}${f.contato || ''}${f.obs ? ' · ' + f.obs : ''}
+        </div>
+      </div>
+      <span style="font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;
+        background:${f.ativo ? 'var(--green-bg)' : 'var(--bg)'};
+        color:${f.ativo ? 'var(--green)' : 'var(--text-ter)'};">
+        ${f.ativo ? 'Ativo' : 'Inativo'}
+      </span>
+      <button class="btn btn-outline btn-sm" onclick="editarFornecedor(${f.id})">Editar</button>
+    </div>`).join('');
+}
+
+// ── Almoxarifado modal ──
+function abrirModalAlmox() {
+  _almoxEditId = null;
+  document.getElementById('modalAlmoxTitulo').textContent = 'Novo almoxarifado';
+  document.getElementById('almoxNome').value = '';
+  document.getElementById('almoxTipo').value = 'loja';
+  document.getElementById('almoxObs').value  = '';
+  document.getElementById('modalAlmox').classList.add('open');
+}
+function editarAlmox(id) {
+  const a = ALMOXARIFADOS.find(x => x.id === id);
+  if (!a) return;
+  _almoxEditId = id;
+  document.getElementById('modalAlmoxTitulo').textContent = 'Editar almoxarifado';
+  document.getElementById('almoxNome').value = a.nome;
+  document.getElementById('almoxTipo').value = a.tipo || 'outro';
+  document.getElementById('almoxObs').value  = a.obs || '';
+  document.getElementById('modalAlmox').classList.add('open');
+}
+function fecharModalAlmox() { document.getElementById('modalAlmox').classList.remove('open'); }
+async function salvarAlmox() {
+  const nome = document.getElementById('almoxNome').value.trim();
+  if (!nome) { toast('Informe o nome do almoxarifado.'); return; }
+  const payload = { nome, tipo: document.getElementById('almoxTipo').value, obs: document.getElementById('almoxObs').value.trim() || null };
+  try {
+    if (_almoxEditId) {
+      await sbPatch('unif_almoxarifados', `id=eq.${_almoxEditId}`, payload);
+    } else {
+      await sbPost('unif_almoxarifados', payload);
+    }
+    toast('✓ Almoxarifado salvo');
+    fecharModalAlmox();
+    ALMOXARIFADOS = await sbGet('unif_almoxarifados', 'select=*&order=nome');
+    renderAlmoxConfig();
+  } catch(e) { toast('Erro: ' + e.message); }
+}
+
+// ── Fornecedor modal ──
+function abrirModalFornecedor() {
+  _fornecEditId = null;
+  document.getElementById('modalFornecedorTitulo').textContent = 'Novo fornecedor';
+  document.getElementById('fornNome').value    = '';
+  document.getElementById('fornCNPJ').value    = '';
+  document.getElementById('fornContato').value = '';
+  document.getElementById('fornObs').value     = '';
+  document.getElementById('modalFornecedor').classList.add('open');
+}
+function editarFornecedor(id) {
+  const f = FORNECEDORES.find(x => x.id === id);
+  if (!f) return;
+  _fornecEditId = id;
+  document.getElementById('modalFornecedorTitulo').textContent = 'Editar fornecedor';
+  document.getElementById('fornNome').value    = f.nome;
+  document.getElementById('fornCNPJ').value    = f.cnpj    || '';
+  document.getElementById('fornContato').value = f.contato || '';
+  document.getElementById('fornObs').value     = f.obs     || '';
+  document.getElementById('modalFornecedor').classList.add('open');
+}
+function fecharModalFornecedor() { document.getElementById('modalFornecedor').classList.remove('open'); }
+async function salvarFornecedor() {
+  const nome = document.getElementById('fornNome').value.trim();
+  if (!nome) { toast('Informe o nome do fornecedor.'); return; }
+  const payload = {
+    nome, cnpj: document.getElementById('fornCNPJ').value.trim() || null,
+    contato: document.getElementById('fornContato').value.trim() || null,
+    obs: document.getElementById('fornObs').value.trim() || null,
+  };
+  try {
+    if (_fornecEditId) {
+      await sbPatch('unif_fornecedores', `id=eq.${_fornecEditId}`, payload);
+    } else {
+      await sbPost('unif_fornecedores', { ...payload, ativo: true });
+    }
+    toast('✓ Fornecedor salvo');
+    fecharModalFornecedor();
+    FORNECEDORES = await sbGet('unif_fornecedores', 'select=*&order=nome');
+    renderFornecedoresConfig();
+    // atualiza select no modal de entrada se estiver aberto
+    const selForn = document.getElementById('entFornecedor');
+    if (selForn) {
+      const val = selForn.value;
+      selForn.innerHTML = '<option value="">Selecione…</option>' +
+        FORNECEDORES.filter(f => f.ativo).map(f => `<option value="${f.nome}">${f.nome}</option>`).join('');
+      selForn.value = val || nome; // seleciona o recém-criado
+    }
+  } catch(e) { toast('Erro: ' + e.message); }
+}
+// abre modal de fornecedor diretamente do modal de entrada (inline)
+function abrirModalFornecedorInline() {
+  _fornecEditId = null;
+  document.getElementById('modalFornecedorTitulo').textContent = 'Novo fornecedor';
+  document.getElementById('fornNome').value    = '';
+  document.getElementById('fornCNPJ').value    = '';
+  document.getElementById('fornContato').value = '';
+  document.getElementById('fornObs').value     = '';
+  document.getElementById('modalFornecedor').classList.add('open');
 }
 
 // ─── Colaboradores: busca ─────────────────────────────────────────────────────
@@ -2507,15 +2780,17 @@ function setSecTab(sub) {
 // ─── Carregamento inicial ─────────────────────────────────────────────────────
 async function init() {
   try {
-    const [itens, kits, almoxs] = await Promise.all([
-      sbGet('unif_catalogo',    'select=*&order=nome'),
-      sbGet('unif_kits',        'select=*,item:unif_catalogo(id,nome,tipo)&ativo=eq.true'),
+    const [itens, kits, almoxs, forns] = await Promise.all([
+      sbGet('unif_catalogo',     'select=*&order=nome'),
+      sbGet('unif_kits',         'select=*,item:unif_catalogo(id,nome,tipo)&ativo=eq.true'),
       sbGet('unif_almoxarifados','select=*&ativo=eq.true&order=nome'),
+      sbGet('unif_fornecedores', 'select=*&ativo=eq.true&order=nome').catch(() => []),
     ]);
     ITENS         = itens;
     KITS          = kits;
     CARGOS        = [...new Set(kits.map(k => k.cargo))].sort();
     ALMOXARIFADOS = almoxs;
+    FORNECEDORES  = forns;
     setTab('painel');
     renderItens();
     renderListaCargosKit();
