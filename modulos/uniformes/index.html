@@ -3445,9 +3445,17 @@ async function adicionarItemKit(cargo, idx) {
   if (!itemId) { toast('Selecione um item.'); return; }
   const genero = _cargoGenero[cargo] || 'unissex';
   try {
-    const [novo] = await sbPost('unif_kits', { cargo, item_id: itemId, quantidade: qtd, genero });
+    // verifica se já existe linha inativa para reativar (evita violar unique constraint)
+    const existente = await sbGet('unif_kits', `cargo=eq.${encodeURIComponent(cargo)}&item_id=eq.${itemId}&ativo=eq.false&limit=1`);
+    let novo;
+    if (existente.length) {
+      const [atualizado] = await sbPatch('unif_kits', `id=eq.${existente[0].id}`, { quantidade: qtd, genero, ativo: true });
+      novo = atualizado || { ...existente[0], quantidade: qtd, genero, ativo: true };
+    } else {
+      [novo] = await sbPost('unif_kits', { cargo, item_id: itemId, quantidade: qtd, genero });
+    }
     novo.item = ITENS.find(i => i.id === itemId);
-    KITS.push(novo);
+    if (!KITS.find(k => k.id === novo.id)) KITS.push(novo);
     if (!CARGOS.includes(cargo)) { CARGOS.push(cargo); CARGOS.sort(); }
     _cargoAberto[cargo] = true;
     renderListaCargosKit();
