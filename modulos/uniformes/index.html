@@ -3838,31 +3838,71 @@ function _comprovanteRemover(tipo, idx) {
   _renderComprovanteItens();
 }
 
-function imprimirComprovante(tipo) {
+async function imprimirComprovante(tipo) {
   const data    = document.getElementById('comprovanteData').value || new Date().toISOString().split('T')[0];
   const obs     = document.getElementById('comprovanteObs').value.trim();
   const dataFmt = new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
   const c       = _colabAtual;
-  const empresa = c.empresa || 'Revest do Brasil Acabamentos Ltda';
+  const nomeEmpSimples = c.empresa || '';
+
+  // busca razão social + CNPJ da empresa de registro no banco
+  let razaoSocial = nomeEmpSimples || 'Revest do Brasil Acabamentos Ltda';
+  let cnpjEmpresa = '';
+  try {
+    const empRows = await sbGet('param_empresa', `select=razao_social,cnpj,nome_simplificado&ativo=eq.true`);
+    const match = empRows.find(r =>
+      (r.nome_simplificado || '').toLowerCase() === nomeEmpSimples.toLowerCase() ||
+      (r.razao_social      || '').toLowerCase().includes(nomeEmpSimples.toLowerCase())
+    );
+    if (match) {
+      razaoSocial = match.razao_social || razaoSocial;
+      cnpjEmpresa = match.cnpj ? match.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : '';
+    }
+  } catch(_) {}
+
+  const cnpjLinha = cnpjEmpresa ? ` · CNPJ ${cnpjEmpresa}` : '';
+
+  // SVG logo Grupo REVEST
+  const logoSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="46" viewBox="0 0 160 46">
+    <text x="2" y="18" font-family="Georgia,serif" font-style="italic" font-size="14" font-weight="400" fill="#1A1A1A">Grupo</text>
+    <text x="2" y="42" font-family="Arial Black,Arial,sans-serif" font-size="26" font-weight="900" fill="#1A1A1A" letter-spacing="-0.5">REVEST</text>
+    <text x="138" y="42" font-family="Arial,sans-serif" font-size="10" fill="#1A1A1A">®</text>
+    <rect x="62" y="6" width="34" height="7" rx="1" fill="#F5D800"/>
+    <rect x="98" y="6" width="22" height="7" rx="1" fill="#2D2D2D"/>
+  </svg>`;
 
   const baseCSS = `
     * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#111; padding:32px 40px; }
-    .hdr { display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:14px; border-bottom:2px solid #111; margin-bottom:20px; }
-    .empresa { font-size:16px; font-weight:700; }
-    .titulo { font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:16px; }
-    .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px 24px; background:#f5f5f5; padding:12px 16px; border-radius:6px; margin-bottom:20px; }
-    .lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#666; }
-    .val { font-size:13px; font-weight:600; margin-top:2px; }
-    table { width:100%; border-collapse:collapse; margin-bottom:20px; }
-    thead th { background:#111; color:#fff; padding:8px 10px; font-size:11px; text-align:left; text-transform:uppercase; letter-spacing:.04em; }
-    tbody td { padding:9px 10px; border-bottom:1px solid #e5e5e5; font-size:13px; vertical-align:middle; }
-    .termo { font-size:12px; color:#333; border:1px solid #ccc; border-radius:4px; padding:12px 14px; margin-bottom:20px; line-height:1.6; }
-    .assinaturas { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:32px; }
-    .ass-linha { border-bottom:1.5px solid #111; margin-bottom:6px; height:36px; }
-    .ass-lbl { font-size:11px; color:#555; }
-    .ass-nome { font-size:12px; margin-top:3px; }
-    @media print { body { padding:20px 28px; } }`;
+    body { font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#1A1A1A; padding:32px 44px; }
+    .hdr { display:flex; justify-content:space-between; align-items:center; padding-bottom:16px; border-bottom:3px solid #F5D800; margin-bottom:6px; }
+    .hdr-right { text-align:right; }
+    .hdr-empresa { font-size:11px; font-weight:700; color:#1A1A1A; text-transform:uppercase; letter-spacing:.04em; }
+    .hdr-cnpj { font-size:10px; color:#666; margin-top:2px; }
+    .hdr-data { font-size:11px; color:#666; margin-top:4px; }
+    .hdr-depto { display:flex; justify-content:flex-end; margin-bottom:20px; }
+    .hdr-depto span { font-size:10px; color:#888; font-style:italic; }
+    .titulo-wrap { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+    .titulo-bar { width:4px; height:22px; background:#F5D800; border-radius:2px; flex-shrink:0; }
+    .titulo { font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#1A1A1A; }
+    .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid #E0E0E0; border-radius:6px; overflow:hidden; margin-bottom:20px; }
+    .info-cell { padding:9px 14px; border-bottom:1px solid #E0E0E0; }
+    .info-cell:nth-last-child(-n+2) { border-bottom:none; }
+    .info-cell:nth-child(odd) { border-right:1px solid #E0E0E0; }
+    .lbl { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#888; }
+    .val { font-size:13px; font-weight:600; margin-top:3px; color:#1A1A1A; }
+    table { width:100%; border-collapse:collapse; margin-bottom:20px; border-radius:6px; overflow:hidden; border:1px solid #E0E0E0; }
+    thead th { background:#2D2D2D; color:#fff; padding:9px 12px; font-size:10.5px; text-align:left; text-transform:uppercase; letter-spacing:.05em; }
+    thead th:not(:first-child) { text-align:center; }
+    tbody td { padding:9px 12px; border-bottom:1px solid #EFEFEF; font-size:13px; vertical-align:middle; }
+    tbody td:not(:first-child) { text-align:center; }
+    tbody tr:last-child td { border-bottom:none; }
+    tbody tr:nth-child(even) { background:#FAFAFA; }
+    .termo { font-size:11.5px; color:#333; border:1px solid #E0E0E0; border-left:3px solid #F5D800; border-radius:4px; padding:13px 16px; margin-bottom:24px; line-height:1.75; background:#FAFAFA; }
+    .assinaturas { display:grid; grid-template-columns:1fr 1fr; gap:48px; margin-top:36px; }
+    .ass-linha { border-bottom:1.5px solid #1A1A1A; margin-bottom:6px; height:38px; }
+    .ass-lbl { font-size:10px; color:#666; }
+    .ass-nome { font-size:11px; font-weight:600; margin-top:3px; color:#1A1A1A; }
+    @media print { body { padding:20px 32px; } }`;
 
   let html = '';
 
@@ -3880,22 +3920,30 @@ function imprimirComprovante(tipo) {
 <title>Termo de Responsabilidade — ${c.nome}</title>
 <style>${baseCSS}</style></head><body>
 <div class="hdr">
-  <div><div class="empresa">${empresa}</div><div style="font-size:12px;color:#555;margin-top:3px;">Departamento de Recursos Humanos</div></div>
-  <div style="font-size:12px;color:#555;text-align:right;">${dataFmt}</div>
+  <div>${logoSVG}</div>
+  <div class="hdr-right">
+    <div class="hdr-empresa">${razaoSocial}</div>
+    <div class="hdr-cnpj">${cnpjEmpresa ? 'CNPJ: ' + cnpjEmpresa : ''}</div>
+    <div class="hdr-data">${dataFmt}</div>
+  </div>
 </div>
-<div class="titulo">Termo de Responsabilidade — Uniformes</div>
+<div class="hdr-depto"><span>Departamento de Recursos Humanos</span></div>
+<div class="titulo-wrap">
+  <div class="titulo-bar"></div>
+  <div class="titulo">Termo de Responsabilidade — Uniformes</div>
+</div>
 <div class="info-grid">
-  <div><div class="lbl">Colaborador</div><div class="val">${c.nome}</div></div>
-  <div><div class="lbl">Matrícula</div><div class="val">${c.matricula || '—'}</div></div>
-  <div><div class="lbl">Cargo</div><div class="val">${c.cargo || '—'}</div></div>
-  <div><div class="lbl">Empresa de registro</div><div class="val">${empresa}</div></div>
+  <div class="info-cell"><div class="lbl">Colaborador</div><div class="val">${c.nome}</div></div>
+  <div class="info-cell"><div class="lbl">Matrícula</div><div class="val">${c.matricula || '—'}</div></div>
+  <div class="info-cell"><div class="lbl">Cargo / Função</div><div class="val">${c.cargo || '—'}</div></div>
+  <div class="info-cell"><div class="lbl">Empresa de Registro</div><div class="val">${razaoSocial}</div></div>
 </div>
 <table>
   <thead><tr>
     <th>Item / Descrição</th>
-    <th style="text-align:center;width:70px;">Tamanho</th>
-    <th style="text-align:center;width:50px;">Qtd.</th>
-    <th style="text-align:center;width:100px;">Data entrega</th>
+    <th style="width:80px;">Tamanho</th>
+    <th style="width:55px;">Qtd.</th>
+    <th style="width:110px;">Data Entrega</th>
   </tr></thead>
   <tbody>${rows}</tbody>
 </table>
@@ -3916,6 +3964,7 @@ function imprimirComprovante(tipo) {
   <div>
     <div class="ass-linha"></div>
     <div class="ass-lbl">Responsável RH / Entregador(a)</div>
+    <div class="ass-nome">&nbsp;</div>
   </div>
 </div>
 <script>window.onload = () => window.print();<\/script>
@@ -3936,28 +3985,36 @@ function imprimirComprovante(tipo) {
     html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Ficha de EPI — ${c.nome}</title>
 <style>${baseCSS}
-  .nr6 { font-size:10px; color:#666; margin-bottom:16px; }
+  .nr6-badge { display:inline-block; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#666; border:1px solid #ddd; border-radius:3px; padding:2px 7px; margin-bottom:16px; }
 </style></head><body>
 <div class="hdr">
-  <div><div class="empresa">${empresa}</div><div style="font-size:12px;color:#555;margin-top:3px;">Ficha de Controle de EPI — NR-6 / Portaria MTE 3.214/78</div></div>
-  <div style="font-size:12px;color:#555;text-align:right;">${dataFmt}</div>
+  <div>${logoSVG}</div>
+  <div class="hdr-right">
+    <div class="hdr-empresa">${razaoSocial}</div>
+    <div class="hdr-cnpj">${cnpjEmpresa ? 'CNPJ: ' + cnpjEmpresa : ''}</div>
+    <div class="hdr-data">${dataFmt}</div>
+  </div>
 </div>
-<div class="titulo">Ficha de Entrega e Devolução de EPI</div>
+<div class="hdr-depto"><span>Ficha de Controle de EPI — NR-6 / Portaria MTE 3.214/78</span></div>
+<div class="titulo-wrap">
+  <div class="titulo-bar"></div>
+  <div class="titulo">Ficha de Entrega e Devolução de EPI</div>
+</div>
 <div class="info-grid">
-  <div><div class="lbl">Colaborador</div><div class="val">${c.nome}</div></div>
-  <div><div class="lbl">Matrícula</div><div class="val">${c.matricula || '—'}</div></div>
-  <div><div class="lbl">Cargo / Função</div><div class="val">${c.cargo || '—'}</div></div>
-  <div><div class="lbl">Empresa de registro</div><div class="val">${empresa}</div></div>
+  <div class="info-cell"><div class="lbl">Colaborador</div><div class="val">${c.nome}</div></div>
+  <div class="info-cell"><div class="lbl">Matrícula</div><div class="val">${c.matricula || '—'}</div></div>
+  <div class="info-cell"><div class="lbl">Cargo / Função</div><div class="val">${c.cargo || '—'}</div></div>
+  <div class="info-cell"><div class="lbl">Empresa de Registro</div><div class="val">${razaoSocial}</div></div>
 </div>
-<div class="nr6">Documento obrigatório conforme NR-6, item 6.6.1, alíneas a, b e c — Ministério do Trabalho e Emprego.</div>
+<div class="nr6-badge">Documento obrigatório — NR-6, item 6.6.1 (a, b, c) — Ministério do Trabalho e Emprego</div>
 <table>
   <thead><tr>
     <th>EPI / Descrição</th>
-    <th style="text-align:center;width:65px;">C.A. nº</th>
-    <th style="text-align:center;width:65px;">Tamanho</th>
-    <th style="text-align:center;width:45px;">Qtd.</th>
-    <th style="text-align:center;width:95px;">Data entrega</th>
-    <th style="text-align:center;width:90px;">Assinatura</th>
+    <th style="width:70px;">C.A. nº</th>
+    <th style="width:65px;">Tamanho</th>
+    <th style="width:50px;">Qtd.</th>
+    <th style="width:100px;">Data Entrega</th>
+    <th style="width:90px;">Assinatura</th>
   </tr></thead>
   <tbody>${rows}</tbody>
 </table>
@@ -3977,6 +4034,7 @@ function imprimirComprovante(tipo) {
   <div>
     <div class="ass-linha"></div>
     <div class="ass-lbl">Responsável pela entrega / RH</div>
+    <div class="ass-nome">&nbsp;</div>
   </div>
 </div>
 <script>window.onload = () => window.print();<\/script>
