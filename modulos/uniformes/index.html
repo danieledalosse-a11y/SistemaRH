@@ -761,7 +761,7 @@
       <button class="modal-close" onclick="fecharConfirm()">×</button>
     </div>
     <div class="confirm-modal-body" style="padding:16px 20px 4px;">
-      <p id="confirmMensagem"></p>
+      <p id="confirmMensagem" style="line-height:1.7;font-size:13px;color:var(--text-sec);"></p>
       <div class="confirm-destaque" id="confirmDestaque" style="display:none;"></div>
     </div>
     <div class="modal-footer">
@@ -2145,11 +2145,18 @@ async function carregarHistoricoColab(colabId) {
         ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#ECFDF3;color:#027A48;font-weight:600;">↩ Devolução</span>`
         : `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">↗ Entrega</span>`;
       const condicao = m.condicao_devolucao ? `<div style="font-size:11px;color:var(--text-ter);">${condicaoLabel[m.condicao_devolucao]||''}</div>` : '';
-      const btnEstorno = `<button onclick="confirmarEstorno(${m.id},'${(m.item?.nome||'').replace(/'/g,"\\'")}',${m.item_id},'${(m.tamanho||'').replace(/'/g,"\\'")}',${m.quantidade},${m.almoxarifado_id},'${m.tipo}')"
-        title="Estornar este lançamento"
-        style="background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-ter);padding:4px 8px;font-size:11px;font-weight:600;transition:all .15s;white-space:nowrap;"
-        onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
-        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)'">Estornar</button>`;
+      const btnStyle = `background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-ter);padding:4px 10px;font-size:11px;font-weight:600;transition:all .15s;white-space:nowrap;`;
+      const btnEstorno = !isDev
+        ? `<button onclick="confirmarEstorno(${m.id},'${(m.item?.nome||'').replace(/'/g,"\\'")}',${m.item_id},'${(m.tamanho||'').replace(/'/g,"\\'")}',${m.quantidade},${m.almoxarifado_id},'${m.tipo}')"
+            title="Estornar: cria devolução automática e restaura estoque"
+            style="${btnStyle}"
+            onmouseover="this.style.borderColor='#F79009';this.style.color='#92400E'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)'">↩ Estornar</button>`
+        : `<button onclick="confirmarExcluirMov(${m.id},'${(m.item?.nome||'').replace(/'/g,"\\'")}','${(m.tamanho||'').replace(/'/g,"\\'")}',${m.quantidade})"
+            title="Excluir este registro sem ajuste de estoque"
+            style="${btnStyle}"
+            onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)'">🗑 Excluir</button>`;
       return `<tr>
         <td style="white-space:nowrap;">${m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '—'}</td>
         <td style="font-weight:600;">${m.item?.nome || '—'}</td>
@@ -2574,13 +2581,42 @@ async function salvarEntrega() {
 
 // ─── Estorno de movimentação ─────────────────────────────────────────────────
 function confirmarEstorno(movId, itemNome, itemId, tamanho, qtd, almoxId, tipo) {
+  const isCd = isCDAlmox(almoxId);
+  const estoqueInfo = isCd
+    ? 'O almoxarifado é CD — o estoque <strong>não será ajustado</strong> automaticamente.'
+    : `As <strong>${qtd} unidade(s)</strong> serão devolvidas ao estoque do almoxarifado.`;
   abrirConfirm({
-    titulo: 'Estornar lançamento',
-    mensagem: `Isso vai remover o registro e ${tipo === 'entrega' ? 'devolver' : 'retirar'} ${qtd} unidade(s) ao estoque.`,
-    destaque: `${itemNome}${tamanho ? ' — ' + tamanho : ''} · ${qtd} un.`,
-    labelOk: 'Estornar',
+    titulo: '↩ Estornar entrega',
+    mensagem: `Esta ação registra uma <strong>devolução automática</strong> no histórico do colaborador e restaura o estoque.<br><br>
+      <strong>Item:</strong> ${itemNome}${tamanho ? ' · Tam. ' + tamanho : ''}<br>
+      <strong>Quantidade:</strong> ${qtd} un.<br><br>
+      ${estoqueInfo}<br><br>
+      O registro original de entrega <strong>permanece no histórico</strong>. Deseja continuar?`,
+    labelOk: 'Sim, estornar',
     callback: () => executarEstorno(movId, itemId, tamanho, qtd, almoxId, tipo),
   });
+}
+
+function confirmarExcluirMov(movId, itemNome, tamanho, qtd) {
+  abrirConfirm({
+    titulo: '🗑 Excluir registro',
+    mensagem: `Esta ação <strong>exclui permanentemente</strong> este registro de devolução do histórico.<br><br>
+      <strong>Item:</strong> ${itemNome}${tamanho ? ' · Tam. ' + tamanho : ''}<br>
+      <strong>Quantidade:</strong> ${qtd} un.<br><br>
+      ⚠️ O estoque <strong>não será ajustado</strong>. Use esta opção apenas para corrigir lançamentos incorretos. Deseja continuar?`,
+    labelOk: 'Sim, excluir',
+    callback: () => executarExcluirMov(movId),
+  });
+}
+
+async function executarExcluirMov(movId) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/unif_movimentacoes?id=eq.${movId}`, {
+      method: 'DELETE', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+    });
+    toast('✓ Registro excluído');
+    carregarHistoricoColab(_colabAtual.id);
+  } catch(e) { toast('Erro ao excluir: ' + e.message); }
 }
 
 async function executarEstorno(movId, itemId, tamanho, qtd, almoxId, tipo) {
@@ -3415,8 +3451,8 @@ function setCargoGenero(cargo, idx, genero) {
 // ─── Confirmação genérica ─────────────────────────────────────────────────────
 let _confirmCallback = null;
 function abrirConfirm({ titulo, mensagem, destaque, labelOk, callback }) {
-  document.getElementById('confirmTitulo').textContent   = titulo;
-  document.getElementById('confirmMensagem').textContent = mensagem;
+  document.getElementById('confirmTitulo').textContent  = titulo;
+  document.getElementById('confirmMensagem').innerHTML  = mensagem;
   const dest = document.getElementById('confirmDestaque');
   if (destaque) { dest.textContent = destaque; dest.style.display = ''; }
   else          { dest.style.display = 'none'; }
