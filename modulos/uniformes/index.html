@@ -971,10 +971,7 @@
         <div class="form-field" style="margin:0;">
           <label class="form-label">Logo bordada</label>
           <select class="form-select" id="entLogoTipo">
-            <option value="sem_logo">Sem logo</option>
-            <option value="grupo_revest">Logo Grupo Revest</option>
-            <option value="revest_acabamentos">Logo Revest Acabamentos</option>
-            <option value="outra">Outra (descrever na observação)</option>
+            <option value="">Carregando...</option>
           </select>
         </div>
         <div class="form-field" style="margin:0;">
@@ -1225,6 +1222,7 @@ let KITS          = [];
 let CARGOS        = [];
 let ALMOXARIFADOS = [];
 let FORNECEDORES  = [];
+let LOGOS         = [];
 let _almoxEditId     = null;
 let _fornecEditId    = null;
 let _editItemId      = null;
@@ -1583,7 +1581,12 @@ function abrirModalEntrada() {
   document.getElementById('entValor').value      = '';
   document.getElementById('entNF').value         = '';
   document.getElementById('entObs').value        = '';
-  document.getElementById('entLogoTipo').value   = 'sem_logo';
+  // popula logos do banco
+  const selLogo = document.getElementById('entLogoTipo');
+  selLogo.innerHTML = LOGOS.length
+    ? LOGOS.map(l => `<option value="${l.id}" data-bordada="${l.bordada}">${l.nome}</option>`).join('')
+    : '<option value="">Sem logo</option>';
+
   document.getElementById('entTamanho').innerHTML = '<option value="">Selecione o item primeiro</option>';
 
   document.getElementById('modalEntradaLote').classList.add('open');
@@ -1596,18 +1599,20 @@ function fecharModalEntrada() {
 function atualizarTamanhosEntrada() {
   const sel  = document.getElementById('entItem');
   const opt  = sel.options[sel.selectedIndex];
-  const selT = document.getElementById('entTamanho');
-  if (!opt?.value) { selT.innerHTML = '<option value="">Selecione o item primeiro</option>'; return; }
-
+  let selT = document.getElementById('entTamanho');
+  if (!opt?.value) {
+    if (selT.tagName === 'INPUT') selT.outerHTML = `<select class="form-select" id="entTamanho"><option value="">Selecione o item primeiro</option></select>`;
+    else selT.innerHTML = '<option value="">Selecione o item primeiro</option>';
+    return;
+  }
   const sistema  = opt.dataset.sistema;
   const tamanhos = JSON.parse(opt.dataset.tamanhos || '[]');
-
   if (sistema === 'unico') {
-    selT.innerHTML = '<option value="Único">Único</option>';
+    selT.outerHTML = `<select class="form-select" id="entTamanho"><option value="Único">Único</option></select>`;
   } else if (tamanhos.length) {
-    selT.innerHTML = tamanhos.map(t => `<option value="${t}">${t}</option>`).join('');
+    selT.outerHTML = `<select class="form-select" id="entTamanho">${tamanhos.map(t => `<option value="${t}">${t}</option>`).join('')}</select>`;
   } else {
-    selT.innerHTML = '<option value="">Sem tamanhos cadastrados</option>';
+    selT.outerHTML = `<input class="form-input" id="entTamanho" type="text" placeholder="ex: P, M, G, 38, 42...">`;
   }
 }
 
@@ -1621,8 +1626,10 @@ async function salvarEntradaLote() {
   const data      = document.getElementById('entData').value;
   const nf        = document.getElementById('entNF').value.trim();
   const obs       = document.getElementById('entObs').value.trim();
-  const logoTipo  = document.getElementById('entLogoTipo').value;
-  const logo      = logoTipo !== 'sem_logo';
+  const logoSel   = document.getElementById('entLogoTipo');
+  const logoId    = parseInt(logoSel.value) || null;
+  const logoOpt   = logoSel.options[logoSel.selectedIndex];
+  const logo      = logoOpt ? logoOpt.dataset.bordada === 'true' : false;
 
   if (!itemId)   { toast('Selecione o item.');         return; }
   if (!almoxId)  { toast('Selecione o almoxarifado.'); return; }
@@ -1638,7 +1645,7 @@ async function salvarEntradaLote() {
     await sbPost('unif_entradas', {
       item_id: itemId, almoxarifado_id: almoxId, fornecedor_id: fornecId,
       tamanho, quantidade: qtd, valor_unitario: valor,
-      logo_bordada: logo, logo_tipo: logoTipo, data_entrada: data,
+      logo_bordada: logo, logo_id: logoId, data_entrada: data,
       nf: nf || null, obs: obs || null,
       status: 'ativo', registrado_por: perfil.nome || 'RH',
     });
@@ -2791,17 +2798,19 @@ function setSecTab(sub) {
 // ─── Carregamento inicial ─────────────────────────────────────────────────────
 async function init() {
   try {
-    const [itens, kits, almoxs, forns] = await Promise.all([
+    const [itens, kits, almoxs, forns, logos] = await Promise.all([
       sbGet('unif_catalogo',     'select=*&order=nome'),
       sbGet('unif_kits',         'select=*,item:unif_catalogo(id,nome,tipo)&ativo=eq.true'),
       sbGet('unif_almoxarifados','select=*&ativo=eq.true&order=nome'),
       sbGet('unif_fornecedores', 'select=*&ativo=eq.true&order=nome').catch(() => []),
+      sbGet('unif_logos',        'select=*&ativo=eq.true&order=ordem').catch(() => []),
     ]);
     ITENS         = itens;
     KITS          = kits;
     CARGOS        = [...new Set(kits.map(k => k.cargo))].sort();
     ALMOXARIFADOS = almoxs;
     FORNECEDORES  = forns;
+    LOGOS         = logos;
     setTab('painel');
     renderItens();
     renderListaCargosKit();

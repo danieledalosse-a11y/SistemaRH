@@ -152,14 +152,23 @@
 
   <!-- Sidebar -->
   <nav class="sidebar">
-    <div class="sidebar-section-label">Uniformes & EPI</div>
-    <div class="sidebar-item active" id="nav-almox" onclick="setPanel('almox')">
+    <div class="sidebar-section-label">Locais & Parceiros</div>
+    <div class="sidebar-item" id="nav-almox" onclick="setPanel('almox')">
       <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       Almoxarifados
     </div>
     <div class="sidebar-item" id="nav-fornec" onclick="setPanel('fornec')">
       <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
       Fornecedores
+    </div>
+    <div class="sidebar-section-label">Catálogo</div>
+    <div class="sidebar-item" id="nav-catalogo" onclick="setPanel('catalogo')">
+      <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Itens / Catálogo
+    </div>
+    <div class="sidebar-item" id="nav-logos" onclick="setPanel('logos')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8.56 2.75c4.37 6.03 6.02 9.42 8.03 17.72m2.54-15.38c-3.72 4.35-8.94 5.66-16.88 5.85m19.5 1.9c-3.5-.93-6.63-.82-8.94 0-2.58.92-5.01 2.86-7.44 6.32"/></svg>
+      Logos Bordadas
     </div>
   </nav>
 
@@ -238,6 +247,71 @@
             <th class="col-acoes"></th>
           </tr></thead>
           <tbody id="tbodyFornec"><tr><td colspan="6" class="loading">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Catálogo de Itens -->
+    <div id="panel-catalogo" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Itens / Catálogo</div>
+          <div class="page-desc">Uniformes, EPIs e acessórios disponíveis</div>
+        </div>
+        <button class="btn btn-primary" onclick="abrirModalCatalogo()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo item
+        </button>
+      </div>
+      <div class="toolbar">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="buscaCatalogo" placeholder="Buscar..." oninput="renderCatalogo()">
+        </div>
+      </div>
+      <div class="table-card">
+        <table>
+          <thead><tr>
+            <th>Nome</th>
+            <th>Tipo</th>
+            <th>Gênero</th>
+            <th>Tamanhos</th>
+            <th>Status</th>
+            <th class="col-acoes"></th>
+          </tr></thead>
+          <tbody id="tbodyCatalogo"><tr><td colspan="6" class="loading">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Logos Bordadas -->
+    <div id="panel-logos" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Logos Bordadas</div>
+          <div class="page-desc">Opções de logo disponíveis para bordado nos uniformes</div>
+        </div>
+        <button class="btn btn-primary" onclick="abrirModalLogo()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova logo
+        </button>
+      </div>
+      <div class="toolbar">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="buscaLogos" placeholder="Buscar..." oninput="renderLogos()">
+        </div>
+      </div>
+      <div class="table-card">
+        <table>
+          <thead><tr>
+            <th>Nome</th>
+            <th>Bordada</th>
+            <th>Ordem</th>
+            <th>Status</th>
+            <th class="col-acoes"></th>
+          </tr></thead>
+          <tbody id="tbodyLogos"><tr><td colspan="5" class="loading">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -338,6 +412,108 @@
   </div>
 </div>
 
+<!-- Modal Catálogo -->
+<div class="overlay" id="overlayCatalogo" onclick="fecharOverlay('overlayCatalogo', event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="tituloCatalogo">Novo item</span>
+      <button class="modal-close" onclick="fecharOverlay('overlayCatalogo')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="field">
+      <label>Nome <span style="color:var(--red)">*</span></label>
+      <input type="text" id="catNome" placeholder="ex: Camisa Polo">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Tipo <span style="color:var(--red)">*</span></label>
+        <select id="catTipo">
+          <option value="uniforme">Uniforme</option>
+          <option value="epi">EPI</option>
+          <option value="acessorio">Acessório</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Gênero</label>
+        <select id="catGenero">
+          <option value="unissex">Unissex</option>
+          <option value="masculino">Masculino</option>
+          <option value="feminino">Feminino</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Variante</label>
+      <input type="text" id="catVariante" placeholder="ex: manga longa, social (opcional)">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Sistema de tamanho <span style="color:var(--red)">*</span></label>
+        <select id="catSistema" onchange="_toggleTamanhosField()">
+          <option value="grade">Grade (P, M, G...)</option>
+          <option value="unico">Tamanho único</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <select id="catAtivo">
+          <option value="true">Ativo</option>
+          <option value="false">Inativo</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" id="catTamanhosRow">
+      <label>Tamanhos disponíveis</label>
+      <input type="text" id="catTamanhos" placeholder="ex: PP, P, M, G, GG (separados por vírgula)">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharOverlay('overlayCatalogo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCatalogo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Logo -->
+<div class="overlay" id="overlayLogo" onclick="fecharOverlay('overlayLogo', event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="tituloLogo">Nova logo</span>
+      <button class="modal-close" onclick="fecharOverlay('overlayLogo')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="field">
+      <label>Nome <span style="color:var(--red)">*</span></label>
+      <input type="text" id="logoNome" placeholder="ex: Logo Filial Sul">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>É bordada?</label>
+        <select id="logoBordada">
+          <option value="true">Sim — com bordado</option>
+          <option value="false">Não — sem bordado</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Ordem na lista</label>
+        <input type="number" id="logoOrdem" min="0" placeholder="0">
+      </div>
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <select id="logoAtivo">
+        <option value="true">Ativo</option>
+        <option value="false">Inativo</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharOverlay('overlayLogo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarLogo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -404,7 +580,7 @@ let _panel = '';
 function setPanel(p) {
   _panel = p;
   document.getElementById('panel-empty').style.display = p ? 'none' : '';
-  ['almox','fornec'].forEach(x => {
+  ['almox','fornec','catalogo','logos'].forEach(x => {
     document.getElementById(`nav-${x}`).classList.toggle('active', x === p);
     document.getElementById(`panel-${x}`).style.display = x === p ? '' : 'none';
   });
@@ -650,13 +826,265 @@ async function excluirFornec(id) {
   } catch(e) { toast('Erro: ' + e.message, 'error'); }
 }
 
+// ══════════════════════════════════════
+// CATÁLOGO DE ITENS
+// ══════════════════════════════════════
+let _catalogoList = [];
+let _catalogoEditId = null;
+const TIPO_CAT = { uniforme:'Uniforme', epi:'EPI', acessorio:'Acessório' };
+const GEN_LABEL = { masculino:'Masculino', feminino:'Feminino', unissex:'Unissex' };
+const SIS_LABEL = { unico:'Único', grade:'Grade' };
+
+async function carregarCatalogo() {
+  try { _catalogoList = await sbGet('unif_catalogo', 'select=*&order=nome'); }
+  catch(e) { toast('Erro ao carregar catálogo', 'error'); }
+  renderCatalogo();
+}
+
+function renderCatalogo() {
+  const busca = (document.getElementById('buscaCatalogo')?.value || '').toLowerCase();
+  const rows = _catalogoList.filter(i => i.nome.toLowerCase().includes(busca) || (i.variante||'').toLowerCase().includes(busca));
+  const tbody = document.getElementById('tbodyCatalogo');
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-table">Nenhum item encontrado.</td></tr>`; return; }
+  tbody.innerHTML = rows.map(i => {
+    const tams = Array.isArray(i.tamanhos_disponiveis) && i.tamanhos_disponiveis.length
+      ? i.tamanhos_disponiveis.join(', ')
+      : (i.sistema_tamanho === 'unico' ? 'Único' : '—');
+    const nome = i.nome + (i.variante ? ` · ${i.variante}` : '');
+    return `<tr>
+      <td style="font-weight:600;">${nome}</td>
+      <td style="color:var(--text-sec);">${TIPO_CAT[i.tipo] || i.tipo || '—'}</td>
+      <td style="color:var(--text-sec);">${GEN_LABEL[i.genero] || '—'}</td>
+      <td style="color:var(--text-sec);font-size:12px;">${tams}</td>
+      <td><span class="badge ${i.ativo ? 'badge-ativo' : 'badge-inativo'}">${i.ativo ? 'Ativo' : 'Inativo'}</span></td>
+      <td class="col-acoes">
+        <button class="btn-icon" onclick="editarCatalogo('${i.id}')" title="Editar">
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn-icon ${i.ativo ? '' : 'btn-icon-warning'}" onclick="toggleAtivoCatalogo('${i.id}')" title="${i.ativo ? 'Inativar' : 'Reativar'}">
+          <svg viewBox="0 0 24 24">${i.ativo ? '<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>' : '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'}</svg>
+        </button>
+        <button class="btn-icon btn-icon-danger" onclick="excluirCatalogo('${i.id}')" title="Excluir">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirModalCatalogo() {
+  _catalogoEditId = null;
+  document.getElementById('tituloCatalogo').textContent = 'Novo item';
+  document.getElementById('catNome').value     = '';
+  document.getElementById('catVariante').value = '';
+  document.getElementById('catTipo').value     = 'uniforme';
+  document.getElementById('catGenero').value   = 'unissex';
+  document.getElementById('catSistema').value  = 'grade';
+  document.getElementById('catTamanhos').value = '';
+  document.getElementById('catAtivo').value    = 'true';
+  _toggleTamanhosField();
+  document.getElementById('overlayCatalogo').classList.add('open');
+  setTimeout(() => document.getElementById('catNome').focus(), 100);
+}
+
+function editarCatalogo(id) {
+  const i = _catalogoList.find(x => x.id === id);
+  if (!i) return;
+  _catalogoEditId = id;
+  document.getElementById('tituloCatalogo').textContent = 'Editar item';
+  document.getElementById('catNome').value     = i.nome;
+  document.getElementById('catVariante').value = i.variante || '';
+  document.getElementById('catTipo').value     = i.tipo || 'uniforme';
+  document.getElementById('catGenero').value   = i.genero || 'unissex';
+  document.getElementById('catSistema').value  = i.sistema_tamanho || 'grade';
+  document.getElementById('catTamanhos').value = Array.isArray(i.tamanhos_disponiveis) ? i.tamanhos_disponiveis.join(', ') : '';
+  document.getElementById('catAtivo').value    = String(i.ativo);
+  _toggleTamanhosField();
+  document.getElementById('overlayCatalogo').classList.add('open');
+}
+
+function _toggleTamanhosField() {
+  const s = document.getElementById('catSistema').value;
+  document.getElementById('catTamanhosRow').style.display = s === 'grade' ? '' : 'none';
+}
+
+async function salvarCatalogo() {
+  const nome = document.getElementById('catNome').value.trim();
+  if (!nome) { toast('Informe o nome do item.'); return; }
+  const sistema = document.getElementById('catSistema').value;
+  const tamRaw  = document.getElementById('catTamanhos').value;
+  const tamanhos = sistema === 'grade'
+    ? tamRaw.split(',').map(t => t.trim()).filter(Boolean)
+    : [];
+  const payload = {
+    nome,
+    variante:             document.getElementById('catVariante').value.trim() || null,
+    tipo:                 document.getElementById('catTipo').value,
+    genero:               document.getElementById('catGenero').value,
+    sistema_tamanho:      sistema,
+    tamanhos_disponiveis: tamanhos.length ? tamanhos : null,
+    ativo:                document.getElementById('catAtivo').value === 'true',
+  };
+  try {
+    if (_catalogoEditId) {
+      await sbPatch('unif_catalogo', `id=eq.${_catalogoEditId}`, payload);
+      const idx = _catalogoList.findIndex(i => i.id === _catalogoEditId);
+      if (idx >= 0) _catalogoList[idx] = { ..._catalogoList[idx], ...payload };
+    } else {
+      const [novo] = await sbPost('unif_catalogo', payload);
+      _catalogoList.push(novo);
+    }
+    toast('✓ Item salvo');
+    fecharOverlay('overlayCatalogo');
+    renderCatalogo();
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function toggleAtivoCatalogo(id) {
+  const i = _catalogoList.find(x => x.id === id);
+  if (!i) return;
+  if (!confirm(`Deseja ${i.ativo ? 'inativar' : 'reativar'} "${i.nome}"?`)) return;
+  try {
+    await sbPatch('unif_catalogo', `id=eq.${id}`, { ativo: !i.ativo });
+    i.ativo = !i.ativo;
+    toast(`✓ Item ${i.ativo ? 'reativado' : 'inativado'}`);
+    renderCatalogo();
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function excluirCatalogo(id) {
+  const i = _catalogoList.find(x => x.id === id);
+  if (!i) return;
+  let vinculado = false;
+  try {
+    const check = await sbGet('unif_estoque', `item_id=eq.${id}&select=id&limit=1`);
+    vinculado = check.length > 0;
+  } catch(_) {}
+  if (vinculado) { toast('Não é possível excluir: há estoque vinculado. Use "Inativar".', 'error'); return; }
+  if (!confirm(`Excluir permanentemente "${i.nome}"?`)) return;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/unif_catalogo?id=eq.${id}`, { method: 'DELETE', headers: SB_HEADERS });
+    if (!r.ok) throw new Error(await r.text());
+    _catalogoList = _catalogoList.filter(x => x.id !== id);
+    toast('✓ Item excluído');
+    renderCatalogo();
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+// ══════════════════════════════════════
+// LOGOS BORDADAS
+// ══════════════════════════════════════
+let _logosList = [];
+let _logosEditId = null;
+
+async function carregarLogos() {
+  try { _logosList = await sbGet('unif_logos', 'select=*&order=ordem,nome'); }
+  catch(e) { toast('Erro ao carregar logos', 'error'); }
+  renderLogos();
+}
+
+function renderLogos() {
+  const busca = (document.getElementById('buscaLogos')?.value || '').toLowerCase();
+  const rows = _logosList.filter(l => l.nome.toLowerCase().includes(busca));
+  const tbody = document.getElementById('tbodyLogos');
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty-table">Nenhuma logo encontrada.</td></tr>`; return; }
+  tbody.innerHTML = rows.map(l => `
+    <tr>
+      <td style="font-weight:600;">${l.nome}</td>
+      <td style="color:var(--text-sec);">${l.bordada ? '<span class="badge badge-ativo">Sim</span>' : '<span class="badge badge-inativo">Não</span>'}</td>
+      <td style="color:var(--text-sec);">${l.ordem}</td>
+      <td><span class="badge ${l.ativo ? 'badge-ativo' : 'badge-inativo'}">${l.ativo ? 'Ativo' : 'Inativo'}</span></td>
+      <td class="col-acoes">
+        <button class="btn-icon" onclick="editarLogo(${l.id})" title="Editar">
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn-icon ${l.ativo ? '' : 'btn-icon-warning'}" onclick="toggleAtivoLogo(${l.id})" title="${l.ativo ? 'Inativar' : 'Reativar'}">
+          <svg viewBox="0 0 24 24">${l.ativo ? '<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>' : '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'}</svg>
+        </button>
+        <button class="btn-icon btn-icon-danger" onclick="excluirLogo(${l.id})" title="Excluir">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+function abrirModalLogo() {
+  _logosEditId = null;
+  document.getElementById('tituloLogo').textContent = 'Nova logo';
+  document.getElementById('logoNome').value    = '';
+  document.getElementById('logoOrdem').value   = _logosList.length;
+  document.getElementById('logoBordada').value = 'true';
+  document.getElementById('logoAtivo').value   = 'true';
+  document.getElementById('overlayLogo').classList.add('open');
+  setTimeout(() => document.getElementById('logoNome').focus(), 100);
+}
+
+function editarLogo(id) {
+  const l = _logosList.find(x => x.id === id);
+  if (!l) return;
+  _logosEditId = id;
+  document.getElementById('tituloLogo').textContent = 'Editar logo';
+  document.getElementById('logoNome').value    = l.nome;
+  document.getElementById('logoOrdem').value   = l.ordem;
+  document.getElementById('logoBordada').value = String(l.bordada);
+  document.getElementById('logoAtivo').value   = String(l.ativo);
+  document.getElementById('overlayLogo').classList.add('open');
+}
+
+async function salvarLogo() {
+  const nome = document.getElementById('logoNome').value.trim();
+  if (!nome) { toast('Informe o nome da logo.'); return; }
+  const payload = {
+    nome,
+    ordem:   parseInt(document.getElementById('logoOrdem').value) || 0,
+    bordada: document.getElementById('logoBordada').value === 'true',
+    ativo:   document.getElementById('logoAtivo').value   === 'true',
+  };
+  try {
+    if (_logosEditId) await sbPatch('unif_logos', `id=eq.${_logosEditId}`, payload);
+    else await sbPost('unif_logos', payload);
+    toast('✓ Logo salva');
+    fecharOverlay('overlayLogo');
+    await carregarLogos();
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function toggleAtivoLogo(id) {
+  const l = _logosList.find(x => x.id === id);
+  if (!l) return;
+  if (!confirm(`Deseja ${l.ativo ? 'inativar' : 'reativar'} a logo "${l.nome}"?`)) return;
+  try {
+    await sbPatch('unif_logos', `id=eq.${id}`, { ativo: !l.ativo });
+    toast(`✓ Logo ${l.ativo ? 'inativada' : 'reativada'}`);
+    await carregarLogos();
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function excluirLogo(id) {
+  const l = _logosList.find(x => x.id === id);
+  if (!l) return;
+  let vinculado = false;
+  try {
+    const check = await sbGet('unif_entradas', `logo_id=eq.${id}&select=id&limit=1`);
+    vinculado = check.length > 0;
+  } catch(_) {}
+  if (vinculado) { toast('Não é possível excluir: há entradas vinculadas. Use "Inativar".', 'error'); return; }
+  if (!confirm(`Excluir permanentemente a logo "${l.nome}"?`)) return;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/unif_logos?id=eq.${id}`, { method: 'DELETE', headers: SB_HEADERS });
+    if (!r.ok) throw new Error(await r.text());
+    toast('✓ Logo excluída');
+    await carregarLogos();
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
 // ── Init ──
 (async function init() {
   applyMask(document.getElementById('fornecCNPJ'),     maskCNPJ);
   applyMask(document.getElementById('fornecTelefone'), maskFone);
-  await Promise.all([carregarAlmox(), carregarFornec()]);
+  await Promise.all([carregarAlmox(), carregarFornec(), carregarCatalogo(), carregarLogos()]);
   const hash = location.hash.replace('#', '');
-  if (['almox','fornec'].includes(hash)) setPanel(hash);
+  if (['almox','fornec','catalogo','logos'].includes(hash)) setPanel(hash);
 })();
 </script>
 </body>
