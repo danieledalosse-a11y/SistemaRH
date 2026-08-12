@@ -150,12 +150,12 @@
   .cargo-kit-gen-u { background: #F2F4F7; color: #344054; }
   .cargo-kit-gen-f { background: #FDF2FA; color: #C11574; }
   .cargo-kit-gen-m { background: #EFF4FF; color: #1849A9; }
-  .cargo-kit-body { display: none; padding: 20px 24px; }
+  .cargo-kit-body { display: none; padding: 16px 24px 20px; }
   .cargo-kit-body.open { display: block; }
-  .cargo-kit-genero-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .cargo-kit-genero-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   .cargo-kit-genero-hint { font-size: 12px; color: var(--text-ter); margin-left: 4px; }
-  .cargo-kit-items { margin-bottom: 20px; }
-  .cargo-kit-item-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border-light); }
+  .cargo-kit-items { margin-bottom: 20px; background: #F8FAFF; border: 1px solid var(--border-light); border-left: 3px solid var(--blue); border-radius: 8px; padding: 4px 16px; }
+  .cargo-kit-item-row { display: flex; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--border-light); }
   .cargo-kit-item-row:last-child { border-bottom: none; }
   .cargo-kit-item-nome { flex: 1; font-size: 14px; font-weight: 500; color: var(--text); }
   .cargo-kit-item-extras { font-size: 12px; color: var(--text-sec); display: block; margin-top: 2px; }
@@ -3445,15 +3445,13 @@ async function adicionarItemKit(cargo, idx) {
   if (!itemId) { toast('Selecione um item.'); return; }
   const genero = _cargoGenero[cargo] || 'unissex';
   try {
-    // verifica se já existe linha inativa para reativar (evita violar unique constraint)
-    const existente = await sbGet('unif_kits', `cargo=eq.${encodeURIComponent(cargo)}&item_id=eq.${itemId}&ativo=eq.false&limit=1`);
-    let novo;
-    if (existente.length) {
-      const [atualizado] = await sbPatch('unif_kits', `id=eq.${existente[0].id}`, { quantidade: qtd, genero, ativo: true });
-      novo = atualizado || { ...existente[0], quantidade: qtd, genero, ativo: true };
-    } else {
-      [novo] = await sbPost('unif_kits', { cargo, item_id: itemId, quantidade: qtd, genero });
-    }
+    const r = await fetch(`${SB_URL}/rest/v1/unif_kits?on_conflict=cargo,item_id`, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=representation,resolution=merge-duplicates' },
+      body: JSON.stringify({ cargo, item_id: itemId, quantidade: qtd, genero, ativo: true })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const [novo] = await r.json();
     novo.item = ITENS.find(i => i.id === itemId);
     if (!KITS.find(k => k.id === novo.id)) KITS.push(novo);
     if (!CARGOS.includes(cargo)) { CARGOS.push(cargo); CARGOS.sort(); }
