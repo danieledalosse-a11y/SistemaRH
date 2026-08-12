@@ -382,9 +382,9 @@
             <div class="card-sub" style="margin:0;" id="colabCargoDetalhe"></div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-outline" onclick="abrirModalDocCD()" title="Gera documento de entrega sem baixa no estoque — para almoxarifado CD">
+            <button class="btn btn-outline" onclick="abrirModalComprovante()" title="Emite Termo de Responsabilidade de Uniformes e Ficha de EPI">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-              Emitir documento CD
+              Emitir comprovante
             </button>
             <button id="btnRegistrarEntrega" class="btn btn-primary" onclick="abrirModalEntrega()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1159,6 +1159,51 @@
   </div>
 </div>
 
+<!-- ═══ Modal: Emitir Comprovante ═══ -->
+<div class="modal-overlay" id="modalComprovante" style="display:none;">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-hdr">
+      <span class="modal-title">Emitir comprovante</span>
+      <button class="modal-close" onclick="fecharModalComprovante()">×</button>
+    </div>
+    <div style="padding:16px 20px 0;">
+      <div id="comprovanteColabInfo" style="font-size:13px;font-weight:600;color:var(--text);background:var(--bg);border-radius:8px;padding:10px 14px;margin-bottom:14px;border:1px solid var(--border);"></div>
+
+      <!-- Uniformes -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);margin-bottom:8px;">Uniformes</div>
+      <div id="comprovanteUnifItens" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+      <button class="btn btn-outline btn-sm" onclick="_addComprovanteItem('unif')" style="width:100%;justify-content:center;margin-bottom:16px;">+ Adicionar uniforme</button>
+
+      <!-- EPIs -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);margin-bottom:8px;">EPIs</div>
+      <div id="comprovanteEpiItens" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+      <button class="btn btn-outline btn-sm" onclick="_addComprovanteItem('epi')" style="width:100%;justify-content:center;margin-bottom:16px;">+ Adicionar EPI</button>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Data do documento</label>
+          <input class="form-input" type="date" id="comprovanteData">
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Observação</label>
+          <input class="form-input" type="text" id="comprovanteObs" placeholder="opcional…">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-outline" onclick="fecharModalComprovante()">Cancelar</button>
+      <button class="btn btn-outline" onclick="imprimirComprovante('unif')" style="gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Termo de Uniformes
+      </button>
+      <button class="btn btn-primary" onclick="imprimirComprovante('epi')" style="gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1-2-2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Ficha de EPI
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1885,13 +1930,14 @@ async function _executarBusca() {
   if (q.length < 2) { lista.innerHTML = ''; return; }
   try {
     const filtroEmpresa = window._UNIF_ROLE === 'logistica' ? '&empresa_atuacao=eq.CD' : '';
-    const rows = await sbGet('colaboradores', `select=id,nome,cargo,sexo&nome=ilike.*${encodeURIComponent(q)}*&ativo=eq.true${filtroEmpresa}&order=nome&limit=10`);
+    const rows = await sbGet('colaboradores', `select=id,nome,cargo,sexo,matricula,empresa_registro&nome=ilike.*${encodeURIComponent(q)}*&ativo=eq.true${filtroEmpresa}&order=nome&limit=10`);
+    window._colabBuscaRows = rows;
     if (!rows.length) {
       lista.innerHTML = '<div style="font-size:13px;color:var(--text-ter);padding:8px 4px;">Nenhum colaborador encontrado</div>';
       return;
     }
     lista.innerHTML = rows.map(r => `
-      <div onclick="selecionarColab(${r.id},'${r.nome.replace(/'/g,"\\'")}','${(r.cargo||'').replace(/'/g,"\\'")}','${r.sexo||''}')"
+      <div onclick="selecionarColabById(${r.id})"
         style="padding:10px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);transition:background .1s;"
         onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='var(--surface)'">
         <div style="width:36px;height:36px;border-radius:50%;background:#E4E7EC;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--text-sec);flex-shrink:0;">
@@ -1905,8 +1951,14 @@ async function _executarBusca() {
   } catch(e) { toast('Erro na busca: ' + e.message); }
 }
 
-async function selecionarColab(id, nome, cargo, genero) {
-  _colabAtual = { id, nome, cargo, genero };
+function selecionarColabById(id) {
+  const r = (window._colabBuscaRows || []).find(x => x.id === id);
+  if (!r) return;
+  selecionarColab(r.id, r.nome, r.cargo, r.sexo, r.matricula, r.empresa_registro);
+}
+
+async function selecionarColab(id, nome, cargo, genero, matricula, empresa) {
+  _colabAtual = { id, nome, cargo, genero, matricula: matricula || '', empresa: empresa || '' };
   document.getElementById('listaColabs').innerHTML = '';
   document.getElementById('buscaColab').value = nome;
   document.getElementById('colabNomeDetalhe').textContent = nome;
@@ -1921,6 +1973,7 @@ async function carregarHistoricoColab(colabId) {
   try {
     const movs = await sbGet('unif_movimentacoes',
       `colaborador_id=eq.${colabId}&select=*,item:unif_catalogo(id,nome,tipo),almox:unif_almoxarifados(nome)&order=data_movimentacao.desc`);
+    window._movColabCache = movs;
 
     // ── Calcular itens em poder ───────────────────────────────────────────────
     const emPoderMap = new Map(); // key: `${item_id}|${tamanho}` → {itemNome, tamanho, qtd, almoxarifado_id}
@@ -3547,8 +3600,242 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPROVANTE UNIFICADO (Termo de Uniformes + Ficha EPI NR-6)
+// ═══════════════════════════════════════════════════════════════════════════════
+let _comprovanteUnif = []; // { nome, tamanho, qtd, data }
+let _comprovanteEpi  = []; // { nome, tamanho, qtd, data, ca }
+
+function abrirModalComprovante() {
+  if (!_colabAtual) return;
+  _comprovanteUnif = [];
+  _comprovanteEpi  = [];
+
+  // pré-popula com histórico de entregas do colaborador
+  const movs = (window._movColabCache || []).filter(m => m.tipo === 'entrega');
+  for (const m of movs) {
+    const item = ITENS.find(i => i.id === (m.item?.id || m.item_id));
+    const isEpi = (m.item?.tipo || item?.tipo) === 'epi';
+    const linha = {
+      nome:    m.item?.nome || '—',
+      tamanho: m.tamanho || '',
+      qtd:     m.quantidade || 1,
+      data:    m.data_movimentacao?.split('T')[0] || '',
+      ca:      '',
+    };
+    (isEpi ? _comprovanteEpi : _comprovanteUnif).push(linha);
+  }
+
+  document.getElementById('comprovanteColabInfo').textContent =
+    `${_colabAtual.nome}${_colabAtual.matricula ? ' · Matrícula: ' + _colabAtual.matricula : ''}${_colabAtual.cargo ? ' · ' + _colabAtual.cargo : ''}`;
+  document.getElementById('comprovanteData').value = new Date().toISOString().split('T')[0];
+  document.getElementById('comprovanteObs').value  = '';
+  _renderComprovanteItens();
+  document.getElementById('modalComprovante').style.display = 'flex';
+}
+
+function fecharModalComprovante() {
+  document.getElementById('modalComprovante').style.display = 'none';
+}
+
+function _addComprovanteItem(tipo) {
+  const linha = { nome: '', tamanho: '', qtd: 1, data: new Date().toISOString().split('T')[0], ca: '' };
+  if (tipo === 'epi') _comprovanteEpi.push(linha);
+  else                _comprovanteUnif.push(linha);
+  _renderComprovanteItens();
+}
+
+function _renderComprovanteItens() {
+  ['unif','epi'].forEach(tipo => {
+    const arr  = tipo === 'unif' ? _comprovanteUnif : _comprovanteEpi;
+    const cont = document.getElementById(tipo === 'unif' ? 'comprovanteUnifItens' : 'comprovanteEpiItens');
+    if (!arr.length) {
+      cont.innerHTML = `<div style="font-size:12px;color:var(--text-ter);padding:8px 4px;">Nenhum item. Adicione manualmente.</div>`;
+      return;
+    }
+    const itensAtivos = ITENS.filter(i => i.ativo && (tipo === 'epi' ? i.tipo === 'epi' : i.tipo !== 'epi'));
+    cont.innerHTML = arr.map((l, idx) => `
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--bg);border-radius:8px;flex-wrap:wrap;">
+        <select onchange="_comprovanteArr('${tipo}',${idx},'nome',this.options[this.selectedIndex].text);this.dataset.itemId=this.value"
+          style="flex:2;min-width:140px;padding:5px 7px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">
+          <option value="">Selecione…</option>
+          ${itensAtivos.map(i=>`<option value="${i.id}" ${i.nome===l.nome?'selected':''}>${i.nome}${i.variante?' · '+i.variante:''}</option>`).join('')}
+        </select>
+        <input type="text" value="${l.tamanho}" placeholder="Tam." oninput="_comprovanteArr('${tipo}',${idx},'tamanho',this.value)"
+          style="width:58px;padding:5px 7px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;text-align:center;">
+        <input type="number" value="${l.qtd}" min="1" oninput="_comprovanteArr('${tipo}',${idx},'qtd',parseInt(this.value)||1)"
+          style="width:48px;padding:5px 7px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;text-align:center;">
+        <input type="date" value="${l.data}" oninput="_comprovanteArr('${tipo}',${idx},'data',this.value)"
+          style="padding:5px 7px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">
+        ${tipo === 'epi' ? `<input type="text" value="${l.ca}" placeholder="CA nº" oninput="_comprovanteArr('epi',${idx},'ca',this.value)"
+          style="width:72px;padding:5px 7px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">` : ''}
+        <button onclick="_comprovanteRemover('${tipo}',${idx})" title="Remover"
+          style="background:none;border:none;cursor:pointer;color:var(--text-ter);padding:4px;font-size:16px;line-height:1;">✕</button>
+      </div>`).join('');
+  });
+}
+
+function _comprovanteArr(tipo, idx, campo, val) {
+  const arr = tipo === 'epi' ? _comprovanteEpi : _comprovanteUnif;
+  if (arr[idx]) arr[idx][campo] = val;
+}
+
+function _comprovanteRemover(tipo, idx) {
+  if (tipo === 'epi') _comprovanteEpi.splice(idx, 1);
+  else                _comprovanteUnif.splice(idx, 1);
+  _renderComprovanteItens();
+}
+
+function imprimirComprovante(tipo) {
+  const data    = document.getElementById('comprovanteData').value || new Date().toISOString().split('T')[0];
+  const obs     = document.getElementById('comprovanteObs').value.trim();
+  const dataFmt = new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+  const c       = _colabAtual;
+  const empresa = c.empresa || 'Revest do Brasil Acabamentos Ltda';
+
+  const baseCSS = `
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#111; padding:32px 40px; }
+    .hdr { display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:14px; border-bottom:2px solid #111; margin-bottom:20px; }
+    .empresa { font-size:16px; font-weight:700; }
+    .titulo { font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:16px; }
+    .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px 24px; background:#f5f5f5; padding:12px 16px; border-radius:6px; margin-bottom:20px; }
+    .lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#666; }
+    .val { font-size:13px; font-weight:600; margin-top:2px; }
+    table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+    thead th { background:#111; color:#fff; padding:8px 10px; font-size:11px; text-align:left; text-transform:uppercase; letter-spacing:.04em; }
+    tbody td { padding:9px 10px; border-bottom:1px solid #e5e5e5; font-size:13px; vertical-align:middle; }
+    .termo { font-size:12px; color:#333; border:1px solid #ccc; border-radius:4px; padding:12px 14px; margin-bottom:20px; line-height:1.6; }
+    .assinaturas { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:32px; }
+    .ass-linha { border-bottom:1.5px solid #111; margin-bottom:6px; height:36px; }
+    .ass-lbl { font-size:11px; color:#555; }
+    .ass-nome { font-size:12px; margin-top:3px; }
+    @media print { body { padding:20px 28px; } }`;
+
+  let html = '';
+
+  if (tipo === 'unif') {
+    const linhas = _comprovanteUnif.filter(l => l.nome);
+    if (!linhas.length) { toast('Nenhum uniforme para imprimir.'); return; }
+    const rows = linhas.map(l => `<tr>
+      <td>${l.nome}</td>
+      <td style="text-align:center;">${l.tamanho || '—'}</td>
+      <td style="text-align:center;">${l.qtd}</td>
+      <td style="text-align:center;">${l.data ? new Date(l.data+'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+    </tr>`).join('');
+
+    html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Termo de Responsabilidade — ${c.nome}</title>
+<style>${baseCSS}</style></head><body>
+<div class="hdr">
+  <div><div class="empresa">${empresa}</div><div style="font-size:12px;color:#555;margin-top:3px;">Departamento de Recursos Humanos</div></div>
+  <div style="font-size:12px;color:#555;text-align:right;">${dataFmt}</div>
+</div>
+<div class="titulo">Termo de Responsabilidade — Uniformes</div>
+<div class="info-grid">
+  <div><div class="lbl">Colaborador</div><div class="val">${c.nome}</div></div>
+  <div><div class="lbl">Matrícula</div><div class="val">${c.matricula || '—'}</div></div>
+  <div><div class="lbl">Cargo</div><div class="val">${c.cargo || '—'}</div></div>
+  <div><div class="lbl">Empresa de registro</div><div class="val">${empresa}</div></div>
+</div>
+<table>
+  <thead><tr>
+    <th>Item / Descrição</th>
+    <th style="text-align:center;width:70px;">Tamanho</th>
+    <th style="text-align:center;width:50px;">Qtd.</th>
+    <th style="text-align:center;width:100px;">Data entrega</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="termo">
+  Declaro que recebi os uniformes listados acima em perfeito estado de conservação e me comprometo a:<br><br>
+  <strong>I.</strong> Utilizá-los exclusivamente durante o horário de trabalho e nas dependências da empresa;<br>
+  <strong>II.</strong> Conservá-los em boas condições de uso, higiene e apresentação;<br>
+  <strong>III.</strong> Comunicar imediatamente ao setor de RH qualquer avaria, perda ou extravio;<br>
+  <strong>IV.</strong> Devolvê-los em sua totalidade no encerramento do contrato de trabalho, independentemente do motivo do desligamento.<br><br>
+  A não devolução dos uniformes poderá ensejar desconto em verbas rescisórias, nos termos do art. 462 da CLT, mediante autorização expressa firmada neste documento.${obs ? '<br><br><strong>Obs.:</strong> ' + obs : ''}
+</div>
+<div class="assinaturas">
+  <div>
+    <div class="ass-linha"></div>
+    <div class="ass-lbl">Assinatura do(a) colaborador(a)</div>
+    <div class="ass-nome">${c.nome}</div>
+  </div>
+  <div>
+    <div class="ass-linha"></div>
+    <div class="ass-lbl">Responsável RH / Entregador(a)</div>
+  </div>
+</div>
+<script>window.onload = () => window.print();<\/script>
+</body></html>`;
+
+  } else {
+    const linhas = _comprovanteEpi.filter(l => l.nome);
+    if (!linhas.length) { toast('Nenhum EPI para imprimir.'); return; }
+    const rows = linhas.map(l => `<tr>
+      <td>${l.nome}</td>
+      <td style="text-align:center;">${l.ca || '—'}</td>
+      <td style="text-align:center;">${l.tamanho || '—'}</td>
+      <td style="text-align:center;">${l.qtd}</td>
+      <td style="text-align:center;">${l.data ? new Date(l.data+'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+      <td style="width:80px;border-bottom:1px solid #ccc;">&nbsp;</td>
+    </tr>`).join('');
+
+    html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Ficha de EPI — ${c.nome}</title>
+<style>${baseCSS}
+  .nr6 { font-size:10px; color:#666; margin-bottom:16px; }
+</style></head><body>
+<div class="hdr">
+  <div><div class="empresa">${empresa}</div><div style="font-size:12px;color:#555;margin-top:3px;">Ficha de Controle de EPI — NR-6 / Portaria MTE 3.214/78</div></div>
+  <div style="font-size:12px;color:#555;text-align:right;">${dataFmt}</div>
+</div>
+<div class="titulo">Ficha de Entrega e Devolução de EPI</div>
+<div class="info-grid">
+  <div><div class="lbl">Colaborador</div><div class="val">${c.nome}</div></div>
+  <div><div class="lbl">Matrícula</div><div class="val">${c.matricula || '—'}</div></div>
+  <div><div class="lbl">Cargo / Função</div><div class="val">${c.cargo || '—'}</div></div>
+  <div><div class="lbl">Empresa de registro</div><div class="val">${empresa}</div></div>
+</div>
+<div class="nr6">Documento obrigatório conforme NR-6, item 6.6.1, alíneas a, b e c — Ministério do Trabalho e Emprego.</div>
+<table>
+  <thead><tr>
+    <th>EPI / Descrição</th>
+    <th style="text-align:center;width:65px;">C.A. nº</th>
+    <th style="text-align:center;width:65px;">Tamanho</th>
+    <th style="text-align:center;width:45px;">Qtd.</th>
+    <th style="text-align:center;width:95px;">Data entrega</th>
+    <th style="text-align:center;width:90px;">Assinatura</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="termo">
+  Declaro ter recebido o(s) EPI(s) listado(s) acima, em perfeito estado de conservação, e estou ciente de que:<br><br>
+  <strong>I.</strong> Sou obrigado(a) a usá-los apenas para a finalidade a que se destina, conforme orientação do empregador;<br>
+  <strong>II.</strong> Devo responsabilizar-me pela guarda e conservação, comunicando qualquer alteração que o torne impróprio para uso;<br>
+  <strong>III.</strong> Recebi treinamento sobre o uso correto, os riscos que o EPI se destina a atenuar e as limitações de proteção;<br>
+  <strong>IV.</strong> Devo devolvê-lo ao término do contrato de trabalho ou quando solicitado pela empresa.${obs ? '<br><br><strong>Obs.:</strong> ' + obs : ''}
+</div>
+<div class="assinaturas">
+  <div>
+    <div class="ass-linha"></div>
+    <div class="ass-lbl">Assinatura do(a) colaborador(a)</div>
+    <div class="ass-nome">${c.nome}</div>
+  </div>
+  <div>
+    <div class="ass-linha"></div>
+    <div class="ass-lbl">Responsável pela entrega / RH</div>
+  </div>
+</div>
+<script>window.onload = () => window.print();<\/script>
+</body></html>`;
+  }
+
+  const blob = new Blob([html], { type: 'text/html' });
+  window.open(URL.createObjectURL(blob), '_blank');
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 init();
-</script>
 </body>
 </html>
