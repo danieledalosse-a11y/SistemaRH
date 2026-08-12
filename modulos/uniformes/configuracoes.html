@@ -218,10 +218,11 @@
             <th>Nome</th>
             <th>CNPJ</th>
             <th>Pessoa de Contato</th>
+            <th>Telefone</th>
             <th>Status</th>
             <th class="col-acoes"></th>
           </tr></thead>
-          <tbody id="tbodyFornec"><tr><td colspan="5" class="loading">Carregando...</td></tr></tbody>
+          <tbody id="tbodyFornec"><tr><td colspan="6" class="loading">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -290,9 +291,13 @@
         <input type="text" id="fornecCNPJ" placeholder="opcional">
       </div>
       <div class="field">
-        <label>Contato</label>
-        <input type="text" id="fornecContato" placeholder="telefone ou e-mail">
+        <label>Telefone</label>
+        <input type="text" id="fornecTelefone" placeholder="(00) 00000-0000">
       </div>
+    </div>
+    <div class="field">
+      <label>Pessoa de Contato</label>
+      <input type="text" id="fornecContato" placeholder="Nome do responsável">
     </div>
     <div class="field">
       <label>Observação</label>
@@ -466,12 +471,13 @@ function renderFornec() {
   const busca = (document.getElementById('buscaFornec')?.value || '').toLowerCase();
   const rows = _fornecList.filter(f => f.nome.toLowerCase().includes(busca) || (f.cnpj || '').includes(busca));
   const tbody = document.getElementById('tbodyFornec');
-  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty-table">Nenhum fornecedor encontrado.</td></tr>`; return; }
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-table">Nenhum fornecedor encontrado.</td></tr>`; return; }
   tbody.innerHTML = rows.map(f => `
     <tr>
       <td style="font-weight:600;">${f.nome}</td>
       <td style="color:var(--text-sec);">${f.cnpj ? maskCNPJ(f.cnpj) : '—'}</td>
-      <td style="color:var(--text-sec);">${f.contato ? maskFone(f.contato) : '—'}</td>
+      <td style="color:var(--text-sec);">${f.contato || '—'}</td>
+      <td style="color:var(--text-sec);">${f.telefone ? maskFone(f.telefone) : '—'}</td>
       <td><span class="badge ${f.ativo ? 'badge-ativo' : 'badge-inativo'}">${f.ativo ? 'Ativo' : 'Inativo'}</span></td>
       <td class="col-acoes">
         <button class="btn-icon" onclick="editarFornec(${f.id})" title="Editar">
@@ -484,11 +490,12 @@ function renderFornec() {
 function abrirModalFornec() {
   _fornecEditId = null;
   document.getElementById('tituloFornec').textContent = 'Novo fornecedor';
-  document.getElementById('fornecNome').value    = '';
-  document.getElementById('fornecCNPJ').value    = '';
-  document.getElementById('fornecContato').value = '';
-  document.getElementById('fornecObs').value     = '';
-  document.getElementById('fornecAtivo').value   = 'true';
+  document.getElementById('fornecNome').value     = '';
+  document.getElementById('fornecCNPJ').value     = '';
+  document.getElementById('fornecTelefone').value = '';
+  document.getElementById('fornecContato').value  = '';
+  document.getElementById('fornecObs').value      = '';
+  document.getElementById('fornecAtivo').value    = 'true';
   document.getElementById('overlayFornec').classList.add('open');
   setTimeout(() => document.getElementById('fornecNome').focus(), 100);
 }
@@ -499,8 +506,9 @@ function editarFornec(id) {
   _fornecEditId = id;
   document.getElementById('tituloFornec').textContent = 'Editar fornecedor';
   document.getElementById('fornecNome').value    = f.nome;
-  document.getElementById('fornecCNPJ').value    = f.cnpj    ? maskCNPJ(f.cnpj)    : '';
-  document.getElementById('fornecContato').value = f.contato ? maskFone(f.contato) : '';
+  document.getElementById('fornecCNPJ').value     = f.cnpj     ? maskCNPJ(f.cnpj)       : '';
+  document.getElementById('fornecTelefone').value = f.telefone ? maskFone(f.telefone)   : '';
+  document.getElementById('fornecContato').value  = f.contato  || '';
   document.getElementById('fornecObs').value     = f.obs     || '';
   document.getElementById('fornecAtivo').value   = String(f.ativo);
   document.getElementById('overlayFornec').classList.add('open');
@@ -511,8 +519,9 @@ async function salvarFornec() {
   if (!nome) { toast('Informe o nome.'); return; }
   const payload = {
     nome,
-    cnpj:    soDigitos(document.getElementById('fornecCNPJ').value)    || null,
-    contato: soDigitos(document.getElementById('fornecContato').value) || null,
+    cnpj:     soDigitos(document.getElementById('fornecCNPJ').value)     || null,
+    telefone: soDigitos(document.getElementById('fornecTelefone').value) || null,
+    contato:  document.getElementById('fornecContato').value.trim()      || null,
     obs:     document.getElementById('fornecObs').value.trim()     || null,
     ativo:   document.getElementById('fornecAtivo').value === 'true',
   };
@@ -527,8 +536,8 @@ async function salvarFornec() {
 
 // ── Init ──
 (async function init() {
-  applyMask(document.getElementById('fornecCNPJ'),    maskCNPJ);
-  applyMask(document.getElementById('fornecContato'), maskFone);
+  applyMask(document.getElementById('fornecCNPJ'),     maskCNPJ);
+  applyMask(document.getElementById('fornecTelefone'), maskFone);
   await Promise.all([carregarAlmox(), carregarFornec()]);
   const hash = location.hash.replace('#', '');
   if (['almox','fornec'].includes(hash)) setPanel(hash);
