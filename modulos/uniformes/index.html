@@ -1901,25 +1901,27 @@ function renderKitEntregaLista() {
       ? `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#FFF7ED;color:#C4490C;font-weight:600;border:1px solid #FED7AA;">EPI</span>`
       : `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;border:1px solid #C7D7FD;">Uniforme</span>`;
 
-    // combina tamanhos do catálogo + tamanhos com estoque real + fallback padrão
-    const TAMANHOS_PADRAO = ['PP','P','M','G','GG','XG','XXG','36','38','40','42','44','46','48','Único'];
-    const tamsCatalogo = (sistema !== 'unico') ? tamanhos : [];
-    const tamsEstoque  = [...new Set(
-      ESTOQUE.filter(e => e.item_id == k.item_id && e.tamanho).map(e => e.tamanho)
-    )];
-    // combina tudo; se vazio usa padrão; sempre inclui "Único"
-    const tamsBase = [...new Set([
-      ...(tamsCatalogo.length || tamsEstoque.length
-        ? [...tamsCatalogo, ...tamsEstoque]
-        : TAMANHOS_PADRAO),
-      'Único'
-    ])].sort();
-    // select sempre aparece
-    const tamSelect = `<select class="form-input" id="kitTam-${idx}"
-         style="padding:6px 10px;font-size:13px;min-width:120px;cursor:pointer;">
-         <option value="">Tamanho...</option>
-         ${tamsBase.map(t => `<option value="${t}">${t}</option>`).join('')}
-       </select>`;
+    // tamanhos do estoque para este item: {tamanho, quantidade}
+    const estoqueDoItem = ESTOQUE.filter(e => e.item_id == k.item_id && e.tamanho);
+    // agrupa quantidade por tamanho (pode ter vários almoxarifados)
+    const qtdPorTam = {};
+    estoqueDoItem.forEach(e => {
+      qtdPorTam[e.tamanho] = (qtdPorTam[e.tamanho] || 0) + (e.quantidade || 0);
+    });
+    const tamsOrdenados = Object.keys(qtdPorTam).sort();
+    const tamSelect = tamsOrdenados.length
+      ? `<select class="form-input" id="kitTam-${idx}"
+           style="padding:6px 10px;font-size:13px;min-width:120px;cursor:pointer;">
+           <option value="">Tamanho...</option>
+           ${tamsOrdenados.map(t => {
+             const qtd = qtdPorTam[t];
+             const sem = qtd <= 0;
+             return `<option value="${t}" ${sem ? 'disabled style="color:#aaa;"' : ''}>${t}${sem ? ' — em falta' : ''}</option>`;
+           }).join('')}
+         </select>`
+      : `<input class="form-input" id="kitTam-${idx}" type="text"
+           placeholder="ex: M, G, 38..." autocomplete="off"
+           style="padding:6px 10px;font-size:13px;min-width:110px;">`;
 
     return `
     <div id="kitRow-${idx}" style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border-light);">
