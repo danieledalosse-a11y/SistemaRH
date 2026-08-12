@@ -741,11 +741,11 @@
   </div>
 </div>
 
-<!-- ═══ Modal: Renomear Kit ═══ -->
+<!-- ═══ Modal: Editar Kit ═══ -->
 <div class="modal-overlay" id="modalRenomearKit">
   <div class="modal" style="max-width:420px;">
     <div class="modal-hdr">
-      <span class="modal-title">Renomear kit</span>
+      <span class="modal-title">Editar kit</span>
       <button class="modal-close" onclick="fecharRenomearKit()">×</button>
     </div>
     <div style="padding:16px 20px;">
@@ -753,7 +753,13 @@
       <div style="font-size:13px;color:var(--text-sec);margin-bottom:14px;" id="renomearKitNomeAtual"></div>
       <label class="form-label">Novo nome <span class="req">*</span></label>
       <input class="form-input" id="renomearKitInput" type="text" placeholder="Nome do cargo/kit…"
-        onkeydown="if(event.key==='Enter') salvarRenomearKit()">
+        onkeydown="if(event.key==='Enter') salvarRenomearKit()" style="margin-bottom:14px;">
+      <label class="form-label">Gênero</label>
+      <select class="form-select" id="renomearKitGenero">
+        <option value="unissex">Unissex</option>
+        <option value="feminino">Feminino</option>
+        <option value="masculino">Masculino</option>
+      </select>
       <div id="renomearKitErro" style="display:none;color:var(--red);font-size:12px;margin-top:6px;"></div>
     </div>
     <div class="modal-footer">
@@ -3299,6 +3305,7 @@ async function removerItemKit(kitId, cargo) {
 function abrirRenomearKit(cargo) {
   document.getElementById('renomearKitNomeAtual').textContent = cargo;
   document.getElementById('renomearKitInput').value = cargo;
+  document.getElementById('renomearKitGenero').value = _cargoGenero[cargo] || 'unissex';
   document.getElementById('renomearKitErro').style.display = 'none';
   document.getElementById('modalRenomearKit').classList.add('open');
   setTimeout(() => {
@@ -3312,28 +3319,43 @@ function fecharRenomearKit() {
 }
 
 async function salvarRenomearKit() {
-  const nomeAtual = document.getElementById('renomearKitNomeAtual').textContent;
-  const novoNome  = document.getElementById('renomearKitInput').value.trim();
-  const erroEl    = document.getElementById('renomearKitErro');
+  const nomeAtual  = document.getElementById('renomearKitNomeAtual').textContent;
+  const novoNome   = document.getElementById('renomearKitInput').value.trim();
+  const novoGenero = document.getElementById('renomearKitGenero').value;
+  const erroEl     = document.getElementById('renomearKitErro');
 
   if (!novoNome) { erroEl.textContent = 'Informe o novo nome.'; erroEl.style.display = ''; return; }
-  if (novoNome === nomeAtual) { fecharRenomearKit(); return; }
-  if (CARGOS.includes(novoNome)) { erroEl.textContent = 'Já existe um kit com esse nome.'; erroEl.style.display = ''; return; }
+  if (novoNome !== nomeAtual && CARGOS.includes(novoNome)) { erroEl.textContent = 'Já existe um kit com esse nome.'; erroEl.style.display = ''; return; }
+
+  const nomeAlterado   = novoNome !== nomeAtual;
+  const generoAlterado = novoGenero !== (_cargoGenero[nomeAtual] || 'unissex');
+
+  if (!nomeAlterado && !generoAlterado) { fecharRenomearKit(); return; }
 
   try {
-    // atualiza todos os registros do cargo no banco
-    await sbPatch('unif_kits', `cargo=eq.${encodeURIComponent(nomeAtual)}`, { cargo: novoNome });
+    const payload = {};
+    if (nomeAlterado)   payload.cargo  = novoNome;
+    if (generoAlterado) payload.genero = novoGenero;
 
-    // atualiza arrays em memória
-    KITS.forEach(k => { if (k.cargo === nomeAtual) k.cargo = novoNome; });
+    await sbPatch('unif_kits', `cargo=eq.${encodeURIComponent(nomeAtual)}`, payload);
+
+    KITS.forEach(k => {
+      if (k.cargo === nomeAtual) {
+        if (nomeAlterado)   k.cargo  = novoNome;
+        if (generoAlterado) k.genero = novoGenero;
+      }
+    });
     const idx = CARGOS.indexOf(nomeAtual);
     if (idx !== -1) CARGOS[idx] = novoNome;
-    if (_cargoGenero[nomeAtual]) { _cargoGenero[novoNome] = _cargoGenero[nomeAtual]; delete _cargoGenero[nomeAtual]; }
-    if (_cargoAberto[nomeAtual]) { _cargoAberto[novoNome] = _cargoAberto[nomeAtual]; delete _cargoAberto[nomeAtual]; }
+    _cargoGenero[novoNome] = novoGenero;
+    if (nomeAlterado) {
+      delete _cargoGenero[nomeAtual];
+      if (_cargoAberto[nomeAtual]) { _cargoAberto[novoNome] = _cargoAberto[nomeAtual]; delete _cargoAberto[nomeAtual]; }
+    }
 
     fecharRenomearKit();
     renderListaCargosKit();
-    toast('✓ Kit renomeado');
+    toast('✓ Kit atualizado');
   } catch(e) {
     erroEl.textContent = 'Erro ao salvar: ' + e.message;
     erroEl.style.display = '';
