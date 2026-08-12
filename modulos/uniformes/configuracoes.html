@@ -217,12 +217,11 @@
           <thead><tr>
             <th>Nome</th>
             <th>CNPJ</th>
-            <th>Contato</th>
-            <th>Observação</th>
+            <th>Pessoa de Contato</th>
             <th>Status</th>
             <th class="col-acoes"></th>
           </tr></thead>
-          <tbody id="tbodyFornec"><tr><td colspan="6" class="loading">Carregando...</td></tr></tbody>
+          <tbody id="tbodyFornec"><tr><td colspan="5" class="loading">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -341,6 +340,22 @@ async function sbGet(t, p) { const r = await fetch(`${SB_URL}/rest/v1/${t}?${p}`
 async function sbPost(t, d) { const r = await fetch(`${SB_URL}/rest/v1/${t}`, { method:'POST', headers:{...SB_HEADERS,'Prefer':'return=representation'}, body:JSON.stringify(d) }); if (!r.ok) throw new Error(await r.text()); return r.json(); }
 async function sbPatch(t, f, d) { const r = await fetch(`${SB_URL}/rest/v1/${t}?${f}`, { method:'PATCH', headers:{...SB_HEADERS,'Prefer':'return=minimal'}, body:JSON.stringify(d) }); if (!r.ok) throw new Error(await r.text()); }
 
+// ── Máscaras ──
+function soDigitos(v) { return v.replace(/\D/g, ''); }
+function maskCNPJ(v) {
+  const d = soDigitos(v).slice(0, 14);
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, (_, a,b,c,e,f) =>
+    f ? `${a}.${b}.${c}/${e}-${f}` : e ? `${a}.${b}.${c}/${e}` : c ? `${a}.${b}.${c}` : b ? `${a}.${b}` : a);
+}
+function maskFone(v) {
+  const d = soDigitos(v).slice(0, 11);
+  if (d.length <= 10) return d.replace(/^(\d{2})(\d{4})(\d{0,4})/, (_, a,b,c) => c ? `(${a}) ${b}-${c}` : b ? `(${a}) ${b}` : a);
+  return d.replace(/^(\d{2})(\d{5})(\d{0,4})/, (_, a,b,c) => c ? `(${a}) ${b}-${c}` : b ? `(${a}) ${b}` : a);
+}
+function applyMask(el, fn) {
+  el.addEventListener('input', () => { const c = el.selectionStart; el.value = fn(el.value); try { el.setSelectionRange(c,c); } catch(_){} });
+}
+
 function toast(msg, tipo='') {
   const el = document.getElementById('toast');
   el.textContent = msg; el.className = 'toast show' + (tipo ? ' ' + tipo : '');
@@ -451,13 +466,12 @@ function renderFornec() {
   const busca = (document.getElementById('buscaFornec')?.value || '').toLowerCase();
   const rows = _fornecList.filter(f => f.nome.toLowerCase().includes(busca) || (f.cnpj || '').includes(busca));
   const tbody = document.getElementById('tbodyFornec');
-  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-table">Nenhum fornecedor encontrado.</td></tr>`; return; }
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty-table">Nenhum fornecedor encontrado.</td></tr>`; return; }
   tbody.innerHTML = rows.map(f => `
     <tr>
       <td style="font-weight:600;">${f.nome}</td>
-      <td style="color:var(--text-sec);">${f.cnpj || '—'}</td>
-      <td style="color:var(--text-sec);">${f.contato || '—'}</td>
-      <td style="color:var(--text-sec);">${f.obs || '—'}</td>
+      <td style="color:var(--text-sec);">${f.cnpj ? maskCNPJ(f.cnpj) : '—'}</td>
+      <td style="color:var(--text-sec);">${f.contato ? maskFone(f.contato) : '—'}</td>
       <td><span class="badge ${f.ativo ? 'badge-ativo' : 'badge-inativo'}">${f.ativo ? 'Ativo' : 'Inativo'}</span></td>
       <td class="col-acoes">
         <button class="btn-icon" onclick="editarFornec(${f.id})" title="Editar">
@@ -485,8 +499,8 @@ function editarFornec(id) {
   _fornecEditId = id;
   document.getElementById('tituloFornec').textContent = 'Editar fornecedor';
   document.getElementById('fornecNome').value    = f.nome;
-  document.getElementById('fornecCNPJ').value    = f.cnpj    || '';
-  document.getElementById('fornecContato').value = f.contato || '';
+  document.getElementById('fornecCNPJ').value    = f.cnpj    ? maskCNPJ(f.cnpj)    : '';
+  document.getElementById('fornecContato').value = f.contato ? maskFone(f.contato) : '';
   document.getElementById('fornecObs').value     = f.obs     || '';
   document.getElementById('fornecAtivo').value   = String(f.ativo);
   document.getElementById('overlayFornec').classList.add('open');
@@ -497,8 +511,8 @@ async function salvarFornec() {
   if (!nome) { toast('Informe o nome.'); return; }
   const payload = {
     nome,
-    cnpj:    document.getElementById('fornecCNPJ').value.trim()    || null,
-    contato: document.getElementById('fornecContato').value.trim() || null,
+    cnpj:    soDigitos(document.getElementById('fornecCNPJ').value)    || null,
+    contato: soDigitos(document.getElementById('fornecContato').value) || null,
     obs:     document.getElementById('fornecObs').value.trim()     || null,
     ativo:   document.getElementById('fornecAtivo').value === 'true',
   };
@@ -513,8 +527,9 @@ async function salvarFornec() {
 
 // ── Init ──
 (async function init() {
+  applyMask(document.getElementById('fornecCNPJ'),    maskCNPJ);
+  applyMask(document.getElementById('fornecContato'), maskFone);
   await Promise.all([carregarAlmox(), carregarFornec()]);
-  // abre na aba passada via hash (#fornec)
   const hash = location.hash.replace('#', '');
   if (['almox','fornec'].includes(hash)) setPanel(hash);
 })();
