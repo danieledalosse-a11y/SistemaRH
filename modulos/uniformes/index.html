@@ -1277,7 +1277,7 @@ async function carregarEstoque() {
   try {
     const [estoq, entrad, devols] = await Promise.all([
       sbGet('unif_estoque', 'select=*,item:unif_catalogo(id,nome,tipo,genero,variante,logo),almox:unif_almoxarifados(id,nome)&order=item_id'),
-      sbGet('unif_entradas', 'select=*,item:unif_catalogo(nome),almox:unif_almoxarifados(nome)&order=data_entrada.desc&limit=200'),
+      sbGet('unif_entradas', 'select=*,item:unif_catalogo(nome),almox:unif_almoxarifados(nome),fornecedor_fk:unif_fornecedores(id,nome)&order=data_entrada.desc&limit=200'),
       sbGet('unif_movimentacoes', 'select=*,item:unif_catalogo(nome),almox:unif_almoxarifados(nome)&tipo=eq.devolucao&condicao_devolucao=eq.reutilizavel&order=data_movimentacao.desc&limit=200'),
     ]);
     ESTOQUE       = estoq;
@@ -1351,7 +1351,7 @@ function renderMovimentacoes() {
       qtd: e.quantidade,
       valorUnit: e.valor_unitario,
       total: e.quantidade * e.valor_unitario,
-      origem: e.fornecedor,
+      origem: e.fornecedor_fk?.nome || e.fornecedor || '—',
       almoxNome: e.almox?.nome || '—',
       almoxId: e.almoxarifado_id,
     })),
@@ -1592,7 +1592,7 @@ function abrirModalEntrada() {
   // popula fornecedores
   const selForn = document.getElementById('entFornecedor');
   selForn.innerHTML = '<option value="">Selecione…</option>' +
-    FORNECEDORES.filter(f => f.ativo).map(f => `<option value="${f.nome}">${f.nome}</option>`).join('');
+    FORNECEDORES.filter(f => f.ativo).map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
 
   document.getElementById('entData').value       = new Date().toISOString().split('T')[0];
   document.getElementById('entQtd').value        = '1';
@@ -1630,7 +1630,7 @@ function atualizarTamanhosEntrada() {
 async function salvarEntradaLote() {
   const itemId  = document.getElementById('entItem').value;
   const almoxId = document.getElementById('entAlmox').value;
-  const fornec    = document.getElementById('entFornecedor').value;
+  const fornecId  = parseInt(document.getElementById('entFornecedor').value) || 0;
   const tamanho   = document.getElementById('entTamanho').value;
   const qtd       = parseInt(document.getElementById('entQtd').value) || 0;
   const valor     = parseFloat(document.getElementById('entValor').value) || 0;
@@ -1640,9 +1640,9 @@ async function salvarEntradaLote() {
   const logoTipo  = document.getElementById('entLogoTipo').value;
   const logo      = logoTipo !== 'sem_logo';
 
-  if (!itemId)  { toast('Selecione o item.');         return; }
-  if (!almoxId) { toast('Selecione o almoxarifado.'); return; }
-  if (!fornec)  { toast('Informe o fornecedor.');     return; }
+  if (!itemId)   { toast('Selecione o item.');         return; }
+  if (!almoxId)  { toast('Selecione o almoxarifado.'); return; }
+  if (!fornecId) { toast('Selecione o fornecedor.');   return; }
   if (!tamanho) { toast('Selecione o tamanho.');      return; }
   if (qtd < 1)  { toast('Informe a quantidade.');     return; }
   if (valor < 0){ toast('Informe o valor unitário.');  return; }
@@ -1652,7 +1652,7 @@ async function salvarEntradaLote() {
   try {
     // registra entrada
     await sbPost('unif_entradas', {
-      item_id: itemId, almoxarifado_id: almoxId, fornecedor: fornec,
+      item_id: itemId, almoxarifado_id: almoxId, fornecedor_id: fornecId,
       tamanho, quantidade: qtd, valor_unitario: valor,
       logo_bordada: logo, logo_tipo: logoTipo, data_entrada: data,
       nf: nf || null, obs: obs || null,
@@ -1820,10 +1820,10 @@ async function salvarFornecedor() {
     // atualiza select no modal de entrada se estiver aberto
     const selForn = document.getElementById('entFornecedor');
     if (selForn) {
-      const val = selForn.value;
+      const novoForn = FORNECEDORES.find(f => f.nome === nome);
       selForn.innerHTML = '<option value="">Selecione…</option>' +
-        FORNECEDORES.filter(f => f.ativo).map(f => `<option value="${f.nome}">${f.nome}</option>`).join('');
-      selForn.value = val || nome; // seleciona o recém-criado
+        FORNECEDORES.filter(f => f.ativo).map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
+      if (novoForn) selForn.value = novoForn.id; // seleciona o recém-criado
     }
   } catch(e) { toast('Erro: ' + e.message); }
 }
