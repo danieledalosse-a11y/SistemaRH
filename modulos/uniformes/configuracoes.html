@@ -162,8 +162,19 @@
   <!-- Main -->
   <main class="main">
 
+    <!-- Empty state -->
+    <div id="panel-empty" class="empty-state">
+      <div>
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </div>
+        <div style="font-weight:700;font-size:15px;margin-bottom:6px;">Nenhum item selecionado</div>
+        <div style="font-size:13px;color:var(--text-sec);">Use o menu lateral para acessar<br>uma seção de configurações.</div>
+      </div>
+    </div>
+
     <!-- Almoxarifados -->
-    <div id="panel-almox">
+    <div id="panel-almox" style="display:none;">
       <div class="page-header">
         <div>
           <div class="page-title">Almoxarifados</div>
@@ -358,7 +369,18 @@ function maskFone(v) {
   return d.replace(/^(\d{2})(\d{5})(\d{0,4})/, (_, a,b,c) => c ? `(${a}) ${b}-${c}` : b ? `(${a}) ${b}` : a);
 }
 function applyMask(el, fn) {
-  el.addEventListener('input', () => { const c = el.selectionStart; el.value = fn(el.value); try { el.setSelectionRange(c,c); } catch(_){} });
+  el.addEventListener('input', () => {
+    const raw = el.value;
+    const cursor = el.selectionStart;
+    const digitsBeforeCursor = raw.slice(0, cursor).replace(/\D/g, '').length;
+    el.value = fn(raw);
+    let count = 0, newPos = el.value.length;
+    for (let i = 0; i < el.value.length; i++) {
+      if (/\d/.test(el.value[i])) { count++; if (count === digitsBeforeCursor) { newPos = i + 1; break; } }
+    }
+    if (digitsBeforeCursor === 0) newPos = 0;
+    try { el.setSelectionRange(newPos, newPos); } catch(_) {}
+  });
 }
 
 function toast(msg, tipo='') {
@@ -368,9 +390,10 @@ function toast(msg, tipo='') {
 }
 
 // ── Navegação ──
-let _panel = 'almox';
+let _panel = '';
 function setPanel(p) {
   _panel = p;
+  document.getElementById('panel-empty').style.display = p ? 'none' : '';
   ['almox','fornec'].forEach(x => {
     document.getElementById(`nav-${x}`).classList.toggle('active', x === p);
     document.getElementById(`panel-${x}`).style.display = x === p ? '' : 'none';
