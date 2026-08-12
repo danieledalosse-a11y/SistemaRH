@@ -691,16 +691,24 @@
     <div class="modal-body">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-field" style="margin:0;grid-column:1/-1;">
-          <label class="form-label">Nome <span class="req">*</span></label>
+          <label class="form-label">Nome fantasia <span class="req">*</span></label>
           <input class="form-input" type="text" id="fornNome" placeholder="ex: Vista Uniformes">
+        </div>
+        <div class="form-field" style="margin:0;grid-column:1/-1;">
+          <label class="form-label">Razão social</label>
+          <input class="form-input" type="text" id="fornRazaoSocial" placeholder="ex: Vista Comércio de Uniformes Ltda">
         </div>
         <div class="form-field" style="margin:0;">
           <label class="form-label">CNPJ</label>
           <input class="form-input" type="text" id="fornCNPJ" placeholder="opcional">
         </div>
         <div class="form-field" style="margin:0;">
-          <label class="form-label">Contato</label>
-          <input class="form-input" type="text" id="fornContato" placeholder="telefone ou e-mail">
+          <label class="form-label">Telefone</label>
+          <input class="form-input" type="text" id="fornTelefone" placeholder="(00) 00000-0000">
+        </div>
+        <div class="form-field" style="margin:0;grid-column:1/-1;">
+          <label class="form-label">Pessoa de contato</label>
+          <input class="form-input" type="text" id="fornContato" placeholder="Nome do responsável">
         </div>
         <div class="form-field" style="margin:0;grid-column:1/-1;">
           <label class="form-label">Observação</label>
@@ -1743,13 +1751,46 @@ async function salvarAlmox() {
 }
 
 // ── Fornecedor modal ──
+function _soDigitos(v) { return v.replace(/\D/g, ''); }
+function _maskCNPJ(v) {
+  const d = _soDigitos(v).slice(0, 14);
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, (_, a,b,c,e,f) =>
+    f ? `${a}.${b}.${c}/${e}-${f}` : e ? `${a}.${b}.${c}/${e}` : c ? `${a}.${b}.${c}` : b ? `${a}.${b}` : a);
+}
+function _maskFone(v) {
+  const d = _soDigitos(v).slice(0, 11);
+  if (d.length <= 10) return d.replace(/^(\d{2})(\d{4})(\d{0,4})/, (_, a,b,c) => c ? `(${a}) ${b}-${c}` : b ? `(${a}) ${b}` : a);
+  return d.replace(/^(\d{2})(\d{5})(\d{0,4})/, (_, a,b,c) => c ? `(${a}) ${b}-${c}` : b ? `(${a}) ${b}` : a);
+}
+function _applyMask(el, fn) {
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const raw = el.value, cursor = el.selectionStart;
+    const digitsBeforeCursor = raw.slice(0, cursor).replace(/\D/g, '').length;
+    el.value = fn(raw);
+    let count = 0, newPos = el.value.length;
+    for (let i = 0; i < el.value.length; i++) {
+      if (/\d/.test(el.value[i])) { count++; if (count === digitsBeforeCursor) { newPos = i + 1; break; } }
+    }
+    if (digitsBeforeCursor === 0) newPos = 0;
+    try { el.setSelectionRange(newPos, newPos); } catch(_) {}
+  });
+}
+// aplica máscaras no modal de fornecedor inline
+(function() {
+  _applyMask(document.getElementById('fornCNPJ'),     _maskCNPJ);
+  _applyMask(document.getElementById('fornTelefone'), _maskFone);
+})();
+
 function abrirModalFornecedor() {
   _fornecEditId = null;
   document.getElementById('modalFornecedorTitulo').textContent = 'Novo fornecedor';
-  document.getElementById('fornNome').value    = '';
-  document.getElementById('fornCNPJ').value    = '';
-  document.getElementById('fornContato').value = '';
-  document.getElementById('fornObs').value     = '';
+  document.getElementById('fornNome').value        = '';
+  document.getElementById('fornRazaoSocial').value = '';
+  document.getElementById('fornCNPJ').value        = '';
+  document.getElementById('fornTelefone').value    = '';
+  document.getElementById('fornContato').value     = '';
+  document.getElementById('fornObs').value         = '';
   document.getElementById('modalFornecedor').classList.add('open');
 }
 function editarFornecedor(id) {
@@ -1757,10 +1798,12 @@ function editarFornecedor(id) {
   if (!f) return;
   _fornecEditId = id;
   document.getElementById('modalFornecedorTitulo').textContent = 'Editar fornecedor';
-  document.getElementById('fornNome').value    = f.nome;
-  document.getElementById('fornCNPJ').value    = f.cnpj    || '';
-  document.getElementById('fornContato').value = f.contato || '';
-  document.getElementById('fornObs').value     = f.obs     || '';
+  document.getElementById('fornNome').value        = f.nome;
+  document.getElementById('fornRazaoSocial').value = f.razao_social || '';
+  document.getElementById('fornCNPJ').value        = f.cnpj     ? _maskCNPJ(f.cnpj)   : '';
+  document.getElementById('fornTelefone').value    = f.telefone ? _maskFone(f.telefone): '';
+  document.getElementById('fornContato').value     = f.contato  || '';
+  document.getElementById('fornObs').value         = f.obs      || '';
   document.getElementById('modalFornecedor').classList.add('open');
 }
 function fecharModalFornecedor() { document.getElementById('modalFornecedor').classList.remove('open'); }
@@ -1768,9 +1811,12 @@ async function salvarFornecedor() {
   const nome = document.getElementById('fornNome').value.trim();
   if (!nome) { toast('Informe o nome do fornecedor.'); return; }
   const payload = {
-    nome, cnpj: document.getElementById('fornCNPJ').value.trim() || null,
-    contato: document.getElementById('fornContato').value.trim() || null,
-    obs: document.getElementById('fornObs').value.trim() || null,
+    nome,
+    razao_social: document.getElementById('fornRazaoSocial').value.trim() || null,
+    cnpj:         _soDigitos(document.getElementById('fornCNPJ').value)     || null,
+    telefone:     _soDigitos(document.getElementById('fornTelefone').value) || null,
+    contato:      document.getElementById('fornContato').value.trim()       || null,
+    obs:          document.getElementById('fornObs').value.trim()           || null,
   };
   try {
     if (_fornecEditId) {
