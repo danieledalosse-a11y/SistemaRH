@@ -1766,7 +1766,9 @@ function _kitDoColabPorCargo(cargo) {
 }
 
 function _kitDoColab() {
-  return _kitDoColabPorCargo(_kitCargoSelecionado || _colabAtual?.cargo || '');
+  // só busca pelo cargo do colaborador se não houver seleção manual pendente
+  const cargo = _kitCargoSelecionado !== undefined ? _kitCargoSelecionado : (_colabAtual?.cargo || '');
+  return _kitDoColabPorCargo(cargo);
 }
 
 function onKitCargoChange() {
@@ -1774,20 +1776,29 @@ function onKitCargoChange() {
   renderKitEntregaLista();
 }
 
-function abrirModalEntrega() {
+async function abrirModalEntrega() {
   if (!_colabAtual) return;
+  await _garantirEstoqueCarregado();
   _popularCamposComuns();
-  // abre no modo kit se houver kit; caso contrário, abre em avulso
-  const temKit = _kitDoColab().length > 0;
-  setModoEntrega(temKit ? 'kit' : 'avulso');
+  // abre sempre em Kit — se não houver kit configurado, renderKitEntrega mostra msg
+  setModoEntrega('kit');
   document.getElementById('modalEntrega').classList.add('open');
 }
 
-function abrirModalEntregaKit() {
+async function abrirModalEntregaKit() {
   if (!_colabAtual) return;
+  await _garantirEstoqueCarregado();
   _popularCamposComuns();
   setModoEntrega('kit');
   document.getElementById('modalEntrega').classList.add('open');
+}
+
+async function _garantirEstoqueCarregado() {
+  if (ESTOQUE.length) return;
+  try {
+    ESTOQUE = await sbGet('unif_estoque',
+      'select=*,item:unif_catalogo(id,nome,genero,variante,logo),almox:unif_almoxarifados(id,nome)');
+  } catch(e) { /* ignora — datalist ficará vazio */ }
 }
 
 function _popularCamposComuns() {
@@ -1852,11 +1863,9 @@ function renderKitEntrega() {
     selCargo.innerHTML = '<option value="">Selecione o kit…</option>' +
       cargosComKit.map(c => `<option value="${c}">${c}</option>`).join('');
     // pré-seleciona por similaridade
-    const similar = cargosComKit.find(c => c.toLowerCase().replace(/[^a-z]/g,'').includes(
-      cargoColab.toLowerCase().replace(/[^a-z]/g,'').slice(0,5)
-    ));
-    if (similar) { selCargo.value = similar; _kitCargoSelecionado = similar; }
-    else _kitCargoSelecionado = '';
+    // não pré-seleciona — usuária deve escolher explicitamente
+    selCargo.value = '';
+    _kitCargoSelecionado = '';
   } else {
     _kitCargoSelecionado = '';
     selectorDiv.style.display = 'none';
@@ -1892,10 +1901,22 @@ function renderKitEntregaLista() {
       ? `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#FFF7ED;color:#C4490C;font-weight:600;border:1px solid #FED7AA;">EPI</span>`
       : `<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;border:1px solid #C7D7FD;">Uniforme</span>`;
 
-    const listId = `tamList-${idx}`;
-    if (sistema !== 'unico' && tamanhos.length) {
-      datalistsHtml += `<datalist id="${listId}">${tamanhos.map(t => `<option value="${t}">`).join('')}</datalist>`;
-    }
+    // combina tamanhos do catálogo + tamanhos com estoque real + fallback padrão
+    const TAMANHOS_PADRAO = ['PP','P','M','G','GG','XG','XXG','36','38','40','42','44','46','48','Único'];
+    const tamsCatalogo = (sistema !== 'unico') ? tamanhos : [];
+    const tamsEstoque  = [...new Set(
+      ESTOQUE.filter(e => e.item_id == k.item_id && e.tamanho).map(e => e.tamanho)
+    )];
+    // se catálogo e estoque estiverem vazios, usa lista padrão
+    const tamsBase = tamsCatalogo.length || tamsEstoque.length
+      ? [...new Set([...tamsCatalogo, ...tamsEstoque])].sort()
+      : TAMANHOS_PADRAO;
+    // select sempre aparece
+    const tamSelect = `<select class="form-input" id="kitTam-${idx}"
+         style="padding:6px 10px;font-size:13px;min-width:120px;cursor:pointer;">
+         <option value="">Tamanho...</option>
+         ${tamsBase.map(t => `<option value="${t}">${t}</option>`).join('')}
+       </select>`;
 
     return `
     <div id="kitRow-${idx}" style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border-light);">
@@ -1907,9 +1928,7 @@ function renderKitEntregaLista() {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <input class="form-input" id="kitTam-${idx}" type="text" list="${listId}"
-          placeholder="ex: M, G, 38..." autocomplete="off"
-          style="padding:6px 10px;font-size:13px;min-width:110px;">
+        ${tamSelect}
         <input class="form-input" id="kitQtd-${idx}" type="number" value="${k.quantidade||1}" min="1"
           style="padding:6px 8px;font-size:13px;text-align:center;width:60px;">
         <button onclick="removerItemKitEntrega(${idx})" title="Remover deste lançamento"
