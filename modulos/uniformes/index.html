@@ -2054,9 +2054,12 @@ async function carregarHistoricoColab(colabId) {
     for (const m of movs) {
       const key = `${m.item_id}|${m.tamanho||''}`;
       if (!emPoderMap.has(key)) emPoderMap.set(key, { item_id: m.item_id, itemNome: m.item?.nome||'—', tamanho: m.tamanho||'', qtd: 0, almoxarifado_id: m.almoxarifado_id });
-      emPoderMap.get(key).qtd += m.tipo === 'entrega' ? (m.quantidade||0) : -(m.quantidade||0);
-      if (m.tipo === 'entrega') {
+      // só conta no saldo entregas confirmadas e todas as devoluções
+      if (m.tipo === 'entrega' && m.confirmado) {
+        emPoderMap.get(key).qtd += (m.quantidade||0);
         entregasMap.set(m.item_id, (entregasMap.get(m.item_id) || 0) + (m.quantidade || 0));
+      } else if (m.tipo === 'devolucao') {
+        emPoderMap.get(key).qtd -= (m.quantidade||0);
       }
     }
     _devItensEmPoder = [...emPoderMap.values()].filter(x => x.qtd > 0);
@@ -2140,32 +2143,48 @@ async function carregarHistoricoColab(colabId) {
     const motivoLabel = { admissao:'Admissão', extra_desconto_folha:'🛒 Extra (desc. folha)', troca_programada:'Troca programada', troca_antecipada:'Troca antecipada', demissao:'Desligamento', ajuste:'Ajuste', devolucao:'Devolução' };
     const condicaoLabel = { reutilizavel:'✅ Reutilizável', descartado:'🗑 Descartado' };
     tbody.innerHTML = movs.map(m => {
-      const isDev = m.tipo === 'devolucao';
-      const movBadge = isDev
+      const isDev     = m.tipo === 'devolucao';
+      const isPending = m.tipo === 'entrega' && !m.confirmado;
+      const movBadge  = isDev
         ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#ECFDF3;color:#027A48;font-weight:600;">↩ Devolução</span>`
-        : `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">↗ Entrega</span>`;
+        : isPending
+          ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#FFFAEB;color:#92400E;font-weight:600;">⏳ Pendente</span>`
+          : `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">✓ Entregue</span>`;
       const condicao = m.condicao_devolucao ? `<div style="font-size:11px;color:var(--text-ter);">${condicaoLabel[m.condicao_devolucao]||''}</div>` : '';
-      const btnStyle = `background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-ter);padding:4px 10px;font-size:11px;font-weight:600;transition:all .15s;white-space:nowrap;`;
-      const nomeEsc2 = (m.item?.nome||'').replace(/'/g,"\\'");
-      const tamEsc2  = (m.tamanho||'').replace(/'/g,"\\'");
-      const btnEstorno = !isDev
-        ? `<div style="display:flex;gap:5px;">
-            <button onclick="confirmarEstorno(${m.id},'${nomeEsc2}',${m.item_id},'${tamEsc2}',${m.quantidade},${m.almoxarifado_id},'${m.tipo}')"
-              title="Estornar: cria devolução automática e restaura estoque"
-              style="${btnStyle}"
-              onmouseover="this.style.borderColor='#F79009';this.style.color='#92400E'"
-              onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)'">↩ Estornar</button>
-            <button onclick="confirmarExcluirMov(${m.id},'${nomeEsc2}','${tamEsc2}',${m.quantidade},${m.item_id},${m.almoxarifado_id},false)"
-              title="Excluir: remove o registro e restaura estoque"
-              style="${btnStyle}"
-              onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
-              onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)'">🗑</button>
-           </div>`
-        : `<button onclick="confirmarExcluirMov(${m.id},'${nomeEsc2}','${tamEsc2}',${m.quantidade},${m.item_id},${m.almoxarifado_id},true)"
-            title="Excluir este registro"
+      const btnStyle  = `background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-ter);padding:5px 11px;font-size:11px;font-weight:600;transition:all .15s;white-space:nowrap;font-family:inherit;`;
+      const nomeEsc2  = (m.item?.nome||'').replace(/'/g,"\\'");
+      const tamEsc2   = (m.tamanho||'').replace(/'/g,"\\'");
+
+      let btnEstorno;
+      if (isPending) {
+        // ⏳ Pendente: confirmar entrega + excluir sem impacto no estoque
+        btnEstorno = `<div style="display:flex;gap:5px;">
+          <button onclick="confirmarConfirmarEntrega(${m.id},'${nomeEsc2}',${m.item_id},'${tamEsc2}',${m.quantidade},${m.almoxarifado_id})"
+            style="${btnStyle}border-color:#D1FADF;color:#027A48;"
+            onmouseover="this.style.background='#ECFDF3';this.style.borderColor='#027A48';"
+            onmouseout="this.style.background='';this.style.borderColor='#D1FADF';"
+            title="Confirmar que o item foi fisicamente entregue">✓ Confirmar entrega</button>
+          <button onclick="confirmarExcluirMov(${m.id},'${nomeEsc2}','${tamEsc2}',${m.quantidade},${m.item_id},${m.almoxarifado_id},false,true)"
             style="${btnStyle}"
-            onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
-            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)'">🗑 Excluir</button>`;
+            onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)';"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)';"
+            title="Excluir este registro (sem impacto no estoque)">🗑</button>
+        </div>`;
+      } else if (!isDev) {
+        // ✅ Entregue: só estornar
+        btnEstorno = `<button onclick="confirmarEstorno(${m.id},'${nomeEsc2}',${m.item_id},'${tamEsc2}',${m.quantidade},${m.almoxarifado_id},'${m.tipo}')"
+          style="${btnStyle}"
+          onmouseover="this.style.borderColor='#F79009';this.style.color='#92400E';"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)';"
+          title="Estornar: registra devolução e restaura estoque">↩ Estornar</button>`;
+      } else {
+        // ↩ Devolução: só excluir
+        btnEstorno = `<button onclick="confirmarExcluirMov(${m.id},'${nomeEsc2}','${tamEsc2}',${m.quantidade},${m.item_id},${m.almoxarifado_id},true,false)"
+          style="${btnStyle}"
+          onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)';"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)';"
+          title="Excluir este registro">🗑 Excluir</button>`;
+      }
       return `<tr>
         <td style="white-space:nowrap;">${m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '—'}</td>
         <td style="font-weight:600;">${m.item?.nome || '—'}</td>
@@ -2499,23 +2518,14 @@ async function salvarEntregaKit() {
         tamanho,
         quantidade:        qtd,
         data_movimentacao: data || new Date().toISOString().split('T')[0],
-        confirmado:        true,
+        confirmado:        false,
         registrado_por:    registradoPor,
         obs:               obs || null,
       });
-
-      if (!isCDAlmox(almoxId)) {
-        const estoqRows = await sbGet('unif_estoque',
-          `almoxarifado_id=eq.${almoxId}&item_id=eq.${k.item_id}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
-        if (estoqRows.length) {
-          const novaQtd = Math.max(0, (estoqRows[0].quantidade || 0) - qtd);
-          await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: novaQtd });
-        }
-      }
       entregues++;
     }
 
-    toast(`✓ Kit registrado — ${entregues} ${entregues === 1 ? 'item entregue' : 'itens entregues'}`);
+    toast(`✓ Kit registrado — ${entregues} ${entregues === 1 ? 'item pendente de confirmação' : 'itens pendentes de confirmação'}`);
     fecharModalEntrega();
     carregarHistoricoColab(_colabAtual.id);
   } catch(e) {
@@ -2551,17 +2561,21 @@ async function salvarEntrega() {
     obsFinal = `[desconto:${valorStr}]${obs ? ' ' + obs : ''}`;
   }
 
+  const tipoMov = motivo === 'demissao' ? 'devolucao' : 'entrega';
+  // devoluções são confirmadas imediatamente; entregas ficam pendentes até confirmação física
+  const confirmarImediato = tipoMov === 'devolucao';
+
   const payload = {
     colaborador_id:    _colabAtual.id,
     item_id:           itemId,
     almoxarifado_id:   almoxId,
-    tipo:              motivo === 'demissao' ? 'devolucao' : 'entrega',
+    tipo:              tipoMov,
     motivo,
     tamanho,
     quantidade:        qtd,
     ca_numero_lote:    caLote || null,
     data_movimentacao: data || new Date().toISOString().split('T')[0],
-    confirmado:        true,
+    confirmado:        confirmarImediato,
     registrado_por:    perfil.nome || 'RH',
     obs:               obsFinal,
   };
@@ -2569,9 +2583,8 @@ async function salvarEntrega() {
   try {
     await sbPost('unif_movimentacoes', payload);
 
-    if (!isCDAlmox(almoxId)) {
-      const tipo = motivo === 'demissao' ? 'devolucao' : 'entrega';
-      const sinal = tipo === 'devolucao' ? 1 : -1;
+    if (!isCDAlmox(almoxId) && confirmarImediato) {
+      const sinal = tipoMov === 'devolucao' ? 1 : -1;
       const estoqRows = await sbGet('unif_estoque',
         `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
       if (estoqRows.length) {
@@ -2580,7 +2593,7 @@ async function salvarEntrega() {
       }
     }
 
-    toast('✓ Entrega registrada');
+    toast(confirmarImediato ? '✓ Devolução registrada' : '✓ Entrega registrada — aguardando confirmação de entrega física');
     fecharModalEntrega();
     carregarHistoricoColab(_colabAtual.id);
   } catch(e) {
@@ -2606,11 +2619,43 @@ function confirmarEstorno(movId, itemNome, itemId, tamanho, qtd, almoxId, tipo) 
   });
 }
 
-function confirmarExcluirMov(movId, itemNome, tamanho, qtd, itemId, almoxId, isDevolucao) {
+function confirmarConfirmarEntrega(movId, itemNome, itemId, tamanho, qtd, almoxId) {
   const isCd = isCDAlmox(almoxId);
-  const estoqueMsg = isDevolucao
+  const estoqueMsg = isCd
+    ? `⚠️ Almoxarifado CD — o estoque <strong>não será ajustado</strong> automaticamente.`
+    : `As <strong>${qtd} unidade(s)</strong> serão <strong>baixadas do estoque</strong> neste momento.`;
+  abrirConfirm({
+    titulo: '✓ Confirmar entrega',
+    mensagem: `Confirme que o item foi <strong>fisicamente entregue</strong> ao colaborador.<br><br>
+      <strong>Item:</strong> ${itemNome}${tamanho ? ' · Tam. ' + tamanho : ''}<br>
+      <strong>Quantidade:</strong> ${qtd} un.<br><br>
+      ${estoqueMsg}<br><br>
+      Após confirmação, o saldo do colaborador será atualizado. Deseja confirmar?`,
+    labelOk: '✓ Confirmar entrega',
+    callback: () => executarConfirmarEntrega(movId, itemId, tamanho, qtd, almoxId),
+  });
+}
+
+async function executarConfirmarEntrega(movId, itemId, tamanho, qtd, almoxId) {
+  try {
+    await sbPatch('unif_movimentacoes', `id=eq.${movId}`, { confirmado: true });
+    if (!isCDAlmox(almoxId)) {
+      const estoqRows = await sbGet('unif_estoque',
+        `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
+      if (estoqRows.length) {
+        const novaQtd = Math.max(0, (estoqRows[0].quantidade || 0) - qtd);
+        await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: novaQtd });
+      }
+    }
+    toast('✓ Entrega confirmada — estoque atualizado');
+    carregarHistoricoColab(_colabAtual.id);
+  } catch(e) { toast('Erro ao confirmar: ' + e.message); }
+}
+
+function confirmarExcluirMov(movId, itemNome, tamanho, qtd, itemId, almoxId, isDevolucao, isPending) {
+  const estoqueMsg = (isDevolucao || isPending)
     ? `⚠️ O estoque <strong>não será ajustado</strong>. Use apenas para corrigir lançamentos incorretos.`
-    : isCd
+    : isCDAlmox(almoxId)
       ? `⚠️ Almoxarifado CD — o estoque <strong>não será ajustado</strong> automaticamente.`
       : `As <strong>${qtd} unidade(s)</strong> serão <strong>devolvidas ao estoque</strong> do almoxarifado.`;
   abrirConfirm({
@@ -2621,17 +2666,17 @@ function confirmarExcluirMov(movId, itemNome, tamanho, qtd, itemId, almoxId, isD
       ${estoqueMsg}<br><br>
       Deseja continuar?`,
     labelOk: 'Sim, excluir',
-    callback: () => executarExcluirMov(movId, itemId, tamanho, qtd, almoxId, isDevolucao),
+    callback: () => executarExcluirMov(movId, itemId, tamanho, qtd, almoxId, isDevolucao, isPending),
   });
 }
 
-async function executarExcluirMov(movId, itemId, tamanho, qtd, almoxId, isDevolucao) {
+async function executarExcluirMov(movId, itemId, tamanho, qtd, almoxId, isDevolucao, isPending) {
   try {
     await fetch(`${SB_URL}/rest/v1/unif_movimentacoes?id=eq.${movId}`, {
       method: 'DELETE', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
     });
-    // se for entrega e não for CD, restaura estoque
-    if (!isDevolucao && !isCDAlmox(almoxId)) {
+    // restaura estoque apenas se era entrega já confirmada e não-CD
+    if (!isDevolucao && !isPending && !isCDAlmox(almoxId)) {
       const estoqRows = await sbGet('unif_estoque',
         `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
       if (estoqRows.length) {
