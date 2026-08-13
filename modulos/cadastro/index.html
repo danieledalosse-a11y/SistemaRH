@@ -412,6 +412,55 @@
   </div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
+  <!-- KPIs da empresa selecionada -->
+  <div class="metrics" id="metricasLista" style="display:none;margin-bottom:16px;">
+    <div class="metric">
+      <div class="metric-icon" style="background:var(--green-bg);">
+        <svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <div class="metric-right">
+        <div class="metric-val" style="color:var(--green);" id="ml-ativos">—</div>
+        <div class="metric-label">Colaboradores ativos</div>
+      </div>
+    </div>
+    <div class="metric">
+      <div class="metric-icon" style="background:var(--blue-bg);">
+        <svg viewBox="0 0 24 24" stroke="var(--blue)"><circle cx="10" cy="14" r="6"/><path d="M22 2l-6 6"/><path d="M16 2h6v6"/></svg>
+      </div>
+      <div class="metric-right">
+        <div class="metric-val" style="color:var(--blue);" id="ml-masc">—</div>
+        <div class="metric-label">Masculino</div>
+      </div>
+    </div>
+    <div class="metric">
+      <div class="metric-icon" style="background:var(--purple-bg);">
+        <svg viewBox="0 0 24 24" stroke="var(--purple)"><circle cx="12" cy="9" r="6"/><path d="M12 15v6"/><path d="M9 18h6"/></svg>
+      </div>
+      <div class="metric-right">
+        <div class="metric-val" style="color:var(--purple);" id="ml-fem">—</div>
+        <div class="metric-label">Feminino</div>
+      </div>
+    </div>
+    <div class="metric">
+      <div class="metric-icon" style="background:#F0FDF4;">
+        <svg viewBox="0 0 24 24" stroke="#16A34A"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+      </div>
+      <div class="metric-right">
+        <div class="metric-val" style="color:#16A34A;" id="ml-aprendiz">—</div>
+        <div class="metric-label">Jovem Aprendiz</div>
+      </div>
+    </div>
+    <div class="metric">
+      <div class="metric-icon" style="background:#FFF7ED;">
+        <svg viewBox="0 0 24 24" stroke="#EA580C"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+      </div>
+      <div class="metric-right">
+        <div class="metric-val" style="color:#EA580C;" id="ml-pcd">—</div>
+        <div class="metric-label">PCD</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Barra de contexto de empresa -->
   <div id="empresaContextBar" class="empresa-bar" style="display:none;">
     <div class="empresa-bar-icon">
@@ -1581,7 +1630,7 @@ function entrarEmpresaNome(nome) {
   atualizarColunaEmpresa(nomeEmpresa);
   setSituacaoTab('Ativo');
   aplicarFiltros();
-  atualizarMetricas();
+  atualizarMetricasLista();
 }
 
 function entrarEmpresa(empresa) {
@@ -1593,13 +1642,14 @@ function entrarEmpresa(empresa) {
   document.getElementById('btnNovoColab').style.display = 'inline-flex';
   document.getElementById('filtroEmpresa').value = empresa;
   filtroEmpresaChanged();
-  atualizarMetricas();
+  atualizarMetricasLista();
 }
 
 function voltarParaEmpresas() {
   _filtroEmpresa = '';
   document.getElementById('btnNovoColab').style.display = 'none';
-  atualizarMetricas();
+  const ml = document.getElementById('metricasLista');
+  if (ml) ml.style.display = 'none';
   renderTelaEmpresas();
 }
 
@@ -1625,6 +1675,7 @@ async function carregarDoSupabase() {
     COLABORADORES = dados.map(supabaseToJS);
     document.getElementById('importCard').style.display = 'none';
     popularFiltros();
+    atualizarMetricas();
     renderTelaEmpresas();
     const ativos = COLABORADORES.filter(c => !c.proLabore && c.situacao === 'Ativo').length;
     document.getElementById('statusConexao').textContent = `${ativos} colaboradores ativos`;
@@ -1716,6 +1767,20 @@ const PER_PAGE = 50;
 
 function isAprendiz(cargo) {
   return cargo && cargo.toLowerCase().includes('aprendiz');
+}
+
+function atualizarMetricasLista() {
+  const metDiv = document.getElementById('metricasLista');
+  if (!metDiv) return;
+  let base = COLABORADORES.filter(c => !c.proLabore);
+  if (_filtroEmpresa) base = base.filter(c => c.empresa && c.empresa.toUpperCase() === _filtroEmpresa.toUpperCase());
+  const ativos   = base.filter(c => c.situacao === 'Ativo');
+  document.getElementById('ml-ativos').textContent   = ativos.length;
+  document.getElementById('ml-masc').textContent     = ativos.filter(c => c.sexo === 'M').length;
+  document.getElementById('ml-fem').textContent      = ativos.filter(c => c.sexo === 'F').length;
+  document.getElementById('ml-aprendiz').textContent = ativos.filter(c => c.aprendiz).length;
+  document.getElementById('ml-pcd').textContent      = ativos.filter(c => c.pcd).length;
+  metDiv.style.display = 'grid';
 }
 
 function atualizarMetricas() {
