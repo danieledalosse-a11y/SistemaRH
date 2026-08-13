@@ -1077,7 +1077,8 @@ function renderPanelPessoal(f) {
     <div class="data-section"><div class="data-section-title">Identificação</div><div class="data-grid">
       ${fi('nome','Nome',f.nome)} ${fi('nascimento','Nascimento',f.nascimento,'date')}
       ${fiSel('sexo','Sexo',f.sexo,['Masculino','Feminino','Outro'])} ${fi('nacionalidade','Nacionalidade',f.nacionalidade)}
-      ${fi('naturalidade','Naturalidade',f.naturalidade)} ${fi('cpf','CPF',f.cpf)}
+      ${fi('naturalidade','Cidade Nasc.',f.naturalidade)} ${fiSel('estado_naturalidade','UF Nasc.',f.estado_naturalidade,['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'])}
+      ${fi('cpf','CPF',f.cpf)}
       ${fi('rg','RG',f.rg)} ${fi('rg_orgao','Órgão RG',f.rg_orgao)}
       ${fi('rg_data','Data RG',f.rg_data,'date')} ${fi('pis','PIS/PASEP',f.pis)}
       ${fi('titulo_eleitor','Título Eleitor',f.titulo_eleitor)} ${fi('titulo_zona','Zona',f.titulo_zona)}
@@ -1213,7 +1214,7 @@ async function savePanel() {
   btn.disabled = true; btn.textContent = 'Salvando...';
   const payload = {
     nome: fv('nome'), nascimento: fv('nascimento')||null, sexo: fv('sexo'),
-    nacionalidade: fv('nacionalidade'), naturalidade: fv('naturalidade'), cpf: fv('cpf'),
+    nacionalidade: fv('nacionalidade'), naturalidade: fv('naturalidade'), estado_naturalidade: fv('estado_naturalidade')||null, cpf: fv('cpf'),
     rg: fv('rg'), rg_orgao: fv('rg_orgao'), rg_data: fv('rg_data')||null, pis: fv('pis'),
     titulo_eleitor: fv('titulo_eleitor'), titulo_zona: fv('titulo_zona'), titulo_secao: fv('titulo_secao'),
     ctps_numero: fv('ctps_numero'), ctps_serie: fv('ctps_serie'),
@@ -1501,7 +1502,8 @@ async function confirmarEfetivar() {
     data_nascimento:   f.nascimento || null,
     sexo:              f.sexo || null,
     nacionalidade:     up(f.nacionalidade),
-    naturalidade:      up(f.naturalidade),
+    naturalidade:          up(f.naturalidade),
+    estado_naturalidade:   f.estado_naturalidade || null,
     rg:                up(f.rg),
     rg_orgao:          up(f.rg_orgao),
     rg_data:           f.rg_data || null,
@@ -1517,7 +1519,17 @@ async function confirmarEfetivar() {
     cnh_emissao:       f.cnh_emissao || null,
     cnh_validade:      f.cnh_validade || null,
     pis:               f.pis || null,
-    escolaridade:      f.escolaridade || null,
+    escolaridade:      (() => {
+      const v = f.escolaridade || ''; const l = v.toLowerCase();
+      if (l.includes('superior') && l.includes('completo'))   return 'Superior completo';
+      if (l.includes('superior') && l.includes('incompleto')) return 'Superior incompleto';
+      if (l.includes('médio') && l.includes('completo'))      return 'Médio completo';
+      if (l.includes('médio') && l.includes('incompleto'))    return 'Médio incompleto';
+      if (l.includes('fundamental') && l.includes('completo'))   return 'Fundamental completo';
+      if (l.includes('fundamental') && l.includes('incompleto')) return 'Fundamental incompleto';
+      if (l.includes('pós') || l.includes('pos'))             return 'Pós-graduação';
+      return v || null;
+    })(),
     cor_raca:          f.cor_raca || null,
     cep:               f.cep || null,
     logradouro:        up(f.logradouro || f.endereco),
