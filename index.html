@@ -71,15 +71,6 @@
 
   .mod-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
-  /* KPI strip na home */
-  .kpi-strip { display: flex; gap: 10px; margin-bottom: 32px; flex-wrap: wrap; }
-  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; flex: 1; min-width: 110px; box-shadow: var(--shadow-sm); }
-  .kpi-val { font-size: 28px; font-weight: 700; line-height: 1; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
-  .kpi-lbl { font-size: 11px; color: var(--text-sec); font-weight: 500; }
-  .kpi-card.green .kpi-val { color: var(--green); }
-  .kpi-card.blue  .kpi-val { color: var(--blue); }
-  .kpi-card.purple .kpi-val { color: var(--purple); }
-  .kpi-card.amber  .kpi-val { color: var(--amber); }
 </style>
 </head>
 <body>
@@ -104,14 +95,6 @@
 </div>
 
 <div class="container">
-
-  <div class="kpi-strip" id="kpiStrip">
-    <div class="kpi-card green"><div class="kpi-val" id="kpi-ativos">—</div><div class="kpi-lbl">Colaboradores ativos</div></div>
-    <div class="kpi-card blue" ><div class="kpi-val" id="kpi-masc">—</div><div class="kpi-lbl">Masculino</div></div>
-    <div class="kpi-card purple"><div class="kpi-val" id="kpi-fem">—</div><div class="kpi-lbl">Feminino</div></div>
-    <div class="kpi-card blue" ><div class="kpi-val" id="kpi-aprendiz">—</div><div class="kpi-lbl">Jovem Aprendiz</div></div>
-    <div class="kpi-card amber"><div class="kpi-val" id="kpi-empresas">—</div><div class="kpi-lbl">Empresas</div></div>
-  </div>
 
   <div class="section-label">Módulos disponíveis</div>
   <div class="modules-grid">
@@ -228,25 +211,6 @@ function logout() {
   localStorage.removeItem('sb_perfil');
   window.location.href = 'login.html';
 }
-
-// KPIs globais de headcount
-(async function loadKPIs() {
-  const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
-  const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
-  try {
-    const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
-    const headers = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + (sess.access_token || SB_KEY) };
-    const r = await fetch(`${SB_URL}/rest/v1/colaboradores?select=situacao,sexo,aprendiz,empresa`, { headers });
-    if (!r.ok) return;
-    const dados = await r.json();
-    const ativos = dados.filter(c => c.situacao === 'Ativo');
-    document.getElementById('kpi-ativos').textContent   = ativos.length;
-    document.getElementById('kpi-masc').textContent     = ativos.filter(c => c.sexo === 'M').length;
-    document.getElementById('kpi-fem').textContent      = ativos.filter(c => c.sexo === 'F').length;
-    document.getElementById('kpi-aprendiz').textContent = ativos.filter(c => c.aprendiz).length;
-    document.getElementById('kpi-empresas').textContent = new Set(dados.filter(c => c.empresa).map(c => c.empresa)).size;
-  } catch(_) {}
-})();
 
 // Pendências Admissão — badges no card
 (async function loadAdmissaoPendencias() {
