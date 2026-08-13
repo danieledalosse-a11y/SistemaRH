@@ -846,10 +846,80 @@ async function abrirRevisao(id) {
 
 function closePanel() { document.getElementById('panelOverlay').classList.remove('open'); }
 
-function rotateDoc(fichaId, key, delta) {
+let _rotPreview = null; // { fichaId, key, rotation, originalUrl }
+
+async function rotateDoc(fichaId, key, delta) {
+  const docs = currentFicha?.docs || {};
+  const path = docs[key];
+  if (!path) return;
+  const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
   const mapKey = `${fichaId}_${key}`;
-  _docRotations[mapKey] = ((_docRotations[mapKey] || 0) + delta + 360) % 360;
+  const currentRot = _docRotations[mapKey] || 0;
+  _rotPreview = { fichaId, key, rotation: (currentRot + delta + 360) % 360, originalUrl: url };
+  await _openRotPreviewModal();
+}
+
+async function _openRotPreviewModal() {
+  let modal = document.getElementById('rotPreviewModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'rotPreviewModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:14px;padding:24px;max-width:90vw;max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:16px;box-shadow:0 8px 40px rgba(0,0,0,.3);">
+        <div style="font-size:13px;font-weight:700;color:#374151;">Pré-visualização — ajuste a rotação</div>
+        <div id="rotPreviewImgWrap" style="overflow:auto;max-width:80vw;max-height:60vh;display:flex;align-items:center;justify-content:center;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;padding:12px;">
+          <img id="rotPreviewImg" style="max-width:100%;max-height:55vh;object-fit:contain;border-radius:4px;" src="">
+        </div>
+        <div id="rotPreviewLoading" style="font-size:12px;color:#9ca3af;display:none;">Carregando...</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button onclick="_adjustRotPreview(-90)" style="padding:8px 18px;border-radius:8px;border:1.5px solid #d1d5db;background:#fff;cursor:pointer;font-size:20px;font-weight:700;color:#374151;" title="Girar para esquerda">↺</button>
+          <span id="rotPreviewDeg" style="font-size:13px;font-weight:700;color:#6b7280;min-width:40px;text-align:center;">0°</span>
+          <button onclick="_adjustRotPreview(90)" style="padding:8px 18px;border-radius:8px;border:1.5px solid #d1d5db;background:#fff;cursor:pointer;font-size:20px;font-weight:700;color:#374151;" title="Girar para direita">↻</button>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button onclick="_confirmRotPreview()" style="padding:9px 24px;border-radius:8px;border:none;background:#1D4ED8;color:#fff;font-weight:700;font-size:13px;cursor:pointer;">Confirmar</button>
+          <button onclick="_closeRotPreview()" style="padding:9px 24px;border-radius:8px;border:1.5px solid #d1d5db;background:#fff;color:#374151;font-weight:600;font-size:13px;cursor:pointer;">Cancelar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  await _renderRotPreview();
+}
+
+async function _renderRotPreview() {
+  const img = document.getElementById('rotPreviewImg');
+  const loading = document.getElementById('rotPreviewLoading');
+  const deg = document.getElementById('rotPreviewDeg');
+  if (!img || !_rotPreview) return;
+  img.style.display = 'none';
+  loading.style.display = 'block';
+  deg.textContent = _rotPreview.rotation + '°';
+  const b64Raw = await docUrlToBase64(_rotPreview.originalUrl);
+  const b64 = _rotPreview.rotation ? await rotateImageB64(b64Raw, _rotPreview.rotation) : b64Raw;
+  loading.style.display = 'none';
+  if (b64) { img.src = b64; img.style.display = 'block'; }
+}
+
+async function _adjustRotPreview(delta) {
+  if (!_rotPreview) return;
+  _rotPreview.rotation = (_rotPreview.rotation + delta + 360) % 360;
+  await _renderRotPreview();
+}
+
+function _confirmRotPreview() {
+  if (!_rotPreview) return;
+  const mapKey = `${_rotPreview.fichaId}_${_rotPreview.key}`;
+  _docRotations[mapKey] = _rotPreview.rotation;
+  _closeRotPreview();
   renderPanelDocs(currentFicha);
+}
+
+function _closeRotPreview() {
+  const modal = document.getElementById('rotPreviewModal');
+  if (modal) modal.style.display = 'none';
+  _rotPreview = null;
 }
 
 function rotateImageB64(b64, degrees) {
