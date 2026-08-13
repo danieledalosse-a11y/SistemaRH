@@ -343,7 +343,7 @@
   </div>
 
   <div class="metrics" style="margin-bottom:28px;">
-    <div class="metric">
+    <div class="metric clickable" onclick="filtrarGlobal('ativos')">
       <div class="metric-icon" style="background:var(--green-bg);">
         <svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       </div>
@@ -352,7 +352,7 @@
         <div class="metric-label">Colaboradores ativos</div>
       </div>
     </div>
-    <div class="metric">
+    <div class="metric clickable" onclick="filtrarGlobal('masc')">
       <div class="metric-icon" style="background:var(--blue-bg);">
         <svg viewBox="0 0 24 24" stroke="var(--blue)"><circle cx="10" cy="14" r="6"/><path d="M22 2l-6 6"/><path d="M16 2h6v6"/></svg>
       </div>
@@ -361,7 +361,7 @@
         <div class="metric-label">Masculino</div>
       </div>
     </div>
-    <div class="metric">
+    <div class="metric clickable" onclick="filtrarGlobal('fem')">
       <div class="metric-icon" style="background:var(--purple-bg);">
         <svg viewBox="0 0 24 24" stroke="var(--purple)"><circle cx="12" cy="9" r="6"/><path d="M12 15v6"/><path d="M9 18h6"/></svg>
       </div>
@@ -370,7 +370,7 @@
         <div class="metric-label">Feminino</div>
       </div>
     </div>
-    <div class="metric">
+    <div class="metric clickable" onclick="filtrarGlobal('aprendiz')">
       <div class="metric-icon" style="background:#F0FDF4;">
         <svg viewBox="0 0 24 24" stroke="#16A34A"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
       </div>
@@ -379,7 +379,7 @@
         <div class="metric-label">Jovem Aprendiz</div>
       </div>
     </div>
-    <div class="metric">
+    <div class="metric clickable" onclick="filtrarGlobal('pcd')">
       <div class="metric-icon" style="background:#FFF7ED;">
         <svg viewBox="0 0 24 24" stroke="#EA580C"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
       </div>
@@ -1731,8 +1731,9 @@ function atualizarMetricas() {
   document.getElementById('m-masc').textContent      = masc;
   document.getElementById('m-fem').textContent       = fem;
   document.getElementById('m-aprendiz').textContent  = aprendiz;
-  document.getElementById('m-pcd').textContent       = pcd || '—';
-  document.getElementById('m-empresas').textContent  = empresas;
+  document.getElementById('m-pcd').textContent       = pcd;
+  const elEmp = document.getElementById('m-empresas');
+  if (elEmp) elEmp.textContent = empresas;
 }
 
 function popularFiltros() {
@@ -1792,10 +1793,25 @@ function aplicarFiltros() {
     if (set && c.setor !== set) return false;
     if (sex && c.sexo !== sex) return false;
     if (window._filtroAprendiz && !c.aprendiz) return false;
+    if (window._filtroPcd && !c.pcd) return false;
     return true;
   });
   PAGE = 1;
   renderTabela();
+}
+
+function filtrarGlobal(tipo) {
+  entrarEmpresa('');
+  window._filtroAprendiz = false;
+  window._filtroPcd = false;
+  ['filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
+  popularSetores('');
+  setSituacaoTab('Ativo');
+  if (tipo === 'masc')    document.getElementById('filtroSexo').value = 'M';
+  else if (tipo === 'fem')      document.getElementById('filtroSexo').value = 'F';
+  else if (tipo === 'aprendiz') window._filtroAprendiz = true;
+  else if (tipo === 'pcd')      window._filtroPcd = true;
+  aplicarFiltros();
 }
 
 function filtrarPorCard(tipo) {
@@ -1841,6 +1857,7 @@ function setSituacaoTab(val) {
 
 function limparFiltros() {
   window._filtroAprendiz = false;
+  window._filtroPcd = false;
   ['ativos','masc','fem','aprendiz'].forEach(c => { const el = document.getElementById('card-' + c); if(el) el.classList.remove('active-filter'); });
   document.getElementById('busca').value = '';
   ['filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
@@ -1908,7 +1925,11 @@ function renderTabela() {
     const idxGlobal = COLABORADORES.indexOf(c);
     const ativo     = c.situacao === 'Ativo';
     const avatarCls = c.sexo === 'M' ? 'avatar-m' : c.sexo === 'F' ? 'avatar-f' : 'avatar-n';
-    const sexoIcon  = c.sexo === 'M' ? ' ♂' : c.sexo === 'F' ? ' ♀' : '';
+    const sexoIcon  = c.sexo === 'M'
+      ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#DBEAFE;color:#1849A9;font-size:10px;font-weight:700;margin-left:5px;vertical-align:middle;line-height:1;">♂</span>'
+      : c.sexo === 'F'
+      ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#F3E8FF;color:#7B2D8B;font-size:10px;font-weight:700;margin-left:5px;vertical-align:middle;line-height:1;">♀</span>'
+      : '';
     const badgeSit  = ativo
       ? '<span class="badge badge-ativo">Ativo</span>'
       : '<span class="badge badge-inativo">Inativo</span>';
@@ -1921,7 +1942,7 @@ function renderTabela() {
       : `<span class="avatar ${avatarCls}">${iniciais(c.nome)}</span>`;
     return `<tr onclick="abrirFicha(${idxGlobal})" title="Clique para abrir a ficha">
       <td class="td-nome">
-        ${listAvatar}${c.nome}<span class="td-sec">${sexoIcon}</span>
+        ${listAvatar}${c.nome}${sexoIcon}
       </td>
       <td class="td-sec">${c.codigo || '—'}</td>
       <td class="td-sec">${c.cargo || '—'}${badgeApr}</td>
