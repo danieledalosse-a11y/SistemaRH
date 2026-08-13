@@ -1566,6 +1566,7 @@ function entrarEmpresa(empresa) {
 function voltarParaEmpresas() {
   _filtroEmpresa = '';
   document.getElementById('btnNovoColab').style.display = 'none';
+  atualizarMetricas();
   renderTelaEmpresas();
 }
 
@@ -1685,15 +1686,16 @@ function isAprendiz(cargo) {
 }
 
 function atualizarMetricas() {
-  const sem_pl = COLABORADORES.filter(c => !c.proLabore);
+  let sem_pl = COLABORADORES.filter(c => !c.proLabore);
+  const filtrandoEmpresa = !!_filtroEmpresa;
+  if (filtrandoEmpresa) sem_pl = sem_pl.filter(c => c.empresa && c.empresa.toUpperCase() === _filtroEmpresa.toUpperCase());
   const ativos  = sem_pl.filter(c => c.situacao === 'Ativo');
-  const inativ  = sem_pl.filter(c => c.situacao === 'Inativo');
   const masc    = ativos.filter(c => c.sexo === 'M').length;
   const fem     = ativos.filter(c => c.sexo === 'F').length;
   const aprendiz= ativos.filter(c => c.aprendiz).length;
   const inss    = ativos.filter(c => c.afastadoINSS).length;
   const pcd     = ativos.filter(c => c.pcd).length;
-  const empresas= new Set(sem_pl.filter(c=>c.empresa).map(c=>c.empresa)).size;
+  const empresas= new Set(COLABORADORES.filter(c=>!c.proLabore && c.empresa).map(c=>c.empresa)).size;
 
   document.getElementById('m-ativos').textContent   = ativos.length;
   document.getElementById('m-masc').textContent      = masc;
@@ -1701,7 +1703,11 @@ function atualizarMetricas() {
   document.getElementById('m-aprendiz').textContent  = aprendiz;
   document.getElementById('m-inss').textContent      = inss || '—';
   document.getElementById('m-pcd').textContent       = pcd || '—';
-  document.getElementById('m-empresas').textContent  = empresas;
+  document.getElementById('m-empresas').textContent  = filtrandoEmpresa ? '—' : empresas;
+
+  // subtítulo dos cards para indicar contexto
+  const label = document.querySelector('#card-ativos .metric-label');
+  if (label) label.textContent = filtrandoEmpresa ? 'Ativos na empresa' : 'Colaboradores ativos';
 }
 
 function popularFiltros() {
