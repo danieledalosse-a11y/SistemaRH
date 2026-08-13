@@ -143,7 +143,9 @@
   .drawer-close:hover { background: var(--bg); color: var(--text); }
   .drawer-close svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
   .drawer-tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; gap: 0; flex-shrink: 0; overflow-x: auto; }
-  .drawer-tab { padding: 13px 16px; font-size: 13px; font-weight: 500; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-sec); border-top: none; border-left: none; border-right: none; background: none; white-space: nowrap; transition: color 0.15s, border-color 0.15s; font-family: inherit; }
+  .drawer-tab { padding: 12px 14px; font-size: 12px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-sec); border-top: none; border-left: none; border-right: none; background: none; white-space: nowrap; transition: color 0.15s, border-color 0.15s; font-family: inherit; display:flex; align-items:center; gap:5px; }
+  .drawer-tab svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; opacity:.65; flex-shrink:0; }
+  .drawer-tab.active svg { opacity:1; }
   .drawer-tab:hover:not(.active) { color: var(--text); }
   .drawer-tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
   .drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
@@ -164,6 +166,30 @@
   .chip-inss:has(input:checked)        { background:var(--amber-bg);  color:var(--amber);  border-color:#fcd34d; }
   .chip-primeiro:has(input:checked)    { background:var(--green-bg);  color:var(--green);  border-color:#6ee7b7; }
   .chip-comissionado:has(input:checked){ background:var(--purple-bg); color:var(--purple); border-color:#c4b5fd; }
+
+  /* ── Estilos extras sec-card ────────────────────────────────── */
+  .sf-muted { color:var(--text-ter); font-style:italic; font-size:13px; }
+  .sf-lock  { font-size:10px; color:var(--text-ter); display:flex; align-items:center; gap:3px; margin-top:4px; }
+  .sf-lock svg { width:10px; height:10px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+  .exp-connector { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:0 8px; }
+  .exp-connector svg { width:16px; height:16px; stroke:#D0D5DD; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .exp-connector span { font-size:9px; color:var(--text-ter); text-align:center; line-height:1.2; white-space:nowrap; }
+
+  /* ── Section cards (aba Geral redesign) ────────────────────── */
+  .sec-card { background:var(--surface); border:.5px solid var(--border); border-radius:12px; margin-bottom:14px; overflow:hidden; box-shadow:var(--shadow-sm); }
+  .sec-head { padding:9px 16px; border-bottom:.5px solid var(--border); display:flex; align-items:center; gap:7px; background:#FAFBFC; }
+  .sec-head svg { flex-shrink:0; opacity:.5; }
+  .sec-head-t { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-ter); }
+  .sf-row { display:grid; grid-template-columns:1fr 1fr; border-bottom:.5px solid var(--border); }
+  .sf-row.full { grid-template-columns:1fr; }
+  .sf-row:last-child { border-bottom:none; }
+  .sf-cell { padding:10px 16px; border-right:.5px solid var(--border); min-width:0; }
+  .sf-cell:last-child, .sf-row.full .sf-cell { border-right:none; }
+  .sf-lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-ter); font-weight:500; margin-bottom:3px; }
+  .sf-inp { border:none; background:transparent; font-size:14px; color:var(--text); width:100%; font-family:inherit; padding:0; margin:0; line-height:1.5; }
+  .sf-inp:focus { outline:none; background:rgba(16,24,40,.04); border-radius:3px; padding:0 3px; margin:0 -3px; }
+  .sf-inp[readonly] { color:var(--text-sec); cursor:default; }
+  select.sf-inp { cursor:pointer; }
   .field input, .field select, .field textarea { border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; font-size: 13px; font-family: inherit; background: #fff; color: var(--text); transition: border-color 0.15s, box-shadow 0.15s; }
   .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #667085; box-shadow: 0 0 0 3px rgba(16,24,40,0.06); }
   .field input[readonly] { background: var(--bg); color: var(--text-sec); cursor: default; border-color: var(--border); }
@@ -454,221 +480,209 @@
     </button>
   </div>
   <div class="drawer-tabs">
-    <button class="drawer-tab active" onclick="setDrawerTab('geral', this)">Geral</button>
-    <button class="drawer-tab" onclick="setDrawerTab('contato', this)">Contato</button>
-    <button class="drawer-tab" onclick="setDrawerTab('documentos', this)">Documentos</button>
-    <button class="drawer-tab" onclick="setDrawerTab('familia', this)">Família</button>
-    <button class="drawer-tab" onclick="setDrawerTab('remuneracao', this)">Remuneração</button>
-    <button class="drawer-tab" onclick="setDrawerTab('beneficios', this)">Benefícios</button>
-    <button class="drawer-tab" onclick="setDrawerTab('historico', this)">Histórico</button>
+    <button class="drawer-tab active" onclick="setDrawerTab('geral', this)"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Geral</button>
+    <button class="drawer-tab" onclick="setDrawerTab('contato', this)"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.18 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.35 6.35l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Contato</button>
+    <button class="drawer-tab" onclick="setDrawerTab('documentos', this)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Documentos</button>
+    <button class="drawer-tab" onclick="setDrawerTab('familia', this)"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Família</button>
+    <button class="drawer-tab" onclick="setDrawerTab('remuneracao', this)"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Remuneração</button>
+    <button class="drawer-tab" onclick="setDrawerTab('beneficios', this)"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>Benefícios</button>
+    <button class="drawer-tab" onclick="setDrawerTab('historico', this)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Histórico</button>
   </div>
   <div class="drawer-body">
 
     <!-- Aba: Dados gerais -->
     <div id="tab-geral">
-      <div class="drawer-section">
-        <div class="drawer-section-title">Dados de registro</div>
-        <div class="field-grid">
-          <div class="field"><label>Matrícula</label><input type="text" id="df-codigo" readonly></div>
-          <div class="field"><label>Situação</label>
-            <select id="df-situacao">
-              <option value="Ativo">Ativo</option>
-              <option value="Inativo">Inativo</option>
-            </select>
-          </div>
-          <div class="field"><label>Data de admissão</label><input type="date" id="df-admissao" oninput="calcularFimExperiencia()"></div>
-          <div class="field"><label>Data de demissão</label><input type="date" id="df-demissao"></div>
+
+      <!-- ① Dados de registro -->
+      <div class="sec-card">
+        <div class="sec-head">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span class="sec-head-t">Dados de registro</span>
         </div>
-        <div class="field-grid full" style="margin-top:12px;">
-          <div class="field"><label>Motivo de desligamento</label><input type="text" id="df-motivo" placeholder="Se aplicável"></div>
+        <div class="sf-row">
+          <div class="sf-cell"><div class="sf-lbl">Matrícula</div><input class="sf-inp" type="text" id="df-codigo" readonly></div>
+          <div class="sf-cell"><div class="sf-lbl">Situação</div>
+            <select class="sf-inp" id="df-situacao"><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select>
+          </div>
+        </div>
+        <div class="sf-row">
+          <div class="sf-cell"><div class="sf-lbl">Data de admissão</div><input class="sf-inp" type="date" id="df-admissao" oninput="calcularFimExperiencia()"></div>
+          <div class="sf-cell"><div class="sf-lbl">Data de demissão</div><input class="sf-inp" type="date" id="df-demissao"></div>
+        </div>
+        <div class="sf-row full">
+          <div class="sf-cell"><div class="sf-lbl">Motivo de desligamento</div><input class="sf-inp" type="text" id="df-motivo" placeholder="Se aplicável"></div>
         </div>
       </div>
-      <div class="drawer-section">
-        <div class="drawer-section-title">Cargo e lotação</div>
-        <div class="field-grid full">
-          <div class="field"><label>Nome completo</label><input type="text" id="df-nome"></div>
+
+      <!-- ② Contrato e vínculo -->
+      <div class="sec-card">
+        <div class="sec-head">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span class="sec-head-t">Contrato e vínculo</span>
         </div>
-        <div class="field-grid" style="margin-top:12px;">
-          <div class="field"><label>Cargo</label>
-            <select id="df-cargo">
-              <option value="">Selecione o cargo</option>
-            </select>
+        <div class="sf-row full">
+          <div class="sf-cell"><div class="sf-lbl">Nome completo</div><input class="sf-inp" type="text" id="df-nome"></div>
+        </div>
+        <div class="sf-row">
+          <div class="sf-cell"><div class="sf-lbl">Cargo</div>
+            <select class="sf-inp" id="df-cargo"><option value="">Selecione o cargo</option></select>
           </div>
-
-          <!-- ── Card unificado de Contratação ────────────────────────── -->
-          <div style="grid-column:1/-1;background:#fff;border:1px solid #dbeafe;border-left:2px solid #1d4ed8;border-radius:var(--radius);padding:14px 18px;">
-            <!-- Cabeçalho: eyebrow + select -->
-            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-              <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1d4ed8;white-space:nowrap;">Tipo de contrato</span>
-              <select id="df-contrato" onchange="toggleExperiencia()" style="flex:1;max-width:320px;">
-                <option value="">Não informado</option>
-              </select>
-              <span id="contrato-lock-msg" style="display:none;font-size:11px;color:var(--text-sec);display:flex;align-items:center;gap:4px;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                Bloqueado após admissão — para alterar, utilize o processo de recontratação.
-              </span>
-            </div>
-
-            <!-- Sub-bloco: Período de Experiência (CLT) -->
-            <div id="bloco-experiencia" style="display:none;border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
-              <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);margin-bottom:12px;">
-                Período de Experiência
-                <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--text-ter);">— admissão: <span id="exp-adm-inline" style="font-weight:600;color:#6d28d9;">—</span> · máximo 90 dias (CLT art. 445)</span>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0;align-items:start;">
-
-                <!-- 1ª Etapa -->
-                <div style="background:var(--bg-sec);border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
-                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-ter);margin-bottom:8px;">1ª Etapa</div>
-                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
-                    <input type="text" inputmode="numeric" id="df-periodoExp" placeholder="—" maxlength="2"
-                      oninput="this.value=this.value.replace(/\D/g,'');calcularFimExperiencia()"
-                      style="width:48px;text-align:center;font-size:13px;font-weight:600;padding:5px 6px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg, #fff);color:var(--text);">
-                    <span style="font-size:12px;color:var(--text-sec);">dias</span>
-                  </div>
-                  <div style="font-size:11px;color:var(--text-ter);margin-bottom:3px;">Término</div>
-                  <input type="date" id="df-fimExperiencia" readonly
-                    style="width:100%;font-size:12px;font-weight:600;color:var(--text);background:transparent;border:none;border-bottom:1px dashed var(--border);padding:3px 0;cursor:default;outline:none;">
-                  <div id="label-oportunidade" style="margin-top:6px;font-size:10px;font-weight:600;color:#d97706;letter-spacing:.03em;text-transform:uppercase;">1ª oportunidade de encerramento</div>
-                </div>
-
-                <!-- Conector -->
-                <div id="divisor-exp" style="display:flex;align-items:center;justify-content:center;padding:0 10px;margin-top:32px;">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                </div>
-
-                <!-- Prorrogação -->
-                <div id="bloco-prorrogacao-dias" style="background:var(--bg-sec);border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
-                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-ter);margin-bottom:8px;">Prorrogação</div>
-                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
-                    <input type="text" inputmode="numeric" id="df-diasProrrogacao" placeholder="—" maxlength="2"
-                      oninput="this.value=this.value.replace(/\D/g,'');calcularFimExperiencia()"
-                      style="width:48px;text-align:center;font-size:13px;font-weight:600;padding:5px 6px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg, #fff);color:var(--text);">
-                    <span style="font-size:12px;color:var(--text-sec);">dias</span>
-                  </div>
-                  <div id="field-exp2">
-                    <div style="font-size:11px;color:var(--text-ter);margin-bottom:3px;">Término</div>
-                    <input type="date" id="df-fimExperiencia2" readonly
-                      style="width:100%;font-size:12px;font-weight:600;color:var(--text);background:transparent;border:none;border-bottom:1px dashed var(--border);padding:3px 0;cursor:default;outline:none;">
-                    <div style="margin-top:6px;font-size:10px;font-weight:600;color:#dc2626;letter-spacing:.03em;text-transform:uppercase;">data prevista no contrato</div>
-                  </div>
-                  <div id="seta-exp2" style="display:none;"></div>
-                </div>
-
-              </div>
-              <div id="aviso-exp" style="display:none;margin-top:10px;font-size:12px;color:#ef4444;font-weight:600;">
-                ⚠️ Total de <span id="aviso-exp-total"></span> dias ultrapassa o limite legal de 90 dias.
-              </div>
-            </div>
-
-            <!-- Sub-bloco: Prazo Determinado (Jovem Aprendiz, Temporário, Estágio) -->
-            <div id="bloco-prazo-determinado" style="display:none;border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px;">
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);margin-bottom:12px;">
-                Contrato a Prazo Determinado
-                <span id="label-prazo-lei" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;"></span>
-                <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">· admissão: <span id="prazo-adm-inline" style="font-weight:600;color:#6d28d9;">—</span></span>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end;">
-                <div class="field" style="margin:0;">
-                  <label>Data de término do contrato</label>
-                  <input type="date" id="df-fimContrato" oninput="calcularDuracaoContrato()">
-                </div>
-                <div class="field" style="margin:0;">
-                  <label>Instituição parceira</label>
-                  <select id="df-instituicaoAprendiz">
-                    <option value="">Selecione</option>
-                  </select>
-                </div>
-              </div>
-              <div id="aviso-prazo" style="display:none;margin-top:10px;font-size:12px;font-weight:500;padding:8px 12px;border-radius:6px;border-left:3px solid;"></div>
+          <div class="sf-cell"><div class="sf-lbl">Setor</div>
+            <select class="sf-inp" id="df-setor"><option value="">Selecione o setor</option></select>
+          </div>
+        </div>
+        <div class="sf-row full">
+          <div class="sf-cell">
+            <div class="sf-lbl">Tipo de contrato</div>
+            <select class="sf-inp" id="df-contrato" onchange="toggleExperiencia()" style="max-width:260px;">
+              <option value="">Não informado</option>
+            </select>
+            <div id="contrato-lock-msg" class="sf-lock" style="display:none;">
+              <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Bloqueado após admissão — para alterar, utilize o processo de recontratação.
             </div>
           </div>
-          <!-- ── fim card contratação ──────────────────────────────────── -->
+        </div>
 
-          <div class="field"><label>Setor</label>
-            <select id="df-setor">
-              <option value="">Selecione o setor</option>
-            </select>
+        <!-- Sub-bloco: Período de Experiência (CLT) -->
+        <div id="bloco-experiencia" style="display:none;border-top:.5px solid var(--border);padding:14px 16px;">
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);margin-bottom:10px;">
+            Período de experiência
+            <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--text-ter);">— admissão: <span id="exp-adm-inline" style="font-weight:600;color:#6d28d9;">—</span> · máx. 90 dias (CLT art. 445)</span>
           </div>
-          <div class="field"><label>Empresa (registro)</label><input type="text" id="df-empresa" readonly></div>
-          <div class="field"><label>Empresa (atuação)</label>
-            <select id="df-empresa-atuacao">
-              <option value="">Selecione a empresa</option>
-            </select>
+          <div style="display:grid;grid-template-columns:1fr 52px 1fr;align-items:start;">
+            <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-ter);margin-bottom:8px;">1ª Etapa</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+                <input type="text" inputmode="numeric" id="df-periodoExp" placeholder="—" maxlength="2"
+                  oninput="this.value=this.value.replace(/\D/g,'');calcularFimExperiencia()"
+                  style="width:48px;text-align:center;font-size:13px;font-weight:600;padding:5px 6px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--text);">
+                <span style="font-size:12px;color:var(--text-sec);">dias</span>
+              </div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:3px;">Término</div>
+              <input type="date" id="df-fimExperiencia" readonly style="width:100%;font-size:12px;font-weight:600;color:var(--text);background:transparent;border:none;border-bottom:1px dashed var(--border);padding:3px 0;cursor:default;outline:none;">
+              <div id="label-oportunidade" style="margin-top:6px;font-size:10px;font-weight:600;color:#d97706;letter-spacing:.03em;text-transform:uppercase;">⚠ 1ª oportunidade de encerramento</div>
+            </div>
+            <div id="divisor-exp" class="exp-connector">
+              <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              <span>se mantida</span>
+            </div>
+            <div id="bloco-prorrogacao-dias" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-ter);margin-bottom:8px;">Prorrogação</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+                <input type="text" inputmode="numeric" id="df-diasProrrogacao" placeholder="—" maxlength="2"
+                  oninput="this.value=this.value.replace(/\D/g,'');calcularFimExperiencia()"
+                  style="width:48px;text-align:center;font-size:13px;font-weight:600;padding:5px 6px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--text);">
+                <span style="font-size:12px;color:var(--text-sec);">dias</span>
+              </div>
+              <div id="field-exp2">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:3px;">Término</div>
+                <input type="date" id="df-fimExperiencia2" readonly style="width:100%;font-size:12px;font-weight:600;color:var(--text);background:transparent;border:none;border-bottom:1px dashed var(--border);padding:3px 0;cursor:default;outline:none;">
+                <div style="margin-top:6px;font-size:10px;font-weight:600;color:#1849A9;letter-spacing:.03em;text-transform:uppercase;">📅 Data prevista no contrato</div>
+              </div>
+              <div id="seta-exp2" style="display:none;"></div>
+            </div>
           </div>
-          <div class="field"><label>Gestor</label>
-            <select id="df-gestor">
-              <option value="">Selecione o gestor</option>
-            </select>
+          <div id="aviso-exp" style="display:none;margin-top:10px;font-size:12px;color:#ef4444;font-weight:600;">
+            ⚠️ Total de <span id="aviso-exp-total"></span> dias ultrapassa o limite legal de 90 dias.
+          </div>
+        </div>
+
+        <!-- Sub-bloco: Prazo Determinado -->
+        <div id="bloco-prazo-determinado" style="display:none;border-top:.5px solid var(--border);padding:14px 16px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);margin-bottom:12px;">
+            Contrato a Prazo Determinado
+            <span id="label-prazo-lei" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;"></span>
+            <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">· admissão: <span id="prazo-adm-inline" style="font-weight:600;color:#6d28d9;">—</span></span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="field" style="margin:0;"><label>Data de término do contrato</label><input type="date" id="df-fimContrato" oninput="calcularDuracaoContrato()"></div>
+            <div class="field" style="margin:0;"><label>Instituição parceira</label>
+              <select id="df-instituicaoAprendiz"><option value="">Selecione</option></select>
+            </div>
+          </div>
+          <div id="aviso-prazo" style="display:none;margin-top:10px;font-size:12px;font-weight:500;padding:8px 12px;border-radius:6px;border-left:3px solid;"></div>
+        </div>
+
+        <div class="sf-row" style="border-top:.5px solid var(--border);">
+          <div class="sf-cell"><div class="sf-lbl">Empresa (registro)</div><input class="sf-inp" type="text" id="df-empresa" readonly></div>
+          <div class="sf-cell"><div class="sf-lbl">Empresa (atuação)</div>
+            <select class="sf-inp" id="df-empresa-atuacao"><option value="">Selecione a empresa</option></select>
+          </div>
+        </div>
+        <div class="sf-row full">
+          <div class="sf-cell"><div class="sf-lbl">Gestor</div>
+            <select class="sf-inp" id="df-gestor"><option value="">Selecione o gestor</option></select>
           </div>
         </div>
       </div>
-      <div class="drawer-section">
-        <div class="drawer-section-title">Dados pessoais</div>
-        <div class="field-grid">
-          <div class="field"><label>Data de nascimento</label><input type="date" id="df-nascimento"></div>
-          <div class="field"><label>Sexo</label>
-            <select id="df-sexo">
-              <option value="">Não informado</option>
-              <option value="M">Masculino</option>
-              <option value="F">Feminino</option>
+
+      <!-- ③ Dados pessoais -->
+      <div class="sec-card">
+        <div class="sec-head">
+          <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span class="sec-head-t">Dados pessoais</span>
+        </div>
+        <div class="sf-row">
+          <div class="sf-cell"><div class="sf-lbl">Data de nascimento</div><input class="sf-inp" type="date" id="df-nascimento"></div>
+          <div class="sf-cell"><div class="sf-lbl">Sexo</div>
+            <select class="sf-inp" id="df-sexo">
+              <option value="">Não informado</option><option value="M">Masculino</option><option value="F">Feminino</option>
             </select>
           </div>
-          <div class="field"><label>Nacionalidade</label>
-            <select id="df-nacionalidade" onchange="togglePaisNascimento()">
-              <option value="">Não informado</option>
-              <option value="Brasileiro(a)">Brasileiro(a)</option>
-              <option value="Estrangeiro(a)">Estrangeiro(a)</option>
+        </div>
+        <div class="sf-row">
+          <div class="sf-cell"><div class="sf-lbl">Nacionalidade</div>
+            <select class="sf-inp" id="df-nacionalidade" onchange="togglePaisNascimento()">
+              <option value="">Não informado</option><option value="Brasileiro(a)">Brasileiro(a)</option><option value="Estrangeiro(a)">Estrangeiro(a)</option>
             </select>
           </div>
-          <div class="field" id="campoPaisNasc" style="display:none;"><label>País de origem</label><input type="text" id="df-paisNascimento" placeholder="Ex: Argentina"></div>
-          <div class="field"><label>Estado (naturalidade)</label>
-            <select id="df-natEstado" onchange="carregarCidadesNat()">
-              <option value="">Selecione o estado</option>
+          <div class="sf-cell" id="campoPaisNasc" style="display:none;"><div class="sf-lbl">País de origem</div><input class="sf-inp" type="text" id="df-paisNascimento" placeholder="Ex: Argentina"></div>
+          <div class="sf-cell"><div class="sf-lbl">Cor / Raça</div>
+            <select class="sf-inp" id="df-cor">
+              <option value="">Não informado</option><option value="Branca">Branca</option><option value="Preta">Preta</option><option value="Parda">Parda</option><option value="Amarela">Amarela</option><option value="Indígena">Indígena</option>
             </select>
           </div>
-          <div class="field"><label>Cidade (naturalidade)</label>
-            <select id="df-naturalidade">
-              <option value="">Selecione a cidade</option>
-            </select>
+        </div>
+        <div class="sf-row">
+          <div class="sf-cell"><div class="sf-lbl">Estado de nascimento</div>
+            <select class="sf-inp" id="df-natEstado" onchange="carregarCidadesNat()"><option value="">Selecione o estado</option></select>
           </div>
-          <div class="field"><label>Cor / Raça</label>
-            <select id="df-cor">
-              <option value="">Não informado</option>
-              <option value="Branca">Branca</option>
-              <option value="Preta">Preta</option>
-              <option value="Parda">Parda</option>
-              <option value="Amarela">Amarela</option>
-              <option value="Indígena">Indígena</option>
-            </select>
+          <div class="sf-cell"><div class="sf-lbl">Cidade de nascimento</div>
+            <select class="sf-inp" id="df-naturalidade"><option value="">Selecione a cidade</option></select>
           </div>
-          <div class="field"><label>Grau de formação</label>
-            <select id="df-escolaridade">
-              <option value="">Não informado</option>
-            </select>
+        </div>
+        <div class="sf-row full">
+          <div class="sf-cell"><div class="sf-lbl">Grau de formação</div>
+            <select class="sf-inp" id="df-escolaridade"><option value="">Não informado</option></select>
           </div>
         </div>
       </div>
-      <div class="drawer-section">
-        <div class="drawer-section-title">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          Sinalizações
+
+      <!-- ④ Sinalizações -->
+      <div class="sec-card">
+        <div class="sec-head">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span class="sec-head-t">Sinalizações</span>
         </div>
-        <div class="chip-toggle-group">
-          <label class="chip-toggle chip-pcd" for="df-pcd">
-            <input type="checkbox" id="df-pcd">PCD
-          </label>
-          <label class="chip-toggle chip-inss" for="df-inss">
-            <input type="checkbox" id="df-inss">Afastado INSS
-          </label>
-          <label class="chip-toggle chip-primeiro" for="df-primeiroEmprego">
-            <input type="checkbox" id="df-primeiroEmprego">Primeiro emprego
-          </label>
-          <label class="chip-toggle chip-comissionado" for="df-comissionado">
-            <input type="checkbox" id="df-comissionado">Comissionado
-          </label>
+        <div class="sf-row">
+          <div class="sf-cell">
+            <div class="sf-lbl">Situação</div>
+            <div class="chip-toggle-group" style="margin-top:6px;">
+              <label class="chip-toggle chip-comissionado" for="df-comissionado"><input type="checkbox" id="df-comissionado">Comissionado</label>
+              <label class="chip-toggle chip-primeiro" for="df-primeiroEmprego"><input type="checkbox" id="df-primeiroEmprego">Primeiro emprego</label>
+            </div>
+          </div>
+          <div class="sf-cell">
+            <div class="sf-lbl">Condições especiais</div>
+            <div class="chip-toggle-group" style="margin-top:6px;">
+              <label class="chip-toggle chip-pcd" for="df-pcd"><input type="checkbox" id="df-pcd">PCD</label>
+              <label class="chip-toggle chip-inss" for="df-inss"><input type="checkbox" id="df-inss">Afastado INSS</label>
+            </div>
+          </div>
         </div>
       </div>
+
     </div>
 
     <!-- Aba: Contato -->
