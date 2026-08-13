@@ -236,15 +236,16 @@ function logout() {
   try {
     const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
     const headers = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + (sess.access_token || SB_KEY) };
-    const r = await fetch(`${SB_URL}/rest/v1/colaboradores?select=situacao,sexo,aprendiz,pro_labore,empresa&pro_labore=eq.false`, { headers });
+    const r = await fetch(`${SB_URL}/rest/v1/colaboradores?select=situacao,sexo,aprendiz,pro_labore,empresa`, { headers });
     if (!r.ok) return;
     const dados = await r.json();
-    const ativos = dados.filter(c => c.situacao === 'Ativo');
+    const sem_pl = dados.filter(c => !c.pro_labore);
+    const ativos = sem_pl.filter(c => c.situacao === 'Ativo');
     document.getElementById('kpi-ativos').textContent   = ativos.length;
     document.getElementById('kpi-masc').textContent     = ativos.filter(c => c.sexo === 'M').length;
     document.getElementById('kpi-fem').textContent      = ativos.filter(c => c.sexo === 'F').length;
     document.getElementById('kpi-aprendiz').textContent = ativos.filter(c => c.aprendiz).length;
-    document.getElementById('kpi-empresas').textContent = new Set(dados.filter(c => c.empresa).map(c => c.empresa)).size;
+    document.getElementById('kpi-empresas').textContent = new Set(sem_pl.filter(c => c.empresa).map(c => c.empresa)).size;
   } catch(_) {}
 })();
 
