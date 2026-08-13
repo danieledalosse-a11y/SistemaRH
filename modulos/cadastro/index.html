@@ -129,6 +129,11 @@
   .page-btn:disabled { opacity: 0.4; cursor: default; }
   .page-info { font-size: 12px; color: var(--text-sec); }
 
+  /* Abas de situação */
+  .sit-tabs { display:flex; gap:2px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:3px; }
+  .sit-tab { padding:5px 16px; border-radius:6px; font-size:12px; font-weight:500; color:var(--text-sec); cursor:pointer; border:none; background:transparent; transition:all .15s; font-family:inherit; white-space:nowrap; }
+  .sit-tab.active { background:var(--surface); color:var(--text); font-weight:600; box-shadow:0 1px 3px rgba(16,24,40,.10); }
+
   /* Modal centralizado */
   .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
   .drawer-overlay.open { display: flex; }
@@ -401,11 +406,19 @@
       </div>
     </div>
 
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+      <div class="sit-tabs" id="sitTabs">
+        <button class="sit-tab" onclick="setSituacaoTab('')">Todos</button>
+        <button class="sit-tab active" onclick="setSituacaoTab('Ativo')">Ativos</button>
+        <button class="sit-tab" onclick="setSituacaoTab('Inativo')">Inativos</button>
+      </div>
+    </div>
+
     <div class="filters">
       <input type="text" id="busca" placeholder="Buscar por nome, matrícula, cargo..." oninput="aplicarFiltros()">
-      <select id="filtroSituacao" onchange="aplicarFiltros()">
+      <select id="filtroSituacao" style="display:none;" onchange="aplicarFiltros()">
         <option value="">Todas as situações</option>
-        <option value="Ativo">Ativos</option>
+        <option value="Ativo" selected>Ativos</option>
         <option value="Inativo">Inativos</option>
       </select>
       <select id="filtroEmpresa" onchange="filtroEmpresaChanged()">
@@ -433,7 +446,6 @@
             <th class="col-empresa" data-sort="empresa" onclick="sortBy('empresa')">Empresa</th>
             <th>Gestor</th>
             <th data-sort="dataAdmissao" onclick="sortBy('dataAdmissao')">Admissão</th>
-            <th>Situação</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -1534,7 +1546,7 @@ function entrarEmpresaNome(nome) {
 
   _filtroEmpresa = nome;
   atualizarColunaEmpresa(nomeEmpresa);
-  document.getElementById('filtroSituacao').value = 'Ativo';
+  setSituacaoTab('Ativo');
   aplicarFiltros();
   atualizarMetricas();
 }
@@ -1772,22 +1784,27 @@ function filtrarPorCard(tipo) {
 
   cardAtivo.classList.add('active-filter');
   // limpa filtros dos selects mas mantém busca
-  ['filtroSituacao','filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
+  ['filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
   popularSetores('');
+  setSituacaoTab('Ativo');
 
-  if (tipo === 'ativos') {
-    document.getElementById('filtroSituacao').value = 'Ativo';
-  } else if (tipo === 'masc') {
-    document.getElementById('filtroSituacao').value = 'Ativo';
+  if (tipo === 'masc') {
     document.getElementById('filtroSexo').value = 'M';
   } else if (tipo === 'fem') {
-    document.getElementById('filtroSituacao').value = 'Ativo';
     document.getElementById('filtroSexo').value = 'F';
   } else if (tipo === 'aprendiz') {
-    document.getElementById('filtroSituacao').value = 'Ativo';
     window._filtroAprendiz = true;
   }
 
+  aplicarFiltros();
+}
+
+function setSituacaoTab(val) {
+  document.getElementById('filtroSituacao').value = val;
+  document.querySelectorAll('#sitTabs .sit-tab').forEach((btn, i) => {
+    const vals = ['', 'Ativo', 'Inativo'];
+    btn.classList.toggle('active', vals[i] === val);
+  });
   aplicarFiltros();
 }
 
@@ -1795,10 +1812,10 @@ function limparFiltros() {
   window._filtroAprendiz = false;
   ['ativos','masc','fem','aprendiz'].forEach(c => { const el = document.getElementById('card-' + c); if(el) el.classList.remove('active-filter'); });
   document.getElementById('busca').value = '';
-  ['filtroSituacao','filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
+  ['filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
   popularSetores('');
   atualizarColunaEmpresa('');
-  aplicarFiltros();
+  setSituacaoTab('Ativo');
 }
 
 function iniciais(nome) {
@@ -1881,7 +1898,6 @@ function renderTabela() {
       <td class="col-empresa td-sec" style="white-space:nowrap;">${(c.empresa || '—').replace(/^\d+\s*-\s*/, '')}</td>
       <td class="td-sec">${c.gestor || '—'}</td>
       <td class="td-sec" style="white-space:nowrap;">${tempoInfo}</td>
-      <td>${badgeSit}</td>
     </tr>`;
   }).join('');
 
