@@ -414,7 +414,7 @@
 
   <!-- KPIs da empresa selecionada -->
   <div class="metrics" id="metricasLista" style="display:none;margin-bottom:16px;">
-    <div class="metric">
+    <div class="metric clickable" id="ml-card-ativos" onclick="filtrarLista('ativos')">
       <div class="metric-icon" style="background:var(--green-bg);">
         <svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       </div>
@@ -423,7 +423,7 @@
         <div class="metric-label">Colaboradores ativos</div>
       </div>
     </div>
-    <div class="metric">
+    <div class="metric clickable" id="ml-card-masc" onclick="filtrarLista('masc')">
       <div class="metric-icon" style="background:var(--blue-bg);">
         <svg viewBox="0 0 24 24" stroke="var(--blue)"><circle cx="10" cy="14" r="6"/><path d="M22 2l-6 6"/><path d="M16 2h6v6"/></svg>
       </div>
@@ -432,7 +432,7 @@
         <div class="metric-label">Masculino</div>
       </div>
     </div>
-    <div class="metric">
+    <div class="metric clickable" id="ml-card-fem" onclick="filtrarLista('fem')">
       <div class="metric-icon" style="background:var(--purple-bg);">
         <svg viewBox="0 0 24 24" stroke="var(--purple)"><circle cx="12" cy="9" r="6"/><path d="M12 15v6"/><path d="M9 18h6"/></svg>
       </div>
@@ -441,7 +441,7 @@
         <div class="metric-label">Feminino</div>
       </div>
     </div>
-    <div class="metric">
+    <div class="metric clickable" id="ml-card-aprendiz" onclick="filtrarLista('aprendiz')">
       <div class="metric-icon" style="background:#F0FDF4;">
         <svg viewBox="0 0 24 24" stroke="#16A34A"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
       </div>
@@ -450,7 +450,7 @@
         <div class="metric-label">Jovem Aprendiz</div>
       </div>
     </div>
-    <div class="metric">
+    <div class="metric clickable" id="ml-card-pcd" onclick="filtrarLista('pcd')">
       <div class="metric-icon" style="background:#FFF7ED;">
         <svg viewBox="0 0 24 24" stroke="#EA580C"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
       </div>
@@ -514,6 +514,7 @@
         <option value="M">Masculino</option>
         <option value="F">Feminino</option>
       </select>
+      <button id="btnLimparFiltroLista" class="btn-link-limpar" onclick="limparFiltroLista()" style="display:none;background:#FEF3C7;color:#92400E;border-color:#FDE68A;">✕ Limpar filtro do card</button>
       <button class="btn-link-limpar" onclick="limparFiltros()">✕ Limpar filtros</button>
     </div>
 
@@ -1879,6 +1880,45 @@ function filtrarGlobal(tipo) {
   aplicarFiltros();
 }
 
+function filtrarLista(tipo) {
+  // filtra dentro da empresa selecionada (não navega para telaEmpresas)
+  window._filtroAprendiz = false;
+  window._filtroPcd = false;
+  ['filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
+  popularSetores(_filtroEmpresa);
+  setSituacaoTab('Ativo');
+  if (tipo === 'masc')         document.getElementById('filtroSexo').value = 'M';
+  else if (tipo === 'fem')     document.getElementById('filtroSexo').value = 'F';
+  else if (tipo === 'aprendiz') window._filtroAprendiz = true;
+  else if (tipo === 'pcd')      window._filtroPcd = true;
+  // destaca card ativo e mostra botão limpar
+  ['ativos','masc','fem','aprendiz','pcd'].forEach(t => {
+    const el = document.getElementById('ml-card-' + t);
+    if (el) el.classList.toggle('active-filter', t === tipo);
+  });
+  mostrarBtnLimparLista(tipo !== 'ativos');
+  aplicarFiltros();
+}
+
+function mostrarBtnLimparLista(show) {
+  let btn = document.getElementById('btnLimparFiltroLista');
+  if (!btn) return;
+  btn.style.display = show ? 'inline-flex' : 'none';
+}
+
+function limparFiltroLista() {
+  window._filtroAprendiz = false;
+  window._filtroPcd = false;
+  ['filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
+  popularSetores(_filtroEmpresa);
+  ['ativos','masc','fem','aprendiz','pcd'].forEach(t => {
+    const el = document.getElementById('ml-card-' + t);
+    if (el) el.classList.remove('active-filter');
+  });
+  mostrarBtnLimparLista(false);
+  setSituacaoTab('Ativo');
+}
+
 function filtrarPorCard(tipo) {
   const cards = ['ativos','masc','fem','aprendiz'];
   const cardAtivo = document.getElementById('card-' + tipo);
@@ -1924,6 +1964,8 @@ function limparFiltros() {
   window._filtroAprendiz = false;
   window._filtroPcd = false;
   ['ativos','masc','fem','aprendiz'].forEach(c => { const el = document.getElementById('card-' + c); if(el) el.classList.remove('active-filter'); });
+  ['ativos','masc','fem','aprendiz','pcd'].forEach(t => { const el = document.getElementById('ml-card-' + t); if(el) el.classList.remove('active-filter'); });
+  mostrarBtnLimparLista(false);
   document.getElementById('busca').value = '';
   ['filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
   popularSetores('');
