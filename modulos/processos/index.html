@@ -95,7 +95,8 @@
   .prog-bar-fill.p75  { background: #22c55e; }   /* 75–99% verde */
   .prog-bar-fill.p100 { background: #027A48; }   /* 100% verde escuro */
 
-  /* Próxima pendência */
+  /* Próxima pendência — esconde quando expandido */
+  .processo-row.open .row-proxima { display: none; }
   .row-proxima { margin-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sec); }
   .row-proxima-label { color: var(--text-ter); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; flex-shrink: 0; }
   .row-proxima-item { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -115,13 +116,18 @@
 
   /* Checklist */
   .checklist { padding: 12px 20px 6px; display: flex; flex-direction: column; gap: 4px; }
-  .checklist-item { display: flex; align-items: flex-start; gap: 10px; padding: 7px 8px; border-radius: 8px; transition: background 0.12s; }
+  .checklist-grupo-header { font-size: 11px; font-weight: 700; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 2px 2px; padding-top: 6px; border-top: 1px solid var(--border); }
+  .checklist-grupo-header:first-child { border-top: none; margin-top: 2px; }
+  .checklist-item { display: flex; align-items: flex-start; gap: 12px; padding: 9px 8px; border-radius: 8px; transition: background 0.12s; }
   .checklist-item:hover { background: var(--bg); }
-  .checklist-item input[type="checkbox"] { margin-top: 2px; width: 15px; height: 15px; accent-color: var(--green); cursor: pointer; flex-shrink: 0; }
+  .checklist-item input[type="checkbox"] { margin-top: 3px; width: 17px; height: 17px; accent-color: var(--green); cursor: pointer; flex-shrink: 0; }
   .checklist-item input[type="checkbox"]:disabled { cursor: not-allowed; }
-  .checklist-item-text { font-size: 13px; color: var(--text); line-height: 1.4; flex: 1; }
+  .checklist-item-main { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .checklist-item-text { font-size: 14px; color: var(--text); line-height: 1.4; }
   .checklist-item-text.done { color: var(--text-ter); text-decoration: line-through; }
-  .checklist-item-prazo { font-size: 11px; color: var(--text-ter); white-space: nowrap; }
+  .checklist-item-meta { font-size: 11.5px; color: var(--text-ter); }
+  .checklist-item-meta.feito { color: var(--green); }
+  .checklist-item-prazo { font-size: 12px; color: var(--text-ter); white-space: nowrap; padding-top: 2px; }
   .checklist-item-prazo.vencido { color: var(--red); font-weight: 600; }
   .checklist-item-prazo.hoje { color: var(--amber); font-weight: 600; }
 
@@ -551,6 +557,64 @@ function progClass(pct) {
   return 'p0';
 }
 
+const GRUPOS_ADMISSAO = [
+  { label: '📋 Documentação & Comunicação', itens: ['Cadastro no sistema concluído', 'Enviar e-mail de contratação ao Escritório', 'Exame admissional realizado', 'Apresentação à equipe realizada'] },
+  { label: '🖥️ Sistemas', itens: ['Cadastrar no Fronter', 'Solicitar criação de e-mail para TI', 'Cadastrar no Sênior'] },
+  { label: '💳 Benefícios', itens: ['Solicitar Vale Transporte ao Financeiro', 'Pedir cartão Alimentação', 'Inserir na tabela Vale Alimentação Mensal', 'Inserir no Vale Gás', 'Pedir cartão Alelo Pagamento'] },
+  { label: '🛡️ Planos & Seguros', itens: ['Incluir no Mixtra', 'Incluir no Wellhub', 'Incluir no Corplife', 'Inserir no Seguro de Vida'] },
+  { label: '🪪 Uniforme & Crachá', itens: ['Uniforme entregue', 'Pedir crachá (Bulmarplac)'] },
+];
+
+const GRUPOS_DEMISSAO = [
+  { label: '📋 Comunicação & Registro', itens: ['Aviso prévio registrado', 'Fechar cartão Ponto e imprimir', 'Arte de desligamento — encaminhar para Dani (Vendedor)'] },
+  { label: '💳 Benefícios & Acessos', itens: ['Verificar Vale Empregado', 'Calcular dias de VA para homologação', 'Cancelar Vale Transporte', 'Excluir Vale Alimentação', 'Excluir Vale Gás', 'Cancelar Plano de Saúde', 'Excluir Seguro de Vida', 'Excluir Mixtra / Wellhub / Corplife', 'Excluir perfil no Fronter', 'Cancelar e-mail e acessos eletrônicos / rastreador (TI)'] },
+  { label: '📄 Documentação Rescisória', itens: ['Enviar ao escritório: verbas rescisórias (HE, Falta, VA, Comissão)', 'Devolução de uniforme e crachá', 'Exame demissional', 'Conferir documentos do escritório: Termo de rescisão, Seguro Desemprego, Médias salariais, Guia FGTS, Extrato FGTS, Chave liberação FGTS'] },
+  { label: '🤝 Homologação & CTPS', itens: ['Homologação com colaborador — prazo legal 10 dias (antecipar se cair em sábado, domingo ou feriado)', 'Baixa na CTPS (digital ou física)'] },
+];
+
+function buildChecklistHtml(checklist, criadoBase, processoId, tipo) {
+  const grupos = tipo === 'admissao' ? GRUPOS_ADMISSAO : tipo === 'demissao' ? GRUPOS_DEMISSAO : null;
+
+  function itemHtml(c) {
+    const prazoDate = c.prazo_dias != null ? calcularPrazoDesde(criadoBase, c.prazo_dias) : null;
+    const ps = prazoDate ? prazoStatus(prazoDate.toISOString().slice(0,10)) : null;
+    const prazoLabel = prazoDate
+      ? `<span class="checklist-item-prazo${ps && !c.concluido ? ' ' + ps : ''}">prazo: ${fmtData(prazoDate.toISOString().slice(0,10))}</span>`
+      : '';
+    let metaHtml = '';
+    if (c.concluido && c.concluido_em) {
+      const quem = c.concluido_por ? ` por ${c.concluido_por}` : '';
+      metaHtml = `<span class="checklist-item-meta feito">✓ Concluído em ${fmtDataHora(c.concluido_em)}${quem}</span>`;
+    }
+    return `<div class="checklist-item">
+      <input type="checkbox" data-clid="${c.id}" ${c.concluido ? 'checked' : ''} onchange="toggleItem(${c.id}, this.checked, ${processoId})">
+      <div class="checklist-item-main">
+        <span class="checklist-item-text${c.concluido ? ' done' : ''}">${c.item}</span>
+        ${metaHtml}
+      </div>
+      ${prazoLabel}
+    </div>`;
+  }
+
+  if (!grupos) return checklist.map(itemHtml).join('');
+
+  const usados = new Set();
+  let html = '';
+  grupos.forEach(g => {
+    const itensGrupo = checklist.filter(c => g.itens.includes(c.item));
+    if (!itensGrupo.length) return;
+    itensGrupo.forEach(c => usados.add(c.id));
+    html += `<div class="checklist-grupo-header">${g.label}</div>`;
+    html += itensGrupo.map(itemHtml).join('');
+  });
+  const restantes = checklist.filter(c => !usados.has(c.id));
+  if (restantes.length) {
+    html += `<div class="checklist-grupo-header">📌 Outros</div>`;
+    html += restantes.map(itemHtml).join('');
+  }
+  return html;
+}
+
 function buildCard(p) {
   const cfg = TIPO_CONFIG[p.tipo] || { label: p.tipo, cor: 'blue', icon: '📄' };
   const checklist = (p.processos_checklist || []).sort((a, b) => a.ordem - b.ordem);
@@ -599,19 +663,8 @@ function buildCard(p) {
   else if (p.tipo === 'atestado' && extras.cid)
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">CID: ${extras.cid} · ${extras.dias_afastamento || '?'} dia(s)</div>`;
 
-  // Checklist detalhado (visível ao expandir)
-  const checklistHtml = checklist.map(c => {
-    const prazoDate = c.prazo_dias != null ? calcularPrazoDesde(criadoBase, c.prazo_dias) : null;
-    const ps = prazoDate ? prazoStatus(prazoDate.toISOString().slice(0,10)) : null;
-    const prazoLabel = prazoDate
-      ? `<span class="checklist-item-prazo${ps ? ' ' + ps : ''}">até ${fmtData(prazoDate.toISOString().slice(0,10))}</span>`
-      : '';
-    return `<div class="checklist-item">
-      <input type="checkbox" ${c.concluido ? 'checked' : ''} onchange="toggleItem(${c.id}, this.checked, ${p.id})">
-      <span class="checklist-item-text${c.concluido ? ' done' : ''}">${c.item}</span>
-      ${prazoLabel}
-    </div>`;
-  }).join('');
+  // Checklist detalhado com agrupamento por categoria
+  const checklistHtml = buildChecklistHtml(checklist, criadoBase, p.id, p.tipo);
 
   const btnConcluir = todosFeitos
     ? `<button class="btn btn-success btn-sm" onclick="concluirProcesso(${p.id})">✅ Concluir processo</button>`
@@ -669,38 +722,93 @@ function calcularPrazoDesde(dataBase, diasUteis) {
 
 // ─── Checklist toggle ─────────────────────────────────────────────
 async function toggleItem(checklistId, concluido, processoId) {
-  try {
-    const body = { concluido };
+  const body = { concluido };
+  if (concluido) { body.concluido_por = USUARIO_NOME || 'RH'; body.concluido_em = new Date().toISOString(); }
+  else           { body.concluido_por = null; body.concluido_em = null; }
+
+  // Atualiza DOM imediatamente — sem re-render, painel permanece aberto
+  const chkEl = document.querySelector(`input[data-clid="${checklistId}"]`);
+  if (chkEl) {
+    const itemEl = chkEl.closest('.checklist-item');
+    const textEl = itemEl?.querySelector('.checklist-item-text');
+    if (textEl) textEl.classList.toggle('done', concluido);
+    // Atualiza ou remove meta (feito por/em)
+    let metaEl = itemEl?.querySelector('.checklist-item-meta');
     if (concluido) {
-      body.concluido_por = USUARIO_NOME || 'RH';
-      body.concluido_em = new Date().toISOString();
+      const quem = USUARIO_NOME ? ` por ${USUARIO_NOME}` : '';
+      const agora = new Date().toISOString();
+      if (!metaEl) {
+        metaEl = document.createElement('span');
+        metaEl.className = 'checklist-item-meta feito';
+        const mainEl = itemEl?.querySelector('.checklist-item-main');
+        if (mainEl) mainEl.appendChild(metaEl);
+      }
+      metaEl.textContent = `✓ Concluído em ${fmtDataHora(agora)}${quem}`;
     } else {
-      body.concluido_por = null;
-      body.concluido_em = null;
+      metaEl?.remove();
     }
-    const r = await fetch(`${SB_URL}/rest/v1/processos_checklist?id=eq.${checklistId}`, {
-      method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error('Erro ao atualizar item');
-    // Recarregar só este card
-    recarregarCard(processoId);
-  } catch(e) {
-    showToast('Erro ao marcar item: ' + e.message, 'error');
   }
+  atualizarProgresso(processoId);
+
+  // Persiste em background
+  fetch(`${SB_URL}/rest/v1/processos_checklist?id=eq.${checklistId}`, {
+    method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(body)
+  }).catch(() => showToast('Erro ao salvar item', 'error'));
 }
 
-async function recarregarCard(processoId) {
-  try {
-    const r = await fetch(
-      `${SB_URL}/rest/v1/processos_rh?id=eq.${processoId}&select=*,processos_checklist(*)`,
-      { headers: SB_HEADERS }
-    );
-    const [p] = await r.json();
-    if (!p) return;
-    const cardEl = document.getElementById('card-' + processoId);
-    if (!cardEl) return;
-    cardEl.outerHTML = buildCard(p);
-  } catch(_) {}
+function atualizarProgresso(processoId) {
+  const cardEl = document.getElementById('card-' + processoId);
+  if (!cardEl) return;
+  const checkboxes = cardEl.querySelectorAll('input[type="checkbox"]');
+  const total = checkboxes.length;
+  const feitos = [...checkboxes].filter(c => c.checked).length;
+  const pct = total ? Math.round((feitos / total) * 100) : 0;
+
+  // Barra
+  const fill = cardEl.querySelector('.prog-bar-fill');
+  if (fill) { fill.style.width = pct + '%'; fill.className = 'prog-bar-fill ' + progClass(pct); }
+
+  // Contagem e %
+  const contagem = cardEl.querySelector('.row-prog-contagem');
+  if (contagem) contagem.textContent = `${feitos} de ${total} itens concluídos`;
+  const pctEl = cardEl.querySelector('.row-prog-pct');
+  if (pctEl) {
+    pctEl.textContent = pct + '%';
+    pctEl.style.color = pct===100?'var(--green)':pct>=75?'#22c55e':pct>=50?'#ca8a04':pct>=25?'#ea580c':'#dc2626';
+  }
+
+  // Próxima pendência
+  const proximaWrap = cardEl.querySelector('.row-proxima');
+  if (proximaWrap) {
+    const proxCb = [...checkboxes].find(c => !c.checked);
+    if (!proxCb) {
+      proximaWrap.innerHTML = '<span style="font-size:12px;color:var(--green);font-weight:600;">✅ Todos os itens concluídos</span>';
+    } else {
+      const item = proxCb.closest('.checklist-item');
+      const texto = item?.querySelector('.checklist-item-text')?.textContent || '';
+      const prazo = item?.querySelector('.checklist-item-prazo')?.textContent || '';
+      const ps = item?.querySelector('.checklist-item-prazo')?.classList.contains('vencido') ? 'vencido'
+               : item?.querySelector('.checklist-item-prazo')?.classList.contains('hoje') ? 'hoje' : 'ok';
+      proximaWrap.innerHTML = `<span class="row-proxima-label">Pendente:</span>
+        <span class="row-proxima-item">${texto}</span>
+        ${prazo ? `<span class="row-proxima-prazo ${ps}">${prazo}</span>` : ''}`;
+    }
+  }
+
+  // Botão concluir
+  const actionsEl = cardEl.querySelector('.card-actions');
+  if (actionsEl) {
+    const btnExiste = actionsEl.querySelector('.btn-success');
+    if (pct === 100 && !btnExiste) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-success btn-sm';
+      btn.textContent = '✅ Concluir processo';
+      btn.onclick = () => concluirProcesso(processoId);
+      actionsEl.insertBefore(btn, actionsEl.firstChild);
+    } else if (pct < 100 && btnExiste) {
+      btnExiste.remove();
+    }
+  }
 }
 
 // ─── Concluir processo ────────────────────────────────────────────
