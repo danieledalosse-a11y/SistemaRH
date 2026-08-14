@@ -1993,6 +1993,14 @@ function toggleLimparColab() {
   const val = document.getElementById('buscaColab').value;
   document.getElementById('btnLimparColab').style.display = val ? '' : 'none';
 }
+function toggleKitGrp(kitId) {
+  const rows = document.querySelectorAll(`tr[data-kit-id="${kitId}"]`);
+  const chev = document.getElementById(`kitChev-${kitId}`);
+  const isOpen = rows.length > 0 && rows[0].style.display !== 'none';
+  rows.forEach(r => { r.style.display = isOpen ? 'none' : ''; });
+  if (chev) chev.style.transform = isOpen ? '' : 'rotate(90deg)';
+}
+
 function limparBuscaColab() {
   document.getElementById('buscaColab').value = '';
   document.getElementById('btnLimparColab').style.display = 'none';
@@ -2138,38 +2146,76 @@ async function carregarHistoricoColab(colabId) {
       cardEmPoder.style.display = 'none';
     }
 
-    // ── Histórico ─────────────────────────────────────────────────────────────
+    // ── Histórico (agrupado por kit_entrega_id) ─────────────────────────────
     if (!movs.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma movimentação registrada</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma movimentação registrada</td></tr>';
       return;
     }
-    const motivoLabel = { admissao:'Admissão', extra_desconto_folha:'🛒 Extra (desc. folha)', troca_programada:'Troca programada', troca_antecipada:'Troca antecipada', demissao:'Desligamento', ajuste:'Ajuste', devolucao:'Devolução' };
-    const condicaoLabel = { reutilizavel:'✅ Reutilizável', descartado:'🗑 Descartado' };
-    tbody.innerHTML = movs.map(m => {
-      const isDev     = m.tipo === 'devolucao';
-      const isPending = m.tipo === 'entrega' && !m.confirmado;
-      const movBadge  = isDev
-        ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#ECFDF3;color:#027A48;font-weight:600;">↩ Devolução</span>`
-        : isPending
-          ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#FFFAEB;color:#92400E;font-weight:600;">⏳ Pendente</span>`
-          : `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">✓ Entregue</span>`;
-      const condicao = m.condicao_devolucao ? `<div style="font-size:11px;color:var(--text-ter);">${condicaoLabel[m.condicao_devolucao]||''}</div>` : '';
-      const btnStyle  = `background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-ter);padding:5px 7px;font-size:11px;font-weight:600;transition:all .15s;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;`;
-      _pendMap[m.id] = {
-        itemNome:  m.item?.nome || '—',
-        itemId:    m.item_id,
-        tamanho:   m.tamanho || '',
-        qtd:       m.quantidade,
-        almoxId:   m.almoxarifado_id,
-        motivo:    m.motivo || 'admissao',
-      };
-      const nomeEsc2  = (m.item?.nome||'').replace(/'/g,"\\'");
-      const tamEsc2   = (m.tamanho||'').replace(/'/g,"\\'");
 
-      let btnEstorno;
-      if (isPending) {
-        // ⏳ Pendente: editar + confirmar entrega + excluir sem impacto no estoque
-        btnEstorno = `<div style="display:flex;gap:5px;">
+    // Agrupar: itens com mesmo kit_entrega_id ficam juntos; avulsos são individuais
+    const _grupos = [];
+    const _kitGrpMap = new Map();
+    for (const m of movs) {
+      if (m.kit_entrega_id) {
+        if (!_kitGrpMap.has(m.kit_entrega_id)) {
+          const g = { tipo: 'kit', kitId: m.kit_entrega_id, itens: [] };
+          _kitGrpMap.set(m.kit_entrega_id, g);
+          _grupos.push(g);
+        }
+        _kitGrpMap.get(m.kit_entrega_id).itens.push(m);
+      } else {
+        _grupos.push({ tipo: 'avulso', mov: m });
+      }
+    }
+
+    const motivoLabel   = { admissao:'Admissão', extra_desconto_folha:'🛒 Extra (desc. folha)', troca_programada:'Troca programada', troca_antecipada:'Troca antecipada', demissao:'Desligamento', ajuste:'Ajuste', devolucao:'Devolução' };
+    const condicaoLabel = { reutilizavel:'✅ Reutilizável', descartado:'🗑 Descartado' };
+    const motPendLabel  = { sem_estoque:'Sem estoque', sem_numeracao:'Tamanho não disponível', entregar_depois:'A entregar futuramente', outro:'Outro motivo' };
+
+    const ICO_EDIT  = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+    const ICO_CHECK = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const ICO_TRASH = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+    const ICO_UNDO  = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>`;
+
+    const _renderMovRow = (m, isKitItem) => {
+      const isDev    = m.tipo === 'devolucao';
+      const isNaoEnt = m.tipo === 'entrega' && (m.quantidade === 0 || m.quantidade === null);
+      const isPend   = m.tipo === 'entrega' && !m.confirmado && !isNaoEnt;
+      const movBadge = isNaoEnt
+        ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#FFF7ED;color:#C4490C;font-weight:600;">⚠ Não entregue</span>`
+        : isDev
+          ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#ECFDF3;color:#027A48;font-weight:600;">↩ Devolução</span>`
+          : isPend
+            ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#FFFAEB;color:#92400E;font-weight:600;">⏳ Pendente</span>`
+            : `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">✓ Entregue</span>`;
+      const condicao = m.condicao_devolucao
+        ? `<div style="font-size:11px;color:var(--text-ter);">${condicaoLabel[m.condicao_devolucao]||''}</div>` : '';
+      const motPendInfo = (isNaoEnt && m.motivo_pendencia)
+        ? `<div style="font-size:11px;color:var(--amber);margin-top:2px;">${motPendLabel[m.motivo_pendencia] || m.motivo_pendencia}</div>` : '';
+      const btnStyle = `background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-ter);padding:5px 7px;font-size:11px;font-weight:600;transition:all .15s;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;`;
+
+      if (!isNaoEnt) {
+        _pendMap[m.id] = {
+          itemNome: m.item?.nome || '—',
+          itemId:   m.item_id,
+          tamanho:  m.tamanho || '',
+          qtd:      m.quantidade,
+          almoxId:  m.almoxarifado_id,
+          motivo:   m.motivo || 'admissao',
+        };
+      }
+      const nomeEsc2 = (m.item?.nome||'').replace(/'/g,"\\'");
+      const tamEsc2  = (m.tamanho||'').replace(/'/g,"\\'");
+
+      let btnAcao = '';
+      if (isNaoEnt) {
+        btnAcao = `<button onclick="confirmarExcluirMov(${m.id},'${nomeEsc2}','${tamEsc2}',${m.quantidade},${m.item_id},${m.almoxarifado_id},false,true)"
+          style="${btnStyle}color:#B91C1C;border-color:#FECACA;"
+          onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)';this.style.background='#FEF2F2';"
+          onmouseout="this.style.borderColor='#FECACA';this.style.color='#B91C1C';this.style.background='';"
+          title="Excluir registro">${ICO_TRASH}</button>`;
+      } else if (isPend) {
+        btnAcao = `<div style="display:flex;gap:5px;">
           <button onclick="abrirEditarPendente(this)"
             data-mov-id="${m.id}"
             data-item-nome="${(m.item?.nome||'').replace(/"/g,'&quot;')}"
@@ -2181,44 +2227,85 @@ async function carregarHistoricoColab(colabId) {
             style="${btnStyle}border-color:#93C5FD;color:#1849A9;background:#EEF4FF;"
             onmouseover="this.style.borderColor='#1849A9';this.style.background='#DBEAFE';"
             onmouseout="this.style.background='#EEF4FF';this.style.borderColor='#93C5FD';"
-            title="Editar lançamento pendente"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+            title="Editar lançamento pendente">${ICO_EDIT}</button>
           <button onclick="confirmarConfirmarEntrega(${m.id},'${nomeEsc2}',${m.item_id},'${tamEsc2}',${m.quantidade},${m.almoxarifado_id})"
             style="${btnStyle}border-color:#6EE7B7;color:#027A48;background:#ECFDF3;"
             onmouseover="this.style.background='#D1FAE5';this.style.borderColor='#027A48';"
             onmouseout="this.style.background='#ECFDF3';this.style.borderColor='#6EE7B7';"
-            title="Confirmar entrega física"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+            title="Confirmar entrega física">${ICO_CHECK}</button>
           <button onclick="confirmarExcluirMov(${m.id},'${nomeEsc2}','${tamEsc2}',${m.quantidade},${m.item_id},${m.almoxarifado_id},false,true)"
             style="${btnStyle}color:#B91C1C;border-color:#FECACA;"
             onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)';this.style.background='#FEF2F2';"
             onmouseout="this.style.borderColor='#FECACA';this.style.color='#B91C1C';this.style.background='';"
-            title="Excluir (sem impacto no estoque)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            title="Excluir (sem impacto no estoque)">${ICO_TRASH}</button>
         </div>`;
       } else if (!isDev) {
-        // ✅ Entregue: só estornar
-        btnEstorno = `<button onclick="confirmarEstorno(${m.id},'${nomeEsc2}',${m.item_id},'${tamEsc2}',${m.quantidade},${m.almoxarifado_id},'${m.tipo}')"
+        btnAcao = `<button onclick="confirmarEstorno(${m.id},'${nomeEsc2}',${m.item_id},'${tamEsc2}',${m.quantidade},${m.almoxarifado_id},'${m.tipo}')"
           style="${btnStyle}"
           onmouseover="this.style.borderColor='#F79009';this.style.color='#92400E';"
           onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)';"
-          title="Estornar (restaura estoque)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></button>`;
+          title="Estornar (restaura estoque)">${ICO_UNDO}</button>`;
       } else {
-        // ↩ Devolução: só excluir
-        btnEstorno = `<button onclick="confirmarExcluirMov(${m.id},'${nomeEsc2}','${tamEsc2}',${m.quantidade},${m.item_id},${m.almoxarifado_id},true,false)"
+        btnAcao = `<button onclick="confirmarExcluirMov(${m.id},'${nomeEsc2}','${tamEsc2}',${m.quantidade},${m.item_id},${m.almoxarifado_id},true,false)"
           style="${btnStyle}"
           onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)';"
           onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)';"
-          title="Excluir registro"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>`;
+          title="Excluir registro">${ICO_TRASH}</button>`;
       }
-      return `<tr>
-        <td style="white-space:nowrap;">${m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '—'}</td>
+
+      const bgStyle = isKitItem ? 'background:var(--bg-sub,#FAFAFA);' : '';
+      const plStyle = isKitItem ? 'padding-left:28px;' : '';
+      return `<tr style="${bgStyle}">
+        <td style="white-space:nowrap;${plStyle}">${m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '—'}</td>
         <td style="font-weight:600;">${m.item?.nome || '—'}</td>
         <td><span class="badge badge-${m.item?.tipo||'uniforme'}">${m.item?.tipo==='epi'?'EPI':'Uniforme'}</span></td>
         <td>${m.tamanho || '—'}</td>
-        <td style="${isDev?'color:#027A48;':''}">${isDev?'−':''}${m.quantidade}</td>
-        <td>${movBadge}${condicao}<div style="font-size:11px;color:var(--text-ter);margin-top:2px;">${motivoLabel[m.motivo]||m.motivo}</div></td>
+        <td style="${isDev?'color:#027A48;':''}">${isDev?'−':''}${isNaoEnt?'—':m.quantidade}</td>
+        <td>${movBadge}${condicao}${motPendInfo}<div style="font-size:11px;color:var(--text-ter);margin-top:2px;">${motivoLabel[m.motivo]||m.motivo}</div></td>
         <td style="color:var(--text-sec);font-size:12px;">${m.almox?.nome || '—'}</td>
         <td style="color:var(--text-sec);font-size:12px;">${m.registrado_por || '—'}</td>
-        <td>${btnEstorno}</td>
+        <td>${btnAcao}</td>
       </tr>`;
+    };
+
+    tbody.innerHTML = _grupos.map(g => {
+      if (g.tipo === 'avulso') return _renderMovRow(g.mov, false);
+
+      // ── Kit group ──
+      const kitId    = g.kitId;
+      const primeiro = g.itens[0];
+      const data     = primeiro.data_movimentacao?.split('T')[0].split('-').reverse().join('/') || '—';
+      const motLabel = motivoLabel[primeiro.motivo] || primeiro.motivo || 'Kit';
+      const nConf    = g.itens.filter(m => m.confirmado).length;
+      const nPend    = g.itens.filter(m => !m.confirmado && (m.quantidade||0) > 0).length;
+      const nNaoEnt  = g.itens.filter(m => (m.quantidade||0) === 0 || m.quantidade === null).length;
+      const total    = g.itens.length;
+
+      const badges = [
+        nConf   > 0 ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">✓ ${nConf}</span>` : '',
+        nPend   > 0 ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#FFFAEB;color:#92400E;font-weight:600;">⏳ ${nPend}</span>` : '',
+        nNaoEnt > 0 ? `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#FFF7ED;color:#C4490C;font-weight:600;">⚠ ${nNaoEnt}</span>` : '',
+      ].filter(Boolean).join('');
+
+      const hdr = `<tr onclick="toggleKitGrp('${kitId}')" style="cursor:pointer;background:var(--bg,#F9FAFB);">
+        <td colspan="9" style="padding:10px 14px;border-bottom:2px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span id="kitChev-${kitId}" style="color:var(--text-ter);font-size:16px;transition:transform .2s;line-height:1;display:inline-block;">›</span>
+            <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);flex-shrink:0;">Kit</span>
+            <span style="font-weight:700;font-size:13px;">${motLabel}</span>
+            <span style="font-size:12px;color:var(--text-ter);">${data}</span>
+            <span style="font-size:12px;color:var(--text-ter);">· ${total} itens</span>
+            <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">${badges}</div>
+          </div>
+        </td>
+      </tr>`;
+
+      const itemRows = g.itens.map(m => {
+        const row = _renderMovRow(m, true);
+        return row.replace('<tr style="', `<tr data-kit-id="${kitId}" style="display:none;`);
+      }).join('');
+
+      return hdr + itemRows;
     }).join('');
   } catch(e) { toast('Erro ao carregar histórico: ' + e.message); }
 }
