@@ -2432,18 +2432,29 @@ function atualizarTamanhosEntrega() {
     return;
   }
 
+  const itemId   = opt.value;
   const sistema  = opt.dataset.sistema;
-  const tamanhos = JSON.parse(opt.dataset.tamanhos || '[]');
   const tipo     = opt.dataset.tipo;
 
   campoCA.style.display = tipo === 'epi' ? '' : 'none';
 
   if (sistema === 'unico') {
     selT.innerHTML = '<option value="Único">Único</option>';
-  } else if (tamanhos.length) {
-    selT.innerHTML = '<option value="">Selecione…</option>' + tamanhos.map(t => `<option value="${t}">${t}</option>`).join('');
   } else {
-    selT.innerHTML = '<option value="">Sem tamanhos cadastrados</option>';
+    // usa tamanhos do ESTOQUE real — mais preciso que o catálogo
+    const tamanhosEstoque = [...new Set(
+      ESTOQUE.filter(e => String(e.item_id) === String(itemId) && e.tamanho)
+             .map(e => e.tamanho)
+    )];
+    // fallback para catálogo se estoque não tiver dados
+    const tamanhos = tamanhosEstoque.length
+      ? tamanhosEstoque
+      : JSON.parse(opt.dataset.tamanhos || '[]');
+    if (tamanhos.length) {
+      selT.innerHTML = '<option value="">Selecione…</option>' + tamanhos.map(t => `<option value="${t}">${t}</option>`).join('');
+    } else {
+      selT.innerHTML = '<option value="">Sem tamanhos cadastrados</option>';
+    }
   }
   mostrarCustoMedioEntrega();
 }
