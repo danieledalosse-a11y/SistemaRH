@@ -987,6 +987,9 @@ function fiSel(id, label, val, opts) {
 function fiCheck(id, label, val) {
   return `<div class="data-row"><label class="data-label" for="pf_${id}">${label}</label><select class="form-control-sm" id="pf_${id}"><option value="Sim"${val?' selected':''}>Sim</option><option value="Não"${!val?' selected':''}>Não</option></select></div>`;
 }
+function togglePanelVT(val) {
+  document.getElementById('pf_vt_extras').style.display = val === 'Sim' ? 'flex' : 'none';
+}
 function fv(id) { const el = document.getElementById('pf_'+id); if (!el) return ''; if (el.type==='checkbox') return el.checked; if (el.tagName==='SELECT' && (el.id==='pf_vale_transporte'||el.id==='pf_primeiro_emprego')) return el.value==='Sim'; return el.value.trim(); }
 function fmtCPF(v) { if (!v) return ''; const d = String(v).replace(/\D/g,''); if (d.length!==11) return v; return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'); }
 function cpfMaskRH(el) {
@@ -1199,7 +1202,21 @@ function renderPanelComp(f) {
     <div class="data-section"><div class="data-section-title">Formação e Perfil</div><div class="data-grid">
       ${fiSel('escolaridade','Escolaridade',f.escolaridade,['Fundamental Incompleto','Fundamental Completo','Médio Incompleto','Médio Completo','Superior Incompleto','Superior Completo','Pós-graduação'])}
       ${fiSel('cor_raca','Cor/Raça',f.cor_raca,['Branca','Preta','Parda','Amarela','Indígena'])}
-      ${fiCheck('vale_transporte','Vale Transporte',f.vale_transporte)}
+      <div class="data-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+        <label class="data-label">Vale Transporte</label>
+        <select class="form-control-sm" id="pf_vale_transporte" onchange="togglePanelVT(this.value)"
+          style="width:100%;">
+          <option value="Sim"${f.vale_transporte?' selected':''}>Sim</option>
+          <option value="Não"${!f.vale_transporte?' selected':''}>Não</option>
+        </select>
+        <div id="pf_vt_extras" style="display:${f.vale_transporte?'flex':'none'};flex-direction:column;gap:8px;width:100%;padding-top:4px;">
+          <div class="data-grid-3">
+            ${fi('vt_cartao','Nº do Cartão VT',f.vt_cartao||'')}
+            ${fi('vt_passes','Passes por dia',f.vt_passes||'')}
+            ${fi('vt_linha','Linha de Ônibus',f.vt_linha||'')}
+          </div>
+        </div>
+      </div>
       ${fiCheck('primeiro_emprego','Primeiro Emprego',f.primeiro_emprego)}
       ${fi('hobby','Hobby/Passatempo',f.hobby)}
     </div></div>
@@ -1227,7 +1244,7 @@ async function savePanel() {
     data_casamento: fv('data_casamento')||null, conjuge_nome: fv('conjuge_nome'),
     conjuge_cpf: fv('conjuge_cpf'), conjuge_rg: fv('conjuge_rg'), conjuge_nascimento: fv('conjuge_nascimento')||null,
     escolaridade: fv('escolaridade'), cor_raca: fv('cor_raca'),
-    vale_transporte: fv('vale_transporte'), primeiro_emprego: fv('primeiro_emprego'),
+    vale_transporte: fv('vale_transporte'), vt_cartao: fv('vt_cartao')||null, vt_passes: fv('vt_passes') ? parseInt(fv('vt_passes')) : null, vt_linha: fv('vt_linha')||null, primeiro_emprego: fv('primeiro_emprego'),
     hobby: fv('hobby'), banco: fv('banco'), agencia: fv('agencia'), conta: fv('conta'),
     dependentes: getPanelDeps(),
     tem_filhos: getPanelDeps().length > 0,
