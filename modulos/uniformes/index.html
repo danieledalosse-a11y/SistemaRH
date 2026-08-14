@@ -2487,6 +2487,56 @@ function mostrarCustoMedioEntrega() {
   }
 }
 
+// ─── Integração Processos RH ────────────────────────────────────────
+async function marcarUniformeEntregueNoProcesso(colaboradorId) {
+  try {
+    const session = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    const token = session.access_token;
+    if (!token || !colaboradorId) return;
+
+    const headers = {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': 'application/json',
+    };
+
+    // Buscar processo de admissão aberto para este colaborador
+    const rProc = await fetch(
+      `${SB_URL}/rest/v1/processos_rh?colaborador_id=eq.${colaboradorId}&tipo=eq.admissao&status=eq.aberto&select=id`,
+      { headers }
+    );
+    if (!rProc.ok) return;
+    const processos = await rProc.json();
+    if (!processos.length) return;
+
+    const processoId = processos[0].id;
+
+    // Buscar item "Uniforme entregue" no checklist
+    const rItem = await fetch(
+      `${SB_URL}/rest/v1/processos_checklist?processo_id=eq.${processoId}&item=eq.Uniforme%20entregue&select=id,concluido`,
+      { headers }
+    );
+    if (!rItem.ok) return;
+    const itens = await rItem.json();
+    if (!itens.length || itens[0].concluido) return;
+
+    // Marcar como concluído
+    const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    await fetch(`${SB_URL}/rest/v1/processos_checklist?id=eq.${itens[0].id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({
+        concluido: true,
+        concluido_por: perfil.nome || 'Uniformes',
+        concluido_em: new Date().toISOString(),
+      }),
+    });
+    toast('✓ Item "Uniforme entregue" marcado automaticamente no Processo de Admissão');
+  } catch(_) {
+    // silencioso — não bloqueia o fluxo principal
+  }
+}
+
 function salvarEntregaAtual() {
   if (_modoEntrega === 'kit') salvarEntregaKit();
   else salvarEntrega();
@@ -2545,6 +2595,8 @@ async function salvarEntregaKit() {
       entregues++;
     }
 
+    const motivoKit = document.getElementById('eMotivoKit')?.value || 'admissao';
+    if (motivoKit === 'admissao') marcarUniformeEntregueNoProcesso(_colabAtual.id);
     toast(`✓ Kit registrado — ${entregues} ${entregues === 1 ? 'item pendente de confirmação' : 'itens pendentes de confirmação'}`);
     fecharModalEntrega();
     carregarHistoricoColab(_colabAtual.id);
@@ -2613,6 +2665,7 @@ async function salvarEntrega() {
       }
     }
 
+    if (motivo === 'admissao') marcarUniformeEntregueNoProcesso(_colabAtual.id);
     toast(confirmarImediato ? '✓ Devolução registrada' : '✓ Entrega registrada — aguardando confirmação de entrega física');
     fecharModalEntrega();
     carregarHistoricoColab(_colabAtual.id);
