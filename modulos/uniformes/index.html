@@ -412,9 +412,9 @@
             <div class="card-sub" style="margin:0;" id="colabCargoDetalhe"></div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-outline" onclick="abrirModalComprovante()" title="Emite Termo de Responsabilidade de Uniformes e Ficha de EPI">
+            <button class="btn btn-outline" onclick="abrirModalComprovante()" title="Gera Termo de Uniformes e Ficha de EPI (NR-6)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-              Emitir comprovante
+              Documentos de entrega
             </button>
             <button id="btnRegistrarEntrega" class="btn btn-primary" onclick="abrirModalEntrega()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1193,7 +1193,7 @@
 <div class="modal-overlay" id="modalComprovante" style="display:none;">
   <div class="modal" style="max-width:640px;">
     <div class="modal-hdr">
-      <span class="modal-title">Emitir comprovante</span>
+      <span class="modal-title">Documentos de entrega</span>
       <button class="modal-close" onclick="fecharModalComprovante()">×</button>
     </div>
     <div style="padding:16px 20px 0;">
@@ -2156,6 +2156,14 @@ async function carregarHistoricoColab(colabId) {
           : `<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#EFF4FF;color:#1849A9;font-weight:600;">✓ Entregue</span>`;
       const condicao = m.condicao_devolucao ? `<div style="font-size:11px;color:var(--text-ter);">${condicaoLabel[m.condicao_devolucao]||''}</div>` : '';
       const btnStyle  = `background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-ter);padding:5px 11px;font-size:11px;font-weight:600;transition:all .15s;white-space:nowrap;font-family:inherit;`;
+      _pendMap[m.id] = {
+        itemNome:  m.item?.nome || '—',
+        itemId:    m.item_id,
+        tamanho:   m.tamanho || '',
+        qtd:       m.quantidade,
+        almoxId:   m.almoxarifado_id,
+        motivo:    m.motivo || 'admissao',
+      };
       const nomeEsc2  = (m.item?.nome||'').replace(/'/g,"\\'");
       const tamEsc2   = (m.tamanho||'').replace(/'/g,"\\'");
 
@@ -2163,7 +2171,7 @@ async function carregarHistoricoColab(colabId) {
       if (isPending) {
         // ⏳ Pendente: editar + confirmar entrega + excluir sem impacto no estoque
         btnEstorno = `<div style="display:flex;gap:5px;">
-          <button onclick="abrirEditarPendente(${m.id},'${nomeEsc2}',${m.item_id},'${tamEsc2}',${m.quantidade},${m.almoxarifado_id},'${m.motivo||'admissao'}')"
+          <button onclick="abrirEditarPendente(${m.id})"
             style="${btnStyle}border-color:#C7D7FD;color:#1849A9;"
             onmouseover="this.style.background='#EEF4FF';this.style.borderColor='#1849A9';"
             onmouseout="this.style.background='';this.style.borderColor='#C7D7FD';"
@@ -3949,6 +3957,7 @@ function abrirModalComprovante() {
     const isEpi = (m.item?.tipo || item?.tipo) === 'epi';
     const linha = {
       nome:    m.item?.nome || '—',
+      item_id: m.item_id || m.item?.id || null,
       tamanho: m.tamanho || '',
       qtd:     m.quantidade || 1,
       data:    m.data_movimentacao?.split('T')[0] || '',
@@ -3987,10 +3996,10 @@ function _renderComprovanteItens() {
     const itensAtivos = ITENS.filter(i => i.ativo && (tipo === 'epi' ? i.tipo === 'epi' : i.tipo !== 'epi'));
     cont.innerHTML = arr.map((l, idx) => `
       <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--bg);border-radius:8px;flex-wrap:wrap;">
-        <select onchange="_comprovanteArr('${tipo}',${idx},'nome',this.options[this.selectedIndex].text);this.dataset.itemId=this.value"
+        <select onchange="_comprovanteArr('${tipo}',${idx},'nome',this.options[this.selectedIndex].text);_comprovanteArr('${tipo}',${idx},'item_id',parseInt(this.value)||null);"
           style="flex:2;min-width:140px;padding:5px 7px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">
           <option value="">Selecione…</option>
-          ${itensAtivos.map(i=>`<option value="${i.id}" ${i.nome===l.nome?'selected':''}>${i.nome}${i.variante?' · '+i.variante:''}</option>`).join('')}
+          ${itensAtivos.map(i=>`<option value="${i.id}" ${i.id===l.item_id?'selected':''}>${i.nome}${i.variante?' · '+i.variante:''}</option>`).join('')}
         </select>
         <input type="text" value="${l.tamanho}" placeholder="Tam." oninput="_comprovanteArr('${tipo}',${idx},'tamanho',this.value)"
           style="width:58px;padding:5px 7px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;text-align:center;">
@@ -4274,11 +4283,13 @@ async function confirmarAjusteEstoque() {
 }
 
 // ─── Editar entrega pendente ──────────────────────────────────────────────────
+const _pendMap = {};
 let _editPendenteId = null;
 
-function abrirEditarPendente(movId, itemNome, itemId, tamanho, qtd, almoxId, motivo) {
-  _editPendenteId = movId;
-  document.getElementById('epNomeItem').textContent = itemNome;
+function abrirEditarPendente(movId) {
+  const p = _pendMap[movId];
+  if (!p) return;
+  const { itemNome, itemId, tamanho, qtd, almoxId, motivo } = p;
 
   // popula tamanhos do estoque
   const selT = document.getElementById('epTamanho');
