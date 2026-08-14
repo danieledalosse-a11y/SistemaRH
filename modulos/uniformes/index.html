@@ -1041,12 +1041,23 @@
 
       <!-- abas Kit / Avulso -->
       <div class="sec-tabs" style="margin-bottom:8px;">
-        <button class="sec-tab active" id="tabModoKit"    onclick="setModoEntrega('kit')">📦 Kit do cargo</button>
-        <button class="sec-tab"        id="tabModoAvulso" onclick="setModoEntrega('avulso')">🛒 Item avulso / Extra</button>
+        <button class="sec-tab active" id="tabModoKit"      onclick="setModoEntrega('kit')">📦 Kit do cargo</button>
+        <button class="sec-tab"        id="tabModoUniforme" onclick="setModoEntrega('uniforme')">👕 Uniforme avulso</button>
+        <button class="sec-tab"        id="tabModoEPI"      onclick="setModoEntrega('epi')">🦺 EPI</button>
       </div>
 
       <!-- MODO KIT -->
       <div id="painelModoKit">
+        <!-- motivo do kit -->
+        <div style="margin-bottom:10px;">
+          <label class="form-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:4px;display:block;">Motivo da entrega</label>
+          <select class="form-select" id="eMotivoKit">
+            <option value="admissao">Admissão</option>
+            <option value="troca_programada">Troca programada</option>
+            <option value="troca_antecipada">Troca antecipada</option>
+            <option value="ajuste">Ajuste de estoque</option>
+          </select>
+        </div>
         <!-- banner de cargo não encontrado — destaque laranja -->
         <div id="kitCargoSelector" style="display:none;margin-bottom:12px;background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:10px;padding:10px 14px;">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
@@ -1064,11 +1075,12 @@
         </div>
       </div>
 
-      <!-- MODO AVULSO -->
+      <!-- MODO AVULSO (compartilhado entre uniforme e epi) -->
       <div id="painelModoAvulso" style="display:none;">
+        <div id="avulsoBanner" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border);font-size:12px;color:var(--text-sec);"></div>
         <div class="form-grid">
           <div class="form-field full">
-            <label class="form-label">Item <span class="req">*</span></label>
+            <label class="form-label" id="labelEItem">Item <span class="req">*</span></label>
             <select class="form-select" id="eItem" onchange="atualizarTamanhosEntrega()">
               <option value="">Selecione um item…</option>
             </select>
@@ -1105,8 +1117,8 @@
             </div>
           </div>
           <div class="form-field full" id="campoCALote" style="display:none;">
-            <label class="form-label">Nº CA do lote (EPI)</label>
-            <input class="form-input" type="text" id="eCALote" placeholder="ex: 12345/lote A">
+            <label class="form-label" id="labelCALote">Nº CA (Certificado de Aprovação) <span class="req">*</span></label>
+            <input class="form-input" type="text" id="eCALote" placeholder="ex: 12345 / Lote A">
           </div>
         </div>
       </div>
@@ -1117,15 +1129,6 @@
           <label class="form-label">Almoxarifado <span class="req">*</span></label>
           <select class="form-select" id="eAlmox">
             <option value="">Selecione…</option>
-          </select>
-        </div>
-        <div class="form-field">
-          <label class="form-label">Motivo <span class="req">*</span></label>
-          <select class="form-select" id="eMotivoKit">
-            <option value="admissao">Admissão</option>
-            <option value="troca_programada">Troca programada</option>
-            <option value="troca_antecipada">Troca antecipada</option>
-            <option value="ajuste">Ajuste de estoque</option>
           </select>
         </div>
         <div class="form-field">
@@ -2389,24 +2392,44 @@ function fecharModalEntrega() {
 function setModoEntrega(modo) {
   _modoEntrega = modo;
   document.getElementById('tabModoKit').classList.toggle('active', modo === 'kit');
-  document.getElementById('tabModoAvulso').classList.toggle('active', modo === 'avulso');
-  document.getElementById('painelModoKit').style.display    = modo === 'kit'    ? '' : 'none';
-  document.getElementById('painelModoAvulso').style.display = modo === 'avulso' ? '' : 'none';
+  document.getElementById('tabModoUniforme').classList.toggle('active', modo === 'uniforme');
+  document.getElementById('tabModoEPI').classList.toggle('active', modo === 'epi');
+  document.getElementById('painelModoKit').style.display    = modo === 'kit' ? '' : 'none';
+  document.getElementById('painelModoAvulso').style.display = modo !== 'kit' ? '' : 'none';
   document.getElementById('btnSalvarEntrega').textContent   = modo === 'kit' ? 'Registrar kit' : 'Registrar';
 
   if (modo === 'kit') {
     renderKitEntrega();
   } else {
-    // popula select de itens no modo avulso — todos os itens ativos, sem filtro de gênero
+    const isEPI = modo === 'epi';
+
+    // Banner de contexto
+    const banner = document.getElementById('avulsoBanner');
+    if (banner) {
+      if (isEPI) {
+        banner.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C4490C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <strong style="color:#92400E;">EPI</strong> — Equipamento de Proteção Individual. O Nº CA é obrigatório para rastreabilidade.`;
+        banner.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#FFF7ED;border:1px solid #FED7AA;font-size:12px;color:#92400E;';
+      } else {
+        banner.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.57a1 1 0 00.99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.57a2 2 0 00-1.34-2.23z"/></svg>
+          Uniforme avulso ou extra — fora do kit padrão do cargo.`;
+        banner.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border);font-size:12px;color:var(--text-sec);';
+      }
+    }
+
+    // Popula select de itens filtrado por tipo
     const selItem = document.getElementById('eItem');
-    selItem.innerHTML = '<option value="">Selecione um item…</option>' +
-      ITENS.filter(i => i.ativo)
-        .map(i => `<option value="${i.id}" data-tipo="${i.tipo}" data-tamanhos='${JSON.stringify(i.tamanhos_disponiveis||[])}' data-sistema="${i.sistema_tamanho}">${_labelItem(i)}</option>`).join('');
+    const itensFiltrados = ITENS.filter(i => i.ativo && i.tipo === (isEPI ? 'epi' : 'uniforme'));
+    selItem.innerHTML = `<option value="">Selecione ${isEPI ? 'o EPI' : 'o uniforme'}…</option>` +
+      itensFiltrados.map(i => `<option value="${i.id}" data-tipo="${i.tipo}" data-tamanhos='${JSON.stringify(i.tamanhos_disponiveis||[])}' data-sistema="${i.sistema_tamanho}">${_labelItem(i)}</option>`).join('');
+
     document.getElementById('eTamanho').innerHTML = '<option value="">Selecione o item primeiro</option>';
     document.getElementById('eQtd').value = '1';
     document.getElementById('eMotivo').value = 'admissao';
     document.getElementById('eCALote').value = '';
-    document.getElementById('campoCALote').style.display = 'none';
+
+    // EPI: campo CA sempre visível e obrigatório; Uniforme: escondido até selecionar item
+    document.getElementById('campoCALote').style.display = isEPI ? '' : 'none';
   }
 }
 
@@ -2535,7 +2558,7 @@ function atualizarTamanhosEntrega() {
 
   if (!opt || !opt.value) {
     selT.innerHTML = '<option value="">Selecione o item primeiro</option>';
-    campoCA.style.display = 'none';
+    campoCA.style.display = _modoEntrega === 'epi' ? '' : 'none';
     return;
   }
 
