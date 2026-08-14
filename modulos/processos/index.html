@@ -319,8 +319,9 @@ const CHECKLISTS = {
     { item: 'Cadastrar no Sênior', prazo_dias: 3 },
     { item: 'Inserir na tabela Vale Alimentação Mensal', prazo_dias: 3 },
     { item: 'Inserir no Vale Gás', prazo_dias: 3 },
-    { item: 'Pedir cartão Alelo Pagamento (Vendedor)', prazo_dias: 3 },
-    { item: 'Incluir nos benefícios: Mixtra / Wellhub / Corplife', prazo_dias: 5 },
+    { item: 'Incluir no Mixtra', prazo_dias: 5 },
+    { item: 'Incluir no Wellhub', prazo_dias: 5 },
+    { item: 'Incluir no Corplife', prazo_dias: 5 },
     { item: 'Inserir no Seguro de Vida', prazo_dias: 5 },
     { item: 'Pedir crachá (Bulmarplac)', prazo_dias: 5 },
   ],
@@ -940,7 +941,21 @@ async function criarProcesso(tipo, colaboradorId, colaboradorNome, dadosExtras) 
   if (!r.ok) { const e = await r.json(); throw new Error(e?.message || 'Erro ao criar processo'); }
   const [proc] = await r.json();
 
-  const checklist = (CHECKLISTS[tipo] || []).map((it, i) => ({
+  let itensBase = [...(CHECKLISTS[tipo] || [])];
+  // Adiciona item Alelo somente se o cargo contiver "vendedor"
+  if (tipo === 'admissao') {
+    const cargo = (dadosExtras?.cargo || '').toLowerCase();
+    if (/vendedor/.test(cargo)) {
+      const idxGas = itensBase.findIndex(it => it.item === 'Inserir no Vale Gás');
+      const alelo = { item: 'Pedir cartão Alelo Pagamento', prazo_dias: 3 };
+      itensBase = [
+        ...itensBase.slice(0, idxGas + 1),
+        alelo,
+        ...itensBase.slice(idxGas + 1)
+      ];
+    }
+  }
+  const checklist = itensBase.map((it, i) => ({
     ...it,
     processo_id: proc.id,
     ordem: i,
