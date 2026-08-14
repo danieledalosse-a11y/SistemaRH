@@ -63,6 +63,16 @@
   .btn-cancelar-processo { background: none; color: var(--red); border: 1px solid var(--red); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 14px; border-radius: 8px; transition: background 0.15s; }
   .btn-cancelar-processo:hover { background: var(--red-bg); }
 
+  /* Modal justificativa */
+  .modal-overlay-proc { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal-proc { background: var(--surface); border-radius: 14px; padding: 28px; width: 100%; max-width: 460px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .modal-proc-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .modal-proc-sub { font-size: 13px; color: var(--text-sec); margin-bottom: 20px; line-height: 1.5; }
+  .modal-proc-aviso { background: var(--amber-bg); border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #92400e; margin-bottom: 16px; }
+  .modal-proc textarea { width: 100%; box-sizing: border-box; border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 13px; color: var(--text); background: var(--bg); resize: vertical; min-height: 90px; }
+  .modal-proc textarea:focus { outline: none; border-color: var(--blue); }
+  .modal-proc-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+
   /* Filtros por tipo */
   .filtros-tipo { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
   .filtro-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text-sec); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; user-select: none; }
@@ -732,9 +742,7 @@ function buildCard(p) {
   // Checklist detalhado com agrupamento por categoria
   const checklistHtml = buildChecklistHtml(checklist, criadoBase, p.id, p.tipo);
 
-  const btnConcluir = todosFeitos
-    ? `<button class="btn btn-success btn-sm" onclick="concluirProcesso(${p.id})">✅ Concluir processo</button>`
-    : '';
+  const btnConcluir = `<button class="btn btn-success btn-sm" onclick="concluirProcesso(${p.id})">✅ Concluir processo</button>`;
 
   return `<div class="processo-row" id="card-${p.id}" data-tipo="${p.tipo}">
     <div class="processo-row-summary" onclick="toggleRow(${p.id})">
@@ -863,37 +871,88 @@ function atualizarProgresso(processoId) {
     }
   }
 
-  // Botão concluir
-  const actionsEl = cardEl.querySelector('.card-actions');
-  if (actionsEl) {
-    const btnExiste = actionsEl.querySelector('.btn-success');
-    if (pct === 100 && !btnExiste) {
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-success btn-sm';
-      btn.textContent = '✅ Concluir processo';
-      btn.onclick = () => concluirProcesso(processoId);
-      actionsEl.insertBefore(btn, actionsEl.firstChild);
-    } else if (pct < 100 && btnExiste) {
-      btnExiste.remove();
-    }
-  }
+  // Botão concluir — sempre visível, nada a atualizar
 }
 
 // ─── Concluir processo ────────────────────────────────────────────
-async function concluirProcesso(processoId) {
+let _processoIdConcluindo = null;
+
+function concluirProcesso(processoId) {
+  _processoIdConcluindo = processoId;
+  const cardEl = document.getElementById('card-' + processoId);
+  const checkboxes = cardEl ? cardEl.querySelectorAll('input[type="checkbox"]') : [];
+  const total = checkboxes.length;
+  const feitos = [...checkboxes].filter(c => c.checked).length;
+  const pendentes = total - feitos;
+
+  const textarea = document.getElementById('modalConcluirJustificativa');
+  const aviso = document.getElementById('modalConcluirAviso');
+  const sub = document.getElementById('modalConcluirSub');
+  const btn = document.getElementById('modalConcluirBtn');
+
+  textarea.value = '';
+
+  if (pendentes === 0) {
+    sub.textContent = 'Todos os itens foram concluídos. Deseja finalizar este processo?';
+    aviso.style.display = 'none';
+    textarea.style.display = 'none';
+    textarea.required = false;
+    btn.textContent = '✅ Confirmar conclusão';
+  } else {
+    sub.textContent = `Este processo possui ${pendentes} ${pendentes === 1 ? 'item pendente' : 'itens pendentes'}. Você ainda pode concluí-lo, mas é necessário registrar uma justificativa.`;
+    aviso.textContent = `⚠ ${pendentes} ${pendentes === 1 ? 'item ficará' : 'itens ficarão'} sem conclusão e isso ficará registrado no histórico.`;
+    aviso.style.display = '';
+    textarea.style.display = '';
+    textarea.required = true;
+    btn.textContent = '✅ Concluir mesmo assim';
+  }
+
+  document.getElementById('modalConcluirProc').style.display = 'flex';
+  if (textarea.style.display !== 'none') textarea.focus();
+}
+
+async function confirmarConclusao() {
+  const processoId = _processoIdConcluindo;
+  if (!processoId) return;
+
+  const textarea = document.getElementById('modalConcluirJustificativa');
+  const cardEl = document.getElementById('card-' + processoId);
+  const checkboxes = cardEl ? cardEl.querySelectorAll('input[type="checkbox"]') : [];
+  const total = checkboxes.length;
+  const feitos = [...checkboxes].filter(c => c.checked).length;
+  const pendentes = total - feitos;
+
+  const justificativa = textarea.value.trim();
+  if (pendentes > 0 && !justificativa) {
+    textarea.focus();
+    textarea.style.borderColor = 'var(--red)';
+    setTimeout(() => textarea.style.borderColor = '', 1500);
+    showToast('Informe a justificativa para os itens pendentes.', 'error');
+    return;
+  }
+
+  document.getElementById('modalConcluirProc').style.display = 'none';
+
   try {
+    const dadosExtrasAtuais = {};
+    if (justificativa) dadosExtrasAtuais.conclusao_justificativa = justificativa;
+
     const r = await fetch(`${SB_URL}/rest/v1/processos_rh?id=eq.${processoId}`, {
       method: 'PATCH',
       headers: SB_HEADERS,
-      body: JSON.stringify({ status: 'concluido', concluido_em: new Date().toISOString(), updated_at: new Date().toISOString() })
+      body: JSON.stringify({
+        status: 'concluido',
+        concluido_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...(justificativa ? { dados_extras: dadosExtrasAtuais } : {})
+      })
     });
     if (!r.ok) throw new Error('Erro ao concluir');
     showToast('Processo concluído!', 'success');
-    document.getElementById('card-' + processoId)?.remove();
+    cardEl?.remove();
     concluidosCarregados = false;
-    // Verificar se ficou vazio
-    const grid = document.querySelector('#andamentoConteudo .processos-grid');
-    if (grid && !grid.children.length) {
+    const lista = document.querySelector('#andamentoConteudo .processos-lista');
+    if (lista && !lista.querySelector('.processo-row')) {
       document.getElementById('andamentoConteudo').innerHTML = `<div class="empty-state">
         <div class="empty-state-icon">✅</div>
         <div class="empty-state-title">Nenhum processo em andamento</div>
@@ -1212,5 +1271,19 @@ function resetForm() {
 // ─── Init ─────────────────────────────────────────────────────────
 init();
 </script>
+
+<!-- Modal justificativa conclusão -->
+<div class="modal-overlay-proc" id="modalConcluirProc" style="display:none;">
+  <div class="modal-proc">
+    <div class="modal-proc-title">Concluir processo</div>
+    <div class="modal-proc-sub" id="modalConcluirSub"></div>
+    <div class="modal-proc-aviso" id="modalConcluirAviso" style="display:none;"></div>
+    <textarea id="modalConcluirJustificativa" placeholder="Justificativa (obrigatória quando há itens pendentes)…"></textarea>
+    <div class="modal-proc-actions">
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('modalConcluirProc').style.display='none'">Cancelar</button>
+      <button class="btn btn-success btn-sm" id="modalConcluirBtn" onclick="confirmarConclusao()">✅ Confirmar conclusão</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
