@@ -115,9 +115,20 @@
   .processo-row.open .processo-row-detalhe { display: block; }
 
   /* Checklist */
-  .checklist { padding: 12px 20px 6px; display: flex; flex-direction: column; gap: 4px; }
-  .checklist-grupo-header { font-size: 11px; font-weight: 700; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 2px 2px; padding-top: 6px; border-top: 1px solid var(--border); }
-  .checklist-grupo-header:first-child { border-top: none; margin-top: 2px; }
+  .checklist { padding: 8px 20px 6px; display: flex; flex-direction: column; gap: 0; }
+  /* Grupo colapsável */
+  .checklist-grupo { border-top: 1px solid var(--border); }
+  .checklist-grupo:first-child { border-top: none; }
+  .checklist-grupo-header { display: flex; align-items: center; gap: 8px; padding: 10px 8px 10px 4px; cursor: pointer; user-select: none; }
+  .checklist-grupo-header:hover { background: var(--bg); border-radius: 6px; }
+  .checklist-grupo-label { font-size: 12px; font-weight: 700; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.05em; flex: 1; }
+  .checklist-grupo-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; flex-shrink: 0; }
+  .checklist-grupo-badge.pendente { background: var(--bg); color: var(--text-sec); }
+  .checklist-grupo-badge.completo { background: #dcfce7; color: #16a34a; }
+  .checklist-grupo-chevron { font-size: 14px; color: var(--text-ter); transition: transform 0.2s; line-height: 1; }
+  .checklist-grupo.open .checklist-grupo-chevron { transform: rotate(90deg); }
+  .checklist-grupo-itens { display: none; padding-bottom: 4px; }
+  .checklist-grupo.open .checklist-grupo-itens { display: block; }
   .checklist-item { display: flex; align-items: flex-start; gap: 12px; padding: 9px 8px; border-radius: 8px; transition: background 0.12s; }
   .checklist-item:hover { background: var(--bg); }
   .checklist-item input[type="checkbox"] { margin-top: 3px; width: 17px; height: 17px; accent-color: var(--green); cursor: pointer; flex-shrink: 0; }
@@ -599,19 +610,36 @@ function buildChecklistHtml(checklist, criadoBase, processoId, tipo) {
   if (!grupos) return checklist.map(itemHtml).join('');
 
   const usados = new Set();
-  let html = '';
+  const gruposData = [];
   grupos.forEach(g => {
     const itensGrupo = checklist.filter(c => g.itens.includes(c.item));
     if (!itensGrupo.length) return;
     itensGrupo.forEach(c => usados.add(c.id));
-    html += `<div class="checklist-grupo-header">${g.label}</div>`;
-    html += itensGrupo.map(itemHtml).join('');
+    gruposData.push({ label: g.label, itens: itensGrupo });
   });
   const restantes = checklist.filter(c => !usados.has(c.id));
-  if (restantes.length) {
-    html += `<div class="checklist-grupo-header">📌 Outros</div>`;
-    html += restantes.map(itemHtml).join('');
-  }
+  if (restantes.length) gruposData.push({ label: '📌 Outros', itens: restantes });
+
+  // Primeiro grupo com pendência fica aberto por padrão
+  let primeiroAberto = false;
+  let html = '';
+  gruposData.forEach(g => {
+    const total = g.itens.length;
+    const feitos = g.itens.filter(c => c.concluido).length;
+    const completo = feitos === total;
+    const deveAbrir = !completo && !primeiroAberto;
+    if (deveAbrir) primeiroAberto = true;
+    const badgeCls = completo ? 'completo' : 'pendente';
+    const badgeText = completo ? '✓ Completo' : `${feitos}/${total}`;
+    html += `<div class="checklist-grupo${deveAbrir ? ' open' : ''}">
+      <div class="checklist-grupo-header" onclick="this.closest('.checklist-grupo').classList.toggle('open')">
+        <span class="checklist-grupo-label">${g.label}</span>
+        <span class="checklist-grupo-badge ${badgeCls}">${badgeText}</span>
+        <span class="checklist-grupo-chevron">›</span>
+      </div>
+      <div class="checklist-grupo-itens">${g.itens.map(itemHtml).join('')}</div>
+    </div>`;
+  });
   return html;
 }
 
@@ -759,6 +787,19 @@ async function toggleItem(checklistId, concluido, processoId) {
 function atualizarProgresso(processoId) {
   const cardEl = document.getElementById('card-' + processoId);
   if (!cardEl) return;
+
+  // Atualiza badge de cada grupo
+  cardEl.querySelectorAll('.checklist-grupo').forEach(grupo => {
+    const cbs = grupo.querySelectorAll('input[type="checkbox"]');
+    const tot = cbs.length, fet = [...cbs].filter(c => c.checked).length;
+    const completo = fet === tot;
+    const badge = grupo.querySelector('.checklist-grupo-badge');
+    if (badge) {
+      badge.textContent = completo ? '✓ Completo' : `${fet}/${tot}`;
+      badge.className = 'checklist-grupo-badge ' + (completo ? 'completo' : 'pendente');
+    }
+  });
+
   const checkboxes = cardEl.querySelectorAll('input[type="checkbox"]');
   const total = checkboxes.length;
   const feitos = [...checkboxes].filter(c => c.checked).length;
