@@ -626,17 +626,18 @@
 
     <!-- Tabs internas -->
     <div class="sec-tabs">
-      <button class="sec-tab active" id="stab-itens" onclick="setSecTab('itens')">Itens</button>
-      <button class="sec-tab" id="stab-kits" onclick="setSecTab('kits')">Kits por Cargo</button>
+      <button class="sec-tab active" id="stab-uniformes" onclick="setSecTab('uniformes')">📋 Uniformes</button>
+      <button class="sec-tab" id="stab-kits" onclick="setSecTab('kits')">📦 Kits por Cargo</button>
+      <button class="sec-tab" id="stab-epis" onclick="setSecTab('epis')">🦺 EPIs</button>
     </div>
 
-    <!-- ── Itens ── -->
-    <div id="ssec-itens">
+    <!-- ── Uniformes / EPIs (grid compartilhado) ── -->
+    <div id="ssec-uniformes">
       <div class="card">
         <div class="card-hdr">
           <div class="card-hdr-left">
-            <div class="card-title">Catálogo de Uniformes e EPIs</div>
-            <div class="card-sub" style="margin:0;">Gerencie os itens disponíveis para entrega</div>
+            <div class="card-title" id="catalogoTitulo">📋 Catálogo de Uniformes</div>
+            <div class="card-sub" id="catalogoSub" style="margin:0;">Uniformes disponíveis para entrega</div>
           </div>
           <button class="btn btn-primary" onclick="abrirModalItem()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -843,6 +844,17 @@
             <input class="form-input" type="text" id="iCA" placeholder="ex: 12345" style="padding:7px 12px;">
           </div>
         </div>
+        <!-- Unidade de medida — só EPI -->
+        <div id="campoUnidade" style="display:none;margin-bottom:12px;">
+          <label class="form-label">Unidade de medida</label>
+          <select class="form-select" id="iUnidade" style="padding:7px 12px;">
+            <option value="unidade">Unidade</option>
+            <option value="par">Par</option>
+            <option value="caixa">Caixa</option>
+            <option value="kit">Kit</option>
+          </select>
+        </div>
+
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);margin-bottom:6px;">Gênero</div>
         <div style="display:flex;gap:8px;" id="generoToggle">
           <button type="button" data-val="unissex"   onclick="_setGenero('unissex')"   class="genero-pill active">👥 Unissex</button>
@@ -3258,11 +3270,37 @@ function _abrirDocumentoImpressao(linhas, data) {
 
 // ─── Sub-navegação (Catálogo) ─────────────────────────────────────────────────
 function setSecTab(sub) {
-  ['itens','kits'].forEach(s => {
-    document.getElementById(`ssec-${s}`).style.display    = s === sub ? '' : 'none';
-    document.getElementById(`stab-${s}`).classList.toggle('active', s === sub);
+  window._catalogoSecTab = sub;
+  // Tabs e seções
+  ['uniformes','kits','epis'].forEach(s => {
+    const tabEl = document.getElementById(`stab-${s}`);
+    if (tabEl) tabEl.classList.toggle('active', s === sub);
   });
-  if (sub === 'kits') renderListaCargosKit();
+
+  const secUnif = document.getElementById('ssec-uniformes');
+  const secKits = document.getElementById('ssec-kits');
+
+  if (sub === 'kits') {
+    if (secUnif) secUnif.style.display = 'none';
+    if (secKits) secKits.style.display = '';
+    renderListaCargosKit();
+  } else {
+    if (secKits) secKits.style.display = 'none';
+    if (secUnif) secUnif.style.display = '';
+
+    const isEPI = sub === 'epis';
+    // Forçar filtro de tipo e atualizar UI
+    const sel = document.getElementById('filtroTipo');
+    if (sel) { sel.value = isEPI ? 'epi' : 'uniforme'; sel.style.display = 'none'; }
+    // Atualizar título e subtítulo do card
+    const titulo = document.getElementById('catalogoTitulo');
+    const subEl  = document.getElementById('catalogoSub');
+    if (titulo) titulo.textContent = isEPI ? '🦺 Catálogo de EPIs' : '📋 Catálogo de Uniformes';
+    if (subEl)  subEl.textContent  = isEPI
+      ? 'Equipamentos de Proteção Individual (NR-6)'
+      : 'Uniformes disponíveis para entrega';
+    renderItens();
+  }
 }
 
 // ─── Carregamento inicial ─────────────────────────────────────────────────────
@@ -3428,6 +3466,7 @@ function abrirModalItem(id) {
     document.getElementById('iNome').value           = item.nome;
     document.getElementById('iTipo').value           = item.tipo;
     document.getElementById('iCA').value             = item.ca_numero || '';
+    document.getElementById('iUnidade').value        = item.unidade_medida || 'unidade';
     document.getElementById('iSistemaTamanho').value = item.sistema_tamanho;
     document.getElementById('iAtivo').checked        = item.ativo;
     _tags = (Array.isArray(item.tamanhos_disponiveis) && item.tamanhos_disponiveis.length)
@@ -3437,9 +3476,12 @@ function abrirModalItem(id) {
           : (item.categoria ? [item.categoria] : []);
     _setGenero(item.genero || 'unissex');
   } else {
+    // Pré-selecionar EPI se o usuário está na aba EPIs do catálogo
+    const tipoInicial = (window._catalogoSecTab === 'epis') ? 'epi' : 'uniforme';
     document.getElementById('iNome').value           = '';
-    document.getElementById('iTipo').value           = 'uniforme';
+    document.getElementById('iTipo').value           = tipoInicial;
     document.getElementById('iCA').value             = '';
+    document.getElementById('iUnidade').value        = 'unidade';
     document.getElementById('iSistemaTamanho').value = 'letra';
     document.getElementById('iAtivo').checked        = true;
     _tags = [];
@@ -3466,7 +3508,11 @@ function fecharModalItem() {
 
 function toggleCampoCA() {
   const isEpi = document.getElementById('iTipo').value === 'epi';
-  document.getElementById('campoCA').style.display = isEpi ? '' : 'none';
+  document.getElementById('campoCA').style.display      = isEpi ? '' : 'none';
+  document.getElementById('campoUnidade').style.display = isEpi ? '' : 'none';
+  // Gênero faz pouco sentido para EPI — ocultar
+  const gt = document.getElementById('generoToggle');
+  if (gt) gt.closest('div')?.style && (gt.parentElement.style.display = isEpi ? 'none' : '');
 }
 
 function renderTagsInput(limpar = false) {
@@ -3531,6 +3577,7 @@ async function salvarItem() {
   const genero  = document.getElementById('iGenero').value;
   const sistema = document.getElementById('iSistemaTamanho').value;
   const ca      = document.getElementById('iCA').value.trim();
+  const unidade = document.getElementById('iUnidade').value;
   const ativo   = document.getElementById('iAtivo').checked;
 
   if (!nome) { toast('Informe o nome do item.'); return; }
@@ -3544,6 +3591,7 @@ async function salvarItem() {
     sistema_tamanho: sistema,
     tamanhos_disponiveis: tamanhos,
     ca_numero: ca || null,
+    unidade_medida: tipo === 'epi' ? unidade : null,
     ativo,
     updated_at: new Date().toISOString()
   };
