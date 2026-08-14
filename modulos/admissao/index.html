@@ -1595,6 +1595,39 @@ async function confirmarEfetivar() {
       method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ status: 'efetivado' })
     });
 
+    // Criar processo de admissão no workflow
+    try {
+      const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+      const processo = await fetch(`${SB_URL}/rest/v1/processos_rh`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          tipo: 'admissao',
+          colaborador_id: novoColaborador.id,
+          colaborador_nome: novoColaborador.nome,
+          criado_por: perfil.nome || 'RH',
+          dados_extras: { data_admissao: admissao, empresa: unidade, cargo }
+        })
+      });
+      const [proc] = await processo.json();
+      // Criar itens do checklist
+      const itens = [
+        { item: 'Cadastro no sistema concluído', prazo_dias: 0, concluido: true, concluido_por: perfil.nome || 'RH', concluido_em: new Date().toISOString() },
+        { item: 'Exame admissional realizado', prazo_dias: 1 },
+        { item: 'Uniforme entregue', prazo_dias: 3 },
+        { item: 'Vale Alimentação solicitado', prazo_dias: 2 },
+        { item: 'Vale Transporte solicitado', prazo_dias: 2 },
+        { item: 'Incluir no seguro de vida', prazo_dias: 5 },
+        { item: 'Crachá emitido', prazo_dias: 5 },
+        { item: 'Apresentação à equipe realizada', prazo_dias: 1 },
+      ].map((it, i) => ({ ...it, processo_id: proc.id, ordem: i }));
+      await fetch(`${SB_URL}/rest/v1/processos_checklist`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify(itens)
+      });
+    } catch(e) { console.warn('Workflow não criado:', e); }
+
     // redireciona ao Cadastro para complementar dados internos
     window.location.href = `../../modulos/cadastro/index.html?efetivar=${novoColaborador.id}`;
   } catch(e) {
