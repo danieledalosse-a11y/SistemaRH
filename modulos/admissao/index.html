@@ -988,7 +988,7 @@ function fiCheck(id, label, val) {
   return `<div class="data-row"><label class="data-label" for="pf_${id}">${label}</label><select class="form-control-sm" id="pf_${id}"><option value="Sim"${val?' selected':''}>Sim</option><option value="Não"${!val?' selected':''}>Não</option></select></div>`;
 }
 function togglePanelVT(val) {
-  document.getElementById('pf_vt_extras').style.display = val === 'Sim' ? 'flex' : 'none';
+  document.getElementById('pf_vt_extras').style.display = val === 'Sim' ? 'grid' : 'none';
 }
 function fv(id) { const el = document.getElementById('pf_'+id); if (!el) return ''; if (el.type==='checkbox') return el.checked; if (el.tagName==='SELECT' && (el.id==='pf_vale_transporte'||el.id==='pf_primeiro_emprego')) return el.value==='Sim'; return el.value.trim(); }
 function fmtCPF(v) { if (!v) return ''; const d = String(v).replace(/\D/g,''); if (d.length!==11) return v; return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'); }
@@ -1202,24 +1202,28 @@ function renderPanelComp(f) {
     <div class="data-section"><div class="data-section-title">Formação e Perfil</div><div class="data-grid">
       ${fiSel('escolaridade','Escolaridade',f.escolaridade,['Fundamental Incompleto','Fundamental Completo','Médio Incompleto','Médio Completo','Superior Incompleto','Superior Completo','Pós-graduação'])}
       ${fiSel('cor_raca','Cor/Raça',f.cor_raca,['Branca','Preta','Parda','Amarela','Indígena'])}
-      <div class="data-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
-        <label class="data-label">Vale Transporte</label>
-        <select class="form-control-sm" id="pf_vale_transporte" onchange="togglePanelVT(this.value)"
-          style="width:100%;">
-          <option value="Sim"${f.vale_transporte?' selected':''}>Sim</option>
-          <option value="Não"${!f.vale_transporte?' selected':''}>Não</option>
-        </select>
-        <div id="pf_vt_extras" style="display:${f.vale_transporte?'flex':'none'};flex-direction:column;gap:8px;width:100%;padding-top:4px;">
-          <div class="data-grid-3">
-            ${fi('vt_cartao','Nº do Cartão VT',f.vt_cartao||'')}
-            ${fi('vt_passes','Passes por dia',f.vt_passes||'')}
-            ${fi('vt_linha','Linha de Ônibus',f.vt_linha||'')}
-          </div>
-        </div>
-      </div>
       ${fiCheck('primeiro_emprego','Primeiro Emprego',f.primeiro_emprego)}
       ${fi('hobby','Hobby/Passatempo',f.hobby)}
-    </div></div>
+    </div>
+    <!-- ── Vale Transporte ── -->
+    <div style="margin-top:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:var(--bg);">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);margin-bottom:10px;">Vale Transporte</div>
+      <div style="display:grid;grid-template-columns:160px 1fr;gap:12px;align-items:start;">
+        <div class="data-row">
+          <label class="data-label">Utiliza VT?</label>
+          <select class="form-control-sm" id="pf_vale_transporte" onchange="togglePanelVT(this.value)">
+            <option value="Sim"${f.vale_transporte?' selected':''}>Sim</option>
+            <option value="Não"${!f.vale_transporte?' selected':''}>Não</option>
+          </select>
+        </div>
+        <div id="pf_vt_extras" style="display:${f.vale_transporte?'grid':'none'};grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          ${fi('vt_cartao','Nº do Cartão VT',f.vt_cartao||'')}
+          ${fi('vt_passes','Passes por dia',f.vt_passes||'')}
+          ${fi('vt_linha','Linha de Ônibus',f.vt_linha||'')}
+        </div>
+      </div>
+    </div>
+    </div>
     <div class="data-section"><div class="data-section-title">Dados Bancários</div><div class="data-grid-3">
       ${fi('banco','Banco',f.banco)} ${fi('agencia','Agência',f.agencia)} ${fi('conta','Conta',f.conta)}
     </div></div>`;
@@ -1576,6 +1580,7 @@ async function confirmarEfetivar() {
     vale_transporte:   f.vale_transporte ? 'Sim' : 'Não',
     vt_passes:         f.vt_passes ? parseInt(f.vt_passes) : null,
     vt_cartao:         f.vt_cartao || null,
+    vt_linha:          f.vt_linha || null,
     primeiro_emprego:  f.primeiro_emprego || false,
     hobby:             up(f.hobby),
     cargo:             cargo || null,
