@@ -2160,8 +2160,13 @@ async function carregarHistoricoColab(colabId) {
 
       let btnEstorno;
       if (isPending) {
-        // ⏳ Pendente: confirmar entrega + excluir sem impacto no estoque
+        // ⏳ Pendente: editar + confirmar entrega + excluir sem impacto no estoque
         btnEstorno = `<div style="display:flex;gap:5px;">
+          <button onclick="abrirEditarPendente(${m.id},'${nomeEsc2}',${m.item_id},'${tamEsc2}',${m.quantidade},${m.almoxarifado_id},'${m.motivo||'admissao'}')"
+            style="${btnStyle}border-color:#C7D7FD;color:#1849A9;"
+            onmouseover="this.style.background='#EEF4FF';this.style.borderColor='#1849A9';"
+            onmouseout="this.style.background='';this.style.borderColor='#C7D7FD';"
+            title="Editar este lançamento pendente">✏ Editar</button>
           <button onclick="confirmarConfirmarEntrega(${m.id},'${nomeEsc2}',${m.item_id},'${tamEsc2}',${m.quantidade},${m.almoxarifado_id})"
             style="${btnStyle}border-color:#D1FADF;color:#027A48;"
             onmouseover="this.style.background='#ECFDF3';this.style.borderColor='#027A48';"
@@ -4214,9 +4219,102 @@ async function confirmarAjusteEstoque() {
   }
 }
 
+// ─── Editar entrega pendente ──────────────────────────────────────────────────
+let _editPendenteId = null;
+
+function abrirEditarPendente(movId, itemNome, itemId, tamanho, qtd, almoxId, motivo) {
+  _editPendenteId = movId;
+  document.getElementById('epNomeItem').textContent = itemNome;
+
+  // popula tamanhos do estoque
+  const selT = document.getElementById('epTamanho');
+  const tamanhosEstoque = [...new Set(
+    ESTOQUE.filter(e => String(e.item_id) === String(itemId) && e.tamanho).map(e => e.tamanho)
+  )];
+  const opts = tamanhosEstoque.length ? tamanhosEstoque : [tamanho];
+  selT.innerHTML = opts.map(t => `<option value="${t}" ${t===tamanho?'selected':''}>${t}</option>`).join('');
+
+  document.getElementById('epQtd').value = qtd;
+  document.getElementById('epMotivo').value = motivo || 'admissao';
+
+  // popula almoxarifados
+  const selA = document.getElementById('epAlmox');
+  selA.innerHTML = ALMOXARIFADOS.map(a => `<option value="${a.id}" ${a.id===almoxId?'selected':''}>${a.nome}</option>`).join('');
+
+  document.getElementById('modalEditarPendente').style.display = 'flex';
+}
+
+function fecharEditarPendente() {
+  document.getElementById('modalEditarPendente').style.display = 'none';
+  _editPendenteId = null;
+}
+
+async function salvarEditarPendente() {
+  const qtd    = parseInt(document.getElementById('epQtd').value);
+  const tam    = document.getElementById('epTamanho').value;
+  const almox  = document.getElementById('epAlmox').value;
+  const motivo = document.getElementById('epMotivo').value;
+  if (!qtd || qtd < 1) { toast('Quantidade inválida.'); return; }
+  const btn = document.getElementById('btnSalvarEP');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  try {
+    await sbPatch('unif_movimentacoes', `id=eq.${_editPendenteId}`, {
+      quantidade: qtd, tamanho: tam, almoxarifado_id: almox, motivo
+    });
+    toast('✓ Lançamento atualizado');
+    fecharEditarPendente();
+    carregarHistoricoColab(_colabAtual.id);
+  } catch(e) { toast('Erro: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Salvar alterações'; }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 init();
 </script>
+
+<!-- Modal Editar Entrega Pendente -->
+<div id="modalEditarPendente" style="display:none;position:fixed;inset:0;background:rgba(16,24,40,0.5);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:16px;padding:28px 32px;width:440px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);">Editar entrega pendente</div>
+        <div id="epNomeItem" style="font-size:13px;color:var(--text-sec);margin-top:2px;"></div>
+      </div>
+      <button onclick="fecharEditarPendente()" style="background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:20px;padding:4px;line-height:1;">×</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Tamanho</label>
+        <select id="epTamanho" style="width:100%;border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);"></select>
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Quantidade</label>
+        <input id="epQtd" type="number" min="1" style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;font-size:14px;font-family:inherit;color:var(--text);background:var(--surface);">
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Almoxarifado</label>
+      <select id="epAlmox" style="width:100%;border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);"></select>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Motivo</label>
+      <select id="epMotivo" style="width:100%;border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);">
+        <option value="admissao">Admissão</option>
+        <option value="reposicao">Reposição</option>
+        <option value="promocao">Promoção / Mudança de cargo</option>
+        <option value="extra">Extra</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:10px;">
+      <button onclick="fecharEditarPendente()" style="flex:1;padding:11px;border:1px solid var(--border);border-radius:9px;background:var(--surface);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--text);">Cancelar</button>
+      <button id="btnSalvarEP" onclick="salvarEditarPendente()" style="flex:2;padding:11px;border:none;border-radius:9px;background:var(--blue);color:#fff;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;">Salvar alterações</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal Ajuste de Estoque -->
 <div id="modalAjusteEstoque" style="display:none;position:fixed;inset:0;background:rgba(16,24,40,0.5);z-index:200;align-items:center;justify-content:center;">
