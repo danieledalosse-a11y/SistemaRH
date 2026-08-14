@@ -1582,7 +1582,7 @@ function renderEstoque() {
       const pct      = Math.round((qtd / maxQtd) * 100);
       const barColor = qtd === 0 ? '#F04438' : qtd <= min ? '#F79009' : '#12B76A';
       const qtdColor = qtd === 0 ? '#B42318' : qtd <= min ? '#92400E' : '#027A48';
-      return `<div style="display:grid;grid-template-columns:120px 1fr;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid var(--border-light);">
+      return `<div style="display:grid;grid-template-columns:120px 1fr auto;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid var(--border-light);">
         <div style="display:flex;align-items:center;gap:10px;min-width:0;">
           <span style="font-size:13px;font-weight:600;color:var(--text);min-width:36px;">${l.tamanho || 'Único'}</span>
           <span style="font-size:13px;font-weight:700;color:${qtdColor};white-space:nowrap;">${qtd} un.</span>
@@ -1592,6 +1592,9 @@ function renderEstoque() {
             <div style="height:100%;width:${pct}%;background:${barColor};border-radius:99px;transition:width .4s;"></div>
           </div>
         </div>
+        <button onclick="abrirAjusteEstoque('${l.id}','${g.item?.nome || ''}','${l.tamanho || 'Único'}',${qtd})" title="Ajustar quantidade" style="flex-shrink:0;background:#EEF4FF;border:1px solid #C7D7FD;color:#1849A9;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .12s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#EEF4FF'">
+          ⚖ Ajuste
+        </button>
       </div>`;
     };
 
@@ -4150,8 +4153,88 @@ async function imprimirComprovante(tipo) {
   window.open(URL.createObjectURL(blob), '_blank');
 }
 
+// ─── Ajuste de Estoque ────────────────────────────────────────────────────────
+let _ajusteEstoqueId = null;
+
+function abrirAjusteEstoque(estoqueId, itemNome, tamanho, qtdAtual) {
+  _ajusteEstoqueId = estoqueId;
+  document.getElementById('ajusteNomeItem').textContent = `${itemNome} — ${tamanho}`;
+  document.getElementById('ajusteQtdAtual').textContent = qtdAtual;
+  document.getElementById('ajusteNovaQtd').value = qtdAtual;
+  document.getElementById('ajusteObs').value = '';
+  document.getElementById('modalAjusteEstoque').style.display = 'flex';
+  setTimeout(() => document.getElementById('ajusteNovaQtd').focus(), 50);
+}
+
+function fecharAjusteEstoque() {
+  document.getElementById('modalAjusteEstoque').style.display = 'none';
+  _ajusteEstoqueId = null;
+}
+
+async function confirmarAjusteEstoque() {
+  const novaQtd = parseInt(document.getElementById('ajusteNovaQtd').value);
+  const obs     = document.getElementById('ajusteObs').value.trim();
+  if (isNaN(novaQtd) || novaQtd < 0) { toast('Informe uma quantidade válida (≥ 0).'); return; }
+  if (!_ajusteEstoqueId) return;
+
+  const btn = document.getElementById('btnConfirmarAjuste');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  try {
+    // 1. Atualiza quantidade no estoque
+    await sbPatch('unif_estoque', `id=eq.${_ajusteEstoqueId}`, { quantidade: novaQtd });
+
+    // 2. Registra movimentação de ajuste para auditoria
+    const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    await sbPost('unif_movimentacoes', {
+      estoque_id:    _ajusteEstoqueId,
+      tipo:          'ajuste',
+      quantidade:    novaQtd,
+      observacao:    obs || 'Ajuste manual de balanço',
+      registrado_por: perfil.nome || 'RH'
+    });
+
+    toast('✓ Estoque ajustado com sucesso');
+    fecharAjusteEstoque();
+    await carregarEstoque();
+  } catch(e) {
+    toast('Erro: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirmar ajuste';
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 init();
 </script>
+
+<!-- Modal Ajuste de Estoque -->
+<div id="modalAjusteEstoque" style="display:none;position:fixed;inset:0;background:rgba(16,24,40,0.5);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:16px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);">Ajuste de estoque</div>
+        <div id="ajusteNomeItem" style="font-size:13px;color:var(--text-sec);margin-top:2px;"></div>
+      </div>
+      <button onclick="fecharAjusteEstoque()" style="background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:20px;padding:4px;line-height:1;">×</button>
+    </div>
+
+    <div style="background:#F9FAFB;border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:13px;color:var(--text-sec);">Quantidade atual</span>
+      <span id="ajusteQtdAtual" style="font-size:20px;font-weight:700;color:var(--text);"></span>
+    </div>
+
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Nova quantidade</label>
+    <input id="ajusteNovaQtd" type="number" min="0" style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:9px;padding:10px 14px;font-size:22px;font-weight:700;text-align:center;font-family:inherit;color:var(--text);background:var(--surface);margin-bottom:16px;" oninput="this.style.borderColor=this.value!=''?'var(--blue)':'var(--border)'">
+
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Motivo do ajuste <span style="font-weight:400;text-transform:none;">(opcional)</span></label>
+    <input id="ajusteObs" type="text" placeholder="Ex: Balanço físico — divergência contada" style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:9px;padding:10px 14px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);margin-bottom:20px;">
+
+    <div style="display:flex;gap:10px;">
+      <button onclick="fecharAjusteEstoque()" style="flex:1;padding:11px;border:1px solid var(--border);border-radius:9px;background:var(--surface);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--text);">Cancelar</button>
+      <button id="btnConfirmarAjuste" onclick="confirmarAjusteEstoque()" style="flex:2;padding:11px;border:none;border-radius:9px;background:var(--blue);color:#fff;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;box-shadow:0 2px 6px rgba(24,73,169,0.22);">Confirmar ajuste</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
