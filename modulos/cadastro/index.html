@@ -781,6 +781,43 @@
         </div>
       </div>
 
+      <!-- ⑤ Indicação -->
+      <div class="sec-card">
+        <div class="sec-head">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+          <span class="sec-head-t">Indicação</span>
+        </div>
+        <div class="sf-row full">
+          <div class="sf-cell">
+            <div class="sf-lbl">Este colaborador foi indicado por alguém?</div>
+            <div class="chip-toggle-group" style="margin-top:6px;">
+              <label class="chip-toggle" for="df-ehIndicacao" style="--chip-color:#5925DC;--chip-bg:#F4F3FF;">
+                <input type="checkbox" id="df-ehIndicacao" onchange="toggleCampoIndicacao()">Sim, foi indicado
+              </label>
+            </div>
+          </div>
+        </div>
+        <div id="bloco-indicacao" style="display:none;border-top:.5px solid var(--border);padding:14px 16px 2px;">
+          <div class="sf-lbl" style="margin-bottom:6px;">Quem indicou? <span style="color:var(--text-ter);font-weight:400;">(busque pelo nome — qualquer empresa do grupo)</span></div>
+          <div style="position:relative;">
+            <input class="sf-inp" type="text" id="df-indicadorBusca" placeholder="Digite o nome do colaborador..." autocomplete="off"
+              oninput="buscarIndicador(this.value)" style="padding-right:34px;">
+            <div id="indicador-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:200;max-height:220px;overflow-y:auto;"></div>
+          </div>
+          <div id="indicador-selecionado" style="display:none;margin-top:10px;padding:10px 14px;background:var(--purple-bg);border:1px solid #c4b5fd;border-radius:8px;display:flex;align-items:center;gap:10px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#5925DC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <div style="flex:1;min-width:0;">
+              <div id="indicador-sel-nome" style="font-size:13px;font-weight:600;color:#5925DC;"></div>
+              <div id="indicador-sel-info" style="font-size:11px;color:var(--text-sec);margin-top:1px;"></div>
+            </div>
+            <button onclick="limparIndicador()" style="background:none;border:none;cursor:pointer;color:#7c3aed;font-size:18px;line-height:1;padding:2px 4px;" title="Remover indicação">×</button>
+          </div>
+          <input type="hidden" id="df-indicadorId">
+
+          <div id="bloco-bonus-status" style="margin-top:10px;margin-bottom:10px;padding:8px 12px;border-radius:8px;font-size:12px;display:none;"></div>
+        </div>
+      </div>
+
     </div>
 
     <!-- Aba: Contato -->
@@ -1480,6 +1517,8 @@ function supabaseToJS(row) {
     afastadoINSS:     !!row.afastado_inss,
     primeiroEmprego:  !!row.primeiro_emprego,
     comissionado:     !!row.comissionado,
+    indicado_por_id:  row.indicado_por_id || null,
+    indicacao_bonus_gerado: !!row.indicacao_bonus_gerado,
     cbo:              row.cbo || '',
     jornada:          row.jornada || '',
     tipoAdmissao:     row.tipo_admissao || '',
@@ -2274,6 +2313,27 @@ function abrirFicha(idx) {
   document.getElementById('df-primeiroEmprego').checked = c.primeiroEmprego || false;
   document.getElementById('df-comissionado').checked   = c.comissionado || /vendedor/i.test(c.cargo || '');
 
+  // Indicação
+  const temIndicacao = !!c.indicado_por_id;
+  document.getElementById('df-ehIndicacao').checked = temIndicacao;
+  document.getElementById('df-indicadorId').value = c.indicado_por_id || '';
+  if (temIndicacao) {
+    document.getElementById('bloco-indicacao').style.display = 'block';
+    const ind = COLABORADORES.find(x => x.id == c.indicado_por_id);
+    if (ind) {
+      document.getElementById('df-indicadorBusca').value = ind.nome || '';
+      preencherIndicadorSelecionado(ind);
+    } else {
+      document.getElementById('df-indicadorBusca').value = c._indicador_nome || '';
+    }
+    // Status do bônus
+    mostrarStatusBonus(c);
+  } else {
+    document.getElementById('bloco-indicacao').style.display = 'none';
+    document.getElementById('indicador-selecionado').style.display = 'none';
+    document.getElementById('bloco-bonus-status').style.display = 'none';
+  }
+
   // Aba Contato
   document.getElementById('df-celular').value       = c.celular || '';
   document.getElementById('df-whatsapp').value      = c.whatsapp || '';
@@ -2665,6 +2725,8 @@ function salvarFicha() {
   c.afastadoINSS      = document.getElementById('df-inss').checked;
   c.primeiroEmprego   = document.getElementById('df-primeiroEmprego').checked;
   c.comissionado      = document.getElementById('df-comissionado').checked;
+  const indId = document.getElementById('df-indicadorId').value;
+  c.indicado_por_id   = document.getElementById('df-ehIndicacao').checked && indId ? parseInt(indId) : null;
   // Contato
   c.celular           = document.getElementById('df-celular').value.trim();
   c.whatsapp          = document.getElementById('df-whatsapp').value.trim();
@@ -2773,6 +2835,7 @@ function salvarFicha() {
       primeiro_emprego:   !!c.primeiroEmprego,
       comissionado:       !!c.comissionado,
       salario_garantia:   !!c.comissionado,
+      indicado_por_id:    c.indicado_por_id || null,
       // Contato
       celular:            c.celular || null,
       whatsapp:           c.whatsapp || null,
@@ -3330,6 +3393,94 @@ function togglePaisNascimento() {
   const rowNat = document.getElementById('df-natEstado').closest('.sf-row,.field');
   if (rowNat) rowNat.style.display = estrangeiro ? 'none' : '';
 }
+
+// ── Indicação ────────────────────────────────────────────────────────────────
+
+function toggleCampoIndicacao() {
+  const checked = document.getElementById('df-ehIndicacao').checked;
+  document.getElementById('bloco-indicacao').style.display = checked ? 'block' : 'none';
+  if (!checked) limparIndicador();
+}
+
+let _indicadorTimer = null;
+function buscarIndicador(q) {
+  clearTimeout(_indicadorTimer);
+  const dd = document.getElementById('indicador-dropdown');
+  if (!q || q.length < 2) { dd.style.display = 'none'; return; }
+  _indicadorTimer = setTimeout(() => {
+    const idAtual = _fichaIdx !== null ? COLABORADORES[_fichaIdx]?.id : null;
+    const matches = COLABORADORES.filter(c =>
+      c.situacao !== 'Inativo' &&
+      c.id !== idAtual &&
+      (c.nome || '').toLowerCase().includes(q.toLowerCase())
+    ).slice(0, 12);
+    if (!matches.length) { dd.innerHTML = '<div style="padding:12px 16px;font-size:13px;color:var(--text-ter);">Nenhum colaborador encontrado</div>'; dd.style.display = 'block'; return; }
+    dd.innerHTML = matches.map(c => `
+      <div onclick="selecionarIndicador(${c.id})" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.nome || ''}</div>
+          <div style="font-size:11px;color:var(--text-sec);">${c.cargo || ''} · ${c.empresa || ''}</div>
+        </div>
+      </div>`).join('');
+    dd.style.display = 'block';
+  }, 200);
+}
+
+function selecionarIndicador(id) {
+  const c = COLABORADORES.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('df-indicadorId').value = id;
+  document.getElementById('df-indicadorBusca').value = c.nome || '';
+  document.getElementById('indicador-dropdown').style.display = 'none';
+  preencherIndicadorSelecionado(c);
+}
+
+function preencherIndicadorSelecionado(c) {
+  document.getElementById('indicador-sel-nome').textContent = c.nome || '';
+  document.getElementById('indicador-sel-info').textContent = (c.cargo || '') + (c.empresa ? ' · ' + c.empresa : '');
+  document.getElementById('indicador-selecionado').style.display = 'flex';
+}
+
+function limparIndicador() {
+  document.getElementById('df-indicadorId').value = '';
+  document.getElementById('df-indicadorBusca').value = '';
+  document.getElementById('indicador-dropdown').style.display = 'none';
+  document.getElementById('indicador-selecionado').style.display = 'none';
+  document.getElementById('bloco-bonus-status').style.display = 'none';
+}
+
+function mostrarStatusBonus(c) {
+  const el = document.getElementById('bloco-bonus-status');
+  if (!c.data_admissao) { el.style.display = 'none'; return; }
+  const adm = new Date(c.data_admissao);
+  const fim90 = new Date(adm);
+  fim90.setDate(fim90.getDate() + 90);
+  const hoje = new Date();
+  const bonusGerado = c.indicacao_bonus_gerado;
+  const demitido = !!c.data_demissao;
+  if (demitido) {
+    el.style.cssText = 'display:block;background:#FEF3F2;border:1px solid #fca5a5;border-radius:8px;padding:8px 12px;font-size:12px;color:#B42318;';
+    el.innerHTML = '❌ Colaborador desligado — <strong>bônus não será pago</strong>';
+  } else if (bonusGerado) {
+    el.style.cssText = 'display:block;background:#ECFDF3;border:1px solid #6ee7b7;border-radius:8px;padding:8px 12px;font-size:12px;color:#027A48;';
+    el.innerHTML = '✅ <strong>Bônus já gerado</strong> — processo criado no módulo Processos';
+  } else if (hoje >= fim90) {
+    el.style.cssText = 'display:block;background:#FFFAEB;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;';
+    const mes = fim90.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    el.innerHTML = `⭐ Período de experiência concluído em <strong>${fim90.toLocaleDateString('pt-BR')}</strong> — bônus deve ser pago na folha de <strong>${mes}</strong>`;
+  } else {
+    const diasRestantes = Math.ceil((fim90 - hoje) / 86400000);
+    el.style.cssText = 'display:block;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text-sec);';
+    el.innerHTML = `⏳ Período de experiência termina em <strong>${fim90.toLocaleDateString('pt-BR')}</strong> — faltam <strong>${diasRestantes} dias</strong>`;
+  }
+  el.style.display = 'block';
+}
+
+// fecha dropdown ao clicar fora
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('indicador-dropdown');
+  if (dd && !dd.contains(e.target) && e.target.id !== 'df-indicadorBusca') dd.style.display = 'none';
+});
 
 async function preencherNaturalidade(estado, cidade) {
   await carregarEstadosNat();

@@ -385,6 +385,7 @@ function switchTab(id) {
 
 // ─── Aba Em andamento ─────────────────────────────────────────────
 async function init() {
+  await verificarBonusIndicacao();
   try {
     const r = await fetch(
       `${SB_URL}/rest/v1/processos_rh?status=eq.aberto&select=*,processos_checklist(*)&order=criado_em.desc`,
@@ -396,6 +397,89 @@ async function init() {
   } catch(e) {
     document.getElementById('andamentoConteudo').innerHTML =
       `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erro ao carregar</div><div class="empty-state-desc">${e.message}</div></div>`;
+  }
+}
+
+async function verificarBonusIndicacao() {
+  // Busca colaboradores ativos com indicado_por_id preenchido e bonus ainda não gerado
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/colaboradores?select=id,nome,data_admissao,indicado_por_id,situacao,indicacao_bonus_gerado` +
+      `&indicado_por_id=not.is.null&indicacao_bonus_gerado=eq.false&ativo=eq.true`,
+      { headers: SB_HEADERS }
+    );
+    if (!r.ok) return;
+    const indicados = await r.json();
+    if (!indicados.length) return;
+
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+
+    for (const c of indicados) {
+      if (!c.data_admissao) continue;
+      const adm = new Date(c.data_admissao);
+      const fim90 = new Date(adm);
+      fim90.setDate(fim90.getDate() + 90);
+      if (hoje < fim90) continue; // ainda não chegou nos 90 dias
+
+      // Verificar se o indicador ainda está ativo
+      const rInd = await fetch(
+        `${SB_URL}/rest/v1/colaboradores?select=id,nome,cargo,empresa&id=eq.${c.indicado_por_id}&ativo=eq.true`,
+        { headers: SB_HEADERS }
+      );
+      if (!rInd.ok) continue;
+      const [indicador] = await rInd.json();
+      if (!indicador) continue; // indicador saiu da empresa, sem bônus
+
+      // Verificar se já existe processo de bonus_indicacao para este par
+      const rProc = await fetch(
+        `${SB_URL}/rest/v1/processos_rh?select=id&tipo=eq.bonus_indicacao` +
+        `&colaborador_id=eq.${indicador.id}&dados_extras->>indicado_id=eq.${c.id}`,
+        { headers: SB_HEADERS }
+      );
+      if (rProc.ok) {
+        const existentes = await rProc.json();
+        if (existentes.length) continue; // já criado
+      }
+
+      // Criar processo de bônus para o indicador
+      const mesBonus = fim90.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+      const rCria = await fetch(`${SB_URL}/rest/v1/processos_rh`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          tipo: 'bonus_indicacao',
+          colaborador_id: indicador.id,
+          colaborador_nome: indicador.nome,
+          criado_por: perfil.nome || 'Sistema',
+          dados_extras: {
+            indicado_id: c.id,
+            indicado_nome: c.nome,
+            data_conclusao_experiencia: fim90.toISOString().slice(0,10),
+            mes_folha: mesBonus
+          }
+        })
+      });
+      if (!rCria.ok) continue;
+      const [proc] = await rCria.json();
+
+      // Criar checklist do bônus
+      const itens = CHECKLISTS.bonus_indicacao.map((it, i) => ({ ...it, processo_id: proc.id, ordem: i }));
+      await fetch(`${SB_URL}/rest/v1/processos_checklist`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify(itens)
+      });
+
+      // Marcar bônus como gerado no colaborador indicado
+      await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${c.id}`, {
+        method: 'PATCH',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ indicacao_bonus_gerado: true })
+      });
+    }
+  } catch(e) {
+    console.warn('Verificação de bônus de indicação falhou:', e);
   }
 }
 
