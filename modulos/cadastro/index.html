@@ -65,8 +65,9 @@
   .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
   .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display:flex; align-items:center; gap:14px; position: relative; cursor: default; transition: all 0.15s; box-shadow: var(--shadow-sm); }
   .metric.clickable { cursor: pointer; }
-  .metric.clickable:hover { border-color: #C4C9D4; box-shadow: var(--shadow-md); transform: translateY(-1px); }
-  .metric.active-filter { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(24,73,169,0.10); }
+  .metric.clickable:hover { border-color: #C4C9D4; box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .metric.active-filter { border-color: var(--blue); background: #EEF4FF; box-shadow: 0 0 0 3px rgba(24,73,169,0.14); transform: translateY(-1px); }
+  .metric.active-filter::after { content: '✓ filtrado'; position:absolute; top:8px; right:10px; font-size:10px; font-weight:600; color:var(--blue); letter-spacing:.02em; }
   .metric-icon { width:44px; height:44px; border-radius:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .metric-icon svg { width:22px; height:22px; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .metric-right { flex:1; min-width:0; }
@@ -515,7 +516,6 @@
         <option value="M">Masculino</option>
         <option value="F">Feminino</option>
       </select>
-      <button id="btnLimparFiltroLista" class="btn-link-limpar" onclick="limparFiltroLista()" style="display:none;background:#FEF3C7;color:#92400E;border-color:#FDE68A;">✕ Limpar filtro do card</button>
       <button class="btn-link-limpar" onclick="limparFiltros()">✕ Limpar filtros</button>
     </div>
 
@@ -1634,7 +1634,6 @@ function entrarEmpresaNome(nome) {
   ['filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('busca').value = '';
   ['ativos','masc','fem','aprendiz','pcd'].forEach(t => { const el = document.getElementById('ml-card-' + t); if(el) el.classList.remove('active-filter'); });
-  mostrarBtnLimparLista(false);
   atualizarColunaEmpresa(nomeEmpresa);
   setSituacaoTab('Ativo');
   aplicarFiltros();
@@ -1653,7 +1652,6 @@ function entrarEmpresa(empresa) {
   document.getElementById('busca').value = '';
   ['filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
   ['ativos','masc','fem','aprendiz','pcd'].forEach(t => { const el = document.getElementById('ml-card-' + t); if(el) el.classList.remove('active-filter'); });
-  mostrarBtnLimparLista(false);
   document.getElementById('filtroEmpresa').value = empresa;
   filtroEmpresaChanged();
   atualizarMetricasLista();
@@ -1894,29 +1892,25 @@ function filtrarGlobal(tipo) {
 }
 
 function filtrarLista(tipo) {
-  // filtra dentro da empresa selecionada (não navega para telaEmpresas)
+  // toggle: segundo clique no card ativo limpa o filtro
+  const cardEl = document.getElementById('ml-card-' + tipo);
+  const jaAtivo = cardEl && cardEl.classList.contains('active-filter');
+  if (jaAtivo) { limparFiltroLista(); return; }
+
   window._filtroAprendiz = false;
   window._filtroPcd = false;
   ['filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
   popularSetores(_filtroEmpresa);
   setSituacaoTab('Ativo');
-  if (tipo === 'masc')         document.getElementById('filtroSexo').value = 'M';
-  else if (tipo === 'fem')     document.getElementById('filtroSexo').value = 'F';
+  if (tipo === 'masc')          document.getElementById('filtroSexo').value = 'M';
+  else if (tipo === 'fem')      document.getElementById('filtroSexo').value = 'F';
   else if (tipo === 'aprendiz') window._filtroAprendiz = true;
   else if (tipo === 'pcd')      window._filtroPcd = true;
-  // destaca card ativo e mostra botão limpar
   ['ativos','masc','fem','aprendiz','pcd'].forEach(t => {
     const el = document.getElementById('ml-card-' + t);
     if (el) el.classList.toggle('active-filter', t === tipo);
   });
-  mostrarBtnLimparLista(tipo !== 'ativos');
   aplicarFiltros();
-}
-
-function mostrarBtnLimparLista(show) {
-  let btn = document.getElementById('btnLimparFiltroLista');
-  if (!btn) return;
-  btn.style.display = show ? 'inline-flex' : 'none';
 }
 
 function limparFiltroLista() {
@@ -1928,7 +1922,6 @@ function limparFiltroLista() {
     const el = document.getElementById('ml-card-' + t);
     if (el) el.classList.remove('active-filter');
   });
-  mostrarBtnLimparLista(false);
   setSituacaoTab('Ativo');
 }
 
@@ -1978,7 +1971,6 @@ function limparFiltros() {
   window._filtroPcd = false;
   ['ativos','masc','fem','aprendiz'].forEach(c => { const el = document.getElementById('card-' + c); if(el) el.classList.remove('active-filter'); });
   ['ativos','masc','fem','aprendiz','pcd'].forEach(t => { const el = document.getElementById('ml-card-' + t); if(el) el.classList.remove('active-filter'); });
-  mostrarBtnLimparLista(false);
   document.getElementById('busca').value = '';
   ['filtroEmpresa','filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
   popularSetores('');
