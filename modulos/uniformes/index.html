@@ -2170,7 +2170,14 @@ async function carregarHistoricoColab(colabId) {
       if (isPending) {
         // ⏳ Pendente: editar + confirmar entrega + excluir sem impacto no estoque
         btnEstorno = `<div style="display:flex;gap:5px;">
-          <button onclick="abrirEditarPendente(${m.id})"
+          <button onclick="abrirEditarPendente(this)"
+            data-mov-id="${m.id}"
+            data-item-nome="${(m.item?.nome||'').replace(/"/g,'&quot;')}"
+            data-item-id="${m.item_id}"
+            data-tamanho="${(m.tamanho||'').replace(/"/g,'&quot;')}"
+            data-qtd="${m.quantidade}"
+            data-almox-id="${m.almoxarifado_id}"
+            data-motivo="${m.motivo||'admissao'}"
             style="${btnStyle}border-color:#93C5FD;color:#1849A9;background:#EEF4FF;"
             onmouseover="this.style.borderColor='#1849A9';this.style.background='#DBEAFE';"
             onmouseout="this.style.background='#EEF4FF';this.style.borderColor='#93C5FD';"
@@ -4285,15 +4292,15 @@ async function confirmarAjusteEstoque() {
 const _pendMap = {};
 let _editPendenteId = null;
 
-function abrirEditarPendente(movId) {
-  const m = (window._movColabCache || []).find(x => x.id === movId);
-  if (!m) return;
-  const itemNome = m.item?.nome || '—';
-  const itemId   = m.item_id;
-  const tamanho  = m.tamanho || '';
-  const qtd      = m.quantidade;
-  const almoxId  = m.almoxarifado_id;
-  const motivo   = m.motivo || 'admissao';
+function abrirEditarPendente(btn) {
+  const d       = btn.dataset;
+  const movId   = parseInt(d.movId);
+  const itemNome= d.itemNome || '—';
+  const itemId  = parseInt(d.itemId);
+  const tamanho = d.tamanho || '';
+  const qtd     = parseInt(d.qtd) || 1;
+  const almoxId = parseInt(d.almoxId);
+  const motivo  = d.motivo || 'admissao';
   _editPendenteId = movId;
   document.getElementById('epNomeItem').textContent = itemNome;
 
