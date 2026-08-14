@@ -2419,9 +2419,12 @@ function setModoEntrega(modo) {
 
     // Popula select de itens filtrado por tipo
     const selItem = document.getElementById('eItem');
-    const itensFiltrados = ITENS.filter(i => i.ativo && i.tipo === (isEPI ? 'epi' : 'uniforme'));
+    const tipoFiltro = isEPI ? 'epi' : 'uniforme';
+    const itensFiltrados = ITENS.filter(i => i.ativo !== false && i.tipo === tipoFiltro);
     selItem.innerHTML = `<option value="">Selecione ${isEPI ? 'o EPI' : 'o uniforme'}…</option>` +
-      itensFiltrados.map(i => `<option value="${i.id}" data-tipo="${i.tipo}" data-tamanhos='${JSON.stringify(i.tamanhos_disponiveis||[])}' data-sistema="${i.sistema_tamanho}">${_labelItem(i)}</option>`).join('');
+      (itensFiltrados.length
+        ? itensFiltrados.map(i => `<option value="${i.id}" data-tipo="${i.tipo}" data-tamanhos='${JSON.stringify(i.tamanhos_disponiveis||[])}' data-sistema="${i.sistema_tamanho}">${_labelItem(i)}</option>`).join('')
+        : `<option disabled>Nenhum ${isEPI ? 'EPI' : 'uniforme'} cadastrado no Catálogo</option>`);
 
     document.getElementById('eTamanho').innerHTML = '<option value="">Selecione o item primeiro</option>';
     document.getElementById('eQtd').value = '1';
