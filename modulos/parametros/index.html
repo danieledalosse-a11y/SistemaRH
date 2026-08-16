@@ -499,7 +499,7 @@ ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAUL
       <input type="hidden" id="uColaboradorId">
       <div class="field-row" style="grid-template-columns:2fr 1fr">
         <div class="field" style="position:relative">
-          <label>Colaborador *</label>
+          <label>Colaborador <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></label>
           <input type="text" id="uColaboradorBusca" placeholder="Digite para buscar..." oninput="buscarColaboradorUser()" autocomplete="off">
           <div id="uColaboradorDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px;"></div>
           <div id="uColaboradorSelecionado" style="display:none;margin-top:6px;padding:8px 12px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:8px;font-size:13px;color:var(--blue);display:none;align-items:center;justify-content:space-between;">
@@ -2083,7 +2083,7 @@ function toggleSenhaVis() {
 
 async function salvarUser() {
   const colaboradorId = parseInt(document.getElementById('uColaboradorId').value) || null;
-  const nome      = document.getElementById('uColaboradorNomeLabel').textContent.trim();
+  const nomeColab = document.getElementById('uColaboradorNomeLabel').textContent.trim();
   const email     = document.getElementById('uEmail').value.trim();
   const senha     = document.getElementById('uSenha').value.trim();
   const perfilId  = parseInt(document.getElementById('uPerfil').value) || null;
@@ -2091,7 +2091,9 @@ async function salvarUser() {
   const perfil    = perfilObj?.nome?.toLowerCase().replace(/\s+/g, '_') || '';
   const acesso    = getModulosSelecionados();
 
-  if (!nome) { showToast('Selecione um colaborador.', 'error'); return; }
+  // colaborador é opcional — usa o e-mail como identificador quando não vinculado
+  const nome = nomeColab || email;
+  if (!nome) { showToast('Informe ao menos o e-mail de acesso.', 'error'); return; }
 
   const temExtra = await testarColunaExtra();
   const bodyBase = { nome, perfil, acesso_modulos: acesso,
