@@ -1921,9 +1921,17 @@ async function carregarNomeColabGestor(id) {
 }
 
 async function buscarColaboradorGestor() {
-  const q = document.getElementById('gColaboradorBusca').value.trim();
+  const inp = document.getElementById('gColaboradorBusca');
+  const q = inp.value.trim();
   const dd = document.getElementById('gColaboradorDropdown');
   if (q.length < 2) { dd.style.display = 'none'; return; }
+  // Posiciona o dropdown fixo relativo ao input (evita ser cortado pelo modal overflow)
+  const rect = inp.getBoundingClientRect();
+  dd.style.position = 'fixed';
+  dd.style.top = (rect.bottom + 2) + 'px';
+  dd.style.left = rect.left + 'px';
+  dd.style.width = rect.width + 'px';
+  dd.style.zIndex = '9999';
   try {
     const r = await fetch(
       `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome&order=nome&limit=10`,
