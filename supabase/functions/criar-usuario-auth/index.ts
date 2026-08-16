@@ -18,6 +18,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    let userId: string
+
     const { data, error } = await admin.auth.admin.createUser({
       email,
       password,
@@ -25,9 +27,22 @@ serve(async (req) => {
       user_metadata: { nome },
     })
 
-    if (error) throw error
+    if (error) {
+      // Se o e-mail já existe, busca o user_id existente
+      if (error.message.includes('already been registered') || error.message.includes('already exists')) {
+        const { data: list, error: listErr } = await admin.auth.admin.listUsers()
+        if (listErr) throw listErr
+        const existing = list.users.find(u => u.email === email)
+        if (!existing) throw new Error('Usuário já existe mas não foi possível localizar')
+        userId = existing.id
+      } else {
+        throw error
+      }
+    } else {
+      userId = data.user.id
+    }
 
-    return new Response(JSON.stringify({ user_id: data.user.id }), {
+    return new Response(JSON.stringify({ user_id: userId }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     })
   } catch (err) {
