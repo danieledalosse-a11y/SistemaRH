@@ -238,6 +238,7 @@
   <div class="tabs">
     <button class="tab active" onclick="switchTab('andamento')">Em andamento</button>
     <button class="tab" onclick="switchTab('concluidos')">Concluídos</button>
+    <button class="tab" onclick="switchTab('cancelados')">Cancelados</button>
     <button class="tab" onclick="switchTab('novo')">Novo processo</button>
   </div>
 
@@ -256,6 +257,14 @@
   </div>
 
   <!-- Aba Novo processo -->
+  <div class="tab-panel" id="panel-cancelados">
+    <div id="canceladosConteudo">
+      <div class="empty-state">
+        <div class="empty-state-icon">⊘</div>
+        <div class="empty-state-title">Carregando…</div>
+      </div>
+    </div>
+  </div>
   <div class="tab-panel" id="panel-novo">
     <div class="form-section">
       <div class="form-title">Abrir novo processo</div>
@@ -455,8 +464,9 @@ function showToast(msg, tipo = '') {
 }
 
 // ─── Tabs ────────────────────────────────────────────────────────
-const TAB_IDS = ['andamento', 'concluidos', 'novo'];
+const TAB_IDS = ['andamento', 'concluidos', 'cancelados', 'novo'];
 let concluidosCarregados = false;
+let canceladosCarregados = false;
 
 function switchTab(id) {
   TAB_IDS.forEach(t => {
@@ -464,6 +474,42 @@ function switchTab(id) {
     document.getElementById('panel-' + t).classList.toggle('active', t === id);
   });
   if (id === 'concluidos' && !concluidosCarregados) carregarConcluidos();
+  if (id === 'cancelados' && !canceladosCarregados) carregarCancelados();
+}
+
+// ─── Aba Cancelados ──────────────────────────────────────────────────
+async function carregarCancelados() {
+  canceladosCarregados = true;
+  const el = document.getElementById('canceladosConteudo');
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/processos_rh?status=eq.cancelado&select=*,processos_checklist(*)&order=criado_em.desc`,
+      { headers: SB_HEADERS }
+    );
+    if (!r.ok) throw new Error('Erro ao carregar');
+    const processos = await r.json();
+    if (!processos.length) {
+      el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⊘</div><div class="empty-state-title">Nenhum processo cancelado</div></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="processos-lista">${processos.map(p => buildCardCancelado(p)).join('')}</div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-desc">${e.message}</div></div>`;
+  }
+}
+
+function buildCardCancelado(p) {
+  const cfg = TIPO_CONFIG[p.tipo] || { label: p.tipo, cor: 'blue', icon: '📄' };
+  const extras = p.dados_extras || {};
+  const motivoCancelamento = extras.motivo_cancelamento || '—';
+  const canceladoEm = p.atualizado_em ? fmtData(p.atualizado_em.slice(0,10)) : '—';
+  return `<div class="processo-row" style="opacity:.7;">
+    <div class="processo-row-summary" style="cursor:default;">
+      <span class="tipo-pill ${cfg.cor}"><span class="tipo-icon">${cfg.icon}</span>${cfg.label}</span>
+      <span class="row-nome">${p.colaborador_nome || '—'}</span>
+      <span style="font-size:11px;color:var(--text-ter);margin-left:auto;">Cancelado em ${canceladoEm} · ${motivoCancelamento}</span>
+    </div>
+  </div>`;
 }
 
 // ─── Aba Em andamento ─────────────────────────────────────────────
@@ -710,7 +756,10 @@ function buildCard(p) {
   const feitos = checklist.filter(c => c.concluido).length;
   const pct = total ? Math.round((feitos / total) * 100) : 0;
   const todosFeitos = total > 0 && feitos === total;
-  const criadoBase = new Date(p.criado_em); criadoBase.setHours(0,0,0,0);
+  // Para demissão, prazos partem da data de demissão; demais, da criação do processo
+  const _baseStr = (p.tipo === 'demissao' && p.dados_extras?.data_demissao)
+    ? p.dados_extras.data_demissao : p.criado_em;
+  const criadoBase = new Date(_baseStr); criadoBase.setHours(0,0,0,0);
   const hoje = new Date(); hoje.setHours(0,0,0,0);
 
   // Urgência geral
@@ -750,6 +799,8 @@ function buildCard(p) {
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Indicado: ${extras.indicado_nome} · Folha de ${extras.mes_folha || '—'}</div>`;
   else if (p.tipo === 'atestado' && extras.cid)
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">CID: ${extras.cid} · ${extras.dias_afastamento || '?'} dia(s)</div>`;
+  else if (p.tipo === 'demissao' && extras.data_demissao)
+    extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Data: ${fmtData(extras.data_demissao)}${extras.motivo ? ' · ' + extras.motivo : ''}</div>`;
 
   // Checklist detalhado com agrupamento por categoria
   const checklistHtml = buildChecklistHtml(checklist, criadoBase, p.id, p.tipo);
@@ -793,6 +844,61 @@ function calcularPrazoDesde(dataBase, diasUteis) {
     if (dow !== 0 && dow !== 6) restantes--;
   }
   return d;
+}
+
+// ─── Cancelar processo ────────────────────────────────────────────────
+let _cancelandoId = null;
+
+function cancelarProcesso(processoId) {
+  _cancelandoId = processoId;
+  const proc = _PROC_MAP[processoId] || {};
+  const cfg = TIPO_CONFIG[proc.tipo] || { label: proc.tipo || 'Processo', icon: '📄' };
+  document.getElementById('modalCancelamentoTitulo').textContent =
+    `${cfg.icon} Cancelar: ${cfg.label} — ${proc.colaborador_nome || ''}`;
+  document.getElementById('motivoCancelamento').value = '';
+  document.getElementById('modalCancelamento').style.display = 'flex';
+}
+
+function fecharModalCancelamento() {
+  document.getElementById('modalCancelamento').style.display = 'none';
+  _cancelandoId = null;
+}
+
+async function confirmarCancelamento() {
+  if (!_cancelandoId) return;
+  const motivo = document.getElementById('motivoCancelamento').value.trim();
+  if (!motivo) { document.getElementById('motivoCancelamento').focus(); return; }
+
+  const proc = _PROC_MAP[_cancelandoId] || {};
+  const btnConf = document.getElementById('btnConfirmarCancelamento');
+  btnConf.disabled = true; btnConf.textContent = 'Cancelando…';
+
+  try {
+    const extras = { ...(proc.dados_extras || {}), motivo_cancelamento: motivo };
+    await fetch(`${SB_URL}/rest/v1/processos_rh?id=eq.${_cancelandoId}`, {
+      method: 'PATCH', headers: SB_HEADERS,
+      body: JSON.stringify({ status: 'cancelado', dados_extras: extras })
+    });
+
+    // Se era demissão: limpar data_demissao e reativar colaborador
+    if (proc.tipo === 'demissao' && proc.colaborador_id) {
+      await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${proc.colaborador_id}`, {
+        method: 'PATCH', headers: SB_HEADERS,
+        body: JSON.stringify({ data_demissao: null, motivo_demissao: null, ativo: true })
+      });
+      showToast('✓ Processo cancelado. Colaborador reativado no Cadastro.', 'success');
+    } else {
+      showToast('✓ Processo cancelado e arquivado', 'success');
+    }
+
+    document.getElementById('card-' + _cancelandoId)?.remove();
+    fecharModalCancelamento();
+    canceladosCarregados = false;
+  } catch(e) {
+    showToast('Erro ao cancelar: ' + e.message, 'error');
+  } finally {
+    btnConf.disabled = false; btnConf.textContent = 'Confirmar cancelamento';
+  }
 }
 
 // ─── Checklist toggle ─────────────────────────────────────────────
@@ -1412,6 +1518,19 @@ init();
     <div class="modal-proc-actions">
       <button class="btn btn-secondary btn-sm" onclick="document.getElementById('modalConcluirProc').style.display='none'">Cancelar</button>
       <button class="btn btn-success btn-sm" id="modalConcluirBtn" onclick="confirmarConclusao()">✅ Confirmar conclusão</button>
+    </div>
+  </div>
+</div>
+<!-- Modal cancelamento -->
+<div id="modalCancelamento" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:var(--card);border-radius:14px;padding:28px 32px;width:min(480px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.25);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px;" id="modalCancelamentoTitulo">Cancelar processo</div>
+    <div style="font-size:13px;color:var(--text-sec);margin-bottom:20px;">O processo será arquivado e poderá ser consultado na aba <strong>Cancelados</strong>.</div>
+    <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:6px;">Motivo do cancelamento <span style="color:#dc2626;">*</span></label>
+    <input id="motivoCancelamento" class="form-control" type="text" placeholder="Ex: Colaborador desistiu da demissão" style="margin-bottom:20px;" onkeydown="if(event.key==='Enter')confirmarCancelamento()">
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="fecharModalCancelamento()">Voltar</button>
+      <button id="btnConfirmarCancelamento" class="btn" style="background:#dc2626;color:#fff;border:none;" onclick="confirmarCancelamento()">Confirmar cancelamento</button>
     </div>
   </div>
 </div>

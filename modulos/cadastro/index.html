@@ -2902,9 +2902,11 @@ function salvarFicha() {
     if (novoGestor !== (c.gestor||'') && (novoGestor||c.gestor)) alteracoes.push(`Gestor: "${c.gestor||'—'}" → "${novoGestor||'—'}"`);
     if (payload.ativo !== undefined && payload.ativo !== (c.situacao === 'Ativo')) alteracoes.push(`Situação: "${c.situacao}" → "${payload.ativo ? 'Ativo' : 'Inativo'}"`);
     sbPatch('colaboradores', `id=eq.${c._sbId}`, payload)
-      .then(() => {
+      .then(async () => {
         registrarAudit('editado', c._sbId, alteracoes.length ? alteracoes.join(' | ') : null);
         mostrarToast('Salvo no banco de dados ✓');
+        // Automação: processo de demissão via Workflow
+        if (novaDem) await _sincronizarProcessoDemissao(c._sbId, c.nome, novaDem, c.motivo);
       })
       .catch(e => mostrarToast('Erro ao salvar: ' + e.message));
   }
@@ -2912,6 +2914,85 @@ function salvarFicha() {
   const badge = document.getElementById('salvoBadge');
   badge.classList.add('show');
   setTimeout(() => badge.classList.remove('show'), 3000);
+}
+
+// ─── Workflow: processo de demissão ─────────────────────────────────────────
+async function _sincronizarProcessoDemissao(colaboradorId, colaboradorNome, dataDemissao, motivo) {
+  try {
+    const SB_URL_CAD = 'https://rujtbxwssiofiialnbbg.supabase.co';
+    const headers = { ...SB_HEADERS, 'Content-Type': 'application/json' };
+
+    // Verifica se já existe processo de demissão aberto ou cancelado (não criar duplicata)
+    const rProc = await fetch(
+      `${SB_URL_CAD}/rest/v1/processos_rh?colaborador_id=eq.${colaboradorId}&tipo=eq.demissao&status=in.(aberto,cancelado)&select=id,dados_extras,status`,
+      { headers }
+    );
+    const existentes = await rProc.json();
+    const aberto = existentes.find(p => p.status === 'aberto');
+
+    if (aberto) {
+      // Atualiza data_demissao no processo existente (prazos serão recalculados no Workflow)
+      const novosExtras = { ...(aberto.dados_extras || {}), data_demissao: dataDemissao, motivo: motivo || null };
+      await fetch(`${SB_URL_CAD}/rest/v1/processos_rh?id=eq.${aberto.id}`, {
+        method: 'PATCH', headers, body: JSON.stringify({ dados_extras: novosExtras })
+      });
+      mostrarToast('⚙ Prazo do processo de demissão atualizado no Workflow');
+      return;
+    }
+
+    // Nenhum aberto — cria novo processo + checklist
+    const checklist = [
+      { item: 'Aviso prévio registrado',                                                              prazo_dias: 0 },
+      { item: 'Fechar cartão Ponto e imprimir',                                                       prazo_dias: 1 },
+      { item: 'Verificar Vale Empregado',                                                             prazo_dias: 1 },
+      { item: 'Calcular dias de VA para homologação',                                                 prazo_dias: 2 },
+      { item: 'Cancelar Vale Transporte',                                                             prazo_dias: 2 },
+      { item: 'Excluir Vale Alimentação',                                                             prazo_dias: 2 },
+      { item: 'Excluir Vale Gás',                                                                     prazo_dias: 2 },
+      { item: 'Cancelar Plano de Saúde',                                                              prazo_dias: 3 },
+      { item: 'Excluir Seguro de Vida',                                                               prazo_dias: 3 },
+      { item: 'Excluir Mixtra / Wellhub / Corplife',                                                  prazo_dias: 3 },
+      { item: 'Excluir perfil no Fronter',                                                            prazo_dias: 3 },
+      { item: 'Cancelar e-mail e acessos eletrônicos / rastreador (TI)',                              prazo_dias: 3 },
+      { item: 'Arte de desligamento — encaminhar para Dani (Vendedor)',                               prazo_dias: 3 },
+      { item: 'Enviar ao escritório: verbas rescisórias (HE, Falta, VA, Comissão)',                   prazo_dias: 3 },
+      { item: 'Devolução de uniforme e crachá',                                                       prazo_dias: 5 },
+      { item: 'Exame demissional',                                                                    prazo_dias: 7 },
+      { item: 'Conferir documentos do escritório: Termo de rescisão, Seguro Desemprego, Médias salariais, Guia FGTS, Extrato FGTS, Chave liberação FGTS', prazo_dias: 8 },
+      { item: 'Homologação com colaborador — prazo legal 10 dias (antecipar se cair em sábado, domingo ou feriado)', prazo_dias: 9 },
+      { item: 'Baixa na CTPS (digital ou física)',                                                    prazo_dias: 10 },
+    ];
+
+    const perfil = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}'); } catch(_) { return {}; } })();
+    const rNew = await fetch(`${SB_URL_CAD}/rest/v1/processos_rh`, {
+      method: 'POST',
+      headers: { ...headers, 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        tipo: 'demissao',
+        colaborador_id: colaboradorId,
+        colaborador_nome: colaboradorNome,
+        criado_por: perfil.nome || 'RH',
+        dados_extras: { data_demissao: dataDemissao, motivo: motivo || null },
+      })
+    });
+    if (!rNew.ok) throw new Error('Erro ao criar processo');
+    const [proc] = await rNew.json();
+
+    // Insere itens do checklist
+    const itens = checklist.map((it, i) => ({
+      processo_id: proc.id,
+      item: it.item,
+      prazo_dias: it.prazo_dias,
+      ordem: i,
+      concluido: false,
+    }));
+    await fetch(`${SB_URL_CAD}/rest/v1/processos_checklist`, {
+      method: 'POST', headers, body: JSON.stringify(itens)
+    });
+    mostrarToast('✅ Processo de demissão aberto no Workflow automaticamente');
+  } catch(e) {
+    console.error('Erro ao sincronizar processo demissão:', e);
+  }
 }
 
 // ─── Remuneração ────────────────────────────────────────────────────────────
