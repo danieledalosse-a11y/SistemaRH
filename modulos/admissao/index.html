@@ -1590,7 +1590,7 @@ async function confirmarEfetivar() {
     banco:             up(f.banco),
     agencia:           f.agencia || null,
     conta:             f.conta || null,
-    vale_transporte:   f.vale_transporte ? 'Sim' : 'Não',
+    vt:                f.vale_transporte ? 'Sim' : 'Não',
     vt_passes:         f.vt_passes ? parseInt(f.vt_passes) : null,
     vt_cartao:         f.vt_cartao || null,
     vt_linha:          f.vt_linha || null,
@@ -1646,16 +1646,24 @@ async function confirmarEfetivar() {
       });
       const [proc] = await processo.json();
       // Criar itens do checklist
-      const itens = [
+      const _itensBase = [
         { item: 'Cadastro no sistema concluído', prazo_dias: 0, concluido: true, concluido_por: perfil.nome || 'RH', concluido_em: new Date().toISOString() },
         { item: 'Exame admissional realizado', prazo_dias: 1 },
         { item: 'Uniforme entregue', prazo_dias: 3 },
         { item: 'Vale Alimentação solicitado', prazo_dias: 2 },
-        { item: 'Vale Transporte solicitado', prazo_dias: 2 },
         { item: 'Incluir no seguro de vida', prazo_dias: 5 },
         { item: 'Crachá emitido', prazo_dias: 5 },
         { item: 'Apresentação à equipe realizada', prazo_dias: 1 },
-      ].map((it, i) => ({ ...it, processo_id: proc.id, ordem: i }));
+      ];
+      // VT: só entra no checklist se o colaborador utiliza VT
+      if (f.vale_transporte) {
+        _itensBase.splice(4, 0, {
+          item: 'Vale Transporte — solicitar inclusão na compra (Financeiro)',
+          prazo_dias: 1,
+          pendencia_financeiro: true,
+        });
+      }
+      const itens = _itensBase.map((it, i) => ({ ...it, processo_id: proc.id, ordem: i }));
       await fetch(`${SB_URL}/rest/v1/processos_checklist`, {
         method: 'POST',
         headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
