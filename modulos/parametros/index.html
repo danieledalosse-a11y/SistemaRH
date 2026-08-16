@@ -432,10 +432,6 @@ ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAUL
         <label>E-mail de acesso</label>
         <input type="email" id="uEmail" placeholder="email@empresa.com">
       </div>
-      <div class="field">
-        <label>Cargo</label>
-        <input type="text" id="uCargo" placeholder="Ex: Analista de RH">
-      </div>
     </div>
 
     <div class="field">
@@ -1528,7 +1524,6 @@ function filtrarUsers() {
   const filtered = q ? allUsers.filter(u =>
     (u.nome || '').toLowerCase().includes(q) ||
     (u.email || '').toLowerCase().includes(q) ||
-    (u.cargo || '').toLowerCase().includes(q) ||
     (u.perfil || '').toLowerCase().includes(q)
   ) : allUsers;
   renderUsers(filtered);
@@ -1559,14 +1554,13 @@ function renderUsers(users) {
           </div>
         </div>
       </td>
-      <td style="font-size:12px;color:var(--text-sec)">${u.cargo || '—'}</td>
       <td><span class="badge-perfil ${u.perfil}">${perfilLabel}</span></td>
       <td><div style="display:flex;flex-wrap:wrap;gap:4px">${mods || '<span style="color:var(--text-sec);font-size:12px">—</span>'}</div></td>
       <td><span class="status-dot ${u.ativo ? 'ativo' : 'inativo'}" title="${u.ativo ? 'Ativo' : 'Inativo'}"></span></td>
     </tr>`;
   }).join('');
   grid.innerHTML = `<table class="users-table">
-    <thead><tr><th>Usuário</th><th>Cargo</th><th>Perfil</th><th>Módulos</th><th>Status</th></tr></thead>
+    <thead><tr><th>Usuário</th><th>Perfil</th><th>Módulos</th><th>Status</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
@@ -1611,7 +1605,6 @@ function abrirUserModal(id) {
 
   document.getElementById('uNome').value   = user?.nome   || '';
   document.getElementById('uEmail').value  = user?.email  || '';
-  document.getElementById('uCargo').value  = user?.cargo  || '';
   document.getElementById('uPerfil').value = user?.perfil || 'rh';
   document.getElementById('uEmail').readOnly = !!user; // email só editável na criação
 
@@ -1644,7 +1637,6 @@ function fecharUserModalOutside(e) {
 async function salvarUser() {
   const nome   = document.getElementById('uNome').value.trim();
   const email  = document.getElementById('uEmail').value.trim();
-  const cargo  = document.getElementById('uCargo').value.trim();
   const perfil = document.getElementById('uPerfil').value;
   const acesso = getModulosSelecionados();
   const _nome = nomeUsuario();
@@ -1653,7 +1645,7 @@ async function salvarUser() {
 
   const temExtra = await testarColunaExtra();
   const body = temExtra
-    ? { nome, email: email || null, cargo: cargo || null, perfil, acesso_modulos: acesso }
+    ? { nome, email: email || null, perfil, acesso_modulos: acesso }
     : { nome, perfil };
 
   try {
