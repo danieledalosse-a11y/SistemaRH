@@ -3521,23 +3521,40 @@ function buscarIndicador(q) {
   clearTimeout(_indicadorTimer);
   const dd = document.getElementById('indicador-dropdown');
   if (!q || q.length < 2) { dd.style.display = 'none'; return; }
-  _indicadorTimer = setTimeout(() => {
-    const idAtual = _fichaIdx !== null ? COLABORADORES[_fichaIdx]?.id : null;
-    const matches = COLABORADORES.filter(c =>
-      c.situacao !== 'Inativo' &&
-      c.id !== idAtual &&
-      (c.nome || '').toLowerCase().includes(q.toLowerCase())
-    ).slice(0, 12);
-    if (!matches.length) { dd.innerHTML = '<div style="padding:12px 16px;font-size:13px;color:var(--text-ter);">Nenhum colaborador encontrado</div>'; dd.style.display = 'block'; return; }
-    dd.innerHTML = matches.map(c => `
-      <div onclick="selecionarIndicador(${c.id})" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.nome || ''}</div>
-          <div style="font-size:11px;color:var(--text-sec);">${c.cargo || ''} · ${c.empresa || ''}</div>
-        </div>
-      </div>`).join('');
-    dd.style.display = 'block';
-  }, 200);
+  dd.innerHTML = '<div style="padding:12px 16px;font-size:13px;color:var(--text-ter);">Buscando…</div>';
+  dd.style.display = 'block';
+  _indicadorTimer = setTimeout(async () => {
+    try {
+      const idAtual = _fichaIdx !== null ? COLABORADORES[_fichaIdx]?._sbId : null;
+      const enc = encodeURIComponent(q.toUpperCase());
+      const url = `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&nome=ilike.*${enc}*&select=id,nome,cargo,empresa_atuacao&order=nome&limit=12`;
+      const r = await fetch(url, { headers: SB_HEADERS });
+      const results = await r.json();
+      const matches = results.filter(x => x.id !== idAtual);
+      if (!matches.length) {
+        dd.innerHTML = '<div style="padding:12px 16px;font-size:13px;color:var(--text-ter);">Nenhum colaborador encontrado</div>';
+        return;
+      }
+      dd.innerHTML = matches.map(x => `
+        <div onclick="selecionarIndicadorSB(${x.id}, ${JSON.stringify(x.nome)}, ${JSON.stringify(x.cargo||'')}, ${JSON.stringify(x.empresa_atuacao||'')})"
+          style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);"
+          onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${x.nome || ''}</div>
+            <div style="font-size:11px;color:var(--text-sec);">${x.cargo || ''}${x.empresa_atuacao ? ' · ' + x.empresa_atuacao : ''}</div>
+          </div>
+        </div>`).join('');
+    } catch(e) {
+      dd.innerHTML = '<div style="padding:12px 16px;font-size:13px;color:var(--red);">Erro ao buscar</div>';
+    }
+  }, 300);
+}
+
+function selecionarIndicadorSB(id, nome, cargo, empresa) {
+  document.getElementById('df-indicadorId').value = id;
+  document.getElementById('df-indicadorBusca').value = nome;
+  document.getElementById('indicador-dropdown').style.display = 'none';
+  preencherIndicadorSelecionado({ id, nome, cargo, empresa });
 }
 
 function selecionarIndicador(id) {
