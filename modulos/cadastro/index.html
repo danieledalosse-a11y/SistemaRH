@@ -608,7 +608,15 @@
           <div class="sf-cell"><div class="sf-lbl">Data de demissão</div><input class="sf-inp" type="date" id="df-demissao"></div>
         </div>
         <div class="sf-row full">
-          <div class="sf-cell"><div class="sf-lbl">Motivo de desligamento</div><input class="sf-inp" type="text" id="df-motivo" placeholder="Se aplicável"></div>
+          <div class="sf-cell">
+            <div class="sf-lbl">Motivo de desligamento</div>
+            <select class="sf-inp" id="df-motivo">
+              <option value="">Não informado</option>
+            </select>
+          </div>
+        </div>
+        <div class="sf-row full">
+          <div class="sf-cell"><div class="sf-lbl">Observação (contexto do desligamento)</div><input class="sf-inp" type="text" id="df-obsDesligamento" placeholder="Ex: abriu negócio próprio, baixo desempenho..."></div>
         </div>
       </div>
 
@@ -1355,7 +1363,22 @@ async function carregarMotivosDesligamento() {
   try {
     MOTIVOS_DESLIGAMENTO = await sbGet('param_motivo_desligamento', 'select=descricao&ativo=eq.true&order=ordem,id');
     popularSelectCausaRescisao();
+    _popularSelectMotivoCard();
   } catch(e) { console.warn('Motivos de desligamento não carregados:', e.message); }
+}
+
+function _popularSelectMotivoCard(valorAtual) {
+  const sel = document.getElementById('df-motivo');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '<option value="">Não informado</option>';
+  MOTIVOS_DESLIGAMENTO.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.descricao;
+    opt.textContent = m.descricao;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
 }
 
 function popularSelectCausaRescisao(valorAtual) {
@@ -1451,6 +1474,7 @@ function supabaseToJS(row) {
     dataAdmissao:     row.data_admissao || '',
     dataDemissao,
     motivo:           row.motivo_demissao || '',
+    obsDesligamento:  row.obs_desligamento || '',
     cargo,
     contrato:         row.tipo_contrato || '',
     periodoExp:       row.periodo_experiencia ? String(row.periodo_experiencia) : '',
@@ -2156,7 +2180,7 @@ function novoColaborador() {
       : '') + 'Preencha os dados e salve para cadastrar';
 
   // Limpa todos os inputs de texto/data/number
-  ['df-codigo','df-admissao','df-demissao','df-motivo','df-nome','df-cargo',
+  ['df-codigo','df-admissao','df-demissao','df-motivo','df-obsDesligamento','df-nome','df-cargo',
    'df-setor','df-empresa-atuacao','df-gestor','df-nascimento',
    'df-cpf','df-rg','df-rgOrgao','df-rgData','df-pis','df-cnh',
    'df-cnhCategoria','df-cnhPrimeiraHab','df-cnhEmissao','df-cnhValidade',
@@ -2281,7 +2305,8 @@ function abrirFicha(idx) {
   document.getElementById('df-situacao').value      = c.situacao || 'Ativo';
   document.getElementById('df-admissao').value      = c.dataAdmissao || '';
   document.getElementById('df-demissao').value      = c.dataDemissao || '';
-  document.getElementById('df-motivo').value        = c.motivo || '';
+  _popularSelectMotivoCard(c.motivo || '');
+  document.getElementById('df-obsDesligamento').value = c.obsDesligamento || '';
   document.getElementById('df-nome').value          = c.nome || '';
   popularSelectCargo(c.cargo || '');
   document.getElementById('df-contrato').value      = c.contrato || '';
@@ -2701,6 +2726,7 @@ function salvarFicha() {
   c.dataAdmissao      = document.getElementById('df-admissao').value;
   c.dataDemissao      = document.getElementById('df-demissao').value;
   c.motivo            = up(document.getElementById('df-motivo').value);
+  c.obsDesligamento   = document.getElementById('df-obsDesligamento').value.trim();
   c.nome              = up(document.getElementById('df-nome').value);
   c.cargo             = novoCargo;
   c.setor             = novoSetor;
@@ -2816,6 +2842,7 @@ function salvarFicha() {
       data_admissao:      c.dataAdmissao || null,
       data_demissao:      c.dataDemissao || null,
       motivo_demissao:    c.motivo || null,
+      obs_desligamento:   c.obsDesligamento || null,
       // Dados pessoais
       data_nascimento:    c.dataNascimento || null,
       sexo:               c.sexo === 'M' ? 'Masc' : c.sexo === 'F' ? 'Fem' : null,
