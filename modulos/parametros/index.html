@@ -1318,6 +1318,26 @@ function abrirModal(row) {
   }
 
   document.getElementById('modalFields').innerHTML = html;
+
+  // Campo de colaborador para gestor
+  if (currentCat === 'gestor') {
+    const colabId   = row?.colaborador_id || '';
+    const colabNome = row?.colaborador_id ? (_gestColabCache[row.colaborador_id]?.nome || '') : '';
+    const extra = `<div class="field" style="position:relative;margin:0 24px 16px;">
+      <label>Colaborador vinculado</label>
+      <input type="hidden" id="gColaboradorId" value="${colabId}">
+      <input type="text" id="gColaboradorBusca" placeholder="Digite para buscar..." oninput="buscarColaboradorGestor()" autocomplete="off" style="${colabId ? 'display:none' : ''}">
+      <div id="gColaboradorDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px;"></div>
+      <div id="gColaboradorSelecionado" style="display:${colabId ? 'flex' : 'none'};align-items:center;gap:8px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:8px;padding:7px 12px;font-size:13px;color:var(--blue);font-weight:500;">
+        <span id="gColaboradorNomeLabel">${colabNome}</span>
+        <button type="button" onclick="limparColaboradorGestor()" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;line-height:1;padding:0 0 0 8px;margin-left:auto">×</button>
+      </div>
+      ${colabId && !colabNome ? `<div id="gColabLoader" style="font-size:12px;color:var(--text-muted)">Carregando...</div>` : ''}
+    </div>`;
+    document.getElementById('modalFields').insertAdjacentHTML('beforeend', extra);
+    if (colabId && !colabNome) carregarNomeColabGestor(colabId);
+  }
+
   document.getElementById('histSection').style.display = 'none';
   document.getElementById('histList').innerHTML = '';
   if (row) {
@@ -1357,6 +1377,12 @@ async function salvar() {
     const isInt = f.type === 'number' || f.source === 'gestores' || f.source === 'setores' || f.source === 'cbos';
     body[f.key] = isInt ? (el.value === '' ? null : parseInt(el.value)) : el.value;
   }
+  // Para gestor: inclui colaborador_id se campo existir
+  if (currentCat === 'gestor') {
+    const gColabEl = document.getElementById('gColaboradorId');
+    if (gColabEl) body.colaborador_id = parseInt(gColabEl.value) || null;
+  }
+
   // Para cargo: sincroniza cbo_codigo a partir do cbo_id selecionado
   if (currentCat === 'cargo' && body.cbo_id) {
     const cboRow = cbosRaw.find(r => r.id === body.cbo_id);
@@ -1879,6 +1905,58 @@ function fecharUserModalOutside(e) {
 }
 
 let _colabCache = {};
+let _gestColabCache = {};
+
+async function carregarNomeColabGestor(id) {
+  try {
+    const r = await sbGet('colaboradores', `select=id,nome&id=eq.${id}`);
+    if (r[0]) {
+      _gestColabCache[id] = r[0];
+      const lbl = document.getElementById('gColaboradorNomeLabel');
+      const loader = document.getElementById('gColabLoader');
+      if (lbl) lbl.textContent = r[0].nome;
+      if (loader) loader.remove();
+    }
+  } catch(_) {}
+}
+
+async function buscarColaboradorGestor() {
+  const q = document.getElementById('gColaboradorBusca').value.trim();
+  const dd = document.getElementById('gColaboradorDropdown');
+  if (q.length < 2) { dd.style.display = 'none'; return; }
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome&order=nome&limit=10`,
+      { headers: SB_HEADERS }
+    );
+    const list = await r.json();
+    if (!list.length) { dd.innerHTML = '<div class="colab-opt" style="color:var(--text-muted);cursor:default">Nenhum resultado</div>'; dd.style.display = 'block'; return; }
+    list.forEach(c => { _gestColabCache[c.id] = c; });
+    dd.innerHTML = list.map(c => `<div class="colab-opt" onclick="selecionarColaboradorGestor(${c.id})">${c.nome}</div>`).join('');
+    dd.style.display = 'block';
+  } catch(_) { dd.style.display = 'none'; }
+}
+
+function selecionarColaboradorGestor(id) {
+  const c = _gestColabCache[id];
+  if (!c) return;
+  document.getElementById('gColaboradorId').value = id;
+  document.getElementById('gColaboradorNomeLabel').textContent = c.nome;
+  document.getElementById('gColaboradorSelecionado').style.display = 'flex';
+  document.getElementById('gColaboradorBusca').style.display = 'none';
+  document.getElementById('gColaboradorDropdown').style.display = 'none';
+}
+
+function limparColaboradorGestor() {
+  document.getElementById('gColaboradorId').value = '';
+  document.getElementById('gColaboradorNomeLabel').textContent = '';
+  document.getElementById('gColaboradorSelecionado').style.display = 'none';
+  const busca = document.getElementById('gColaboradorBusca');
+  busca.style.display = 'block';
+  busca.value = '';
+  busca.focus();
+  document.getElementById('gColaboradorDropdown').style.display = 'none';
+}
 
 async function buscarColaboradorUser() {
   const q = document.getElementById('uColaboradorBusca').value.trim();
