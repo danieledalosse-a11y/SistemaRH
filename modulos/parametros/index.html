@@ -613,7 +613,7 @@ const CATS = {
     cols:  ['nome'],
     colabNome: true,
     fields: [
-      { key: 'apelido', label: 'Apelido', type: 'text', placeholder: 'Ex: Madson', width: 3 },
+      { key: 'apelido', label: 'Apelido', type: 'text', placeholder: '', width: 3 },
       { key: 'ordem',   label: 'Ordem',   type: 'number', placeholder: '1',         width: 1 },
     ],
     headers: ['Ordem','Nome','Apelido','Situação',''],
@@ -1343,7 +1343,13 @@ function abrirModal(row) {
       </div>
     </div>`;
     document.getElementById('modalFields').insertAdjacentHTML('afterbegin', busca);
-    if (colabId && !_gestColabCache[colabId]) carregarNomeColabGestor(colabId);
+    if (colabId && !_gestColabCache[colabId]) {
+      carregarNomeColabGestor(colabId);
+    } else if (colabId && _gestColabCache[colabId]) {
+      // colaborador já em cache — preenche apelido se vazio
+      const af = document.getElementById('field_apelido');
+      if (af && !af.value.trim()) af.value = _gestColabCache[colabId].nome.split(' ')[0];
+    }
   }
 
   document.getElementById('histSection').style.display = 'none';
@@ -1930,6 +1936,9 @@ async function carregarNomeColabGestor(id) {
       const loader = document.getElementById('gColabLoader');
       if (lbl) lbl.textContent = r[0].nome;
       if (loader) loader.remove();
+      // preenche apelido com primeiro nome se ainda vazio
+      const af = document.getElementById('field_apelido');
+      if (af && !af.value.trim()) af.value = r[0].nome.split(' ')[0];
     }
   } catch(_) {}
 }
