@@ -1930,13 +1930,21 @@ async function buscarColaboradorGestor() {
   const q = inp.value.trim();
   const dd = document.getElementById('gColaboradorDropdown');
   if (q.length < 2) { dd.style.display = 'none'; return; }
-  // Posiciona o dropdown fixo relativo ao input (evita ser cortado pelo modal overflow)
+  // Posiciona o dropdown fixo abaixo do input, fora do modal overflow
   const rect = inp.getBoundingClientRect();
-  dd.style.position = 'fixed';
-  dd.style.top = (rect.bottom + 2) + 'px';
-  dd.style.left = rect.left + 'px';
-  dd.style.width = rect.width + 'px';
-  dd.style.zIndex = '9999';
+  Object.assign(dd.style, {
+    position: 'fixed',
+    top: (rect.bottom + 4) + 'px',
+    left: rect.left + 'px',
+    width: rect.width + 'px',
+    zIndex: '9999',
+    background: 'var(--card)',
+    border: '1px solid var(--border)',
+    borderRadius: '10px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+    maxHeight: '220px',
+    overflowY: 'auto',
+  });
   try {
     const r = await fetch(
       `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome&order=nome&limit=10`,
@@ -1945,10 +1953,19 @@ async function buscarColaboradorGestor() {
     const list = await r.json();
     if (!list.length) { dd.innerHTML = '<div class="colab-opt" style="color:var(--text-muted);cursor:default">Nenhum resultado</div>'; dd.style.display = 'block'; return; }
     list.forEach(c => { _gestColabCache[c.id] = c; });
-    dd.innerHTML = list.map(c => `<div class="colab-opt" onclick="selecionarColaboradorGestor(${c.id})">${c.nome}</div>`).join('');
+    dd.innerHTML = list.map(c =>
+      `<div class="colab-opt" onclick="selecionarColaboradorGestor(${c.id})" style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background='var(--blue-bg)';this.style.color='var(--blue)'" onmouseout="this.style.background='';this.style.color='var(--text)'">${c.nome}</div>`
+    ).join('');
     dd.style.display = 'block';
   } catch(_) { dd.style.display = 'none'; }
 }
+
+function fecharDropdownGestor(e) {
+  const dd = document.getElementById('gColaboradorDropdown');
+  const inp = document.getElementById('gColaboradorBusca');
+  if (dd && inp && !dd.contains(e.target) && e.target !== inp) dd.style.display = 'none';
+}
+document.addEventListener('click', fecharDropdownGestor);
 
 function selecionarColaboradorGestor(id) {
   const c = _gestColabCache[id];
