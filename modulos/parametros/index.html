@@ -1112,9 +1112,15 @@ function renderTabela(rows) {
 function abrirModal(row) {
   const cat = CATS[currentCat];
   editingId = row ? row.id : null;
-  const titleLabel = row
-    ? (row.nome || row.titulo || row.descricao || row.razao_social || gestoresMap[row.gestor_id] || 'Item')
-    : 'Novo Item';
+  let titleLabel;
+  if (!row) {
+    titleLabel = 'Novo Item';
+  } else if (currentCat === 'bonus_indicacao') {
+    const vFmt = row.valor != null ? `R$ ${parseFloat(row.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : 'Bônus';
+    titleLabel = vFmt;
+  } else {
+    titleLabel = row.nome || row.titulo || row.descricao || row.razao_social || gestoresMap[row.gestor_id] || 'Item';
+  }
   document.getElementById('modalTitle').textContent = titleLabel;
   const btnExcluir = document.getElementById('btnExcluir');
   btnExcluir.style.display = row ? '' : 'none';
@@ -1131,7 +1137,12 @@ function abrirModal(row) {
   }
   // Badge de status no cabeçalho
   const statusEl = document.getElementById('modalStatus');
-  if (row) {
+  if (row && cat.noAtivo) {
+    const vigente = !row.vigencia_fim;
+    statusEl.innerHTML = vigente
+      ? '<span class="badge badge-ativo">Vigente</span>'
+      : '<span class="badge badge-inativo">Encerrado</span>';
+  } else if (row) {
     statusEl.innerHTML = row.ativo
       ? '<span class="badge badge-ativo">Ativo</span>'
       : '<span class="badge badge-inativo">Inativo</span>';
@@ -1144,8 +1155,11 @@ function abrirModal(row) {
   const proximaOrdem = row ? null : (allRows.length ? Math.max(...allRows.map(r => r.ordem || 0)) + 1 : 1);
 
   let html = '';
+  if (cat.noOrdem && cat.noAtivo) html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;">';
   cat.fields.forEach(f => {
     const val = row ? (row[f.key] ?? '') : (f.key === 'ordem' ? proximaOrdem : '');
+    const colSpan = (cat.noOrdem && cat.noAtivo && f.width >= 4) ? 'grid-column:1/-1;' : '';
+    const fieldStyle = colSpan ? ` style="${colSpan}"` : '';
     if (f.type === 'select' && f.source === 'empresas') {
       const opts = Object.entries(empresasMap).map(([k,v]) =>
         `<option value="${k}"${val==k?' selected':''}>${v} (${k})</option>`).join('');
@@ -1182,12 +1196,13 @@ function abrirModal(row) {
       </div>`;
     } else {
       const stepAttr = f.step ? ` step="${f.step}"` : '';
-      html += `<div class="field">
+      html += `<div class="field"${fieldStyle}>
         <label>${f.label}</label>
         <input type="${f.type}" id="field_${f.key}" value="${val}" placeholder="${f.placeholder || ''}"${stepAttr} style="width:100%">
       </div>`;
     }
   });
+  if (cat.noOrdem && cat.noAtivo) html += '</div>';
 
   if (row) {
     html += `<div class="field-audit">
