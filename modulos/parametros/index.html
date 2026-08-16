@@ -232,6 +232,16 @@
   .modulo-check.disabled { opacity: 0.5; cursor: not-allowed; }
   .modulo-icon { font-size: 14px; flex-shrink: 0; }
 
+  /* Perfis */
+  .perfis-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 14px; margin-top: 4px; }
+  .perfil-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; }
+  .perfil-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: var(--blue); }
+  .perfil-card-header { display: flex; align-items: center; justify-content: space-between; }
+  .perfil-card-nome { font-size: 15px; font-weight: 700; color: var(--text); }
+  .perfil-card-desc { font-size: 12px; color: var(--text-sec); line-height: 1.5; }
+  .perfil-card-modulos { display: flex; flex-wrap: wrap; gap: 5px; }
+  .perfil-mod-chip { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; background: var(--blue-bg); color: var(--blue); }
+
   #uColaboradorDropdown { position: absolute; left: 0; right: 0; top: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 10; max-height: 180px; overflow-y: auto; display: none; }
   .colab-opt { padding: 9px 12px; cursor: pointer; font-size: 13px; color: var(--text); transition: background 0.1s; }
   .colab-opt:hover { background: var(--blue-bg); color: var(--blue); }
@@ -344,6 +354,62 @@
       </div>
     </div>
 
+    <!-- Painel de perfis -->
+    <div id="perfisPanel" style="display:none">
+      <div class="page-header">
+        <div class="page-title">Perfis de Acesso</div>
+      </div>
+      <div class="users-toolbar">
+        <div></div>
+        <button class="btn btn-primary" onclick="abrirPerfilModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo Perfil
+        </button>
+      </div>
+      <div id="perfisGrid"></div>
+    </div>
+
+    <!-- Modal perfil -->
+    <div class="overlay" id="perfilOverlay" onclick="fecharPerfilModalOutside(event)" style="display:none;opacity:0;pointer-events:none">
+      <div class="modal" style="max-width:520px">
+        <div class="modal-header">
+          <div class="modal-header-left">
+            <div class="modal-title" id="perfilModalTitle">Novo Perfil</div>
+            <div class="modal-status" id="perfilModalStatus"></div>
+          </div>
+          <button class="modal-close" onclick="fecharPerfilModal()">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div style="padding:0 24px 24px;display:flex;flex-direction:column;gap:16px">
+          <div class="field-row" style="grid-template-columns:1fr 1fr">
+            <div class="field">
+              <label>Nome do perfil *</label>
+              <input type="text" id="pNome" placeholder="Ex: Gestor de Loja">
+            </div>
+            <div class="field">
+              <label>Status</label>
+              <div id="pStatusBadge" style="margin-top:6px"></div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Descrição</label>
+            <input type="text" id="pDesc" placeholder="Descreva as responsabilidades deste perfil">
+          </div>
+          <div class="field">
+            <label>Módulos com acesso</label>
+            <div id="pModulosGrid" class="modulos-grid" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="perfilBtnToggle" class="btn" onclick="togglePerfilAtivo()" style="display:none">Inativar</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-ghost" onclick="fecharPerfilModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarPerfil()">Salvar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Painel de usuários -->
     <div id="usersPanel" style="display:none">
       <div class="page-header">
@@ -432,9 +498,7 @@ ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAUL
       <div class="field">
         <label>Perfil *</label>
         <select id="uPerfil" onchange="perfilChanged()">
-          <option value="rh">RH</option>
-          <option value="gestor">Gestor</option>
-          <option value="admin">Administrador</option>
+          <option value="">Carregando...</option>
         </select>
       </div>
     </div>
@@ -887,6 +951,10 @@ function renderSidebar() {
         <svg class="chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       <div class="sidebar-group-items">
+        <div class="sidebar-item" data-cat="perfis" onclick="selectCat(this)">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Perfis de Acesso
+        </div>
         <div class="sidebar-item" data-cat="usuarios" onclick="selectCat(this)">
           <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Usuários
@@ -960,6 +1028,13 @@ function selectCat(el) {
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('mainPanel').style.display = 'none';
   document.getElementById('usersPanel').style.display = 'none';
+  document.getElementById('perfisPanel').style.display = 'none';
+
+  if (currentCat === 'perfis') {
+    document.getElementById('perfisPanel').style.display = '';
+    carregarPerfis();
+    return;
+  }
 
   if (currentCat === 'usuarios') {
     document.getElementById('usersPanel').style.display = '';
@@ -1373,7 +1448,15 @@ function nomeUsuario() {
 }
 
 function isAdminLogado() {
-  try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}').perfil === 'admin'; } catch(_) { return false; }
+  try {
+    const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    if (p.perfil === 'admin') return true;
+    if (p.perfil_id) {
+      const perf = allPerfis.find(x => x.id === p.perfil_id);
+      return perf?.nome?.toLowerCase() === 'admin';
+    }
+    return false;
+  } catch(_) { return false; }
 }
 
 async function registrarAudit(acao, registroId, detalhe) {
@@ -1511,6 +1594,122 @@ const AVATAR_COLORS = {
   gestor: '#b45309',
 };
 
+// ─── PERFIS ──────────────────────────────────────────────────────────────────
+let allPerfis = [];
+let editingPerfilId = null;
+
+async function carregarPerfis() {
+  document.getElementById('perfisGrid').innerHTML = '<div class="loading">Carregando...</div>';
+  try {
+    allPerfis = await sbGet('perfis', 'select=*&order=id');
+    renderPerfis();
+  } catch(e) {
+    document.getElementById('perfisGrid').innerHTML = `<div class="empty"><p style="color:var(--red)">Erro: ${e.message}</p></div>`;
+  }
+}
+
+function renderPerfis() {
+  const grid = document.getElementById('perfisGrid');
+  if (!allPerfis.length) { grid.innerHTML = '<div class="empty"><p>Nenhum perfil cadastrado.</p></div>'; return; }
+  grid.innerHTML = `<div class="perfis-grid">${allPerfis.map(p => {
+    const mods = Array.isArray(p.modulos) ? p.modulos : (JSON.parse(p.modulos || '[]'));
+    const chips = mods.map(k => {
+      const m = MODULOS_SISTEMA.find(x => x.key === k);
+      return m ? `<span class="perfil-mod-chip">${m.icon} ${m.label}</span>` : '';
+    }).join('');
+    const badge = p.ativo
+      ? '<span class="badge badge-ativo">Ativo</span>'
+      : '<span class="badge badge-inativo">Inativo</span>';
+    return `<div class="perfil-card" onclick="abrirPerfilModal(${p.id})">
+      <div class="perfil-card-header">
+        <div class="perfil-card-nome">${p.nome}</div>
+        ${badge}
+      </div>
+      ${p.descricao ? `<div class="perfil-card-desc">${p.descricao}</div>` : ''}
+      <div class="perfil-card-modulos">${chips || '<span style="font-size:12px;color:var(--text-muted)">Sem módulos</span>'}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function abrirPerfilModal(id) {
+  editingPerfilId = id || null;
+  const p = id ? allPerfis.find(x => x.id === id) : null;
+  document.getElementById('perfilModalTitle').textContent = p ? p.nome : 'Novo Perfil';
+  document.getElementById('perfilModalStatus').innerHTML = p
+    ? (p.ativo ? '<span class="badge badge-ativo">Ativo</span>' : '<span class="badge badge-inativo">Inativo</span>')
+    : '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">Novo</span>';
+  document.getElementById('pNome').value = p?.nome || '';
+  document.getElementById('pDesc').value = p?.descricao || '';
+  const mods = p ? (Array.isArray(p.modulos) ? p.modulos : JSON.parse(p.modulos || '[]')) : [];
+  document.getElementById('pModulosGrid').innerHTML = MODULOS_SISTEMA.map(m =>
+    `<label class="modulo-check">
+      <input type="checkbox" value="${m.key}" ${mods.includes(m.key) ? 'checked' : ''}>
+      <span class="modulo-icon">${m.icon}</span>${m.label}
+    </label>`
+  ).join('');
+  const btnToggle = document.getElementById('perfilBtnToggle');
+  if (p) {
+    btnToggle.style.display = '';
+    btnToggle.textContent = p.ativo ? 'Inativar' : 'Ativar';
+    btnToggle.style.background = p.ativo ? 'var(--red-bg)' : 'var(--green-bg)';
+    btnToggle.style.color = p.ativo ? 'var(--red)' : 'var(--green)';
+    btnToggle.style.borderColor = p.ativo ? '#FECDCA' : '#A9DFC4';
+  } else {
+    btnToggle.style.display = 'none';
+  }
+  const ov = document.getElementById('perfilOverlay');
+  ov.style.display = 'flex';
+  requestAnimationFrame(() => { ov.style.opacity = '1'; ov.style.pointerEvents = ''; });
+}
+
+function fecharPerfilModal() {
+  const ov = document.getElementById('perfilOverlay');
+  ov.style.opacity = '0';
+  ov.style.pointerEvents = 'none';
+  setTimeout(() => { ov.style.display = 'none'; }, 200);
+  editingPerfilId = null;
+}
+
+function fecharPerfilModalOutside(e) {
+  if (e.target === document.getElementById('perfilOverlay')) fecharPerfilModal();
+}
+
+async function salvarPerfil() {
+  const nome = document.getElementById('pNome').value.trim();
+  if (!nome) { showToast('Nome é obrigatório.', 'error'); return; }
+  const modulos = [...document.querySelectorAll('#pModulosGrid input:checked')].map(c => c.value);
+  const descricao = document.getElementById('pDesc').value.trim();
+  const body = { nome, descricao: descricao || null, modulos };
+  try {
+    if (editingPerfilId) {
+      await sbPatch('perfis', editingPerfilId, body);
+      showToast('Perfil atualizado!', 'success');
+    } else {
+      await sbPost('perfis', { ...body, ativo: true });
+      showToast('Perfil criado!', 'success');
+    }
+    fecharPerfilModal();
+    carregarPerfis();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+async function togglePerfilAtivo() {
+  if (!editingPerfilId) return;
+  const p = allPerfis.find(x => x.id === editingPerfilId);
+  if (!p) return;
+  try {
+    await sbPatch('perfis', editingPerfilId, { ativo: !p.ativo });
+    showToast(p.ativo ? 'Perfil inativado.' : 'Perfil ativado.', 'success');
+    fecharPerfilModal();
+    carregarPerfis();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+// ─── USUÁRIOS ────────────────────────────────────────────────────────────────
 let allUsers = [];
 let editingUserId = null;
 let _temColunaExtra = null; // null = não testado ainda
@@ -1531,6 +1730,7 @@ async function carregarUsers() {
   const temExtra = await testarColunaExtra();
   document.getElementById('sqlBanner').style.display = temExtra ? 'none' : '';
   try {
+    if (!allPerfis.length) allPerfis = await sbGet('perfis', 'select=*&ativo=eq.true&order=nome');
     const cols = temExtra ? 'select=*' : 'select=id,user_id,nome,perfil,ativo,created_at';
     allUsers = await sbGet('usuarios_perfil', cols + '&order=nome');
     renderUsers(allUsers);
@@ -1555,11 +1755,11 @@ function renderUsers(users) {
     grid.innerHTML = '<div class="empty"><p>Nenhum usuário encontrado.</p></div>';
     return;
   }
-  const perfisLabel = { admin: 'Administrador', rh: 'RH', gestor: 'Gestor' };
   const rows = users.map(u => {
     const iniciais = (u.nome || 'US').split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
     const cor = AVATAR_COLORS[u.perfil] || '#64748b';
-    const perfilLabel = perfisLabel[u.perfil] || u.perfil || '—';
+    const perfilObj = allPerfis.find(p => p.id === u.perfil_id);
+    const perfilLabel = perfilObj?.nome || u.perfil || '—';
     const mods = (u.acesso_modulos || []).map(k => {
       const m = MODULOS_SISTEMA.find(x => x.key === k);
       return m ? `<span class="mod-chip">${m.icon} ${m.label}</span>` : '';
@@ -1585,26 +1785,26 @@ function renderUsers(users) {
   </table>`;
 }
 
+function popularSelectPerfis(perfilAtual) {
+  const sel = document.getElementById('uPerfil');
+  const perfisAtivos = allPerfis.filter(p => p.ativo);
+  sel.innerHTML = perfisAtivos.map(p =>
+    `<option value="${p.id}" ${String(p.id) === String(perfilAtual) ? 'selected' : ''}>${p.nome}</option>`
+  ).join('');
+  if (!perfisAtivos.length) sel.innerHTML = '<option value="">Nenhum perfil cadastrado</option>';
+}
+
 function renderModulosGrid(acessoAtual) {
-  const perfil = document.getElementById('uPerfil').value;
-  const acesso = acessoAtual || PERFIL_ACESSO_PADRAO[perfil] || [];
-  const isAdmin = perfil === 'admin';
+  const perfilId = document.getElementById('uPerfil').value;
+  const perfilObj = allPerfis.find(p => String(p.id) === String(perfilId));
+  const acesso = acessoAtual || (perfilObj ? (Array.isArray(perfilObj.modulos) ? perfilObj.modulos : JSON.parse(perfilObj.modulos || '[]')) : []);
   document.getElementById('modulosGrid').innerHTML = MODULOS_SISTEMA.map(m => {
     const checked = acesso.includes(m.key);
-    const disabled = isAdmin && m.key === 'parametros';
-    return `<label class="modulo-check ${disabled ? 'disabled' : ''}">
-      <input type="checkbox" value="${m.key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} onchange="syncModulosAdmin()">
+    return `<label class="modulo-check">
+      <input type="checkbox" value="${m.key}" ${checked ? 'checked' : ''}>
       <span class="modulo-icon">${m.icon}</span>${m.label}
     </label>`;
   }).join('');
-}
-
-function syncModulosAdmin() {
-  // Se admin, parametros sempre marcado
-  if (document.getElementById('uPerfil').value === 'admin') {
-    const cb = document.querySelector('.modulos-grid input[value="parametros"]');
-    if (cb) cb.checked = true;
-  }
 }
 
 function perfilChanged() {
@@ -1624,7 +1824,7 @@ function abrirUserModal(id) {
     : '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">Novo usuário</span>';
 
   document.getElementById('uColaboradorId').value = user?.colaborador_id || '';
-  document.getElementById('uPerfil').value = user?.perfil || 'rh';
+  popularSelectPerfis(user?.perfil_id || '');
   document.getElementById('uEmail').value  = user?.email  || '';
   const senhaInput = document.getElementById('uSenha');
   const senhaHint  = document.getElementById('uSenhaHint');
@@ -1729,11 +1929,13 @@ function toggleSenhaVis() {
 
 async function salvarUser() {
   const colaboradorId = parseInt(document.getElementById('uColaboradorId').value) || null;
-  const nome   = document.getElementById('uColaboradorNomeLabel').textContent.trim();
-  const email  = document.getElementById('uEmail').value.trim();
-  const senha  = document.getElementById('uSenha').value.trim();
-  const perfil = document.getElementById('uPerfil').value;
-  const acesso = getModulosSelecionados();
+  const nome      = document.getElementById('uColaboradorNomeLabel').textContent.trim();
+  const email     = document.getElementById('uEmail').value.trim();
+  const senha     = document.getElementById('uSenha').value.trim();
+  const perfilId  = parseInt(document.getElementById('uPerfil').value) || null;
+  const perfilObj = allPerfis.find(p => p.id === perfilId);
+  const perfil    = perfilObj?.nome?.toLowerCase().replace(/\s+/g, '_') || '';
+  const acesso    = getModulosSelecionados();
 
   if (!nome) { showToast('Selecione um colaborador.', 'error'); return; }
 
@@ -1741,6 +1943,7 @@ async function salvarUser() {
   const bodyBase = { nome, perfil, acesso_modulos: acesso,
     email: email || null,
     senha_acesso: senha || null,
+    ...(perfilId ? { perfil_id: perfilId } : {}),
     ...(colaboradorId ? { colaborador_id: colaboradorId } : {})
   };
   const body = temExtra ? bodyBase : { nome, perfil };
