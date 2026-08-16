@@ -1969,15 +1969,24 @@ async function buscarColaboradorGestor() {
   });
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome&order=nome&limit=10`,
+      `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome&order=nome&limit=7`,
       { headers: SB_HEADERS }
     );
     const list = await r.json();
-    if (!list.length) { dd.innerHTML = '<div class="colab-opt" style="color:var(--text-muted);cursor:default">Nenhum resultado</div>'; dd.style.display = 'block'; return; }
+    if (!list.length) {
+      dd.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text-ter)">Nenhum resultado</div>';
+      dd.style.display = 'block'; return;
+    }
     list.forEach(c => { _gestColabCache[c.id] = c; });
-    dd.innerHTML = list.map(c =>
-      `<div class="colab-opt" onclick="selecionarColaboradorGestor(${c.id})" style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background='var(--blue-bg)';this.style.color='var(--blue)'" onmouseout="this.style.background='';this.style.color='var(--text)'">${c.nome}</div>`
-    ).join('');
+    const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(${esc})`, 'gi');
+    dd.innerHTML = list.map((c, i) => {
+      const label = c.nome.replace(re, '<strong>$1</strong>');
+      return `<div onclick="selecionarColaboradorGestor(${c.id})"
+        style="padding:8px 14px;cursor:pointer;font-size:13px;color:var(--text);${i < list.length-1 ? 'border-bottom:1px solid var(--border)' : ''};transition:background .12s"
+        onmouseover="this.style.background='var(--blue-bg)';this.style.color='var(--blue)'"
+        onmouseout="this.style.background='';this.style.color='var(--text)'">${label}</div>`;
+    }).join('');
     dd.style.display = 'block';
   } catch(_) { dd.style.display = 'none'; }
 }
@@ -2023,15 +2032,22 @@ async function buscarColaboradorUser() {
   if (q.length < 2) { dd.style.display = 'none'; return; }
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome,email&order=nome&limit=10`,
+      `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome,email&order=nome&limit=7`,
       { headers: SB_HEADERS }
     );
     const list = await r.json();
-    if (!list.length) { dd.innerHTML = '<div class="colab-opt" style="color:var(--text-muted);cursor:default">Nenhum resultado</div>'; dd.style.display = 'block'; return; }
+    if (!list.length) {
+      dd.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text-ter)">Nenhum resultado</div>';
+      dd.style.display = 'block'; return;
+    }
     list.forEach(c => { _colabCache[c.id] = c; });
-    dd.innerHTML = list.map(c =>
-      `<div class="colab-opt" onclick="selecionarColaboradorUser(${c.id})">${c.nome}</div>`
-    ).join('');
+    const escU = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const reU = new RegExp(`(${escU})`, 'gi');
+    dd.innerHTML = list.map((c, i) => {
+      const label = c.nome.replace(reU, '<strong>$1</strong>');
+      return `<div class="colab-opt" onclick="selecionarColaboradorUser(${c.id})"
+        style="${i < list.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">${label}</div>`;
+    }).join('');
     dd.style.display = 'block';
   } catch(_) { dd.style.display = 'none'; }
 }
