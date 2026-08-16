@@ -232,6 +232,11 @@
   .modulo-check.disabled { opacity: 0.5; cursor: not-allowed; }
   .modulo-icon { font-size: 14px; flex-shrink: 0; }
 
+  #uColaboradorDropdown { position: absolute; left: 0; right: 0; top: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 10; max-height: 180px; overflow-y: auto; display: none; }
+  .colab-opt { padding: 9px 12px; cursor: pointer; font-size: 13px; color: var(--text); transition: background 0.1s; }
+  .colab-opt:hover { background: var(--blue-bg); color: var(--blue); }
+  #uColaboradorSelecionado { display: none; align-items: center; gap: 8px; background: var(--blue-bg); border: 1px solid var(--blue); border-radius: 8px; padding: 7px 12px; font-size: 13px; color: var(--blue); font-weight: 500; }
+
   .sql-box { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 14px 16px; font-family: monospace; font-size: 12px; line-height: 1.65; overflow-x: auto; margin-top: 8px; position: relative; white-space: pre; }
   .sql-copy-btn { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.1); border: none; color: #94a3b8; border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; transition: background 0.15s, color 0.15s; }
   .sql-copy-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
@@ -413,10 +418,16 @@ ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAUL
       </button>
     </div>
 
+    <input type="hidden" id="uColaboradorId">
     <div class="field-row" style="grid-template-columns:2fr 1fr">
-      <div class="field">
-        <label>Nome completo *</label>
-        <input type="text" id="uNome" placeholder="Ex: Daniele Dalosse">
+      <div class="field" style="position:relative">
+        <label>Colaborador *</label>
+        <input type="text" id="uColaboradorBusca" placeholder="Digite para buscar..." oninput="buscarColaboradorUser()" autocomplete="off">
+        <div id="uColaboradorDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px;"></div>
+        <div id="uColaboradorSelecionado" style="display:none;margin-top:6px;padding:8px 12px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:8px;font-size:13px;color:var(--blue);display:none;align-items:center;justify-content:space-between;">
+          <span id="uColaboradorNomeLabel"></span>
+          <button type="button" onclick="limparColaboradorUser()" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;line-height:1;padding:0 0 0 8px">×</button>
+        </div>
       </div>
       <div class="field">
         <label>Perfil *</label>
@@ -430,7 +441,7 @@ ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAUL
     <div class="field-row" style="grid-template-columns:1fr 1fr">
       <div class="field">
         <label>E-mail de acesso</label>
-        <input type="email" id="uEmail" placeholder="email@empresa.com">
+        <input type="email" id="uEmail" placeholder="email@empresa.com" readonly style="background:var(--surface-alt,#f8fafc);color:var(--text-sec)">
       </div>
     </div>
 
@@ -1479,11 +1490,7 @@ const MODULOS_SISTEMA = [
   { key: 'parametros', label: 'Parâmetros',        icon: '🔧' },
 ];
 
-const PERFIL_ACESSO_PADRAO = {
-  admin:  ['cadastro', 'ferias', 'processos', 'uniformes', 'admissao', 'parametros'],
-  rh:     ['cadastro', 'ferias', 'processos', 'uniformes', 'admissao'],
-  gestor: ['ferias'],
-};
+const PERFIL_ACESSO_PADRAO = {}; // módulos sempre desmarcados ao criar — usuário seleciona manualmente
 
 const AVATAR_COLORS = {
   admin:  '#6d28d9',
@@ -1603,10 +1610,23 @@ function abrirUserModal(id) {
     ? (user.ativo ? '<span class="badge badge-ativo">Ativo</span>' : '<span class="badge badge-inativo">Inativo</span>')
     : '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">Novo usuário</span>';
 
-  document.getElementById('uNome').value   = user?.nome   || '';
-  document.getElementById('uEmail').value  = user?.email  || '';
+  document.getElementById('uColaboradorId').value = user?.colaborador_id || '';
   document.getElementById('uPerfil').value = user?.perfil || 'rh';
-  document.getElementById('uEmail').readOnly = !!user; // email só editável na criação
+  document.getElementById('uEmail').value  = user?.email  || '';
+  // Campo de busca: ao editar mostra nome salvo; ao criar começa vazio
+  const busca = document.getElementById('uColaboradorBusca');
+  const sel   = document.getElementById('uColaboradorSelecionado');
+  const label = document.getElementById('uColaboradorNomeLabel');
+  if (user?.nome) {
+    busca.style.display = 'none';
+    sel.style.display = 'flex';
+    label.textContent = user.nome;
+  } else {
+    busca.style.display = '';
+    busca.value = '';
+    sel.style.display = 'none';
+    document.getElementById('uColaboradorDropdown').style.display = 'none';
+  }
 
   const btnToggle = document.getElementById('userBtnToggle');
   if (user) {
@@ -1634,19 +1654,62 @@ function fecharUserModalOutside(e) {
   if (e.target === document.getElementById('userOverlay')) fecharUserModal();
 }
 
+let _colabCache = {};
+
+async function buscarColaboradorUser() {
+  const q = document.getElementById('uColaboradorBusca').value.trim();
+  const dd = document.getElementById('uColaboradorDropdown');
+  if (q.length < 2) { dd.style.display = 'none'; return; }
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome,email&order=nome&limit=10`,
+      { headers: SB_HEADERS }
+    );
+    const list = await r.json();
+    if (!list.length) { dd.innerHTML = '<div class="colab-opt" style="color:var(--text-muted);cursor:default">Nenhum resultado</div>'; dd.style.display = ''; return; }
+    list.forEach(c => { _colabCache[c.id] = c; });
+    dd.innerHTML = list.map(c =>
+      `<div class="colab-opt" onclick="selecionarColaboradorUser('${c.id}')">${c.nome}</div>`
+    ).join('');
+    dd.style.display = '';
+  } catch(_) { dd.style.display = 'none'; }
+}
+
+function selecionarColaboradorUser(id) {
+  const c = _colabCache[id];
+  if (!c) return;
+  document.getElementById('uColaboradorId').value = id;
+  document.getElementById('uColaboradorNomeLabel').textContent = c.nome;
+  document.getElementById('uColaboradorSelecionado').style.display = 'flex';
+  document.getElementById('uColaboradorBusca').style.display = 'none';
+  document.getElementById('uColaboradorDropdown').style.display = 'none';
+  if (c.email) document.getElementById('uEmail').value = c.email;
+}
+
+function limparColaboradorUser() {
+  document.getElementById('uColaboradorId').value = '';
+  document.getElementById('uColaboradorNomeLabel').textContent = '';
+  document.getElementById('uColaboradorSelecionado').style.display = 'none';
+  document.getElementById('uColaboradorBusca').style.display = '';
+  document.getElementById('uColaboradorBusca').value = '';
+  document.getElementById('uColaboradorDropdown').style.display = 'none';
+  document.getElementById('uEmail').value = '';
+}
+
 async function salvarUser() {
-  const nome   = document.getElementById('uNome').value.trim();
+  const colaboradorId = document.getElementById('uColaboradorId').value;
+  const nome = document.getElementById('uColaboradorNomeLabel').textContent.trim();
   const email  = document.getElementById('uEmail').value.trim();
   const perfil = document.getElementById('uPerfil').value;
   const acesso = getModulosSelecionados();
-  const _nome = nomeUsuario();
 
-  if (!nome) { showToast('Nome é obrigatório.', 'error'); return; }
+  if (!nome) { showToast('Selecione um colaborador.', 'error'); return; }
 
   const temExtra = await testarColunaExtra();
-  const body = temExtra
-    ? { nome, email: email || null, perfil, acesso_modulos: acesso }
-    : { nome, perfil };
+  const bodyBase = colaboradorId
+    ? { nome, email: email || null, perfil, acesso_modulos: acesso, colaborador_id: colaboradorId }
+    : { nome, email: email || null, perfil, acesso_modulos: acesso };
+  const body = temExtra ? bodyBase : { nome, perfil };
 
   try {
     if (editingUserId) {
