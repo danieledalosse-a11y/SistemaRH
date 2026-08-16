@@ -154,7 +154,8 @@
   /* Modal */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
   .overlay.open { display: flex; }
-  .modal { background: var(--surface); border-radius: 16px; padding: 32px; width: 500px; max-width: 95vw; max-height: 88vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,0.2); }
+  .modal { background: var(--surface); border-radius: 16px; width: 500px; max-width: 95vw; max-height: 88vh; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.2); display: flex; flex-direction: column; }
+  .modal-body { flex: 1; overflow-y: auto; padding: 0 32px; }
 
   /* Histórico de auditoria */
   .hist-section { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 18px; }
@@ -178,19 +179,21 @@
   .hist-expand-btn.open svg { transform: rotate(180deg); }
   .hist-extra { display: none; }
   .hist-extra.open { display: block; }
-  .modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 12px; position: sticky; top: -32px; margin-top: -32px; padding: 32px 0 16px; background: var(--surface); z-index: 10; }
+  .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 28px 32px 20px; background: var(--surface); flex-shrink: 0; border-bottom: 1px solid var(--border); }
   .modal-header-left { flex: 1; min-width: 0; }
   .modal-title { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.2; margin-bottom: 6px; }
   .modal-status { margin-top: 4px; }
   .modal-close { background: none; border: none; cursor: pointer; color: var(--text-ter); padding: 4px; border-radius: 7px; display: flex; align-items: center; transition: background 0.12s, color 0.12s; flex-shrink: 0; }
   .modal-close:hover { background: var(--bg); color: var(--text); }
   .modal-close svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-  .field { margin-bottom: 18px; }
+  .field { margin-bottom: 16px; }
+  .modal-body .field:first-child, .modal-body > *:first-child { margin-top: 20px; }
+  .modal-body > *:last-child { margin-bottom: 20px; }
   .field label { display: block; font-size: 11.5px; font-weight: 700; color: var(--text-sec); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
   .field input, .field select, .field textarea { width: 100%; border: 1px solid var(--border); border-radius: 9px; padding: 10px 14px; font-size: 14px; font-family: inherit; color: var(--text); background: var(--surface); outline: none; transition: border-color 0.12s, box-shadow 0.12s; }
   .field input:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,78,216,0.1); }
   .field-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-  .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--border); align-items: center; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 18px 32px; border-top: 1px solid var(--border); align-items: center; flex-shrink: 0; background: var(--surface); }
 
   /* Empty / Loading */
   .empty { text-align: center; padding: 56px 24px; color: var(--text-sec); }
@@ -381,7 +384,7 @@
             <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div style="padding:0 24px 24px;display:flex;flex-direction:column;gap:16px">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
           <div class="field-row" style="grid-template-columns:1fr 1fr">
             <div class="field">
               <label>Nome do perfil *</label>
@@ -453,10 +456,12 @@ ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAUL
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-    <div id="modalFields"></div>
-    <div id="histSection" style="display:none" class="hist-section">
-      <div class="hist-section-label">Histórico de alterações</div>
-      <div id="histList"></div>
+    <div class="modal-body">
+      <div id="modalFields"></div>
+      <div id="histSection" style="display:none" class="hist-section">
+        <div class="hist-section-label">Histórico de alterações</div>
+        <div id="histList"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <div style="display:flex;gap:8px;margin-right:auto">
@@ -484,56 +489,58 @@ ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAUL
       </button>
     </div>
 
-    <input type="hidden" id="uColaboradorId">
-    <div class="field-row" style="grid-template-columns:2fr 1fr">
-      <div class="field" style="position:relative">
-        <label>Colaborador *</label>
-        <input type="text" id="uColaboradorBusca" placeholder="Digite para buscar..." oninput="buscarColaboradorUser()" autocomplete="off">
-        <div id="uColaboradorDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px;"></div>
-        <div id="uColaboradorSelecionado" style="display:none;margin-top:6px;padding:8px 12px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:8px;font-size:13px;color:var(--blue);display:none;align-items:center;justify-content:space-between;">
-          <span id="uColaboradorNomeLabel"></span>
-          <button type="button" onclick="limparColaboradorUser()" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;line-height:1;padding:0 0 0 8px">×</button>
+    <div class="modal-body">
+      <input type="hidden" id="uColaboradorId">
+      <div class="field-row" style="grid-template-columns:2fr 1fr">
+        <div class="field" style="position:relative">
+          <label>Colaborador *</label>
+          <input type="text" id="uColaboradorBusca" placeholder="Digite para buscar..." oninput="buscarColaboradorUser()" autocomplete="off">
+          <div id="uColaboradorDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px;"></div>
+          <div id="uColaboradorSelecionado" style="display:none;margin-top:6px;padding:8px 12px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:8px;font-size:13px;color:var(--blue);display:none;align-items:center;justify-content:space-between;">
+            <span id="uColaboradorNomeLabel"></span>
+            <button type="button" onclick="limparColaboradorUser()" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;line-height:1;padding:0 0 0 8px">×</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Perfil *</label>
+          <select id="uPerfil" onchange="perfilChanged()">
+            <option value="">Carregando...</option>
+          </select>
         </div>
       </div>
-      <div class="field">
-        <label>Perfil *</label>
-        <select id="uPerfil" onchange="perfilChanged()">
-          <option value="">Carregando...</option>
-        </select>
-      </div>
-    </div>
-    <div class="field-row" style="grid-template-columns:1fr 1fr">
-      <div class="field">
-        <label>E-mail de acesso</label>
-        <input type="email" id="uEmail" placeholder="email@empresa.com">
-      </div>
-      <div class="field" id="uSenhaWrap">
-        <label>Senha de acesso</label>
-        <div style="position:relative">
-          <input type="password" id="uSenha" placeholder="Revest@2026" autocomplete="new-password" style="padding-right:38px;width:100%;box-sizing:border-box">
-          <button type="button" onclick="toggleSenhaVis()" title="Mostrar/ocultar" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-sec);padding:0;line-height:1" id="btnToggleSenha">👁</button>
+      <div class="field-row" style="grid-template-columns:1fr 1fr">
+        <div class="field">
+          <label>E-mail de acesso</label>
+          <input type="email" id="uEmail" placeholder="email@empresa.com">
         </div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="uSenhaHint"></div>
+        <div class="field" id="uSenhaWrap">
+          <label>Senha de acesso</label>
+          <div style="position:relative">
+            <input type="password" id="uSenha" placeholder="Revest@2026" autocomplete="new-password" style="padding-right:38px;width:100%;box-sizing:border-box">
+            <button type="button" onclick="toggleSenhaVis()" title="Mostrar/ocultar" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-sec);padding:0;line-height:1" id="btnToggleSenha">👁</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="uSenhaHint"></div>
+        </div>
       </div>
-    </div>
 
-    <div class="field">
-      <label>Módulos com acesso</label>
-      <div class="modulos-grid" id="modulosGrid"></div>
-    </div>
-
-    <!-- Instruções para nova conta -->
-    <div id="userNewInstructions" style="display:none;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:4px;">
-      <div style="font-size:12px;font-weight:700;color:var(--text-sec);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Próximo passo — Criar conta de acesso</div>
-      <div style="font-size:13px;color:var(--text-sec);line-height:1.6;">
-        O registro foi salvo. Para que o usuário consiga fazer login, crie a conta de autenticação no Supabase:<br>
-        <b>Authentication → Users → Add user</b> com o e-mail informado e senha padrão <code style="background:#e2e8f0;padding:1px 6px;border-radius:4px;font-size:12px">Revest@2026</code>.
+      <div class="field">
+        <label>Módulos com acesso</label>
+        <div class="modulos-grid" id="modulosGrid"></div>
       </div>
-      <div style="margin-top:10px">
-        <div style="font-size:11.5px;font-weight:700;color:var(--text-sec);margin-bottom:4px;">Ou use o script Python local:</div>
-        <div style="position:relative">
-          <div class="sql-box" id="userPyScript"></div>
-          <button class="sql-copy-btn" onclick="copiarPyScript()">Copiar</button>
+
+      <!-- Instruções para nova conta -->
+      <div id="userNewInstructions" style="display:none;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:4px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-sec);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Próximo passo — Criar conta de acesso</div>
+        <div style="font-size:13px;color:var(--text-sec);line-height:1.6;">
+          O registro foi salvo. Para que o usuário consiga fazer login, crie a conta de autenticação no Supabase:<br>
+          <b>Authentication → Users → Add user</b> com o e-mail informado e senha padrão <code style="background:#e2e8f0;padding:1px 6px;border-radius:4px;font-size:12px">Revest@2026</code>.
+        </div>
+        <div style="margin-top:10px">
+          <div style="font-size:11.5px;font-weight:700;color:var(--text-sec);margin-bottom:4px;">Ou use o script Python local:</div>
+          <div style="position:relative">
+            <div class="sql-box" id="userPyScript"></div>
+            <button class="sql-copy-btn" onclick="copiarPyScript()">Copiar</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1325,7 +1332,7 @@ function abrirModal(row) {
   if (currentCat === 'gestor') {
     const colabId   = row?.colaborador_id || '';
     const colabNome = colabId ? (_gestColabCache[colabId]?.nome || row?.nome || '') : '';
-    const busca = `<div class="field" style="position:relative;margin:0 24px 16px;">
+    const busca = `<div class="field" style="position:relative;margin:0;">
       <label>Nome (colaborador) *</label>
       <input type="hidden" id="gColaboradorId" value="${colabId}">
       <input type="text" id="gColaboradorBusca" placeholder="Digite para buscar colaborador..." oninput="buscarColaboradorGestor()" autocomplete="off" style="${colabId ? 'display:none' : ''}">
@@ -1977,9 +1984,13 @@ function selecionarColaboradorGestor(id) {
   document.getElementById('gColaboradorSelecionado').style.display = 'flex';
   document.getElementById('gColaboradorBusca').style.display = 'none';
   document.getElementById('gColaboradorDropdown').style.display = 'none';
-  // Atualiza o campo nome do gestor com o nome completo do colaborador
   const nomeField = document.getElementById('field_nome');
   if (nomeField) nomeField.value = c.nome;
+  // Auto-preenche apelido com o primeiro nome se ainda estiver vazio
+  const apelidoField = document.getElementById('field_apelido');
+  if (apelidoField && !apelidoField.value.trim()) {
+    apelidoField.value = c.nome.split(' ')[0];
+  }
 }
 
 function limparColaboradorGestor() {
