@@ -559,6 +559,23 @@ async function verificarBonusIndicacao() {
       gatilho75.setDate(gatilho75.getDate() + 75);
       if (hoje < gatilho75) continue; // abre no Workflow aos 75 dias (pagamento aos 90)
 
+      // Buscar valor do bônus vigente na data do gatilho (75 dias após admissão)
+      const dataGatilhoStr = gatilho75.toISOString().slice(0,10);
+      let valorBonus = null;
+      try {
+        const rVal = await fetch(
+          `${SB_URL}/rest/v1/param_bonus_indicacao` +
+          `?vigencia_inicio=lte.${dataGatilhoStr}` +
+          `&or=(vigencia_fim.is.null,vigencia_fim.gte.${dataGatilhoStr})` +
+          `&order=vigencia_inicio.desc&limit=1&select=valor,vigencia_inicio,vigencia_fim`,
+          { headers: SB_HEADERS }
+        );
+        if (rVal.ok) {
+          const [param] = await rVal.json();
+          if (param) valorBonus = parseFloat(param.valor);
+        }
+      } catch(_) {}
+
       // Verificar se o indicador ainda está ativo
       const rInd = await fetch(
         `${SB_URL}/rest/v1/colaboradores?select=id,nome,cargo,empresa&id=eq.${c.indicado_por_id}&ativo=eq.true`,
@@ -593,7 +610,8 @@ async function verificarBonusIndicacao() {
             indicado_id: c.id,
             indicado_nome: c.nome,
             data_conclusao_experiencia: fim90.toISOString().slice(0,10),
-            mes_folha: mesBonus
+            mes_folha: mesBonus,
+            valor_bonus: valorBonus,
           }
         })
       });
@@ -807,8 +825,10 @@ function buildCard(p) {
   let extraHtml = '';
   if (p.tipo === 'reajuste' && extras.salario_novo)
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Novo salário: ${fmtMoeda(extras.salario_novo)} a partir de ${fmtData(extras.data_vigencia)}</div>`;
-  else if (p.tipo === 'bonus_indicacao' && extras.indicado_nome)
-    extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Indicado: ${extras.indicado_nome} · Folha de ${extras.mes_folha || '—'}</div>`;
+  else if (p.tipo === 'bonus_indicacao' && extras.indicado_nome) {
+    const valorBonusLabel = extras.valor_bonus != null ? ` · ${fmtMoeda(extras.valor_bonus)}` : '';
+    extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Indicado: ${extras.indicado_nome} · Folha de ${extras.mes_folha || '—'}${valorBonusLabel}</div>`;
+  }
   else if (p.tipo === 'atestado' && extras.cid)
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">CID: ${extras.cid} · ${extras.dias_afastamento || '?'} dia(s)</div>`;
   else if (p.tipo === 'demissao' && extras.data_demissao)
