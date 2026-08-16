@@ -200,10 +200,18 @@
 
   /* ── Users Panel ── */
   .users-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-  .users-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 14px; }
-  .user-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; display: flex; align-items: center; gap: 14px; transition: box-shadow 0.15s, border-color 0.15s; position: relative; }
-  .user-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: #c8d0db; }
-  .user-card.inativo { opacity: 0.55; }
+  .users-grid { }
+  .users-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .users-table thead tr { border-bottom: 2px solid var(--border); }
+  .users-table th { padding: 8px 14px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--text-sec); text-transform: uppercase; }
+  .users-table tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.12s; }
+  .users-table tbody tr:hover { background: var(--surface-hover, #f8fafc); }
+  .users-table tbody tr.user-row-inativo { opacity: 0.5; }
+  .users-table td { padding: 12px 14px; vertical-align: middle; }
+  .mod-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 20px; background: var(--surface-alt, #f1f5f9); color: var(--text-sec); border: 1px solid var(--border); }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+  .status-dot.ativo { background: var(--green); }
+  .status-dot.inativo { background: #cbd5e1; }
   .user-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: #fff; flex-shrink: 0; letter-spacing: .03em; }
   .user-info { flex: 1; min-width: 0; }
   .user-nome { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -217,11 +225,12 @@
   .user-edit-btn { position: absolute; bottom: 14px; right: 14px; }
 
   /* Modal usuarios */
-  .modulos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
-  .modulo-check { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: border-color 0.12s, background 0.12s; font-size: 13px; color: var(--text-sec); font-weight: 500; }
+  .modulos-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 4px; }
+  .modulo-check { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: border-color 0.12s, background 0.12s; font-size: 12px; color: var(--text-sec); font-weight: 500; user-select: none; }
   .modulo-check:has(input:checked) { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); font-weight: 600; }
-  .modulo-check input { accent-color: var(--blue); width: 15px; height: 15px; flex-shrink: 0; }
+  .modulo-check input { accent-color: var(--blue); width: 14px; height: 14px; flex-shrink: 0; }
   .modulo-check.disabled { opacity: 0.5; cursor: not-allowed; }
+  .modulo-icon { font-size: 14px; flex-shrink: 0; }
 
   .sql-box { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 14px 16px; font-family: monospace; font-size: 12px; line-height: 1.65; overflow-x: auto; margin-top: 8px; position: relative; white-space: pre; }
   .sql-copy-btn { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.1); border: none; color: #94a3b8; border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; transition: background 0.15s, color 0.15s; }
@@ -1466,15 +1475,17 @@ function fmtDate(iso) {
 
 // ─── Módulo Usuários ──────────────────────────────────────────────────────────
 const MODULOS_SISTEMA = [
-  { key: 'cadastro',   label: 'Cadastro' },
-  { key: 'ferias',     label: 'Férias' },
-  { key: 'admissao',   label: 'Admissão Online' },
-  { key: 'parametros', label: 'Parâmetros' },
+  { key: 'cadastro',   label: 'Cadastro',         icon: '👤' },
+  { key: 'ferias',     label: 'Férias',            icon: '🏖️' },
+  { key: 'processos',  label: 'Workflow',          icon: '⚙️' },
+  { key: 'uniformes',  label: 'Uniformes',         icon: '👔' },
+  { key: 'admissao',   label: 'Admissão Online',   icon: '📋' },
+  { key: 'parametros', label: 'Parâmetros',        icon: '🔧' },
 ];
 
 const PERFIL_ACESSO_PADRAO = {
-  admin:  ['cadastro', 'ferias', 'admissao', 'parametros'],
-  rh:     ['cadastro', 'ferias', 'admissao'],
+  admin:  ['cadastro', 'ferias', 'processos', 'uniformes', 'admissao', 'parametros'],
+  rh:     ['cadastro', 'ferias', 'processos', 'uniformes', 'admissao'],
   gestor: ['ferias'],
 };
 
@@ -1530,29 +1541,34 @@ function renderUsers(users) {
     return;
   }
   const perfisLabel = { admin: 'Administrador', rh: 'RH', gestor: 'Gestor' };
-  grid.innerHTML = users.map(u => {
+  const rows = users.map(u => {
     const iniciais = (u.nome || 'US').split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
     const cor = AVATAR_COLORS[u.perfil] || '#64748b';
     const perfilLabel = perfisLabel[u.perfil] || u.perfil || '—';
-    const badgeAtivo = u.ativo
-      ? `<span class="badge badge-ativo" style="font-size:10px">Ativo</span>`
-      : `<span class="badge badge-inativo" style="font-size:10px">Inativo</span>`;
-    return `<div class="user-card ${u.ativo ? '' : 'inativo'}">
-      <div class="user-avatar" style="background:${cor}">${iniciais}</div>
-      <div class="user-info">
-        <div class="user-nome">${u.nome || '—'}</div>
-        ${u.cargo ? `<div class="user-cargo-label">${u.cargo}</div>` : ''}
-        ${u.email ? `<div class="user-email-label">${u.email}</div>` : ''}
-      </div>
-      <div class="user-badges">
-        <span class="badge-perfil ${u.perfil}">${perfilLabel}</span>
-        ${badgeAtivo}
-      </div>
-      <button class="btn-icon user-edit-btn" onclick="abrirUserModal(${u.id})" title="Editar usuário">
-        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-      </button>
-    </div>`;
+    const mods = (u.acesso_modulos || []).map(k => {
+      const m = MODULOS_SISTEMA.find(x => x.key === k);
+      return m ? `<span class="mod-chip">${m.icon} ${m.label}</span>` : '';
+    }).filter(Boolean).join('');
+    return `<tr class="${u.ativo ? '' : 'user-row-inativo'}" onclick="abrirUserModal(${u.id})">
+      <td>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="user-avatar" style="background:${cor};width:36px;height:36px;font-size:13px;flex-shrink:0">${iniciais}</div>
+          <div>
+            <div class="user-nome" style="font-size:14px">${u.nome || '—'}</div>
+            ${u.email ? `<div class="user-email-label">${u.email}</div>` : ''}
+          </div>
+        </div>
+      </td>
+      <td style="font-size:12px;color:var(--text-sec)">${u.cargo || '—'}</td>
+      <td><span class="badge-perfil ${u.perfil}">${perfilLabel}</span></td>
+      <td><div style="display:flex;flex-wrap:wrap;gap:4px">${mods || '<span style="color:var(--text-sec);font-size:12px">—</span>'}</div></td>
+      <td><span class="status-dot ${u.ativo ? 'ativo' : 'inativo'}" title="${u.ativo ? 'Ativo' : 'Inativo'}"></span></td>
+    </tr>`;
   }).join('');
+  grid.innerHTML = `<table class="users-table">
+    <thead><tr><th>Usuário</th><th>Cargo</th><th>Perfil</th><th>Módulos</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 }
 
 function renderModulosGrid(acessoAtual) {
@@ -1564,7 +1580,7 @@ function renderModulosGrid(acessoAtual) {
     const disabled = isAdmin && m.key === 'parametros';
     return `<label class="modulo-check ${disabled ? 'disabled' : ''}">
       <input type="checkbox" value="${m.key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} onchange="syncModulosAdmin()">
-      ${m.label}
+      <span class="modulo-icon">${m.icon}</span>${m.label}
     </label>`;
   }).join('');
 }
