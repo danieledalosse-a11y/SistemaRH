@@ -1206,9 +1206,18 @@ function renderPanelComp(f) {
       ${fi('hobby','Hobby/Passatempo',f.hobby)}
     </div>
     <!-- ── Vale Transporte ── -->
-    <div style="margin-top:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:var(--bg);">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);margin-bottom:10px;">Vale Transporte</div>
-      <div style="display:grid;grid-template-columns:160px 1fr;gap:12px;align-items:start;">
+    <div id="vt_card" style="margin-top:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:var(--bg);transition:border-color .2s;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-ter);"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);">Vale Transporte</span>
+        </div>
+        <div id="vt_erro" style="display:none;font-size:12px;font-weight:600;color:#DC2626;display:flex;align-items:center;gap:5px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Cartão e passes são obrigatórios
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:12px;align-items:start;">
         <div class="data-row">
           <label class="data-label">Utiliza VT?</label>
           <select class="form-control-sm" id="pf_vale_transporte" onchange="togglePanelVT(this.value)">
@@ -1217,8 +1226,8 @@ function renderPanelComp(f) {
           </select>
         </div>
         <div id="pf_vt_extras" style="display:${f.vale_transporte?'grid':'none'};grid-template-columns:1fr 1fr 1fr;gap:12px;">
-          ${fi('vt_cartao','Nº do Cartão VT',f.vt_cartao||'')}
-          ${fi('vt_passes','Passes por dia',f.vt_passes||'')}
+          ${fi('vt_cartao','Nº do Cartão VT *',f.vt_cartao||'')}
+          ${fi('vt_passes','Passes por dia *',f.vt_passes||'')}
           ${fi('vt_linha','Linha de Ônibus',f.vt_linha||'')}
         </div>
       </div>
@@ -1233,17 +1242,31 @@ async function savePanel() {
   const btn = document.getElementById('btnSalvarFicha');
   const info = document.getElementById('panelSaveInfo');
 
-  // Validação VT
+  // Validação VT — destaque visual no card, sem mensagem no rodapé
+  const _vtErro = document.getElementById('vt_erro');
+  const _vtCard = document.getElementById('vt_card');
+  const _vtCartaoEl = document.getElementById('pf_vt_cartao');
+  const _vtPassesEl = document.getElementById('pf_vt_passes');
   if (fv('vale_transporte') === true) {
-    const cartao = fv('vt_cartao');
-    const passes = fv('vt_passes');
-    if (!cartao || !passes) {
-      info.textContent = 'Informe o Nº do Cartão e a quantidade de passes para o Vale Transporte.';
-      info.style.color = 'var(--red)';
-      setTimeout(() => { info.textContent = ''; }, 5000);
+    const cartaoOk = !!fv('vt_cartao');
+    const passesOk = !!fv('vt_passes');
+    if (!cartaoOk || !passesOk) {
+      if (_vtErro) { _vtErro.style.display = 'flex'; }
+      if (_vtCard) { _vtCard.style.borderColor = '#DC2626'; }
+      if (_vtCartaoEl) _vtCartaoEl.style.borderColor = cartaoOk ? '' : '#DC2626';
+      if (_vtPassesEl) _vtPassesEl.style.borderColor = passesOk ? '' : '#DC2626';
+      setTimeout(() => {
+        if (_vtErro) _vtErro.style.display = 'none';
+        if (_vtCard) _vtCard.style.borderColor = '';
+        if (_vtCartaoEl) _vtCartaoEl.style.borderColor = '';
+        if (_vtPassesEl) _vtPassesEl.style.borderColor = '';
+      }, 5000);
       return;
     }
   }
+  // Limpar estado de erro caso esteja ok
+  if (_vtErro) _vtErro.style.display = 'none';
+  if (_vtCard) _vtCard.style.borderColor = '';
 
   btn.disabled = true; btn.textContent = 'Salvando...';
   const payload = {
