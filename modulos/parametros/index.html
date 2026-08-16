@@ -443,6 +443,14 @@ ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAUL
         <label>E-mail de acesso</label>
         <input type="email" id="uEmail" placeholder="email@empresa.com" readonly style="background:var(--surface-alt,#f8fafc);color:var(--text-sec)">
       </div>
+      <div class="field" id="uSenhaWrap">
+        <label>Senha de acesso</label>
+        <div style="position:relative">
+          <input type="password" id="uSenha" placeholder="Revest@2026" autocomplete="new-password" style="padding-right:38px;width:100%;box-sizing:border-box">
+          <button type="button" onclick="toggleSenhaVis()" title="Mostrar/ocultar" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-sec);padding:0;line-height:1" id="btnToggleSenha">👁</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="uSenhaHint"></div>
+      </div>
     </div>
 
     <div class="field">
@@ -960,8 +968,9 @@ function selectCat(el) {
   }
 
   document.getElementById('mainPanel').style.display = '';
+  const soPodeVer = !isAdminLogado();
   const btnNovo = document.getElementById('btnNovo');
-  if (btnNovo) btnNovo.style.display = currentCat === 'cbo' ? 'none' : '';
+  if (btnNovo) btnNovo.style.display = (currentCat === 'cbo' || soPodeVer) ? 'none' : '';
   const toolbarLeft = document.getElementById('toolbarLeft');
   if (toolbarLeft) toolbarLeft.style.display = currentCat === 'cbo' ? 'none' : '';
   const cat = CATS[currentCat];
@@ -1114,7 +1123,7 @@ function renderTabela(rows) {
 
     html += `<td>${badge}</td>`;
     html += `<td class="col-acoes">
-      <button class="btn-icon" onclick="editarItem('${row.id}')" title="Editar">
+      <button class="btn-icon" onclick="editarItem('${row.id}')" title="Editar" ${!isAdminLogado() ? 'style="display:none"' : ''}>
         <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button>
     </td>`;
@@ -1361,6 +1370,10 @@ async function toggleAtivoModal() {
 // ─── Audit log ────────────────────────────────────────────────────────────────
 function nomeUsuario() {
   try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}').nome || ''; } catch(_) { return ''; }
+}
+
+function isAdminLogado() {
+  try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}').perfil === 'admin'; } catch(_) { return false; }
 }
 
 async function registrarAudit(acao, registroId, detalhe) {
@@ -1613,6 +1626,17 @@ function abrirUserModal(id) {
   document.getElementById('uColaboradorId').value = user?.colaborador_id || '';
   document.getElementById('uPerfil').value = user?.perfil || 'rh';
   document.getElementById('uEmail').value  = user?.email  || '';
+  const senhaInput = document.getElementById('uSenha');
+  const senhaHint  = document.getElementById('uSenhaHint');
+  if (user) {
+    senhaInput.value = user.senha_acesso || '';
+    senhaInput.type = 'password';
+    senhaHint.textContent = user.senha_acesso ? 'Senha salva — edite para alterar' : 'Senha ainda não cadastrada';
+  } else {
+    senhaInput.value = 'Revest@2026';
+    senhaInput.type = 'password';
+    senhaHint.textContent = 'Sugestão de senha padrão';
+  }
   // Campo de busca: ao editar mostra nome salvo; ao criar começa vazio
   const busca = document.getElementById('uColaboradorBusca');
   const sel   = document.getElementById('uColaboradorSelecionado');
@@ -1698,49 +1722,68 @@ function limparColaboradorUser() {
   document.getElementById('uEmail').value = '';
 }
 
+function toggleSenhaVis() {
+  const inp = document.getElementById('uSenha');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
 async function salvarUser() {
   const colaboradorId = parseInt(document.getElementById('uColaboradorId').value) || null;
-  const nome = document.getElementById('uColaboradorNomeLabel').textContent.trim();
+  const nome   = document.getElementById('uColaboradorNomeLabel').textContent.trim();
   const email  = document.getElementById('uEmail').value.trim();
+  const senha  = document.getElementById('uSenha').value.trim();
   const perfil = document.getElementById('uPerfil').value;
   const acesso = getModulosSelecionados();
 
   if (!nome) { showToast('Selecione um colaborador.', 'error'); return; }
 
   const temExtra = await testarColunaExtra();
-  const bodyBase = colaboradorId
-    ? { nome, email: email || null, perfil, acesso_modulos: acesso, colaborador_id: colaboradorId }
-    : { nome, email: email || null, perfil, acesso_modulos: acesso };
+  const bodyBase = { nome, perfil, acesso_modulos: acesso,
+    email: email || null,
+    senha_acesso: senha || null,
+    ...(colaboradorId ? { colaborador_id: colaboradorId } : {})
+  };
   const body = temExtra ? bodyBase : { nome, perfil };
 
   try {
     if (editingUserId) {
       await sbPatch('usuarios_perfil', editingUserId, body);
+      // Se mudou a senha, atualizar no auth via edge function
+      if (senha && email) {
+        try {
+          await fetch(`${SB_URL}/functions/v1/criar-usuario-auth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SB_KEY}` },
+            body: JSON.stringify({ email, password: senha, nome, modo: 'update' })
+          });
+        } catch(_) {}
+      }
       showToast('Usuário atualizado!', 'success');
       fecharUserModal();
       carregarUsers();
     } else {
+      if (!email) { showToast('Informe o e-mail de acesso.', 'error'); return; }
+      if (!senha) { showToast('Informe a senha de acesso.', 'error'); return; }
+
       const novo = { ...body, ativo: true };
-      delete novo.alterado_por;
-      delete novo.updated_at;
-      delete novo.criado_por;
-      const res = await sbPost('usuarios_perfil', novo);
-      const novoId = Array.isArray(res) ? res[0]?.id : res?.id;
-      // Mostrar instruções para criar conta de autenticação
-      document.getElementById('userBtnSalvar').style.display = 'none';
-      document.getElementById('userBtnToggle').style.display = 'none';
-      document.getElementById('userNewInstructions').style.display = '';
-      const pyScript = `python3 -c "
-import urllib.request, json
-SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co'
-SB_SECRET = 'SEU_SERVICE_KEY'  # Chave secreta — nunca no browser
-data = json.dumps({'email': '${email || 'email@empresa.com'}', 'password': 'Revest@2026', 'email_confirm': True}).encode()
-req = urllib.request.Request(SB_URL+'/auth/v1/admin/users', data=data,
-  headers={'apikey': SB_SECRET, 'Authorization': 'Bearer '+SB_SECRET, 'Content-Type': 'application/json'}, method='POST')
-with urllib.request.urlopen(req) as r: print('OK:', json.loads(r.read())['id'])
-"`;
-      document.getElementById('userPyScript').textContent = pyScript;
-      showToast('Usuário criado com sucesso!', 'success');
+      delete novo.alterado_por; delete novo.updated_at; delete novo.criado_por;
+
+      // 1. Criar conta de auth via Edge Function
+      showToast('Criando conta de acesso...', 'info');
+      const authRes = await fetch(`${SB_URL}/functions/v1/criar-usuario-auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SB_KEY}` },
+        body: JSON.stringify({ email, password: senha, nome })
+      });
+      const authData = await authRes.json();
+      if (!authRes.ok || authData.error) throw new Error(authData.error || 'Falha ao criar conta de acesso');
+
+      // 2. Salvar perfil com user_id vinculado
+      novo.user_id = authData.user_id;
+      await sbPost('usuarios_perfil', novo);
+
+      showToast('Usuário criado e conta de acesso configurada!', 'success');
+      fecharUserModal();
       carregarUsers();
     }
   } catch(e) {
