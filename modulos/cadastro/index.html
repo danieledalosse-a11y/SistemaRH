@@ -1162,7 +1162,7 @@ let GESTORES = [];
 
 async function carregarGestores() {
   try {
-    GESTORES = await sbGet('param_gestor', 'select=nome&ativo=eq.true&order=ordem,nome');
+    GESTORES = await sbGet('param_gestor', 'select=nome,apelido&ativo=eq.true&order=ordem,nome');
     popularSelectGestor();
   } catch(e) { console.warn('Gestores não carregados:', e.message); }
 }
@@ -1171,11 +1171,12 @@ function popularSelectGestor(valorAtual) {
   const sel = document.getElementById('df-gestor');
   if (!sel) return;
   const prev = valorAtual !== undefined ? valorAtual : sel.value;
-  sel.innerHTML = '<option value="">Selecione o gestor</option>';
+  sel.innerHTML = '<option value="">— Sem gestor —</option>';
   GESTORES.forEach(g => {
     const opt = document.createElement('option');
-    opt.value = g.nome;
-    opt.textContent = g.nome;
+    const label = g.apelido || g.nome;
+    opt.value = label;
+    opt.textContent = label;
     sel.appendChild(opt);
   });
   sel.value = prev;
