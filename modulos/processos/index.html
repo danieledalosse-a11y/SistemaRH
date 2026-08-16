@@ -266,6 +266,7 @@
           <option value="">— selecione —</option>
           <option value="reajuste">Reajuste Salarial</option>
           <option value="vt_avulso">VT Avulso</option>
+          <option value="vt_alteracao">Alteração de VT (Inclusão / Cancelamento)</option>
           <option value="bonus_indicacao">Bônus de Indicação</option>
           <option value="atestado">Atestado &gt; 3 dias</option>
           <option value="demissao">Demissão</option>
@@ -331,6 +332,7 @@ const TIPO_CONFIG = {
   demissao:        { label: 'Demissão',            cor: 'red',    icon: '🚪' },
   reajuste:        { label: 'Reajuste Salarial',   cor: 'blue',   icon: '💰' },
   vt_avulso:       { label: 'VT Avulso',           cor: 'purple', icon: '🚌' },
+  vt_alteracao:    { label: 'Alteração de VT',      cor: 'purple', icon: '🚌' },
   bonus_indicacao: { label: 'Bônus de Indicação',  cor: 'amber',  icon: '⭐' },
   atestado:        { label: 'Atestado > 3 dias',   cor: 'amber',  icon: '📋' },
 };
@@ -392,6 +394,11 @@ const CHECKLISTS = {
     { item: 'Confirmar que indicado ainda está ativo', prazo_dias: 0 },
     { item: 'Incluir bônus na folha do mês', prazo_dias: 3 },
     { item: 'Comunicar ao colaborador que indicou', prazo_dias: 3 },
+  ],
+  vt_alteracao: [
+    { item: 'Solicitação registrada', prazo_dias: 0 },
+    { item: 'Encaminhar solicitação ao Financeiro', prazo_dias: 1 },
+    { item: 'Confirmar execução pelo Financeiro', prazo_dias: 5, _acao_vt: true },
   ],
   atestado: [
     { item: 'Registrar atestado no sistema', prazo_dias: 0 },
@@ -584,7 +591,12 @@ function filtrarTipo(tipo) {
   }
 }
 
+// Cache de processos para uso em toggleItem
+const _PROC_MAP = {};
+
 function renderProcessos(processos) {
+  // Armazena processos no cache para acesso em toggleItem
+  processos.forEach(p => { _PROC_MAP[p.id] = p; });
   filtroAtivo = 'todos';
   const el = document.getElementById('andamentoConteudo');
   if (!processos.length) {
@@ -816,7 +828,68 @@ async function toggleItem(checklistId, concluido, processoId) {
   // Persiste em background
   fetch(`${SB_URL}/rest/v1/processos_checklist?id=eq.${checklistId}`, {
     method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(body)
+  }).then(() => {
+    // Se item VT foi concluído, refletir no cadastro do colaborador
+    if (concluido) _aplicarEfeitoVT(checklistId, processoId);
   }).catch(() => showToast('Erro ao salvar item', 'error'));
+}
+
+async function _aplicarEfeitoVT(checklistId, processoId) {
+  const proc = _PROC_MAP[processoId];
+  if (!proc || !proc.colaborador_id) return;
+
+  const extras = proc.dados_extras || {};
+  const isAdmissao    = proc.tipo === 'admissao';
+  const isVtAlteracao = proc.tipo === 'vt_alteracao';
+  if (!isAdmissao && !isVtAlteracao) return;
+
+  // Identificar se este é o item de VT — pelo texto do checklist
+  const itemEl = document.querySelector(`input[data-clid="${checklistId}"]`);
+  const itemTexto = itemEl?.closest('.checklist-item')?.querySelector('.checklist-item-text')?.textContent || '';
+  const isItemVT = isVtAlteracao
+    || itemTexto.toLowerCase().includes('vale transporte')
+    || itemTexto.toLowerCase().includes('solicitar vt');
+  if (!isItemVT) return;
+
+  // Determinar operação
+  const operacao = extras.operacao
+    || (extras.vt === 'Sim' ? 'inclusao' : null)
+    || (isAdmissao && extras.vt === 'Sim' ? 'inclusao' : null);
+  if (!operacao) return;
+
+  // Montar patch para colaboradores
+  let patch = {};
+  let historicoItem = {};
+  if (operacao === 'inclusao') {
+    patch = {
+      vt:        'Sim',
+      vt_cartao: extras.vt_cartao || null,
+      vt_passes: extras.vt_passes ? parseInt(extras.vt_passes) : null,
+      vt_linha:  extras.vt_linha  || null,
+    };
+    historicoItem = { tipo: 'vt_inclusao', detalhe: 'Ativado via Workflow', usuario: USUARIO_NOME, data: new Date().toISOString() };
+  } else if (operacao === 'cancelamento') {
+    patch = { vt: 'Não', vt_cartao: null, vt_passes: null, vt_linha: null };
+    historicoItem = { tipo: 'vt_cancelamento', detalhe: extras.motivo || 'Cancelado via Workflow', usuario: USUARIO_NOME, data: new Date().toISOString() };
+  } else {
+    return;
+  }
+
+  try {
+    // Buscar historico atual
+    const rColab = await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${proc.colaborador_id}&select=historico`, { headers: SB_HEADERS });
+    const [colab] = await rColab.json();
+    const historico = Array.isArray(colab?.historico) ? colab.historico : [];
+    historico.push(historicoItem);
+    patch.historico = historico;
+
+    await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${proc.colaborador_id}`, {
+      method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(patch)
+    });
+    showToast(operacao === 'inclusao' ? '✓ VT ativado no cadastro do colaborador' : '✓ VT cancelado no cadastro do colaborador', 'success');
+  } catch(e) {
+    console.error('Erro ao atualizar VT no colaborador:', e);
+  }
 }
 
 function atualizarProgresso(processoId) {
@@ -1081,6 +1154,14 @@ document.addEventListener('click', e => {
 // ─── Campos extras por tipo ───────────────────────────────────────
 function onTipoChange() { atualizarCamposExtras(); }
 
+function toggleCamposVTAlteracao() {
+  const op = document.getElementById('xVtOperacao')?.value;
+  const inc = document.getElementById('camposVTInclusao');
+  const can = document.getElementById('camposVTCancelamento');
+  if (inc) inc.style.display = op === 'inclusao' ? '' : 'none';
+  if (can) can.style.display = op === 'cancelamento' ? '' : 'none';
+}
+
 function atualizarCamposExtras() {
   const tipo = document.getElementById('fTipo').value;
   const el = document.getElementById('camposExtras');
@@ -1106,6 +1187,42 @@ function atualizarCamposExtras() {
       <div class="form-group">
         <label class="form-label">Data de vigência</label>
         <input class="form-control" type="date" id="xDataVigencia">
+      </div>`;
+  } else if (tipo === 'vt_alteracao') {
+    html = `
+      <div class="form-group">
+        <label class="form-label">Operação</label>
+        <select class="form-control" id="xVtOperacao" onchange="toggleCamposVTAlteracao()">
+          <option value="inclusao">Inclusão de VT</option>
+          <option value="cancelamento">Cancelamento de VT</option>
+        </select>
+      </div>
+      <div id="camposVTInclusao">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Nº do Cartão VT</label>
+            <input class="form-control" type="text" id="xVtCartao" placeholder="Número do cartão">
+          </div>
+          <div class="form-group" style="max-width:120px;">
+            <label class="form-label">Passes/dia</label>
+            <input class="form-control" type="number" id="xVtPasses" min="1" max="10" placeholder="2">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Linha de Ônibus</label>
+          <input class="form-control" type="text" id="xVtLinha" placeholder="Ex: Mandaguaçu / Maringá">
+        </div>
+      </div>
+      <div id="camposVTCancelamento" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Motivo do cancelamento</label>
+          <select class="form-control" id="xVtMotivo">
+            <option value="nao_utiliza">Não utiliza mais transporte público</option>
+            <option value="mudanca_endereco">Mudança de endereço</option>
+            <option value="veiculo_proprio">Passou a utilizar veículo próprio</option>
+            <option value="outro">Outro motivo</option>
+          </select>
+        </div>
       </div>`;
   } else if (tipo === 'vt_avulso') {
     html = `
@@ -1222,6 +1339,19 @@ async function submitNovoProcesso() {
     const dv = document.getElementById('xDataVigencia')?.value;
     if (!sn || !dv) { showToast('Preencha novo salário e data de vigência', 'error'); return; }
     dadosExtras = { salario_novo: sn, data_vigencia: dv };
+  } else if (tipo === 'vt_alteracao') {
+    const op = document.getElementById('xVtOperacao')?.value || 'inclusao';
+    dadosExtras = { operacao: op };
+    if (op === 'inclusao') {
+      const cartao = document.getElementById('xVtCartao')?.value?.trim();
+      const passes = document.getElementById('xVtPasses')?.value;
+      if (!cartao || !passes) { showToast('Informe cartão e passes para inclusão de VT', 'error'); return; }
+      dadosExtras.vt_cartao = cartao;
+      dadosExtras.vt_passes = parseInt(passes);
+      dadosExtras.vt_linha  = document.getElementById('xVtLinha')?.value?.trim() || null;
+    } else {
+      dadosExtras.motivo = document.getElementById('xVtMotivo')?.value || 'nao_utiliza';
+    }
   } else if (tipo === 'vt_avulso') {
     dadosExtras = {
       linha_vt: document.getElementById('xLinhaVt')?.value || '',
