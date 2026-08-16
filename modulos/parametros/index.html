@@ -606,9 +606,10 @@ const CATS = {
     cols:  ['nome'],
     colabNome: true,
     fields: [
-      { key: 'ordem', label: 'Ordem', type: 'number', placeholder: '1', width: 1 },
+      { key: 'apelido', label: 'Apelido', type: 'text', placeholder: 'Ex: Madson', width: 3 },
+      { key: 'ordem',   label: 'Ordem',   type: 'number', placeholder: '1',         width: 1 },
     ],
-    headers: ['Ordem','Nome','Situação',''],
+    headers: ['Ordem','Nome','Apelido','Situação',''],
   },
   gestor_setor: {
     label: 'Gestores por Setor', section: 'Estrutura', sectionOrder: 1, order: 4,
@@ -795,9 +796,9 @@ async function carregarEmpresas() {
 
 async function carregarGestores() {
   try {
-    const rows = await sbGet('param_gestor', 'select=id,nome&ativo=eq.true&order=ordem');
+    const rows = await sbGet('param_gestor', 'select=id,nome,apelido&ativo=eq.true&order=ordem');
     gestoresMap = {};
-    rows.forEach(r => { gestoresMap[r.id] = r.nome; });
+    rows.forEach(r => { gestoresMap[r.id] = r.apelido || r.nome; });
     return rows;
   } catch(_) { return []; }
 }
@@ -1176,6 +1177,7 @@ function renderTabela(rows) {
       html += `<td style="font-weight:600">${gestoresMap[row.gestor_id] || '—'}</td>`;
     } else if (currentCat === 'gestor') {
       html += `<td style="font-weight:600">${row.nome || '—'}</td>`;
+      html += `<td style="font-size:12px;color:var(--text-sec)">${row.apelido || '—'}</td>`;
     } else if (currentCat === 'setor') {
       html += `<td>${(row.descricao || '—').replace(/^\d+\s*-\s*/, '')}</td>`;
     } else if (currentCat === 'empresa') {
