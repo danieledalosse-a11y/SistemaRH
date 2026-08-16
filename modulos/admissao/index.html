@@ -990,6 +990,61 @@ function fiCheck(id, label, val) {
 function togglePanelVT(val) {
   document.getElementById('pf_vt_extras').style.display = val === 'Sim' ? 'grid' : 'none';
 }
+
+async function uploadVTFoto(input) {
+  const file = input.files[0];
+  if (!file || !currentFicha) return;
+  const token = currentConvite?.token || currentFicha?.token;
+  if (!token) { alert('Token não encontrado.'); return; }
+  const lbl = document.getElementById('vt_foto_label');
+  const btn = document.getElementById('vt_foto_btn');
+  lbl.textContent = 'Enviando…';
+  btn.disabled = true;
+  try {
+    const ext  = file.name.split('.').pop().toLowerCase();
+    const path = `${token}/vt_cartao_foto.${ext}`;
+    const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    const res  = await fetch(`${SB_URL}/storage/v1/object/admissao-docs/${path}`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + (sess.access_token || ''), 'Content-Type': file.type, 'x-upsert': 'true' },
+      body: file
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const newDocs = { ...(currentFicha.docs || {}), vt_cartao_foto: path };
+    await fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${currentFicha.id}`, {
+      method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ docs: newDocs })
+    });
+    currentFicha.docs = newDocs;
+    _atualizarBotaoVTFoto(path);
+  } catch(e) {
+    alert('Erro ao enviar foto: ' + e.message);
+    lbl.textContent = 'Foto do cartão';
+  } finally {
+    btn.disabled = false;
+    input.value = '';
+  }
+}
+
+function _atualizarBotaoVTFoto(path) {
+  const btn = document.getElementById('vt_foto_btn');
+  const lbl = document.getElementById('vt_foto_label');
+  const ver = document.getElementById('vt_foto_ver');
+  if (!btn) return;
+  if (path) {
+    const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`;
+    btn.style.borderColor = '#6EE7B7'; btn.style.color = '#027A48';
+    btn.onmouseover = () => { btn.style.borderColor = '#027A48'; };
+    btn.onmouseout  = () => { btn.style.borderColor = '#6EE7B7'; };
+    lbl.textContent = 'Foto anexada ✓';
+    if (ver) { ver.href = url; ver.style.display = ''; }
+  } else {
+    btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text-ter)';
+    btn.onmouseover = () => { btn.style.borderColor = 'var(--blue)'; btn.style.color = 'var(--blue)'; };
+    btn.onmouseout  = () => { btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text-ter)'; };
+    lbl.textContent = 'Foto do cartão';
+    if (ver) ver.style.display = 'none';
+  }
+}
 function fv(id) { const el = document.getElementById('pf_'+id); if (!el) return ''; if (el.type==='checkbox') return el.checked; if (el.tagName==='SELECT' && (el.id==='pf_vale_transporte'||el.id==='pf_primeiro_emprego')) return el.value==='Sim'; return el.value.trim(); }
 function fmtCPF(v) { if (!v) return ''; const d = String(v).replace(/\D/g,''); if (d.length!==11) return v; return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'); }
 function cpfMaskRH(el) {
@@ -1212,9 +1267,27 @@ function renderPanelComp(f) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-ter);"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
           <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);">Vale Transporte</span>
         </div>
-        <div id="vt_erro" style="display:none;font-size:12px;font-weight:600;color:#DC2626;align-items:center;gap:5px;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Cartão e passes são obrigatórios
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="vt_erro" style="display:none;font-size:12px;font-weight:600;color:#DC2626;align-items:center;gap:5px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Cartão e passes são obrigatórios
+          </div>
+          <!-- Foto do cartão VT -->
+          <input type="file" id="vt_foto_input" accept="image/*" style="display:none;" onchange="uploadVTFoto(this)">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" id="vt_foto_btn"
+              onclick="document.getElementById('vt_foto_input').click()"
+              title="Anexar foto do cartão VT"
+              style="background:none;border:1.5px solid var(--border);border-radius:7px;padding:5px 8px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--text-ter);font-size:11px;font-weight:600;transition:all .15s;"
+              onmouseover="this.style.borderColor='var(--blue)';this.style.color='var(--blue)';"
+              onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-ter)';">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              <span id="vt_foto_label">Foto do cartão</span>
+            </button>
+            <a id="vt_foto_ver" href="#" target="_blank"
+              style="display:none;font-size:11px;font-weight:600;color:var(--blue);text-decoration:none;padding:5px 8px;border:1.5px solid #BFDBFE;border-radius:7px;transition:opacity .15s;"
+              onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">Ver foto</a>
+          </div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:140px 1fr;gap:12px;align-items:start;">
@@ -1245,6 +1318,8 @@ function renderPanelComp(f) {
     <div class="data-section"><div class="data-section-title">Dados Bancários</div><div class="data-grid-3">
       ${fi('banco','Banco',f.banco)} ${fi('agencia','Agência',f.agencia)} ${fi('conta','Conta',f.conta)}
     </div></div>`;
+  // Inicializar estado do botão de foto do cartão VT
+  setTimeout(() => _atualizarBotaoVTFoto(f.docs?.vt_cartao_foto || null), 0);
 }
 
 async function savePanel() {
