@@ -3517,6 +3517,7 @@ function toggleCampoIndicacao() {
 }
 
 let _indicadorTimer = null;
+const _indicadorCache = {};
 function buscarIndicador(q) {
   clearTimeout(_indicadorTimer);
   const dd = document.getElementById('indicador-dropdown');
@@ -3535,8 +3536,9 @@ function buscarIndicador(q) {
         dd.innerHTML = '<div style="padding:12px 16px;font-size:13px;color:var(--text-ter);">Nenhum colaborador encontrado</div>';
         return;
       }
+      matches.forEach(x => { _indicadorCache[x.id] = x; });
       dd.innerHTML = matches.map(x => `
-        <div onclick="selecionarIndicadorSB(${x.id}, ${JSON.stringify(x.nome)}, ${JSON.stringify(x.cargo||'')}, ${JSON.stringify(x.empresa_atuacao||'')})"
+        <div onclick="selecionarIndicadorSB(${x.id})"
           style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);"
           onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
           <div style="flex:1;min-width:0;">
@@ -3550,11 +3552,13 @@ function buscarIndicador(q) {
   }, 300);
 }
 
-function selecionarIndicadorSB(id, nome, cargo, empresa) {
+function selecionarIndicadorSB(id) {
+  const x = _indicadorCache[id];
+  if (!x) return;
   document.getElementById('df-indicadorId').value = id;
-  document.getElementById('df-indicadorBusca').value = nome;
+  document.getElementById('df-indicadorBusca').value = x.nome;
   document.getElementById('indicador-dropdown').style.display = 'none';
-  preencherIndicadorSelecionado({ id, nome, cargo, empresa });
+  preencherIndicadorSelecionado({ id, nome: x.nome, cargo: x.cargo || '', empresa: x.empresa_atuacao || '' });
 }
 
 function selecionarIndicador(id) {
