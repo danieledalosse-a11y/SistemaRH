@@ -668,6 +668,23 @@ const CATS = {
     ],
     headers: ['Ordem','Código','Descrição','Situação',''],
   },
+  bonus_indicacao: {
+    label: 'Bônus de Indicação', section: 'Admissão e Rescisão', sectionOrder: 4, order: 3,
+    icon: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    desc:  'Histórico de valores do bônus pago ao colaborador que indicou uma contratação. Mantenha o registro de cada reajuste para rastreabilidade.',
+    table: 'param_bonus_indicacao',
+    noAtivo: true,
+    noOrdem: true,
+    orderBy: 'vigencia_inicio.desc',
+    cols:  ['valor','vigencia_inicio','vigencia_fim'],
+    fields: [
+      { key: 'valor',           label: 'Valor (R$)',         type: 'number', placeholder: 'Ex: 500.00', step: '0.01', width: 2, required: true },
+      { key: 'vigencia_inicio', label: 'Vigência — Início',  type: 'date',   width: 2, required: true },
+      { key: 'vigencia_fim',    label: 'Vigência — Fim',     type: 'date',   width: 2 },
+      { key: 'observacao',      label: 'Observação',         type: 'text',   placeholder: 'Ex: Reajuste aprovado em reunião de julho/2026', width: 6 },
+    ],
+    headers: ['Valor', 'Vigência — Início', 'Vigência — Fim', 'Situação', ''],
+  },
 };
 
 let currentCat = null;
@@ -947,7 +964,7 @@ async function carregar() {
     } else if (currentCat === 'cargo') {
       await carregarCbos();
     }
-    const orderBy = currentCat === 'cbo' ? 'grupo,codigo' : 'ordem,id';
+    const orderBy = currentCat === 'cbo' ? 'grupo,codigo' : (cat.orderBy || 'ordem,id');
     allRows = await sbGet(cat.table, `select=*&order=${orderBy}`);
     if (currentCat === 'cbo') { renderCboConsultivo(); return; }
     renderTabela(allRows);
@@ -1031,14 +1048,22 @@ function renderTabela(rows) {
   html += `</tr></thead><tbody>`;
 
   rows.forEach(row => {
-    const badge = row.ativo
-      ? `<span class="badge badge-ativo">Ativo</span>`
-      : `<span class="badge badge-inativo">Inativo</span>`;
+    const badge = cat.noAtivo
+      ? (row.vigencia_fim == null
+          ? `<span class="badge badge-ativo">Vigente</span>`
+          : `<span class="badge badge-inativo">Encerrado</span>`)
+      : (row.ativo
+          ? `<span class="badge badge-ativo">Ativo</span>`
+          : `<span class="badge badge-inativo">Inativo</span>`);
 
     html += `<tr>`;
-    if (currentCat !== 'cbo') html += `<td class="col-ordem">${row.ordem ?? '—'}</td>`;
+    if (currentCat !== 'cbo' && !cat.noOrdem) html += `<td class="col-ordem">${row.ordem ?? '—'}</td>`;
 
-    if (currentCat === 'cargo') {
+    if (currentCat === 'bonus_indicacao') {
+      html += `<td style="font-weight:700;font-variant-numeric:tabular-nums">R$ ${parseFloat(row.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>`;
+      html += `<td>${row.vigencia_inicio ? fmtDate(row.vigencia_inicio + 'T00:00:00') : '—'}</td>`;
+      html += `<td>${row.vigencia_fim ? fmtDate(row.vigencia_fim + 'T00:00:00') : '<span style="color:var(--green);font-size:12px;font-weight:600">Atual</span>'}</td>`;
+    } else if (currentCat === 'cargo') {
       html += `<td style="font-weight:600">${row.nome || '—'}</td>`;
       const cboLabel = row.cbo_id ? (cbosMap[row.cbo_id] || row.cbo_codigo || '—') : (row.cbo_codigo || '—');
       html += `<td style="font-size:12px;color:var(--text-sec);">${cboLabel}</td>`;
@@ -1156,9 +1181,10 @@ function abrirModal(row) {
         <small style="color:var(--text-sec);font-size:11px;">Fonte: MTE — mtecbo.gov.br</small>
       </div>`;
     } else {
+      const stepAttr = f.step ? ` step="${f.step}"` : '';
       html += `<div class="field">
         <label>${f.label}</label>
-        <input type="${f.type}" id="field_${f.key}" value="${val}" placeholder="${f.placeholder || ''}" style="width:100%">
+        <input type="${f.type}" id="field_${f.key}" value="${val}" placeholder="${f.placeholder || ''}"${stepAttr} style="width:100%">
       </div>`;
     }
   });
@@ -1224,13 +1250,19 @@ async function salvar() {
     body.cbo_codigo = null;
   }
 
+  // bonus_indicacao: valor é float; vigencia_fim vazio → null
+  if (currentCat === 'bonus_indicacao') {
+    body.valor = body.valor !== '' && body.valor != null ? parseFloat(body.valor) : null;
+    if (!body.vigencia_fim) body.vigencia_fim = null;
+  }
+
   const _perf = localStorage.getItem('sb_perfil');
   const _nome = _perf ? (JSON.parse(_perf).nome || '') : '';
   if (editingId) {
     body.alterado_por = _nome;
     body.updated_at = new Date().toISOString();
   } else {
-    body.ativo = true;
+    if (!CATS[currentCat].noAtivo) body.ativo = true;
     body.criado_por = _nome;
   }
 
