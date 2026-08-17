@@ -86,8 +86,17 @@
   .processos-lista { display: flex; flex-direction: column; gap: 8px; }
 
   /* Row compacto */
-  .processo-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; transition: box-shadow 0.15s; }
+  .processo-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; transition: box-shadow 0.15s; display: flex; }
   .processo-row:hover { box-shadow: 0 2px 8px rgba(16,24,40,0.10); }
+  .processo-stripe { width: 4px; flex-shrink: 0; }
+  .processo-stripe.urgente  { background: #DC2626; }
+  .processo-stripe.atencao  { background: #F79009; }
+  .processo-stripe.ok       { background: #12B76A; }
+  .processo-inner { flex: 1; min-width: 0; overflow: hidden; }
+  .tab-cnt { display:inline-block; font-size:11px; font-weight:700; padding:1px 6px; border-radius:99px; background:rgba(255,255,255,.18); color:#fff; margin-left:4px; vertical-align:middle; line-height:16px; }
+  .tab.active .tab-cnt { background:var(--blue); }
+  .secao-label { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-ter); margin:18px 0 8px; padding:0 2px; }
+  .secao-label:first-child { margin-top:0; }
   /* Row — linha única compacta */
   .processo-row-summary { padding: 12px 16px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 12px; }
   .tipo-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 20px; flex-shrink: 0; white-space: nowrap; }
@@ -236,7 +245,7 @@
 <div class="container">
 
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('andamento')">Em andamento</button>
+    <button class="tab active" onclick="switchTab('andamento')">Em andamento <span class="tab-cnt" id="tab-cnt-andamento" style="display:none;"></span></button>
     <button class="tab" onclick="switchTab('concluidos')">Concluídos</button>
     <button class="tab" onclick="switchTab('cancelados')">Cancelados</button>
     <button class="tab" onclick="switchTab('novo')">Novo processo</button>
@@ -244,6 +253,14 @@
 
   <!-- Aba Em andamento -->
   <div class="tab-panel active" id="panel-andamento">
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;position:relative;">
+        <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-ter);pointer-events:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="buscaAndamento" type="text" placeholder="Buscar por colaborador ou tipo…"
+          oninput="_filtrarAndamento()"
+          style="width:100%;padding:8px 12px 8px 30px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;outline:none;font-family:inherit;">
+      </div>
+    </div>
     <div id="andamentoConteudo">
       <div class="loading"><div class="spinner"></div> Carregando processos...</div>
     </div>
@@ -251,13 +268,31 @@
 
   <!-- Aba Concluídos -->
   <div class="tab-panel" id="panel-concluidos">
+    <div style="margin-bottom:14px;">
+      <select id="filtroConcluidos" onchange="_recarregarConcluidos()"
+        style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;outline:none;font-family:inherit;">
+        <option value="30">Últimos 30 dias</option>
+        <option value="60">Últimos 60 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="9999">Todos</option>
+      </select>
+    </div>
     <div id="concluidosConteudo">
       <div class="loading"><div class="spinner"></div> Carregando histórico...</div>
     </div>
   </div>
 
-  <!-- Aba Novo processo -->
+  <!-- Aba Cancelados -->
   <div class="tab-panel" id="panel-cancelados">
+    <div style="margin-bottom:14px;">
+      <select id="filtroCancelados" onchange="_recarregarCancelados()"
+        style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;outline:none;font-family:inherit;">
+        <option value="30">Últimos 30 dias</option>
+        <option value="60">Últimos 60 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="9999">Todos</option>
+      </select>
+    </div>
     <div id="canceladosConteudo">
       <div class="empty-state">
         <div class="empty-state-icon">⊘</div>
@@ -488,12 +523,20 @@ function switchTab(id) {
 }
 
 // ─── Aba Cancelados ──────────────────────────────────────────────────
+async function _recarregarCancelados() {
+  canceladosCarregados = false;
+  await carregarCancelados();
+}
+
 async function carregarCancelados() {
   canceladosCarregados = true;
   const el = document.getElementById('canceladosConteudo');
+  const dias = parseInt(document.getElementById('filtroCancelados')?.value || '30');
+  const dataCorte = dias < 9999 ? (() => { const d = new Date(); d.setDate(d.getDate() - dias); return d.toISOString().slice(0,10); })() : null;
+  const filtroData = dataCorte ? `&atualizado_em=gte.${dataCorte}` : '';
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/processos_rh?status=eq.cancelado&select=*,processos_checklist(*)&order=criado_em.desc${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}`,
+      `${SB_URL}/rest/v1/processos_rh?status=eq.cancelado&select=*,processos_checklist(*)&order=criado_em.desc&limit=200${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}${filtroData}`,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar');
@@ -670,10 +713,42 @@ function filtrarTipo(tipo) {
 // Cache de processos para uso em toggleItem
 const _PROC_MAP = {};
 
+// Cache global de processos em andamento para busca
+let _TODOS_PROCESSOS = [];
+
 function renderProcessos(processos) {
-  // Armazena processos no cache para acesso em toggleItem
   processos.forEach(p => { _PROC_MAP[p.id] = p; });
+  _TODOS_PROCESSOS = processos;
   filtroAtivo = 'todos';
+  const cntEl = document.getElementById('tab-cnt-andamento');
+  if (cntEl) { cntEl.textContent = processos.length; cntEl.style.display = processos.length ? 'inline-block' : 'none'; }
+  _renderAndamento(processos);
+}
+
+function _filtrarAndamento() {
+  const q = (document.getElementById('buscaAndamento')?.value || '').toLowerCase().trim();
+  const filtrados = q
+    ? _TODOS_PROCESSOS.filter(p =>
+        (p.colaborador_nome || '').toLowerCase().includes(q) ||
+        (TIPO_CONFIG[p.tipo]?.label || p.tipo || '').toLowerCase().includes(q)
+      )
+    : _TODOS_PROCESSOS;
+  _renderAndamento(filtrados);
+}
+
+function _diasRestantesProcesso(p) {
+  const checklist = (p.processos_checklist || []).filter(c => !c.concluido);
+  if (!checklist.length) return 9999;
+  const base = new Date((p.tipo === 'demissao' && p.dados_extras?.data_demissao) ? p.dados_extras.data_demissao : p.criado_em);
+  base.setHours(0,0,0,0);
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const prazos = checklist
+    .filter(c => c.prazo_dias != null)
+    .map(c => { const d = calcularPrazoDesde(base, c.prazo_dias); return Math.ceil((d - hoje) / 86400000); });
+  return prazos.length ? Math.min(...prazos) : 9999;
+}
+
+function _renderAndamento(processos) {
   const el = document.getElementById('andamentoConteudo');
   if (!processos.length) {
     el.innerHTML = `<div class="empty-state">
@@ -683,20 +758,25 @@ function renderProcessos(processos) {
     </div>`;
     return;
   }
-  const tiposPresentes = [...new Set(processos.map(p => p.tipo))];
-  const chipsHtml = tiposPresentes.length > 1
-    ? '<div class="filtros-tipo">' +
-      '<div class="filtro-chip ativo" data-tipo="todos" onclick="filtrarTipo(\'todos\')">Todos <span class="chip-count">' + processos.length + '</span></div>' +
-      tiposPresentes.map(t => {
-        const cfg = TIPO_CONFIG[t] || { label: t, icon: '📄' };
-        const n = processos.filter(p => p.tipo === t).length;
-        return '<div class="filtro-chip" data-tipo="' + t + '" onclick="filtrarTipo(\'' + t + '\')"> ' + cfg.icon + ' ' + cfg.label + ' <span class="chip-count">' + n + '</span></div>';
-      }).join('') +
-      '</div>'
-    : '';
 
-  const rows = processos.map(p => buildCard(p)).join('');
-  el.innerHTML = chipsHtml + `<div class="processos-lista">${rows}</div>`;
+  const atrasados = processos.filter(p => _diasRestantesProcesso(p) < 0);
+  const proximos  = processos.filter(p => { const d = _diasRestantesProcesso(p); return d >= 0 && d <= 7; });
+  const normais   = processos.filter(p => _diasRestantesProcesso(p) > 7);
+
+  let html = '';
+  if (atrasados.length) {
+    html += `<div class="secao-label">⚠ Atrasados — ${atrasados.length}</div>`;
+    html += `<div class="processos-lista">${atrasados.map(p => buildCard(p)).join('')}</div>`;
+  }
+  if (proximos.length) {
+    html += `<div class="secao-label">⏰ Próximos do prazo — ${proximos.length}</div>`;
+    html += `<div class="processos-lista">${proximos.map(p => buildCard(p)).join('')}</div>`;
+  }
+  if (normais.length) {
+    if (atrasados.length || proximos.length) html += `<div class="secao-label">Em andamento — ${normais.length}</div>`;
+    html += `<div class="processos-lista">${normais.map(p => buildCard(p)).join('')}</div>`;
+  }
+  el.innerHTML = html;
 }
 
 function progClass(pct) {
@@ -872,7 +952,10 @@ function buildCard(p) {
 
   const btnConcluir = `<button class="btn btn-success btn-sm" onclick="concluirProcesso(${p.id})">✅ Concluir processo</button>`;
 
+  const _stripeCls = temVencido ? 'urgente' : (temHoje ? 'atencao' : 'ok');
   return `<div class="processo-row" id="card-${p.id}" data-tipo="${p.tipo}">
+    <div class="processo-stripe ${_stripeCls}"></div>
+    <div class="processo-inner">
     <div class="processo-row-summary" onclick="toggleRow(${p.id})">
       <span class="tipo-pill ${cfg.cor}"><span class="tipo-icon">${cfg.icon}</span>${cfg.label}</span>
       <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
@@ -895,6 +978,7 @@ function buildCard(p) {
         <div class="card-actions-spacer"></div>
         <button class="btn-cancelar-processo" onclick="cancelarProcesso(${p.id})">⊘ Cancelar processo</button>
       </div>
+    </div>
     </div>
   </div>`;
 }
@@ -1239,12 +1323,20 @@ async function cancelarProcesso(processoId) {
 }
 
 // ─── Aba Concluídos ───────────────────────────────────────────────
+async function _recarregarConcluidos() {
+  concluidosCarregados = false;
+  await carregarConcluidos();
+}
+
 async function carregarConcluidos() {
   concluidosCarregados = true;
   const el = document.getElementById('concluidosConteudo');
+  const dias = parseInt(document.getElementById('filtroConcluidos')?.value || '30');
+  const dataCorte = dias < 9999 ? (() => { const d = new Date(); d.setDate(d.getDate() - dias); return d.toISOString().slice(0,10); })() : null;
+  const filtroData = dataCorte ? `&updated_at=gte.${dataCorte}` : '';
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/processos_rh?status=eq.concluido&select=*&order=updated_at.desc&limit=100${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}`,
+      `${SB_URL}/rest/v1/processos_rh?status=eq.concluido&select=*&order=updated_at.desc&limit=200${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}${filtroData}`,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar histórico');
