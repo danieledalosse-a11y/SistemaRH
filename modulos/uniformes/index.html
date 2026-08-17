@@ -312,7 +312,7 @@
     </div>
 
     <!-- Alertas de Estoque -->
-    <div id="secAlertas" style="background:var(--surface);border:1px solid #FECDCA;border-left:4px solid #F04438;border-radius:var(--radius);padding:16px 20px;margin-bottom:10px;box-shadow:var(--shadow-sm);">
+    <div id="secAlertas" style="background:#FFF5F5;border:1px solid #FCA5A5;border-left:4px solid #DC2626;border-radius:var(--radius);padding:16px 20px;margin-bottom:10px;box-shadow:var(--shadow-sm);">
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;" onclick="togglePainelSecao('secAlertas')">
         <div style="display:flex;align-items:center;gap:12px;">
           <div id="iconAlertas" style="font-size:10px;color:#F04438;transition:transform .2s;transform:rotate(-90deg);flex-shrink:0;">&#9660;</div>
@@ -329,7 +329,7 @@
     </div>
 
     <!-- Pendencias de Uniforme -->
-    <div id="secPendencias" style="background:var(--surface);border:1px solid #FEC84B;border-left:4px solid #F79009;border-radius:var(--radius);padding:16px 20px;margin-bottom:10px;box-shadow:var(--shadow-sm);">
+    <div id="secPendencias" style="background:#FFFBEB;border:1px solid #FCD34D;border-left:4px solid #D97706;border-radius:var(--radius);padding:16px 20px;margin-bottom:10px;box-shadow:var(--shadow-sm);">
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;" onclick="togglePainelSecao('secPendencias')">
         <div style="display:flex;align-items:center;gap:12px;">
           <div id="iconPendencias" style="font-size:10px;color:#F79009;transition:transform .2s;transform:rotate(-90deg);flex-shrink:0;">&#9660;</div>
@@ -3300,35 +3300,51 @@ async function carregarPainel() {
       }).join('');
     }
 
-    // Feed de ultimas entregas
+    // Feed de ultimas entregas - agrupado por colaborador, fechado por padrao
     const feed = document.getElementById('painelMovs');
+    const badgeE = document.getElementById('badgeEntregas');
     if (!movs.length) {
       feed.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Nenhuma entrega registrada</div>`;
+      if (badgeE) badgeE.style.display = 'none';
     } else {
-      feed.innerHTML = movs.map(m => {
-        const data = m.data_movimentacao
-          ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/')
-          : '?';
-        const tam = m.tamanho
-          ? `<span style="font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:1px 7px;margin-left:6px;color:var(--text-sec);">${m.tamanho}</span>`
-          : '';
-        const colabId = m.colaborador_id || '';
-        const nomeColab = m.colaborador ? m.colaborador.nome : '?';
-        const cargoColab = m.colaborador ? m.colaborador.cargo : '';
-        const nomeItem = m.item ? m.item.nome : '?';
-        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border-light);gap:12px;">
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-              ${nomeColab}
-              <span style="font-weight:400;color:var(--text-ter);font-size:12px;"> - ${cargoColab}</span>
-            </div>
-            <div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${nomeItem}${tam} - ${m.quantidade} un.</div>
-          </div>
-          <div style="text-align:right;flex-shrink:0;">
+      const grupos = new Map();
+      for (const m of movs) {
+        const cid = m.colaborador_id || 'x';
+        if (!grupos.has(cid)) grupos.set(cid, { colab: m.colaborador, itens: [] });
+        grupos.get(cid).itens.push(m);
+      }
+      const gruposArr = [...grupos.entries()].slice(0, 5);
+      if (badgeE) { badgeE.textContent = gruposArr.length + ' colaborador' + (gruposArr.length > 1 ? 'es' : ''); badgeE.style.display = ''; }
+      let gi = 0;
+      feed.innerHTML = gruposArr.map(([cid, g]) => {
+        const idx = gi++;
+        const nome = g.colab ? g.colab.nome : '?';
+        const cargo = g.colab ? g.colab.cargo : '';
+        const qtd = g.itens.length;
+        const itensHtml = g.itens.map(m => {
+          const data = m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '?';
+          const tam = m.tamanho ? `<span style="font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin-left:4px;color:var(--text-sec);">${m.tamanho}</span>` : '';
+          const nomeItem = m.item ? m.item.nome : '?';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0 8px 32px;border-bottom:1px solid var(--border-light);">
+            <div style="font-size:13px;color:var(--text);">${nomeItem}${tam} <span style="color:var(--text-ter);">· ${m.quantidade} un.</span></div>
             <div style="font-size:12px;color:var(--text-ter);">${data}</div>
-            <button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:11px;padding:3px 10px;"
-              onclick="setTab('colaboradores');setTimeout(()=>selecionarColabById('${colabId}'),300)">Ver</button>
+          </div>`;
+        }).join('');
+        return `<div style="border-bottom:1px solid var(--border-light);">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;cursor:pointer;user-select:none;" onclick="toggleFeedColab(${idx})">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div id="iconFeed${idx}" style="font-size:10px;color:var(--text-ter);transition:transform .2s;transform:rotate(-90deg);flex-shrink:0;">&#9660;</div>
+              <div>
+                <span style="font-size:13px;font-weight:600;">${nome}</span>
+                <span style="font-size:12px;color:var(--text-ter);margin-left:6px;">${cargo}</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;background:var(--blue-bg);color:var(--blue);">${qtd} item${qtd > 1 ? 's' : ''}</span>
+              <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 10px;" onclick="event.stopPropagation();setTab('colaboradores');setTimeout(()=>selecionarColabById('${cid}'),300)">Ver</button>
+            </div>
           </div>
+          <div id="bodyFeed${idx}" style="overflow:hidden;transition:max-height .3s ease;max-height:0px;">${itensHtml}</div>
         </div>`;
       }).join('');
     }
