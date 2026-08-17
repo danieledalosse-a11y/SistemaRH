@@ -1,23 +1,23 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Férias — Sistema RH</title>
-<!-- SheetJS removido — dados vêm do Supabase -->
-<style>
-  :root {
-    --bg: #F0F2F5;
-    --surface: #ffffff;
-    --border: #E4E7EC;
-    --border-light: #F0F2F5;
-    --text: #101828;
-    --text-sec: #667085;
-    --text-ter: #98A2B3;
-    --accent: #101828;
-    --green: #027A48;  --green-bg: #ECFDF3;  --green-mid: #6CE9A6;
-    --red:   #B42318;  --red-bg:   #FEF3F2;
-    --blue:  #1849A9;  --blue-bg:  #EFF4FF;
+  const hoje = new Date().toISOString().slice(0,10);
+  let colabs = GESTOR_COLABS.slice().sort((a,b) => a.nome.localeCompare(b.nome));
+  let titulo = 'Equipe'; let sub = Todos os  colaboradores;
+
+  if (_gestorAlertaAtivo === 'dobra') {
+    colabs = colabs.filter(c => (window._gestorRiscoDobra||[]).includes(c.id));
+    titulo = 'Risco de dobra'; sub = ${colabs.length} colaborador(es) com vencimento em menos de 60 dias;
+  } else if (_gestorAlertaAtivo === 'sem-agendado') {
+    colabs = colabs.filter(c => (window._gestorSemAgendado||[]).includes(c.id));
+    titulo = 'Sem férias agendadas'; sub = ${colabs.length} colaborador(es) sem período futuro lançado;
+  } else if (_gestorAlertaAtivo === 'saindo') {
+    colabs = colabs.filter(c => (window._gestorSaiEmBreve||[]).includes(c.id));
+    titulo = 'Saem em breve'; sub = ${colabs.length} colaborador(es) com férias iniciando nos próximos 30 dias;
+  }
+
+  const tEl = document.getElementById('gestorListaTitulo');
+  const sEl = document.getElementById('gestorListaSub');
+  if (tEl) tEl.textContent = titulo;
+  if (sEl) sEl.textContent = sub;
+
     --amber: #92400E;  --amber-bg: #FFFAEB;
     --purple:#5925DC;  --purple-bg:#F4F3FF;
     --radius: 12px;
@@ -1534,9 +1534,9 @@
     <div id="gestorLoadingMsg" style="font-size:14px;color:var(--text-sec);">Carregando dados da equipe...</div>
   </div>
   <div id="gestorContent" style="display:none;">
-    <!-- ── Tab bar ── -->
+    <!-- ── Tab bar: apenas 2 abas ── -->
     <div style="display:flex;gap:4px;margin-bottom:20px;">
-      <button class="pvtab active" id="gtab-painel"   onclick="setGestorTab('painel')">
+      <button class="pvtab active" id="gtab-painel" onclick="setGestorTab('painel')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         Painel
       </button>
@@ -1544,15 +1544,18 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Timeline
       </button>
-      <button class="pvtab" id="gtab-equipe" onclick="setGestorTab('equipe')">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Equipe
-      </button>
     </div>
 
-    <!-- ── Aba Painel ── -->
+    <!-- ── Aba Painel: KPIs + lista integrada ── -->
     <div id="gsub-painel">
       <div class="gestor-alerts" id="gestorAlerts"></div>
+      <div class="card" style="margin-top:0;">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:16px;">
+          <div class="card-title" id="gestorListaTitulo">Equipe</div>
+          <div class="card-sub" style="margin:0;" id="gestorListaSub">Clique em um card acima para filtrar</div>
+        </div>
+        <div class="gestor-colab-list" id="gestorAtencaoList"></div>
+      </div>
     </div>
 
     <!-- ── Aba Timeline ── -->
@@ -1578,17 +1581,7 @@
         <div id="gestorGanttContent"></div>
       </div>
     </div>
-
-    <!-- ── Aba Equipe ── -->
-    <div id="gsub-equipe" style="display:none;">
-      <div class="card">
-        <div class="card-title" style="margin-bottom:4px;">Equipe</div>
-        <div class="card-sub" style="margin-bottom:16px;">Situação de férias de cada colaborador</div>
-        <div class="gestor-colab-list" id="gestorAtencaoList"></div>
-      </div>
-    </div>
   </div>
-</div>
 
 <!-- ═══ Modal solicitação gestor ═══ -->
 <div class="modal-overlay" id="modalGestor" style="display:none;" onclick="if(event.target===this)fecharModalGestor()">
@@ -5656,7 +5649,7 @@ function filtrarGestorAlerta(tipo) {
 }
 
 function setGestorTab(tab) {
-  ['painel','timeline','equipe'].forEach(t => {
+  ['painel','timeline'].forEach(t => {
     document.getElementById('gsub-' + t).style.display = t === tab ? '' : 'none';
     document.getElementById('gtab-' + t)?.classList.toggle('active', t === tab);
   });
@@ -5806,25 +5799,26 @@ function renderGestorGantt() {
 
 function renderGestorAtencao() {
   const hoje = new Date().toISOString().slice(0,10);
-  let colabs = GESTOR_COLABS;
+  let colabs = GESTOR_COLABS.slice().sort((a,b) => a.nome.localeCompare(b.nome));
+  let _titulo = 'Equipe', _sub = `Todos os  colaboradores`;
 
   if (_gestorAlertaAtivo === 'dobra') {
     colabs = colabs.filter(c => (window._gestorRiscoDobra||[]).includes(c.id));
+    _titulo = 'Risco de dobra'; _sub = ` colaborador(es) com vencimento em menos de 60 dias sem férias aprovadas`;
   } else if (_gestorAlertaAtivo === 'sem-agendado') {
     colabs = colabs.filter(c => (window._gestorSemAgendado||[]).includes(c.id));
+    _titulo = 'Sem férias agendadas'; _sub = ` colaborador(es) sem período futuro lançado`;
   } else if (_gestorAlertaAtivo === 'saindo') {
     colabs = colabs.filter(c => (window._gestorSaiEmBreve||[]).includes(c.id));
-  } else {
-    const atencao = new Set([...(window._gestorRiscoDobra||[]), ...(window._gestorSemAgendado||[])]);
-    colabs = colabs.filter(c => atencao.has(c.id));
+    _titulo = 'Saem em breve'; _sub = ` colaborador(es) iniciando férias nos próximos 30 dias`;
   }
 
   const list = document.getElementById('gestorAtencaoList');
+  const tEl = document.getElementById('gestorListaTitulo');
+  const sEl = document.getElementById('gestorListaSub');
+  if (tEl) tEl.textContent = _titulo;
+  if (sEl) sEl.textContent = _sub;
 
-  if (!colabs.length) {
-    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-sec);font-size:13px;">Nenhum colaborador com atenção necessária.</div>';
-    return;
-  }
 
   list.innerHTML = colabs.map(c => {
     const periodos = GESTOR_PERIODOS.filter(p => p.colaborador_id === c.id)
