@@ -312,6 +312,8 @@ const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
 const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
 let SB_HEADERS = {};
 let USUARIO_NOME = '';
+let USUARIO_ID   = '';
+let USUARIO_PERFIL = '';
 
 (function () {
   const sess = localStorage.getItem('sb_session');
@@ -320,9 +322,11 @@ let USUARIO_NOME = '';
     const s = JSON.parse(sess);
     if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
     SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' };
+    USUARIO_ID = s.user?.id || '';
     const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     const nome = p.nome || s.email || '';
-    USUARIO_NOME = nome;
+    USUARIO_NOME   = nome;
+    USUARIO_PERFIL = p.perfil || '';
     document.getElementById('userNome').textContent = nome.split(' ')[0];
     const iniciais = nome.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
     document.getElementById('userAvatar').textContent = iniciais || '?';
@@ -489,7 +493,7 @@ async function carregarCancelados() {
   const el = document.getElementById('canceladosConteudo');
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/processos_rh?status=eq.cancelado&select=*,processos_checklist(*)&order=criado_em.desc`,
+      `${SB_URL}/rest/v1/processos_rh?status=eq.cancelado&select=*,processos_checklist(*)&order=criado_em.desc${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}`,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar');
@@ -523,7 +527,7 @@ async function init() {
   await verificarBonusIndicacao();
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/processos_rh?status=eq.aberto&select=*,processos_checklist(*)&order=criado_em.desc`,
+      `${SB_URL}/rest/v1/processos_rh?status=eq.aberto&select=*,processos_checklist(*)&order=criado_em.desc${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}`,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar processos');
@@ -1240,7 +1244,7 @@ async function carregarConcluidos() {
   const el = document.getElementById('concluidosConteudo');
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/processos_rh?status=in.(concluido,cancelado)&select=*&order=updated_at.desc&limit=100`,
+      `${SB_URL}/rest/v1/processos_rh?status=in.(concluido,cancelado)&select=*&order=updated_at.desc&limit=100${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}`,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar histórico');
@@ -1458,6 +1462,7 @@ async function criarProcesso(tipo, colaboradorId, colaboradorNome, dadosExtras) 
       colaborador_id: colaboradorId || null,
       colaborador_nome: colaboradorNome,
       criado_por: USUARIO_NOME || 'RH',
+      criado_por_user_id: USUARIO_ID || null,
       dados_extras: dadosExtras || {}
     })
   });
