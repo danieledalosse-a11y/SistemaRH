@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -292,86 +292,88 @@
   <!-- PAINEL -->
   <div id="sec-painel" style="display:none;">
 
-    <!-- KPIs Painel -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
-      <div class="metric m-blue">
-        <div class="metric-label">Total de unidades</div>
-        <div class="metric-val c-blue" id="pKpiUnid">—</div>
-      </div>
-      <div class="metric m-green">
-        <div class="metric-label">Valor do estoque</div>
-        <div class="metric-val" id="pKpiValor" style="font-size:22px;">—</div>
-      </div>
-      <div class="metric m-amber clickable" onclick="setTab('estoque');setTimeout(()=>{document.getElementById('filtroEstoqueStatus').value='baixo';renderEstoque();},200)">
-        <div class="metric-label" style="color:var(--amber);">Estoque baixo ↗</div>
-        <div class="metric-val c-amber" id="pKpiAlerta">—</div>
-        <div class="metric-sub">itens com qtd ≤ 2</div>
-      </div>
-      <div class="metric m-red clickable" onclick="setTab('estoque');setTimeout(()=>{document.getElementById('filtroEstoqueStatus').value='zerado';renderEstoque();},200)">
-        <div class="metric-label" style="color:var(--red);">Zerados ↗</div>
+    <!-- ── Linha 1: KPIs de ação (requerem atenção) ── -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;">
+      <div class="metric m-red clickable" onclick="togglePainelSecao('secAlertas');document.getElementById('secAlertas').scrollIntoView({behavior:'smooth'})">
+        <div class="metric-label" style="color:var(--red);">Zerados — requer compra ↗</div>
         <div class="metric-val c-red" id="pKpiZerado">—</div>
         <div class="metric-sub">itens sem estoque</div>
       </div>
-      <div class="metric m-amber clickable" onclick="document.getElementById('cardPendencias').scrollIntoView({behavior:'smooth'})">
-        <div class="metric-label" style="color:#B45309;">Pendências ↗</div>
+      <div class="metric m-amber clickable" onclick="togglePainelSecao('secAlertas');document.getElementById('secAlertas').scrollIntoView({behavior:'smooth'})">
+        <div class="metric-label" style="color:var(--amber);">Estoque baixo — atenção ↗</div>
+        <div class="metric-val c-amber" id="pKpiAlerta">—</div>
+        <div class="metric-sub">itens com qtd ≤ 2</div>
+      </div>
+      <div class="metric m-amber clickable" onclick="togglePainelSecao('secPendencias');document.getElementById('secPendencias').scrollIntoView({behavior:'smooth'})">
+        <div class="metric-label" style="color:#B45309;">Pendências de entrega ↗</div>
         <div class="metric-val c-amber" id="pKpiPendencias">—</div>
         <div class="metric-sub">itens não entregues</div>
       </div>
     </div>
 
-    <!-- Alertas + Kits -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
-      <div class="card" style="margin-bottom:0;">
-        <div class="card-hdr" style="margin-bottom:12px;">
-          <div class="card-title">Alertas de Estoque</div>
-          <button class="btn btn-outline btn-sm" onclick="setTab('estoque')">Ver estoque</button>
-        </div>
-        <div id="painelAlertas"><div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Carregando…</div></div>
+    <!-- ── Linha 2: KPIs informativos ── -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+      <div class="metric m-blue">
+        <div class="metric-label">Total em estoque</div>
+        <div class="metric-val c-blue" id="pKpiUnid">—</div>
+        <div class="metric-sub">unidades disponíveis</div>
       </div>
-      <div class="card" style="margin-bottom:0;">
-        <div class="card-hdr" style="margin-bottom:12px;">
-          <div class="card-title">Kits por Cargo</div>
-          <button class="btn btn-outline btn-sm" onclick="setTab('catalogo');setTimeout(()=>setSecTab('kits'),100)">Gerenciar</button>
-        </div>
-        <div id="painelKits"><div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Carregando…</div></div>
+      <div class="metric m-green">
+        <div class="metric-label">Valor do estoque</div>
+        <div class="metric-val" id="pKpiValor" style="font-size:22px;">—</div>
+        <div class="metric-sub">custo médio × quantidade</div>
       </div>
     </div>
 
-    <!-- Pendências de Uniforme -->
-    <div class="card" id="cardPendencias" style="margin-bottom:16px;">
-      <div class="card-hdr" style="margin-bottom:16px;">
-        <div>
-          <div class="card-title">Pendências de Uniforme</div>
-          <div class="card-sub" style="margin-bottom:0;">Itens não entregues por falta de estoque — aguardando reposição</div>
+    <!-- ── Alertas de Estoque (colapsável) ── -->
+    <div class="card" id="secAlertas" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="togglePainelSecao('secAlertas')">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="iconAlertas" style="font-size:13px;color:var(--text-ter);transition:transform .2s;">▼</div>
+          <div>
+            <div class="card-title" style="margin-bottom:0;">Alertas de Estoque</div>
+            <div style="font-size:12px;color:var(--text-ter);margin-top:1px;" id="subAlertas">itens com estoque crítico</div>
+          </div>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="carregarPendenciasUniforme()">↺ Atualizar</button>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();setTab('estoque')">Ver estoque →</button>
       </div>
-      <div id="painelPendencias"><div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Carregando…</div></div>
+      <div id="bodyAlertas" style="overflow:hidden;transition:max-height .3s ease;max-height:0;">
+        <div style="margin-top:14px;border-top:1px solid var(--border-light);padding-top:14px;" id="painelAlertas">
+          <div style="text-align:center;padding:20px;color:var(--text-ter);font-size:13px;">Carregando…</div>
+        </div>
+      </div>
     </div>
 
-    <!-- Últimas entregas -->
+    <!-- ── Pendências de Uniforme (colapsável) ── -->
+    <div class="card" id="secPendencias" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="togglePainelSecao('secPendencias')">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="iconPendencias" style="font-size:13px;color:var(--text-ter);transition:transform .2s;">▼</div>
+          <div>
+            <div class="card-title" style="margin-bottom:0;">Pendências de Uniforme</div>
+            <div style="font-size:12px;color:var(--text-ter);margin-top:1px;" id="subPendencias">itens não entregues por falta de estoque</div>
+          </div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();carregarPendenciasUniforme()">↺ Atualizar</button>
+      </div>
+      <div id="bodyPendencias" style="overflow:hidden;transition:max-height .3s ease;max-height:0;">
+        <div style="margin-top:14px;border-top:1px solid var(--border-light);padding-top:14px;" id="painelPendencias">
+          <div style="text-align:center;padding:20px;color:var(--text-ter);font-size:13px;">Carregando…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Últimas Entregas (feed compacto) ── -->
     <div class="card">
-      <div class="card-hdr" style="margin-bottom:16px;">
-        <div class="card-title">Últimas Entregas</div>
-        <button class="btn btn-outline btn-sm" onclick="setTab('colaboradores')">Colaboradores</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div>
+          <div class="card-title" style="margin-bottom:0;">Últimas Entregas</div>
+          <div style="font-size:12px;color:var(--text-ter);margin-top:1px;">5 registros mais recentes</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="setTab('colaboradores')">Ver todos →</button>
       </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Colaborador</th>
-              <th>Cargo</th>
-              <th>Item</th>
-              <th>Tamanho</th>
-              <th>Qtd.</th>
-              <th>Registrado por</th>
-            </tr>
-          </thead>
-          <tbody id="painelMovs">
-            <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-ter);">Carregando…</td></tr>
-          </tbody>
-        </table>
+      <div id="painelMovs">
+        <div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Carregando…</div>
       </div>
     </div>
 
@@ -3225,95 +3227,118 @@ async function executarEstorno(movId, itemId, tamanho, qtd, almoxId, tipo) {
 }
 
 // ─── Painel ──────────────────────────────────────────────────────────────────
+function togglePainelSecao(secId) {
+  const key  = secId.replace('sec','');
+  const body = document.getElementById('body' + key);
+  const icon = document.getElementById('icon' + key);
+  if (!body) return;
+  const isOpen = body.style.maxHeight && body.style.maxHeight !== '0px';
+  if (isOpen) {
+    body.style.maxHeight = '0px';
+    if (icon) icon.style.transform = 'rotate(-90deg)';
+  } else {
+    body.style.maxHeight = (body.scrollHeight + 400) + 'px';
+    if (icon) icon.style.transform = 'rotate(0deg)';
+  }
+}
+
+function _abrirPainelSecao(secId) {
+  const key  = secId.replace('sec','');
+  const body = document.getElementById('body' + key);
+  const icon = document.getElementById('icon' + key);
+  if (body && (!body.style.maxHeight || body.style.maxHeight === '0px')) {
+    body.style.maxHeight = (body.scrollHeight + 400) + 'px';
+    if (icon) icon.style.transform = 'rotate(0deg)';
+  }
+}
+
 async function carregarPainel() {
   try {
-    // Carrega em paralelo: movimentações recentes + estoque (se ainda vazio)
     const [movs, estoqFresh] = await Promise.all([
       sbGet('unif_movimentacoes',
-        'select=*,colaborador:colaboradores(nome,cargo),item:unif_catalogo(nome)&order=data_movimentacao.desc&limit=15'),
+        'select=*,colaborador:colaboradores(id,nome,cargo),item:unif_catalogo(nome)' +
+        '&motivo_pendencia=is.null&quantidade=gt.0&order=data_movimentacao.desc&limit=5'),
       ESTOQUE.length ? Promise.resolve(ESTOQUE)
         : sbGet('unif_estoque',
             'select=*,item:unif_catalogo(id,nome,genero,variante,logo),almox:unif_almoxarifados(id,nome)'),
     ]);
     if (!ESTOQUE.length && estoqFresh.length) ESTOQUE = estoqFresh;
 
-    // ── KPIs ──────────────────────────────────────────────────────────────────
+    // KPIs
     const totalUnid  = ESTOQUE.reduce((s, e) => s + (e.quantidade || 0), 0);
     const totalValor = ESTOQUE.reduce((s, e) => s + (e.quantidade || 0) * (e.custo_medio || 0), 0);
     const emAlerta   = ESTOQUE.filter(e => e.quantidade > 0 && e.quantidade <= (e.estoque_minimo || 2));
     const zerados    = ESTOQUE.filter(e => (e.quantidade || 0) === 0);
     document.getElementById('pKpiUnid').textContent   = totalUnid.toLocaleString('pt-BR');
-    document.getElementById('pKpiValor').textContent  = 'R ' + totalValor.toLocaleString('pt-BR', {minimumFractionDigits:2});
+    document.getElementById('pKpiValor').textContent  = 'R$ ' + totalValor.toLocaleString('pt-BR', {minimumFractionDigits:2});
     document.getElementById('pKpiAlerta').textContent = emAlerta.length;
     document.getElementById('pKpiZerado').textContent = zerados.length;
 
-    // ── Alertas de estoque ────────────────────────────────────────────────────
-    const alertasCombinados = [...zerados, ...emAlerta].slice(0, 10);
-    const elAlertas = document.getElementById('painelAlertas');
+    // Alertas de estoque
+    const alertasCombinados = [...zerados, ...emAlerta].slice(0, 15);
+    const elAlertas  = document.getElementById('painelAlertas');
+    const subAlertas = document.getElementById('subAlertas');
     if (!alertasCombinados.length) {
-      elAlertas.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px 0;color:var(--green);">
+      elAlertas.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:12px 0;color:var(--green);">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        <span style="font-size:13px;font-weight:600;">Estoque sem alertas</span>
+        <span style="font-size:13px;font-weight:600;">Estoque sem alertas - tudo em ordem!</span>
       </div>`;
+      if (subAlertas) subAlertas.textContent = 'nenhum item critico';
     } else {
+      if (subAlertas) subAlertas.textContent = alertasCombinados.length + ' item' + (alertasCombinados.length > 1 ? 's' : '') + ' com estoque critico';
       elAlertas.innerHTML = alertasCombinados.map(e => {
         const isZerado = (e.quantidade || 0) === 0;
-        const [cor, bg] = isZerado ? ['#B42318','#FEF3F2'] : ['#92400E','#FFFAEB'];
-        const label     = e.item?.nome || '—';
-        const sub       = [e.tamanho, e.almox?.nome].filter(Boolean).join(' · ');
-        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border-light);">
+        const cor = isZerado ? '#B42318' : '#92400E';
+        const bg  = isZerado ? '#FEF3F2' : '#FFFAEB';
+        const label = e.item ? e.item.nome : '?';
+        const sub   = [e.tamanho, e.almox ? e.almox.nome : null].filter(Boolean).join(' - ');
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-light);">
           <div>
             <div style="font-size:13px;font-weight:600;">${label}</div>
             <div style="font-size:12px;color:var(--text-sec);">${sub}</div>
           </div>
           <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;background:${bg};color:${cor};">
-            ${isZerado ? 'Zerado' : e.quantidade + ' un.'}
+            ${isZerado ? 'Zerado' : e.quantidade + ' un.'}
           </span>
+        </div>`;
+      }).join('');
+      _abrirPainelSecao('secAlertas');
+    }
+
+    // Feed de ultimas entregas
+    const feed = document.getElementById('painelMovs');
+    if (!movs.length) {
+      feed.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Nenhuma entrega registrada</div>`;
+    } else {
+      feed.innerHTML = movs.map(m => {
+        const data = m.data_movimentacao
+          ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/')
+          : '?';
+        const tam = m.tamanho
+          ? `<span style="font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:1px 7px;margin-left:6px;color:var(--text-sec);">${m.tamanho}</span>`
+          : '';
+        const colabId = m.colaborador_id || '';
+        const nomeColab = m.colaborador ? m.colaborador.nome : '?';
+        const cargoColab = m.colaborador ? m.colaborador.cargo : '';
+        const nomeItem = m.item ? m.item.nome : '?';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border-light);gap:12px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              ${nomeColab}
+              <span style="font-weight:400;color:var(--text-ter);font-size:12px;"> - ${cargoColab}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${nomeItem}${tam} - ${m.quantidade} un.</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:12px;color:var(--text-ter);">${data}</div>
+            <button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:11px;padding:3px 10px;"
+              onclick="setTab('colaboradores');setTimeout(()=>selecionarColabById('${colabId}'),300)">Ver</button>
+          </div>
         </div>`;
       }).join('');
     }
 
-    // ── Kits por cargo ────────────────────────────────────────────────────────
-    const porCargo = new Map();
-    for (const k of KITS) {
-      if (!porCargo.has(k.cargo)) porCargo.set(k.cargo, 0);
-      porCargo.set(k.cargo, porCargo.get(k.cargo) + 1);
-    }
-    const elKits = document.getElementById('painelKits');
-    if (!porCargo.size) {
-      elKits.innerHTML = `<div style="font-size:13px;color:var(--text-ter);padding:16px 0;">Nenhum kit cadastrado. Use a aba Catálogo → Kits por Cargo.</div>`;
-    } else {
-      const linhas = [...porCargo.entries()].sort((a,b) => a[0].localeCompare(b[0])).map(([cargo, qtd]) =>
-        `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border-light);">
-          <span style="font-size:13px;font-weight:600;">${cargo}</span>
-          <span style="font-size:12px;color:var(--text-sec);">${qtd} ${qtd === 1 ? 'item' : 'itens'}</span>
-        </div>`).join('');
-      elKits.innerHTML = linhas +
-        `<div style="font-size:12px;color:var(--text-ter);padding-top:10px;">${porCargo.size} cargo${porCargo.size > 1 ? 's' : ''} com kit definido</div>`;
-    }
-
-    // ── Últimas entregas ──────────────────────────────────────────────────────
-    const motivoLabel = { admissao:'Admissão', kit_admissao:'Kit CD', troca_programada:'Troca', troca_antecipada:'Troca antecipada', demissao:'Devolução', ajuste:'Ajuste' };
-    const tbody = document.getElementById('painelMovs');
-    if (!movs.length) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma entrega registrada</td></tr>`;
-    } else {
-      tbody.innerHTML = movs.map(m => {
-        const data = m.data_movimentacao
-          ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/')
-          : '—';
-        return `<tr>
-          <td style="white-space:nowrap;color:var(--text-sec);">${data}</td>
-          <td style="font-weight:600;">${m.colaborador?.nome || '—'}</td>
-          <td style="color:var(--text-sec);">${m.colaborador?.cargo || '—'}</td>
-          <td>${m.item?.nome || '—'}</td>
-          <td style="color:var(--text-sec);">${m.tamanho || '—'}</td>
-          <td>${m.quantidade}</td>
-          <td style="color:var(--text-sec);font-size:12px;">${m.registrado_por || '—'}</td>
-        </tr>`;
-      }).join('');
-    }
-    // ── Pendências ────────────────────────────────────────────────────────────
+    // Pendencias
     await carregarPendenciasUniforme();
 
   } catch(e) { toast('Erro ao carregar painel: ' + e.message); }
@@ -3328,8 +3353,10 @@ async function carregarPendenciasUniforme() {
       '&motivo_pendencia=not.is.null&order=data_movimentacao.desc');
 
     document.getElementById('pKpiPendencias').textContent = pends.length;
+    const subPend = document.getElementById('subPendencias');
 
     if (!pends.length) {
+      if (subPend) subPend.textContent = 'nenhuma pendencia no momento';
       el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px 0;color:var(--green);">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         <span style="font-size:13px;font-weight:600;">Sem pendências — tudo entregue!</span>
@@ -3338,6 +3365,9 @@ async function carregarPendenciasUniforme() {
     }
 
     // agrupa por colaborador
+    if (subPend) subPend.textContent = pends.length + ' item' + (pends.length > 1 ? 's' : '') + ' aguardando entrega';
+    _abrirPainelSecao('secPendencias');
+
     const porColab = new Map();
     for (const p of pends) {
       const cid = p.colaborador_id;
