@@ -1534,31 +1534,58 @@
     <div id="gestorLoadingMsg" style="font-size:14px;color:var(--text-sec);">Carregando dados da equipe...</div>
   </div>
   <div id="gestorContent" style="display:none;">
-    <!-- Cards de alerta -->
-    <div class="gestor-alerts" id="gestorAlerts"></div>
-    <!-- Timeline da equipe -->
-    <div class="card" style="margin-bottom:24px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
-        <div>
-          <div class="card-title">Timeline da equipe</div>
-          <div class="card-sub" style="margin-bottom:0;">Períodos de férias agendados e concluídos</div>
-        </div>
-        <select id="gestorFiltroCargo" onchange="renderGestorTimeline()" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
-          <option value="">Todos os cargos</option>
-        </select>
-      </div>
-      <div class="gestor-timeline-nav">
-        <button class="gestor-timeline-nav-btn" onclick="gestorNavMes(-3)">&#8249; Anterior</button>
-        <span class="gestor-timeline-month-label" id="gestorMesLabel"></span>
-        <button class="gestor-timeline-nav-btn" onclick="gestorNavMes(3)">Próximo &#8250;</button>
-      </div>
-      <div id="gestorTimelineContent"></div>
+    <!-- ── Tab bar ── -->
+    <div style="display:flex;gap:4px;margin-bottom:20px;">
+      <button class="pvtab active" id="gtab-painel"   onclick="setGestorTab('painel')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Painel
+      </button>
+      <button class="pvtab" id="gtab-timeline" onclick="setGestorTab('timeline')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Timeline
+      </button>
+      <button class="pvtab" id="gtab-equipe" onclick="setGestorTab('equipe')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Equipe
+      </button>
     </div>
-    <!-- Lista: Atenção necessária -->
-    <div class="card">
-      <div class="card-title">Atenção necessária</div>
-      <div class="card-sub">Colaboradores com risco de dobra ou sem agendamento</div>
-      <div class="gestor-colab-list" id="gestorAtencaoList"></div>
+
+    <!-- ── Aba Painel ── -->
+    <div id="gsub-painel">
+      <div class="gestor-alerts" id="gestorAlerts"></div>
+    </div>
+
+    <!-- ── Aba Timeline ── -->
+    <div id="gsub-timeline" style="display:none;">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="gantt-nav">
+          <button class="gantt-nav-btn" onclick="gestorGanttAnterior()" title="Mês anterior">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div class="gantt-nav-center">
+            <span class="gantt-nav-month" id="gestorGanttTitulo"></span>
+          </div>
+          <button class="gantt-nav-btn" onclick="gestorGanttProximo()" title="Próximo mês">
+            <svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
+          </button>
+          <div class="gantt-nav-filters">
+            <span class="gantt-filter-label">Cargo</span>
+            <select id="gestorFiltroCargo" onchange="renderGestorGantt()" class="gantt-filter-select">
+              <option value="">Todos</option>
+            </select>
+          </div>
+        </div>
+        <div id="gestorGanttContent"></div>
+      </div>
+    </div>
+
+    <!-- ── Aba Equipe ── -->
+    <div id="gsub-equipe" style="display:none;">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:4px;">Equipe</div>
+        <div class="card-sub" style="margin-bottom:16px;">Situação de férias de cada colaborador</div>
+        <div class="gestor-colab-list" id="gestorAtencaoList"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -5522,16 +5549,16 @@ async function initGestor() {
     document.getElementById('gestorContent').style.display  = 'block';
 
     // Popula filtro de cargos
-    const cargos = [...new Set(GESTOR_COLABS.map(c => c.cargo || '').filter(Boolean))].sort();
-    const sel = document.getElementById('gestorFiltroCargo');
-    cargos.forEach(cg => { const o = document.createElement('option'); o.value = cg; o.textContent = cg; sel.appendChild(o); });
+    // (filtro de cargos populado lazily em renderGestorGantt)
+
+
 
     const hoje = new Date();
     _gestorMesBase = hoje.getFullYear() * 12 + hoje.getMonth();
-
+    _gestorGanttAno = hoje.getFullYear(); _gestorGanttMes = hoje.getMonth();
     renderGestorAlerts();
     renderGestorTimeline();
-    renderGestorAtencao();
+    renderGestorGantt();
   } catch(e) {
     setGestorMsg('Erro: ' + (e.message || e));
   }
@@ -5628,78 +5655,153 @@ function filtrarGestorAlerta(tipo) {
   renderGestorAtencao();
 }
 
-function gestorNavMes(delta) {
-  _gestorMesBase += delta;
-  renderGestorTimeline();
+function setGestorTab(tab) {
+  ['painel','timeline','equipe'].forEach(t => {
+    document.getElementById('gsub-' + t).style.display = t === tab ? '' : 'none';
+    document.getElementById('gtab-' + t)?.classList.toggle('active', t === tab);
+  });
+  if (tab === 'timeline') renderGestorGantt();
 }
 
-function renderGestorTimeline() {
-  const cargoFiltro = document.getElementById('gestorFiltroCargo')?.value || '';
-  const colabs = cargoFiltro ? GESTOR_COLABS.filter(c => c.cargo === cargoFiltro) : GESTOR_COLABS;
+let _gestorGanttAno = new Date().getFullYear();
+let _gestorGanttMes = new Date().getMonth();
 
-  const meses = [];
-  for (let i = 0; i < 3; i++) {
-    const total = _gestorMesBase + i;
-    const ano = Math.floor(total / 12);
-    const mes = total % 12;
-    meses.push({ ano, mes });
+function gestorGanttAnterior() {
+  if (_gestorGanttMes === 0) { _gestorGanttMes = 11; _gestorGanttAno--; }
+  else { _gestorGanttMes--; }
+  renderGestorGantt();
+}
+function gestorGanttProximo() {
+  if (_gestorGanttMes === 11) { _gestorGanttMes = 0; _gestorGanttAno++; }
+  else { _gestorGanttMes++; }
+  renderGestorGantt();
+}
+
+function renderGestorGantt() {
+  const titulo  = document.getElementById('gestorGanttTitulo');
+  const content = document.getElementById('gestorGanttContent');
+  if (!content) return;
+
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const WD    = ['D','S','T','Q','Q','S','S'];
+
+  const ano = _gestorGanttAno, mes = _gestorGanttMes;
+  const diasNoMes = new Date(ano, mes+1, 0).getDate();
+  const mesStr    = String(mes+1).padStart(2,'0');
+  const mesInicio = `${ano}-${mesStr}-01`;
+  const mesFim    = `${ano}-${mesStr}-${String(diasNoMes).padStart(2,'0')}`;
+  const hoje      = new Date().toISOString().slice(0,10);
+
+  if (titulo) titulo.innerHTML = `${MESES[mes]} <span class="gantt-nav-year">${ano}</span>`;
+
+  // Popula filtro de cargos
+  const cargoSel   = document.getElementById('gestorFiltroCargo');
+  const cargoFiltro = cargoSel?.value || '';
+  if (cargoSel && cargoSel.options.length <= 1) {
+    const cargos = [...new Set(GESTOR_COLABS.map(c => c.cargo || '').filter(Boolean))].sort();
+    cargos.forEach(cg => { const o = document.createElement('option'); o.value = cg; o.textContent = cg; cargoSel.appendChild(o); });
   }
-  const NOMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  document.getElementById('gestorMesLabel').textContent =
-    `${NOMES[meses[0].mes]} ${meses[0].ano} — ${NOMES[meses[2].mes]} ${meses[2].ano}`;
 
-  // Só mostra colaboradores com férias no período visível
-  const _periodoInicio = `${meses[0].ano}-${String(meses[0].mes+1).padStart(2,'0')}-01`
-  const _ultimoDia = new Date(meses[2].ano, meses[2].mes+1, 0).getDate()
-  const _periodoFim = `${meses[2].ano}-${String(meses[2].mes+1).padStart(2,'0')}-${String(_ultimoDia).padStart(2,'0')}`
-  const colabsVisiveis = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.data_fim >= _periodoInicio && l.data_inicio <= _periodoFim))
-  const content = document.getElementById('gestorTimelineContent');
-  if (!colabsVisiveis.length) {
-    content.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-sec);font-size:13px;">Nenhum colaborador com férias neste período.</div>';
+  let colabs = cargoFiltro ? GESTOR_COLABS.filter(c => c.cargo === cargoFiltro) : GESTOR_COLABS;
+  colabs = colabs.filter(c =>
+    GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.data_fim >= mesInicio && l.data_inicio <= mesFim)
+  ).sort((a, b) => a.nome.localeCompare(b.nome));
+
+  if (!colabs.length) {
+    content.innerHTML = `<div class="gantt-empty" style="padding:32px;text-align:center;color:var(--text-ter);font-size:13px;">Nenhum colaborador com férias em ${MESES[mes]} ${ano}</div>`;
     return;
   }
 
-  let html = `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;">`;
-  html += `<colgroup><col style="width:180px;">`;
-  meses.forEach(({ano, mes}) => {
-    const dias = new Date(ano, mes+1, 0).getDate();
-    for (let d = 0; d < dias; d++) html += `<col style="width:18px;">`;
-  });
-  html += `</colgroup><thead><tr>`;
-  html += `<th style="text-align:left;padding:6px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-ter);border-bottom:1px solid var(--border);">Colaborador</th>`;
-  meses.forEach(({ano, mes}) => {
-    const dias = new Date(ano, mes+1, 0).getDate();
-    html += `<th colspan="${dias}" style="text-align:center;padding:5px 4px;font-size:11px;font-weight:600;color:var(--text-sec);border-bottom:1px solid var(--border);border-left:2px solid var(--border);">${NOMES[mes]} ${ano}</th>`;
-  });
-  html += `</tr></thead><tbody>`;
+  const AV_COLORS = ['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C','#1D4ED8'];
+  const BAR_BG    = ['#DBEAFE','#CFFAFE','#EDE9FE','#FEF3C7','#DCFCE7','#FCE7F3','#FFEDD5','#EFF6FF'];
+  const BAR_TEXT  = ['#1E40AF','#0E7490','#5B21B6','#92400E','#15803D','#9D174D','#9A3412','#1D4ED8'];
+  const avIdx  = name => { let h=0; for(let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))&0xFFFFFF; return Math.abs(h)%AV_COLORS.length; };
+  const avColor = name => AV_COLORS[avIdx(name)];
+  const barBg   = name => BAR_BG[avIdx(name)];
+  const barText = name => BAR_TEXT[avIdx(name)];
+  const avInit  = name => name.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');
 
-  colabsVisiveis.forEach(c => {
+  const diasInfo = [];
+  for (let d = 1; d <= diasNoMes; d++) {
+    const ds  = `${ano}-${mesStr}-${String(d).padStart(2,'0')}`;
+    const dow = new Date(ds + 'T12:00:00').getDay();
+    diasInfo.push({ d, ds, dow, weekend: dow===0, isHoje: ds===hoje });
+  }
+
+  let thDias = `<th class="gantt-name-col" style="padding-left:16px;font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.6px;">Colaborador</th>`;
+  diasInfo.forEach(({ d, ds, dow, weekend, isHoje }) => {
+    const cls = [isHoje ? 'gantt-th-today' : '', weekend ? 'gantt-th-weekend' : ''].filter(Boolean).join(' ');
+    const num = isHoje
+      ? `<span class="gantt-th-today-bubble">${d}</span>`
+      : `<span class="gantt-th-day">${d}</span>`;
+    thDias += `<th class="${cls}" title="${ds}">${num}<span class="gantt-th-wd">${WD[dow]}</span></th>`;
+  });
+
+  const W_CELL = 28;
+  let rows = '';
+  colabs.forEach(c => {
     const lancColabs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id);
-    html += `<tr><td style="padding:5px 12px;font-size:12px;font-weight:500;white-space:nowrap;border-bottom:1px solid var(--border-light);overflow:hidden;text-overflow:ellipsis;" title="${c.nome}">${c.nome.split(' ').slice(0,2).join(' ')}</td>`;
-    meses.forEach(({ano, mes}) => {
-      const diasNoMes = new Date(ano, mes+1, 0).getDate();
-      for (let d = 1; d <= diasNoMes; d++) {
-        const dia  = `${ano}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        const lanc = lancColabs.find(l => l.data_inicio <= dia && l.data_fim >= dia);
-        const bl   = d === 1 ? 'border-left:2px solid var(--border);' : '';
-        let bg = '';
-        if (lanc) {
-          const st = (lanc.status||'').toLowerCase();
-          bg = st === 'gozado' ? 'var(--green)' : st === 'solicitado' ? '#F79009' : '#1849A9';
-        }
-        html += `<td style="padding:2px 1px;border-bottom:1px solid var(--border-light);${bl}">${lanc ? `<div style="height:18px;background:${bg};border-radius:2px;opacity:0.85;" title="${c.nome}: ${lanc.data_inicio} → ${lanc.data_fim} (${lanc.status||''})"></div>` : ''}</td>`;
-      }
+    const cor  = avColor(c.nome);
+    const ini  = avInit(c.nome);
+    const sub  = [c.cargo, c.setor].filter(Boolean).join(' · ');
+
+    rows += `<tr class="gantt-row">
+      <td><div class="gantt-name-cell">
+        <div class="gantt-av" style="background:${cor};">${ini}</div>
+        <div>
+          <div class="gantt-name">${c.nome}</div>
+          <div class="gantt-name-sub">${sub}</div>
+        </div>
+      </div></td>`;
+
+    diasInfo.forEach(({ ds, weekend, isHoje }) => {
+      const cellCls = ['gantt-cell', weekend?'gantt-cell-weekend':'', isHoje?'gantt-cell-today':''].filter(Boolean).join(' ');
+      let barHtml = isHoje ? `<div class="gantt-today-marker"></div>` : '';
+
+      lancColabs.forEach(l => {
+        if (l.data_fim < ds || l.data_inicio > ds) return;
+        const drawDay = l.data_inicio >= mesInicio ? l.data_inicio : mesInicio;
+        if (ds !== drawDay) return;
+
+        const contLeft  = l.data_inicio < mesInicio;
+        const contRight = l.data_fim > mesFim;
+        const endDs     = contRight ? mesFim : l.data_fim;
+        const diaInicio = parseInt(drawDay.slice(-2));
+        const maxCols   = diasNoMes - diaInicio + 1;
+        const colsCalc  = Math.max(1, Math.round((new Date(endDs+'T12:00:00') - new Date(drawDay+'T12:00:00')) / 86400000) + 1);
+        const colsTotal = Math.min(colsCalc, maxCols);
+
+        const st = (l.status || '').toLowerCase();
+        const isAprov  = st !== 'solicitado';
+        const bg  = barBg(c.nome);
+        const txt = barText(c.nome);
+        const fmtShort = d => { const [,m,dia] = d.split('-'); return `${dia}/${m}`; };
+        let label = '';
+        if (colsTotal >= 9) label = `${fmtShort(l.data_inicio)} → ${fmtShort(l.data_fim)} · ${l.dias}d`;
+        else if (colsTotal >= 4) label = `${l.dias}d`;
+
+        const barCls = ['gantt-bar', !isAprov?'pendente':'', contLeft?'bar-cont-left':'', contRight?'bar-cont-right':''].filter(Boolean).join(' ');
+        const bgStyle = isAprov
+          ? `background:${bg};`
+          : `background:transparent;border-color:${txt};`;
+
+        barHtml += `<div class="${barCls}"
+          style="left:2px;width:${colsTotal * W_CELL - 4}px;${bgStyle}"
+          title="${c.nome}: ${l.data_inicio} → ${l.data_fim} · ${l.dias}d (${l.status||''})">
+          <span class="gantt-bar-label" style="color:${txt};">${label}</span>
+        </div>`;
+      });
+
+      rows += `<td class="${cellCls}">${barHtml}</td>`;
     });
-    html += `</tr>`;
+
+    rows += `</tr>`;
   });
 
-  html += `</tbody></table></div>`;
-  html += `<div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;">
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sec);"><div style="width:14px;height:14px;background:var(--green);border-radius:3px;"></div>Gozado</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sec);"><div style="width:14px;height:14px;background:#1849A9;border-radius:3px;"></div>Aprovado/Agendado</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sec);"><div style="width:14px;height:14px;background:#F79009;border-radius:3px;"></div>Solicitado</div>
-  </div>`;
-  content.innerHTML = html;
+  content.innerHTML = `<div class="gantt-scroll"><table class="gantt-table">
+    <thead><tr>${thDias}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
 }
 
 function renderGestorAtencao() {
