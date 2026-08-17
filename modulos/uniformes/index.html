@@ -3227,6 +3227,20 @@ async function executarEstorno(movId, itemId, tamanho, qtd, almoxId, tipo) {
 }
 
 // ─── Painel ──────────────────────────────────────────────────────────────────
+function toggleFeedColab(idx) {
+  const body = document.getElementById('bodyFeed' + idx);
+  const icon = document.getElementById('iconFeed' + idx);
+  if (!body) return;
+  const isOpen = body.style.maxHeight && body.style.maxHeight !== '0px';
+  if (isOpen) {
+    body.style.maxHeight = '0px';
+    if (icon) icon.style.transform = 'rotate(-90deg)';
+  } else {
+    body.style.maxHeight = body.scrollHeight + 'px';
+    if (icon) icon.style.transform = 'rotate(0deg)';
+  }
+}
+
 function togglePainelSecao(secId) {
   const key  = secId.replace('sec','');
   const body = document.getElementById('body' + key);
@@ -3257,7 +3271,7 @@ async function carregarPainel() {
     const [movs, estoqFresh] = await Promise.all([
       sbGet('unif_movimentacoes',
         'select=*,colaborador:colaboradores(id,nome,cargo),item:unif_catalogo(nome)' +
-        '&motivo_pendencia=is.null&quantidade=gt.0&order=data_movimentacao.desc&limit=5'),
+        '&motivo_pendencia=is.null&quantidade=gt.0&order=data_movimentacao.desc&limit=30'),
       ESTOQUE.length ? Promise.resolve(ESTOQUE)
         : sbGet('unif_estoque',
             'select=*,item:unif_catalogo(id,nome,genero,variante,logo),almox:unif_almoxarifados(id,nome)'),
@@ -3283,9 +3297,11 @@ async function carregarPainel() {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         <span style="font-size:13px;font-weight:600;">Estoque sem alertas - tudo em ordem!</span>
       </div>`;
-      if (subAlertas) subAlertas.textContent = 'nenhum item critico';
+      const badgeA0 = document.getElementById('badgeAlertas');
+      if (badgeA0) badgeA0.style.display = 'none';
     } else {
-      if (subAlertas) subAlertas.textContent = alertasCombinados.length + ' item' + (alertasCombinados.length > 1 ? 's' : '') + ' com estoque critico';
+      const badgeA = document.getElementById('badgeAlertas');
+      if (badgeA) { badgeA.textContent = alertasCombinados.length + ' item' + (alertasCombinados.length > 1 ? 's' : ''); badgeA.style.display = ''; }
       elAlertas.innerHTML = alertasCombinados.map(e => {
         const isZerado = (e.quantidade || 0) === 0;
         const cor = isZerado ? '#B42318' : '#92400E';
@@ -3302,7 +3318,6 @@ async function carregarPainel() {
           </span>
         </div>`;
       }).join('');
-      _abrirPainelSecao('secAlertas');
     }
 
     // Feed de ultimas entregas
@@ -3356,7 +3371,8 @@ async function carregarPendenciasUniforme() {
     const subPend = document.getElementById('subPendencias');
 
     if (!pends.length) {
-      if (subPend) subPend.textContent = 'nenhuma pendencia no momento';
+      const badgeP0 = document.getElementById('badgePendencias');
+      if (badgeP0) badgeP0.style.display = 'none';
       el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px 0;color:var(--green);">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         <span style="font-size:13px;font-weight:600;">Sem pendências — tudo entregue!</span>
@@ -3365,9 +3381,8 @@ async function carregarPendenciasUniforme() {
     }
 
     // agrupa por colaborador
-    if (subPend) subPend.textContent = pends.length + ' item' + (pends.length > 1 ? 's' : '') + ' aguardando entrega';
-    _abrirPainelSecao('secPendencias');
-
+    const badgeP = document.getElementById('badgePendencias');
+    if (badgeP) { badgeP.textContent = pends.length + ' item' + (pends.length > 1 ? 's' : ''); badgeP.style.display = ''; }
     const porColab = new Map();
     for (const p of pends) {
       const cid = p.colaborador_id;
