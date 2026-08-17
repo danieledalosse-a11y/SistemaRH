@@ -1051,12 +1051,12 @@
 </div>
 
 <div class="modal-overlay" id="modalEntrega">
-  <div class="modal" style="max-width:600px;">
+  <div class="modal" style="max-width:640px;max-height:92vh;display:flex;flex-direction:column;">
     <div class="modal-hdr">
       <span class="modal-title">Registrar entrega</span>
       <button class="modal-close" onclick="fecharModalEntrega()">×</button>
     </div>
-    <div class="modal-body" style="padding:10px 16px 2px;">
+    <div class="modal-body" style="padding:10px 16px 2px;overflow-y:auto;flex:1;min-height:0;">
 
       <!-- cabeçalho colaborador -->
       <div style="background:var(--bg);border-radius:8px;padding:6px 12px;margin-bottom:6px;font-size:12px;display:flex;align-items:center;gap:8px;">
@@ -1094,7 +1094,7 @@
             <option value="">Selecione o kit…</option>
           </select>
         </div>
-        <div id="kitEntregaLista"></div>
+        <div id="kitEntregaLista" style="max-height:280px;overflow-y:auto;border:1px solid var(--border-light);border-radius:8px;"></div>
         <div id="kitEntregaVazio" style="display:none;text-align:center;padding:24px 16px;color:var(--text-ter);font-size:13px;">
           Nenhum kit cadastrado.<br>
           <span style="font-size:12px;">Configure em <strong>Kits por Cargo</strong> antes de usar esta opção.</span>
@@ -2566,36 +2566,33 @@ function renderKitEntregaLista() {
            style="padding:6px 10px;font-size:13px;min-width:110px;">`;
 
     return `
-    <div id="kitRow-${idx}" style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border-light);">
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
-          ${tipoBadge}
-          <span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.nome}</span>
-          ${item.variante ? `<span style="font-size:12px;color:var(--text-sec);white-space:nowrap;">· ${item.variante}</span>` : ''}
-        </div>
+    <div id="kitRow-${idx}" style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border-light);border-left:3px solid transparent;border-radius:4px;transition:background .15s,border-color .15s;">
+      <div style="flex:1;min-width:0;display:flex;align-items:center;gap:7px;">
+        ${tipoBadge}
+        <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.nome}</span>
+        ${item.variante ? `<span style="font-size:11px;color:var(--text-sec);white-space:nowrap;">· ${item.variante}</span>` : ''}
       </div>
-      <div id="kitRowCtrls-${idx}" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <div id="kitRowCtrls-${idx}" style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
         ${tamSelect}
         <input class="form-input" id="kitQtd-${idx}" type="number" value="${k.quantidade||1}" min="1"
-          style="padding:6px 8px;font-size:13px;text-align:center;width:60px;">
-        <button onclick="toggleKitPendente(${idx})" id="kitBtnPend-${idx}"
-          title="Marcar como não disponível / pendente"
-          style="background:none;border:1.5px solid #FDE68A;border-radius:6px;cursor:pointer;color:#92400E;padding:4px 8px;font-size:11px;font-weight:600;white-space:nowrap;transition:all .15s;"
-          onmouseover="this.style.background='#FFFBEB'" onmouseout="this.style.background=''">⚠ Pendente</button>
+          style="padding:5px 6px;font-size:13px;text-align:center;width:52px;">
+        <button onclick="toggleKitPendente(${idx})" title="Sem tamanho disponível? Marcar como pendente"
+          style="background:none;border:none;cursor:pointer;color:#D97706;padding:4px 6px;font-size:18px;line-height:1;transition:color .15s;flex-shrink:0;"
+          onmouseover="this.style.color='#B45309'" onmouseout="this.style.color='#D97706'">⚠</button>
         <button onclick="removerItemKitEntrega(${idx})" title="Remover deste lançamento"
           style="background:none;border:none;cursor:pointer;color:var(--text-ter);padding:4px;line-height:1;font-size:18px;transition:color .15s;"
           onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-ter)'">×</button>
       </div>
-      <div id="kitRowPend-${idx}" style="display:none;flex-shrink:0;align-items:center;gap:8px;">
-        <select id="kitPendMotivo-${idx}" class="form-input" style="padding:6px 10px;font-size:13px;min-width:180px;">
+      <div id="kitRowPend-${idx}" style="display:none;flex-shrink:0;align-items:center;gap:6px;">
+        <select id="kitPendMotivo-${idx}" class="form-input" style="padding:5px 8px;font-size:12px;min-width:160px;border-color:#FCD34D;background:#FFFBEB;color:#92400E;font-weight:500;">
           <option value="sem_estoque">Sem estoque</option>
-          <option value="sem_numeracao">Tamanho não disponível</option>
-          <option value="entregar_depois">A entregar futuramente</option>
+          <option value="sem_numeracao">Tamanho indisponível</option>
+          <option value="entregar_depois">Entregar depois</option>
           <option value="outro">Outro motivo</option>
         </select>
-        <button onclick="toggleKitPendente(${idx})"
-          style="background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-sec);padding:4px 8px;font-size:11px;font-weight:600;transition:all .15s;"
-          onmouseover="this.style.background='var(--bg-sub)'" onmouseout="this.style.background=''">↩ Cancelar</button>
+        <button onclick="toggleKitPendente(${idx})" title="Desfazer"
+          style="background:none;border:none;cursor:pointer;color:var(--text-sec);padding:4px 6px;font-size:18px;line-height:1;transition:color .15s;flex-shrink:0;"
+          onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-sec)'">↩</button>
         <button onclick="removerItemKitEntrega(${idx})" title="Remover deste lançamento"
           style="background:none;border:none;cursor:pointer;color:var(--text-ter);padding:4px;line-height:1;font-size:18px;transition:color .15s;"
           onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-ter)'">×</button>
@@ -2614,22 +2611,23 @@ function removerItemKitEntrega(idx) {
 
 function toggleKitPendente(idx) {
   const isPend = _kitItensPendentesIdx.has(idx);
+  const row    = document.getElementById(`kitRow-${idx}`);
   const ctrls  = document.getElementById(`kitRowCtrls-${idx}`);
   const pend   = document.getElementById(`kitRowPend-${idx}`);
   if (!ctrls || !pend) return;
 
   if (isPend) {
-    // desfazer pendente
     _kitItensPendentesIdx.delete(idx);
     delete _kitItensPendenteMotivo[idx];
     ctrls.style.display = 'flex';
     pend.style.display  = 'none';
+    if (row) { row.style.background = ''; row.style.borderLeftColor = 'transparent'; }
   } else {
-    // marcar como pendente
     _kitItensPendentesIdx.add(idx);
     _kitItensPendenteMotivo[idx] = 'sem_estoque';
     ctrls.style.display = 'none';
     pend.style.display  = 'flex';
+    if (row) { row.style.background = '#FFFBEB'; row.style.borderLeftColor = '#F59E0B'; }
   }
 }
 
