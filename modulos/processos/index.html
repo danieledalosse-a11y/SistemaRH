@@ -268,7 +268,7 @@
 
   <!-- Aba Concluídos -->
   <div class="tab-panel" id="panel-concluidos">
-    <div style="margin-bottom:14px;">
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
       <select id="filtroConcluidos" onchange="_recarregarConcluidos()"
         style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;outline:none;font-family:inherit;">
         <option value="30">Últimos 30 dias</option>
@@ -276,6 +276,11 @@
         <option value="90">Últimos 90 dias</option>
         <option value="9999">Todos</option>
       </select>
+      <div style="flex:1;min-width:180px;position:relative;">
+        <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-ter);pointer-events:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="buscaConcluidos" type="text" placeholder="Buscar por colaborador…" oninput="_filtrarHistorico('concluidos')"
+          style="width:100%;padding:8px 12px 8px 30px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;outline:none;font-family:inherit;">
+      </div>
     </div>
     <div id="concluidosConteudo">
       <div class="loading"><div class="spinner"></div> Carregando histórico...</div>
@@ -284,7 +289,7 @@
 
   <!-- Aba Cancelados -->
   <div class="tab-panel" id="panel-cancelados">
-    <div style="margin-bottom:14px;">
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
       <select id="filtroCancelados" onchange="_recarregarCancelados()"
         style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;outline:none;font-family:inherit;">
         <option value="30">Últimos 30 dias</option>
@@ -292,6 +297,11 @@
         <option value="90">Últimos 90 dias</option>
         <option value="9999">Todos</option>
       </select>
+      <div style="flex:1;min-width:180px;position:relative;">
+        <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-ter);pointer-events:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="buscaCancelados" type="text" placeholder="Buscar por colaborador…" oninput="_filtrarHistorico('cancelados')"
+          style="width:100%;padding:8px 12px 8px 30px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;outline:none;font-family:inherit;">
+      </div>
     </div>
     <div id="canceladosConteudo">
       <div class="empty-state">
@@ -533,21 +543,17 @@ async function carregarCancelados() {
   const el = document.getElementById('canceladosConteudo');
   const dias = parseInt(document.getElementById('filtroCancelados')?.value || '30');
   const dataCorte = dias < 9999 ? (() => { const d = new Date(); d.setDate(d.getDate() - dias); return d.toISOString().slice(0,10); })() : null;
-  const filtroData = dataCorte ? `&atualizado_em=gte.${dataCorte}` : '';
+  const filtroData = dataCorte ? '&atualizado_em=gte.' + dataCorte : '';
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/processos_rh?status=eq.cancelado&select=*,processos_checklist(*)&order=criado_em.desc&limit=200${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}${filtroData}`,
+      SB_URL + '/rest/v1/processos_rh?status=eq.cancelado&select=*,processos_checklist(*)&order=atualizado_em.desc&limit=200' + (USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : '') + filtroData,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar');
-    const processos = await r.json();
-    if (!processos.length) {
-      el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⊘</div><div class="empty-state-title">Nenhum processo cancelado</div></div>`;
-      return;
-    }
-    el.innerHTML = `<div class="processos-lista">${processos.map(p => buildCardCancelado(p)).join('')}</div>`;
+    _cacheCancelados = await r.json();
+    _renderHistorico('cancelados', _cacheCancelados);
   } catch(e) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-desc">${e.message}</div></div>`;
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-desc">' + e.message + '</div></div>';
   }
 }
 
@@ -1030,7 +1036,7 @@ async function confirmarCancelamento() {
     const extras = { ...(proc.dados_extras || {}), motivo_cancelamento: motivo };
     await fetch(`${SB_URL}/rest/v1/processos_rh?id=eq.${_cancelandoId}`, {
       method: 'PATCH', headers: SB_HEADERS,
-      body: JSON.stringify({ status: 'cancelado', dados_extras: extras })
+      body: JSON.stringify({ status: 'cancelado', atualizado_em: new Date().toISOString(), dados_extras: extras })
     });
 
     // Se era demissão: limpar data_demissao e reativar colaborador
@@ -1303,7 +1309,7 @@ async function cancelarProcesso(processoId) {
     const r = await fetch(`${SB_URL}/rest/v1/processos_rh?id=eq.${processoId}`, {
       method: 'PATCH',
       headers: SB_HEADERS,
-      body: JSON.stringify({ status: 'cancelado', updated_at: new Date().toISOString() })
+      body: JSON.stringify({ status: 'cancelado', atualizado_em: new Date().toISOString() })
     });
     if (!r.ok) throw new Error('Erro ao cancelar');
     showToast('Processo cancelado.', '');
@@ -1323,6 +1329,42 @@ async function cancelarProcesso(processoId) {
 }
 
 // ─── Aba Concluídos ───────────────────────────────────────────────
+let _cacheConcluidos = [];
+let _cacheCancelados = [];
+
+function _filtrarHistorico(aba) {
+  const id = aba === 'concluidos' ? 'buscaConcluidos' : 'buscaCancelados';
+  const q = (document.getElementById(id)?.value || '').toLowerCase().trim();
+  const cache = aba === 'concluidos' ? _cacheConcluidos : _cacheCancelados;
+  const filtrados = q ? cache.filter(p => (p.colaborador_nome || '').toLowerCase().includes(q)) : cache;
+  _renderHistorico(aba, filtrados);
+}
+
+function _renderHistorico(aba, processos) {
+  const elId = aba === 'concluidos' ? 'concluidosConteudo' : 'canceladosConteudo';
+  const el = document.getElementById(elId);
+  if (!processos.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📂</div><div class="empty-state-title">Nenhum resultado</div></div>';
+    return;
+  }
+  if (aba === 'concluidos') {
+    const rows = processos.map(p => {
+      const cfg = TIPO_CONFIG[p.tipo] || { label: p.tipo, icon: '📄' };
+      return '<div class="concluido-row">' +
+        '<div class="concluido-tipo">' + cfg.icon + '</div>' +
+        '<div class="concluido-info">' +
+          '<div class="concluido-nome">' + (p.colaborador_nome || '—') + '</div>' +
+          '<div class="concluido-meta">' + cfg.label + ' · Concluído em ' + fmtDataHora(p.concluido_em) + '</div>' +
+        '</div>' +
+        '<span class="badge-status badge-concluido">Concluído</span>' +
+      '</div>';
+    }).join('');
+    el.innerHTML = '<div class="concluidos-list">' + rows + '</div>';
+  } else {
+    el.innerHTML = '<div class="processos-lista">' + processos.map(p => buildCardCancelado(p)).join('') + '</div>';
+  }
+}
+
 async function _recarregarConcluidos() {
   concluidosCarregados = false;
   await carregarConcluidos();
@@ -1333,35 +1375,17 @@ async function carregarConcluidos() {
   const el = document.getElementById('concluidosConteudo');
   const dias = parseInt(document.getElementById('filtroConcluidos')?.value || '30');
   const dataCorte = dias < 9999 ? (() => { const d = new Date(); d.setDate(d.getDate() - dias); return d.toISOString().slice(0,10); })() : null;
-  const filtroData = dataCorte ? `&updated_at=gte.${dataCorte}` : '';
+  const filtroData = dataCorte ? '&atualizado_em=gte.' + dataCorte : '';
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/processos_rh?status=eq.concluido&select=*&order=updated_at.desc&limit=200${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}${filtroData}`,
+      SB_URL + '/rest/v1/processos_rh?status=eq.concluido&select=*&order=atualizado_em.desc&limit=200' + (USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : '') + filtroData,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar histórico');
-    const processos = await r.json();
-    if (!processos.length) {
-      el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📂</div><div class="empty-state-title">Sem histórico ainda</div></div>`;
-      return;
-    }
-    const rows = processos.map(p => {
-      const cfg = TIPO_CONFIG[p.tipo] || { label: p.tipo, icon: '📄' };
-      const badge = p.status === 'concluido'
-        ? `<span class="badge-status badge-concluido">Concluído</span>`
-        : `<span class="badge-status badge-cancelado">Cancelado</span>`;
-      return `<div class="concluido-row">
-        <div class="concluido-tipo">${cfg.icon}</div>
-        <div class="concluido-info">
-          <div class="concluido-nome">${p.colaborador_nome || '—'}</div>
-          <div class="concluido-meta">${cfg.label} · ${p.status === 'concluido' ? 'Concluído em ' + fmtDataHora(p.concluido_em) : 'Cancelado'}</div>
-        </div>
-        ${badge}
-      </div>`;
-    }).join('');
-    el.innerHTML = `<div class="concluidos-list">${rows}</div>`;
+    _cacheConcluidos = await r.json();
+    _renderHistorico('concluidos', _cacheConcluidos);
   } catch(e) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erro ao carregar</div><div class="empty-state-desc">${e.message}</div></div>`;
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erro ao carregar</div><div class="empty-state-desc">' + e.message + '</div></div>';
   }
 }
 
