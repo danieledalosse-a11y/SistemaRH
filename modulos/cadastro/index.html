@@ -1543,7 +1543,9 @@ function supabaseToJS(row) {
     primeiroEmprego:  !!row.primeiro_emprego,
     comissionado:     !!row.comissionado,
     indicado_por_id:  row.indicado_por_id || null,
-    indicacao_bonus_gerado: !!row.indicacao_bonus_gerado,
+    indicacao_bonus_gerado:  !!row.indicacao_bonus_gerado,
+    prorrogacao_45_gerado:   !!row.prorrogacao_45_gerado,
+    avaliacao_90_gerado:     !!row.avaliacao_90_gerado,
     cbo:              row.cbo || '',
     jornada:          row.jornada || '',
     tipoAdmissao:     row.tipo_admissao || '',
@@ -1731,6 +1733,109 @@ function voltarParaEmpresas() {
   renderTelaEmpresas();
 }
 
+async function verificarExperienciaWorkflows() {
+  try {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const perfil = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}'); } catch(_) { return {}; } })();
+
+    for (const c of COLABORADORES) {
+      if (!c.em_experiencia || c.data_demissao || !c.data_admissao || c.proLabore) continue;
+
+      const adm = new Date(c.data_admissao + 'T00:00:00');
+
+      // ── Workflow 1: avaliação dos 45 dias ─────────────────────────────────
+      if (!c.prorrogacao_45_gerado) {
+        const dias1 = c.periodoExp ? parseInt(c.periodoExp) : 45;
+        const fim45 = new Date(adm);
+        fim45.setDate(fim45.getDate() + dias1);
+        const restantes45 = Math.ceil((fim45 - hoje) / 86400000);
+        if (restantes45 >= 0 && restantes45 <= 7) {
+          const rP = await fetch(`${SB_URL_CAD}/rest/v1/processos_rh`, {
+            method: 'POST',
+            headers: { ...headers, 'Prefer': 'return=representation' },
+            body: JSON.stringify({
+              tipo: 'prorrogacao_experiencia',
+              colaborador_id: c._sbId,
+              colaborador_nome: c.nome,
+              criado_por: perfil.nome || 'RH',
+              dados_extras: {
+                data_admissao: c.data_admissao,
+                fim_45_dias: fim45.toISOString().split('T')[0],
+                dias_restantes: restantes45,
+              },
+            })
+          });
+          if (rP.ok) {
+            const [proc] = await rP.json();
+            const itens = [
+              { item: `Avaliar colaborador ${c.nome} — 1º período de experiência vence em ${fim45.toLocaleDateString('pt-BR')}`, prazo_dias: Math.max(restantes45, 1) },
+              { item: 'Comunicar decisão ao gestor responsável', prazo_dias: Math.max(restantes45, 1) },
+              { item: 'Prorrogar contrato por mais 45 dias OU iniciar processo de desligamento', prazo_dias: Math.max(restantes45, 1) },
+              { item: 'Registrar decisão no cadastro do colaborador', prazo_dias: Math.max(restantes45, 1) + 1 },
+            ];
+            await fetch(`${SB_URL_CAD}/rest/v1/processos_checklist`, {
+              method: 'POST', headers,
+              body: JSON.stringify(itens.map((it, i) => ({ processo_id: proc.id, item: it.item, prazo_dias: it.prazo_dias, ordem: i, concluido: false })))
+            });
+            await fetch(`${SB_URL_CAD}/rest/v1/colaboradores?id=eq.${c._sbId}`, {
+              method: 'PATCH', headers,
+              body: JSON.stringify({ prorrogacao_45_gerado: true })
+            });
+            c.prorrogacao_45_gerado = true;
+            mostrarToast(`📋 Workflow criado: avaliação de experiência (45 dias) — ${c.nome}`);
+          }
+        }
+      }
+
+      // ── Workflow 2: avaliação final dos 90 dias ───────────────────────────
+      if (!c.avaliacao_90_gerado) {
+        const fim90Str = c.fimExperiencia;
+        const fim90 = fim90Str
+          ? new Date(fim90Str + 'T00:00:00')
+          : (() => { const d = new Date(adm); d.setDate(d.getDate() + 90); return d; })();
+        const restantes90 = Math.ceil((fim90 - hoje) / 86400000);
+        if (restantes90 >= 0 && restantes90 <= 7) {
+          const rP = await fetch(`${SB_URL_CAD}/rest/v1/processos_rh`, {
+            method: 'POST',
+            headers: { ...headers, 'Prefer': 'return=representation' },
+            body: JSON.stringify({
+              tipo: 'avaliacao_final_experiencia',
+              colaborador_id: c._sbId,
+              colaborador_nome: c.nome,
+              criado_por: perfil.nome || 'RH',
+              dados_extras: {
+                data_admissao: c.data_admissao,
+                fim_experiencia: fim90.toISOString().split('T')[0],
+                dias_restantes: restantes90,
+              },
+            })
+          });
+          if (rP.ok) {
+            const [proc] = await rP.json();
+            const itens = [
+              { item: `Avaliação final de ${c.nome} — experiência vence em ${fim90.toLocaleDateString('pt-BR')}`, prazo_dias: Math.max(restantes90, 1) },
+              { item: 'Comunicar decisão ao gestor responsável', prazo_dias: Math.max(restantes90, 1) },
+              { item: 'Efetivar como contrato por prazo indeterminado OU iniciar processo de desligamento', prazo_dias: Math.max(restantes90, 1) },
+              { item: 'Atualizar tipo de contrato no cadastro do colaborador', prazo_dias: Math.max(restantes90, 1) + 1 },
+            ];
+            await fetch(`${SB_URL_CAD}/rest/v1/processos_checklist`, {
+              method: 'POST', headers,
+              body: JSON.stringify(itens.map((it, i) => ({ processo_id: proc.id, item: it.item, prazo_dias: it.prazo_dias, ordem: i, concluido: false })))
+            });
+            await fetch(`${SB_URL_CAD}/rest/v1/colaboradores?id=eq.${c._sbId}`, {
+              method: 'PATCH', headers,
+              body: JSON.stringify({ avaliacao_90_gerado: true })
+            });
+            c.avaliacao_90_gerado = true;
+            mostrarToast(`📋 Workflow criado: avaliação final de experiência (90 dias) — ${c.nome}`);
+          }
+        }
+      }
+    }
+  } catch(e) { console.error('Erro verificarExperienciaWorkflows:', e); }
+}
+
 async function verificarBonusIndicacao() {
   try {
     const hoje = new Date();
@@ -1805,6 +1910,7 @@ async function carregarDoSupabase() {
     atualizarNotificacoes();
 
     verificarBonusIndicacao();
+    verificarExperienciaWorkflows();
     // verificar redirect de efetivação (banner controlado por efetivacaoPendente em abrirFicha)
     const _efId = new URLSearchParams(window.location.search).get('efetivar');
     if (_efId) {
