@@ -1731,6 +1731,51 @@ function voltarParaEmpresas() {
   renderTelaEmpresas();
 }
 
+async function verificarBonusIndicacao() {
+  try {
+    const hoje = new Date();
+    const candidatos = COLABORADORES.filter(c =>
+      c.indicado_por_id && !c.indicacao_bonus_gerado && !c.data_demissao && c.data_admissao
+    );
+    for (const c of candidatos) {
+      const adm = new Date(c.data_admissao);
+      const fim90 = new Date(adm);
+      fim90.setDate(fim90.getDate() + 90);
+      const diasRestantes = Math.ceil((fim90 - hoje) / 86400000);
+      if (diasRestantes > 15) continue;
+      const perfil = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}'); } catch(_) { return {}; } })();
+      const rProc = await fetch(`${SB_URL_CAD}/rest/v1/processos_rh`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          tipo: 'bonus_indicacao',
+          colaborador_id: c._sbId,
+          colaborador_nome: c.nome,
+          criado_por: perfil.nome || 'RH',
+          dados_extras: { data_admissao: c.data_admissao, fim_90_dias: fim90.toISOString().split('T')[0], dias_restantes: diasRestantes, indicado_por_id: c.indicado_por_id },
+        })
+      });
+      if (!rProc.ok) continue;
+      const [proc] = await rProc.json();
+      const checklist = [
+        { item: `Verificar indicação: colaborador completa 90 dias em ${fim90.toLocaleDateString('pt-BR')}`, prazo_dias: Math.max(diasRestantes, 1) },
+        { item: 'Confirmar pagamento de bônus de indicação na folha', prazo_dias: Math.max(diasRestantes, 1) + 5 },
+        { item: 'Comunicar indicador sobre o pagamento', prazo_dias: Math.max(diasRestantes, 1) + 5 },
+      ];
+      await fetch(`${SB_URL_CAD}/rest/v1/processos_checklist`, {
+        method: 'POST', headers,
+        body: JSON.stringify(checklist.map((it, i) => ({ processo_id: proc.id, item: it.item, prazo_dias: it.prazo_dias, ordem: i, concluido: false })))
+      });
+      await fetch(`${SB_URL_CAD}/rest/v1/colaboradores?id=eq.${c._sbId}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ indicacao_bonus_gerado: true })
+      });
+      c.indicacao_bonus_gerado = true;
+      mostrarToast(`⭐ Workflow criado: bônus de indicação de ${c.nome} (faltam ${diasRestantes} dias)`);
+    }
+  } catch(e) { console.error('Erro verificarBonusIndicacao:', e); }
+}
+
 async function carregarDoSupabase() {
   setLoadingMsg('Buscando colaboradores...');
   try {
@@ -1759,6 +1804,7 @@ async function carregarDoSupabase() {
     document.getElementById('statusConexao').textContent = `${ativos} colaboradores ativos`;
     atualizarNotificacoes();
 
+    verificarBonusIndicacao();
     // verificar redirect de efetivação (banner controlado por efetivacaoPendente em abrirFicha)
     const _efId = new URLSearchParams(window.location.search).get('efetivar');
     if (_efId) {
