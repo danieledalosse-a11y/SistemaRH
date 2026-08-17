@@ -2512,13 +2512,17 @@ function renderKitEntrega() {
   renderKitEntregaLista();
 }
 
-let _kitItensRemovidosIdx = new Set();
+let _kitItensRemovidosIdx  = new Set();
+let _kitItensPendentesIdx  = new Set();   // itens marcados como "não disponível"
+let _kitItensPendenteMotivo = {};         // idx → motivo_pendencia
 
 function renderKitEntregaLista() {
   const lista    = document.getElementById('kitEntregaLista');
   const vazio    = document.getElementById('kitEntregaVazio');
   const itensKit = _kitDoColab();
-  _kitItensRemovidosIdx = new Set();
+  _kitItensRemovidosIdx   = new Set();
+  _kitItensPendentesIdx   = new Set();
+  _kitItensPendenteMotivo = {};
 
   if (!itensKit.length) {
     lista.innerHTML = '';
@@ -2570,10 +2574,28 @@ function renderKitEntregaLista() {
           ${item.variante ? `<span style="font-size:12px;color:var(--text-sec);white-space:nowrap;">· ${item.variante}</span>` : ''}
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <div id="kitRowCtrls-${idx}" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
         ${tamSelect}
         <input class="form-input" id="kitQtd-${idx}" type="number" value="${k.quantidade||1}" min="1"
           style="padding:6px 8px;font-size:13px;text-align:center;width:60px;">
+        <button onclick="toggleKitPendente(${idx})" id="kitBtnPend-${idx}"
+          title="Marcar como não disponível / pendente"
+          style="background:none;border:1.5px solid #FDE68A;border-radius:6px;cursor:pointer;color:#92400E;padding:4px 8px;font-size:11px;font-weight:600;white-space:nowrap;transition:all .15s;"
+          onmouseover="this.style.background='#FFFBEB'" onmouseout="this.style.background=''">⚠ Pendente</button>
+        <button onclick="removerItemKitEntrega(${idx})" title="Remover deste lançamento"
+          style="background:none;border:none;cursor:pointer;color:var(--text-ter);padding:4px;line-height:1;font-size:18px;transition:color .15s;"
+          onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-ter)'">×</button>
+      </div>
+      <div id="kitRowPend-${idx}" style="display:none;flex-shrink:0;align-items:center;gap:8px;">
+        <select id="kitPendMotivo-${idx}" class="form-input" style="padding:6px 10px;font-size:13px;min-width:180px;">
+          <option value="sem_estoque">Sem estoque</option>
+          <option value="sem_numeracao">Tamanho não disponível</option>
+          <option value="entregar_depois">A entregar futuramente</option>
+          <option value="outro">Outro motivo</option>
+        </select>
+        <button onclick="toggleKitPendente(${idx})"
+          style="background:none;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-sec);padding:4px 8px;font-size:11px;font-weight:600;transition:all .15s;"
+          onmouseover="this.style.background='var(--bg-sub)'" onmouseout="this.style.background=''">↩ Cancelar</button>
         <button onclick="removerItemKitEntrega(${idx})" title="Remover deste lançamento"
           style="background:none;border:none;cursor:pointer;color:var(--text-ter);padding:4px;line-height:1;font-size:18px;transition:color .15s;"
           onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-ter)'">×</button>
@@ -2588,6 +2610,27 @@ function removerItemKitEntrega(idx) {
   _kitItensRemovidosIdx.add(idx);
   const row = document.getElementById(`kitRow-${idx}`);
   if (row) row.remove();
+}
+
+function toggleKitPendente(idx) {
+  const isPend = _kitItensPendentesIdx.has(idx);
+  const ctrls  = document.getElementById(`kitRowCtrls-${idx}`);
+  const pend   = document.getElementById(`kitRowPend-${idx}`);
+  if (!ctrls || !pend) return;
+
+  if (isPend) {
+    // desfazer pendente
+    _kitItensPendentesIdx.delete(idx);
+    delete _kitItensPendenteMotivo[idx];
+    ctrls.style.display = 'flex';
+    pend.style.display  = 'none';
+  } else {
+    // marcar como pendente
+    _kitItensPendentesIdx.add(idx);
+    _kitItensPendenteMotivo[idx] = 'sem_estoque';
+    ctrls.style.display = 'none';
+    pend.style.display  = 'flex';
+  }
 }
 
 function onMotivoChange() {
@@ -2725,9 +2768,10 @@ async function salvarEntregaKit() {
   const itensAtivos = itensKit.filter((_, idx) => !_kitItensRemovidosIdx.has(idx));
   if (!itensAtivos.length) { toast('Nenhum item para registrar.'); return; }
 
-  // valida tamanhos dos itens ativos
+  // valida tamanhos dos itens ativos (pula pendentes)
   for (let idx = 0; idx < itensKit.length; idx++) {
     if (_kitItensRemovidosIdx.has(idx)) continue;
+    if (_kitItensPendentesIdx.has(idx)) continue;
     const tam = (document.getElementById(`kitTam-${idx}`)?.value || '').trim();
     if (!tam) {
       const item = ITENS.find(i => i.id == itensKit[idx].item_id);
@@ -2744,31 +2788,55 @@ async function salvarEntregaKit() {
 
   try {
     let entregues = 0;
+    let pendentes = 0;
+    const motivoKit = document.getElementById('eMotivoKit')?.value || 'admissao';
     for (let idx = 0; idx < itensKit.length; idx++) {
       if (_kitItensRemovidosIdx.has(idx)) continue;
-      const k       = itensKit[idx];
-      const tamanho = (document.getElementById(`kitTam-${idx}`).value || '').trim();
-      const qtd     = parseInt(document.getElementById(`kitQtd-${idx}`).value) || 1;
+      const k = itensKit[idx];
 
-      await sbPost('unif_movimentacoes', {
-        colaborador_id:    _colabAtual.id,
-        item_id:           k.item_id,
-        almoxarifado_id:   almoxId,
-        tipo:              'entrega',
-        motivo:            document.getElementById('eMotivoKit')?.value || 'admissao',
-        tamanho,
-        quantidade:        qtd,
-        data_movimentacao: data || new Date().toISOString().split('T')[0],
-        confirmado:        false,
-        registrado_por:    registradoPor,
-        obs:               obs || null,
-      });
-      entregues++;
+      if (_kitItensPendentesIdx.has(idx)) {
+        // grava como "não entregue" com motivo de pendência
+        const motivo_pend = document.getElementById(`kitPendMotivo-${idx}`)?.value || 'sem_estoque';
+        await sbPost('unif_movimentacoes', {
+          colaborador_id:    _colabAtual.id,
+          item_id:           k.item_id,
+          almoxarifado_id:   almoxId,
+          tipo:              'entrega',
+          motivo:            motivoKit,
+          tamanho:           null,
+          quantidade:        0,
+          motivo_pendencia:  motivo_pend,
+          data_movimentacao: data || new Date().toISOString().split('T')[0],
+          confirmado:        false,
+          registrado_por:    registradoPor,
+          obs:               obs || null,
+        });
+        pendentes++;
+      } else {
+        const tamanho = (document.getElementById(`kitTam-${idx}`).value || '').trim();
+        const qtd     = parseInt(document.getElementById(`kitQtd-${idx}`).value) || 1;
+        await sbPost('unif_movimentacoes', {
+          colaborador_id:    _colabAtual.id,
+          item_id:           k.item_id,
+          almoxarifado_id:   almoxId,
+          tipo:              'entrega',
+          motivo:            motivoKit,
+          tamanho,
+          quantidade:        qtd,
+          data_movimentacao: data || new Date().toISOString().split('T')[0],
+          confirmado:        false,
+          registrado_por:    registradoPor,
+          obs:               obs || null,
+        });
+        entregues++;
+      }
     }
 
-    const motivoKit = document.getElementById('eMotivoKit')?.value || 'admissao';
     if (motivoKit === 'admissao') marcarUniformeEntregueNoProcesso(_colabAtual.id);
-    toast(`✓ Kit registrado — ${entregues} ${entregues === 1 ? 'item pendente de confirmação' : 'itens pendentes de confirmação'}`);
+    const partes = [];
+    if (entregues) partes.push(`${entregues} ${entregues === 1 ? 'item registrado' : 'itens registrados'}`);
+    if (pendentes) partes.push(`${pendentes} ${pendentes === 1 ? 'item pendente' : 'itens pendentes'}`);
+    toast(`✓ Kit salvo — ${partes.join(', ')}`);
     fecharModalEntrega();
     carregarHistoricoColab(_colabAtual.id);
   } catch(e) {
