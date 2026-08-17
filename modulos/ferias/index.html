@@ -1843,17 +1843,61 @@ function logoutFerias() {
   window.location.href = '../../login.html';
 }
 
+async function _renovarToken() {
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    if (!sess.refresh_token) return false;
+    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: sess.refresh_token }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    const nova = {
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at:    Date.now() + data.expires_in * 1000,
+      user_id:       data.user?.id || sess.user_id,
+      email:         data.user?.email || sess.email,
+    };
+    localStorage.setItem('sb_session', JSON.stringify(nova));
+    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + data.access_token, 'Content-Type': 'application/json' };
+    return true;
+  } catch(_) { return false; }
+}
+
+async function _sbFetch(url, opts) {
+  let r = await fetch(url, opts);
+  if (!r.ok) {
+    const txt = await r.text();
+    let isExpired = false;
+    try { const j = JSON.parse(txt); isExpired = j.code === 'PGRST303' || (j.message||'').includes('JWT expired'); } catch(_) {}
+    if (isExpired || r.status === 401) {
+      const ok = await _renovarToken();
+      if (!ok) { window.location.href = '../../login.html'; throw new Error('Sessão expirada'); }
+      const extra = opts._extra || {};
+      const newOpts = { ...opts, headers: { ...SB_HEADERS, ...extra } };
+      delete newOpts._extra;
+      r = await fetch(url, newOpts);
+      if (!r.ok) throw new Error(await r.text());
+      return r;
+    }
+    throw new Error(txt);
+  }
+  return r;
+}
+
 async function sbGet(tabela, params) {
-  const url = `${SB_URL}/rest/v1/${tabela}?${params}`;
-  const r = await fetch(url, { headers: SB_HEADERS });
-  if (!r.ok) throw new Error(await r.text());
+  const r = await _sbFetch(`${SB_URL}/rest/v1/${tabela}?${params}`, { headers: SB_HEADERS });
   return r.json();
 }
 
 async function sbPatch(tabela, filtro, dados) {
-  const url = `${SB_URL}/rest/v1/${tabela}?${filtro}`;
-  const r = await fetch(url, { method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(dados) });
-  if (!r.ok) throw new Error(await r.text());
+  const extra = { 'Prefer': 'return=minimal' };
+  await _sbFetch(`${SB_URL}/rest/v1/${tabela}?${filtro}`, {
+    method: 'PATCH', headers: { ...SB_HEADERS, ...extra }, _extra: extra, body: JSON.stringify(dados),
+  });
 }
 
 function setLoadingMsg(msg) {
