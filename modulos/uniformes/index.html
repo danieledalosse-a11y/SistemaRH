@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -445,6 +445,21 @@
           <button onclick="bulkDeselecionarTodos()" style="background:none;border:none;cursor:pointer;font-size:11px;color:#1849A9;padding:0 4px;font-family:inherit;text-decoration:underline;">Limpar seleção</button>
         </div>
 
+        <!-- filtro por data -->
+        <div id="filtroDataBar" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <label style="font-size:12px;font-weight:600;color:var(--text-sec);">Filtrar por data:</label>
+          <input type="date" id="filtroDataInput" onchange="filtrarPorData()"
+            style="font-size:12px;padding:5px 9px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-family:inherit;cursor:pointer;">
+          <button onclick="selecionarTodosDaData()" id="btnSelecionarData"
+            style="display:none;background:#EFF4FF;border:1.5px solid #C7D7FD;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:600;color:#1849A9;cursor:pointer;font-family:inherit;transition:all .15s;"
+            onmouseover="this.style.background='#DBEAFE'" onmouseout="this.style.background='#EFF4FF'">
+            Selecionar todos desta data
+          </button>
+          <button onclick="limparFiltroDatas()" id="btnLimparFiltro"
+            style="display:none;background:none;border:none;cursor:pointer;font-size:11px;color:var(--text-ter);font-family:inherit;text-decoration:underline;">
+            Limpar filtro
+          </button>
+        </div>
         <div class="tbl-wrap">
           <table>
             <thead>
@@ -2344,7 +2359,7 @@ async function carregarHistoricoColab(colabId) {
       const bgStyle = isKitItem ? 'background:var(--bg-sub,#FAFAFA);' : '';
       const plStyle = isKitItem ? 'padding-left:28px;' : '';
       const isPendOuNaoEnt = isPend || isNaoEnt;
-      return `<tr style="${bgStyle}" data-mov-id="${m.id}" data-is-pend="${isPend?'1':'0'}" data-item-id="${m.item_id}" data-tamanho="${m.tamanho||''}" data-qtd="${m.quantidade||0}" data-almox-id="${m.almoxarifado_id||''}">
+      return `<tr style="${bgStyle}" data-mov-id="${m.id}" data-is-pend="${isPend?'1':'0'}" data-confirmado="${m.confirmado?'1':'0'}" data-date="${m.data_movimentacao?.split('T')[0]||''}" data-item-id="${m.item_id}" data-tamanho="${m.tamanho||''}" data-qtd="${m.quantidade||0}" data-almox-id="${m.almoxarifado_id||''}">
         <td style="padding:12px 8px 12px 14px;">
           <input type="checkbox" class="chk-mov" data-id="${m.id}"
             onchange="_atualizarBulkBar()"
@@ -3074,16 +3089,25 @@ function bulkDeselecionarTodos() {
 function bulkExcluir() {
   const chks = _getChksSelecionados();
   if (!chks.length) return;
+  const confirmados = chks.filter(c => c.closest('tr')?.dataset.confirmado === '1');
+  const excluiveis  = chks.filter(c => c.closest('tr')?.dataset.confirmado !== '1');
+  if (!excluiveis.length) {
+    toast('⚠️ Itens já confirmados não podem ser excluídos. Use Estornar.', 4000);
+    return;
+  }
+  const avisoConf = confirmados.length
+    ? `<br><br>⚠️ <strong>${confirmados.length} item(ns) confirmado(s)</strong> foram ignorados — use Estornar para revertê-los.`
+    : '';
   abrirConfirm({
     titulo:   '🗑 Excluir selecionados',
-    mensagem: `Você está prestes a excluir <strong>${chks.length} ${chks.length===1?'registro':'registros'}</strong> permanentemente.<br><br>⚠️ O estoque <strong>não será ajustado</strong> para itens ainda pendentes de confirmação.<br><br>Deseja continuar?`,
-    labelOk:  'Sim, excluir todos',
+    mensagem: `Você está prestes a excluir <strong>${excluiveis.length} ${excluiveis.length===1?'registro':'registros'}</strong> permanentemente.<br><br>⚠️ O estoque <strong>não será ajustado</strong> para itens ainda pendentes de confirmação.${avisoConf}<br><br>Deseja continuar?`,
+    labelOk:  'Sim, excluir',
     callback: async () => {
       let ok = 0;
-      for (const c of chks) {
+      for (const c of excluiveis) {
         const id = c.dataset.id;
         const tr = c.closest('tr');
-        const isPend = tr?.dataset.isPend === '1';
+        const isPend  = tr?.dataset.isPend === '1';
         const almoxId = tr?.dataset.almoxId || '';
         const itemId  = tr?.dataset.itemId  || '';
         const tamanho = tr?.dataset.tamanho || '';
@@ -3092,7 +3116,6 @@ function bulkExcluir() {
           await fetch(`${SB_URL}/rest/v1/unif_movimentacoes?id=eq.${id}`, {
             method: 'DELETE', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
           });
-          // restaura estoque se era entrega confirmada e não-CD
           if (!isPend && qtd > 0 && almoxId && !isCDAlmox(almoxId)) {
             const estoqRows = await sbGet('unif_estoque',
               `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
@@ -3104,9 +3127,43 @@ function bulkExcluir() {
         } catch(_) {}
       }
       toast(`✓ ${ok} ${ok===1?'registro excluído':'registros excluídos'}`);
-      carregarHistoricoColab(_colabAtual.id);
+      await carregarHistoricoColab(_colabAtual.id);
+      _atualizarBulkBar();
     },
   });
+}
+
+
+function filtrarPorData() {
+  const val = document.getElementById('filtroDataInput')?.value || '';
+  const trs = document.querySelectorAll('#tbodyMovColab tr');
+  const btnSel = document.getElementById('btnSelecionarData');
+  const btnLimpar = document.getElementById('btnLimparFiltro');
+  trs.forEach(tr => {
+    if (!val) { tr.style.display = ''; return; }
+    tr.style.display = (tr.dataset.date === val) ? '' : 'none';
+  });
+  if (btnSel) btnSel.style.display = val ? '' : 'none';
+  if (btnLimpar) btnLimpar.style.display = val ? '' : 'none';
+  _atualizarBulkBar();
+}
+
+function selecionarTodosDaData() {
+  const val = document.getElementById('filtroDataInput')?.value || '';
+  if (!val) return;
+  const trs = document.querySelectorAll('#tbodyMovColab tr');
+  trs.forEach(tr => {
+    if (tr.style.display === 'none') return;
+    const chk = tr.querySelector('.chk-mov');
+    if (chk) chk.checked = true;
+  });
+  _atualizarBulkBar();
+}
+
+function limparFiltroDatas() {
+  const inp = document.getElementById('filtroDataInput');
+  if (inp) inp.value = '';
+  filtrarPorData();
 }
 
 async function bulkConfirmar() {
