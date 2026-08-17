@@ -5371,6 +5371,75 @@ let _gestorAlertaAtivo = null;
 let _gestorHistAberto  = new Set();
 let _gestorColabSolicitando = null;
 
+function _addOneYear(dateStr) {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return `${y + 1}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function processGestorFerias(rows) {
+  const periodos    = [];
+  const lancamentos = [];
+
+  rows.forEach(row => {
+    const periodo = {
+      id:            row.id,
+      colaborador_id: row.colaborador_id,
+      pa_inicio:     row.pa_inicio,
+      pa_fim:        row.pa_fim,
+      data_fim_gozo: _addOneYear(row.pa_fim),
+      dias_direito:  30,
+      _feriasRow:    row,
+    };
+    periodos.push(periodo);
+
+    // período 1
+    if (row.periodo1_inicio && Number(row.dias1) > 0) {
+      lancamentos.push({
+        id:            `${row.id}-p1`,
+        colaborador_id: row.colaborador_id,
+        periodo_id:    row.id,
+        data_inicio:   row.periodo1_inicio,
+        data_fim:      row.periodo1_fim || row.periodo1_inicio,
+        dias:          Number(row.dias1),
+        status:        (row.status || 'aprovado').toLowerCase(),
+      });
+    }
+
+    // período 2
+    if (row.periodo2_inicio && Number(row.dias2) > 0) {
+      lancamentos.push({
+        id:            `${row.id}-p2`,
+        colaborador_id: row.colaborador_id,
+        periodo_id:    row.id,
+        data_inicio:   row.periodo2_inicio,
+        data_fim:      row.periodo2_fim || row.periodo2_inicio,
+        dias:          Number(row.dias2),
+        status:        (row.status || 'aprovado').toLowerCase(),
+      });
+    }
+
+    // realizacoes JSONB
+    if (Array.isArray(row.realizacoes)) {
+      row.realizacoes.forEach((r, i) => {
+        if (r.inicio && Number(r.dias) > 0) {
+          lancamentos.push({
+            id:            `${row.id}-r${i}`,
+            colaborador_id: row.colaborador_id,
+            periodo_id:    row.id,
+            data_inicio:   r.inicio,
+            data_fim:      r.fim || r.inicio,
+            dias:          Number(r.dias),
+            status:        (r.status || 'gozado').toLowerCase(),
+          });
+        }
+      });
+    }
+  });
+
+  return { periodos, lancamentos };
+}
+
 async function initGestor() {
   // Esconde elementos do RH
   ['sec-visao-rh','sec-lancar','sec-minha-equipe','sec-historico'].forEach(id => {
@@ -5398,10 +5467,8 @@ async function initGestor() {
 
     const ids = GESTOR_COLABS.map(c => c.id).join(',');
     setGestorMsg('Buscando férias da equipe...');
-    const [periodos, lancamentos] = await Promise.all([
-      sbGet('ferias_periodos',    `colaborador_id=in.(${ids})&select=*&order=data_inicio.desc`),
-      sbGet('ferias_lancamentos', `colaborador_id=in.(${ids})&select=*&order=data_inicio.desc`),
-    ]);
+    const feriasRows = await sbGet('ferias', `colaborador_id=in.(${ids})&select=*&order=colaborador_id,ano`);
+    const { periodos, lancamentos } = processGestorFerias(feriasRows);
     GESTOR_PERIODOS    = periodos;
     GESTOR_LANCAMENTOS = lancamentos;
 
@@ -5751,28 +5818,49 @@ async function gestorEnviarSolicitacao() {
   if (diasVal > saldo) { toast('Dias ultrapassam o saldo disponível.'); return; }
 
   const fim = retorno || addDays(inicio, diasVal - 1);
-  const payload = {
-    colaborador_id: colab.id,
-    periodo_id:     periodo.id,
-    data_inicio:    inicio,
-    data_fim:       fim,
-    dias:           diasVal,
-    status:         'solicitado',
-    solicitado_por: GESTOR_NOME_USUARIO,
-  };
 
   try {
     const btn = document.getElementById('mgBtnEnviar');
     btn.disabled = true; btn.textContent = 'Enviando...';
-    const url = `${SB_URL}/rest/v1/ferias_lancamentos`;
+
+    const feriasId = periodo.id;
+    const row = periodo._feriasRow || {};
+    let patchData;
+    let slotKey;
+    if (!row.periodo1_inicio) {
+      patchData = { periodo1_inicio: inicio, periodo1_fim: fim, dias1: diasVal,
+                    obs_gestor: `Solicitado por: ${GESTOR_NOME_USUARIO}`, status: 'Solicitado' };
+      slotKey = 'p1';
+    } else if (!row.periodo2_inicio) {
+      patchData = { periodo2_inicio: inicio, periodo2_fim: fim, dias2: diasVal,
+                    obs_gestor: `Solicitado por: ${GESTOR_NOME_USUARIO}`, status: 'Solicitado' };
+      slotKey = 'p2';
+    } else {
+      toast('Ambos os períodos já estão preenchidos para este PA. Contate o RH.');
+      btn.disabled = false; btn.textContent = 'Enviar para RH aprovar';
+      return;
+    }
+
+    const url = `${SB_URL}/rest/v1/ferias?id=eq.${feriasId}`;
     const r = await fetch(url, {
-      method:  'POST',
+      method:  'PATCH',
       headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
-      body:    JSON.stringify(payload),
+      body:    JSON.stringify(patchData),
     });
     if (!r.ok) throw new Error(await r.text());
-    const [novo] = await r.json();
-    GESTOR_LANCAMENTOS.push(novo);
+
+    // atualiza estado local
+    const pIdx = GESTOR_PERIODOS.findIndex(p => p.id === feriasId);
+    if (pIdx !== -1) GESTOR_PERIODOS[pIdx]._feriasRow = { ...row, ...patchData };
+    GESTOR_LANCAMENTOS.push({
+      id:             `${feriasId}-${slotKey}`,
+      colaborador_id: colab.id,
+      periodo_id:     feriasId,
+      data_inicio:    inicio,
+      data_fim:       fim,
+      dias:           diasVal,
+      status:         'solicitado',
+    });
     fecharModalGestor();
     renderGestorAlerts();
     renderGestorAtencao();
