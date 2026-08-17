@@ -202,24 +202,28 @@
 </div>
 
 <script>
-(function() {
-  const sess = localStorage.getItem('sb_session');
-  const perf = localStorage.getItem('sb_perfil');
-  if (!sess) { window.location.href = 'login.html'; return; }
+// ── 1. Verificação de sessão (redireciona apenas se não autenticado) ──
+const _sess = localStorage.getItem('sb_session');
+if (!_sess) { window.location.href = 'login.html'; }
+else {
   try {
-    const s = JSON.parse(sess);
-    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = 'login.html'; return; }
-    const p = perf ? JSON.parse(perf) : {};
-    const nome = p.nome || s.email || '';
-    const iniciais = nome.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+    const _s = JSON.parse(_sess);
+    if (_s.expires_at < Date.now()) { localStorage.clear(); window.location.href = 'login.html'; }
+  } catch(_) { localStorage.clear(); window.location.href = 'login.html'; }
+}
+
+// ── 2. UI e RBAC (nunca redireciona — erros aqui não são falha de auth) ──
+(function() {
+  try {
+    const s = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    const nome = (p.nome || s.email || '').trim();
+    const iniciais = nome ? nome.split(/\s+/).slice(0,2).map(w => w[0] || '').join('').toUpperCase() : '?';
     document.getElementById('userAvatar').textContent = iniciais;
-    document.getElementById('userName').textContent = nome.split(' ')[0];
+    document.getElementById('userName').textContent = nome.split(/\s+/)[0] || '';
     if (p.perfil === 'admin') document.getElementById('btnParams').style.display = 'flex';
 
-    // Revelar grids (evita flash de conteúdo antes do filtro RBAC)
-    document.querySelectorAll('.modules-grid').forEach(g => g.style.visibility = 'visible');
-
-    // Filtrar cards pelo acesso_modulos (admin vê tudo)
+    // Revelar grids após calcular RBAC (evita flash)
     const acesso = Array.isArray(p.acesso_modulos) ? p.acesso_modulos : [];
     const isAdmin = p.perfil === 'admin';
     if (!isAdmin && acesso.length > 0) {
@@ -237,14 +241,13 @@
           if (el) el.style.display = 'none';
         }
       });
-      // Oculta seção "Módulos disponíveis" se ficou vazia
-      const grid = document.querySelector('.modules-grid');
-      if (grid && !grid.querySelector('a[style!="display: none;"]')) {
-        const label = grid.previousElementSibling;
-        if (label) label.style.display = 'none';
-      }
     }
-  } catch(_) { window.location.href = 'login.html'; }
+    document.querySelectorAll('.modules-grid').forEach(g => g.style.visibility = 'visible');
+  } catch(e) {
+    // Erro de UI — revela grids mesmo assim, não redireciona
+    document.querySelectorAll('.modules-grid').forEach(g => g.style.visibility = 'visible');
+    console.error('Erro ao montar home:', e);
+  }
 })();
 
 function logout() {
