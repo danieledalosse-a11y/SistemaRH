@@ -438,10 +438,22 @@
           </div>
         </div>
 
+        <!-- barra de ações em lote — aparece quando há seleção -->
+        <div id="bulkBar" style="display:none;align-items:center;gap:10px;padding:8px 14px;margin-bottom:8px;background:#EFF4FF;border:1.5px solid #C7D7FD;border-radius:10px;flex-wrap:wrap;">
+          <span id="bulkCount" style="font-size:13px;font-weight:600;color:#1849A9;flex:1;"></span>
+          <button onclick="bulkConfirmar()" id="bulkBtnConfirmar" style="display:none;background:#ECFDF3;border:1.5px solid #6EE7B7;border-radius:7px;padding:5px 14px;font-size:12px;font-weight:600;color:#027A48;cursor:pointer;font-family:inherit;transition:all .15s;" onmouseover="this.style.background='#D1FAE5'" onmouseout="this.style.background='#ECFDF3'">✓ Confirmar entrega</button>
+          <button onclick="bulkExcluir()" style="background:#FEF2F2;border:1.5px solid #FECACA;border-radius:7px;padding:5px 14px;font-size:12px;font-weight:600;color:#B91C1C;cursor:pointer;font-family:inherit;transition:all .15s;" onmouseover="this.style.background='#FEE2E2'" onmouseout="this.style.background='#FEF2F2'">🗑 Excluir selecionados</button>
+          <button onclick="bulkDeselecionarTodos()" style="background:none;border:none;cursor:pointer;font-size:11px;color:#1849A9;padding:0 4px;font-family:inherit;text-decoration:underline;">Limpar seleção</button>
+        </div>
+
         <div class="tbl-wrap">
           <table>
             <thead>
               <tr>
+                <th style="width:36px;padding:10px 8px 10px 14px;">
+                  <input type="checkbox" id="chkSelectAll" onchange="toggleSelectAllColab(this.checked)"
+                    style="width:15px;height:15px;cursor:pointer;accent-color:#1849A9;">
+                </th>
                 <th>Data</th>
                 <th>Item</th>
                 <th>Tipo</th>
@@ -454,7 +466,7 @@
               </tr>
             </thead>
             <tbody id="tbodyMovColab">
-              <tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma entrega registrada</td></tr>
+              <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-ter);">Nenhuma entrega registrada</td></tr>
             </tbody>
           </table>
         </div>
@@ -2287,7 +2299,13 @@ async function carregarHistoricoColab(colabId) {
 
       const bgStyle = isKitItem ? 'background:var(--bg-sub,#FAFAFA);' : '';
       const plStyle = isKitItem ? 'padding-left:28px;' : '';
-      return `<tr style="${bgStyle}">
+      const isPendOuNaoEnt = isPend || isNaoEnt;
+      return `<tr style="${bgStyle}" data-mov-id="${m.id}" data-is-pend="${isPend?'1':'0'}" data-item-id="${m.item_id}" data-tamanho="${m.tamanho||''}" data-qtd="${m.quantidade||0}" data-almox-id="${m.almoxarifado_id||''}">
+        <td style="padding:12px 8px 12px 14px;">
+          <input type="checkbox" class="chk-mov" data-id="${m.id}"
+            onchange="_atualizarBulkBar()"
+            style="width:15px;height:15px;cursor:pointer;accent-color:#1849A9;">
+        </td>
         <td style="white-space:nowrap;${plStyle}">${m.data_movimentacao ? m.data_movimentacao.split('T')[0].split('-').reverse().join('/') : '—'}</td>
         <td style="font-weight:600;">${m.item?.nome || '—'}</td>
         <td><span class="badge badge-${m.item?.tipo||'uniforme'}">${m.item?.tipo==='epi'?'EPI':'Uniforme'}</span></td>
@@ -2963,6 +2981,123 @@ async function executarConfirmarEntrega(movId, itemId, tamanho, qtd, almoxId) {
     toast('✓ Entrega confirmada — estoque atualizado');
     carregarHistoricoColab(_colabAtual.id);
   } catch(e) { toast('Erro ao confirmar: ' + e.message); }
+}
+
+// ─── Seleção em lote ─────────────────────────────────────────────────────────
+
+function _getChksSelecionados() {
+  return [...document.querySelectorAll('#tbodyMovColab .chk-mov:checked')];
+}
+
+function _atualizarBulkBar() {
+  const chks   = _getChksSelecionados();
+  const bar    = document.getElementById('bulkBar');
+  const count  = document.getElementById('bulkCount');
+  const btnCfm = document.getElementById('bulkBtnConfirmar');
+  const chkAll = document.getElementById('chkSelectAll');
+  const todos  = [...document.querySelectorAll('#tbodyMovColab .chk-mov')];
+
+  if (!chks.length) {
+    bar.style.display = 'none';
+    if (chkAll) chkAll.checked = false;
+    return;
+  }
+  bar.style.display = 'flex';
+  count.textContent = `${chks.length} ${chks.length === 1 ? 'item selecionado' : 'itens selecionados'}`;
+
+  // mostra "Confirmar entrega" só se houver pendentes na seleção
+  const temPend = chks.some(c => {
+    const tr = c.closest('tr');
+    return tr && tr.dataset.isPend === '1';
+  });
+  btnCfm.style.display = temPend ? '' : 'none';
+
+  if (chkAll) chkAll.checked = chks.length === todos.length && todos.length > 0;
+}
+
+function toggleSelectAllColab(checked) {
+  document.querySelectorAll('#tbodyMovColab .chk-mov').forEach(c => c.checked = checked);
+  _atualizarBulkBar();
+}
+
+function bulkDeselecionarTodos() {
+  document.querySelectorAll('#tbodyMovColab .chk-mov').forEach(c => c.checked = false);
+  const chkAll = document.getElementById('chkSelectAll');
+  if (chkAll) chkAll.checked = false;
+  _atualizarBulkBar();
+}
+
+function bulkExcluir() {
+  const chks = _getChksSelecionados();
+  if (!chks.length) return;
+  abrirConfirm({
+    titulo:   '🗑 Excluir selecionados',
+    mensagem: `Você está prestes a excluir <strong>${chks.length} ${chks.length===1?'registro':'registros'}</strong> permanentemente.<br><br>⚠️ O estoque <strong>não será ajustado</strong> para itens ainda pendentes de confirmação.<br><br>Deseja continuar?`,
+    labelOk:  'Sim, excluir todos',
+    callback: async () => {
+      let ok = 0;
+      for (const c of chks) {
+        const id = c.dataset.id;
+        const tr = c.closest('tr');
+        const isPend = tr?.dataset.isPend === '1';
+        const almoxId = tr?.dataset.almoxId || '';
+        const itemId  = tr?.dataset.itemId  || '';
+        const tamanho = tr?.dataset.tamanho || '';
+        const qtd     = Number(tr?.dataset.qtd) || 0;
+        try {
+          await fetch(`${SB_URL}/rest/v1/unif_movimentacoes?id=eq.${id}`, {
+            method: 'DELETE', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+          });
+          // restaura estoque se era entrega confirmada e não-CD
+          if (!isPend && qtd > 0 && almoxId && !isCDAlmox(almoxId)) {
+            const estoqRows = await sbGet('unif_estoque',
+              `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
+            if (estoqRows.length) {
+              await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: (estoqRows[0].quantidade||0) + qtd });
+            }
+          }
+          ok++;
+        } catch(_) {}
+      }
+      toast(`✓ ${ok} ${ok===1?'registro excluído':'registros excluídos'}`);
+      carregarHistoricoColab(_colabAtual.id);
+    },
+  });
+}
+
+async function bulkConfirmar() {
+  const chks = _getChksSelecionados().filter(c => c.closest('tr')?.dataset.isPend === '1');
+  if (!chks.length) return;
+  abrirConfirm({
+    titulo:   '✓ Confirmar entregas',
+    mensagem: `Confirmar a entrega física de <strong>${chks.length} ${chks.length===1?'item':'itens'}</strong>?<br><br>O estoque será debitado para cada item confirmado.`,
+    labelOk:  'Sim, confirmar',
+    callback: async () => {
+      let ok = 0;
+      for (const c of chks) {
+        const tr      = c.closest('tr');
+        const id      = c.dataset.id;
+        const almoxId = tr?.dataset.almoxId || '';
+        const itemId  = tr?.dataset.itemId  || '';
+        const tamanho = tr?.dataset.tamanho || '';
+        const qtd     = Number(tr?.dataset.qtd) || 1;
+        try {
+          await sbPatch('unif_movimentacoes', `id=eq.${id}`, { confirmado: true });
+          if (almoxId && !isCDAlmox(almoxId)) {
+            const estoqRows = await sbGet('unif_estoque',
+              `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
+            if (estoqRows.length) {
+              const nova = Math.max(0, (estoqRows[0].quantidade||0) - qtd);
+              await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: nova });
+            }
+          }
+          ok++;
+        } catch(_) {}
+      }
+      toast(`✓ ${ok} ${ok===1?'entrega confirmada':'entregas confirmadas'}`);
+      carregarHistoricoColab(_colabAtual.id);
+    },
+  });
 }
 
 function confirmarExcluirMov(movId, itemNome, tamanho, qtd, itemId, almoxId, isDevolucao, isPending) {
