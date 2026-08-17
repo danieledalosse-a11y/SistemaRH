@@ -293,7 +293,7 @@
   <div id="sec-painel" style="display:none;">
 
     <!-- KPIs Painel -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
       <div class="metric m-blue">
         <div class="metric-label">Total de unidades</div>
         <div class="metric-val c-blue" id="pKpiUnid">—</div>
@@ -311,6 +311,11 @@
         <div class="metric-label" style="color:var(--red);">Zerados ↗</div>
         <div class="metric-val c-red" id="pKpiZerado">—</div>
         <div class="metric-sub">itens sem estoque</div>
+      </div>
+      <div class="metric m-amber clickable" onclick="document.getElementById('cardPendencias').scrollIntoView({behavior:'smooth'})">
+        <div class="metric-label" style="color:#B45309;">Pendências ↗</div>
+        <div class="metric-val c-amber" id="pKpiPendencias">—</div>
+        <div class="metric-sub">itens não entregues</div>
       </div>
     </div>
 
@@ -330,6 +335,18 @@
         </div>
         <div id="painelKits"><div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Carregando…</div></div>
       </div>
+    </div>
+
+    <!-- Pendências de Uniforme -->
+    <div class="card" id="cardPendencias" style="margin-bottom:16px;">
+      <div class="card-hdr" style="margin-bottom:16px;">
+        <div>
+          <div class="card-title">Pendências de Uniforme</div>
+          <div class="card-sub" style="margin-bottom:0;">Itens não entregues por falta de estoque — aguardando reposição</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="carregarPendenciasUniforme()">↺ Atualizar</button>
+      </div>
+      <div id="painelPendencias"><div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px;">Carregando…</div></div>
     </div>
 
     <!-- Últimas entregas -->
@@ -3296,7 +3313,71 @@ async function carregarPainel() {
         </tr>`;
       }).join('');
     }
+    // ── Pendências ────────────────────────────────────────────────────────────
+    await carregarPendenciasUniforme();
+
   } catch(e) { toast('Erro ao carregar painel: ' + e.message); }
+}
+
+async function carregarPendenciasUniforme() {
+  const el = document.getElementById('painelPendencias');
+  const motPendLabel = { sem_estoque: 'Sem estoque', tamanho_indisponivel: 'Tamanho indisponível', aguardando_entrega: 'Aguardando entrega', outro: 'Outro motivo' };
+  try {
+    const pends = await sbGet('unif_movimentacoes',
+      'select=*,colaborador:colaboradores(id,nome,cargo,matricula),item:unif_catalogo(nome)' +
+      '&motivo_pendencia=not.is.null&order=data_movimentacao.desc');
+
+    document.getElementById('pKpiPendencias').textContent = pends.length;
+
+    if (!pends.length) {
+      el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px 0;color:var(--green);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span style="font-size:13px;font-weight:600;">Sem pendências — tudo entregue!</span>
+      </div>`;
+      return;
+    }
+
+    // agrupa por colaborador
+    const porColab = new Map();
+    for (const p of pends) {
+      const cid = p.colaborador_id;
+      if (!porColab.has(cid)) porColab.set(cid, { colab: p.colaborador, itens: [] });
+      porColab.get(cid).itens.push(p);
+    }
+
+    el.innerHTML = `
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              <th>Cargo</th>
+              <th>Item</th>
+              <th>Motivo</th>
+              <th>Data</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pends.map(p => {
+              const data = p.data_movimentacao
+                ? p.data_movimentacao.split('T')[0].split('-').reverse().join('/')
+                : '—';
+              const motivo = motPendLabel[p.motivo_pendencia] || p.motivo_pendencia || '—';
+              const colabId = p.colaborador_id;
+              return `<tr>
+                <td style="font-weight:600;">${p.colaborador?.nome || '—'}${p.colaborador?.matricula ? '<span style="font-size:11px;color:var(--text-ter);margin-left:6px;">#'+p.colaborador.matricula+'</span>' : ''}</td>
+                <td style="color:var(--text-sec);font-size:12px;">${p.colaborador?.cargo || '—'}</td>
+                <td>${p.item?.nome || '—'}</td>
+                <td><span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--amber-bg);color:var(--amber);">${motivo}</span></td>
+                <td style="white-space:nowrap;color:var(--text-sec);">${data}</td>
+                <td><button class="btn btn-outline btn-sm" onclick="setTab('colaboradores');setTimeout(()=>selecionarColabById('${colabId}'),300)" title="Abrir colaborador">→ Ver</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) { el.innerHTML = `<div style="color:var(--red);font-size:13px;padding:12px 0;">Erro ao carregar pendências.</div>`; }
 }
 
 // ─── Fluxo CD ────────────────────────────────────────────────────────────────
