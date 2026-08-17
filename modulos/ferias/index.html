@@ -5485,6 +5485,8 @@ function processGestorFerias(rows) {
 }
 
 async function initGestor() {
+  setRole('gestor');
+  const _rtEl = document.getElementById('roleToggle'); if (_rtEl) _rtEl.style.display = 'none';
   // Esconde elementos do RH
   ['sec-visao-rh','sec-lancar','sec-minha-equipe','sec-historico'].forEach(id => {
     const el = document.getElementById(id);
@@ -5646,9 +5648,14 @@ function renderGestorTimeline() {
   document.getElementById('gestorMesLabel').textContent =
     `${NOMES[meses[0].mes]} ${meses[0].ano} — ${NOMES[meses[2].mes]} ${meses[2].ano}`;
 
+  // Só mostra colaboradores com férias no período visível
+  const _periodoInicio = `${meses[0].ano}-${String(meses[0].mes+1).padStart(2,'0')}-01`
+  const _ultimoDia = new Date(meses[2].ano, meses[2].mes+1, 0).getDate()
+  const _periodoFim = `${meses[2].ano}-${String(meses[2].mes+1).padStart(2,'0')}-${String(_ultimoDia).padStart(2,'0')}`
+  const colabsVisiveis = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.data_fim >= _periodoInicio && l.data_inicio <= _periodoFim))
   const content = document.getElementById('gestorTimelineContent');
-  if (!colabs.length) {
-    content.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-sec);font-size:13px;">Nenhum colaborador neste filtro.</div>';
+  if (!colabsVisiveis.length) {
+    content.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-sec);font-size:13px;">Nenhum colaborador com férias neste período.</div>';
     return;
   }
 
@@ -5666,7 +5673,7 @@ function renderGestorTimeline() {
   });
   html += `</tr></thead><tbody>`;
 
-  colabs.forEach(c => {
+  colabsVisiveis.forEach(c => {
     const lancColabs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id);
     html += `<tr><td style="padding:5px 12px;font-size:12px;font-weight:500;white-space:nowrap;border-bottom:1px solid var(--border-light);overflow:hidden;text-overflow:ellipsis;" title="${c.nome}">${c.nome.split(' ').slice(0,2).join(' ')}</td>`;
     meses.forEach(({ano, mes}) => {
