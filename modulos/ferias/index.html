@@ -5981,10 +5981,11 @@ function renderGestorAtencao() {
     const paAno = pa ? (pa.pa_fim ? pa.pa_fim.slice(0,4) : (pa.data_inicio||'').slice(0,4)) : '—';
 
     // Agendamento relevante
-    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && l.periodo_id === pa?.id);
+    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
     const ativo  = lancs.find(l => l.data_inicio <= hoje && l.data_fim >= hoje);
     const futuro = lancs.filter(l => l.data_inicio > hoje).sort((a,b) => a.data_inicio.localeCompare(b.data_inicio))[0];
-    const lRef   = ativo || futuro;
+    const passado = lancs.filter(l => l.data_fim < hoje).sort((a,b) => b.data_fim.localeCompare(a.data_fim))[0];
+    const lRef   = ativo || futuro || passado;
     const agendHtml = lRef
       ? `<span style="font-size:11px;white-space:nowrap;">${_fmtD(lRef.data_inicio)} → ${_fmtD(lRef.data_fim)} · ${lRef.dias}d</span>
          ${lancs.length > 1 ? `<span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">+${lancs.length-1} período${lancs.length>2?'s':''}</span>` : ''}`
@@ -6007,7 +6008,7 @@ function renderGestorAtencao() {
 
     const podeSlicitar = pa && saldo > 0;
     const btnSolicitar = podeSlicitar
-      ? `<button onclick="gestorAbrirModal('${c.id}',${pa.id})" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;white-space:nowrap;">Solicitar</button>`
+      ? `<button onclick="gestorAbrirModal('${c.id}','${pa.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;white-space:nowrap;">Solicitar</button>`
       : `<button disabled style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--border);background:transparent;color:var(--text-ter);cursor:not-allowed;white-space:nowrap;">Solicitar</button>`;
     const btnHistorico = `<button onclick="gestorToggleHist('${c.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">Histórico</button>`;
 
@@ -6022,8 +6023,8 @@ function renderGestorAtencao() {
           ${admissaoFmt ? `<div style="font-size:10px;color:var(--text-ter);margin-top:2px;">Adm. ${admissaoFmt}</div>` : ''}
         </div>
       </div>
-      <div class="proto-td" style="text-align:center;">
-        <div style="font-size:22px;font-weight:700;color:var(--text);line-height:1;">${paAno}</div>
+      <div class="proto-td">
+        <div style="font-size:15px;font-weight:700;color:var(--text);line-height:1;">${paAno}</div>
         <div style="font-size:10px;color:var(--text-ter);margin-top:3px;">PA vigente</div>
       </div>
       <div class="proto-td">${agendHtml}</div>
@@ -6071,7 +6072,7 @@ function gestorToggleHist(colabId) {
 
 function gestorAbrirModal(colabId, periodoId) {
   const colab   = GESTOR_COLABS.find(c => c.id === colabId);
-  const periodo = GESTOR_PERIODOS.find(p => p.id === periodoId);
+  const periodo = GESTOR_PERIODOS.find(p => String(p.id) === String(periodoId));
   if (!colab || !periodo) return;
   _gestorColabSolicitando = { colab, periodo };
 
