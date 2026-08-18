@@ -5563,51 +5563,71 @@ function processGestorFerias(rows) {
   return { periodos, lancamentos };
 }
 
+async function _carregarEquipeGestor(apelido) {
+  setGestorMsg('Carregando equipe...');
+  GESTOR_APELIDO = apelido;
+  GESTOR_COLABS = await sbGet('colaboradores', `gestor=eq.${encodeURIComponent(apelido)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome`);
+  if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado para este gestor');
+  const ids = GESTOR_COLABS.map(c => c.id).join(',');
+  setGestorMsg('Buscando férias da equipe...');
+  const feriasRows = await sbGet('ferias', `colaborador_id=in.(${ids})&select=*&order=colaborador_id,ano`);
+  const { periodos, lancamentos } = processGestorFerias(feriasRows);
+  GESTOR_PERIODOS    = periodos;
+  GESTOR_LANCAMENTOS = lancamentos;
+  document.getElementById('gestorLoading').style.display = 'none';
+  document.getElementById('gestorContent').style.display = 'block';
+  const hoje = new Date();
+  _gestorMesBase = hoje.getFullYear() * 12 + hoje.getMonth();
+  _gestorGanttAno = hoje.getFullYear(); _gestorGanttMes = hoje.getMonth();
+  renderGestorAlerts();
+  renderGestorAtencao();
+  renderGestorGantt();
+}
+
 async function initGestor(fromToggle = false) {
   if (!fromToggle) {
     // gestor puro: esconde toggle e troca visão
     setRole('gestor');
     const _rtEl = document.getElementById('roleToggle'); if (_rtEl) _rtEl.style.display = 'none';
   }
-  // seções já trocadas pelo setRole; garantir sec-gestor visível
   document.getElementById('sec-gestor').style.display = 'block';
 
   try {
     const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     GESTOR_NOME_USUARIO = p.nome || '';
     const colaborador_id = p.colaborador_id;
-    if (!colaborador_id) throw new Error('colaborador_id não encontrado no perfil');
+
+    if (!colaborador_id) {
+      // Usuário RH sem vínculo de gestor — mostra seletor de gestores
+      setGestorMsg('Carregando lista de gestores...');
+      const todos = await sbGet('param_gestor', 'select=apelido,nome&order=nome');
+      if (!todos.length) { setGestorMsg('Nenhum gestor cadastrado em param_gestor.'); return; }
+      document.getElementById('gestorLoadingMsg').innerHTML = `
+        <div style="font-size:13px;color:var(--text-sec);margin-bottom:12px;">Selecione um gestor para visualizar a equipe dele:</div>
+        <select id="selectGestorRH" style="padding:8px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:260px;">
+          <option value="">— escolha um gestor —</option>
+          ${todos.map(g => `<option value="${g.apelido||g.nome}">${g.nome}</option>`).join('')}
+        </select>
+        <button onclick="rhVerEquipeGestor()" style="margin-left:10px;padding:8px 18px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Ver equipe</button>`;
+      return;
+    }
 
     setGestorMsg('Identificando gestor...');
     const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=apelido,nome&limit=1`);
     if (!pgRows.length) throw new Error('Gestor não encontrado em param_gestor');
-    GESTOR_APELIDO = pgRows[0].apelido || pgRows[0].nome;
+    await _carregarEquipeGestor(pgRows[0].apelido || pgRows[0].nome);
+  } catch(e) {
+    setGestorMsg('Erro: ' + (e.message || e));
+  }
+}
 
-    setGestorMsg('Carregando equipe...');
-    GESTOR_COLABS = await sbGet('colaboradores', `gestor=eq.${encodeURIComponent(GESTOR_APELIDO)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome`);
-    if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado para este gestor');
-
-    const ids = GESTOR_COLABS.map(c => c.id).join(',');
-    setGestorMsg('Buscando férias da equipe...');
-    const feriasRows = await sbGet('ferias', `colaborador_id=in.(${ids})&select=*&order=colaborador_id,ano`);
-    const { periodos, lancamentos } = processGestorFerias(feriasRows);
-    GESTOR_PERIODOS    = periodos;
-    GESTOR_LANCAMENTOS = lancamentos;
-
-    document.getElementById('gestorLoading').style.display  = 'none';
-    document.getElementById('gestorContent').style.display  = 'block';
-
-    // Popula filtro de cargos
-    // (filtro de cargos populado lazily em renderGestorGantt)
-
-
-
-    const hoje = new Date();
-    _gestorMesBase = hoje.getFullYear() * 12 + hoje.getMonth();
-    _gestorGanttAno = hoje.getFullYear(); _gestorGanttMes = hoje.getMonth();
-    renderGestorAlerts();
-    renderGestorAtencao();
-    renderGestorGantt();
+async function rhVerEquipeGestor() {
+  const sel = document.getElementById('selectGestorRH');
+  const apelido = sel?.value;
+  if (!apelido) { toast('Selecione um gestor.', 'aviso'); return; }
+  document.getElementById('gestorLoadingMsg').textContent = 'Carregando equipe...';
+  try {
+    await _carregarEquipeGestor(apelido);
   } catch(e) {
     setGestorMsg('Erro: ' + (e.message || e));
   }
