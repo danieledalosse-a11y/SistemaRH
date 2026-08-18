@@ -3093,7 +3093,10 @@ function salvarFicha() {
         registrarAudit('editado', c._sbId, alteracoes.length ? alteracoes.join(' | ') : null);
         mostrarToast('Salvo no banco de dados ✓');
         // Automação: processo de demissão via Workflow
-        if (novaDem) await _sincronizarProcessoDemissao(c._sbId, c.nome, novaDem, c.motivo);
+        if (novaDem) {
+          await _sincronizarProcessoDemissao(c._sbId, c.nome, novaDem, c.motivo);
+          await _criarWorkflowDevolucaoUniforme(c._sbId, c.nome, novaDem);
+        }
       })
       .catch(e => mostrarToast('Erro ao salvar: ' + e.message));
   }
@@ -3185,6 +3188,61 @@ async function _sincronizarProcessoDemissao(colaboradorId, colaboradorNome, data
     mostrarToast('✅ Processo de demissão aberto no Workflow automaticamente');
   } catch(e) {
     console.error('Erro ao sincronizar processo demissão:', e);
+  }
+}
+
+// ─── Workflow: devolução de uniforme na demissão ─────────────────────────────
+async function _criarWorkflowDevolucaoUniforme(colaboradorId, colaboradorNome, dataDemissao) {
+  try {
+    const SB_URL_CAD = 'https://rujtbxwssiofiialnbbg.supabase.co';
+    const headers = { ...SB_HEADERS, 'Content-Type': 'application/json' };
+
+    // Verifica se colaborador tem itens em posse (entregas sem devolução correspondente)
+    const rMovs = await fetch(
+      `${SB_URL_CAD}/rest/v1/unif_movimentacoes?colaborador_id=eq.${colaboradorId}&tipo=eq.entrega&select=id,item_id`,
+      { headers }
+    );
+    const entregas = await rMovs.json();
+    if (!entregas.length) return; // sem uniformes — não abre workflow
+
+    // Verifica se já existe workflow de devolução aberto para este colaborador
+    const rExist = await fetch(
+      `${SB_URL_CAD}/rest/v1/processos_rh?colaborador_id=eq.${colaboradorId}&tipo=eq.devolucao_uniforme&status=eq.aberto&select=id`,
+      { headers }
+    );
+    const existentes = await rExist.json();
+    if (existentes.length) return; // já existe
+
+    const perfil = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}'); } catch(_) { return {}; } })();
+    const rNew = await fetch(`${SB_URL_CAD}/rest/v1/processos_rh`, {
+      method: 'POST',
+      headers: { ...headers, 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        tipo: 'devolucao_uniforme',
+        colaborador_id: colaboradorId,
+        colaborador_nome: colaboradorNome,
+        criado_por: perfil.nome || 'RH',
+        dados_extras: { data_demissao: dataDemissao, qtd_itens: entregas.length },
+      })
+    });
+    if (!rNew.ok) return;
+    const [proc] = await rNew.json();
+
+    const checklist = [
+      { item: 'Receber itens do colaborador', prazo_dias: 3 },
+      { item: 'Avaliar condição de cada peça (reutilizável / descarte)', prazo_dias: 3 },
+      { item: 'Registrar devolução no módulo de Uniformes', prazo_dias: 5 },
+      { item: 'Confirmar estoque atualizado no almoxarifado', prazo_dias: 5 },
+    ];
+    await fetch(`${SB_URL_CAD}/rest/v1/processos_checklist`, {
+      method: 'POST', headers,
+      body: JSON.stringify(checklist.map((it, i) => ({
+        processo_id: proc.id, item: it.item, prazo_dias: it.prazo_dias, ordem: i, concluido: false
+      })))
+    });
+    mostrarToast('👕 Workflow de devolução de uniforme aberto automaticamente');
+  } catch(e) {
+    console.error('Erro ao criar workflow devolução uniforme:', e);
   }
 }
 
