@@ -5600,7 +5600,7 @@ function processGestorFerias(rows) {
 async function _carregarEquipeGestor(apelido) {
   setGestorMsg('Carregando equipe...');
   GESTOR_APELIDO = apelido;
-  GESTOR_COLABS = await sbGet('colaboradores', `gestor=eq.${encodeURIComponent(apelido)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome`);
+  GESTOR_COLABS = await sbGet('colaboradores', `gestor=eq.${encodeURIComponent(apelido)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url`);
   if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado para este gestor');
   const ids = GESTOR_COLABS.map(c => c.id).join(',');
   setGestorMsg('Buscando férias da equipe...');
@@ -6001,17 +6001,19 @@ function renderGestorAtencao() {
 
     const cor = _cor(c.nome);
     const ini = _ini(c.nome);
+    const avatarHtml = c.foto_url
+      ? `<img src="${c.foto_url}" class="proto-avatar" style="object-fit:cover;background:${cor};" alt="">`
+      : `<div class="proto-avatar" style="background:${cor};">${ini}</div>`;
 
-    const paId = pa ? `'${pa.id}'` : 'null';
     const podeSlicitar = pa && saldo > 0;
     const btnSolicitar = podeSlicitar
-      ? `<button onclick="gestorAbrirModal('${c.id}',${paId})" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;white-space:nowrap;">Solicitar</button>`
+      ? `<button onclick="gestorAbrirModal('${c.id}',${pa.id})" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;white-space:nowrap;">Solicitar</button>`
       : `<button disabled style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--border);background:transparent;color:var(--text-ter);cursor:not-allowed;white-space:nowrap;">Solicitar</button>`;
     const btnHistorico = `<button onclick="gestorToggleHist('${c.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">Histórico</button>`;
 
     return `<div class="proto-table-row" style="grid-template-columns:2fr 1fr 1fr 1fr 80px 120px;cursor:default;">
       <div class="proto-colab-cell">
-        <div class="proto-avatar" style="background:${cor};">${ini}</div>
+        ${avatarHtml}
         <div>
           <div class="proto-emp-name">${c.nome}</div>
           <div class="proto-emp-detail">${c.cargo||'—'}</div>
