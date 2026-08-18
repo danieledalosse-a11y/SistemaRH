@@ -2502,7 +2502,14 @@ function abrirFicha(idx) {
       document.getElementById('df-indicadorBusca').value = ind.nome || '';
       preencherIndicadorSelecionado(ind);
     } else {
-      document.getElementById('df-indicadorBusca').value = c._indicador_nome || '';
+      // indicador não está na lista local — busca direto no Supabase
+      fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${c.indicado_por_id}&select=id,nome,cargo,empresa_atuacao&limit=1`, { headers: SB_HEADERS })
+        .then(r => r.json()).then(arr => {
+          if (arr && arr[0]) {
+            document.getElementById('df-indicadorBusca').value = arr[0].nome || '';
+            preencherIndicadorSelecionado({ id: arr[0].id, nome: arr[0].nome, cargo: arr[0].cargo || '', empresa: arr[0].empresa_atuacao || '' });
+          }
+        }).catch(() => {});
     }
     // Status do bônus
     mostrarStatusBonus(c);
