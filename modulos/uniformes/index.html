@@ -618,10 +618,11 @@
                 <th style="text-align:right;">Total</th>
                 <th>Origem / Fornecedor</th>
                 <th>Almoxarifado</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="tbodyMovEstoque">
-              <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-ter);">Carregando…</td></tr>
+              <tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-ter);">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -724,6 +725,31 @@
   </div>
 
 </div><!-- /container -->
+
+<!-- ═══ Modal: Editar Entrada ═══ -->
+<div class="modal-overlay" id="modalEditEntrada">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-hdr">
+      <span class="modal-title">Editar entrada</span>
+      <button class="modal-close" onclick="fecharEditEntrada()">✕</button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <div style="background:var(--bg);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--text-sec);" id="editEntradaInfo">—</div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Quantidade</label>
+        <input type="number" id="editEntradaQtd" min="1" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Valor unitário (R$)</label>
+        <input type="number" id="editEntradaValor" min="0" step="0.01" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="fecharEditEntrada()">Cancelar</button>
+      <button class="btn-pri" id="btnSalvarEditEntrada" onclick="salvarEditEntrada()">Salvar alteração</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ Modal: Almoxarifado ═══ -->
 <div class="modal-overlay" id="modalAlmox">
@@ -1547,6 +1573,7 @@ function renderMovimentacoes() {
   const devEstoque = ESTOQUE.length ? [] : []; // devoluções ao estoque virão de _movsEstoque
   const rows = [
     ...ENTRADAS.map(e => ({
+      id: e.id,
       tipo: 'entrada',
       data: e.data_entrada,
       itemNome: e.item?.nome || '—',
@@ -1586,7 +1613,7 @@ function renderMovimentacoes() {
 
   const tbody = document.getElementById('tbodyMovEstoque');
   if (!lista.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-ter);">Nenhuma movimentação encontrada</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text-ter);">Nenhuma movimentação encontrada</td></tr>';
     return;
   }
   tbody.innerHTML = lista.map(r => {
@@ -1603,8 +1630,45 @@ function renderMovimentacoes() {
       <td style="text-align:right;font-weight:600;">${vTotal}</td>
       <td style="color:var(--text-sec);">${r.origem || '—'}</td>
       <td style="color:var(--text-sec);font-size:12px;">${r.almoxNome}</td>
+      <td style="text-align:center;">${r.tipo === 'entrada' && r.id ? `<button onclick="abrirEditEntrada(${r.id})" title="Editar entrada" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--text-ter);font-size:15px;line-height:1;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">✏️</button>` : ''}</td>
     </tr>`;
   }).join('');
+}
+
+let _editEntradaId = null;
+function abrirEditEntrada(id) {
+  const entrada = ENTRADAS.find(e => e.id === id);
+  if (!entrada) return;
+  _editEntradaId = id;
+  const nome = entrada.item?.nome || '—';
+  const tam  = entrada.tamanho || '—';
+  const data = (entrada.data_entrada || '').split('T')[0].split('-').reverse().join('/');
+  document.getElementById('editEntradaInfo').textContent = `${nome} — ${tam} — ${data}`;
+  document.getElementById('editEntradaQtd').value   = entrada.quantidade;
+  document.getElementById('editEntradaValor').value = entrada.valor_unitario;
+  document.getElementById('modalEditEntrada').classList.add('aberto');
+}
+function fecharEditEntrada() {
+  document.getElementById('modalEditEntrada').classList.remove('aberto');
+  _editEntradaId = null;
+}
+async function salvarEditEntrada() {
+  const qtd   = parseFloat(document.getElementById('editEntradaQtd').value);
+  const valor = parseFloat(document.getElementById('editEntradaValor').value);
+  if (!qtd || qtd < 1)   { _destacarCampo('editEntradaQtd');   toast('Informe a quantidade.', 'erro'); return; }
+  if (isNaN(valor) || valor < 0) { _destacarCampo('editEntradaValor'); toast('Informe o valor unitário.', 'erro'); return; }
+  const btn = document.getElementById('btnSalvarEditEntrada');
+  btn.disabled = true;
+  try {
+    await sbPatch('unif_entradas', `id=eq.${_editEntradaId}`, { quantidade: qtd, valor_unitario: valor });
+    toast('Entrada atualizada com sucesso!');
+    fecharEditEntrada();
+    await carregarEstoque();
+  } catch(e) {
+    toast(_erroApi(e), 'erro');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function renderAlertas() {
