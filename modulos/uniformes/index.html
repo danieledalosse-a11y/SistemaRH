@@ -733,15 +733,46 @@
       <span class="modal-title">Editar entrada</span>
       <button class="modal-close" onclick="fecharEditEntrada()">✕</button>
     </div>
-    <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
-      <div style="background:var(--bg);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--text-sec);" id="editEntradaInfo">—</div>
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Quantidade</label>
-        <input type="number" id="editEntradaQtd" min="1" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);">
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Item</label>
+          <select id="editEntradaItem" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);"></select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Tamanho</label>
+          <select id="editEntradaTamanho" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+            <option value="">Selecione</option>
+            <option>PP</option><option>P</option><option>M</option><option>G</option>
+            <option>GG</option><option>XGG</option><option>ÚNICO</option>
+            <option>34</option><option>36</option><option>38</option><option>39</option>
+            <option>40</option><option>41</option><option>42</option><option>43</option><option>44</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Quantidade</label>
+          <input type="number" id="editEntradaQtd" min="1" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Valor unitário (R$)</label>
+          <input type="number" id="editEntradaValor" min="0" step="0.01" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);">
+        </div>
       </div>
       <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Valor unitário (R$)</label>
-        <input type="number" id="editEntradaValor" min="0" step="0.01" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);">
+        <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Fornecedor</label>
+        <select id="editEntradaFornec" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);"></select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Almoxarifado</label>
+          <select id="editEntradaAlmox" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);"></select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px;">Data de entrada</label>
+          <input type="date" id="editEntradaData" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);">
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1640,12 +1671,32 @@ function abrirEditEntrada(id) {
   const entrada = ENTRADAS.find(e => String(e.id) === String(id));
   if (!entrada) { toast('Entrada não encontrada.', 'erro'); return; }
   _editEntradaId = id;
-  const nome = entrada.item?.nome || '—';
-  const tam  = entrada.tamanho || '—';
-  const data = (entrada.data_entrada || '').split('T')[0].split('-').reverse().join('/');
-  document.getElementById('editEntradaInfo').textContent = `${nome} — ${tam} — ${data}`;
+
+  // popular select de itens
+  const selItem = document.getElementById('editEntradaItem');
+  selItem.innerHTML = ITENS.map(i => `<option value="${i.id}" ${String(i.id)===String(entrada.item_id)?'selected':''}>${i.nome}</option>`).join('');
+
+  // popular select de fornecedores
+  const selFornec = document.getElementById('editEntradaFornec');
+  selFornec.innerHTML = '<option value="">— sem fornecedor —</option>' +
+    FORNECEDORES.map(f => `<option value="${f.id}" ${String(f.id)===String(entrada.fornecedor_id)?'selected':''}>${f.nome}</option>`).join('');
+
+  // popular select de almoxarifados
+  const selAlmox = document.getElementById('editEntradaAlmox');
+  selAlmox.innerHTML = ALMOXARIFADOS.map(a => `<option value="${a.id}" ${String(a.id)===String(entrada.almoxarifado_id)?'selected':''}>${a.nome}</option>`).join('');
+
+  // popular tamanho
+  const selTam = document.getElementById('editEntradaTamanho');
+  selTam.value = entrada.tamanho || '';
+  if (!selTam.value && entrada.tamanho) {
+    const opt = document.createElement('option');
+    opt.value = entrada.tamanho; opt.textContent = entrada.tamanho; opt.selected = true;
+    selTam.appendChild(opt);
+  }
+
   document.getElementById('editEntradaQtd').value   = entrada.quantidade;
   document.getElementById('editEntradaValor').value = entrada.valor_unitario;
+  document.getElementById('editEntradaData').value  = (entrada.data_entrada || '').split('T')[0];
   document.getElementById('modalEditEntrada').classList.add('open');
 }
 function fecharEditEntrada() {
@@ -1653,14 +1704,30 @@ function fecharEditEntrada() {
   _editEntradaId = null;
 }
 async function salvarEditEntrada() {
-  const qtd   = parseFloat(document.getElementById('editEntradaQtd').value);
-  const valor = parseFloat(document.getElementById('editEntradaValor').value);
+  const itemId  = document.getElementById('editEntradaItem').value;
+  const tamanho = document.getElementById('editEntradaTamanho').value;
+  const qtd     = parseFloat(document.getElementById('editEntradaQtd').value);
+  const valor   = parseFloat(document.getElementById('editEntradaValor').value);
+  const fornecSel  = document.getElementById('editEntradaFornec');
+  const fornecId   = fornecSel.value || null;
+  const fornecNome = fornecSel.options[fornecSel.selectedIndex]?.textContent?.trim() || '';
+  const almoxId = document.getElementById('editEntradaAlmox').value;
+  const data    = document.getElementById('editEntradaData').value;
+
+  if (!itemId)  { _destacarCampo('editEntradaItem');    toast('Selecione o item.', 'erro'); return; }
+  if (!tamanho) { _destacarCampo('editEntradaTamanho'); toast('Selecione o tamanho.', 'erro'); return; }
   if (!qtd || qtd < 1)   { _destacarCampo('editEntradaQtd');   toast('Informe a quantidade.', 'erro'); return; }
   if (isNaN(valor) || valor < 0) { _destacarCampo('editEntradaValor'); toast('Informe o valor unitário.', 'erro'); return; }
+  if (!almoxId) { _destacarCampo('editEntradaAlmox'); toast('Selecione o almoxarifado.', 'erro'); return; }
+
   const btn = document.getElementById('btnSalvarEditEntrada');
   btn.disabled = true;
   try {
-    await sbPatch('unif_entradas', `id=eq.${_editEntradaId}`, { quantidade: qtd, valor_unitario: valor });
+    await sbPatch('unif_entradas', `id=eq.${_editEntradaId}`, {
+      item_id: itemId, tamanho, quantidade: qtd, valor_unitario: valor,
+      fornecedor_id: fornecId, fornecedor: fornecNome,
+      almoxarifado_id: almoxId, data_entrada: data || undefined,
+    });
     toast('Entrada atualizada com sucesso!');
     fecharEditEntrada();
     await carregarEstoque();
