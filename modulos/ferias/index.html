@@ -1554,12 +1554,19 @@
     <!-- ── Aba Painel ── -->
     <div id="gsub-painel">
       <div class="gestor-alerts" id="gestorAlerts"></div>
-      <div class="card" style="margin-top:0;">
-        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:16px;">
-          <div class="card-title" id="gestorListaTitulo">Equipe</div>
-          <div class="card-sub" style="margin:0;" id="gestorListaSub">Clique em um card acima para filtrar por situação</div>
+      <div class="card" style="margin-top:0;padding:0;overflow:hidden;">
+        <div style="display:flex;align-items:baseline;gap:10px;padding:16px 20px 12px;">
+          <div class="card-title" id="gestorListaTitulo">Minha equipe</div>
+          <div class="card-sub" style="margin:0;" id="gestorListaSub"></div>
         </div>
-        <div class="gestor-colab-list" id="gestorAtencaoList"></div>
+        <div class="proto-table-head" id="gestorTableHead" style="grid-template-columns:2fr 1fr 1fr 1fr 80px 120px;">
+          <div class="proto-th">Colaborador</div>
+          <div class="proto-th">PA Vigente</div>
+          <div class="proto-th">Agendamentos</div>
+          <div class="proto-th">Saldo</div>
+          <div class="proto-th" style="text-align:right;">Situação</div>
+        </div>
+        <div id="gestorAtencaoList"></div>
       </div>
     </div>
 
@@ -5876,87 +5883,90 @@ function renderGestorGantt() {
 function renderGestorAtencao() {
   const hoje = new Date().toISOString().slice(0,10);
   let colabs = GESTOR_COLABS.slice().sort((a,b) => a.nome.localeCompare(b.nome));
-  let _titulo = 'Minha equipe', _sub = `${colabs.length} colaborador(es) · clique em um card acima para filtrar`;
+  let _sub = `${colabs.length} colaborador(es)`;
 
   if (_gestorAlertaAtivo === 'dobra') {
     colabs = colabs.filter(c => (window._gestorRiscoDobra||[]).includes(c.id));
-    _titulo = 'Risco de dobra'; _sub = `${colabs.length} colaborador(es) com vencimento em menos de 60 dias sem férias aprovadas`;
+    _sub = `${colabs.length} colaborador(es) com vencimento próximo sem férias aprovadas`;
   } else if (_gestorAlertaAtivo === 'sem-agendado') {
     colabs = colabs.filter(c => (window._gestorSemAgendado||[]).includes(c.id));
-    _titulo = 'Sem férias agendadas'; _sub = `${colabs.length} colaborador(es) sem período futuro lançado`;
+    _sub = `${colabs.length} colaborador(es) sem período futuro lançado`;
   } else if (_gestorAlertaAtivo === 'saindo') {
     colabs = colabs.filter(c => (window._gestorSaiEmBreve||[]).includes(c.id));
-    _titulo = 'Saem em breve'; _sub = `${colabs.length} colaborador(es) iniciando férias nos próximos 30 dias`;
+    _sub = `${colabs.length} colaborador(es) iniciando férias nos próximos 30 dias`;
   }
 
-  const list = document.getElementById('gestorAtencaoList');
-  const tEl = document.getElementById('gestorListaTitulo');
   const sEl = document.getElementById('gestorListaSub');
-  if (tEl) tEl.textContent = _titulo;
   if (sEl) sEl.textContent = _sub;
 
+  const list = document.getElementById('gestorAtencaoList');
+  if (!colabs.length) {
+    list.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-ter);font-size:13px;">Nenhum colaborador encontrado.</div>`;
+    return;
+  }
+
+  const _ini = nome => nome.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  const _cor = nome => { let h=0; for(let i=0;i<nome.length;i++) h=(h*31+nome.charCodeAt(i))&0xFFFFFF; const COLS=['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C']; return COLS[Math.abs(h)%COLS.length]; };
+  const _fmtD = d => d ? d.split('-').reverse().join('/') : '—';
+
   list.innerHTML = colabs.map(c => {
-    const periodos = GESTOR_PERIODOS.filter(p => p.colaborador_id === c.id)
-      .slice().sort((a, b) => (a.data_fim_gozo||'').localeCompare(b.data_fim_gozo||''));
-    const pa  = gestorPeriodoAtivo(c.id);
+    const pa = gestorPeriodoAtivo(c.id);
     const dpd = pa ? gestorDpd(pa) : 9999;
+    const saldo = pa ? gestorSaldoPeriodo(pa) : 0;
+    const total = pa ? (Number(pa.dias_direito) || 30) : 30;
+    const pct = total > 0 ? Math.min(100, Math.round((total - saldo) / total * 100)) : 0;
+    const saldoColor = saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--text-sec)';
+    const barColor = saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--blue)';
 
-    let badgeHtml = '';
-    if (dpd < 60)        badgeHtml = `<span style="background:#D92D20;color:#fff;font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;">Crítico</span>`;
-    else if (dpd < 120)  badgeHtml = `<span style="background:#FFFAEB;color:#B54708;font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;">Atenção</span>`;
-    else if (!gestorTemAgendado(c.id)) badgeHtml = `<span style="background:#FFFAEB;color:#B54708;font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;">Sem agendamento</span>`;
+    // PA vigente
+    const paStr = pa && pa.pa_inicio && pa.pa_fim
+      ? `${_fmtD(pa.pa_inicio)} → ${_fmtD(pa.pa_fim)}`
+      : pa ? `${(pa.data_inicio||'').slice(0,4)}` : '—';
+    const paAno = pa ? (pa.pa_fim ? pa.pa_fim.slice(0,4) : (pa.data_inicio||'').slice(0,4)) : '—';
 
-    const iniciais = c.nome.split(' ').filter(Boolean).slice(0,2).map(n=>n[0]).join('').toUpperCase();
+    // Agendamento relevante
+    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && l.periodo_id === pa?.id);
+    const ativo  = lancs.find(l => l.data_inicio <= hoje && l.data_fim >= hoje);
+    const futuro = lancs.filter(l => l.data_inicio > hoje).sort((a,b) => a.data_inicio.localeCompare(b.data_inicio))[0];
+    const lRef   = ativo || futuro;
+    const agendHtml = lRef
+      ? `<span style="font-size:11px;white-space:nowrap;">${_fmtD(lRef.data_inicio)} → ${_fmtD(lRef.data_fim)} · ${lRef.dias}d</span>
+         ${lancs.length > 1 ? `<span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">+${lancs.length-1} período${lancs.length>2?'s':''}</span>` : ''}`
+      : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
 
-    const paRows = periodos.map(p => {
-      const s    = gestorSaldoPeriodo(p);
-      const d    = gestorDpd(p);
-      const vencStr = p.data_fim_gozo ? gestorFmtData(p.data_fim_gozo) : '—';
-      const paLabel = p.pa_inicio && p.pa_fim
-        ? `${p.pa_inicio.slice(0,4)}/${p.pa_fim.slice(2,4)}`
-        : (p.data_inicio ? p.data_inicio.slice(0,4) : '—');
-      let vencStyle = '';
-      if (d < 60) vencStyle = 'color:var(--red);font-weight:700;';
-      else if (d < 120) vencStyle = 'color:#B54708;font-weight:600;';
-      return `<div class="gestor-pa-row">
-        <div><div class="gestor-pa-row-label">Período aq.</div><div class="gestor-pa-row-val">${paLabel}</div></div>
-        <div><div class="gestor-pa-row-label">Saldo</div><div class="gestor-pa-row-val">${s} dias</div></div>
-        <div><div class="gestor-pa-row-label">Vencimento</div><div class="gestor-pa-row-val" style="${vencStyle}">${vencStr}${d < 9999 ? ' · '+d+'d' : ''}</div></div>
-        <button class="btn btn-outline btn-sm" onclick="gestorToggleHist(${c.id})">Histórico</button>
-        <button class="btn btn-green btn-sm" onclick="gestorAbrirModal(${c.id},${p.id})">Solicitar</button>
-      </div>`;
-    }).join('');
+    // Badge situação
+    let badge = '';
+    if (dpd < 60)               badge = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;"><span class="la-dot" style="background:rgba(255,255,255,0.7)"></span>Crítico</span>`;
+    else if (dpd < 120)         badge = `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009"></span>Atenção</span>`;
+    else if (!lancs.length)     badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
+    else if (ativo)             badge = `<span class="badge-status-v" style="background:#ECFDF3;color:#027A48;"><span class="la-dot la-dot-v" style="background:#027A48"></span>Em férias</span>`;
+    else if (saldo <= 0)        badge = `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
+    else                        badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9"></span>Agendado</span>`;
 
-    const lancHist = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id)
-      .slice().sort((a, b) => (b.data_inicio||'').localeCompare(a.data_inicio||''));
-    const histRows = lancHist.map(l => {
-      const paRef   = GESTOR_PERIODOS.find(p => p.id === l.periodo_id);
-      const paLabel = paRef ? (paRef.pa_inicio ? `${paRef.pa_inicio.slice(0,4)}/${paRef.pa_fim.slice(2,4)}` : (paRef.data_inicio||'').slice(0,4)) : '—';
-      return `<tr>
-        <td>${paLabel}</td>
-        <td>${gestorFmtData(l.data_inicio)} → ${gestorFmtData(l.data_fim)}</td>
-        <td>${l.dias||'—'} dias</td>
-        <td><span style="${gestorBadgeStyle(l.status)}">${l.status||'—'}</span></td>
-      </tr>`;
-    }).join('');
+    const cor = _cor(c.nome);
+    const ini = _ini(c.nome);
 
-    const histAberto = _gestorHistAberto.has(c.id);
-
-    return `<div class="gestor-colab-card">
-      <div class="gestor-colab-header">
-        <div class="proto-avatar" style="background:#1849A9;">${iniciais}</div>
-        <div class="gestor-colab-info">
-          <div class="gestor-colab-name">${c.nome}</div>
-          <div class="gestor-colab-cargo">${c.cargo||''}</div>
+    return `<div class="proto-table-row" style="grid-template-columns:2fr 1fr 1fr 1fr 80px 120px;cursor:default;">
+      <div class="proto-colab-cell">
+        <div class="proto-avatar" style="background:${cor};">${ini}</div>
+        <div>
+          <div class="proto-emp-name">${c.nome}</div>
+          <div class="proto-emp-detail">${c.cargo||'—'}</div>
         </div>
-        ${badgeHtml}
       </div>
-      <div class="gestor-pa-rows">${paRows || '<div style="font-size:12px;color:var(--text-ter);padding:8px 0;">Nenhum período aquisitivo encontrado.</div>'}</div>
-      <div class="gestor-hist-block" id="gestorHist-${c.id}" style="${histAberto?'display:block;':''}">
-        ${lancHist.length
-          ? `<table class="gestor-hist-table"><thead><tr><th>Período aq.</th><th>Gozo</th><th>Dias</th><th>Status</th></tr></thead><tbody>${histRows}</tbody></table>`
-          : '<div style="font-size:12px;color:var(--text-ter);padding:8px 0;">Nenhum histórico registrado.</div>'}
+      <div class="proto-td">
+        <span style="display:block;font-size:10px;color:var(--text-ter);margin-bottom:2px;">PA ${paAno}</span>
+        <span style="font-size:11px;color:var(--text-sec);white-space:nowrap;">${paStr}</span>
       </div>
+      <div class="proto-td">${agendHtml}</div>
+      <div class="proto-td">
+        <div class="proto-saldo-val" style="color:${saldoColor};">${saldo}d</div>
+        <div class="proto-saldo-sub">de ${total}d</div>
+        <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;width:52px;">
+          <div style="height:3px;border-radius:2px;background:${barColor};width:${pct}%;"></div>
+        </div>
+      </div>
+      <div class="proto-td">${badge}</div>
     </div>`;
   }).join('');
 }
