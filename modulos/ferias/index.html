@@ -5991,14 +5991,18 @@ function renderGestorAtencao() {
          ${lancs.length > 1 ? `<span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">+${lancs.length-1} período${lancs.length>2?'s':''}</span>` : ''}`
       : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
 
-    // Badge situação
+    // Badge situação — mesma lógica da visão RH (paBadge)
+    const nivel = nivelRisco(dpd);
+    const dlimFmt = pa?.data_fim_gozo ? pa.data_fim_gozo.slice(0,10).split('-').reverse().join('/') : '';
     let badge = '';
-    if (dpd < 60)               badge = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;"><span class="la-dot" style="background:rgba(255,255,255,0.7)"></span>Crítico</span>`;
-    else if (dpd < 120)         badge = `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009"></span>Atenção</span>`;
-    else if (!lancs.length)     badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
-    else if (ativo)             badge = `<span class="badge-status-v" style="background:#ECFDF3;color:#027A48;"><span class="la-dot la-dot-v" style="background:#027A48"></span>Em férias</span>`;
-    else if (saldo <= 0)        badge = `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
-    else                        badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9"></span>Agendado</span>`;
+    if (saldo > 0 && pa && nivel) {
+      const vence = dlimFmt ? ` · Vence em ${dlimFmt}` : '';
+      if (nivel === 'critico') badge = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Crítico${vence}</span>`;
+      else if (nivel === 'atencao') badge = `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção${vence}</span>`;
+      else badge = `<span class="badge-status-r" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;"><span class="la-dot" style="background:#3B82F6;"></span>No radar${vence}</span>`;
+    } else if (saldo <= 0)    badge = `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
+    else if (!lancs.length)   badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
+    else                      badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`;
 
     const cor = _cor(c.nome);
     const ini = _ini(c.nome);
