@@ -4791,10 +4791,32 @@ function searchGlobalKeydown(e) {
 }
 
 // ─── Role toggle (RH / Gestor) ───────────────────────────────────────────────
+const _RH_SECS = ['sec-visao-rh','sec-lancar','sec-minha-equipe','sec-historico'];
 function setRole(role) {
   document.body.classList.toggle('modo-gestor', role === 'gestor');
   document.getElementById('roleBtnRH')?.classList.toggle('active', role === 'rh');
   document.getElementById('roleBtnGestor')?.classList.toggle('active', role === 'gestor');
+
+  if (role === 'gestor') {
+    // esconde seções RH e abas
+    _RH_SECS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    const modTabs = document.querySelector('.mod-tabs');
+    if (modTabs) modTabs.style.display = 'none';
+    // mostra seção gestor (e carrega se ainda não carregou)
+    const sg = document.getElementById('sec-gestor');
+    if (sg) { sg.style.display = 'block'; }
+    if (!window._gestorCarregado && typeof initGestor === 'function') {
+      window._gestorCarregado = true;
+      initGestor(true);
+    }
+  } else {
+    // volta para RH
+    _RH_SECS.forEach(id => { const el = document.getElementById(id); if (el && id === 'sec-visao-rh') el.style.display = 'block'; });
+    const modTabs = document.querySelector('.mod-tabs');
+    if (modTabs) modTabs.style.display = 'flex';
+    const sg = document.getElementById('sec-gestor');
+    if (sg) sg.style.display = 'none';
+  }
 }
 
 // ─── Sidebar: situação ────────────────────────────────────────────────────────
@@ -5541,16 +5563,13 @@ function processGestorFerias(rows) {
   return { periodos, lancamentos };
 }
 
-async function initGestor() {
-  setRole('gestor');
-  const _rtEl = document.getElementById('roleToggle'); if (_rtEl) _rtEl.style.display = 'none';
-  // Esconde elementos do RH
-  ['sec-visao-rh','sec-lancar','sec-minha-equipe','sec-historico'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-  const modTabs = document.querySelector('.mod-tabs');
-  if (modTabs) modTabs.style.display = 'none';
+async function initGestor(fromToggle = false) {
+  if (!fromToggle) {
+    // gestor puro: esconde toggle e troca visão
+    setRole('gestor');
+    const _rtEl = document.getElementById('roleToggle'); if (_rtEl) _rtEl.style.display = 'none';
+  }
+  // seções já trocadas pelo setRole; garantir sec-gestor visível
   document.getElementById('sec-gestor').style.display = 'block';
 
   try {
