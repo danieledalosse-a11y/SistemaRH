@@ -1555,9 +1555,10 @@
     <div id="gsub-painel">
       <div class="gestor-alerts" id="gestorAlerts"></div>
       <div class="card" style="margin-top:0;padding:0;overflow:hidden;">
-        <div style="display:flex;align-items:baseline;gap:10px;padding:16px 20px 12px;">
+        <div style="display:flex;align-items:center;gap:10px;padding:16px 20px 12px;">
           <div class="card-title" id="gestorListaTitulo">Minha equipe</div>
           <div class="card-sub" style="margin:0;" id="gestorListaSub"></div>
+          <button id="btnTrocarGestor" onclick="trocarGestorRH()" style="display:none;margin-left:auto;padding:5px 14px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-sec);font-size:12px;font-weight:600;cursor:pointer;" onmouseover="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-sec)'">Trocar gestor</button>
         </div>
         <div class="proto-table-head" id="gestorTableHead" style="grid-template-columns:2fr 1fr 1fr 1fr 80px 120px;">
           <div class="proto-th">Colaborador</div>
@@ -4815,6 +4816,10 @@ function setRole(role) {
     if (!window._gestorCarregado && typeof initGestor === 'function') {
       window._gestorCarregado = true;
       initGestor(true);
+    } else if (window._gestorCarregado && GESTOR_COLABS.length) {
+      // já carregado: só mostra o botão trocar
+      const btn = document.getElementById('btnTrocarGestor');
+      if (btn && IS_RH) btn.style.display = 'block';
     }
   } else {
     // volta para RH
@@ -5635,9 +5640,24 @@ async function rhVerEquipeGestor() {
   document.getElementById('gestorLoadingMsg').textContent = 'Carregando equipe...';
   try {
     await _carregarEquipeGestor(apelido);
+    // mostra botão "Trocar gestor" após carregar
+    const btn = document.getElementById('btnTrocarGestor');
+    if (btn) btn.style.display = 'block';
   } catch(e) {
     setGestorMsg('Erro: ' + (e.message || e));
   }
+}
+
+function trocarGestorRH() {
+  // reseta flag e mostra seletor novamente
+  window._gestorCarregado = false;
+  GESTOR_COLABS = []; GESTOR_PERIODOS = []; GESTOR_LANCAMENTOS = [];
+  document.getElementById('gestorContent').style.display = 'none';
+  document.getElementById('gestorLoading').style.display = 'block';
+  const btn = document.getElementById('btnTrocarGestor');
+  if (btn) btn.style.display = 'none';
+  // reinicia o fluxo do seletor
+  initGestor(true);
 }
 
 function setGestorMsg(msg) {
