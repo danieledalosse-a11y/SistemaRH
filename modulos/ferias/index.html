@@ -2586,6 +2586,11 @@ function _abrirDrawerInterno(key) {
 
   setDrawerTab('historico', document.querySelectorAll('.drawer-tab')[0]);
 
+  // modo gestor: oculta aba Lançar
+  const tabLancar = document.querySelectorAll('.drawer-tab')[1];
+  if (tabLancar) tabLancar.style.display = window._drawerModoGestor ? 'none' : '';
+  window._drawerModoGestor = false;
+
   const fichaLink = document.getElementById('btnVerFichaFerias');
   if (fichaLink && colab.matricula) fichaLink.href = `../colaborador/index.html?matricula=${encodeURIComponent(colab.matricula)}`;
 
@@ -6082,7 +6087,11 @@ function renderGestorAtencao() {
 function gestorAbrirHistorico(colabId) {
   if (COLABORADORES.length) {
     const colab = COLABORADORES.find(c => String(c._sbColabId) === String(colabId));
-    if (colab) { abrirDrawer(colab.__key); return; }
+    if (colab) {
+      window._drawerModoGestor = true;
+      abrirDrawer(colab.__key);
+      return;
+    }
   }
   gestorToggleHist(colabId);
 }
