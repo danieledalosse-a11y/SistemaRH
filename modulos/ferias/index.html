@@ -5717,8 +5717,13 @@ function gestorPeriodoAtivo(colaborador_id) {
   const hoje = new Date().toISOString().slice(0,10);
   const periodos = GESTOR_PERIODOS.filter(p => p.colaborador_id === colaborador_id)
     .slice().sort((a, b) => (a.data_fim_gozo||'').localeCompare(b.data_fim_gozo||''));
+  // Prioritize non-expired with saldo
   const ativos = periodos.filter(p => (!p.data_fim_gozo || p.data_fim_gozo >= hoje) && gestorSaldoPeriodo(p) > 0);
-  return ativos[0] || periodos[0] || null;
+  if (ativos.length) return ativos[0];
+  // Fallback: vencido mas ainda com saldo (ex: dobra já ocorrida)
+  const comSaldo = periodos.filter(p => gestorSaldoPeriodo(p) > 0);
+  if (comSaldo.length) return comSaldo[comSaldo.length - 1]; // mais recente
+  return null; // todos concluídos — não exibir na lista
 }
 
 function gestorDpd(periodo) {
@@ -6040,8 +6045,11 @@ function renderGestorAtencao() {
 
   list.innerHTML = colabs.map(c => {
     const pa = gestorPeriodoAtivo(c.id);
-    // recém-contratado sem registro na tabela ferias ainda
-    const semPA = !pa && !!c.data_admissao;
+    // recém-contratado: sem PA e sem nenhum registro na tabela ferias
+    const temPeriodos = GESTOR_PERIODOS.some(p => p.colaborador_id === c.id);
+    const semPA = !pa && !temPeriodos && !!c.data_admissao;
+    // todos os PAs concluídos (saldo=0) — não exibir
+    if (!pa && !semPA) return '';
     const paInicioPrevisto = semPA ? c.data_admissao.slice(0,10) : null;
     const paFimPrevisto    = semPA ? addDays(paInicioPrevisto, 364) : null;
     const paAnoPrevisto    = semPA ? paFimPrevisto.slice(0,4) : null;
