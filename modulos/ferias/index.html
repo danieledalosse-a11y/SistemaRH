@@ -1613,16 +1613,22 @@
           </button>
           <div class="gantt-nav-filters">
             <span class="gantt-filter-label">Cargo</span>
-            <select id="gestorFiltroCargo" onchange="renderGestorGantt()" class="gantt-filter-select">
-              <option value="">Todos</option>
-            </select>
+            <div class="filter-wrap">
+              <select id="gestorFiltroCargo" onchange="renderGestorGantt();syncFilterClear('gestorFiltroCargo','')" class="gantt-filter-select">
+                <option value="">Todos</option>
+              </select>
+              <button class="filter-clear" id="clr-gestorFiltroCargo" onclick="clearFilter('gestorFiltroCargo','',()=>{renderGestorGantt()})" tabindex="-1" title="Limpar filtro" style="right:22px;">✕</button>
+            </div>
             <span class="gantt-filter-label" style="margin-left:12px;">Status</span>
-            <select id="gestorFiltroStatus" onchange="renderGestorGantt()" class="gantt-filter-select">
-              <option value="">Todos</option>
-              <option value="aprovado">Aprovado</option>
-              <option value="agendado">Agendado</option>
-              <option value="solicitado">Solicitado</option>
-            </select>
+            <div class="filter-wrap">
+              <select id="gestorFiltroStatus" onchange="renderGestorGantt();syncFilterClear('gestorFiltroStatus','')" class="gantt-filter-select">
+                <option value="">Todos</option>
+                <option value="aprovado">Aprovado</option>
+                <option value="agendado">Agendado</option>
+                <option value="solicitado">Solicitado</option>
+              </select>
+              <button class="filter-clear" id="clr-gestorFiltroStatus" onclick="clearFilter('gestorFiltroStatus','',()=>{renderGestorGantt()})" tabindex="-1" title="Limpar filtro" style="right:22px;">✕</button>
+            </div>
           </div>
         </div>
         <div id="gestorGanttContent"></div>
@@ -6104,8 +6110,8 @@ function renderGestorRelatorio() {
       const lancsDoMes = GESTOR_LANCAMENTOS.filter(l => l.data_fim >= mesInicio && l.data_inicio <= mesFim);
       if (!lancsDoMes.length) continue;
 
-      const colabIds = [...new Set(lancsDoMes.map(l => l.colaborador_id))];
-      const colabsDoMes = colabIds.map(id => GESTOR_COLABS.find(c => c.id === id)).filter(Boolean).sort((a,b) => a.nome.localeCompare(b.nome));
+      const colabIds = [...new Set(lancsDoMes.map(l => String(l.colaborador_id)))];
+      const colabsDoMes = colabIds.map(id => GESTOR_COLABS.find(c => String(c.id) === id)).filter(Boolean).sort((a,b) => a.nome.localeCompare(b.nome));
 
       html += `<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-light,var(--border));">
@@ -6116,7 +6122,7 @@ function renderGestorRelatorio() {
 
       colabsDoMes.forEach(c => {
         if (!c) return;
-        const lc = lancsDoMes.filter(l => l.colaborador_id === c.id).sort((a,b) => a.data_inicio.localeCompare(b.data_inicio));
+        const lc = lancsDoMes.filter(l => String(l.colaborador_id) === String(c.id)).sort((a,b) => a.data_inicio.localeCompare(b.data_inicio));
         const cor = _cor(c.nome), ini = _ini(c.nome);
         const fotoHtml = c.foto_url
           ? `<img src="${c.foto_url}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">`
@@ -6148,7 +6154,7 @@ function renderGestorRelatorio() {
     cargos.forEach(cargo => {
       const colabs = GESTOR_COLABS.filter(c => (c.cargo||'Sem cargo') === cargo).sort((a,b) => a.nome.localeCompare(b.nome));
       const total   = colabs.length;
-      const agend   = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.data_fim >= hoje)).length;
+      const agend   = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => String(l.colaborador_id) === String(c.id) && l.data_fim >= hoje)).length;
       const semAgend = total - agend;
 
       html += `<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;">
