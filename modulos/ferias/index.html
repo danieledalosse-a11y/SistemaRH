@@ -2312,14 +2312,15 @@ function riscoBadgeHtml(dpd, compacto = false, dlim = null) {
 }
 
 function isRiscoDobra(colab) {
-  // verifica em todos os PAs válidos se há saldo > 0 próximo da dobra
+  // PA com saldo > 0, dpd ≤ 180 e sem lançamento futuro que proteja da dobra
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   return colab.registros.some(reg => {
     if (excluir.has(reg.status)) return false;
     const saldo = calcSaldo(reg);
     if (saldo <= 0) return false;
     const dpd = diasParaDobra(reg);
-    return dpd !== null && dpd <= REGRAS_FERIAS.diasAlertaDobra;
+    if (dpd === null || dpd > REGRAS_FERIAS.diasAlertaDobra) return false;
+    return !reg.lancamentos.some(l => l.fim && l.fim >= HOJE);
   });
 }
 
@@ -3775,13 +3776,14 @@ function renderListaAnual() {
   baseSearch.forEach(c => {
     let pasDoAno;
     if (_statusFiltro === 'risco') {
-      // apenas PAs com saldo em risco de dobra (qualquer ano)
+      // apenas PAs com saldo em risco de dobra e sem lançamento futuro (qualquer ano)
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
         const saldo = calcSaldo(reg);
         if (saldo <= 0) return false;
         const dpd = diasParaDobra(reg);
-        return dpd !== null && dpd <= REGRAS_FERIAS.diasAlertaDobra;
+        if (dpd === null || dpd > REGRAS_FERIAS.diasAlertaDobra) return false;
+        return !reg.lancamentos.some(l => l.fim && l.fim >= HOJE);
       });
     } else if (_statusFiltro === 'hoje') {
       // PAs com ao menos um lançamento cobrindo hoje (qualquer ano)
@@ -3998,9 +4000,15 @@ function renderListaAnual() {
       const futuro  = reg.lancamentos.filter(l => l.inicio && l.inicio > HOJE).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
       const passado = reg.lancamentos.filter(l => l.fim && l.fim < HOJE).sort((a,b) => b.fim.localeCompare(a.fim))[0];
       const lRef    = ativo || futuro || passado;
+      const dpdReg  = diasParaDobra(reg);
+      const lancProtegedobra = lRef && (lRef === ativo || lRef === futuro) && saldo > 0 && dpdReg !== null && dpdReg <= 180;
+      const alertaDobraHtml = lancProtegedobra
+        ? `<span style="display:inline-block;margin-top:3px;font-size:10px;font-weight:600;color:#B54708;background:#FFFAEB;border:1px solid #FDE68A;border-radius:4px;padding:2px 6px;">⚠ Manter evita dobra</span>`
+        : '';
       const agendHtml = lRef
         ? `<span style="font-size:11px;white-space:nowrap;">${formatDate(lRef.inicio)} → ${formatDate(lRef.fim)} · ${lRef.dias}d</span>
-           ${reg.lancamentos.length > 1 ? `<span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">+${reg.lancamentos.length - 1} período${reg.lancamentos.length > 2 ? 's' : ''}</span>` : ''}`
+           ${reg.lancamentos.length > 1 ? `<span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">+${reg.lancamentos.length - 1} período${reg.lancamentos.length > 2 ? 's' : ''}</span>` : ''}
+           ${alertaDobraHtml}`
         : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
 
       html += `<div class="proto-table-row" onclick="abrirDrawer('${key}')">
@@ -5782,7 +5790,7 @@ function renderGestorAlerts(colabsBase) {
       <div style="flex:1;min-width:0;">
         <div class="proto-alert-eyebrow">Risco de dobra</div>
         <div class="proto-alert-num">${riscoDobra.length}</div>
-        <div class="proto-alert-sub">Vence em menos de 60 dias sem férias aprovadas</div>
+        <div class="proto-alert-sub">Férias vencendo nos próximos 180 dias sem agendamento</div>
       </div>
       <div class="proto-alert-arr">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
@@ -6049,9 +6057,14 @@ function renderGestorAtencao() {
     const futuro = lancs.filter(l => l.data_inicio > hoje).sort((a,b) => a.data_inicio.localeCompare(b.data_inicio))[0];
     const passado = lancs.filter(l => l.data_fim < hoje).sort((a,b) => b.data_fim.localeCompare(a.data_fim))[0];
     const lRef   = ativo || futuro || passado;
+    const lancProtegedobraG = lRef && (lRef === ativo || lRef === futuro) && saldo > 0 && dpd <= 180;
+    const alertaDobraGHtml = lancProtegedobraG
+      ? `<span style="display:inline-block;margin-top:3px;font-size:10px;font-weight:600;color:#B54708;background:#FFFAEB;border:1px solid #FDE68A;border-radius:4px;padding:2px 6px;">⚠ Manter evita dobra</span>`
+      : '';
     const agendHtml = lRef
       ? `<span style="font-size:11px;white-space:nowrap;">${_fmtD(lRef.data_inicio)} → ${_fmtD(lRef.data_fim)} · ${lRef.dias}d</span>
-         ${lancs.length > 1 ? `<span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">+${lancs.length-1} período${lancs.length>2?'s':''}</span>` : ''}`
+         ${lancs.length > 1 ? `<span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">+${lancs.length-1} período${lancs.length>2?'s':''}</span>` : ''}
+         ${alertaDobraGHtml}`
       : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
 
     // Badge situação — mesma lógica da visão RH (paBadge)
