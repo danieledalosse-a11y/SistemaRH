@@ -5726,29 +5726,32 @@ function gestorTemAgendado(colaborador_id) {
   );
 }
 
-function gestorLancFuturos30() {
+function gestorLancFuturos30(colabsBase) {
   const hoje = new Date();
   const daqui30 = new Date(hoje); daqui30.setDate(hoje.getDate() + 30);
   const hj  = hoje.toISOString().slice(0,10);
   const d30 = daqui30.toISOString().slice(0,10);
+  const ids = colabsBase ? new Set(colabsBase.map(c => String(c.id))) : null;
   return GESTOR_LANCAMENTOS.filter(l =>
     l.data_inicio >= hj && l.data_inicio <= d30 &&
-    ['aprovado','agendado'].includes((l.status||'').toLowerCase())
+    ['aprovado','agendado'].includes((l.status||'').toLowerCase()) &&
+    (!ids || ids.has(String(l.colaborador_id)))
   );
 }
 
-function renderGestorAlerts() {
+function renderGestorAlerts(colabsBase) {
+  const base = colabsBase || GESTOR_COLABS;
   const hoje = new Date().toISOString().slice(0,10);
 
-  const riscoDobra = GESTOR_COLABS.filter(c => {
+  const riscoDobra = base.filter(c => {
     const p = gestorPeriodoAtivo(c.id);
     if (!p) return false;
     if (gestorDpd(p) >= 60) return false;
     return !GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.data_fim >= hoje && ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
   });
 
-  const semAgendado = GESTOR_COLABS.filter(c => !gestorTemAgendado(c.id));
-  const futuros     = gestorLancFuturos30();
+  const semAgendado = base.filter(c => !gestorTemAgendado(c.id));
+  const futuros     = gestorLancFuturos30(base);
   const saiEmBreve  = [...new Set(futuros.map(l => l.colaborador_id))];
 
   window._gestorRiscoDobra  = riscoDobra.map(c => c.id);
@@ -5763,8 +5766,8 @@ function renderGestorAlerts() {
     </div>
     <div class="gestor-alert-card warning${_gestorAlertaAtivo==='sem-agendado'?' active':''}" onclick="filtrarGestorAlerta('sem-agendado')">
       <div class="gestor-alert-val">${semAgendado.length}</div>
-      <div class="gestor-alert-label">Sem férias agendadas</div>
-      <div class="gestor-alert-sub">Nenhum período futuro lançado</div>
+      <div class="gestor-alert-label">Sem agendamento</div>
+      <div class="gestor-alert-sub">Com saldo disponível e nenhum período futuro lançado</div>
     </div>
     <div class="gestor-alert-card info${_gestorAlertaAtivo==='saindo'?' active':''}" onclick="filtrarGestorAlerta('saindo')">
       <div class="gestor-alert-val">${saiEmBreve.length}</div>
@@ -5776,7 +5779,6 @@ function renderGestorAlerts() {
 
 function filtrarGestorAlerta(tipo) {
   _gestorAlertaAtivo = _gestorAlertaAtivo === tipo ? null : tipo;
-  renderGestorAlerts();
   renderGestorAtencao();
 }
 
@@ -5969,6 +5971,9 @@ function renderGestorAtencao() {
   if (busca) colabs = colabs.filter(c => c.nome.toLowerCase().includes(busca));
   if (filtroCargo) colabs = colabs.filter(c => c.cargo === filtroCargo);
   if (filtroGestor) colabs = colabs.filter(c => c.gestor === filtroGestor);
+
+  // Atualiza cards com base na lista filtrada (antes do filtro de alerta)
+  renderGestorAlerts(colabs);
 
   const sEl = document.getElementById('gestorListaSub');
   if (sEl) sEl.textContent = _sub;
