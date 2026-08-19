@@ -1558,15 +1558,18 @@
         <div style="display:flex;align-items:center;gap:10px;padding:16px 20px 12px;">
           <div class="card-title" id="gestorListaTitulo">Minha equipe</div>
           <div class="card-sub" style="margin:0;" id="gestorListaSub"></div>
-          <button id="btnTrocarGestor" onclick="trocarGestorRH()" style="display:none;margin-left:auto;padding:5px 14px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-sec);font-size:12px;font-weight:600;cursor:pointer;" onmouseover="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-sec)'">Trocar gestor</button>
+          <button id="btnTrocarGestor" onclick="trocarGestorRH()" style="display:none;"></button>
         </div>
         <div style="display:flex;gap:10px;align-items:center;padding:0 20px 12px;flex-wrap:wrap;">
           <div style="position:relative;flex:1;min-width:200px;">
             <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-ter);" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input type="text" id="gestorBusca" placeholder="Buscar colaborador..." oninput="renderGestorAtencao()" style="width:100%;box-sizing:border-box;padding:7px 12px 7px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
           </div>
-          <select id="gestorFiltroCargo2" onchange="renderGestorAtencao()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:180px;">
+          <select id="gestorFiltroCargo2" onchange="renderGestorAtencao()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:160px;">
             <option value="">Todos os cargos</option>
+          </select>
+          <select id="gestorFiltroGestor" onchange="renderGestorAtencao()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:160px;">
+            <option value="">Todos os gestores</option>
           </select>
         </div>
         <div class="proto-table-head" id="gestorTableHead" style="grid-template-columns:2fr 1fr 1fr 1fr 120px 100px;">
@@ -5599,15 +5602,23 @@ function processGestorFerias(rows) {
 
 async function _carregarEquipeGestor(apelido) {
   setGestorMsg('Carregando equipe...');
-  GESTOR_APELIDO = apelido;
-  GESTOR_COLABS = await sbGet('colaboradores', `gestor=eq.${encodeURIComponent(apelido)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url`);
-  if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado para este gestor');
+  GESTOR_APELIDO = apelido || null;
+  const colabQuery = apelido
+    ? `gestor=eq.${encodeURIComponent(apelido)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url&order=nome`
+    : `ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url&order=nome`;
+  GESTOR_COLABS = await sbGet('colaboradores', colabQuery);
+  if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado');
   const ids = GESTOR_COLABS.map(c => c.id).join(',');
   setGestorMsg('Buscando férias da equipe...');
   const feriasRows = await sbGet('ferias', `colaborador_id=in.(${ids})&select=*&order=colaborador_id,ano`);
   const { periodos, lancamentos } = processGestorFerias(feriasRows);
   GESTOR_PERIODOS    = periodos;
   GESTOR_LANCAMENTOS = lancamentos;
+  // Reseta selects de filtro para repopular com novos dados
+  ['gestorFiltroCargo2','gestorFiltroGestor'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { const first = el.options[0]; el.innerHTML = ''; el.appendChild(first); }
+  });
   document.getElementById('gestorLoading').style.display = 'none';
   document.getElementById('gestorContent').style.display = 'block';
   const hoje = new Date();
@@ -5632,17 +5643,8 @@ async function initGestor(fromToggle = false) {
     const colaborador_id = p.colaborador_id;
 
     if (!colaborador_id) {
-      // Usuário RH sem vínculo de gestor — mostra seletor de gestores
-      setGestorMsg('Carregando lista de gestores...');
-      const todos = await sbGet('param_gestor', 'select=apelido,nome&order=nome');
-      if (!todos.length) { setGestorMsg('Nenhum gestor cadastrado em param_gestor.'); return; }
-      document.getElementById('gestorLoadingMsg').innerHTML = `
-        <div style="font-size:13px;color:var(--text-sec);margin-bottom:12px;">Selecione um gestor para visualizar a equipe dele:</div>
-        <select id="selectGestorRH" style="padding:8px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:260px;">
-          <option value="">— escolha um gestor —</option>
-          ${todos.map(g => `<option value="${g.apelido||g.nome}">${g.nome}</option>`).join('')}
-        </select>
-        <button onclick="rhVerEquipeGestor()" style="margin-left:10px;padding:8px 18px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Ver equipe</button>`;
+      // Usuário RH — carrega todos os colaboradores diretamente
+      await _carregarEquipeGestor(null);
       return;
     }
 
@@ -5926,11 +5928,20 @@ function renderGestorAtencao() {
   const hoje = new Date().toISOString().slice(0,10);
   let colabs = GESTOR_COLABS.slice().sort((a,b) => a.nome.localeCompare(b.nome));
 
-  // Popula select de cargos na primeira chamada com dados
+  // Popula selects de cargo e gestor na primeira chamada com dados
   const cargoSel = document.getElementById('gestorFiltroCargo2');
   if (cargoSel && cargoSel.options.length <= 1 && colabs.length) {
     const cargos = [...new Set(colabs.map(c => c.cargo).filter(Boolean))].sort();
     cargos.forEach(cg => { const o = document.createElement('option'); o.value = cg; o.textContent = cg; cargoSel.appendChild(o); });
+  }
+  const gestorSel = document.getElementById('gestorFiltroGestor');
+  if (gestorSel) {
+    if (!GESTOR_APELIDO && gestorSel.options.length <= 1 && colabs.length) {
+      // RH vendo todos — popula lista de gestores
+      const gestores = [...new Set(colabs.map(c => c.gestor).filter(Boolean))].sort();
+      gestores.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; gestorSel.appendChild(o); });
+    }
+    gestorSel.style.display = GESTOR_APELIDO ? 'none' : '';
   }
 
   // Filtros de alerta
@@ -5946,11 +5957,13 @@ function renderGestorAtencao() {
     _sub = `${colabs.length} colaborador(es) iniciando férias nos próximos 30 dias`;
   }
 
-  // Filtros de busca e cargo
+  // Filtros de busca, cargo e gestor
   const busca = (document.getElementById('gestorBusca')?.value || '').toLowerCase().trim();
   const filtroCargo = document.getElementById('gestorFiltroCargo2')?.value || '';
+  const filtroGestor = document.getElementById('gestorFiltroGestor')?.value || '';
   if (busca) colabs = colabs.filter(c => c.nome.toLowerCase().includes(busca));
   if (filtroCargo) colabs = colabs.filter(c => c.cargo === filtroCargo);
+  if (filtroGestor) colabs = colabs.filter(c => c.gestor === filtroGestor);
 
   const sEl = document.getElementById('gestorListaSub');
   if (sEl) sEl.textContent = _sub;
