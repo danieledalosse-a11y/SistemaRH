@@ -5874,6 +5874,7 @@ function setGestorTab(tab) {
 
 let _gestorGanttAno = new Date().getFullYear();
 let _gestorGanttMes = new Date().getMonth();
+let _gestorJanelaDias = null;
 
 function gestorGanttAnterior() {
   if (_gestorGanttMes === 0) { _gestorGanttMes = 11; _gestorGanttAno--; }
@@ -5920,19 +5921,28 @@ function renderGestorGantt() {
   const c30 = new Set(GESTOR_LANCAMENTOS.filter(l => l.data_fim >= hoje && l.data_inicio <= s30).map(l => l.colaborador_id)).size;
   const c60 = new Set(GESTOR_LANCAMENTOS.filter(l => l.data_fim >= hoje && l.data_inicio <= s60).map(l => l.colaborador_id)).size;
   const c90 = new Set(GESTOR_LANCAMENTOS.filter(l => l.data_fim >= hoje && l.data_inicio <= s90).map(l => l.colaborador_id)).size;
-  const _chip = (n, label) => `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:12px;background:var(--surface-alt,#F8FAFC);border:1px solid var(--border);color:var(--text-sec);">
-    <span style="font-weight:700;color:var(--text);">${n}</span>${label}</span>`;
+  const _chipStyle = (ativo) => ativo
+    ? 'display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:12px;background:var(--blue);border:1px solid var(--blue);color:#fff;cursor:pointer;'
+    : 'display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:12px;background:#F8FAFC;border:1px solid var(--border);color:var(--text-sec);cursor:pointer;';
+  const _chip = (n, label, janela) => {
+    const ativo = _gestorJanelaDias === janela;
+    return `<button onclick="_gestorJanelaDias=(_gestorJanelaDias===${janela}?null:${janela});renderGestorGantt();" style="${_chipStyle(ativo)}"><span style="font-weight:700;${ativo?'color:#fff;':'color:var(--text);'}">${n}</span>${label}</button>`;
+  };
   const counterHtml = `<div style="display:flex;gap:8px;align-items:center;padding:10px 16px 0;flex-wrap:wrap;">
     <span style="font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;margin-right:4px;">Agendados nos próximos</span>
-    ${_chip(c30,'30 dias')} ${_chip(c60,'60 dias')} ${_chip(c90,'90 dias')}
+    ${_chip(c30,'30 dias',30)} ${_chip(c60,'60 dias',60)} ${_chip(c90,'90 dias',90)}
+    ${_gestorJanelaDias ? `<button onclick="_gestorJanelaDias=null;renderGestorGantt();" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text-ter);cursor:pointer;">✕ limpar</button>` : ''}
   </div>`;
+
+  const janelaFim = _gestorJanelaDias ? (() => { const d = new Date(); d.setDate(d.getDate() + _gestorJanelaDias); return d.toISOString().slice(0,10); })() : null;
 
   let colabs = cargoFiltro ? GESTOR_COLABS.filter(c => c.cargo === cargoFiltro) : GESTOR_COLABS;
   colabs = colabs.filter(c =>
     GESTOR_LANCAMENTOS.some(l => {
-      if (l.colaborador_id !== c.id) return false;
+      if (String(l.colaborador_id) !== String(c.id)) return false;
       if (l.data_fim < mesInicio || l.data_inicio > mesFim) return false;
       if (statusFiltro && (l.status || '').toLowerCase() !== statusFiltro) return false;
+      if (janelaFim && !(l.data_fim >= hoje && l.data_inicio <= janelaFim)) return false;
       return true;
     })
   ).sort((a, b) => a.nome.localeCompare(b.nome));
