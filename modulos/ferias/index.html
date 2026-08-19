@@ -1968,6 +1968,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
     if (!mat) return;
     const nome  = colabDados.nome  || `Matrícula ${mat}`;
     const cargo = colabDados.cargo || '';
+    if (cargo.toLowerCase().includes('sócio') || cargo.toLowerCase().includes('socio')) return;
     const __key = mat + '|' + nome;
 
     const lancamentos = [];
@@ -5620,7 +5621,8 @@ async function _carregarEquipeGestor(apelido) {
   const colabQuery = apelido
     ? `gestor=eq.${encodeURIComponent(apelido)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url&order=nome`
     : `ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url&order=nome`;
-  GESTOR_COLABS = await sbGet('colaboradores', colabQuery);
+  GESTOR_COLABS = (await sbGet('colaboradores', colabQuery))
+    .filter(c => !(c.cargo||'').toLowerCase().includes('sócio') && !(c.cargo||'').toLowerCase().includes('socio'));
   if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado');
   const ids = GESTOR_COLABS.map(c => c.id).join(',');
   setGestorMsg('Buscando férias da equipe...');
