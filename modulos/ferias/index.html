@@ -5747,11 +5747,17 @@ function renderGestorAlerts(colabsBase) {
   const riscoDobra = base.filter(c => {
     const p = gestorPeriodoAtivo(c.id);
     if (!p) return false;
-    if (gestorDpd(p) >= 60) return false;
+    if (gestorDpd(p) > 180) return false;   // alinhado com nivelRisco da visão RH (≤ 180 dias)
+    if (gestorSaldoPeriodo(p) <= 0) return false;
     return !GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.data_fim >= hoje && ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
   });
 
-  const semAgendado = base.filter(c => !gestorTemAgendado(c.id));
+  const semAgendado = base.filter(c => {
+    const p = gestorPeriodoAtivo(c.id);
+    if (!p) return false;
+    if (gestorSaldoPeriodo(p) <= 0) return false;  // alinhado com visão RH: só conta quem tem saldo aberto
+    return !gestorTemAgendado(c.id);
+  });
   const futuros     = gestorLancFuturos30(base);
   const saiEmBreve  = [...new Set(futuros.map(l => l.colaborador_id))];
 
