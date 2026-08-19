@@ -6040,18 +6040,21 @@ function renderGestorAtencao() {
 
   list.innerHTML = colabs.map(c => {
     const pa = gestorPeriodoAtivo(c.id);
-    const dpd = pa ? gestorDpd(pa) : 9999;
-    const saldo = pa ? gestorSaldoPeriodo(pa) : 0;
+    // recém-contratado sem registro na tabela ferias ainda
+    const semPA = !pa && !!c.data_admissao;
+    const paInicioPrevisto = semPA ? c.data_admissao.slice(0,10) : null;
+    const paFimPrevisto    = semPA ? addDays(paInicioPrevisto, 364) : null;
+    const paAnoPrevisto    = semPA ? paFimPrevisto.slice(0,4) : null;
+
+    const dpd   = pa ? gestorDpd(pa) : 9999;
+    const saldo = pa ? gestorSaldoPeriodo(pa) : (semPA ? 30 : 0);
     const total = pa ? (Number(pa.dias_direito) || 30) : 30;
-    const pct = total > 0 ? Math.min(100, Math.round((total - saldo) / total * 100)) : 0;
-    const saldoColor = saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--text-sec)';
-    const barColor = saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--blue)';
+    const pct   = pa ? Math.min(100, Math.round((total - saldo) / total * 100)) : 0;
+    const saldoColor = pa ? (saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--text-sec)') : (semPA ? '#6366F1' : 'var(--green)');
+    const barColor   = pa ? (saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--blue)') : '#6366F1';
 
     // PA vigente
-    const paStr = pa && pa.pa_inicio && pa.pa_fim
-      ? `${_fmtD(pa.pa_inicio)} → ${_fmtD(pa.pa_fim)}`
-      : pa ? `${(pa.data_inicio||'').slice(0,4)}` : '—';
-    const paAno = pa ? (pa.pa_fim ? pa.pa_fim.slice(0,4) : (pa.data_inicio||'').slice(0,4)) : '—';
+    const paAno = pa ? (pa.pa_fim ? pa.pa_fim.slice(0,4) : (pa.data_inicio||'').slice(0,4)) : (semPA ? paAnoPrevisto : '—');
 
     // Agendamento relevante
     const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
@@ -6078,7 +6081,8 @@ function renderGestorAtencao() {
       if (nivel === 'critico') badge = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Crítico${vence}</span>`;
       else if (nivel === 'atencao') badge = `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção${vence}</span>`;
       else badge = `<span class="badge-status-r" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;"><span class="la-dot" style="background:#3B82F6;"></span>No radar${vence}</span>`;
-    } else if (saldo <= 0)    badge = `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
+    } else if (semPA)         badge = `<span class="badge-status-v" style="background:#F0F4FF;color:#6366F1;border:1px solid #C7D2FE;"><span class="la-dot" style="background:#6366F1;"></span>Período futuro</span>`;
+    else if (saldo <= 0)      badge = `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
     else if (!lancs.length)   badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
     else                      badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`;
 
@@ -6091,6 +6095,8 @@ function renderGestorAtencao() {
     const podeSlicitar = pa && saldo > 0;
     const btnSolicitar = podeSlicitar
       ? `<button onclick="gestorAbrirModal('${c.id}','${pa.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;white-space:nowrap;">Solicitar</button>`
+      : semPA
+      ? `<button onclick="gestorSolicitarNovoPa('${c.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid #6366F1;background:transparent;color:#6366F1;cursor:pointer;white-space:nowrap;">Solicitar</button>`
       : `<button disabled style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--border);background:transparent;color:var(--text-ter);cursor:not-allowed;white-space:nowrap;">Solicitar</button>`;
     const btnHistorico = `<button onclick="gestorAbrirHistorico('${c.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">Histórico</button>`;
 
@@ -6108,6 +6114,9 @@ function renderGestorAtencao() {
       <div class="proto-td">
         ${pa
           ? `<div style="font-size:15px;font-weight:700;color:var(--text);line-height:1;">${paAno}</div>`
+          : semPA
+          ? `<div style="font-size:15px;font-weight:700;color:#6366F1;line-height:1;">${paAnoPrevisto}</div>
+             <div style="font-size:10px;color:#6366F1;opacity:0.7;margin-top:2px;">Previsto</div>`
           : `<div style="font-size:13px;color:var(--text-ter);">—</div>`}
       </div>
       <div class="proto-td">${agendHtml}</div>
@@ -6163,6 +6172,41 @@ function gestorToggleHist(colabId) {
   el.style.display = aberto ? 'none' : 'block';
   if (aberto) _gestorHistAberto.delete(colabId);
   else _gestorHistAberto.add(colabId);
+}
+
+async function gestorSolicitarNovoPa(colabId) {
+  const colab = GESTOR_COLABS.find(c => String(c.id) === String(colabId));
+  if (!colab || !colab.data_admissao) { toast('Data de admissão não disponível.'); return; }
+
+  const paInicio     = colab.data_admissao.slice(0,10);
+  const paFim        = addDays(paInicio, 364);
+  const dataFimGozo  = _addOneYear(paFim);
+  const ano          = Number(paFim.slice(0,4));
+
+  try {
+    toast('Criando período aquisitivo previsto...');
+    const r = await fetch(`${SB_URL}/rest/v1/ferias`, {
+      method:  'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+      body:    JSON.stringify({ colaborador_id: colab.id, ano, pa_inicio: paInicio, pa_fim: paFim, status: 'Aprovado', dias_direito: 30 }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const [row] = await r.json();
+
+    const novoPeriodo = {
+      id:             row.id,
+      colaborador_id: colab.id,
+      pa_inicio:      paInicio,
+      pa_fim:         paFim,
+      data_fim_gozo:  dataFimGozo,
+      dias_direito:   30,
+      _feriasRow:     row,
+    };
+    GESTOR_PERIODOS.push(novoPeriodo);
+    gestorAbrirModal(colabId, row.id);
+  } catch(e) {
+    toast('Erro ao criar período: ' + (e.message || e));
+  }
 }
 
 function gestorAbrirModal(colabId, periodoId) {
