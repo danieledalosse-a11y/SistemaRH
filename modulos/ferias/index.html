@@ -2497,10 +2497,9 @@ function getPendentes() {
   const result = [];
   COLABORADORES.forEach(colab => {
     colab.registros.forEach((reg, ri) => {
-      if (reg.status === 'Pendente' && reg._novoLanc) {
-        const nl = reg._novoLanc;
-        result.push({ colab, reg, ri, lancamento: nl, _tipo: 'legado' });
-      }
+      if (reg.status !== 'Pendente') return;
+      const nl = reg._novoLanc || { inicio: reg.paInicio, fim: reg.paFim, dias: 0, motivo: reg._obsGestor || 'Solicitado pelo gestor' };
+      result.push({ colab, reg, ri, lancamento: nl, _tipo: 'legado' });
     });
   });
   return result;
@@ -2865,7 +2864,7 @@ function renderDrawerHistorico(colab) {
   document.getElementById('drawerHistorico').innerHTML = btnPrint + regs.map(r => {
     const saldo = calcSaldo(r);
     let situBadge = '';
-    if (r.status === 'Pendente')    situBadge = `<span class="badge badge-amber">Pendente aprovação</span>`;
+    if (r.status === 'Pendente')    situBadge = `<span class="badge badge-amber">Pendente aprovação</span>${IS_RH ? `<div style="display:flex;gap:6px;margin-top:8px;"><button onclick="rhAprovarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:5px 14px;border-radius:7px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprovar</button><button onclick="rhRecusarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:5px 14px;border-radius:7px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;">✕ Recusar</button></div>` : ''}`;
     else if (r.status === 'Rejeitado') situBadge = `<span class="badge badge-vermelho">Rejeitado</span>`;
     else if (r.status === 'Cancelado' || r.status === 'Descartado') situBadge = `<span class="badge badge-cinza">${r.status}</span>`;
     else if (r.lancamentos.length === 0 && saldo > 0) situBadge = `<span class="badge badge-amber">Sem agendamento</span>`;
@@ -3983,6 +3982,8 @@ function renderListaAnual() {
 
 
   const paBadge = reg => {
+    // Pendente de aprovação pelo RH — prioridade máxima
+    if (reg.status === 'Pendente') return `<span class="badge-status-v" style="background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;"><span class="la-dot" style="background:#F79009;"></span>Aguardando aprovação</span>`;
     const saldo = calcSaldo(reg);
     const dlim  = dataLimiteDobra(reg);
     const diasDobra = dlim ? Math.round((new Date(dlim) - new Date(HOJE)) / 86400000) : null;
@@ -4413,8 +4414,8 @@ function confirmarLancamento() {
 
 // ─── Aprovar / Recusar solicitação do gestor (registro na tabela ferias) ───
 async function rhAprovarSolicitado(feriasId, idx) {
-  const btn = event.target;
-  btn.disabled = true; btn.textContent = 'Salvando...';
+  const btn = (typeof event !== 'undefined' && event?.target) || null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
     await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Aprovado' });
     COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
@@ -4431,7 +4432,7 @@ async function rhAprovarSolicitado(feriasId, idx) {
     renderListaAnual();
   } catch(e) {
     alert('Erro ao aprovar: ' + e.message);
-    btn.disabled = false; btn.textContent = '✓ Aprovar';
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Aprovar'; }
   }
 }
 
