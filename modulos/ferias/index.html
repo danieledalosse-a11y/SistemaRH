@@ -5783,9 +5783,11 @@ function processGestorFerias(rows) {
                      : (_rowSt === 'rejeitado') ? 'recusado'
                      : _rowSt;
 
+    const _obsMotivo = row.obs_gestor || null;
+
     // período 1
     if (row.periodo1_inicio && Number(row.dias1) > 0) {
-      lancamentos.push({
+      const lanc1 = {
         id:            `${row.id}-p1`,
         colaborador_id: row.colaborador_id,
         periodo_id:    row.id,
@@ -5793,12 +5795,15 @@ function processGestorFerias(rows) {
         data_fim:      row.periodo1_fim || row.periodo1_inicio,
         dias:          Number(row.dias1),
         status:        _rowStNorm,
-      });
+      };
+      if (_rowStNorm === 'recusado' && _obsMotivo) lanc1._motivoRecusa = _obsMotivo;
+      if (_rowStNorm === 'cancelado' && _obsMotivo) lanc1._motivoCancelamento = _obsMotivo;
+      lancamentos.push(lanc1);
     }
 
     // período 2
     if (row.periodo2_inicio && Number(row.dias2) > 0) {
-      lancamentos.push({
+      const lanc2 = {
         id:            `${row.id}-p2`,
         colaborador_id: row.colaborador_id,
         periodo_id:    row.id,
@@ -5806,7 +5811,10 @@ function processGestorFerias(rows) {
         data_fim:      row.periodo2_fim || row.periodo2_inicio,
         dias:          Number(row.dias2),
         status:        _rowStNorm,
-      });
+      };
+      if (_rowStNorm === 'recusado' && _obsMotivo) lanc2._motivoRecusa = _obsMotivo;
+      if (_rowStNorm === 'cancelado' && _obsMotivo) lanc2._motivoCancelamento = _obsMotivo;
+      lancamentos.push(lanc2);
     }
 
     // realizacoes JSONB
@@ -6000,9 +6008,14 @@ function renderGestorAlerts(colabsBase) {
   const futuros     = gestorLancFuturos30(base);
   const saiEmBreve  = [...new Set(futuros.map(l => l.colaborador_id))];
 
-  const aguardandoAprov = base.filter(c =>
-    GESTOR_LANCAMENTOS.some(l => String(l.colaborador_id) === String(c.id) && (l.status||'').toLowerCase() === 'solicitado')
-  );
+  // Conta solicitados + recusados com datas futuras/ativas
+  const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
+    const st = (l.status||'').toLowerCase();
+    return (st === 'solicitado' || st === 'recusado') && l.data_fim >= hoje;
+  });
+  const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
+  const aguardandoAprov = base.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
+
   window._gestorRiscoDobra  = riscoDobra.map(c => c.id);
   window._gestorSemAgendado = semAgendado.map(c => c.id);
   window._gestorSaiEmBreve  = saiEmBreve;
@@ -6014,9 +6027,9 @@ function renderGestorAlerts(colabsBase) {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
         </div>
         <div style="flex:1;min-width:0;">
-          <div class="proto-alert-eyebrow" style="color:#92400E;">Aguardando aprovação RH</div>
+          <div class="proto-alert-eyebrow" style="color:#92400E;">Para analisar</div>
           <div class="proto-alert-num" style="color:#92400E;">${aguardandoAprov.length}</div>
-          <div class="proto-alert-sub">Solicitação enviada — aguardando RH confirmar</div>
+          <div class="proto-alert-sub">Solicitações pendentes e recusas</div>
         </div>
         <div class="proto-alert-arr"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
       </div>`
@@ -6564,7 +6577,7 @@ function renderGestorAtencao() {
     _sub = `${colabs.length} colaborador(es) iniciando férias nos próximos 30 dias`;
   } else if (_gestorAlertaAtivo === 'aguard') {
     colabs = colabs.filter(c => (window._gestorAguardAprov||[]).includes(c.id));
-    _sub = `${colabs.length} colaborador(es) com solicitação aguardando aprovação do RH`;
+    _sub = `${colabs.length} colaborador(es) com solicitações pendentes ou recusas para analisar`;
   }
 
   const sEl = document.getElementById('gestorListaSub');
@@ -6835,10 +6848,11 @@ function _renderGsolLista(c) {
     return;
   }
 
-  const iconAguard = `<div class="gsol-item-icon" style="background:#FFFBEB;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>`;
-  const iconAprov  = `<div class="gsol-item-icon" style="background:#DCFCE7;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
-  const iconRecus  = `<div class="gsol-item-icon" style="background:#FEE2E2;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D92D20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>`;
-  const iconGozado = `<div class="gsol-item-icon" style="background:#F0FDF4;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>`;
+  const iconAguard  = `<div class="gsol-item-icon" style="background:#FFFBEB;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>`;
+  const iconAprov   = `<div class="gsol-item-icon" style="background:#DCFCE7;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
+  const iconRecus   = `<div class="gsol-item-icon" style="background:#FEE2E2;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D92D20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>`;
+  const iconGozado  = `<div class="gsol-item-icon" style="background:#F0FDF4;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>`;
+  const iconCancel  = `<div class="gsol-item-icon" style="background:#F1F5F9;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>`;
 
   // Agrupa lançamentos por PA (periodo_id)
   const paMap = new Map();
@@ -6859,27 +6873,41 @@ function _renderGsolLista(c) {
 
   const renderLanc = (l) => {
     const st = (l.status || '').toLowerCase();
-    const icon = st === 'solicitado' ? iconAguard : st === 'recusado' ? iconRecus : st === 'gozado' ? iconGozado : iconAprov;
+    const icon = st === 'solicitado' ? iconAguard
+               : st === 'recusado'  ? iconRecus
+               : st === 'cancelado' ? iconCancel
+               : st === 'gozado'    ? iconGozado
+               : iconAprov;
     const badgeHtml = st === 'solicitado'
       ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#FFFBEB;color:#92400E;font-weight:600;">Aguardando aprovação RH</span>`
       : st === 'recusado'
       ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#FEF2F2;color:#D92D20;font-weight:600;">Recusado pelo RH</span>`
+      : st === 'cancelado'
+      ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#F1F5F9;color:#64748B;font-weight:600;">Cancelado</span>`
       : st === 'gozado'
       ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#F0FDF4;color:#15803D;font-weight:600;">Gozado</span>`
       : `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#DCFCE7;color:#15803D;font-weight:600;">Aprovado</span>`;
     const motivoHtml = st === 'recusado' && l._motivoRecusa
       ? `<div class="gsol-item-motivo">Motivo: ${l._motivoRecusa}</div>` : '';
-    const cancelarHtml = st === 'solicitado'
+    const motivoCancelHtml = st === 'cancelado' && l._motivoCancelamento
+      ? `<div class="gsol-item-motivo" style="color:#64748B;background:#F8FAFC;border-color:#E2E8F0;">Motivo: ${l._motivoCancelamento}</div>` : '';
+    const acoesHtml = st === 'solicitado'
       ? `<div style="margin-top:8px;"><button onclick="gestorCancelarSolicitacao('${l.periodo_id}','${c.id}','${l.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;cursor:pointer;font-weight:600;">Cancelar solicitação</button></div>`
+      : st === 'recusado'
+      ? `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+           <button onclick="gestorRemarcarSolicitacao('${l.periodo_id}','${c.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #1570EF;background:transparent;color:#1570EF;cursor:pointer;font-weight:600;">Remarcar</button>
+           <button onclick="gestorCancelarSolicitacao('${l.periodo_id}','${c.id}','${l.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;cursor:pointer;font-weight:600;">Cancelar</button>
+         </div>`
       : '';
     const passado = l.data_fim < hoje;
     return `<div class="gsol-item">
       ${icon}
       <div class="gsol-item-body">
         <div class="gsol-item-periodo">${_fmtD(l.data_inicio)} → ${_fmtD(l.data_fim)} · ${l.dias} dias</div>
-        <div style="margin-bottom:4px;">${badgeHtml}${passado && st !== 'solicitado' ? `<span style="font-size:11px;color:var(--text-ter);margin-left:6px;">Concluído</span>` : ''}</div>
+        <div style="margin-bottom:4px;">${badgeHtml}${passado && st !== 'solicitado' && st !== 'cancelado' ? `<span style="font-size:11px;color:var(--text-ter);margin-left:6px;">Concluído</span>` : ''}</div>
         ${motivoHtml}
-        ${cancelarHtml}
+        ${motivoCancelHtml}
+        ${acoesHtml}
       </div>
     </div>`;
   };
@@ -6960,6 +6988,13 @@ function gestorToggleMenu(btn, colabId, paId) {
   menu.classList.add('open');
 }
 
+function gestorRemarcarSolicitacao(feriasId, colabId) {
+  const periodo = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
+  if (!periodo) { toast('Período não encontrado.'); return; }
+  fecharGestorSolicitacoes();
+  gestorAbrirModal(colabId, feriasId);
+}
+
 function fecharGestorSolicitacoes() {
   document.getElementById('gsolOverlay').classList.remove('open');
   document.getElementById('gsolDrawer').classList.remove('open');
@@ -6967,26 +7002,45 @@ function fecharGestorSolicitacoes() {
 }
 
 async function gestorCancelarSolicitacao(feriasId, colabId, lancId) {
-  if (!confirm('Deseja cancelar esta solicitação? O período voltará para sem agendamento.')) return;
+  const lancAtual = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
+  const isSolicitado = lancAtual && (lancAtual.status||'').toLowerCase() === 'solicitado';
+
+  const msg = isSolicitado
+    ? 'Deseja cancelar esta solicitação? O período voltará a estar disponível.'
+    : 'Deseja descartar esta recusa? O período ficará registrado no histórico.';
+  if (!confirm(msg)) return;
+
+  const motivo = prompt('Motivo do cancelamento (opcional):') ?? '';
+
   try {
-    const isP2 = String(lancId).endsWith('-p2');
-    const patch = isP2
-      ? { periodo2_inicio: null, periodo2_fim: null, dias2: null, obs_gestor: null, status: 'Aprovado' }
-      : { periodo1_inicio: null, periodo1_fim: null, dias1: null, obs_gestor: null, status: 'Aprovado' };
-    await sbPatch('ferias', `id=eq.${feriasId}`, patch);
+    await sbPatch('ferias', `id=eq.${feriasId}`, {
+      status: 'Cancelado',
+      obs_gestor: motivo.trim() || 'Cancelado pelo gestor',
+    });
 
-    const idx = GESTOR_LANCAMENTOS.findIndex(l => String(l.id) === String(lancId));
-    if (idx >= 0) GESTOR_LANCAMENTOS.splice(idx, 1);
-
+    // Atualiza em memória — mantém no array para exibição histórica
+    const lancIdx = GESTOR_LANCAMENTOS.findIndex(l => String(l.id) === String(lancId));
+    if (lancIdx >= 0) {
+      GESTOR_LANCAMENTOS[lancIdx].status = 'cancelado';
+      GESTOR_LANCAMENTOS[lancIdx]._motivoCancelamento = motivo.trim() || 'Cancelado pelo gestor';
+    }
     const per = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
     if (per?._feriasRow) {
-      if (isP2) { per._feriasRow.periodo2_inicio = null; per._feriasRow.periodo2_fim = null; per._feriasRow.dias2 = null; }
-      else { per._feriasRow.periodo1_inicio = null; per._feriasRow.periodo1_fim = null; per._feriasRow.dias1 = null; }
-      per._feriasRow.status = 'Aprovado';
-      per._feriasRow.obs_gestor = null;
+      per._feriasRow.status = 'Cancelado';
+      per._feriasRow.obs_gestor = motivo.trim() || 'Cancelado pelo gestor';
     }
 
-    toast('Solicitação cancelada');
+    // Remove colaborador do KPI "Para analisar" se não tiver mais pendências
+    const aindaTemPend = GESTOR_LANCAMENTOS.some(l =>
+      String(l.colaborador_id) === String(colabId) &&
+      ['solicitado','recusado'].includes((l.status||'').toLowerCase()) &&
+      l.data_fim >= new Date().toISOString().slice(0,10)
+    );
+    if (!aindaTemPend && window._gestorAguardAprov) {
+      window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(colabId));
+    }
+
+    toast('Solicitação cancelada e registrada no histórico');
     fecharGestorSolicitacoes();
     renderGestorAlerts();
     renderGestorAtencao();
@@ -7155,15 +7209,35 @@ async function gestorEnviarSolicitacao() {
     // atualiza estado local
     const pIdx = GESTOR_PERIODOS.findIndex(p => p.id === feriasId);
     if (pIdx !== -1) GESTOR_PERIODOS[pIdx]._feriasRow = { ...row, ...patchData };
-    GESTOR_LANCAMENTOS.push({
-      id:             `${feriasId}-${slotKey}`,
-      colaborador_id: colab.id,
-      periodo_id:     feriasId,
-      data_inicio:    inicio,
-      data_fim:       fim,
-      dias:           diasVal,
-      status:         'solicitado',
-    });
+
+    // Se estava recusado (remarcar), atualiza o lançamento existente em vez de duplicar
+    const lancExistente = GESTOR_LANCAMENTOS.find(l =>
+      String(l.periodo_id) === String(feriasId) &&
+      String(l.id) === `${feriasId}-${slotKey}` &&
+      ['recusado','solicitado','cancelado'].includes((l.status||'').toLowerCase())
+    );
+    if (lancExistente) {
+      lancExistente.status = 'solicitado';
+      lancExistente.data_inicio = inicio;
+      lancExistente.data_fim = fim;
+      lancExistente.dias = diasVal;
+      lancExistente._motivoRecusa = null;
+      lancExistente._motivoCancelamento = null;
+    } else {
+      GESTOR_LANCAMENTOS.push({
+        id:             `${feriasId}-${slotKey}`,
+        colaborador_id: colab.id,
+        periodo_id:     feriasId,
+        data_inicio:    inicio,
+        data_fim:       fim,
+        dias:           diasVal,
+        status:         'solicitado',
+      });
+    }
+    // Garante que o colaborador entra no KPI "Para analisar"
+    if (window._gestorAguardAprov && !window._gestorAguardAprov.some(id => String(id) === String(colab.id))) {
+      window._gestorAguardAprov.push(colab.id);
+    }
     fecharModalGestor();
     renderGestorAlerts();
     renderGestorAtencao();
