@@ -2456,7 +2456,8 @@ function getPendentes() {
   COLABORADORES.forEach(colab => {
     colab.registros.forEach((reg, ri) => {
       if (reg.status === 'Pendente' && reg._novoLanc) {
-        result.push({ colab, reg, ri });
+        const nl = reg._novoLanc;
+        result.push({ colab, reg, ri, lancamento: nl, _tipo: 'legado' });
       }
     });
   });
@@ -3791,21 +3792,32 @@ function renderPendentes() {
 
   document.getElementById('pendContent').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px;">
-      ${lista.map(({ colab, reg, ri }, idx) => {
-        const nl = reg._novoLanc;
-        return `<div class="pendente-item">
-          <div class="pendente-body">
-            <div class="pendente-nome">${colab.nome}</div>
-            <div class="pendente-info">${colab.setor || colab.unidade || '—'} · PA ${formatDate(reg.paInicio)} a ${formatDate(reg.paFim)}</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <span class="badge badge-azul">${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</span>
-              <span class="badge badge-cinza">${nl.dias} dias</span>
-              ${nl.motivo ? `<span class="badge badge-cinza">${nl.motivo}</span>` : ''}
-              ${nl.diasTrabalhar ? `<span class="badge badge-acordo">ACORDO ${nl.diasTrabalhar}d</span>` : ''}
+      ${lista.map(({ colab, reg, ri, lancamento, _tipo }, idx) => {
+        const nl   = lancamento;
+        const ini  = nl.inicio || nl.data_inicio || '';
+        const fim  = nl.fim    || nl.data_fim    || '';
+        const dias = nl.dias   || '';
+        const motivo = nl.motivo || nl._obsGestor || reg._obsGestor || '';
+        const feriasId = reg._sbId || '';
+        const gestorNome = colab.gestor || '';
+        return `<div class="pendente-item" style="border-left:4px solid #F79009;">
+          <div class="pendente-body" style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <div class="pendente-nome">${colab.nome}</div>
+              <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#FFFBEB;color:#92400E;font-weight:600;">Aguardando aprovação</span>
+            </div>
+            <div class="pendente-info">${colab.cargo || '—'} · ${colab.setor || colab.unidade || '—'}${gestorNome ? ' · Gestor: ' + gestorNome : ''}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+              <span class="badge badge-azul">${formatDate(ini)} → ${formatDate(fim)}</span>
+              <span class="badge badge-cinza">${dias} dias</span>
+              ${motivo ? `<span class="badge badge-cinza">${motivo}</span>` : ''}
             </div>
           </div>
-          <div class="pendente-actions">
-            <button class="btn btn-outline btn-sm" onclick="abrirModalAprovar(${idx})">Analisar</button>
+          <div class="pendente-actions" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+            ${feriasId
+              ? `<button onclick="rhAprovarSolicitado('${feriasId}',${idx})" style="padding:6px 14px;border-radius:7px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✓ Aprovar</button>
+                 <button onclick="rhRecusarSolicitado('${feriasId}',${idx})" style="padding:6px 14px;border-radius:7px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✕ Recusar</button>`
+              : `<button class="btn btn-outline btn-sm" onclick="abrirModalAprovar(${idx})">Analisar</button>`}
           </div>
         </div>`;
       }).join('')}
@@ -3828,7 +3840,7 @@ function renderListaAnual() {
     if (_statusFiltro === 'hoje')  return regs.some(reg => reg.lancamentos.some(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim));
     if (_statusFiltro === 'risco') return isRiscoDobra(c);
     if (_statusFiltro === 'sem')   return isSemAgendado(c);
-    if (_statusFiltro === 'ok')    return getPendentes().some(p => p.__key === c.__key);
+    if (_statusFiltro === 'ok')    return getPendentes().some(p => p.colab.__key === c.__key);
     return true;
   });
 
@@ -4347,6 +4359,50 @@ function confirmarLancamento() {
   document.getElementById('modalLancar').classList.remove('open');
   toast(`✓ Lançamento enviado para aprovação — ${colab.nome}`);
   renderAll();
+}
+
+// ─── Aprovar / Recusar solicitação do gestor (registro na tabela ferias) ───
+async function rhAprovarSolicitado(feriasId, idx) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Aprovado' });
+    COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
+      if (String(reg._sbId) === String(feriasId)) {
+        reg.status = 'Aprovado';
+        if (reg._novoLanc) {
+          reg.lancamentos.push({ ...reg._novoLanc });
+          reg._novoLanc = null;
+        }
+      }
+    }));
+    toast('✓ Férias aprovadas');
+    renderPendentes();
+    renderListaAnual();
+  } catch(e) {
+    alert('Erro ao aprovar: ' + e.message);
+    btn.disabled = false; btn.textContent = '✓ Aprovar';
+  }
+}
+
+async function rhRecusarSolicitado(feriasId, idx) {
+  const motivo = prompt('Motivo da recusa (obrigatório):');
+  if (!motivo?.trim()) return;
+  try {
+    await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Rejeitado', obs_gestor: motivo.trim() });
+    COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
+      if (String(reg._sbId) === String(feriasId)) {
+        reg.status = 'Rejeitado';
+        reg._novoLanc = null;
+        reg._motivoRejeicao = motivo.trim();
+      }
+    }));
+    toast('Solicitação recusada');
+    renderPendentes();
+    renderListaAnual();
+  } catch(e) {
+    alert('Erro ao recusar: ' + e.message);
+  }
 }
 
 // ─── Modal aprovação ─────────────────────────────────────────────────────────
@@ -5635,6 +5691,10 @@ function processGestorFerias(rows) {
     };
     periodos.push(periodo);
 
+    // Normaliza status do row: 'Pendente'/'Solicitado' → 'solicitado'; demais → lowercase
+    const _rowSt = (row.status || 'aprovado').toLowerCase();
+    const _rowStNorm = (_rowSt === 'pendente' || _rowSt === 'solicitado') ? 'solicitado' : _rowSt;
+
     // período 1
     if (row.periodo1_inicio && Number(row.dias1) > 0) {
       lancamentos.push({
@@ -5644,7 +5704,7 @@ function processGestorFerias(rows) {
         data_inicio:   row.periodo1_inicio,
         data_fim:      row.periodo1_fim || row.periodo1_inicio,
         dias:          Number(row.dias1),
-        status:        (row.status || 'aprovado').toLowerCase(),
+        status:        _rowStNorm,
       });
     }
 
@@ -5657,7 +5717,7 @@ function processGestorFerias(rows) {
         data_inicio:   row.periodo2_inicio,
         data_fim:      row.periodo2_fim || row.periodo2_inicio,
         dias:          Number(row.dias2),
-        status:        (row.status || 'aprovado').toLowerCase(),
+        status:        _rowStNorm,
       });
     }
 
@@ -5852,11 +5912,29 @@ function renderGestorAlerts(colabsBase) {
   const futuros     = gestorLancFuturos30(base);
   const saiEmBreve  = [...new Set(futuros.map(l => l.colaborador_id))];
 
+  const aguardandoAprov = base.filter(c =>
+    GESTOR_LANCAMENTOS.some(l => String(l.colaborador_id) === String(c.id) && (l.status||'').toLowerCase() === 'solicitado')
+  );
   window._gestorRiscoDobra  = riscoDobra.map(c => c.id);
   window._gestorSemAgendado = semAgendado.map(c => c.id);
   window._gestorSaiEmBreve  = saiEmBreve;
+  window._gestorAguardAprov = aguardandoAprov.map(c => c.id);
 
-  document.getElementById('gestorAlerts').innerHTML = `
+  const _cardAprovHtml = aguardandoAprov.length > 0
+    ? `<div class="proto-alert-card${_gestorAlertaAtivo==='aguard'?' pa-active':''}" style="background:#FFFBEB;border-color:#FDE68A;cursor:pointer;" onclick="filtrarGestorAlerta('aguard')">
+        <div class="proto-alert-icon" style="background:#FEF3C7;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="proto-alert-eyebrow" style="color:#92400E;">Aguardando aprovação RH</div>
+          <div class="proto-alert-num" style="color:#92400E;">${aguardandoAprov.length}</div>
+          <div class="proto-alert-sub">Solicitação enviada — aguardando RH confirmar</div>
+        </div>
+        <div class="proto-alert-arr"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>`
+    : '';
+
+  document.getElementById('gestorAlerts').innerHTML = _cardAprovHtml + `
     <div class="proto-alert-card red${_gestorAlertaAtivo==='dobra'?' pa-active':''}" onclick="filtrarGestorAlerta('dobra')">
       <div class="proto-alert-icon">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B42318" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -6396,6 +6474,9 @@ function renderGestorAtencao() {
   } else if (_gestorAlertaAtivo === 'saindo') {
     colabs = colabs.filter(c => (window._gestorSaiEmBreve||[]).includes(c.id));
     _sub = `${colabs.length} colaborador(es) iniciando férias nos próximos 30 dias`;
+  } else if (_gestorAlertaAtivo === 'aguard') {
+    colabs = colabs.filter(c => (window._gestorAguardAprov||[]).includes(c.id));
+    _sub = `${colabs.length} colaborador(es) com solicitação aguardando aprovação do RH`;
   }
 
   const sEl = document.getElementById('gestorListaSub');
@@ -6418,8 +6499,11 @@ function renderGestorAtencao() {
       if (!pa) return '5-concluido';
       const dpd = gestorDpd(pa);
       const fut = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id)===String(c.id) && l.data_fim>=hoje);
+      const temSol = fut.some(l => (l.status||'').toLowerCase() === 'solicitado');
+      const temAprov = fut.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
       if (dpd < 180 && !fut.length) return '0-critico';
       if (!fut.length) return '2-semag';
+      if (temSol && !temAprov) return '2b-aguard';
       return '3-agendado';
     }
     return c.nome;
@@ -6500,7 +6584,16 @@ function renderGestorAtencao() {
     } else if (semPA)         badge = `<span class="badge-status-v" style="background:#F0F4FF;color:#6366F1;border:1px solid #C7D2FE;"><span class="la-dot" style="background:#6366F1;"></span>Período futuro</span>`;
     else if (saldo <= 0)      badge = `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
     else if (!lancs.length)   badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
-    else                      badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`;
+    else {
+      const temSolicitado = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.data_fim >= hoje);
+      const temAprovado   = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.data_fim >= hoje);
+      if (temSolicitado && !temAprovado)
+        badge = `<span class="badge-status-v" style="background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;"><span class="la-dot" style="background:#F79009;"></span>Aguardando RH</span>`;
+      else if (temSolicitado)
+        badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;border:1px solid #BFDBFE;"><span class="la-dot" style="background:#1849A9;"></span>Agendado <span style="font-size:10px;color:#92400E;margin-left:4px;">+1 pendente</span></span>`;
+      else
+        badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`;
+    }
 
     let borderClr;
     if (saldo > 0 && pa && nivel) {
@@ -6508,7 +6601,11 @@ function renderGestorAtencao() {
     } else if (semPA) borderClr = '#6366F1';
     else if (saldo <= 0) borderClr = 'var(--green)';
     else if (!lancs.length) borderClr = '#F59E0B';
-    else borderClr = '#1849A9';
+    else {
+      const temSolPend = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.data_fim >= hoje);
+      const temAprovF  = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.data_fim >= hoje);
+      borderClr = (temSolPend && !temAprovF) ? '#F79009' : '#1849A9';
+    }
 
     const cor = _cor(c.nome);
     const ini = _ini(c.nome);
