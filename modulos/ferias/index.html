@@ -1136,6 +1136,27 @@
   .gestor-alert-card.info    .gestor-alert-val { color: var(--blue); }
   .gestor-alert-label { font-size: 13px; color: var(--text-sec); font-weight: 500; }
   .gestor-alert-sub { font-size: 11px; color: var(--text-ter); margin-top: 4px; }
+
+  /* Drawer gestor solicitações */
+  .gsol-overlay { position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1100;display:none; }
+  .gsol-overlay.open { display:block; }
+  .gsol-drawer { position:fixed;top:0;right:-480px;width:460px;max-width:100vw;height:100vh;background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.12);z-index:1101;transition:right .25s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden; }
+  .gsol-drawer.open { right:0; }
+  .gsol-header { padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0; }
+  .gsol-body { flex:1;overflow-y:auto;padding:20px; }
+  .gsol-footer { padding:16px 20px;border-top:1px solid var(--border);flex-shrink:0; }
+  .gsol-saldo-row { display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap; }
+  .gsol-saldo-card { flex:1;min-width:100px;padding:10px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border); }
+  .gsol-saldo-label { font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:4px; }
+  .gsol-saldo-val { font-size:16px;font-weight:700;color:var(--text); }
+  .gsol-item { display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--border-light,var(--border)); }
+  .gsol-item:last-child { border-bottom:none; }
+  .gsol-item-icon { width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px; }
+  .gsol-item-body { flex:1;min-width:0; }
+  .gsol-item-periodo { font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px; }
+  .gsol-item-meta { font-size:12px;color:var(--text-sec);margin-bottom:6px; }
+  .gsol-item-motivo { font-size:11px;color:#D92D20;background:#FEF2F2;border:1px solid #FECACA;border-radius:5px;padding:4px 8px;margin-top:4px;display:inline-block; }
+
   .gestor-timeline-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   .gestor-timeline-nav-btn { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; cursor: pointer; font-family: inherit; font-size: 13px; color: var(--text-sec); transition: all 0.15s; }
   .gestor-timeline-nav-btn:hover { border-color: var(--text-sec); color: var(--text); }
@@ -6616,8 +6637,11 @@ function renderGestorAtencao() {
     else {
       const temSolicitado = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.data_fim >= hoje);
       const temAprovado   = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.data_fim >= hoje);
+      const temRecusado   = lancs.some(l => (l.status||'').toLowerCase() === 'recusado' && l.data_fim >= hoje);
       if (temSolicitado && !temAprovado)
         badge = `<span class="badge-status-v" style="background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;"><span class="la-dot" style="background:#F79009;"></span>Aguardando RH</span>`;
+      else if (temRecusado && !temAprovado && !temSolicitado)
+        badge = `<span class="badge-status-v" style="background:#FEF2F2;color:#D92D20;border:1px solid #FECACA;"><span class="la-dot" style="background:#D92D20;"></span>Recusado pelo RH</span>`;
       else if (temSolicitado)
         badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;border:1px solid #BFDBFE;"><span class="la-dot" style="background:#1849A9;"></span>Agendado <span style="font-size:10px;color:#92400E;margin-left:4px;">+1 pendente</span></span>`;
       else
@@ -6633,7 +6657,8 @@ function renderGestorAtencao() {
     else {
       const temSolPend = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.data_fim >= hoje);
       const temAprovF  = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.data_fim >= hoje);
-      borderClr = (temSolPend && !temAprovF) ? '#F79009' : '#1849A9';
+      const temRecF    = lancs.some(l => (l.status||'').toLowerCase() === 'recusado' && l.data_fim >= hoje);
+      borderClr = (temSolPend && !temAprovF) ? '#F79009' : (temRecF && !temAprovF && !temSolPend) ? '#D92D20' : '#1849A9';
     }
 
     const cor = _cor(c.nome);
@@ -6649,7 +6674,7 @@ function renderGestorAtencao() {
       : semPA
       ? `<button onclick="gestorSolicitarNovoPa('${c.id}')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:#6366F1;color:#fff;cursor:pointer;white-space:nowrap;font-weight:600;">Solicitar</button>`
       : `<button disabled style="font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:var(--border);color:var(--text-ter);cursor:not-allowed;white-space:nowrap;font-weight:600;">Solicitar</button>`;
-    const btnHistorico = `<button onclick="gestorAbrirHistorico('${c.id}')" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">${_iconeHist}Histórico</button>`;
+    const btnHistorico = `<button onclick="gestorAbrirSolicitacoes('${c.id}')" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">${_iconeHist}Solicitações</button>`;
 
     const admissaoFmt = c.data_admissao ? c.data_admissao.slice(0,10).split('-').reverse().join('/') : null;
 
@@ -6702,6 +6727,144 @@ function renderGestorAtencao() {
       })()}
     </div>`;
   }).join('');
+}
+
+// ─── Drawer Gestor — Solicitações ────────────────────────────────────────────
+let _gsolColabId = null;
+
+function gestorAbrirSolicitacoes(colabId) {
+  _gsolColabId = String(colabId);
+  const c = GESTOR_COLABS.find(c => String(c.id) === _gsolColabId);
+  if (!c) return;
+  const pa    = gestorPeriodoAtivo(c.id);
+  const saldo = pa ? gestorSaldoPeriodo(pa) : 0;
+  const total = pa ? (Number(pa.dias_direito) || 30) : 30;
+  const venc  = pa?.data_fim_gozo ? gestorFmtData(pa.data_fim_gozo) : '—';
+  const paAno = pa?.pa_fim ? pa.pa_fim.slice(0,4) : '—';
+
+  const _ini = nome => nome.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  const _cor = nome => { let h=0; for(let i=0;i<nome.length;i++) h=(h*31+nome.charCodeAt(i))&0xFFFFFF; const COLS=['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C']; return COLS[Math.abs(h)%COLS.length]; };
+  const avatarEl = document.getElementById('gsolAvatar');
+  if (c.foto_url) {
+    avatarEl.innerHTML = `<img src="${c.foto_url}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" alt="">`;
+    avatarEl.style.background = 'transparent';
+  } else {
+    avatarEl.textContent = _ini(c.nome);
+    avatarEl.style.background = _cor(c.nome);
+  }
+  document.getElementById('gsolNome').textContent  = c.nome;
+  document.getElementById('gsolCargo').textContent = c.cargo || '—';
+
+  document.getElementById('gsolSaldo').innerHTML = `
+    <div class="gsol-saldo-card">
+      <div class="gsol-saldo-label">PA Vigente</div>
+      <div class="gsol-saldo-val">${paAno}</div>
+    </div>
+    <div class="gsol-saldo-card">
+      <div class="gsol-saldo-label">Saldo</div>
+      <div class="gsol-saldo-val" style="color:${saldo<=5?'var(--red)':'var(--text)'};">${saldo}d <span style="font-size:12px;font-weight:400;color:var(--text-ter);">de ${total}d</span></div>
+    </div>
+    <div class="gsol-saldo-card">
+      <div class="gsol-saldo-label">Vencimento</div>
+      <div class="gsol-saldo-val" style="font-size:13px;">${venc}</div>
+    </div>`;
+
+  const btnNova = document.getElementById('gsolBtnNova');
+  if (pa && saldo > 0) {
+    btnNova.style.display = '';
+    btnNova.onclick = () => { fecharGestorSolicitacoes(); gestorAbrirModal(colabId, pa.id); };
+  } else {
+    btnNova.style.display = 'none';
+  }
+
+  _renderGsolLista(c, pa);
+
+  document.getElementById('gsolOverlay').classList.add('open');
+  document.getElementById('gsolDrawer').classList.add('open');
+}
+
+function _renderGsolLista(c) {
+  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+  const hoje  = new Date().toISOString().slice(0,10);
+  const lancs = GESTOR_LANCAMENTOS
+    .filter(l => String(l.colaborador_id) === String(c.id))
+    .sort((a,b) => b.data_inicio.localeCompare(a.data_inicio));
+
+  if (!lancs.length) {
+    document.getElementById('gsolLista').innerHTML =
+      `<div style="text-align:center;padding:32px 0;color:var(--text-ter);font-size:13px;">Nenhuma solicitação registrada.</div>`;
+    return;
+  }
+
+  const iconAguard = `<div class="gsol-item-icon" style="background:#FFFBEB;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>`;
+  const iconAprov  = `<div class="gsol-item-icon" style="background:#DCFCE7;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
+  const iconRecus  = `<div class="gsol-item-icon" style="background:#FEE2E2;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D92D20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>`;
+  const iconGozado = `<div class="gsol-item-icon" style="background:#F0FDF4;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>`;
+
+  document.getElementById('gsolLista').innerHTML = lancs.map(l => {
+    const st = (l.status || '').toLowerCase();
+    const icon = st === 'solicitado' ? iconAguard : st === 'recusado' ? iconRecus : st === 'gozado' ? iconGozado : iconAprov;
+    const badgeHtml = st === 'solicitado'
+      ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#FFFBEB;color:#92400E;font-weight:600;">Aguardando aprovação RH</span>`
+      : st === 'recusado'
+      ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#FEF2F2;color:#D92D20;font-weight:600;">Recusado pelo RH</span>`
+      : st === 'gozado'
+      ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#F0FDF4;color:#15803D;font-weight:600;">Gozado</span>`
+      : `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#DCFCE7;color:#15803D;font-weight:600;">Aprovado</span>`;
+
+    const motivoHtml = st === 'recusado' && l._motivoRecusa
+      ? `<div class="gsol-item-motivo">Motivo: ${l._motivoRecusa}</div>` : '';
+
+    const cancelarHtml = st === 'solicitado'
+      ? `<div style="margin-top:8px;"><button onclick="gestorCancelarSolicitacao('${l.periodo_id}','${c.id}','${l.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;cursor:pointer;font-weight:600;">Cancelar solicitação</button></div>`
+      : '';
+
+    const passado = l.data_fim < hoje;
+    return `<div class="gsol-item">
+      ${icon}
+      <div class="gsol-item-body">
+        <div class="gsol-item-periodo">${_fmtD(l.data_inicio)} → ${_fmtD(l.data_fim)} · ${l.dias} dias</div>
+        <div style="margin-bottom:4px;">${badgeHtml}${passado && st !== 'solicitado' ? `<span style="font-size:11px;color:var(--text-ter);margin-left:6px;">Concluído</span>` : ''}</div>
+        ${motivoHtml}
+        ${cancelarHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function fecharGestorSolicitacoes() {
+  document.getElementById('gsolOverlay').classList.remove('open');
+  document.getElementById('gsolDrawer').classList.remove('open');
+  _gsolColabId = null;
+}
+
+async function gestorCancelarSolicitacao(feriasId, colabId, lancId) {
+  if (!confirm('Deseja cancelar esta solicitação? O período voltará para sem agendamento.')) return;
+  try {
+    const isP2 = String(lancId).endsWith('-p2');
+    const patch = isP2
+      ? { periodo2_inicio: null, periodo2_fim: null, dias2: null, obs_gestor: null, status: 'Aprovado' }
+      : { periodo1_inicio: null, periodo1_fim: null, dias1: null, obs_gestor: null, status: 'Aprovado' };
+    await sbPatch('ferias', `id=eq.${feriasId}`, patch);
+
+    const idx = GESTOR_LANCAMENTOS.findIndex(l => String(l.id) === String(lancId));
+    if (idx >= 0) GESTOR_LANCAMENTOS.splice(idx, 1);
+
+    const per = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
+    if (per?._feriasRow) {
+      if (isP2) { per._feriasRow.periodo2_inicio = null; per._feriasRow.periodo2_fim = null; per._feriasRow.dias2 = null; }
+      else { per._feriasRow.periodo1_inicio = null; per._feriasRow.periodo1_fim = null; per._feriasRow.dias1 = null; }
+      per._feriasRow.status = 'Aprovado';
+      per._feriasRow.obs_gestor = null;
+    }
+
+    toast('Solicitação cancelada');
+    fecharGestorSolicitacoes();
+    renderGestorAlerts();
+    renderGestorAtencao();
+  } catch(e) {
+    alert('Erro ao cancelar: ' + e.message);
+  }
 }
 
 function gestorAbrirHistorico(colabId) {
@@ -6911,5 +7074,27 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 </script>
+
+<!-- ═══ Drawer Gestor — Solicitações ═══ -->
+<div class="gsol-overlay" id="gsolOverlay" onclick="fecharGestorSolicitacoes()">
+  <div class="gsol-drawer" id="gsolDrawer" onclick="event.stopPropagation()">
+    <div class="gsol-header">
+      <div id="gsolAvatar" style="width:40px;height:40px;border-radius:50%;background:#1849A9;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:15px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="gsolNome">—</div>
+        <div style="font-size:12px;color:var(--text-sec);" id="gsolCargo">—</div>
+      </div>
+      <button onclick="fecharGestorSolicitacoes()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--text-sec);padding:4px;line-height:1;flex-shrink:0;">✕</button>
+    </div>
+    <div class="gsol-body">
+      <div class="gsol-saldo-row" id="gsolSaldo"></div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);margin-bottom:12px;">Solicitações</div>
+      <div id="gsolLista"></div>
+    </div>
+    <div class="gsol-footer">
+      <button id="gsolBtnNova" onclick="" style="width:100%;padding:10px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Nova solicitação</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
