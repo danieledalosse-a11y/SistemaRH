@@ -1116,6 +1116,16 @@
 
   /* ── Visão Gestor ── */
   #sec-gestor { display: none; }
+  /* Botões de ação da linha do gestor */
+  .gstor-btn-prim { font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer;white-space:nowrap;font-weight:600;width:100%; }
+  .gstor-btn-more { display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-sec);cursor:pointer;transition:all .15s;flex-shrink:0; }
+  .gstor-btn-more:hover { background:var(--bg);color:var(--text);border-color:var(--text-ter); }
+  /* Menu dropdown "⋯" */
+  .gstor-menu { position:fixed;z-index:800;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:4px;min-width:160px;display:none; }
+  .gstor-menu.open { display:block; }
+  .gstor-menu-item { display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:5px;font-size:12px;color:var(--text);cursor:pointer;white-space:nowrap;border:none;background:none;width:100%;text-align:left; }
+  .gstor-menu-item:hover { background:var(--bg);color:var(--blue); }
+  .gstor-menu-item svg { flex-shrink:0;color:var(--text-sec); }
   .gestor-alerts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
   .gestor-alerts .proto-alert-card { flex:1; min-width:180px; padding:10px 14px; gap:10px; }
   .gestor-alerts .proto-alert-icon { width:32px; height:32px; flex-shrink:0; }
@@ -6695,19 +6705,19 @@ function renderGestorAtencao() {
       ? `<img src="${c.foto_url}" class="proto-avatar" style="object-fit:cover;background:${cor};" alt="">`
       : `<div class="proto-avatar" style="background:${cor};">${ini}</div>`;
 
-    const _iconeHist = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`;
     const podeSlicitar = pa && saldo > 0;
     const btnSolicitar = podeSlicitar
-      ? `<button onclick="gestorAbrirModal('${c.id}','${pa.id}')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer;white-space:nowrap;font-weight:600;">Solicitar</button>`
+      ? `<button onclick="gestorAbrirModal('${c.id}','${pa.id}')" class="gstor-btn-prim">Solicitar</button>`
       : semPA
-      ? `<button onclick="gestorSolicitarNovoPa('${c.id}')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:#6366F1;color:#fff;cursor:pointer;white-space:nowrap;font-weight:600;">Solicitar</button>`
-      : `<button disabled style="font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:var(--border);color:var(--text-ter);cursor:not-allowed;white-space:nowrap;font-weight:600;">Solicitar</button>`;
-    const _iconeHistFicha = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`;
-    const btnHistorico = `<button onclick="gestorAbrirSolicitacoes('${c.id}')" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">${_iconeHist}Solicitações</button><button onclick="gestorAbrirHistorico('${c.id}')" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">${_iconeHistFicha}Histórico</button>`;
+      ? `<button onclick="gestorSolicitarNovoPa('${c.id}')" class="gstor-btn-prim" style="background:#6366F1;">Solicitar</button>`
+      : `<button disabled class="gstor-btn-prim" style="background:var(--border);color:var(--text-ter);cursor:not-allowed;">Solicitar</button>`;
+    const btnHistorico = `<button class="gstor-btn-more" onclick="gestorToggleMenu(this,'${c.id}',${pa?.id ? `'${pa.id}'` : 'null'})" title="Mais ações">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    </button>`;
 
     const admissaoFmt = c.data_admissao ? c.data_admissao.slice(0,10).split('-').reverse().join('/') : null;
 
-    return `<div class="proto-table-row" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 100px;cursor:default;border-left:4px solid ${borderClr};padding-left:12px;">
+    return `<div class="proto-table-row" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 88px;cursor:default;border-left:4px solid ${borderClr};padding-left:12px;">
       <div class="proto-colab-cell">
         ${avatarHtml}
         <div>
@@ -6733,7 +6743,7 @@ function renderGestorAtencao() {
         </div>
       </div>
       <div class="proto-td">${badge}</div>
-      <div class="proto-td" style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">${btnSolicitar}${btnHistorico}</div>
+      <div class="proto-td" style="display:flex;flex-direction:row;gap:4px;align-items:center;justify-content:flex-end;">${btnSolicitar}${btnHistorico}</div>
     </div>
     <div id="gestorHist-${c.id}" style="display:none;background:var(--surface-alt,var(--bg-2));border-bottom:1px solid var(--border);padding:12px 20px 16px;">
       ${(() => {
@@ -6900,6 +6910,54 @@ function _renderGsolLista(c) {
       </div>
     </div>`;
   }).join('');
+}
+
+function gestorToggleMenu(btn, colabId, paId) {
+  // Fecha qualquer menu aberto
+  const existing = document.getElementById('gstorMenu');
+  if (existing) {
+    if (existing.dataset.colabId === String(colabId)) {
+      existing.classList.remove('open');
+      existing.dataset.colabId = '';
+      return;
+    }
+    existing.classList.remove('open');
+  }
+  const menu = existing || (() => {
+    const el = document.createElement('div');
+    el.id = 'gstorMenu';
+    el.className = 'gstor-menu';
+    el.innerHTML = `
+      <button class="gstor-menu-item" id="gstorMenuSol">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        Solicitações
+      </button>
+      <button class="gstor-menu-item" id="gstorMenuHist">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Histórico
+      </button>`;
+    document.body.appendChild(el);
+    // Fechar ao clicar fora
+    document.addEventListener('click', e => {
+      if (!el.contains(e.target) && !e.target.closest('.gstor-btn-more')) {
+        el.classList.remove('open');
+        el.dataset.colabId = '';
+      }
+    }, true);
+    return el;
+  })();
+
+  // Posiciona o menu abaixo do botão
+  const rect = btn.getBoundingClientRect();
+  menu.style.top  = `${rect.bottom + 4}px`;
+  menu.style.left = `${Math.min(rect.left, window.innerWidth - 170)}px`;
+  menu.dataset.colabId = String(colabId);
+
+  // Atualiza handlers
+  document.getElementById('gstorMenuSol').onclick  = () => { menu.classList.remove('open'); gestorAbrirSolicitacoes(colabId); };
+  document.getElementById('gstorMenuHist').onclick = () => { menu.classList.remove('open'); gestorAbrirHistorico(colabId); };
+
+  menu.classList.add('open');
 }
 
 function fecharGestorSolicitacoes() {
