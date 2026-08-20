@@ -4427,9 +4427,21 @@ async function rhAprovarSolicitado(feriasId, idx) {
         }
       }
     }));
+    // Sincroniza GESTOR_LANCAMENTOS para refletir na visão do gestor sem reload
+    GESTOR_LANCAMENTOS.forEach(l => {
+      if (String(l.periodo_id) === String(feriasId) && (l.status||'').toLowerCase() === 'solicitado') {
+        l.status = 'aprovado';
+      }
+    });
+    if (window._gestorAguardAprov) {
+      const syncL = GESTOR_LANCAMENTOS.find(l => String(l.periodo_id) === String(feriasId));
+      if (syncL) window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(syncL.colaborador_id));
+    }
     toast('✓ Férias aprovadas');
     renderPendentes();
     renderListaAnual();
+    if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
+    if (typeof renderGestorAtencao === 'function') renderGestorAtencao();
   } catch(e) {
     alert('Erro ao aprovar: ' + e.message);
     if (btn) { btn.disabled = false; btn.textContent = '✓ Aprovar'; }
@@ -4448,9 +4460,22 @@ async function rhRecusarSolicitado(feriasId, idx) {
         reg._motivoRejeicao = motivo.trim();
       }
     }));
+    // Sincroniza GESTOR_LANCAMENTOS para refletir na visão do gestor sem reload
+    GESTOR_LANCAMENTOS.forEach(l => {
+      if (String(l.periodo_id) === String(feriasId) && (l.status||'').toLowerCase() === 'solicitado') {
+        l.status = 'recusado';
+        l._motivoRecusa = motivo.trim();
+      }
+    });
+    if (window._gestorAguardAprov) {
+      const syncL = GESTOR_LANCAMENTOS.find(l => String(l.periodo_id) === String(feriasId));
+      if (syncL) window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(syncL.colaborador_id));
+    }
     toast('Solicitação recusada');
     renderPendentes();
     renderListaAnual();
+    if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
+    if (typeof renderGestorAtencao === 'function') renderGestorAtencao();
   } catch(e) {
     alert('Erro ao recusar: ' + e.message);
   }
@@ -5744,7 +5769,9 @@ function processGestorFerias(rows) {
 
     // Normaliza status do row: 'Pendente'/'Solicitado' → 'solicitado'; demais → lowercase
     const _rowSt = (row.status || 'aprovado').toLowerCase();
-    const _rowStNorm = (_rowSt === 'pendente' || _rowSt === 'solicitado') ? 'solicitado' : _rowSt;
+    const _rowStNorm = (_rowSt === 'pendente' || _rowSt === 'solicitado') ? 'solicitado'
+                     : (_rowSt === 'rejeitado') ? 'recusado'
+                     : _rowSt;
 
     // período 1
     if (row.periodo1_inicio && Number(row.dias1) > 0) {
