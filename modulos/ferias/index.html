@@ -6674,7 +6674,8 @@ function renderGestorAtencao() {
       : semPA
       ? `<button onclick="gestorSolicitarNovoPa('${c.id}')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:#6366F1;color:#fff;cursor:pointer;white-space:nowrap;font-weight:600;">Solicitar</button>`
       : `<button disabled style="font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:var(--border);color:var(--text-ter);cursor:not-allowed;white-space:nowrap;font-weight:600;">Solicitar</button>`;
-    const btnHistorico = `<button onclick="gestorAbrirSolicitacoes('${c.id}')" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">${_iconeHist}Solicitações</button>`;
+    const _iconeHistFicha = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`;
+    const btnHistorico = `<button onclick="gestorAbrirSolicitacoes('${c.id}')" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">${_iconeHist}Solicitações</button><button onclick="gestorAbrirHistorico('${c.id}')" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;white-space:nowrap;">${_iconeHistFicha}Histórico</button>`;
 
     const admissaoFmt = c.data_admissao ? c.data_admissao.slice(0,10).split('-').reverse().join('/') : null;
 
@@ -6801,7 +6802,24 @@ function _renderGsolLista(c) {
   const iconRecus  = `<div class="gsol-item-icon" style="background:#FEE2E2;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D92D20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>`;
   const iconGozado = `<div class="gsol-item-icon" style="background:#F0FDF4;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>`;
 
-  document.getElementById('gsolLista').innerHTML = lancs.map(l => {
+  // Agrupa lançamentos por PA (periodo_id)
+  const paMap = new Map();
+  lancs.forEach(l => {
+    const pid = String(l.periodo_id);
+    if (!paMap.has(pid)) paMap.set(pid, []);
+    paMap.get(pid).push(l);
+  });
+
+  // Ordena os PAs por ano decrescente (usa pa_fim do GESTOR_PERIODOS)
+  const pasOrdenados = [...paMap.keys()].sort((a, b) => {
+    const pa = GESTOR_PERIODOS.find(p => String(p.id) === a);
+    const pb = GESTOR_PERIODOS.find(p => String(p.id) === b);
+    const fa = pa?.pa_fim || pa?.pa_inicio || '0';
+    const fb = pb?.pa_fim || pb?.pa_inicio || '0';
+    return fb.localeCompare(fa);
+  });
+
+  const renderLanc = (l) => {
     const st = (l.status || '').toLowerCase();
     const icon = st === 'solicitado' ? iconAguard : st === 'recusado' ? iconRecus : st === 'gozado' ? iconGozado : iconAprov;
     const badgeHtml = st === 'solicitado'
@@ -6811,14 +6829,11 @@ function _renderGsolLista(c) {
       : st === 'gozado'
       ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#F0FDF4;color:#15803D;font-weight:600;">Gozado</span>`
       : `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#DCFCE7;color:#15803D;font-weight:600;">Aprovado</span>`;
-
     const motivoHtml = st === 'recusado' && l._motivoRecusa
       ? `<div class="gsol-item-motivo">Motivo: ${l._motivoRecusa}</div>` : '';
-
     const cancelarHtml = st === 'solicitado'
       ? `<div style="margin-top:8px;"><button onclick="gestorCancelarSolicitacao('${l.periodo_id}','${c.id}','${l.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;cursor:pointer;font-weight:600;">Cancelar solicitação</button></div>`
       : '';
-
     const passado = l.data_fim < hoje;
     return `<div class="gsol-item">
       ${icon}
@@ -6827,6 +6842,33 @@ function _renderGsolLista(c) {
         <div style="margin-bottom:4px;">${badgeHtml}${passado && st !== 'solicitado' ? `<span style="font-size:11px;color:var(--text-ter);margin-left:6px;">Concluído</span>` : ''}</div>
         ${motivoHtml}
         ${cancelarHtml}
+      </div>
+    </div>`;
+  };
+
+  document.getElementById('gsolLista').innerHTML = pasOrdenados.map(pid => {
+    const per = GESTOR_PERIODOS.find(p => String(p.id) === pid);
+    const paInicio = per?.pa_inicio ? _fmtD(per.pa_inicio) : '—';
+    const paFim    = per?.pa_fim    ? _fmtD(per.pa_fim)    : '—';
+    const paAno    = per?.pa_fim    ? per.pa_fim.slice(0,4) : per?.pa_inicio?.slice(0,4) || '—';
+    const diasDir  = per ? (Number(per.dias_direito) || 30) : 30;
+    const saldoPa  = per ? gestorSaldoPeriodo(per) : 0;
+    const temSolic = paMap.get(pid).some(l => (l.status||'').toLowerCase() === 'solicitado');
+    const headerBg = temSolic ? '#FFFBEB' : 'var(--bg)';
+    const headerBd = temSolic ? '#FDE68A' : 'var(--border)';
+
+    return `<div style="margin-bottom:16px;border:1px solid ${headerBd};border-radius:10px;overflow:hidden;">
+      <div style="padding:10px 14px;background:${headerBg};display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <div>
+          <span style="font-size:12px;font-weight:700;color:var(--text);">PA ${paAno}</span>
+          <span style="font-size:11px;color:var(--text-ter);margin-left:8px;">${paInicio} → ${paFim}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-sec);">
+          Saldo: <strong style="color:${saldoPa<=5?'#D92D20':'var(--text)'};">${saldoPa}d</strong> de ${diasDir}d
+        </div>
+      </div>
+      <div style="padding:0 14px;">
+        ${paMap.get(pid).map(renderLanc).join('')}
       </div>
     </div>`;
   }).join('');
