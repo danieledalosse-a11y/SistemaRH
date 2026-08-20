@@ -7010,8 +7010,14 @@ function gestorToggleMenu(btn, colabId, paId) {
 function gestorRemarcarSolicitacao(feriasId, colabId) {
   const periodo = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
   if (!periodo) { toast('Período não encontrado.'); return; }
+  // Detecta qual slot foi recusado para forçar atualização nesse slot (não criar p2)
+  const lancRecusado = GESTOR_LANCAMENTOS.find(l =>
+    String(l.periodo_id) === String(feriasId) &&
+    (l.status||'').toLowerCase() === 'recusado'
+  );
+  const slotRemarcar = lancRecusado ? (String(lancRecusado.id).endsWith('-p2') ? 'p2' : 'p1') : null;
   fecharGestorSolicitacoes();
-  gestorAbrirModal(colabId, feriasId);
+  gestorAbrirModal(colabId, feriasId, slotRemarcar, lancRecusado);
 }
 
 function fecharGestorSolicitacoes() {
@@ -7124,11 +7130,11 @@ async function gestorSolicitarNovoPa(colabId) {
   }
 }
 
-function gestorAbrirModal(colabId, periodoId) {
+function gestorAbrirModal(colabId, periodoId, slotRemarcar, lancRecusado) {
   const colab   = GESTOR_COLABS.find(c => String(c.id) === String(colabId));
   const periodo = GESTOR_PERIODOS.find(p => String(p.id) === String(periodoId));
   if (!colab || !periodo) return;
-  _gestorColabSolicitando = { colab, periodo };
+  _gestorColabSolicitando = { colab, periodo, _slotRemarcar: slotRemarcar || null, _lancRecusado: lancRecusado || null };
 
   document.getElementById('mgNome').textContent  = colab.nome;
   document.getElementById('mgCargo').textContent = colab.cargo || '';
@@ -7195,19 +7201,35 @@ async function gestorEnviarSolicitacao() {
 
   const fim = retorno || addDays(inicio, diasVal - 1);
 
+  // Validação: datas idênticas à solicitação recusada anteriormente
+  const lancRecusado = _gestorColabSolicitando._lancRecusado;
+  if (lancRecusado && lancRecusado.data_inicio === inicio && lancRecusado.data_fim === fim) {
+    const erroEl = document.getElementById('mgErro');
+    if (erroEl) {
+      erroEl.textContent = 'Este período já foi avaliado e não aprovado pelo RH. Escolha datas diferentes ou entre em contato com o RH antes de reenviar.';
+      erroEl.classList.add('show');
+      setTimeout(() => erroEl.classList.remove('show'), 6000);
+    } else {
+      toast('Este período já foi recusado pelo RH. Escolha datas diferentes.');
+    }
+    return;
+  }
+
   try {
     const btn = document.getElementById('mgBtnEnviar');
     btn.disabled = true; btn.textContent = 'Enviando...';
 
     const feriasId = periodo.id;
     const row = periodo._feriasRow || {};
+    const slotForcado = _gestorColabSolicitando._slotRemarcar;
     let patchData;
     let slotKey;
-    if (!row.periodo1_inicio) {
+
+    if (slotForcado === 'p1' || (!slotForcado && !row.periodo1_inicio)) {
       patchData = { periodo1_inicio: inicio, periodo1_fim: fim, dias1: diasVal,
                     obs_gestor: `Solicitado por: ${GESTOR_NOME_USUARIO}`, status: 'Pendente' };
       slotKey = 'p1';
-    } else if (!row.periodo2_inicio) {
+    } else if (slotForcado === 'p2' || (!slotForcado && !row.periodo2_inicio)) {
       patchData = { periodo2_inicio: inicio, periodo2_fim: fim, dias2: diasVal,
                     obs_gestor: `Solicitado por: ${GESTOR_NOME_USUARIO}`, status: 'Pendente' };
       slotKey = 'p2';
