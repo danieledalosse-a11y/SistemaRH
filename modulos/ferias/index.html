@@ -1116,7 +1116,13 @@
 
   /* ── Visão Gestor ── */
   #sec-gestor { display: none; }
-  .gestor-alerts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+  .gestor-alerts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+  .gestor-alerts .proto-alert-card { flex:1; min-width:180px; padding:10px 14px; gap:10px; }
+  .gestor-alerts .proto-alert-icon { width:32px; height:32px; flex-shrink:0; }
+  .gestor-alerts .proto-alert-icon svg { width:16px; height:16px; }
+  .gestor-alerts .proto-alert-num { font-size:22px; font-weight:800; line-height:1.1; }
+  .gestor-alerts .proto-alert-eyebrow { font-size:10px; margin-bottom:1px; }
+  .gestor-alerts .proto-alert-sub { font-size:11px; margin-top:1px; }
   .gestor-alert-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; cursor: pointer; transition: all 0.15s; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
   .gestor-alert-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
   .gestor-alert-card.danger::before  { background: var(--red); }
@@ -1260,6 +1266,21 @@
           <div class="proto-alert-eyebrow" style="color:var(--green);">Em férias hoje</div>
           <div class="proto-alert-num" style="color:var(--green);" id="alertNumHoje">—</div>
           <div class="proto-alert-sub" id="alertInfoDesc">aguardando dados...</div>
+        </div>
+        <div class="proto-alert-arr">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+
+      <!-- Card: Aguardando aprovação RH — visível quando há pendentes -->
+      <div class="proto-alert-card rh-only" id="cardRhAguard" style="display:none;background:#FFFBEB;border-color:#FDE68A;cursor:pointer;" onclick="setStatusFiltro('ok')">
+        <div class="proto-alert-icon" style="background:#FEF3C7;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="proto-alert-eyebrow" style="color:#92400E;">Aguardando aprovação</div>
+          <div class="proto-alert-num" style="color:#92400E;" id="alertNumPend">—</div>
+          <div class="proto-alert-sub">Solicitações enviadas por gestores</div>
         </div>
         <div class="proto-alert-arr">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
@@ -3442,6 +3463,11 @@ function renderMetricas() {
   document.getElementById('cnt-dobra').textContent  = riscoDobra;
   document.getElementById('cnt-sem').textContent    = semAgendado;
   document.getElementById('cnt-pend').textContent   = pendentes;
+  // Card de aprovação no topo (RH)
+  const cardAg = document.getElementById('cardRhAguard');
+  const numAg  = document.getElementById('alertNumPend');
+  if (cardAg) { cardAg.style.display = pendentes > 0 ? '' : 'none'; }
+  if (numAg)  { numAg.textContent = pendentes; }
 
   const pct = (n) => total > 0 ? `${Math.round(n / total * 100)}% do quadro` : '';
 
@@ -3877,6 +3903,9 @@ function renderListaAnual() {
         if (excluir.has(reg.status)) return false;
         return Number(reg.ano) === ano && reg.paInicio && reg.paFim && HOJE >= reg.paInicio && HOJE <= reg.paFim;
       });
+    } else if (_statusFiltro === 'ok') {
+      // Pendentes: inclui status 'Pendente' (não exclui como os demais filtros)
+      pasDoAno = c.registros.filter(reg => reg.status === 'Pendente' && reg._novoLanc);
     } else {
       // todos: PAs cujo ano de direito = ANO_REF (convenção: ano em que o direito é adquirido)
       pasDoAno = c.registros.filter(reg => {
