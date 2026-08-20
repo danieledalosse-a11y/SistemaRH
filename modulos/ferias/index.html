@@ -1595,6 +1595,45 @@
 
     <!-- ── Aba Relatório ── -->
     <div id="gsub-relatorio" style="display:none;">
+      <div class="card" style="padding:20px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:14px;">Filtros do relatório</div>
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">De</div>
+            <input type="date" id="relDe" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Até</div>
+            <input type="date" id="relAte" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Cargo</div>
+            <select id="relCargo" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:180px;">
+              <option value="">Todos os cargos</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Status</div>
+            <select id="relStatus" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+              <option value="">Todos</option>
+              <option value="aprovado">Aprovado</option>
+              <option value="agendado">Agendado</option>
+              <option value="solicitado">Solicitado</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Agrupar por</div>
+            <select id="relAgrupamento" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+              <option value="">Sem agrupamento</option>
+              <option value="cargo">Cargo</option>
+              <option value="mes">Mês</option>
+            </select>
+          </div>
+          <button onclick="gestorGerarRelatorio()" style="padding:7px 20px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;white-space:nowrap;">
+            Gerar relatório
+          </button>
+        </div>
+      </div>
       <div id="gestorRelatorioContent"></div>
     </div>
 
@@ -6089,113 +6128,206 @@ function gestorExportarCSV() {
   URL.revokeObjectURL(url);
 }
 
-let _gestorRelView = 'mes';
 function renderGestorRelatorio() {
+  // Popula select de cargo e define período padrão (mês atual + 3 meses)
+  const cargoSel = document.getElementById('relCargo');
+  if (cargoSel && cargoSel.options.length <= 1 && GESTOR_COLABS.length) {
+    const cargos = [...new Set(GESTOR_COLABS.map(c => c.cargo).filter(Boolean))].sort();
+    cargos.forEach(cg => { const o = document.createElement('option'); o.value = cg; o.textContent = cg; cargoSel.appendChild(o); });
+  }
+  const hoje = new Date();
+  const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const fim  = new Date(hoje.getFullYear(), hoje.getMonth() + 3, 0);
+  const toISO = d => d.toISOString().slice(0,10);
+  const deEl  = document.getElementById('relDe');
+  const ateEl = document.getElementById('relAte');
+  if (deEl  && !deEl.value)  deEl.value  = toISO(ini);
+  if (ateEl && !ateEl.value) ateEl.value = toISO(fim);
+  document.getElementById('gestorRelatorioContent').innerHTML =
+    `<div style="text-align:center;padding:40px;color:var(--text-ter);font-size:13px;">Defina os filtros acima e clique em <strong>Gerar relatório</strong>.</div>`;
+}
+
+function gestorGerarRelatorio() {
   const el = document.getElementById('gestorRelatorioContent');
   if (!el) return;
   const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
-  const _ini  = nome => nome.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
-  const _cor  = nome => { let h=0; for(let i=0;i<nome.length;i++) h=(h*31+nome.charCodeAt(i))&0xFFFFFF; const COLS=['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C']; return COLS[Math.abs(h)%COLS.length]; };
   const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  const hoje  = new Date().toISOString().slice(0,10);
-  const hojeD = new Date();
 
-  const btnStyle = v => `padding:6px 16px;border-radius:7px;font-size:13px;font-family:inherit;cursor:pointer;border:1.5px solid var(--border);transition:background .12s;${_gestorRelView===v?'background:var(--blue);color:#fff;border-color:var(--blue);font-weight:600;':'background:var(--surface);color:var(--text-sec);'}`;
-  const toolbar = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
-    <button style="${btnStyle('mes')}"  onclick="_gestorRelView='mes';renderGestorRelatorio();">Por mês</button>
-    <button style="${btnStyle('cargo')}" onclick="_gestorRelView='cargo';renderGestorRelatorio();">Por cargo</button>
+  const de         = document.getElementById('relDe')?.value || '';
+  const ate        = document.getElementById('relAte')?.value || '';
+  const cargoFil   = document.getElementById('relCargo')?.value || '';
+  const statusFil  = document.getElementById('relStatus')?.value || '';
+  const agrupFil   = document.getElementById('relAgrupamento')?.value || '';
+
+  // Filtra lançamentos no período selecionado
+  let lancs = GESTOR_LANCAMENTOS.filter(l => {
+    if (de  && l.data_fim   < de)  return false;
+    if (ate && l.data_inicio > ate) return false;
+    if (statusFil && (l.status||'').toLowerCase() !== statusFil) return false;
+    return true;
+  });
+
+  // Enriquece com dados do colaborador e filtra por cargo
+  const rows = lancs.map(l => {
+    const c = GESTOR_COLABS.find(c => String(c.id) === String(l.colaborador_id));
+    if (!c) return null;
+    if (cargoFil && c.cargo !== cargoFil) return null;
+    return { ...l, colab: c };
+  }).filter(Boolean).sort((a, b) => a.data_inicio.localeCompare(b.data_inicio) || a.colab.nome.localeCompare(b.colab.nome));
+
+  if (!rows.length) {
+    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-ter);font-size:13px;">Nenhum resultado para os filtros selecionados.</div>`;
+    return;
+  }
+
+  const stBadge = st => {
+    const s = (st||'').toLowerCase();
+    if (s === 'solicitado') return `<span style="padding:2px 8px;border-radius:4px;font-size:11px;background:#FFFBEB;color:#92400E;">Solicitado</span>`;
+    return `<span style="padding:2px 8px;border-radius:4px;font-size:11px;background:#DCFCE7;color:#15803D;">Aprovado</span>`;
+  };
+
+  const acoes = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">
+    <span style="font-size:13px;color:var(--text-sec);">${rows.length} registro${rows.length!==1?'s':''} encontrado${rows.length!==1?'s':''}</span>
     <span style="flex:1;"></span>
-    <button onclick="gestorExportarCSV()" style="display:flex;align-items:center;gap:6px;padding:6px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-sec);cursor:pointer;">
+    <button onclick="gestorExportarRelatorioCSV()" style="display:flex;align-items:center;gap:5px;padding:6px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--text-sec);cursor:pointer;">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Exportar CSV
     </button>
+    <button onclick="gestorImprimirRelatorio()" style="display:flex;align-items:center;gap:5px;padding:6px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--text-sec);cursor:pointer;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Imprimir
+    </button>
   </div>`;
 
-  if (_gestorRelView === 'mes') {
-    let html = toolbar;
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(hojeD.getFullYear(), hojeD.getMonth() + i, 1);
-      const ano = d.getFullYear(), mes = d.getMonth();
-      const mesStr   = String(mes+1).padStart(2,'0');
-      const mesInicio = `${ano}-${mesStr}-01`;
-      const mesFim    = `${ano}-${mesStr}-${String(new Date(ano, mes+1, 0).getDate()).padStart(2,'0')}`;
+  const thStyle = 'padding:9px 12px;font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;text-align:left;border-bottom:2px solid var(--border);white-space:nowrap;';
+  const tdStyle = 'padding:10px 12px;font-size:13px;color:var(--text);border-bottom:1px solid var(--border-light,var(--border));vertical-align:middle;';
+  const tdSecStyle = 'padding:10px 12px;font-size:12px;color:var(--text-sec);border-bottom:1px solid var(--border-light,var(--border));vertical-align:middle;';
 
-      const lancsDoMes = GESTOR_LANCAMENTOS.filter(l => l.data_fim >= mesInicio && l.data_inicio <= mesFim);
-      if (!lancsDoMes.length) continue;
+  if (!agrupFil) {
+    // Tabela simples
+    const tableRows = rows.map(r => `<tr>
+      <td style="${tdStyle}">${r.colab.nome}</td>
+      <td style="${tdSecStyle}">${r.colab.cargo||'—'}</td>
+      <td style="${tdSecStyle}">${r.colab.setor||'—'}</td>
+      <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.data_inicio)} → ${_fmtD(r.data_fim)}</td>
+      <td style="${tdStyle};text-align:center;">${r.dias}d</td>
+      <td style="${tdStyle};">${stBadge(r.status)}</td>
+    </tr>`).join('');
+    el.innerHTML = acoes + `<div class="card" style="padding:0;overflow:hidden;overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;min-width:600px;">
+        <thead><tr>
+          <th style="${thStyle}">Colaborador</th>
+          <th style="${thStyle}">Cargo</th>
+          <th style="${thStyle}">Setor</th>
+          <th style="${thStyle}">Período</th>
+          <th style="${thStyle};text-align:center;">Dias</th>
+          <th style="${thStyle}">Status</th>
+        </tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table></div>`;
 
-      const colabIds = [...new Set(lancsDoMes.map(l => String(l.colaborador_id)))];
-      const colabsDoMes = colabIds.map(id => GESTOR_COLABS.find(c => String(c.id) === id)).filter(Boolean).sort((a,b) => a.nome.localeCompare(b.nome));
-
-      html += `<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-light,var(--border));">
-          <div style="font-size:14px;font-weight:600;color:var(--text);">${MESES[mes]} ${ano}</div>
-          <span style="font-size:12px;color:var(--text-ter);">${colabsDoMes.length} colaborador${colabsDoMes.length>1?'es':''}</span>
+  } else if (agrupFil === 'cargo') {
+    const grupos = {};
+    rows.forEach(r => { const k = r.colab.cargo||'Sem cargo'; if (!grupos[k]) grupos[k]=[]; grupos[k].push(r); });
+    let html = acoes;
+    Object.keys(grupos).sort().forEach(cargo => {
+      const gRows = grupos[cargo].map(r => `<tr>
+        <td style="${tdStyle}">${r.colab.nome}</td>
+        <td style="${tdSecStyle}">${r.colab.setor||'—'}</td>
+        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.data_inicio)} → ${_fmtD(r.data_fim)}</td>
+        <td style="${tdStyle};text-align:center;">${r.dias}d</td>
+        <td style="${tdStyle};">${stBadge(r.status)}</td>
+      </tr>`).join('');
+      html += `<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;overflow-x:auto;">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);">
+          <span style="font-size:13px;font-weight:600;color:var(--text);">${cargo}</span>
+          <span style="font-size:12px;color:var(--text-ter);margin-left:8px;">${grupos[cargo].length} registro${grupos[cargo].length!==1?'s':''}</span>
         </div>
-        <div style="padding:10px 16px 12px;display:flex;flex-direction:column;gap:6px;">`;
-
-      colabsDoMes.forEach(c => {
-        if (!c) return;
-        const lc = lancsDoMes.filter(l => String(l.colaborador_id) === String(c.id)).sort((a,b) => a.data_inicio.localeCompare(b.data_inicio));
-        const cor = _cor(c.nome), ini = _ini(c.nome);
-        const fotoHtml = c.foto_url
-          ? `<img src="${c.foto_url}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">`
-          : `<div style="width:28px;height:28px;border-radius:50%;background:${cor};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fff;flex-shrink:0;">${ini}</div>`;
-        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;background:var(--surface-alt,#F8FAFC);">
-          ${fotoHtml}
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.nome}</div>
-            <div style="font-size:11px;color:var(--text-ter);">${c.cargo||''}</div>
-          </div>
-          <div style="font-size:12px;color:var(--text-sec);text-align:right;white-space:nowrap;">
-            ${lc.map(l => {
-              const st = (l.status||'').toLowerCase();
-              const stCor = st==='solicitado' ? '#B45309' : '#15803D';
-              return `<span style="display:inline-block;margin-left:6px;padding:2px 6px;border-radius:4px;font-size:11px;background:${st==='solicitado'?'#FFFBEB':'#DCFCE7'};color:${stCor};">${_fmtD(l.data_inicio)} → ${_fmtD(l.data_fim)} · ${l.dias}d</span>`;
-            }).join('')}
-          </div>
-        </div>`;
-      });
-
-      html += `</div></div>`;
-    }
+        <table style="width:100%;border-collapse:collapse;min-width:500px;">
+          <thead><tr>
+            <th style="${thStyle}">Colaborador</th><th style="${thStyle}">Setor</th>
+            <th style="${thStyle}">Período</th><th style="${thStyle};text-align:center;">Dias</th><th style="${thStyle}">Status</th>
+          </tr></thead><tbody>${gRows}</tbody>
+        </table></div>`;
+    });
     el.innerHTML = html;
 
-  } else {
-    // Por cargo
-    const cargos = [...new Set(GESTOR_COLABS.map(c => c.cargo||'Sem cargo'))].sort();
-    let html = toolbar;
-    cargos.forEach(cargo => {
-      const colabs = GESTOR_COLABS.filter(c => (c.cargo||'Sem cargo') === cargo).sort((a,b) => a.nome.localeCompare(b.nome));
-      const total   = colabs.length;
-      const agend   = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => String(l.colaborador_id) === String(c.id) && l.data_fim >= hoje)).length;
-      const semAgend = total - agend;
-
-      html += `<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-light,var(--border));">
-          <div style="font-size:14px;font-weight:600;color:var(--text);">${cargo}</div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <span style="font-size:12px;padding:3px 8px;border-radius:4px;background:#DCFCE7;color:#15803D;">${agend} agendado${agend!==1?'s':''}</span>
-            ${semAgend>0?`<span style="font-size:12px;padding:3px 8px;border-radius:4px;background:#FFFBEB;color:#92400E;">${semAgend} sem agendamento</span>`:''}
-          </div>
+  } else if (agrupFil === 'mes') {
+    const grupos = {};
+    rows.forEach(r => {
+      const k = r.data_inicio.slice(0,7);
+      if (!grupos[k]) grupos[k]=[];
+      grupos[k].push(r);
+    });
+    let html = acoes;
+    Object.keys(grupos).sort().forEach(ym => {
+      const [ano, mes] = ym.split('-');
+      const label = `${MESES[Number(mes)-1]} ${ano}`;
+      const gRows = grupos[ym].map(r => `<tr>
+        <td style="${tdStyle}">${r.colab.nome}</td>
+        <td style="${tdSecStyle}">${r.colab.cargo||'—'}</td>
+        <td style="${tdSecStyle}">${r.colab.setor||'—'}</td>
+        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.data_inicio)} → ${_fmtD(r.data_fim)}</td>
+        <td style="${tdStyle};text-align:center;">${r.dias}d</td>
+        <td style="${tdStyle};">${stBadge(r.status)}</td>
+      </tr>`).join('');
+      html += `<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;overflow-x:auto;">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);">
+          <span style="font-size:13px;font-weight:600;color:var(--text);">${label}</span>
+          <span style="font-size:12px;color:var(--text-ter);margin-left:8px;">${grupos[ym].length} registro${grupos[ym].length!==1?'s':''}</span>
         </div>
-        <div style="padding:10px 16px 12px;display:flex;flex-wrap:wrap;gap:6px;">`;
-
-      colabs.forEach(c => {
-        const temAgend = GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.data_fim >= hoje);
-        const cor = _cor(c.nome), ini = _ini(c.nome);
-        const fotoHtml = c.foto_url
-          ? `<img src="${c.foto_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;" alt="">`
-          : `<div style="width:24px;height:24px;border-radius:50%;background:${cor};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff;">${ini}</div>`;
-        html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;border:1px solid ${temAgend?'#A7F3D0':'var(--border)'};background:${temAgend?'#ECFDF5':'var(--surface)'};">
-          ${fotoHtml}
-          <span style="font-size:12px;color:var(--text);white-space:nowrap;">${c.nome.split(' ').slice(0,2).join(' ')}</span>
-        </div>`;
-      });
-
-      html += `</div></div>`;
+        <table style="width:100%;border-collapse:collapse;min-width:500px;">
+          <thead><tr>
+            <th style="${thStyle}">Colaborador</th><th style="${thStyle}">Cargo</th><th style="${thStyle}">Setor</th>
+            <th style="${thStyle}">Período</th><th style="${thStyle};text-align:center;">Dias</th><th style="${thStyle}">Status</th>
+          </tr></thead><tbody>${gRows}</tbody>
+        </table></div>`;
     });
     el.innerHTML = html;
   }
+
+  // Guarda rows para export/print
+  window._gestorRelRows = rows;
+}
+
+function gestorExportarRelatorioCSV() {
+  const rows = window._gestorRelRows;
+  if (!rows?.length) return;
+  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+  const header = ['Nome','Cargo','Setor','Início','Fim','Dias','Status'];
+  const linhas = [header, ...rows.map(r => [r.colab.nome, r.colab.cargo||'', r.colab.setor||'', _fmtD(r.data_inicio), _fmtD(r.data_fim), r.dias, r.status||''])];
+  const csv  = linhas.map(l => l.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `relatorio-ferias-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function gestorImprimirRelatorio() {
+  const rows = window._gestorRelRows;
+  if (!rows?.length) return;
+  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+  const de  = document.getElementById('relDe')?.value || '';
+  const ate = document.getElementById('relAte')?.value || '';
+  const periodo = (de || ate) ? `${_fmtD(de)} a ${_fmtD(ate)}` : 'Todos os períodos';
+  const trs = rows.map(r => `<tr><td>${r.colab.nome}</td><td>${r.colab.cargo||'—'}</td><td>${r.colab.setor||'—'}</td><td>${_fmtD(r.data_inicio)} → ${_fmtD(r.data_fim)}</td><td style="text-align:center;">${r.dias}d</td><td>${r.status||'—'}</td></tr>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório Férias</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#222;}
+  h2{margin:0 0 4px;font-size:15px;}p{margin:0 0 16px;color:#666;font-size:11px;}
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;padding:6px 8px;border-bottom:2px solid #333;font-size:10px;text-transform:uppercase;}
+  td{padding:6px 8px;border-bottom:1px solid #e5e5e5;font-size:12px;}
+  tr:nth-child(even){background:#f9f9f9;}
+  @media print{body{padding:0;}}</style>
+  </head><body onload="window.print()">
+  <h2>Relatório de Férias</h2>
+  <p>Período: ${periodo} · ${rows.length} registro(s) · Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
+  <table><thead><tr><th>Colaborador</th><th>Cargo</th><th>Setor</th><th>Período</th><th>Dias</th><th>Status</th></tr></thead>
+  <tbody>${trs}</tbody></table></body></html>`;
+  const w = window.open('','_blank');
+  w.document.write(html); w.document.close();
 }
 
 function renderGestorAtencao() {
