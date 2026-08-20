@@ -1120,6 +1120,13 @@
   .gstor-btn-prim { font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer;white-space:nowrap;font-weight:600;width:100%; }
   .gstor-btn-more { display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-sec);cursor:pointer;transition:all .15s;flex-shrink:0; }
   .gstor-btn-more:hover { background:var(--bg);color:var(--text);border-color:var(--text-ter); }
+  .gstor-row { cursor:pointer; }
+  .gstor-row:hover { background:var(--bg); }
+  .gstor-btn-sm { font-size:11px;padding:5px 10px;border-radius:6px;font-weight:600;cursor:pointer;white-space:nowrap;border:none; }
+  .gstor-btn-blue   { background:var(--blue);color:#fff; }
+  .gstor-btn-indigo { background:#6366F1;color:#fff; }
+  .gstor-btn-amber  { background:#FFFBEB;color:#92400E;border:1px solid #FDE68A !important; }
+  .gstor-btn-red-outline { background:transparent;color:#D92D20;border:1.5px solid #D92D20 !important; }
   /* Menu dropdown "⋯" */
   .gstor-menu { position:fixed;z-index:800;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:4px;min-width:160px;display:none; }
   .gstor-menu.open { display:block; }
@@ -6027,9 +6034,9 @@ function renderGestorAlerts(colabsBase) {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
         </div>
         <div style="flex:1;min-width:0;">
-          <div class="proto-alert-eyebrow" style="color:#92400E;">Para analisar</div>
+          <div class="proto-alert-eyebrow" style="color:#92400E;">Pendentes</div>
           <div class="proto-alert-num" style="color:#92400E;">${aguardandoAprov.length}</div>
-          <div class="proto-alert-sub">Solicitações pendentes e recusas</div>
+          <div class="proto-alert-sub">Aguardando RH ou ação do gestor</div>
         </div>
         <div class="proto-alert-arr"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
       </div>`
@@ -6719,18 +6726,26 @@ function renderGestorAtencao() {
       : `<div class="proto-avatar" style="background:${cor};">${ini}</div>`;
 
     const podeSlicitar = pa && saldo > 0;
-    const btnSolicitar = podeSlicitar
-      ? `<button onclick="gestorAbrirModal('${c.id}','${pa.id}')" class="gstor-btn-prim">Solicitar</button>`
-      : semPA
-      ? `<button onclick="gestorSolicitarNovoPa('${c.id}')" class="gstor-btn-prim" style="background:#6366F1;">Solicitar</button>`
-      : `<button disabled class="gstor-btn-prim" style="background:var(--border);color:var(--text-ter);cursor:not-allowed;">Solicitar</button>`;
-    const btnHistorico = `<button class="gstor-btn-more" onclick="gestorToggleMenu(this,'${c.id}',${pa?.id ? `'${pa.id}'` : 'null'})" title="Mais ações">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-    </button>`;
+    const lancsFuturosAtivos = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id) && l.data_fim >= hoje);
+    const temSolicitado = lancsFuturosAtivos.some(l => (l.status||'').toLowerCase() === 'solicitado');
+    const temRecusado   = lancsFuturosAtivos.some(l => (l.status||'').toLowerCase() === 'recusado');
+    const temAprovado   = lancsFuturosAtivos.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
+    let btnAcao;
+    if (semPA) {
+      btnAcao = `<button onclick="event.stopPropagation();gestorSolicitarNovoPa('${c.id}')" class="gstor-btn-sm gstor-btn-indigo">Solicitar</button>`;
+    } else if (temSolicitado && !temAprovado) {
+      btnAcao = `<button onclick="event.stopPropagation();gestorAbrirSolicitacoes('${c.id}')" class="gstor-btn-sm gstor-btn-amber" style="cursor:default;">⏳ Aguardando...</button>`;
+    } else if (temRecusado && !temAprovado && !temSolicitado) {
+      btnAcao = `<button onclick="event.stopPropagation();gestorAbrirSolicitacoes('${c.id}')" class="gstor-btn-sm gstor-btn-red-outline">Ver recusa →</button>`;
+    } else if (podeSlicitar) {
+      btnAcao = `<button onclick="event.stopPropagation();gestorAbrirModal('${c.id}','${pa.id}')" class="gstor-btn-sm gstor-btn-blue">Solicitar</button>`;
+    } else {
+      btnAcao = '';
+    }
 
     const admissaoFmt = c.data_admissao ? c.data_admissao.slice(0,10).split('-').reverse().join('/') : null;
 
-    return `<div class="proto-table-row" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 88px;cursor:default;border-left:4px solid ${borderClr};padding-left:12px;">
+    return `<div class="proto-table-row gstor-row" onclick="gestorAbrirSolicitacoes('${c.id}')" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 88px;border-left:4px solid ${borderClr};padding-left:12px;">
       <div class="proto-colab-cell">
         ${avatarHtml}
         <div>
@@ -6756,7 +6771,7 @@ function renderGestorAtencao() {
         </div>
       </div>
       <div class="proto-td">${badge}</div>
-      <div class="proto-td" style="display:flex;flex-direction:row;gap:4px;align-items:center;justify-content:flex-end;">${btnSolicitar}${btnHistorico}</div>
+      <div class="proto-td" style="display:flex;flex-direction:row;gap:4px;align-items:center;justify-content:flex-end;">${btnAcao}</div>
     </div>
     <div id="gestorHist-${c.id}" style="display:none;background:var(--surface-alt,var(--bg-2));border-bottom:1px solid var(--border);padding:12px 20px 16px;">
       ${(() => {
@@ -6827,6 +6842,10 @@ function gestorAbrirSolicitacoes(colabId) {
     btnNova.onclick = () => { fecharGestorSolicitacoes(); gestorAbrirModal(colabId, pa.id); };
   } else {
     btnNova.style.display = 'none';
+  }
+  const btnHist = document.getElementById('gsolBtnHist');
+  if (btnHist) {
+    btnHist.onclick = () => { fecharGestorSolicitacoes(); gestorAbrirHistorico(colabId); };
   }
 
   _renderGsolLista(c, pa);
@@ -7294,7 +7313,10 @@ document.addEventListener('DOMContentLoaded', () => {
       <div id="gsolLista"></div>
     </div>
     <div class="gsol-footer">
-      <button id="gsolBtnNova" onclick="" style="width:100%;padding:10px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Nova solicitação</button>
+      <div style="display:flex;gap:8px;flex-direction:column;">
+        <button id="gsolBtnNova" onclick="" style="width:100%;padding:10px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Nova solicitação</button>
+        <button id="gsolBtnHist" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-sec);font-size:12px;cursor:pointer;">Ver histórico completo</button>
+      </div>
     </div>
   </div>
 </div>
