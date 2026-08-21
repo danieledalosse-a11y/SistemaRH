@@ -272,7 +272,14 @@
   .phist-fechar:hover { color: var(--text); background: var(--bg); }
   .phist-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
   .phist-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-ter); margin-bottom: 10px; }
-  .phist-etapas { display: flex; flex-direction: column; gap: 0; }
+  .phist-grupo { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .phist-grupo-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .phist-grupo-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-sec); }
+  .phist-grupo-badge { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px; }
+  .phist-grupo-badge.done    { background: var(--green-bg); color: var(--green); }
+  .phist-grupo-badge.partial { background: #FFF7ED; color: #C2410C; }
+  .phist-grupo-badge.pend    { background: var(--border); color: var(--text-ter); }
+  .phist-etapas { display: flex; flex-direction: column; gap: 0; padding: 0 14px; }
   .phist-etapa { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .phist-etapa:last-child { border-bottom: none; }
   .phist-etapa-check { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; margin-top: 1px; }
@@ -2075,19 +2082,48 @@ function _phistRender(proc, etapas, unifMovs, cfg) {
   // Etapas
   const etapasOrdenadas = [...etapas].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
   if (etapasOrdenadas.length) {
-    html += '<div><div class="phist-section-title">Etapas</div><div class="phist-etapas">';
+    // Agrupa por prazo_dias → fases naturais
+    const gruposMap = new Map();
     for (const e of etapasOrdenadas) {
-      const ok = !!e.concluido;
-      const quando = e.concluido_em ? fmtDataHora(e.concluido_em) + (e.concluido_por ? ' · ' + e.concluido_por : '') : '';
-      html += `<div class="phist-etapa">
-        <div class="phist-etapa-check ${ok ? 'ok' : 'pend'}">${ok ? '✓' : '·'}</div>
-        <div>
-          <div class="phist-etapa-titulo">${e.item || e.descricao || e.titulo || '—'}</div>
-          ${quando ? `<div class="phist-etapa-when">${quando}</div>` : ''}
-        </div>
-      </div>`;
+      const chave = e.prazo_dias ?? 0;
+      if (!gruposMap.has(chave)) gruposMap.set(chave, []);
+      gruposMap.get(chave).push(e);
     }
-    html += '</div></div>';
+    // Nomes de fase por prazo (genérico, funciona para qualquer tipo)
+    const labelFase = (dias, idx) => {
+      if (idx === 0) return 'Imediato';
+      if (dias <= 1) return 'Dia 1';
+      if (dias <= 3) return `Até ${dias} dias`;
+      if (dias <= 7) return `Até ${dias} dias`;
+      return `Até ${dias} dias`;
+    };
+    html += '<div><div class="phist-section-title">Etapas</div>';
+    let faseIdx = 0;
+    for (const [prazo, itens] of gruposMap) {
+      const total = itens.length;
+      const feitos = itens.filter(e => e.concluido).length;
+      const allDone = feitos === total;
+      const label = labelFase(prazo, faseIdx++);
+      html += `<div class="phist-grupo">
+        <div class="phist-grupo-header">
+          <span class="phist-grupo-label">${label}</span>
+          <span class="phist-grupo-badge ${allDone ? 'done' : feitos > 0 ? 'partial' : 'pend'}">${feitos}/${total}</span>
+        </div>
+        <div class="phist-etapas">`;
+      for (const e of itens) {
+        const ok = !!e.concluido;
+        const quando = e.concluido_em ? fmtDataHora(e.concluido_em) + (e.concluido_por ? ' · ' + e.concluido_por : '') : '';
+        html += `<div class="phist-etapa">
+          <div class="phist-etapa-check ${ok ? 'ok' : 'pend'}">${ok ? '✓' : '·'}</div>
+          <div>
+            <div class="phist-etapa-titulo">${e.item || e.descricao || e.titulo || '—'}</div>
+            ${quando ? `<div class="phist-etapa-when">${quando}</div>` : ''}
+          </div>
+        </div>`;
+      }
+      html += '</div></div>';
+    }
+    html += '</div>';
   }
 
   // Itens de uniforme (apenas devolucao_uniforme)
