@@ -1580,7 +1580,11 @@ async function _executarConclusao(processoId, justificativa) {
         ...(justificativa ? { dados_extras: dadosExtrasAtuais } : {})
       })
     });
-    if (!r.ok) throw new Error('Erro ao concluir');
+    if (!r.ok) {
+      let detail = '';
+      try { const b = await r.json(); detail = b.message || b.hint || b.details || JSON.stringify(b); } catch(_) {}
+      throw new Error(detail || `HTTP ${r.status}`);
+    }
     showToast('Processo concluído!', 'success');
     cardEl?.remove();
     concluidosCarregados = false;
@@ -1593,7 +1597,7 @@ async function _executarConclusao(processoId, justificativa) {
       </div>`;
     }
   } catch(e) {
-    showToast(_erroApi(e), 'error');
+    showToast('Erro ao concluir processo: ' + (e.message || 'tente novamente.'), 'error');
   }
 }
 
