@@ -73,6 +73,30 @@
   .modal-proc textarea:focus { outline: none; border-color: var(--blue); }
   .modal-proc-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
 
+  /* Modal devolução uniforme */
+  .mdu-overlay { position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;display:none;align-items:center;justify-content:center;padding:20px; }
+  .mdu-overlay.open { display:flex; }
+  .mdu-box { background:var(--surface);border-radius:14px;width:100%;max-width:540px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.22); }
+  .mdu-header { padding:22px 24px 0;flex-shrink:0; }
+  .mdu-title { font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px; }
+  .mdu-sub { font-size:13px;color:var(--text-sec);line-height:1.5;margin-bottom:16px; }
+  .mdu-body { padding:0 24px;overflow-y:auto;flex:1; }
+  .mdu-footer { padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0; }
+  .mdu-almox-row { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border); }
+  .mdu-item { display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:8px; }
+  .mdu-item-nome { font-size:13px;font-weight:600;color:var(--text); }
+  .mdu-item-info { font-size:12px;color:var(--text-sec);margin-top:1px; }
+  .mdu-cond-sel { display:flex;gap:6px; }
+  .mdu-cond-btn { border:1.5px solid var(--border);background:var(--surface);border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text-sec);transition:all .15s; }
+  .mdu-cond-btn.reu { border-color:#027A48;background:#ECFDF3;color:#027A48; }
+  .mdu-cond-btn.des { border-color:#B42318;background:#FEF3F2;color:#B42318; }
+  .mdu-loading { text-align:center;padding:32px;color:var(--text-ter);font-size:13px; }
+  .mdu-empty { text-align:center;padding:24px;color:var(--text-ter);font-size:13px; }
+  .mdu-label { font-size:12px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:5px; }
+  .mdu-select { width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;color:var(--text);background:var(--surface); }
+  .mdu-input { width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;color:var(--text);background:var(--surface); }
+  .mdu-info { background:var(--blue-bg);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--blue);margin-bottom:14px;line-height:1.5; }
+
   /* Filtros por tipo */
   .filtros-tipo { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
   .filtro-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text-sec); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; user-select: none; }
@@ -1503,6 +1527,19 @@ async function confirmarConclusao() {
 
   document.getElementById('modalConcluirProc').style.display = 'none';
 
+  // Se for devolução de uniforme, abre modal especializado
+  const proc = _PROC_MAP[processoId];
+  if (proc && proc.tipo === 'devolucao_uniforme') {
+    _justificativaConclusao = justificativa;
+    await _abrirModalDevolucaoUnif(processoId, proc);
+    return;
+  }
+
+  await _executarConclusao(processoId, justificativa);
+}
+
+async function _executarConclusao(processoId, justificativa) {
+  const cardEl = document.getElementById('card-' + processoId);
   try {
     const dadosExtrasAtuais = {};
     if (justificativa) dadosExtrasAtuais.conclusao_justificativa = justificativa;
@@ -1531,6 +1568,166 @@ async function confirmarConclusao() {
     }
   } catch(e) {
     showToast(_erroApi(e), 'error');
+  }
+}
+
+// ─── Modal devolução de uniforme (conclusão integrada) ────────────────────────
+let _justificativaConclusao = '';
+let _mduItens = []; // { item_id, itemNome, tamanho, qtd, almoxarifado_id }
+let _mduProcessoId = null;
+
+async function _abrirModalDevolucaoUnif(processoId, proc) {
+  _mduProcessoId = processoId;
+  const colabId = proc.colaborador_id;
+  const colabNome = proc.colaborador_nome || 'Colaborador';
+
+  const overlay = document.getElementById('mduOverlay');
+  overlay.classList.add('open');
+  document.getElementById('mduSubtitulo').textContent = colabNome;
+  document.getElementById('mduBody').innerHTML = '<div class="mdu-loading">Carregando itens…</div>';
+  document.getElementById('mduBtnConfirmar').disabled = true;
+
+  try {
+    // Busca movimentações e almoxarifados em paralelo
+    const [movs, almoxs] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/unif_movimentacoes?colaborador_id=eq.${colabId}&select=*,item:unif_catalogo(id,nome)&order=data_movimentacao.desc`, { headers: SB_HEADERS }).then(r => r.json()),
+      fetch(`${SB_URL}/rest/v1/unif_almoxarifados?select=id,nome&order=nome`, { headers: SB_HEADERS }).then(r => r.json()),
+    ]);
+
+    // Calcula itens em poder (mesma lógica do módulo de uniformes)
+    const emPoderMap = new Map();
+    for (const m of movs) {
+      const key = `${m.item_id}|${m.tamanho||''}`;
+      if (!emPoderMap.has(key)) emPoderMap.set(key, { item_id: m.item_id, itemNome: m.item?.nome||'—', tamanho: m.tamanho||'', qtd: 0, almoxarifado_id: m.almoxarifado_id });
+      if (m.tipo === 'entrega' && m.confirmado) emPoderMap.get(key).qtd += (m.quantidade||0);
+      else if (m.tipo === 'devolucao')          emPoderMap.get(key).qtd -= (m.quantidade||0);
+    }
+    _mduItens = [...emPoderMap.values()].filter(x => x.qtd > 0);
+
+    // Popula almoxarifado
+    const selAlmox = document.getElementById('mduAlmox');
+    selAlmox.innerHTML = '<option value="">Selecione…</option>' + almoxs.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
+    // Pré-seleciona almoxarifado da primeira entrega, se houver
+    const almoxOrigem = _mduItens[0]?.almoxarifado_id;
+    if (almoxOrigem) selAlmox.value = almoxOrigem;
+
+    // Renderiza lista de itens
+    if (!_mduItens.length) {
+      document.getElementById('mduBody').innerHTML = '<div class="mdu-empty">Nenhum item em posse registrado para este colaborador.</div>';
+      document.getElementById('mduBtnConfirmar').disabled = false;
+      return;
+    }
+
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('mduData').value = hoje;
+
+    document.getElementById('mduBody').innerHTML = `
+      <div class="mdu-info">Selecione a condição de cada peça. Itens <strong>reutilizáveis</strong> voltam ao estoque do almoxarifado selecionado. <strong>Descartes</strong> apenas registram a baixa.</div>
+      ${_mduItens.map((x, i) => `
+        <div class="mdu-item">
+          <div>
+            <div class="mdu-item-nome">${x.itemNome}</div>
+            <div class="mdu-item-info">Tamanho: ${x.tamanho||'—'} · Em poder: ${x.qtd} un.</div>
+          </div>
+          <div class="mdu-cond-sel">
+            <button class="mdu-cond-btn reu" id="mduBtnReu_${i}" onclick="_mduSetCond(${i},'reutilizavel')">✓ Reutilizável</button>
+            <button class="mdu-cond-btn" id="mduBtnDes_${i}" onclick="_mduSetCond(${i},'descarte')">✕ Descarte</button>
+          </div>
+        </div>`).join('')}`;
+
+    document.getElementById('mduBtnConfirmar').disabled = false;
+  } catch(e) {
+    document.getElementById('mduBody').innerHTML = `<div class="mdu-empty" style="color:var(--red);">Erro ao carregar itens: ${e.message}</div>`;
+  }
+}
+
+function _mduSetCond(i, cond) {
+  document.getElementById(`mduBtnReu_${i}`).className = 'mdu-cond-btn' + (cond === 'reutilizavel' ? ' reu' : '');
+  document.getElementById(`mduBtnDes_${i}`).className = 'mdu-cond-btn' + (cond === 'descarte' ? ' des' : '');
+  _mduItens[i]._cond = cond;
+}
+
+function _mduFechar() {
+  document.getElementById('mduOverlay').classList.remove('open');
+  _mduItens = [];
+  _mduProcessoId = null;
+}
+
+async function _mduConfirmar() {
+  const processoId = _mduProcessoId;
+  if (!processoId) return;
+
+  const almoxId = document.getElementById('mduAlmox').value;
+  const data    = document.getElementById('mduData').value || new Date().toISOString().split('T')[0];
+  const perfil  = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  const regPor  = perfil.nome || 'RH';
+
+  // Verifica se há itens reutilizáveis sem almoxarifado
+  const temReu = _mduItens.some(x => (x._cond || 'reutilizavel') === 'reutilizavel');
+  if (temReu && !almoxId) {
+    showToast('Selecione o almoxarifado de destino para itens reutilizáveis.', 'error');
+    document.getElementById('mduAlmox').focus();
+    return;
+  }
+
+  const btn = document.getElementById('mduBtnConfirmar');
+  btn.disabled = true;
+  btn.textContent = 'Salvando…';
+
+  try {
+    for (const x of _mduItens) {
+      const cond = x._cond || 'reutilizavel';
+      const destAlmox = cond === 'reutilizavel' ? almoxId : (x.almoxarifado_id || null);
+
+      // Registra movimentação de devolução
+      const rMov = await fetch(`${SB_URL}/rest/v1/unif_movimentacoes`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          colaborador_id:     _PROC_MAP[processoId]?.colaborador_id,
+          item_id:            x.item_id,
+          almoxarifado_id:    destAlmox || null,
+          tipo:               'devolucao',
+          motivo:             'devolucao',
+          tamanho:            x.tamanho || null,
+          quantidade:         x.qtd,
+          condicao_devolucao: cond,
+          data_movimentacao:  data,
+          confirmado:         true,
+          registrado_por:     regPor,
+          obs:                'Registrado via conclusão de processo de desligamento',
+        })
+      });
+      if (!rMov.ok) throw new Error('Erro ao registrar devolução');
+
+      // Se reutilizável, incrementa estoque
+      if (cond === 'reutilizavel' && almoxId) {
+        const qStr = `almoxarifado_id=eq.${almoxId}&item_id=eq.${x.item_id}&tamanho=eq.${encodeURIComponent(x.tamanho||'')}&select=id,quantidade`;
+        const estoqRows = await fetch(`${SB_URL}/rest/v1/unif_estoque?${qStr}`, { headers: SB_HEADERS }).then(r => r.json());
+        if (estoqRows.length) {
+          await fetch(`${SB_URL}/rest/v1/unif_estoque?id=eq.${estoqRows[0].id}`, {
+            method: 'PATCH',
+            headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ quantidade: (estoqRows[0].quantidade || 0) + x.qtd })
+          });
+        } else {
+          // Cria linha de estoque se não existir
+          await fetch(`${SB_URL}/rest/v1/unif_estoque`, {
+            method: 'POST',
+            headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ almoxarifado_id: almoxId, item_id: x.item_id, tamanho: x.tamanho || '', quantidade: x.qtd, custo_medio: 0 })
+          });
+        }
+      }
+    }
+
+    _mduFechar();
+    showToast('Devolução registrada!', 'success');
+    await _executarConclusao(processoId, _justificativaConclusao);
+  } catch(e) {
+    showToast(_erroApi(e), 'error');
+    btn.disabled = false;
+    btn.textContent = '✅ Confirmar e concluir';
   }
 }
 
@@ -1992,6 +2189,31 @@ init();
     </div>
   </div>
 </div>
+<!-- Modal devolução uniforme -->
+<div class="mdu-overlay" id="mduOverlay">
+  <div class="mdu-box">
+    <div class="mdu-header">
+      <div class="mdu-title">Registrar devolução de uniforme</div>
+      <div class="mdu-sub" id="mduSubtitulo"></div>
+      <div class="mdu-almox-row">
+        <div>
+          <label class="mdu-label">Almoxarifado de destino (reutilizáveis)</label>
+          <select class="mdu-select" id="mduAlmox"></select>
+        </div>
+        <div>
+          <label class="mdu-label">Data da devolução</label>
+          <input class="mdu-input" type="date" id="mduData">
+        </div>
+      </div>
+    </div>
+    <div class="mdu-body" id="mduBody"></div>
+    <div class="mdu-footer">
+      <button class="btn btn-secondary btn-sm" onclick="_mduFechar()">Cancelar</button>
+      <button class="btn btn-success btn-sm" id="mduBtnConfirmar" onclick="_mduConfirmar()">✅ Confirmar e concluir</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal cancelamento -->
 <div id="modalCancelamento" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:var(--card);border-radius:14px;padding:28px 32px;width:min(480px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.25);">
