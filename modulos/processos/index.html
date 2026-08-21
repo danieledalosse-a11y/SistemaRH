@@ -1881,6 +1881,21 @@ async function _mduConfirmar() {
   const perfil  = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
   const regPor  = perfil.nome || 'RH';
 
+  // Linhas com quantidade preenchida mas sem item selecionado
+  const linhasIncompletas = _mduLinhas.filter(l => (l.qtdReu > 0 || l.qtdDes > 0) && !l.item_id);
+  if (linhasIncompletas.length) {
+    showToast('Selecione o item para todas as linhas antes de confirmar.', 'error');
+    // Destaca visualmente os selects sem item
+    document.querySelectorAll('#mduBody .mdu-item-sel').forEach((sel, i) => {
+      const l = _mduLinhas[i];
+      if (l && (l.qtdReu > 0 || l.qtdDes > 0) && !l.item_id) {
+        sel.style.borderColor = 'var(--red)';
+        setTimeout(() => sel.style.borderColor = '', 2500);
+      }
+    });
+    return;
+  }
+
   const linhasAtivas = _mduLinhas.filter(l => (l.qtdReu > 0 || l.qtdDes > 0) && l.item_id);
   const temReu = linhasAtivas.some(l => l.qtdReu > 0);
 
