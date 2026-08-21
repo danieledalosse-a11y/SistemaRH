@@ -1680,8 +1680,8 @@ function _mduRenderTabela() {
           <button class="mdu-btn-rm" onclick="_mduRemoverLinha(${i})" title="Remover">×</button>
         </div>
         <div class="mdu-row-qtds">
-          <div class="mdu-qcell reu"><span class="mdu-qlabel">↩</span><input class="mdu-qty" type="number" min="0" value="${l.qtdReu??1}" id="mduReu_${i}"></div>
-          <div class="mdu-qcell des"><span class="mdu-qlabel">🗑</span><input class="mdu-qty" type="number" min="0" value="${l.qtdDes??0}" id="mduDes_${i}"></div>
+          <div class="mdu-qcell reu"><span class="mdu-qlabel" title="Retorna ao almoxarifado selecionado">↩</span><input class="mdu-qty" type="number" min="0" value="${l.qtdReu??1}" id="mduReu_${i}"></div>
+          <div class="mdu-qcell des"><span class="mdu-qlabel" title="Baixa sem repor estoque (descarte)">🗑</span><input class="mdu-qty" type="number" min="0" value="${l.qtdDes??0}" id="mduDes_${i}"></div>
         </div>
       </div>`;
     }
@@ -1693,18 +1693,16 @@ function _mduRenderTabela() {
         ${l.emPoder != null ? `<span class="mdu-row-posse">· Em posse: ${l.emPoder} un.</span>` : ''}
       </div>
       <div class="mdu-row-qtds">
-        <div class="mdu-qcell reu"><span class="mdu-qlabel">↩ Estoque</span><input class="mdu-qty" type="number" min="0" max="${l.emPoder}" value="${l.qtdReu??l.emPoder}" id="mduReu_${i}"></div>
-        <div class="mdu-qcell des"><span class="mdu-qlabel">🗑 Descarte</span><input class="mdu-qty" type="number" min="0" max="${l.emPoder}" value="${l.qtdDes??0}" id="mduDes_${i}"></div>
+        <div class="mdu-qcell reu"><span class="mdu-qlabel" title="Retorna ao almoxarifado selecionado">↩ Estoque</span><input class="mdu-qty" type="number" min="0" max="${l.emPoder}" value="${l.qtdReu??l.emPoder}" id="mduReu_${i}"></div>
+        <div class="mdu-qcell des"><span class="mdu-qlabel" title="Baixa sem repor estoque (descarte)">🗑 Descarte</span><input class="mdu-qty" type="number" min="0" max="${l.emPoder}" value="${l.qtdDes??0}" id="mduDes_${i}"></div>
       </div>
     </div>`;
   }).join('');
 
   document.getElementById('mduBody').innerHTML = `
-    <div class="mdu-info">
-      ${semRegistro && !_mduLinhas.length
-        ? 'Nenhum uniforme registrado no sistema. Use <strong>+ Item</strong> para adicionar peças manualmente ou <strong>⚡ Kit do cargo</strong> para carregar o kit padrão.'
-        : '↩ <strong>Estoque</strong>: peça retorna ao almoxarifado. 🗑 <strong>Descarte</strong>: baixa sem repor estoque. Quantidade zero = não registrado.'}
-    </div>
+    ${semRegistro && !_mduLinhas.length
+      ? `<div class="mdu-info">Nenhum uniforme registrado no sistema. Use <strong>+ Item</strong> para adicionar peças manualmente ou <strong>⚡ Kit do cargo</strong> para carregar o kit padrão.</div>`
+      : ''}
     ${_mduLinhas.length ? `<div class="mdu-list">${rows}</div>` : ''}`;
 }
 
@@ -1828,11 +1826,22 @@ async function _mduConfirmar() {
   btn.disabled = true;
   btn.textContent = 'Salvando…';
 
+  // helper: faz fetch e lança erro com corpo do Supabase se não ok
+  async function _mduFetch(url, opts) {
+    const r = await fetch(url, opts);
+    if (!r.ok) {
+      let detail = '';
+      try { const b = await r.json(); detail = b.message || b.hint || JSON.stringify(b); } catch(_) {}
+      throw new Error(detail || `HTTP ${r.status}`);
+    }
+    return r;
+  }
+
   try {
     for (const l of linhasAtivas) {
       // Reutilizáveis
       if (l.qtdReu > 0) {
-        await fetch(`${SB_URL}/rest/v1/unif_movimentacoes`, {
+        await _mduFetch(`${SB_URL}/rest/v1/unif_movimentacoes`, {
           method: 'POST',
           headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
           body: JSON.stringify({
@@ -1849,12 +1858,12 @@ async function _mduConfirmar() {
           const qStr = `almoxarifado_id=eq.${almoxId}&item_id=eq.${l.item_id}&tamanho=eq.${encodeURIComponent(l.tamanho||'')}&select=id,quantidade`;
           const estoqRows = await fetch(`${SB_URL}/rest/v1/unif_estoque?${qStr}`, { headers: SB_HEADERS }).then(r => r.json());
           if (estoqRows.length) {
-            await fetch(`${SB_URL}/rest/v1/unif_estoque?id=eq.${estoqRows[0].id}`, {
+            await _mduFetch(`${SB_URL}/rest/v1/unif_estoque?id=eq.${estoqRows[0].id}`, {
               method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
               body: JSON.stringify({ quantidade: (estoqRows[0].quantidade || 0) + l.qtdReu })
             });
           } else {
-            await fetch(`${SB_URL}/rest/v1/unif_estoque`, {
+            await _mduFetch(`${SB_URL}/rest/v1/unif_estoque`, {
               method: 'POST', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
               body: JSON.stringify({ almoxarifado_id: almoxId, item_id: l.item_id, tamanho: l.tamanho||'', quantidade: l.qtdReu, custo_medio: 0 })
             });
@@ -1863,7 +1872,7 @@ async function _mduConfirmar() {
       }
       // Descartes
       if (l.qtdDes > 0) {
-        await fetch(`${SB_URL}/rest/v1/unif_movimentacoes`, {
+        await _mduFetch(`${SB_URL}/rest/v1/unif_movimentacoes`, {
           method: 'POST',
           headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
           body: JSON.stringify({
@@ -1883,7 +1892,7 @@ async function _mduConfirmar() {
     showToast('Devolução registrada!', 'success');
     await _executarConclusao(processoId, _justificativaConclusao);
   } catch(e) {
-    showToast(_erroApi(e), 'error');
+    showToast('Erro ao registrar devolução: ' + (e.message || 'verifique os campos.'), 'error');
     btn.disabled = false;
     btn.textContent = '✅ Confirmar e concluir';
   }
