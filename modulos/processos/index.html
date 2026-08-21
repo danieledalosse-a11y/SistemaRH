@@ -102,7 +102,7 @@
   .mdu-em-poder { font-size:12px;color:var(--text-ter);font-weight:500; }
   .mdu-em-poder.sem-registro { color:var(--amber);font-style:italic; }
   .mdu-item-sel { border:1.5px solid var(--border);border-radius:6px;padding:5px 8px;font-family:inherit;font-size:12px;color:var(--text);background:var(--surface);width:100%; }
-  .mdu-tam-input { border:1.5px solid var(--border);border-radius:6px;padding:5px 6px;font-family:inherit;font-size:12px;color:var(--text);background:var(--surface);width:54px;text-align:center; }
+  .mdu-tam-sel { border:1.5px solid var(--border);border-radius:6px;padding:5px 6px;font-family:inherit;font-size:12px;color:var(--text);background:var(--surface);width:80px; }
   .mdu-btn-rm { background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;padding:2px 4px;line-height:1;border-radius:4px; }
   .mdu-btn-rm:hover { color:var(--red);background:var(--red-bg); }
   .mdu-badge-sys { font-size:10px;font-weight:600;color:var(--text-ter);background:var(--border);border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:middle; }
@@ -1641,17 +1641,23 @@ async function _abrirModalDevolucaoUnif(processoId, proc) {
   }
 }
 
-function _mduRenderTabela() {
-  const catOpts = '<option value="">Selecione o item…</option>' +
-    _mduCatalogo.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+const _MDU_TAMANHOS = ['PP','P','M','G','GG','XGG','ÚNICO','34','36','38','39','40','41','42','43','44'];
 
+function _mduTamOpts(sel) {
+  return '<option value="">Tam.</option>' +
+    _MDU_TAMANHOS.map(t => `<option${sel===t?' selected':''}>${t}</option>`).join('');
+}
+
+function _mduRenderTabela() {
   const rows = _mduLinhas.map((l, i) => {
     if (l.manual) {
+      const catOptsSelected = '<option value="">Selecione o item…</option>' +
+        _mduCatalogo.map(c => `<option value="${c.id}"${String(c.id)===String(l.item_id)?' selected':''}>${c.nome}</option>`).join('');
       return `<tr class="mdu-manual-row">
-        <td><select class="mdu-item-sel" onchange="_mduSetItem(${i},this.value)">${catOpts.replace(`value="${l.item_id}"`,`value="${l.item_id}" selected`)}</select> <span class="mdu-badge-manual">Manual</span></td>
-        <td style="text-align:center;"><input class="mdu-tam-input" type="text" placeholder="Ex: M" value="${l.tamanho}" onchange="_mduLinhas[${i}].tamanho=this.value.trim()" maxlength="6"></td>
+        <td><select class="mdu-item-sel" onchange="_mduSetItem(${i},this.value)">${catOptsSelected}</select> <span class="mdu-badge-manual">Manual</span></td>
+        <td style="text-align:center;"><select class="mdu-tam-sel" onchange="_mduLinhas[${i}].tamanho=this.value">${_mduTamOpts(l.tamanho)}</select></td>
         <td class="mdu-em-poder sem-registro" style="text-align:center;">—</td>
-        <td style="text-align:center;"><input class="mdu-qty reu" type="number" min="0" value="${l.qtdReu??0}" id="mduReu_${i}"></td>
+        <td style="text-align:center;"><input class="mdu-qty reu" type="number" min="0" value="${l.qtdReu??1}" id="mduReu_${i}"></td>
         <td style="text-align:center;"><input class="mdu-qty des" type="number" min="0" value="${l.qtdDes??0}" id="mduDes_${i}"></td>
         <td style="text-align:center;"><button class="mdu-btn-rm" onclick="_mduRemoverLinha(${i})" title="Remover">×</button></td>
       </tr>`;
