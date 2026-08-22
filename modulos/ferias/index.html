@@ -1265,6 +1265,36 @@
     <!-- ── Alertas acionáveis ── -->
     <div class="proto-alerts-row">
 
+      <!-- Card: Pendentes de aprovação — sempre visível (RH); verde quando zero, âmbar quando há pendentes -->
+      <div class="proto-alert-card rh-only" id="cardRhAguard" style="cursor:pointer;" onclick="setStatusFiltro('ok')">
+        <div class="proto-alert-icon" id="cardRhAguardIcon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="proto-alert-eyebrow" id="cardRhAguardLabel">Pendentes de aprovação</div>
+          <div class="proto-alert-num" id="alertNumPend">—</div>
+          <div class="proto-alert-sub">Solicitações enviadas por gestores</div>
+        </div>
+        <div class="proto-alert-arr">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+
+      <!-- Card: Agendados — sempre visível (RH); azul -->
+      <div class="proto-alert-card rh-only" id="cardRhAgendados" style="background:#EFF6FF;border-color:#BFDBFE;cursor:pointer;" onclick="setStatusFiltro('agendado')">
+        <div class="proto-alert-icon" style="background:#DBEAFE;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="9 15 11 17 15 13"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="proto-alert-eyebrow" style="color:#1D4ED8;">Agendados</div>
+          <div class="proto-alert-num" style="color:#1D4ED8;" id="alertNumAgendados">—</div>
+          <div class="proto-alert-sub">Com férias aprovadas e período futuro</div>
+        </div>
+        <div class="proto-alert-arr">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+
       <!-- Card: Risco de Dobra -->
       <div class="proto-alert-card red" onclick="setStatusFiltro('risco')">
         <div class="proto-alert-icon">
@@ -1304,21 +1334,6 @@
           <div class="proto-alert-eyebrow" style="color:var(--green);">Em férias hoje</div>
           <div class="proto-alert-num" style="color:var(--green);" id="alertNumHoje">—</div>
           <div class="proto-alert-sub" id="alertInfoDesc">aguardando dados...</div>
-        </div>
-        <div class="proto-alert-arr">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-        </div>
-      </div>
-
-      <!-- Card: Aguardando aprovação RH — visível quando há pendentes -->
-      <div class="proto-alert-card rh-only" id="cardRhAguard" style="display:none;background:#FFFBEB;border-color:#FDE68A;cursor:pointer;" onclick="setStatusFiltro('ok')">
-        <div class="proto-alert-icon" style="background:#FEF3C7;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div class="proto-alert-eyebrow" style="color:#92400E;">Aguardando aprovação</div>
-          <div class="proto-alert-num" style="color:#92400E;" id="alertNumPend">—</div>
-          <div class="proto-alert-sub">Solicitações enviadas por gestores</div>
         </div>
         <div class="proto-alert-arr">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
@@ -3500,11 +3515,9 @@ function renderMetricas() {
   document.getElementById('cnt-dobra').textContent  = riscoDobra;
   document.getElementById('cnt-sem').textContent    = semAgendado;
   document.getElementById('cnt-pend').textContent   = pendentes;
-  // Card de aprovação no topo (RH)
-  const cardAg = document.getElementById('cardRhAguard');
-  const numAg  = document.getElementById('alertNumPend');
-  if (cardAg) { cardAg.style.display = pendentes > 0 ? '' : 'none'; }
-  if (numAg)  { numAg.textContent = pendentes; }
+  // Card Pendentes (sempre visível — estilo atualizado via renderKPI)
+  const numAg = document.getElementById('alertNumPend');
+  if (numAg) numAg.textContent = pendentes;
 
   const pct = (n) => total > 0 ? `${Math.round(n / total * 100)}% do quadro` : '';
 
@@ -3900,10 +3913,13 @@ function renderListaAnual() {
   const baseFiltrada = _statusFiltro === 'todos' ? base : base.filter(c => {
     const excl = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
     const regs = c.registros.filter(r => !excl.has(r.status));
-    if (_statusFiltro === 'hoje')  return regs.some(reg => reg.lancamentos.some(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim));
-    if (_statusFiltro === 'risco') return isRiscoDobra(c);
-    if (_statusFiltro === 'sem')   return isSemAgendado(c);
-    if (_statusFiltro === 'ok')    return getPendentes().some(p => p.colab.__key === c.__key);
+    if (_statusFiltro === 'hoje')     return regs.some(reg => reg.lancamentos.some(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim));
+    if (_statusFiltro === 'risco')    return isRiscoDobra(c);
+    if (_statusFiltro === 'sem')      return isSemAgendado(c);
+    if (_statusFiltro === 'ok')       return getPendentes().some(p => p.colab.__key === c.__key);
+    if (_statusFiltro === 'agendado') return regs.some(reg =>
+      reg.lancamentos.some(l => l.fim && l.fim >= HOJE && ['aprovado','agendado'].includes((l.status||'').toLowerCase()))
+    );
     return true;
   });
 
@@ -3943,6 +3959,12 @@ function renderListaAnual() {
     } else if (_statusFiltro === 'ok') {
       // Pendentes: inclui status 'Pendente' (não exclui como os demais filtros)
       pasDoAno = c.registros.filter(reg => reg.status === 'Pendente' && reg._novoLanc);
+    } else if (_statusFiltro === 'agendado') {
+      // Agendados: PAs com ao menos um lançamento aprovado com fim >= hoje
+      pasDoAno = c.registros.filter(reg => {
+        if (excluir.has(reg.status)) return false;
+        return reg.lancamentos.some(l => l.fim && l.fim >= HOJE && ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
+      });
     } else {
       // todos: PAs cujo ano de direito = ANO_REF (convenção: ano em que o direito é adquirido)
       pasDoAno = c.registros.filter(reg => {
@@ -4871,7 +4893,7 @@ function renderKPI() {
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const mesAtual = HOJE.slice(0, 7);
 
-  let nHoje = 0, nSem = 0, nRisco = 0, nPend = 0;
+  let nHoje = 0, nSem = 0, nRisco = 0, nPend = 0, nAgendados = 0;
 
   lista.forEach(c => {
     const regsValidos = c.registros.filter(r => !excluir.has(r.status));
@@ -4883,6 +4905,14 @@ function renderKPI() {
     // risco de dobra
     if (isRiscoDobra(c)) nRisco++;
     if (isSemAgendado(c)) nSem++;
+    // agendados: ao menos um lançamento aprovado com fim >= hoje (qualquer PA)
+    const temAgendado = regsValidos.some(reg =>
+      reg.lancamentos.some(l =>
+        l.fim && l.fim >= HOJE &&
+        ['aprovado','agendado'].includes((l.status||'').toLowerCase())
+      )
+    );
+    if (temAgendado) nAgendados++;
   });
   nPend = getPendentes().length;
 
@@ -4902,6 +4932,32 @@ function renderKPI() {
   if (elADesc)  elADesc.textContent  = nHoje === 0 ? 'nenhum colaborador em férias hoje'
     : nHoje === 1 ? '1 colaborador em férias hoje'
     : `${nHoje} colaboradores em férias hoje`;
+
+  // Card Pendentes de aprovação — sempre visível, estilo dinâmico
+  const elNumPend = document.getElementById('alertNumPend');
+  const cardPend  = document.getElementById('cardRhAguard');
+  const cardPendIcon = document.getElementById('cardRhAguardIcon');
+  const cardPendLabel = document.getElementById('cardRhAguardLabel');
+  if (elNumPend) elNumPend.textContent = nPend;
+  if (cardPend) {
+    if (nPend === 0) {
+      cardPend.style.background    = '#ECFDF3';
+      cardPend.style.borderColor   = '#6CE9A6';
+      if (cardPendIcon)  { cardPendIcon.style.background = '#D1FAE5'; cardPendIcon.querySelector('svg').setAttribute('stroke','#027A48'); }
+      if (cardPendLabel) { cardPendLabel.style.color = '#027A48'; }
+      if (elNumPend)     { elNumPend.style.color = '#027A48'; }
+    } else {
+      cardPend.style.background    = '#FFFBEB';
+      cardPend.style.borderColor   = '#FDE68A';
+      if (cardPendIcon)  { cardPendIcon.style.background = '#FEF3C7'; cardPendIcon.querySelector('svg').setAttribute('stroke','#B45309'); }
+      if (cardPendLabel) { cardPendLabel.style.color = '#92400E'; }
+      if (elNumPend)     { elNumPend.style.color = '#92400E'; }
+    }
+  }
+
+  // Card Agendados — sempre visível
+  const elAAgend = document.getElementById('alertNumAgendados');
+  if (elAAgend) elAAgend.textContent = nAgendados;
 
   // atualiza contadores nos chips de status
   const elHoje  = document.getElementById('cnt-hoje');
@@ -6023,16 +6079,20 @@ function renderGestorAlerts(colabsBase) {
   const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
   const aguardandoAprov = base.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
 
-  // Agendados: colabs com pelo menos um lançamento status='aprovado' com data_fim >= hoje
-  // Usa data_fim em vez de correspondência de ano do PA — evita falha quando
-  // gestorPeriodoAtivo retorna um PA mais antigo (com saldo) de ano diferente do lançamento.
-  const agendados = base.filter(c =>
-    GESTOR_LANCAMENTOS.some(l =>
+  // Agendados: colabs cujo PA ativo possui ao menos um lançamento aprovado/agendado
+  // com data_fim >= hoje. Filtra por periodo_id do PA ativo para manter consistência
+  // com o badge da lista (que também filtra por periodo_id). Isso evita que colabs
+  // com aprovação em PA antigo (diferente do ativo) sejam contados erroneamente.
+  const agendados = base.filter(c => {
+    const pa = gestorPeriodoAtivo(c.id);
+    if (!pa) return false;
+    return GESTOR_LANCAMENTOS.some(l =>
       String(l.colaborador_id) === String(c.id) &&
+      String(l.periodo_id) === String(pa.id) &&
       (l.data_fim || '') >= hoje &&
-      (l.status||'').toLowerCase() === 'aprovado'
-    )
-  );
+      ['aprovado','agendado'].includes((l.status||'').toLowerCase())
+    );
+  });
 
   window._gestorRiscoDobra  = riscoDobra.map(c => c.id);
   window._gestorSemAgendado = semAgendado.map(c => c.id);
