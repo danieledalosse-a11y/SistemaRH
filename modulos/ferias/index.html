@@ -6080,15 +6080,10 @@ function renderGestorAlerts(colabsBase) {
   const aguardandoAprov = base.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
 
   // Agendados: colabs cujo PA ativo possui ao menos um lançamento aprovado/agendado
-  // com data_fim >= hoje. Filtra por periodo_id do PA ativo para manter consistência
-  // com o badge da lista (que também filtra por periodo_id). Isso evita que colabs
-  // com aprovação em PA antigo (diferente do ativo) sejam contados erroneamente.
+  // Agendado: qualquer lançamento aprovado/agendado com data_fim >= hoje, sem filtrar por PA.
   const agendados = base.filter(c => {
-    const pa = gestorPeriodoAtivo(c.id);
-    if (!pa) return false;
     return GESTOR_LANCAMENTOS.some(l =>
       String(l.colaborador_id) === String(c.id) &&
-      String(l.periodo_id) === String(pa.id) &&
       (l.data_fim || '') >= hoje &&
       ['aprovado','agendado'].includes((l.status||'').toLowerCase())
     );
@@ -6681,7 +6676,7 @@ function renderGestorAtencao() {
     _sub = `${colabs.length} colaborador(es) com solicitações pendentes ou recusas para analisar`;
   } else if (_gestorAlertaAtivo === 'agendado') {
     colabs = colabs.filter(c => (window._gestorAgendados||[]).includes(c.id));
-    _sub = `${colabs.length} colaborador(es) com férias aprovadas no PA vigente`;
+    _sub = `${colabs.length} colaborador(es) com férias aprovadas agendadas`;
   }
 
   const sEl = document.getElementById('gestorListaSub');
