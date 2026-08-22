@@ -5854,8 +5854,8 @@ function processGestorFerias(rows) {
         id:            `${row.id}-p1`,
         colaborador_id: row.colaborador_id,
         periodo_id:    row.id,
-        data_inicio:   row.periodo1_inicio,
-        data_fim:      row.periodo1_fim || row.periodo1_inicio,
+        inicio:        row.periodo1_inicio,
+        fim:           row.periodo1_fim || row.periodo1_inicio,
         dias:          Number(row.dias1),
         status:        _rowStNorm,
       };
@@ -5870,8 +5870,8 @@ function processGestorFerias(rows) {
         id:            `${row.id}-p2`,
         colaborador_id: row.colaborador_id,
         periodo_id:    row.id,
-        data_inicio:   row.periodo2_inicio,
-        data_fim:      row.periodo2_fim || row.periodo2_inicio,
+        inicio:        row.periodo2_inicio,
+        fim:           row.periodo2_fim || row.periodo2_inicio,
         dias:          Number(row.dias2),
         status:        _rowStNorm,
       };
@@ -5888,8 +5888,8 @@ function processGestorFerias(rows) {
             id:            `${row.id}-r${i}`,
             colaborador_id: row.colaborador_id,
             periodo_id:    row.id,
-            data_inicio:   r.inicio,
-            data_fim:      r.fim || r.inicio,
+            inicio:        r.inicio,
+            fim:           r.fim || r.inicio,
             dias:          Number(r.dias),
             status:        (r.status || 'gozado').toLowerCase(),
           });
@@ -6019,15 +6019,14 @@ function gestorDpd(periodo) {
   return Math.round((venc - hoje) / 86400000);
 }
 
-// Fonte de verdade única: colaborador tem férias aprovadas/agendadas com data_fim >= hoje
+// Fonte de verdade única: colaborador tem férias aprovadas/agendadas com fim >= hoje
 // Usado pelo badge da linha E pelo KPI/filtro — garante consistência.
 function gestorIsAgendado(colabId) {
   const hoje = new Date().toISOString().slice(0,10);
   const id = String(colabId);
   return GESTOR_LANCAMENTOS.some(l => {
     if (String(l.colaborador_id) !== id) return false;
-    const fim = l.data_fim || l.fim || '';
-    if (fim < hoje) return false;
+    if ((l.fim || '') < hoje) return false;
     const st = (l.status || '').toLowerCase();
     return st === 'aprovado' || st === 'agendado';
   });
@@ -6038,7 +6037,7 @@ function gestorTemAgendado(colaborador_id) {
   const hoje = new Date().toISOString().slice(0,10);
   return GESTOR_LANCAMENTOS.some(l =>
     String(l.colaborador_id) === String(colaborador_id) &&
-    (l.data_fim || '') >= hoje &&
+    (l.fim || '') >= hoje &&
     ['aprovado','agendado','solicitado'].includes((l.status||'').toLowerCase())
   );
 }
@@ -6050,7 +6049,7 @@ function gestorLancFuturos30(colabsBase) {
   const d30 = daqui30.toISOString().slice(0,10);
   const ids = colabsBase ? new Set(colabsBase.map(c => String(c.id))) : null;
   return GESTOR_LANCAMENTOS.filter(l =>
-    l.data_inicio >= hj && l.data_inicio <= d30 &&
+    l.inicio >= hj && l.inicio <= d30 &&
     ['aprovado','agendado'].includes((l.status||'').toLowerCase()) &&
     (!ids || ids.has(String(l.colaborador_id)))
   );
@@ -6065,7 +6064,7 @@ function renderGestorAlerts(colabsBase) {
     if (!p) return false;
     if (gestorDpd(p) > 180) return false;   // alinhado com nivelRisco da visão RH (≤ 180 dias)
     if (gestorSaldoPeriodo(p) <= 0) return false;
-    return !GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.data_fim >= hoje && ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
+    return !GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.fim >= hoje && ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
   });
 
   const semAgendado = base.filter(c => {
@@ -6080,7 +6079,7 @@ function renderGestorAlerts(colabsBase) {
     // Cond 2: sem férias futuras aprovadas/agendadas/solicitadas em qualquer PA aberto
     return !GESTOR_LANCAMENTOS.some(l =>
       String(l.colaborador_id) === String(c.id) &&
-      (l.data_fim || '') >= hoje &&
+      (l.fim || '') >= hoje &&
       ['aprovado','agendado','solicitado'].includes((l.status||'').toLowerCase())
     );
   });
@@ -6090,7 +6089,7 @@ function renderGestorAlerts(colabsBase) {
   // Conta solicitados + recusados com datas futuras/ativas
   const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
     const st = (l.status||'').toLowerCase();
-    return (st === 'solicitado' || st === 'recusado') && l.data_fim >= hoje;
+    return (st === 'solicitado' || st === 'recusado') && l.fim >= hoje;
   });
   const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
   const aguardandoAprov = base.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
@@ -6245,9 +6244,9 @@ function renderGestorGantt() {
   const d30 = new Date(); d30.setDate(d30.getDate() + 30); const s30 = d30.toISOString().slice(0,10);
   const d60 = new Date(); d60.setDate(d60.getDate() + 60); const s60 = d60.toISOString().slice(0,10);
   const d90 = new Date(); d90.setDate(d90.getDate() + 90); const s90 = d90.toISOString().slice(0,10);
-  const c30 = new Set(GESTOR_LANCAMENTOS.filter(l => l.data_fim >= hoje && l.data_inicio <= s30).map(l => l.colaborador_id)).size;
-  const c60 = new Set(GESTOR_LANCAMENTOS.filter(l => l.data_fim >= hoje && l.data_inicio <= s60).map(l => l.colaborador_id)).size;
-  const c90 = new Set(GESTOR_LANCAMENTOS.filter(l => l.data_fim >= hoje && l.data_inicio <= s90).map(l => l.colaborador_id)).size;
+  const c30 = new Set(GESTOR_LANCAMENTOS.filter(l => l.fim >= hoje && l.inicio <= s30).map(l => l.colaborador_id)).size;
+  const c60 = new Set(GESTOR_LANCAMENTOS.filter(l => l.fim >= hoje && l.inicio <= s60).map(l => l.colaborador_id)).size;
+  const c90 = new Set(GESTOR_LANCAMENTOS.filter(l => l.fim >= hoje && l.inicio <= s90).map(l => l.colaborador_id)).size;
   const _chipStyle = (ativo) => ativo
     ? 'display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:12px;background:var(--blue);border:1px solid var(--blue);color:#fff;cursor:pointer;'
     : 'display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:12px;background:#F8FAFC;border:1px solid var(--border);color:var(--text-sec);cursor:pointer;';
@@ -6267,9 +6266,9 @@ function renderGestorGantt() {
   colabs = colabs.filter(c =>
     GESTOR_LANCAMENTOS.some(l => {
       if (String(l.colaborador_id) !== String(c.id)) return false;
-      if (l.data_fim < mesInicio || l.data_inicio > mesFim) return false;
+      if (l.fim < mesInicio || l.inicio > mesFim) return false;
       if (statusFiltro && (l.status || '').toLowerCase() !== statusFiltro) return false;
-      if (janelaFim && !(l.data_fim >= hoje && l.data_inicio <= janelaFim)) return false;
+      if (janelaFim && !(l.fim >= hoje && l.inicio <= janelaFim)) return false;
       return true;
     })
   ).sort((a, b) => a.nome.localeCompare(b.nome));
@@ -6326,13 +6325,13 @@ function renderGestorGantt() {
       let barHtml = isHoje ? `<div class="gantt-today-marker"></div>` : '';
 
       lancColabs.forEach(l => {
-        if (l.data_fim < ds || l.data_inicio > ds) return;
-        const drawDay = l.data_inicio >= mesInicio ? l.data_inicio : mesInicio;
+        if (l.fim < ds || l.inicio > ds) return;
+        const drawDay = l.inicio >= mesInicio ? l.inicio : mesInicio;
         if (ds !== drawDay) return;
 
-        const contLeft  = l.data_inicio < mesInicio;
-        const contRight = l.data_fim > mesFim;
-        const endDs     = contRight ? mesFim : l.data_fim;
+        const contLeft  = l.inicio < mesInicio;
+        const contRight = l.fim > mesFim;
+        const endDs     = contRight ? mesFim : l.fim;
         const diaInicio = parseInt(drawDay.slice(-2));
         const maxCols   = diasNoMes - diaInicio + 1;
         const colsCalc  = Math.max(1, Math.round((new Date(endDs+'T12:00:00') - new Date(drawDay+'T12:00:00')) / 86400000) + 1);
@@ -6344,7 +6343,7 @@ function renderGestorGantt() {
         const txt = barText(c.nome);
         const fmtShort = d => { const [,m,dia] = d.split('-'); return `${dia}/${m}`; };
         let label = '';
-        if (colsTotal >= 9) label = `${fmtShort(l.data_inicio)} → ${fmtShort(l.data_fim)} · ${l.dias}d`;
+        if (colsTotal >= 9) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
         else if (colsTotal >= 4) label = `${l.dias}d`;
 
         const barCls = ['gantt-bar', !isAprov?'pendente':'', contLeft?'bar-cont-left':'', contRight?'bar-cont-right':''].filter(Boolean).join(' ');
@@ -6354,7 +6353,7 @@ function renderGestorGantt() {
 
         barHtml += `<div class="${barCls}"
           style="left:2px;width:${colsTotal * W_CELL - 4}px;${bgStyle}"
-          title="${c.nome}: ${l.data_inicio} → ${l.data_fim} · ${l.dias}d (${l.status||''})">
+          title="${c.nome}: ${l.inicio} → ${l.fim} · ${l.dias}d (${l.status||''})">
           <span class="gantt-bar-label" style="color:${txt};">${label}</span>
         </div>`;
       });
@@ -6391,10 +6390,10 @@ function gestorExportarCSV() {
     const saldo = pa ? gestorSaldoPeriodo(pa) : (semPA ? 30 : 0);
     const paAno = pa ? (pa.pa_fim?.slice(0,4) || '—') : (semPA ? addDays(c.data_admissao.slice(0,10), 364).slice(0,4) : '—');
     const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
-    const ativo  = lancs.find(l => l.data_inicio <= hoje && l.data_fim >= hoje);
-    const futuro = lancs.filter(l => l.data_inicio > hoje).sort((a,b) => a.data_inicio.localeCompare(b.data_inicio))[0];
+    const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
+    const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
     const lRef   = ativo || futuro;
-    const agendStr = lRef ? `${lRef.data_inicio} a ${lRef.data_fim} (${lRef.dias}d)` : '—';
+    const agendStr = lRef ? `${lRef.inicio} a ${lRef.fim} (${lRef.dias}d)` : '—';
     const dpd   = pa ? gestorDpd(pa) : 9999;
     const nivel = nivelRisco(dpd);
     let situacao;
@@ -6449,8 +6448,8 @@ function gestorGerarRelatorio() {
 
   // Filtra lançamentos no período selecionado
   let lancs = GESTOR_LANCAMENTOS.filter(l => {
-    if (de  && l.data_fim   < de)  return false;
-    if (ate && l.data_inicio > ate) return false;
+    if (de  && l.fim   < de)  return false;
+    if (ate && l.inicio > ate) return false;
     if (statusFil && (l.status||'').toLowerCase() !== statusFil) return false;
     return true;
   });
@@ -6461,7 +6460,7 @@ function gestorGerarRelatorio() {
     if (!c) return null;
     if (cargoFil && c.cargo !== cargoFil) return null;
     return { ...l, colab: c };
-  }).filter(Boolean).sort((a, b) => a.data_inicio.localeCompare(b.data_inicio) || a.colab.nome.localeCompare(b.colab.nome));
+  }).filter(Boolean).sort((a, b) => a.inicio.localeCompare(b.inicio) || a.colab.nome.localeCompare(b.colab.nome));
 
   if (!rows.length) {
     el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-ter);font-size:13px;">Nenhum resultado para os filtros selecionados.</div>`;
@@ -6497,7 +6496,7 @@ function gestorGerarRelatorio() {
       <td style="${tdStyle}">${r.colab.nome}</td>
       <td style="${tdSecStyle}">${r.colab.cargo||'—'}</td>
       <td style="${tdSecStyle}">${r.colab.setor||'—'}</td>
-      <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.data_inicio)} → ${_fmtD(r.data_fim)}</td>
+      <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.inicio)} → ${_fmtD(r.fim)}</td>
       <td style="${tdStyle};text-align:center;">${r.dias}d</td>
       <td style="${tdStyle};">${stBadge(r.status)}</td>
     </tr>`).join('');
@@ -6522,7 +6521,7 @@ function gestorGerarRelatorio() {
       const gRows = grupos[cargo].map(r => `<tr>
         <td style="${tdStyle}">${r.colab.nome}</td>
         <td style="${tdSecStyle}">${r.colab.setor||'—'}</td>
-        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.data_inicio)} → ${_fmtD(r.data_fim)}</td>
+        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.inicio)} → ${_fmtD(r.fim)}</td>
         <td style="${tdStyle};text-align:center;">${r.dias}d</td>
         <td style="${tdStyle};">${stBadge(r.status)}</td>
       </tr>`).join('');
@@ -6543,7 +6542,7 @@ function gestorGerarRelatorio() {
   } else if (agrupFil === 'mes') {
     const grupos = {};
     rows.forEach(r => {
-      const k = r.data_inicio.slice(0,7);
+      const k = r.inicio.slice(0,7);
       if (!grupos[k]) grupos[k]=[];
       grupos[k].push(r);
     });
@@ -6555,7 +6554,7 @@ function gestorGerarRelatorio() {
         <td style="${tdStyle}">${r.colab.nome}</td>
         <td style="${tdSecStyle}">${r.colab.cargo||'—'}</td>
         <td style="${tdSecStyle}">${r.colab.setor||'—'}</td>
-        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.data_inicio)} → ${_fmtD(r.data_fim)}</td>
+        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.inicio)} → ${_fmtD(r.fim)}</td>
         <td style="${tdStyle};text-align:center;">${r.dias}d</td>
         <td style="${tdStyle};">${stBadge(r.status)}</td>
       </tr>`).join('');
@@ -6583,7 +6582,7 @@ function gestorExportarRelatorioCSV() {
   if (!rows?.length) return;
   const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const header = ['Nome','Cargo','Setor','Início','Fim','Dias','Status'];
-  const linhas = [header, ...rows.map(r => [r.colab.nome, r.colab.cargo||'', r.colab.setor||'', _fmtD(r.data_inicio), _fmtD(r.data_fim), r.dias, r.status||''])];
+  const linhas = [header, ...rows.map(r => [r.colab.nome, r.colab.cargo||'', r.colab.setor||'', _fmtD(r.inicio), _fmtD(r.fim), r.dias, r.status||''])];
   const csv  = linhas.map(l => l.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
@@ -6600,7 +6599,7 @@ function gestorImprimirRelatorio() {
   const de  = document.getElementById('relDe')?.value || '';
   const ate = document.getElementById('relAte')?.value || '';
   const periodo = (de || ate) ? `${_fmtD(de)} a ${_fmtD(ate)}` : 'Todos os períodos';
-  const trs = rows.map(r => `<tr><td>${r.colab.nome}</td><td>${r.colab.cargo||'—'}</td><td>${r.colab.setor||'—'}</td><td>${_fmtD(r.data_inicio)} → ${_fmtD(r.data_fim)}</td><td style="text-align:center;">${r.dias}d</td><td>${r.status||'—'}</td></tr>`).join('');
+  const trs = rows.map(r => `<tr><td>${r.colab.nome}</td><td>${r.colab.cargo||'—'}</td><td>${r.colab.setor||'—'}</td><td>${_fmtD(r.inicio)} → ${_fmtD(r.fim)}</td><td style="text-align:center;">${r.dias}d</td><td>${r.status||'—'}</td></tr>`).join('');
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório Férias</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#222;}
   h2{margin:0 0 4px;font-size:15px;}p{margin:0 0 16px;color:#666;font-size:11px;}
@@ -6698,8 +6697,8 @@ function renderGestorAtencao() {
     if (_gestorSortCol === 'pa') return pa ? (pa.pa_fim || pa.data_inicio || '') : '';
     if (_gestorSortCol === 'saldo') return pa ? gestorSaldoPeriodo(pa) : (GESTOR_PERIODOS.some(p=>p.colaborador_id===c.id) ? 0 : 30);
     if (_gestorSortCol === 'agend') {
-      const fut = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id)===String(c.id) && l.data_fim >= hoje).sort((a,b)=>a.data_inicio.localeCompare(b.data_inicio))[0];
-      return fut ? fut.data_inicio : '9999';
+      const fut = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id)===String(c.id) && l.fim >= hoje).sort((a,b)=>a.inicio.localeCompare(b.inicio))[0];
+      return fut ? fut.inicio : '9999';
     }
     if (_gestorSortCol === 'sit') {
       const temPeriodos = GESTOR_PERIODOS.some(p=>p.colaborador_id===c.id);
@@ -6707,7 +6706,7 @@ function renderGestorAtencao() {
       if (semPA) return '1-sempa';
       if (!pa) return '5-concluido';
       const dpd = gestorDpd(pa);
-      const fut = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id)===String(c.id) && l.data_fim>=hoje);
+      const fut = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id)===String(c.id) && l.fim>=hoje);
       const temSol = fut.some(l => (l.status||'').toLowerCase() === 'solicitado');
       const temAprov = fut.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
       if (dpd < 180 && !fut.length) return '0-critico';
@@ -6767,16 +6766,16 @@ function renderGestorAtencao() {
 
     // Agendamento relevante — busca em TODOS os PAs, não apenas no PA vigente
     const lancs = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id) === String(c.id));
-    const ativo  = lancs.find(l => l.data_inicio <= hoje && l.data_fim >= hoje);
-    const futuro = lancs.filter(l => l.data_inicio > hoje).sort((a,b) => a.data_inicio.localeCompare(b.data_inicio))[0];
-    const passado = lancs.filter(l => l.data_fim < hoje).sort((a,b) => b.data_fim.localeCompare(a.data_fim))[0];
+    const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
+    const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
+    const passado = lancs.filter(l => l.fim < hoje).sort((a,b) => b.fim.localeCompare(a.fim))[0];
     const lRef   = ativo || futuro || passado;
     const lancProtegedobraG = lRef && (lRef === ativo || lRef === futuro) && saldo > 0 && dpd <= 180;
     const alertaDobraGHtml = lancProtegedobraG
       ? `<span style="display:inline-block;margin-top:3px;font-size:10px;font-weight:600;color:#B54708;background:#FFFAEB;border:1px solid #FDE68A;border-radius:4px;padding:2px 6px;">⚠ Manter evita dobra</span>`
       : '';
     const agendHtml = lRef
-      ? `<span style="font-size:11px;white-space:nowrap;">${_fmtD(lRef.data_inicio)} → ${_fmtD(lRef.data_fim)} · ${lRef.dias}d</span>
+      ? `<span style="font-size:11px;white-space:nowrap;">${_fmtD(lRef.inicio)} → ${_fmtD(lRef.fim)} · ${lRef.dias}d</span>
          ${lancs.length > 1 ? `<span style="display:block;font-size:10px;color:var(--text-ter);margin-top:2px;">+${lancs.length-1} período${lancs.length>2?'s':''}</span>` : ''}
          ${alertaDobraGHtml}`
       : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
@@ -6794,16 +6793,16 @@ function renderGestorAtencao() {
     else if (saldo <= 0)      badge = `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
     else if (!lancs.length)   badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
     else {
-      const temSolicitado = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.data_fim >= hoje);
-      const temAprovado   = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.data_fim >= hoje);
-      const temRecusado   = lancs.some(l => (l.status||'').toLowerCase() === 'recusado' && l.data_fim >= hoje);
+      const temSolicitado = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.fim >= hoje);
+      const temAprovado   = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.fim >= hoje);
+      const temRecusado   = lancs.some(l => (l.status||'').toLowerCase() === 'recusado' && l.fim >= hoje);
       if (temSolicitado && !temAprovado)
         badge = `<span class="badge-status-v" style="background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;"><span class="la-dot" style="background:#F79009;"></span>Aguardando RH</span>`;
       else if (temRecusado && !temAprovado && !temSolicitado)
         badge = `<span class="badge-status-v" style="background:#FEF2F2;color:#D92D20;border:1px solid #FECACA;"><span class="la-dot" style="background:#D92D20;"></span>Recusado pelo RH</span>`;
       else if (temSolicitado)
         badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;border:1px solid #BFDBFE;"><span class="la-dot" style="background:#1849A9;"></span>Agendado <span style="font-size:10px;color:#92400E;margin-left:4px;">+1 pendente</span></span>`;
-      else if (lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.data_fim >= hoje) || ativo)
+      else if (lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.fim >= hoje) || ativo)
         badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`;
       else
         badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
@@ -6816,9 +6815,9 @@ function renderGestorAtencao() {
     else if (saldo <= 0) borderClr = 'var(--green)';
     else if (!lancs.length) borderClr = '#F59E0B';
     else {
-      const temSolPend = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.data_fim >= hoje);
-      const temAprovF  = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.data_fim >= hoje);
-      const temRecF    = lancs.some(l => (l.status||'').toLowerCase() === 'recusado' && l.data_fim >= hoje);
+      const temSolPend = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.fim >= hoje);
+      const temAprovF  = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.fim >= hoje);
+      const temRecF    = lancs.some(l => (l.status||'').toLowerCase() === 'recusado' && l.fim >= hoje);
       borderClr = (temSolPend && !temAprovF) ? '#F79009' : (temRecF && !temAprovF && !temSolPend) ? '#D92D20' : '#1849A9';
     }
 
@@ -6829,7 +6828,7 @@ function renderGestorAtencao() {
       : `<div class="proto-avatar" style="background:${cor};">${ini}</div>`;
 
     const podeSlicitar = pa && saldo > 0;
-    const lancsFuturosAtivos = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id) && l.data_fim >= hoje);
+    const lancsFuturosAtivos = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id) && l.fim >= hoje);
     const temSolicitado = lancsFuturosAtivos.some(l => (l.status||'').toLowerCase() === 'solicitado');
     const temRecusado   = lancsFuturosAtivos.some(l => (l.status||'').toLowerCase() === 'recusado');
     const temAprovado   = lancsFuturosAtivos.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
@@ -6888,7 +6887,7 @@ function renderGestorAtencao() {
             <th style="padding:4px 8px;font-weight:600;">Obs</th>
           </tr></thead>
           <tbody>${hlancs.map(l => `<tr style="border-top:1px solid var(--border);">
-            <td style="padding:4px 8px;white-space:nowrap;">${_fmtD(l.data_inicio)} → ${_fmtD(l.data_fim)}</td>
+            <td style="padding:4px 8px;white-space:nowrap;">${_fmtD(l.inicio)} → ${_fmtD(l.fim)}</td>
             <td style="padding:4px 8px;">${l.dias}d</td>
             <td style="padding:4px 8px;">${l.status||'—'}</td>
             <td style="padding:4px 8px;color:var(--text-ter);">${l.motivo||l.obs_gestor||'—'}</td>
@@ -7021,11 +7020,11 @@ function _renderGsolLista(c) {
            <button onclick="gestorCancelarSolicitacao('${l.periodo_id}','${c.id}','${l.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;cursor:pointer;font-weight:600;">Cancelar</button>
          </div>`
       : '';
-    const passado = l.data_fim < hoje;
+    const passado = l.fim < hoje;
     return `<div class="gsol-item">
       ${icon}
       <div class="gsol-item-body">
-        <div class="gsol-item-periodo">${_fmtD(l.data_inicio)} → ${_fmtD(l.data_fim)} · ${l.dias} dias</div>
+        <div class="gsol-item-periodo">${_fmtD(l.inicio)} → ${_fmtD(l.fim)} · ${l.dias} dias</div>
         <div style="margin-bottom:4px;">${badgeHtml}${passado && st !== 'solicitado' && st !== 'cancelado' ? `<span style="font-size:11px;color:var(--text-ter);margin-left:6px;">Concluído</span>` : ''}</div>
         ${motivoHtml}
         ${motivoCancelHtml}
@@ -7162,7 +7161,7 @@ async function gestorCancelarSolicitacao(feriasId, colabId, lancId) {
     const aindaTemPend = GESTOR_LANCAMENTOS.some(l =>
       String(l.colaborador_id) === String(colabId) &&
       ['solicitado','recusado'].includes((l.status||'').toLowerCase()) &&
-      l.data_fim >= new Date().toISOString().slice(0,10)
+      l.fim >= new Date().toISOString().slice(0,10)
     );
     if (!aindaTemPend && window._gestorAguardAprov) {
       window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(colabId));
