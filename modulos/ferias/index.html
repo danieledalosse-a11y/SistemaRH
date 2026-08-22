@@ -3918,7 +3918,8 @@ function renderListaAnual() {
     if (_statusFiltro === 'sem')      return isSemAgendado(c);
     if (_statusFiltro === 'ok')       return getPendentes().some(p => p.colab.__key === c.__key);
     if (_statusFiltro === 'agendado') return regs.some(reg =>
-      reg.lancamentos.some(l => l.fim && l.fim >= HOJE && ['aprovado','agendado'].includes((l.status||'').toLowerCase()))
+      ['aprovado','agendado'].includes((reg.status||'').toLowerCase()) &&
+      reg.lancamentos.some(l => l.fim && l.fim >= HOJE)
     );
     return true;
   });
@@ -3963,7 +3964,8 @@ function renderListaAnual() {
       // Agendados: PAs com ao menos um lançamento aprovado com fim >= hoje
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
-        return reg.lancamentos.some(l => l.fim && l.fim >= HOJE && ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
+        return ['aprovado','agendado'].includes((reg.status||'').toLowerCase()) &&
+          reg.lancamentos.some(l => l.fim && l.fim >= HOJE);
       });
     } else {
       // todos: PAs cujo ano de direito = ANO_REF (convenção: ano em que o direito é adquirido)
@@ -4905,12 +4907,10 @@ function renderKPI() {
     // risco de dobra
     if (isRiscoDobra(c)) nRisco++;
     if (isSemAgendado(c)) nSem++;
-    // agendados: ao menos um lançamento aprovado com fim >= hoje (qualquer PA)
+    // agendados: ao menos um PA aprovado com lançamento futuro (status em reg, não em l)
     const temAgendado = regsValidos.some(reg =>
-      reg.lancamentos.some(l =>
-        l.fim && l.fim >= HOJE &&
-        ['aprovado','agendado'].includes((l.status||'').toLowerCase())
-      )
+      ['aprovado','agendado'].includes((reg.status||'').toLowerCase()) &&
+      reg.lancamentos.some(l => l.fim && l.fim >= HOJE)
     );
     if (temAgendado) nAgendados++;
   });
@@ -6099,7 +6099,7 @@ function renderGestorAlerts(colabsBase) {
 
   window._gestorRiscoDobra  = riscoDobra.map(c => String(c.id));
   window._gestorSemAgendado = semAgendado.map(c => String(c.id));
-  window._gestorSaiEmBreve  = saiEmBreve.map(c => String(c.id));
+  window._gestorSaiEmBreve  = saiEmBreve.map(id => String(id));
   window._gestorAguardAprov = aguardandoAprov.map(c => String(c.id));
   window._gestorAgendados   = agendados.map(c => String(c.id));
 
