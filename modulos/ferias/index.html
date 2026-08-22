@@ -6097,11 +6097,11 @@ function renderGestorAlerts(colabsBase) {
   // Agendados: usa gestorIsAgendado como fonte de verdade única (= mesma lógica do badge da linha)
   const agendados = base.filter(c => gestorIsAgendado(c.id));
 
-  window._gestorRiscoDobra  = riscoDobra.map(c => c.id);
-  window._gestorSemAgendado = semAgendado.map(c => c.id);
-  window._gestorSaiEmBreve  = saiEmBreve;
-  window._gestorAguardAprov = aguardandoAprov.map(c => c.id);
-  window._gestorAgendados   = agendados.map(c => c.id);
+  window._gestorRiscoDobra  = riscoDobra.map(c => String(c.id));
+  window._gestorSemAgendado = semAgendado.map(c => String(c.id));
+  window._gestorSaiEmBreve  = saiEmBreve.map(c => String(c.id));
+  window._gestorAguardAprov = aguardandoAprov.map(c => String(c.id));
+  window._gestorAgendados   = agendados.map(c => String(c.id));
 
   // Card "Pendentes" — sempre visível; visual muda conforme há pendências
   const _cardAprovHtml = aguardandoAprov.length > 0
@@ -6671,19 +6671,19 @@ function renderGestorAtencao() {
   // Filtros de alerta (sobre a lista já filtrada)
   let _sub = `${colabs.length} colaborador(es)`;
   if (_gestorAlertaAtivo === 'dobra') {
-    colabs = colabs.filter(c => (window._gestorRiscoDobra||[]).includes(c.id));
+    colabs = colabs.filter(c => (window._gestorRiscoDobra||[]).includes(String(c.id)));
     _sub = `${colabs.length} colaborador(es) com vencimento próximo sem férias aprovadas`;
   } else if (_gestorAlertaAtivo === 'sem-agendado') {
-    colabs = colabs.filter(c => (window._gestorSemAgendado||[]).includes(c.id));
+    colabs = colabs.filter(c => (window._gestorSemAgendado||[]).includes(String(c.id)));
     _sub = `${colabs.length} colaborador(es) sem período futuro lançado`;
   } else if (_gestorAlertaAtivo === 'saindo') {
-    colabs = colabs.filter(c => (window._gestorSaiEmBreve||[]).includes(c.id));
+    colabs = colabs.filter(c => (window._gestorSaiEmBreve||[]).includes(String(c.id)));
     _sub = `${colabs.length} colaborador(es) iniciando férias nos próximos 30 dias`;
   } else if (_gestorAlertaAtivo === 'aguard') {
-    colabs = colabs.filter(c => (window._gestorAguardAprov||[]).includes(c.id));
+    colabs = colabs.filter(c => (window._gestorAguardAprov||[]).includes(String(c.id)));
     _sub = `${colabs.length} colaborador(es) com solicitações pendentes ou recusas para analisar`;
   } else if (_gestorAlertaAtivo === 'agendado') {
-    colabs = colabs.filter(c => (window._gestorAgendados||[]).includes(c.id));
+    colabs = colabs.filter(c => (window._gestorAgendados||[]).includes(String(c.id)));
     _sub = `${colabs.length} colaborador(es) com férias aprovadas agendadas`;
   }
 
@@ -7379,7 +7379,7 @@ async function gestorEnviarSolicitacao() {
     }
     // Garante que o colaborador entra no KPI "Para analisar"
     if (window._gestorAguardAprov && !window._gestorAguardAprov.some(id => String(id) === String(colab.id))) {
-      window._gestorAguardAprov.push(colab.id);
+      window._gestorAguardAprov.push(String(colab.id));
     }
     fecharModalGestor();
     renderGestorAlerts();
