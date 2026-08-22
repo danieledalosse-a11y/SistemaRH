@@ -6794,11 +6794,15 @@ function renderGestorAtencao() {
       : semPA ? paAnoPrevisto
       : (_lancRelev?.inicio?.slice(0,4) || '—');
 
-    // Agendamento relevante — busca em TODOS os PAs, não apenas no PA vigente
+    // Todos os lançamentos do colaborador (para badge/counts)
     const lancs = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id) === String(c.id));
-    const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
-    const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
-    const passado = lancs.filter(l => l.fim < hoje).sort((a,b) => b.fim.localeCompare(a.fim))[0];
+    // Lançamentos do PA efetivo apenas (para coluna Agendamentos)
+    const lancsPa = paEfetivo
+      ? lancs.filter(l => String(l.periodo_id) === String(paEfetivo.id))
+      : lancs;
+    const ativo  = lancsPa.find(l => l.inicio <= hoje && l.fim >= hoje);
+    const futuro = lancsPa.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
+    const passado = lancsPa.filter(l => l.fim < hoje).sort((a,b) => b.fim.localeCompare(a.fim))[0];
     const lRef   = ativo || futuro || passado;
     const lancProtegedobraG = lRef && (lRef === ativo || lRef === futuro) && saldo > 0 && dpd <= 180;
     const alertaDobraGHtml = lancProtegedobraG
