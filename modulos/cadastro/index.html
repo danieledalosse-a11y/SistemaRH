@@ -1106,15 +1106,51 @@ let SB_HEADERS = {};
 
 async function sbGet(tabela, params) {
   const url = `${SB_URL}/rest/v1/${tabela}?${params}`;
-  const r = await fetch(url, { headers: SB_HEADERS });
-  if (!r.ok) throw new Error(await r.text());
+  let r = await fetch(url, { headers: SB_HEADERS });
+  if (!r.ok) {
+    const txt = await r.text();
+    if ((txt.includes('JWT expired') || txt.includes('PGRST303')) && await _sbRefreshSession()) {
+      r = await fetch(url, { headers: SB_HEADERS });
+      if (!r.ok) throw new Error(await r.text());
+    } else {
+      throw new Error(txt);
+    }
+  }
   return r.json();
+}
+
+async function _sbRefreshSession() {
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    if (!sess.refresh_token) return false;
+    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: sess.refresh_token }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    if (!data.access_token) return false;
+    const newSess = { ...sess, access_token: data.access_token, refresh_token: data.refresh_token || sess.refresh_token, expires_at: Date.now() + (data.expires_in || 3600) * 1000 };
+    localStorage.setItem('sb_session', JSON.stringify(newSess));
+    SB_HEADERS = { ...SB_HEADERS, Authorization: `Bearer ${data.access_token}` };
+    return true;
+  } catch { return false; }
 }
 
 async function sbPatch(tabela, filtro, dados) {
   const url = `${SB_URL}/rest/v1/${tabela}?${filtro}`;
-  const r = await fetch(url, { method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(dados) });
-  if (!r.ok) throw new Error(await r.text());
+  let r = await fetch(url, { method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(dados) });
+  if (!r.ok) {
+    const txt = await r.text();
+    const isExpired = txt.includes('JWT expired') || txt.includes('PGRST303');
+    if (isExpired && await _sbRefreshSession()) {
+      r = await fetch(url, { method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(dados) });
+      if (!r.ok) throw new Error(await r.text());
+    } else {
+      throw new Error(txt);
+    }
+  }
 }
 
 // ─── Audit log ────────────────────────────────────────────────────────────────
