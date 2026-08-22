@@ -6668,22 +6668,30 @@ function renderGestorAtencao() {
   // Atualiza cards com base na lista filtrada por busca/cargo/gestor (antes do filtro de alerta)
   renderGestorAlerts(colabs);
 
-  // Filtros de alerta (sobre a lista já filtrada)
+  // Filtros de alerta (sobre a lista já filtrada) — calculados diretamente, sem arrays intermediários
+  const _hj = hoje;
   let _sub = `${colabs.length} colaborador(es)`;
   if (_gestorAlertaAtivo === 'dobra') {
-    colabs = colabs.filter(c => (window._gestorRiscoDobra||[]).includes(String(c.id)));
+    colabs = colabs.filter(c => {
+      const p = gestorPeriodoAtivo(c.id);
+      if (!p) return false;
+      if (gestorDpd(p) > 180) return false;
+      if (gestorSaldoPeriodo(p) <= 0) return false;
+      return !GESTOR_LANCAMENTOS.some(l => String(l.colaborador_id) === String(c.id) && (l.fim||'') >= _hj && ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
+    });
     _sub = `${colabs.length} colaborador(es) com vencimento próximo sem férias aprovadas`;
   } else if (_gestorAlertaAtivo === 'sem-agendado') {
-    colabs = colabs.filter(c => (window._gestorSemAgendado||[]).includes(String(c.id)));
+    colabs = colabs.filter(c => !gestorIsAgendado(c.id) && GESTOR_PERIODOS.some(p => p.colaborador_id === c.id && gestorSaldoPeriodo(p) > 0));
     _sub = `${colabs.length} colaborador(es) sem período futuro lançado`;
   } else if (_gestorAlertaAtivo === 'saindo') {
-    colabs = colabs.filter(c => (window._gestorSaiEmBreve||[]).includes(String(c.id)));
+    const saiIds = new Set(gestorLancFuturos30(colabs).map(l => String(l.colaborador_id)));
+    colabs = colabs.filter(c => saiIds.has(String(c.id)));
     _sub = `${colabs.length} colaborador(es) iniciando férias nos próximos 30 dias`;
   } else if (_gestorAlertaAtivo === 'aguard') {
-    colabs = colabs.filter(c => (window._gestorAguardAprov||[]).includes(String(c.id)));
+    colabs = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => String(l.colaborador_id) === String(c.id) && ['solicitado','recusado'].includes((l.status||'').toLowerCase()) && (l.fim||'') >= _hj));
     _sub = `${colabs.length} colaborador(es) com solicitações pendentes ou recusas para analisar`;
   } else if (_gestorAlertaAtivo === 'agendado') {
-    colabs = colabs.filter(c => (window._gestorAgendados||[]).includes(String(c.id)));
+    colabs = colabs.filter(c => gestorIsAgendado(c.id));
     _sub = `${colabs.length} colaborador(es) com férias aprovadas agendadas`;
   }
 
