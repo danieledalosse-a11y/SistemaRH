@@ -6760,12 +6760,15 @@ function renderGestorAtencao() {
 
   list.innerHTML = colabs.map(c => {
     const pa = gestorPeriodoAtivo(c.id);
-    // recém-contratado: sem PA e sem nenhum registro na tabela ferias
-    const temPeriodos = GESTOR_PERIODOS.some(p => p.colaborador_id === c.id);
-    const semPA = !pa && !temPeriodos && !!c.data_admissao;
-    // todos os PAs concluídos (saldo=0) — não exibir, EXCETO quando um filtro KPI está ativo
+    // semPA: qualquer colaborador sem PA ativo com saldo (inclui quem tem PAs históricos já gozados)
+    const semPA = !pa && !!c.data_admissao;
     if (!pa && !semPA && !_gestorAlertaAtivo) return '';
-    const paInicioPrevisto = semPA ? c.data_admissao.slice(0,10) : null;
+    // Para semPA: usa o último PA histórico como base; se não houver, usa data_admissao
+    const _ultimoPA = semPA
+      ? GESTOR_PERIODOS.filter(p => p.colaborador_id === c.id).sort((a,b) => (b.pa_fim||'').localeCompare(a.pa_fim||''))[0]
+      : null;
+    const _baseDataPrevisto = semPA ? (_ultimoPA?.pa_fim ? addDays(_ultimoPA.pa_fim, 1) : c.data_admissao.slice(0,10)) : null;
+    const paInicioPrevisto = _baseDataPrevisto;
     const paFimPrevisto    = semPA ? addDays(paInicioPrevisto, 364) : null;
     const paAnoPrevisto    = semPA ? paFimPrevisto.slice(0,4) : null;
 
