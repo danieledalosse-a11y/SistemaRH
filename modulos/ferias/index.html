@@ -6019,11 +6019,23 @@ function gestorDpd(periodo) {
   return Math.round((venc - hoje) / 86400000);
 }
 
+// Fonte de verdade única: colaborador tem férias aprovadas/agendadas com data_fim >= hoje
+// Usado pelo badge da linha E pelo KPI/filtro — garante consistência.
+function gestorIsAgendado(colabId) {
+  const hoje = new Date().toISOString().slice(0,10);
+  return GESTOR_LANCAMENTOS.some(l =>
+    String(l.colaborador_id) === String(colabId) &&
+    (l.data_fim || '') >= hoje &&
+    ['aprovado','agendado'].includes((l.status||'').toLowerCase())
+  );
+}
+
+// Mantido para compatibilidade interna (inclui solicitado, usado em gestorLancFuturos30 context)
 function gestorTemAgendado(colaborador_id) {
   const hoje = new Date().toISOString().slice(0,10);
   return GESTOR_LANCAMENTOS.some(l =>
-    l.colaborador_id === colaborador_id &&
-    l.data_fim > hoje &&
+    String(l.colaborador_id) === String(colaborador_id) &&
+    (l.data_fim || '') >= hoje &&
     ['aprovado','agendado','solicitado'].includes((l.status||'').toLowerCase())
   );
 }
@@ -6054,17 +6066,18 @@ function renderGestorAlerts(colabsBase) {
   });
 
   const semAgendado = base.filter(c => {
+    // Exclusão imediata: qualquer lançamento aprovado/agendado com fim >= hoje
+    // (mesma condição que gera badge "Agendado" na linha — fonte de verdade única)
+    if (gestorIsAgendado(c.id)) return false;
     const abertos = GESTOR_PERIODOS.filter(p => p.colaborador_id === c.id && gestorSaldoPeriodo(p) > 0);
     if (!abertos.length) return false;
     // Cond 1: PA vencido com saldo e sem nenhum lançamento
     if (abertos.some(p => p.data_fim_gozo && p.data_fim_gozo < hoje &&
         !GESTOR_LANCAMENTOS.some(l => String(l.periodo_id) === String(p.id)))) return true;
-    // Cond 2: PA mais recente com saldo sem férias futuras
-    const maisRecente = abertos.slice().sort((a, b) => (b.data_fim_gozo||'').localeCompare(a.data_fim_gozo||''))[0];
+    // Cond 2: sem férias futuras aprovadas/agendadas/solicitadas em qualquer PA aberto
     return !GESTOR_LANCAMENTOS.some(l =>
-      l.colaborador_id === c.id &&
-      String(l.periodo_id) === String(maisRecente.id) &&
-      l.data_fim >= hoje &&
+      String(l.colaborador_id) === String(c.id) &&
+      (l.data_fim || '') >= hoje &&
       ['aprovado','agendado','solicitado'].includes((l.status||'').toLowerCase())
     );
   });
@@ -6079,15 +6092,8 @@ function renderGestorAlerts(colabsBase) {
   const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
   const aguardandoAprov = base.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
 
-  // Agendados: colabs cujo PA ativo possui ao menos um lançamento aprovado/agendado
-  // Agendado: qualquer lançamento aprovado/agendado com data_fim >= hoje, sem filtrar por PA.
-  const agendados = base.filter(c => {
-    return GESTOR_LANCAMENTOS.some(l =>
-      String(l.colaborador_id) === String(c.id) &&
-      (l.data_fim || '') >= hoje &&
-      ['aprovado','agendado'].includes((l.status||'').toLowerCase())
-    );
-  });
+  // Agendados: usa gestorIsAgendado como fonte de verdade única (= mesma lógica do badge da linha)
+  const agendados = base.filter(c => gestorIsAgendado(c.id));
 
   window._gestorRiscoDobra  = riscoDobra.map(c => c.id);
   window._gestorSemAgendado = semAgendado.map(c => c.id);
