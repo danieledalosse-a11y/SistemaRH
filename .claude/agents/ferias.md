@@ -120,6 +120,81 @@ Classes CSS:
 Não filtra por ano — procura qualquer lançamento cujo período engloba o dia de hoje.
 Na linha exibe **somente o lancamento ativo** (não todos os lançamentos do PA).
 
+## Visão Gestor — arquitetura de dados
+
+A visão Gestor usa arrays **separados** (não a estrutura `COLABORADORES[].registros[].lancamentos[]` da visão RH):
+
+| Variável global | Conteúdo |
+|---|---|
+| `GESTOR_COLABS` | colaboradores do gestor logado |
+| `GESTOR_PERIODOS` | todos os PAs dos colaboradores |
+| `GESTOR_LANCAMENTOS` | todos os lançamentos, campo `inicio`/`fim` (NÃO `data_inicio`/`data_fim`) |
+
+`processGestorFerias(rows)` — constrói GESTOR_PERIODOS e GESTOR_LANCAMENTOS a partir das rows do Supabase. Lançamentos gerados usam `inicio`/`fim` (consistente com as rows da tabela `ferias`).
+
+**Nunca usar `data_inicio` ou `data_fim` em GESTOR_LANCAMENTOS** — esses campos não existem nos objetos gerados por `processGestorFerias`. Qualquer ordenação ou comparação de datas de lançamento usa `l.inicio` e `l.fim`.
+
+## Visão Gestor — funções canônicas
+
+```js
+// Retorna o PA mais antigo com saldo > 0 e não expirado
+gestorPeriodoAtivo(colaborador_id)
+
+// True se colaborador tem lançamento aprovado/agendado/gozado com fim >= hoje
+gestorIsAgendado(colabId)
+// Nota: inclui status 'gozado' com fim >= hoje (colaborador em férias agora, gozo já registrado)
+
+// Dias até o prazo de dobra do PA
+gestorDpd(pa)
+
+// Saldo restante do PA (dias_direito - dias já lançados)
+gestorSaldoPeriodo(pa)
+```
+
+## Visão Gestor — filtro KPI ativo
+
+`_gestorAlertaAtivo` — variável de módulo: `null` | `'agendado'` | `'dobra'` | `'sem-agendado'` | `'saindo'` | `'aguard'`
+
+`filtrarGestorAlerta(tipo)` — toggle: mesmo tipo limpa o filtro. Cards KPI exibem classe `pa-active` quando ativos. O subtítulo da lista exibe botão "× Limpar filtro" quando há filtro ativo.
+
+**Regra do renderer de linha:** `if (!pa && !semPA && !_gestorAlertaAtivo) return ''` — colaboradores com todos os PAs concluídos só aparecem quando um filtro KPI está ativo.
+
+## Visão Gestor — paEfetivo (padrão crítico)
+
+Quando o filtro `'agendado'` está ativo, o colaborador pode ter `pa = null` (saldo zerado, todos os dias já agendados). Para exibir corretamente o PA e o saldo, usar `paEfetivo`:
+
+```js
+const _lancRelev = GESTOR_LANCAMENTOS.find(l =>
+  String(l.colaborador_id) === String(c.id) &&
+  ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()) &&
+  (l.fim||'') >= hoje
+);
+const _paRelev = _lancRelev
+  ? GESTOR_PERIODOS.find(p => String(p.id) === String(_lancRelev.periodo_id))
+  : null;
+
+// No filtro agendado: prioriza o PA do lançamento futuro (não o gestorPeriodoAtivo)
+// Fora do filtro: usa gestorPeriodoAtivo, com fallback para _paRelev
+const paEfetivo = _gestorAlertaAtivo === 'agendado'
+  ? (_paRelev || pa)
+  : (pa || _paRelev);
+```
+
+Todos os cálculos de exibição (dpd, saldo, total, pct, cores, badge, paAno) usam `paEfetivo`.
+**Botão "Solicitar"** continua usando `pa` (gestorPeriodoAtivo) — é onde novas solicitações são feitas.
+
+## Visão Gestor — badge de saldo zerado
+
+Quando `saldo <= 0`, verificar se há lançamento futuro aprovado antes de exibir "Concluído":
+
+```js
+const _temFutAprov = lancs.some(l =>
+  ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()) &&
+  (l.fim||'') >= hoje
+);
+badge = _temFutAprov ? 'Agendado' : 'Concluído';
+```
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
