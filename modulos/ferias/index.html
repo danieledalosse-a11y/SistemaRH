@@ -6854,7 +6854,7 @@ function renderGestorAtencao() {
       const temAprovado   = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.fim >= hoje);
       const temRecusado   = lancs.some(l => (l.status||'').toLowerCase() === 'recusado' && l.fim >= hoje);
       if (temSolicitado && !temAprovado)
-        badge = `<span class="badge-status-v" style="background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;"><span class="la-dot" style="background:#F79009;"></span>Aguardando RH</span>`;
+        badge = `<span class="badge-status-v" style="background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;"><span class="la-dot" style="background:#F79009;"></span>Aguardando aprovação</span>`;
       else if (temRecusado && !temAprovado && !temSolicitado)
         badge = `<span class="badge-status-v" style="background:#FEF2F2;color:#D92D20;border:1px solid #FECACA;"><span class="la-dot" style="background:#D92D20;"></span>Recusado pelo RH</span>`;
       else if (temSolicitado)
@@ -6868,7 +6868,10 @@ function renderGestorAtencao() {
     let borderClr;
     if (saldo > 0 && paEfetivo && nivel) {
       borderClr = nivel === 'critico' ? '#D92D20' : nivel === 'atencao' ? '#F79009' : '#3B82F6';
-    } else if (semPA) borderClr = '#6366F1';
+    } else if (semPA) {
+      const _semPAagendado = lancs.some(l => ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()) && (l.fim||'') >= hoje);
+      borderClr = _semPAagendado ? '#1849A9' : '#6366F1';
+    }
     else if (saldo <= 0) borderClr = 'var(--green)';
     else if (!lancs.length) borderClr = '#F59E0B';
     else {
