@@ -1793,6 +1793,10 @@
     </div>
     <div class="gestor-aviso" id="mgAviso">Atenção: mais de 80% do saldo será utilizado.</div>
     <div class="gestor-erro" id="mgErro">Os dias solicitados ultrapassam o saldo disponível.</div>
+    <div class="field" style="margin-top:14px;">
+      <label style="font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.04em;">Observação <span style="font-weight:400;opacity:.6;">(opcional)</span></label>
+      <textarea id="mgObs" rows="2" placeholder="Ex: férias coletivas, preferência do colaborador..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);resize:vertical;margin-top:4px;"></textarea>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="fecharModalGestor()">Cancelar</button>
       <button class="btn btn-green" id="mgBtnEnviar" onclick="gestorEnviarSolicitacao()">Enviar para RH aprovar</button>
@@ -7302,6 +7306,8 @@ function gestorAbrirModal(colabId, periodoId, slotRemarcar, lancRecusado) {
 
 function fecharModalGestor() {
   document.getElementById('modalGestor').style.display = 'none';
+  const obsEl = document.getElementById('mgObs');
+  if (obsEl) obsEl.value = '';
   _gestorColabSolicitando = null;
 }
 
@@ -7365,13 +7371,15 @@ async function gestorEnviarSolicitacao() {
     let patchData;
     let slotKey;
 
+    const _obsGestor = (document.getElementById('mgObs')?.value || '').trim();
+    const _obsBase = `Solicitado por: ${GESTOR_NOME_USUARIO}${_obsGestor ? ' — ' + _obsGestor : ''}`;
     if (slotForcado === 'p1' || (!slotForcado && !row.periodo1_inicio)) {
       patchData = { periodo1_inicio: inicio, periodo1_fim: fim, dias1: diasVal,
-                    obs_gestor: `Solicitado por: ${GESTOR_NOME_USUARIO}`, status: 'Pendente' };
+                    obs_gestor: _obsBase, status: 'Pendente' };
       slotKey = 'p1';
     } else if (slotForcado === 'p2' || (!slotForcado && !row.periodo2_inicio)) {
       patchData = { periodo2_inicio: inicio, periodo2_fim: fim, dias2: diasVal,
-                    obs_gestor: `Solicitado por: ${GESTOR_NOME_USUARIO}`, status: 'Pendente' };
+                    obs_gestor: _obsBase, status: 'Pendente' };
       slotKey = 'p2';
     } else {
       toast('Ambos os períodos já estão preenchidos para este PA. Contate o RH.');
