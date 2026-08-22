@@ -159,6 +159,15 @@ gestorSaldoPeriodo(pa)
 
 **Regra do renderer de linha:** `if (!pa && !semPA && !_gestorAlertaAtivo) return ''` — colaboradores com todos os PAs concluídos só aparecem quando um filtro KPI está ativo.
 
+**Definição de `semPA`:** `!pa && !!c.data_admissao` — qualquer colaborador sem PA ativo com saldo, incluindo quem tem PAs históricos já gozados mas ainda não tem novo PA criado. **Não** usar `!temPeriodos` como condição — isso ocultaria colaboradores que gozaram o último PA mas o novo ainda não foi lançado no banco.
+
+**Coluna PA Vigente:** prioridade de exibição:
+1. `paEfetivo` encontrado → mostra o ano real (`paEfetivo.pa_fim.slice(0,4)`)
+2. `semPA` sem paEfetivo → mostra "XXXX Previsto" (baseado no `pa_fim` do último PA histórico + 1 dia)
+3. Nenhum → `—`
+
+**Coluna Agendamentos:** mostra apenas lançamentos do `paEfetivo` (`lancsPa`), não de PAs históricos. Colaborador com PA 2027 e lançamento apenas no PA 2026 encerrado mostra `—` na coluna, não o lançamento antigo.
+
 ## Visão Gestor — paEfetivo (padrão crítico)
 
 Quando o filtro `'agendado'` está ativo, o colaborador pode ter `pa = null` (saldo zerado, todos os dias já agendados). Para exibir corretamente o PA e o saldo, usar `paEfetivo`:
@@ -194,6 +203,16 @@ const _temFutAprov = lancs.some(l =>
 );
 badge = _temFutAprov ? 'Agendado' : 'Concluído';
 ```
+
+## Tabela `ferias` — colunas que NÃO existem
+
+**`dias_direito` não existe** na tabela `ferias` do Supabase. Nunca incluir esse campo em POST/PATCH para essa tabela. O valor padrão 30 é aplicado apenas nos objetos JS locais via `|| 30`.
+
+O objeto `periodo` em `GESTOR_PERIODOS` tem `dias_direito: 30` hardcoded no JS (em `processGestorFerias`), mas esse campo não vai para o banco.
+
+## Renovação automática de JWT (módulo cadastro)
+
+`_sbRefreshSession()` em `modulos/cadastro/index.html` — ao detectar `JWT expired` em `sbPatch` ou `sbGet`, tenta renovar usando `refresh_token` do localStorage e refaz a chamada original. Se o refresh falhar, lança o erro normalmente.
 
 ## Pendências conhecidas
 
