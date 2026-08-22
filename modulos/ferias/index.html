@@ -6742,10 +6742,8 @@ function renderGestorAtencao() {
   });
 
   const list = document.getElementById('gestorAtencaoList');
-  // DEBUG TEMPORÁRIO — remover após diagnóstico
-  console.log('[GESTOR DEBUG] _gestorAlertaAtivo:', _gestorAlertaAtivo, '| colabs.length:', colabs.length, '| GESTOR_LANCAMENTOS.length:', GESTOR_LANCAMENTOS.length, '| agendados sample:', GESTOR_LANCAMENTOS.filter(l=>['aprovado','agendado'].includes((l.status||'').toLowerCase()) && (l.fim||'') >= hoje).slice(0,3));
   if (!colabs.length) {
-    list.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-ter);font-size:13px;">Nenhum colaborador encontrado. [DEBUG: GESTOR_LANCAMENTOS=${GESTOR_LANCAMENTOS.length}, GESTOR_COLABS=${GESTOR_COLABS.length}]</div>`;
+    list.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-ter);font-size:13px;">Nenhum colaborador encontrado.</div>`;
     return;
   }
 
@@ -6887,7 +6885,7 @@ function renderGestorAtencao() {
     </div>
     <div id="gestorHist-${c.id}" style="display:none;background:var(--surface-alt,var(--bg-2));border-bottom:1px solid var(--border);padding:12px 20px 16px;">
       ${(() => {
-        const hlancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id).sort((a,b) => b.data_inicio.localeCompare(a.data_inicio));
+        const hlancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id).sort((a,b) => (b.inicio||'').localeCompare(a.inicio||''));
         if (!hlancs.length) return `<p style="font-size:12px;color:var(--text-ter);margin:0;">Nenhum lançamento encontrado.</p>`;
         return `<table style="font-size:12px;width:100%;border-collapse:collapse;">
           <thead><tr style="color:var(--text-ter);text-align:left;">
@@ -6971,7 +6969,7 @@ function _renderGsolLista(c) {
   const hoje  = new Date().toISOString().slice(0,10);
   const lancs = GESTOR_LANCAMENTOS
     .filter(l => String(l.colaborador_id) === String(c.id))
-    .sort((a,b) => b.data_inicio.localeCompare(a.data_inicio));
+    .sort((a,b) => (b.inicio||'').localeCompare(a.inicio||''));
 
   if (!lancs.length) {
     document.getElementById('gsolLista').innerHTML =
@@ -7315,7 +7313,7 @@ async function gestorEnviarSolicitacao() {
 
   // Validação: datas idênticas à solicitação recusada anteriormente
   const lancRecusado = _gestorColabSolicitando._lancRecusado;
-  if (lancRecusado && lancRecusado.data_inicio === inicio && lancRecusado.data_fim === fim) {
+  if (lancRecusado && lancRecusado.inicio === inicio && lancRecusado.fim === fim) {
     const erroEl = document.getElementById('mgErro');
     if (erroEl) {
       erroEl.textContent = 'Este período já foi avaliado e não aprovado pelo RH. Escolha datas diferentes ou entre em contato com o RH antes de reenviar.';
@@ -7371,8 +7369,8 @@ async function gestorEnviarSolicitacao() {
     );
     if (lancExistente) {
       lancExistente.status = 'solicitado';
-      lancExistente.data_inicio = inicio;
-      lancExistente.data_fim = fim;
+      lancExistente.inicio = inicio;
+      lancExistente.fim = fim;
       lancExistente.dias = diasVal;
       lancExistente._motivoRecusa = null;
       lancExistente._motivoCancelamento = null;
@@ -7381,8 +7379,8 @@ async function gestorEnviarSolicitacao() {
         id:             `${feriasId}-${slotKey}`,
         colaborador_id: colab.id,
         periodo_id:     feriasId,
-        data_inicio:    inicio,
-        data_fim:       fim,
+        inicio:         inicio,
+        fim:            fim,
         dias:           diasVal,
         status:         'solicitado',
       });
