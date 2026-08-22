@@ -3977,10 +3977,15 @@ function renderListaAnual() {
           reg.lancamentos.some(l => l.fim && l.fim >= HOJE);
       });
     } else {
-      // todos: PAs cujo ano de direito = ANO_REF (convenção: ano em que o direito é adquirido)
+      // todos: PAs cujo ano de direito = ANO_REF OU que têm lançamento/gozo no ANO_REF
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
-        return Number(reg.ano) === ano;
+        if (Number(reg.ano) === ano) return true;
+        // PA de ano anterior mas com lançamento (gozo) ocorrendo no ANO_REF
+        return reg.lancamentos.some(l => {
+          const lancAno = (l.inicio || l.fim || '').slice(0,4);
+          return Number(lancAno) === ano;
+        });
       });
     }
     pasDoAno = pasDoAno.sort((a, b) => (a.paInicio || '').localeCompare(b.paInicio || ''));
