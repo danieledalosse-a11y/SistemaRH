@@ -7205,21 +7205,32 @@ async function gestorCancelarSolicitacao(feriasId, colabId, lancId) {
   const motivo = prompt('Motivo do cancelamento (opcional):') ?? '';
 
   try {
-    await sbPatch('ferias', `id=eq.${feriasId}`, {
-      status: 'Cancelado',
-      obs_gestor: motivo.trim() || 'Cancelado pelo gestor',
-    });
+    // Identifica o slot (p1 ou p2) a partir do ID do lançamento (formato: "{rowId}-p1" ou "{rowId}-p2")
+    const slot = String(lancId).endsWith('-p2') ? 'p2' : 'p1';
+    const clearSlot = slot === 'p1'
+      ? { periodo1_inicio: null, periodo1_fim: null, dias1: 0, motivo1: null, nota1: null }
+      : { periodo2_inicio: null, periodo2_fim: null, dias2: 0, motivo2: null, nota2: null };
 
-    // Atualiza em memória — mantém no array para exibição histórica
+    // Verifica se o outro slot ainda tem dados (para decidir o status da row)
+    const per = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
+    const row = per?._feriasRow || {};
+    const outroSlotTemDados = slot === 'p1'
+      ? !!(row.periodo2_inicio && Number(row.dias2) > 0)
+      : !!(row.periodo1_inicio && Number(row.dias1) > 0);
+
+    // Se o outro slot ainda tem férias aprovadas/gozadas, mantém o status; senão volta a Aprovado
+    const novoStatus = outroSlotTemDados ? (row.status || 'Aprovado') : 'Aprovado';
+    const patchData = { ...clearSlot, status: novoStatus, obs_gestor: motivo.trim() || null };
+
+    await sbPatch('ferias', `id=eq.${feriasId}`, patchData);
+
+    // Atualiza em memória — remove o lançamento cancelado do array
     const lancIdx = GESTOR_LANCAMENTOS.findIndex(l => String(l.id) === String(lancId));
     if (lancIdx >= 0) {
-      GESTOR_LANCAMENTOS[lancIdx].status = 'cancelado';
-      GESTOR_LANCAMENTOS[lancIdx]._motivoCancelamento = motivo.trim() || 'Cancelado pelo gestor';
+      GESTOR_LANCAMENTOS.splice(lancIdx, 1);
     }
-    const per = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
     if (per?._feriasRow) {
-      per._feriasRow.status = 'Cancelado';
-      per._feriasRow.obs_gestor = motivo.trim() || 'Cancelado pelo gestor';
+      Object.assign(per._feriasRow, patchData);
     }
 
     // Remove colaborador do KPI "Para analisar" se não tiver mais pendências
