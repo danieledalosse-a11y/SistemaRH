@@ -6763,23 +6763,27 @@ function renderGestorAtencao() {
     const paFimPrevisto    = semPA ? addDays(paInicioPrevisto, 364) : null;
     const paAnoPrevisto    = semPA ? paFimPrevisto.slice(0,4) : null;
 
-    const dpd   = pa ? gestorDpd(pa) : 9999;
-    const saldo = pa ? gestorSaldoPeriodo(pa) : (semPA ? 30 : 0);
-    const total = pa ? (Number(pa.dias_direito) || 30) : 30;
-    const pct   = pa ? Math.min(100, Math.round((total - saldo) / total * 100)) : 0;
-    const saldoColor = pa ? (saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--text-sec)') : (semPA ? '#6366F1' : 'var(--green)');
-    const barColor   = pa ? (saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--blue)') : '#6366F1';
-
-    // PA vigente — quando pa=null, busca o PA do lançamento futuro relevante
+    // PA do lançamento futuro relevante (aprovado/agendado/gozado com fim >= hoje)
     const _lancRelev = GESTOR_LANCAMENTOS.find(l =>
       String(l.colaborador_id) === String(c.id) &&
       ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()) &&
       (l.fim||'') >= hoje
     );
     const _paRelev = _lancRelev ? GESTOR_PERIODOS.find(p => String(p.id) === String(_lancRelev.periodo_id)) : null;
-    // No filtro agendado: prioriza o PA do lancamento; fora do filtro: usa gestorPeriodoAtivo
-    const _paRef   = (_gestorAlertaAtivo === 'agendado' ? (_paRelev || pa) : (pa || _paRelev));
-    const paAno = _paRef ? (_paRef.pa_fim ? _paRef.pa_fim.slice(0,4) : (_paRef.pa_inicio||'').slice(0,4)) : (semPA ? paAnoPrevisto : '—');
+    // No filtro agendado: todos os cálculos usam o PA do lançamento; fora: usa gestorPeriodoAtivo
+    const paEfetivo = _gestorAlertaAtivo === 'agendado' ? (_paRelev || pa) : (pa || _paRelev);
+
+    const dpd   = paEfetivo ? gestorDpd(paEfetivo) : 9999;
+    const saldo = paEfetivo ? gestorSaldoPeriodo(paEfetivo) : (semPA ? 30 : 0);
+    const total = paEfetivo ? (Number(paEfetivo.dias_direito) || 30) : 30;
+    const pct   = paEfetivo ? Math.min(100, Math.round((total - saldo) / total * 100)) : 0;
+    const saldoColor = paEfetivo ? (saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--text-sec)') : (semPA ? '#6366F1' : 'var(--green)');
+    const barColor   = paEfetivo ? (saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--blue)') : '#6366F1';
+
+    const paAno = paEfetivo
+      ? ((paEfetivo.pa_fim || paEfetivo.pa_inicio || '').slice(0,4) || _lancRelev?.inicio?.slice(0,4) || '—')
+      : semPA ? paAnoPrevisto
+      : (_lancRelev?.inicio?.slice(0,4) || '—');
 
     // Agendamento relevante — busca em TODOS os PAs, não apenas no PA vigente
     const lancs = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id) === String(c.id));
@@ -6799,15 +6803,20 @@ function renderGestorAtencao() {
 
     // Badge situação — mesma lógica da visão RH (paBadge)
     const nivel = nivelRisco(dpd);
-    const dlimFmt = pa?.data_fim_gozo ? pa.data_fim_gozo.slice(0,10).split('-').reverse().join('/') : '';
+    const dlimFmt = paEfetivo?.data_fim_gozo ? paEfetivo.data_fim_gozo.slice(0,10).split('-').reverse().join('/') : '';
     let badge = '';
-    if (saldo > 0 && pa && nivel) {
+    if (saldo > 0 && paEfetivo && nivel) {
       const vence = dlimFmt ? ` · Vence em ${dlimFmt}` : '';
       if (nivel === 'critico') badge = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Crítico${vence}</span>`;
       else if (nivel === 'atencao') badge = `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção${vence}</span>`;
       else badge = `<span class="badge-status-r" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;"><span class="la-dot" style="background:#3B82F6;"></span>No radar${vence}</span>`;
     } else if (semPA)         badge = `<span class="badge-status-v" style="background:#F0F4FF;color:#6366F1;border:1px solid #C7D2FE;"><span class="la-dot" style="background:#6366F1;"></span>Período futuro</span>`;
-    else if (saldo <= 0)      badge = `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
+    else if (saldo <= 0) {
+      const _temFutAprov = lancs.some(l => ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()) && (l.fim||'') >= hoje);
+      badge = _temFutAprov
+        ? `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`
+        : `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
+    }
     else if (!lancs.length)   badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
     else {
       const temSolicitado = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.fim >= hoje);
@@ -6826,7 +6835,7 @@ function renderGestorAtencao() {
     }
 
     let borderClr;
-    if (saldo > 0 && pa && nivel) {
+    if (saldo > 0 && paEfetivo && nivel) {
       borderClr = nivel === 'critico' ? '#D92D20' : nivel === 'atencao' ? '#F79009' : '#3B82F6';
     } else if (semPA) borderClr = '#6366F1';
     else if (saldo <= 0) borderClr = 'var(--green)';
