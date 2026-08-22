@@ -6023,21 +6023,16 @@ function renderGestorAlerts(colabsBase) {
   const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
   const aguardandoAprov = base.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
 
-  // Agendados: colabs com pelo menos um lançamento status='aprovado' no PA vigente
-  const anoAtual = new Date().getFullYear();
-  const agendados = base.filter(c => {
-    const pa = gestorPeriodoAtivo(c.id);
-    const paAno = pa ? (pa.ano || (pa.pa_inicio ? parseInt(pa.pa_inicio.slice(0,4)) : null) || anoAtual) : anoAtual;
-    return GESTOR_LANCAMENTOS.some(l =>
+  // Agendados: colabs com pelo menos um lançamento status='aprovado' com data_fim >= hoje
+  // Usa data_fim em vez de correspondência de ano do PA — evita falha quando
+  // gestorPeriodoAtivo retorna um PA mais antigo (com saldo) de ano diferente do lançamento.
+  const agendados = base.filter(c =>
+    GESTOR_LANCAMENTOS.some(l =>
       String(l.colaborador_id) === String(c.id) &&
-      (l.status||'').toLowerCase() === 'aprovado' &&
-      (() => {
-        const pLanc = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
-        const lAno = pLanc ? (pLanc.ano || (pLanc.pa_inicio ? parseInt(pLanc.pa_inicio.slice(0,4)) : null) || anoAtual) : anoAtual;
-        return lAno === paAno;
-      })()
-    );
-  });
+      (l.data_fim || '') >= hoje &&
+      (l.status||'').toLowerCase() === 'aprovado'
+    )
+  );
 
   window._gestorRiscoDobra  = riscoDobra.map(c => c.id);
   window._gestorSemAgendado = semAgendado.map(c => c.id);
