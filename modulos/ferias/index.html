@@ -6028,7 +6028,8 @@ function gestorIsAgendado(colabId) {
     if (String(l.colaborador_id) !== id) return false;
     if ((l.fim || '') < hoje) return false;
     const st = (l.status || '').toLowerCase();
-    return st === 'aprovado' || st === 'agendado';
+    // inclui gozado com fim >= hoje (de férias agora, gozo já registrado)
+    return st === 'aprovado' || st === 'agendado' || st === 'gozado';
   });
 }
 
@@ -6769,8 +6770,15 @@ function renderGestorAtencao() {
     const saldoColor = pa ? (saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--text-sec)') : (semPA ? '#6366F1' : 'var(--green)');
     const barColor   = pa ? (saldo <= 0 ? 'var(--green)' : saldo <= 5 ? 'var(--red)' : 'var(--blue)') : '#6366F1';
 
-    // PA vigente
-    const paAno = pa ? (pa.pa_fim ? pa.pa_fim.slice(0,4) : (pa.data_inicio||'').slice(0,4)) : (semPA ? paAnoPrevisto : '—');
+    // PA vigente — quando pa=null, busca o PA do lançamento futuro relevante
+    const _lancRelev = GESTOR_LANCAMENTOS.find(l =>
+      String(l.colaborador_id) === String(c.id) &&
+      ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()) &&
+      (l.fim||'') >= hoje
+    );
+    const _paRelev = _lancRelev ? GESTOR_PERIODOS.find(p => String(p.id) === String(_lancRelev.periodo_id)) : null;
+    const _paRef   = pa || _paRelev;
+    const paAno = _paRef ? (_paRef.pa_fim ? _paRef.pa_fim.slice(0,4) : (_paRef.pa_inicio||'').slice(0,4)) : (semPA ? paAnoPrevisto : '—');
 
     // Agendamento relevante — busca em TODOS os PAs, não apenas no PA vigente
     const lancs = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id) === String(c.id));
