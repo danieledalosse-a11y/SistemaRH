@@ -2741,7 +2741,11 @@ function _abrirDrawerInterno(key) {
   window._drawerModoGestor = false;
 
   const fichaLink = document.getElementById('btnVerFichaFerias');
-  if (fichaLink && colab.matricula) fichaLink.href = `../colaborador/index.html?matricula=${encodeURIComponent(colab.matricula)}`;
+  if (fichaLink) {
+    const _modoG = window._drawerModoGestor;
+    fichaLink.style.display = _modoG ? 'none' : '';
+    if (!_modoG && colab.matricula) fichaLink.href = `../colaborador/index.html?matricula=${encodeURIComponent(colab.matricula)}`;
+  }
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawerOverlay').classList.add('open');
@@ -5832,8 +5836,14 @@ function _addOneYear(dateStr) {
 function processGestorFerias(rows) {
   const periodos    = [];
   const lancamentos = [];
+  const _periodoKeys = new Set(); // deduplicação por colaborador_id + pa_inicio
 
   rows.forEach(row => {
+    // Ignora linhas duplicadas (mesmo colaborador + mesmo início de PA)
+    const _pKey = `${row.colaborador_id}|${row.pa_inicio || row.id}`;
+    if (_periodoKeys.has(_pKey)) return;
+    _periodoKeys.add(_pKey);
+
     const periodo = {
       id:            row.id,
       colaborador_id: row.colaborador_id,
