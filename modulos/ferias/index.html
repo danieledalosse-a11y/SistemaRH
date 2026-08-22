@@ -3053,7 +3053,7 @@ function renderDrawerHistorico(colab) {
       </div>` : '';
       const notaVisivelHtml = l.nota && !(!excluirPA && IS_RH) ? `<div class="drawer-tl-meta">${l.nota}</div>` : l.nota ? `<div class="drawer-tl-meta" id="hist-nota-${r._sbId}-${lancIdx}">${l.nota}</div>` : '';
       return `<div class="drawer-tl-item">
-        <div class="drawer-tl-dot" style="background:${l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)'}"></div>
+        <div class="drawer-tl-dot" style="background:${excluirPA ? '#CBD5E1' : l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)'}"></div>
         <div class="drawer-tl-info" style="flex:1;min-width:0;">
           <div class="drawer-tl-dates-row">
             <div class="drawer-tl-dates-left">
@@ -7370,9 +7370,15 @@ async function gestorEnviarSolicitacao() {
 
   const fim = retorno || addDays(inicio, diasVal - 1);
 
-  // Validação: datas idênticas à solicitação recusada anteriormente
+  // Validação: datas idênticas a qualquer lançamento recusado deste PA
   const lancRecusado = _gestorColabSolicitando._lancRecusado;
-  if (lancRecusado && lancRecusado.inicio === inicio && lancRecusado.fim === fim) {
+  const _recusadoMatch = (lancRecusado && lancRecusado.inicio === inicio && lancRecusado.fim === fim)
+    || GESTOR_LANCAMENTOS.some(l =>
+        String(l.periodo_id) === String(periodo.id) &&
+        (l.status||'').toLowerCase() === 'recusado' &&
+        l.inicio === inicio && l.fim === fim
+      );
+  if (_recusadoMatch) {
     const erroEl = document.getElementById('mgErro');
     if (erroEl) {
       erroEl.textContent = 'Este período já foi avaliado e não aprovado pelo RH. Escolha datas diferentes ou entre em contato com o RH antes de reenviar.';
