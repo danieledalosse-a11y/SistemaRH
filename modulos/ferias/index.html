@@ -6023,11 +6023,14 @@ function gestorDpd(periodo) {
 // Usado pelo badge da linha E pelo KPI/filtro — garante consistência.
 function gestorIsAgendado(colabId) {
   const hoje = new Date().toISOString().slice(0,10);
-  return GESTOR_LANCAMENTOS.some(l =>
-    String(l.colaborador_id) === String(colabId) &&
-    (l.data_fim || '') >= hoje &&
-    ['aprovado','agendado'].includes((l.status||'').toLowerCase())
-  );
+  const id = String(colabId);
+  return GESTOR_LANCAMENTOS.some(l => {
+    if (String(l.colaborador_id) !== id) return false;
+    const fim = l.data_fim || l.fim || '';
+    if (fim < hoje) return false;
+    const st = (l.status || '').toLowerCase();
+    return st === 'aprovado' || st === 'agendado';
+  });
 }
 
 // Mantido para compatibilidade interna (inclui solicitado, usado em gestorLancFuturos30 context)
