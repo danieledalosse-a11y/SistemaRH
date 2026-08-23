@@ -214,6 +214,103 @@ O objeto `periodo` em `GESTOR_PERIODOS` tem `dias_direito: 30` hardcoded no JS (
 
 `_sbRefreshSession()` em `modulos/cadastro/index.html` — ao detectar `JWT expired` em `sbPatch` ou `sbGet`, tenta renovar usando `refresh_token` do localStorage e refaz a chamada original. Se o refresh falhar, lança o erro normalmente.
 
+## Cancelamento de lançamento pelo Gestor — regra crítica
+
+`gestorCancelarSolicitacao` deve limpar **apenas o slot** (p1 ou p2), nunca marcar o PA inteiro como 'Cancelado'.
+
+```js
+const slot = String(lancId).endsWith('-p2') ? 'p2' : 'p1';
+const clearSlot = slot === 'p1'
+  ? { periodo1_inicio: null, periodo1_fim: null, dias1: 0, motivo1: null, nota1: null }
+  : { periodo2_inicio: null, periodo2_fim: null, dias2: 0, motivo2: null, nota2: null };
+// novoStatus = 'Aprovado' (mantém PA aberto para nova solicitação)
+await sbPatch('ferias', `id=eq.${feriasId}`, { ...clearSlot, status: 'Aprovado', obs_gestor: motivo });
+```
+
+**Por quê:** cancelar o PA inteiro faz o sistema criar nova row com datas erradas (usa `data_admissao` em vez do aniversário correto) no próximo `gestorSolicitarNovoPa`.
+
+## Filtro dropdown de gestores (Visão Gestor)
+
+Sempre buscar de `param_gestor` (campo `apelido`, filtro `ativo=eq.true&order=ordem`), **não** de valores distintos da coluna `colaboradores.gestor`. Isso evita duplicatas por variação de capitalização.
+
+```js
+// Dentro de renderGestorAtencao (NÃO async) — usar .then(), nunca await
+sbGet('param_gestor', 'select=apelido&ativo=eq.true&order=ordem').then(pgRows => {
+  const gestores = pgRows.map(r => r.apelido).filter(Boolean);
+  gestores.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; gestorSel.appendChild(o); });
+}).catch(() => { /* fallback: distinct de colaboradores */ });
+```
+
+## Filtro de ano na Visão RH
+
+`ANO_REF = 0` significa "Todos os anos" (sentinel). O select inicia com `<option value="0" selected>Todos os anos</option>`.
+
+Ao filtrar lançamentos por ano, checar **ambos** `inicio` e `fim` do lançamento:
+```js
+const iniAno = Number((l.inicio || '').slice(0,4));
+const fimAno = Number((l.fim   || '').slice(0,4));
+return iniAno === ano || fimAno === ano;
+```
+
+Isso cobre lançamentos que cruzam a virada do ano (ex: 22/12/2025 → 04/01/2026).
+
+## Seleção de PA na coluna "PA Vigente" da lista
+
+```js
+// Em renderListaAnual, linha ~4223
+const _comSaldo = pasDoAno.filter(r => calcSaldo(r) > 0);
+const reg = _comSaldo.length > 0
+  ? _comSaldo[0]                      // mais antigo com saldo (regra CLT)
+  : pasDoAno[pasDoAno.length - 1];    // mais recente (todos concluídos)
+```
+
+**Por quê:** `pasDoAno` é ordenado por `paInicio` ascendente. Sem esta lógica, colaboradores com todos os PAs concluídos exibem o PA mais antigo (ex: 2019) em vez do mais recente.
+
+## Criação automática de PAs — `autocriarPasFaltantes()`
+
+Chamada em `carregarDoSupabase()` após `supabaseParaModelo()`. Cria em **loop** todos os PAs faltantes para cada colaborador até chegar no PA vigente.
+
+**Condição de entrada (por colaborador):**
+- Colaborador ativo com `_sbColabId`
+- Nenhum PA válido com `pa_fim >= HOJE` (sem PA vigente)
+- Último PA válido com `calcSaldo = 0` (totalmente utilizado)
+
+**Loop interno:** cria PAs sequenciais (`pa_inicio = addDays(lastReg.paFim, 1)`, `pa_fim = addDays(paInicio, 364)`) até que o novo PA tenha `pa_fim >= HOJE`. Limite de 10 iterações por colaborador (segurança).
+
+**Datas:**
+- `pa_inicio` = dia seguinte ao `pa_fim` do último PA
+- `pa_fim` = `pa_inicio + 364 dias`
+- `ano` = ano do `pa_fim`
+- `status` = `'Aprovado'`, sem lançamentos
+
+**NÃO cria** se:
+- Algum PA válido já tem `pa_fim >= HOJE` (vigente existe)
+- Último PA tem saldo > 0 (PA aberto, não concluído)
+
+**Campos do POST** (só o que existe na tabela `ferias`):
+`colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status`
+— nunca incluir `dias_direito` (campo inexistente).
+
+## Dot de lançamento no drawer RH — cor correta
+
+```js
+// Cor do dot: cinza se PA cancelado/descartado, cinza se lançamento passado, verde se futuro/ativo
+style="background:${excluirPA ? '#CBD5E1' : l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)'}"
+```
+
+`excluirPA` é calculado antes do loop de lançamentos: `const excluirPA = excluir.has(r.status)`.
+
+## Scripts Python de manutenção — padrão REST
+
+A biblioteca `supabase-py` pode não estar instalada. Usar `requests` diretamente:
+```python
+import requests
+SB_URL = "https://rujtbxwssiofiialnbbg.supabase.co"
+headers = {"apikey": SB_SECRET, "Authorization": f"Bearer {SB_SECRET}", "Content-Type": "application/json", "Accept": "application/json"}
+r = requests.get(f"{SB_URL}/rest/v1/ferias?...", headers=headers)
+rows = r.json()  # verificar isinstance(rows, list) antes de iterar
+```
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI

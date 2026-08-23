@@ -2216,6 +2216,8 @@ async function carregarDoSupabase() {
     ]);
     setLoadingMsg('Processando dados...');
     supabaseParaModelo(feriasRows, colaborRows);
+    setLoadingMsg('Verificando períodos aquisitivos...');
+    const nCriados = await autocriarPasFaltantes();
     document.getElementById('loadingCard').style.display = 'none';
     document.getElementById('visaoContent').style.display = 'block';
     const bar = document.getElementById('statusBar');
@@ -2225,7 +2227,11 @@ async function carregarDoSupabase() {
     }
     popularFiltros();
     renderAll();
-    toast(`✓ ${COLABORADORES.length} colaboradores carregados`);
+    if (nCriados > 0) {
+      toast(`✓ ${COLABORADORES.length} colaboradores · ${nCriados} PA${nCriados > 1 ? 's' : ''} criado${nCriados > 1 ? 's' : ''} automaticamente`);
+    } else {
+      toast(`✓ ${COLABORADORES.length} colaboradores carregados`);
+    }
   } catch(e) {
     setLoadingMsg('Erro ao conectar: ' + e.message);
   }
@@ -3259,6 +3265,72 @@ async function rhCriarNovoPa(key) {
   }
 }
 
+async function autocriarPasFaltantes() {
+  // Cria em sequência todos os PAs faltantes para cada colaborador até chegar no vigente.
+  // Condição de entrada: último PA válido já terminou (pa_fim < hoje) E saldo = 0.
+  // Condição de parada: o PA recém-criado tem pa_fim >= hoje (PA vigente atingido).
+  // Limite de segurança: máximo 10 PAs por colaborador por execução (evita loop infinito).
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const MAX_POR_COLAB = 10;
+  let totalCriados = 0;
+
+  for (const colab of COLABORADORES) {
+    if (!colab.ativo || !colab._sbColabId) continue;
+
+    const regsValidos = () => colab.registros
+      .filter(r => !excluir.has(r.status) && r.paFim)
+      .sort((a, b) => (a.paFim || '').localeCompare(b.paFim || ''));
+
+    let iteracoes = 0;
+    while (iteracoes < MAX_POR_COLAB) {
+      iteracoes++;
+      const validos = regsValidos();
+      if (!validos.length) break;
+
+      // Já tem PA vigente (pa_fim >= hoje) → não precisa criar
+      if (validos.some(r => r.paFim >= HOJE)) break;
+
+      // Último PA válido
+      const lastReg = validos[validos.length - 1];
+      if (!lastReg.paFim || lastReg.paFim >= HOJE) break;
+
+      // Só cria se o último PA está concluído (saldo = 0)
+      if (calcSaldo(lastReg) > 0) break;
+
+      const paInicio = addDays(lastReg.paFim, 1);
+      const paFim    = addDays(paInicio, 364);
+      const ano      = Number(paFim.slice(0, 4));
+
+      try {
+        const r = await fetch(`${SB_URL}/rest/v1/ferias`, {
+          method:  'POST',
+          headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+          body:    JSON.stringify({
+            colaborador_id:        colab._sbColabId,
+            matricula_colaborador: colab.matricula,
+            ano, pa_inicio: paInicio, pa_fim: paFim, status: 'Aprovado',
+          }),
+        });
+        if (!r.ok) break; // erro de rede/banco: para este colaborador
+        const [row] = await r.json();
+        const novoReg = {
+          _sbId: row.id, ano, paInicio, paFim,
+          totalDias: 30, status: 'Aprovado', lancamentos: [],
+          abonoPecuniario: 0, diasAntecipados: 0,
+          _notaLivre: null, _obsGestor: null,
+          realizacoes: [], _novoLanc: null, _motivoRejeicao: null,
+        };
+        colab.registros.push(novoReg);
+        totalCriados++;
+        // Se o PA recém-criado já cobre hoje → para (vigente atingido)
+        if (paFim >= HOJE) break;
+      } catch { break; }
+    }
+  }
+
+  return totalCriados;
+}
+
 async function confirmarDrawerLancamento() {
   const colab = COLABORADORES.find(c => c.__key === _lancarKey);
   if (!colab) return;
@@ -4145,7 +4217,9 @@ function renderListaAnual() {
   let html = '';
 
   sortedItems.forEach(({ c, pasDoAno }) => {
-    const reg = pasDoAno[0]; // PA mais relevante para a linha
+    // PA mais relevante: com saldo (mais antigo, regra CLT) ou sem saldo (mais recente)
+    const _comSaldo = pasDoAno.filter(r => calcSaldo(r) > 0);
+    const reg = _comSaldo.length > 0 ? _comSaldo[0] : pasDoAno[pasDoAno.length - 1];
     const saldo = calcSaldo(reg);
     const total = reg.totalDias || 30;
     const pct   = total > 0 ? Math.min(100, Math.round((total - saldo) / total * 100)) : 0;
