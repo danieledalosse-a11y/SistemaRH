@@ -6019,6 +6019,11 @@ function processGestorFerias(rows) {
 
     const _obsMotivo = row.obs_gestor || null;
 
+    // Quando row status=Pendente/Solicitado E ambos p1+p2 existem:
+    // p1 já estava aprovado (pré-requisito para p2 ser adicionado); só p2 é solicitado.
+    const _temP2 = row.periodo2_inicio && Number(row.dias2) > 0;
+    const _stP1 = (_rowStNorm === 'solicitado' && _temP2) ? 'aprovado' : _rowStNorm;
+
     // período 1
     if (row.periodo1_inicio && Number(row.dias1) > 0) {
       const lanc1 = {
@@ -6028,15 +6033,15 @@ function processGestorFerias(rows) {
         inicio:        row.periodo1_inicio,
         fim:           row.periodo1_fim || row.periodo1_inicio,
         dias:          Number(row.dias1),
-        status:        _rowStNorm,
+        status:        _stP1,
       };
-      if (_rowStNorm === 'recusado' && _obsMotivo) lanc1._motivoRecusa = _obsMotivo;
-      if (_rowStNorm === 'cancelado' && _obsMotivo) lanc1._motivoCancelamento = _obsMotivo;
+      if (_stP1 === 'recusado' && _obsMotivo) lanc1._motivoRecusa = _obsMotivo;
+      if (_stP1 === 'cancelado' && _obsMotivo) lanc1._motivoCancelamento = _obsMotivo;
       lancamentos.push(lanc1);
     }
 
     // período 2
-    if (row.periodo2_inicio && Number(row.dias2) > 0) {
+    if (_temP2) {
       const lanc2 = {
         id:            `${row.id}-p2`,
         colaborador_id: row.colaborador_id,
