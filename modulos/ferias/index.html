@@ -818,6 +818,25 @@
   /* Sidebar contador de aguardando aprovação */
   .sidebar-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; font-size: 11px; font-weight: 700; background: var(--amber-bg); color: var(--amber); border: 1px solid #FEC84B; }
 
+  /* ── Atividade Recente (Gestor) ── */
+  .gstor-ativ-wrap { margin-bottom: 12px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .gstor-ativ-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; cursor: pointer; user-select: none; }
+  .gstor-ativ-title { font-size: 12px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.5px; }
+  .gstor-ativ-toggle { font-size: 11px; color: var(--text-ter); }
+  .gstor-ativ-list { border-top: 1px solid var(--border); }
+  .gstor-ativ-item { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .gstor-ativ-item:last-child { border-bottom: none; }
+  .gstor-ativ-icon { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .gstor-ativ-icon.aprov  { background: #ECFDF3; color: #027A48; }
+  .gstor-ativ-icon.recus  { background: #FEF2F2; color: #D92D20; }
+  .gstor-ativ-icon.cancel { background: #F3F4F6; color: #6B7280; }
+  .gstor-ativ-nome { font-weight: 600; color: var(--text); min-width: 110px; }
+  .gstor-ativ-per  { color: var(--text-sec); flex: 1; }
+  .gstor-ativ-chip { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+  .gstor-ativ-chip.aprov  { background: #ECFDF3; color: #027A48; border: 1px solid #6CE9A6; }
+  .gstor-ativ-chip.recus  { background: #FEF2F2; color: #D92D20; border: 1px solid #FECACA; }
+  .gstor-ativ-chip.cancel { background: #F3F4F6; color: #6B7280; border: 1px solid #D1D5DB; }
+
   /* ── Acordos (gozo real) ── */
   /* ── Acordos / Realizações ── */
   .real-section { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
@@ -1636,6 +1655,7 @@
     <!-- ── Aba Painel ── -->
     <div id="gsub-painel">
       <div class="gestor-alerts" id="gestorAlerts"></div>
+      <div id="gestorAtividade"></div>
       <div class="card" style="margin-top:0;padding:0;overflow:hidden;">
         <div style="display:flex;align-items:center;gap:10px;padding:16px 20px 12px;">
           <div class="card-title" id="gestorListaTitulo">Minha equipe</div>
@@ -4623,6 +4643,7 @@ async function rhAprovarSolicitado(feriasId, idx) {
     renderPendentes();
     renderListaAnual();
     if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
+    if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
     if (typeof renderGestorAtencao === 'function') renderGestorAtencao();
   } catch(e) {
     alert('Erro ao aprovar: ' + e.message);
@@ -4657,6 +4678,7 @@ async function rhRecusarSolicitado(feriasId, idx) {
     renderPendentes();
     renderListaAnual();
     if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
+    if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
     if (typeof renderGestorAtencao === 'function') renderGestorAtencao();
   } catch(e) {
     alert('Erro ao recusar: ' + e.message);
@@ -6205,6 +6227,51 @@ function gestorLancFuturos30(colabsBase) {
   );
 }
 
+let _gestorAtivAberto = true;
+function renderGestorAtividade() {
+  const el = document.getElementById('gestorAtividade');
+  if (!el) return;
+
+  const fmtD = d => d ? d.slice(0,10).split('-').reverse().slice(0,2).join('/') : '—';
+
+  // Lançamentos concluídos que passaram pelo fluxo gestor (obs_gestor preenchido)
+  const eventos = GESTOR_LANCAMENTOS
+    .filter(l => {
+      const st = (l.status||'').toLowerCase();
+      if (!['aprovado','recusado','cancelado'].includes(st)) return false;
+      const per = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
+      return per && per._feriasRow && per._feriasRow.obs_gestor;
+    })
+    .sort((a, b) => (b.fim||'').localeCompare(a.fim||''))
+    .slice(0, 10);
+
+  if (!eventos.length) { el.innerHTML = ''; return; }
+
+  const nomeMap = new Map(GESTOR_COLABS.map(c => [String(c.id), c.nome.split(' ')[0]]));
+
+  const items = eventos.map(l => {
+    const st   = (l.status||'').toLowerCase();
+    const cls  = st === 'aprovado' ? 'aprov' : st === 'recusado' ? 'recus' : 'cancel';
+    const icon = st === 'aprovado' ? '✓' : st === 'recusado' ? '✗' : '⊘';
+    const chip = st === 'aprovado' ? 'Aprovado pelo RH' : st === 'recusado' ? 'Recusado pelo RH' : 'Cancelado';
+    const nome = nomeMap.get(String(l.colaborador_id)) || '—';
+    return `<div class="gstor-ativ-item">
+      <div class="gstor-ativ-icon ${cls}">${icon}</div>
+      <span class="gstor-ativ-nome">${nome}</span>
+      <span class="gstor-ativ-per">${fmtD(l.inicio)} → ${fmtD(l.fim)} · ${l.dias}d</span>
+      <span class="gstor-ativ-chip ${cls}">${chip}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="gstor-ativ-wrap">
+    <div class="gstor-ativ-header" onclick="_gestorAtivAberto=!_gestorAtivAberto;renderGestorAtividade()">
+      <span class="gstor-ativ-title">Atividade recente</span>
+      <span class="gstor-ativ-toggle">${_gestorAtivAberto ? '▲ ocultar' : '▼ mostrar'}</span>
+    </div>
+    ${_gestorAtivAberto ? `<div class="gstor-ativ-list">${items}</div>` : ''}
+  </div>`;
+}
+
 function renderGestorAlerts(colabsBase) {
   const base = colabsBase || GESTOR_COLABS;
   const hoje = new Date().toISOString().slice(0,10);
@@ -6823,8 +6890,9 @@ function renderGestorAtencao() {
   if (filtroCargo) colabs = colabs.filter(c => c.cargo === filtroCargo);
   if (filtroGestor) colabs = colabs.filter(c => c.gestor === filtroGestor);
 
-  // Atualiza cards com base na lista filtrada por busca/cargo/gestor (antes do filtro de alerta)
+  // Atualiza cards e atividade recente com base na lista filtrada
   renderGestorAlerts(colabs);
+  renderGestorAtividade();
 
   // Filtros de alerta (sobre a lista já filtrada) — calculados diretamente, sem arrays intermediários
   const _hj = hoje;
