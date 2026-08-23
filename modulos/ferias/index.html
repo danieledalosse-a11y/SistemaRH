@@ -5838,10 +5838,12 @@ function renderTimeline() {
         const statusCls = l.aprovado ? '' : 'pendente';
 
         // label: datas completas se ≥ 9 cols, só dias se ≥ 4, vazio se menor
+        // barras que vêm do mês anterior: usa colsTotal visíveis + restante original para threshold
+        const colsOriginais = Math.max(1, Math.round((new Date(l.fim+'T12:00:00') - new Date(l.inicio+'T12:00:00')) / 86400000) + 1);
         const fmtShort = d => { const [,m,dia] = d.split('-'); return `${dia}/${m}`; };
         let label = '';
-        if (colsTotal >= 9) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
-        else if (colsTotal >= 4) label = `${l.dias}d`;
+        if (colsOriginais >= 9) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
+        else if (colsOriginais >= 4) label = `${l.dias}d`;
 
         const bg  = barBg(c.nome);
         const txt = barText(c.nome);
@@ -6489,10 +6491,11 @@ function renderGestorGantt() {
         const isAprov  = st !== 'solicitado';
         const bg  = barBg(c.nome);
         const txt = barText(c.nome);
+        const colsOriginais = Math.max(1, Math.round((new Date(l.fim+'T12:00:00') - new Date(l.inicio+'T12:00:00')) / 86400000) + 1);
         const fmtShort = d => { const [,m,dia] = d.split('-'); return `${dia}/${m}`; };
         let label = '';
-        if (colsTotal >= 9) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
-        else if (colsTotal >= 4) label = `${l.dias}d`;
+        if (colsOriginais >= 9) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
+        else if (colsOriginais >= 4) label = `${l.dias}d`;
 
         const barCls = ['gantt-bar', !isAprov?'pendente':'', contLeft?'bar-cont-left':'', contRight?'bar-cont-right':''].filter(Boolean).join(' ');
         const bgStyle = isAprov
