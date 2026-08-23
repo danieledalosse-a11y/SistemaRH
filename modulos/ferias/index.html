@@ -6236,10 +6236,11 @@ function renderGestorAlerts(colabsBase) {
   const futuros     = gestorLancFuturos30(base);
   const saiEmBreve  = [...new Set(futuros.map(l => l.colaborador_id))];
 
-  // Conta solicitados + recusados com datas futuras/ativas
+  // Conta solicitados (independente de data) + recusados com datas futuras/ativas
   const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
     const st = (l.status||'').toLowerCase();
-    return (st === 'solicitado' || st === 'recusado') && l.fim >= hoje;
+    if (st === 'solicitado') return true;
+    return st === 'recusado' && l.fim >= hoje;
   });
   const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
   const aguardandoAprov = base.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
@@ -7516,6 +7517,23 @@ async function gestorEnviarSolicitacao() {
   if (diasVal > saldo) { toast('Dias ultrapassam o saldo disponível.'); return; }
 
   const fim = retorno || addDays(inicio, diasVal - 1);
+
+  // Validação: já existe solicitação pendente para este PA (qualquer slot)
+  const jaSolicitado = GESTOR_LANCAMENTOS.some(l =>
+    String(l.periodo_id) === String(periodo.id) &&
+    (l.status||'').toLowerCase() === 'solicitado'
+  );
+  if (jaSolicitado) {
+    const erroEl = document.getElementById('mgErro');
+    if (erroEl) {
+      erroEl.textContent = 'Já existe uma solicitação aguardando aprovação do RH para este período. Aguarde a resposta antes de enviar novamente.';
+      erroEl.classList.add('show');
+      setTimeout(() => erroEl.classList.remove('show'), 6000);
+    } else {
+      toast('Já existe uma solicitação pendente para este PA.');
+    }
+    return;
+  }
 
   // Validação: datas idênticas a qualquer lançamento recusado deste PA
   const lancRecusado = _gestorColabSolicitando._lancRecusado;
