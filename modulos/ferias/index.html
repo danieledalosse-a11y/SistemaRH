@@ -1386,11 +1386,12 @@
             <button class="filter-clear" id="clr-sidebarSetor" onclick="clearFilter('sidebarSetor','',()=>{renderAll()})" tabindex="-1" title="Limpar filtro">✕</button>
           </div>
           <div class="filter-wrap">
-            <select class="proto-fsel" id="listaAnualAno" onchange="ANO_REF=parseInt(this.value);renderListaAnual();syncFilterClear('listaAnualAno','2026')">
+            <select class="proto-fsel" id="listaAnualAno" onchange="ANO_REF=parseInt(this.value)||0;renderListaAnual();syncFilterClear('listaAnualAno','0')">
+              <option value="0" selected>Todos os anos</option>
               <option value="2024">2024</option><option value="2025">2025</option>
-              <option value="2026" selected>2026</option><option value="2027">2027</option>
+              <option value="2026">2026</option><option value="2027">2027</option>
             </select>
-            <button class="filter-clear" id="clr-listaAnualAno" onclick="clearFilter('listaAnualAno','2026',()=>{ANO_REF=2026;renderListaAnual()})" tabindex="-1" title="Limpar filtro">✕</button>
+            <button class="filter-clear" id="clr-listaAnualAno" onclick="clearFilter('listaAnualAno','0',()=>{ANO_REF=0;renderListaAnual()})" tabindex="-1" title="Limpar filtro">✕</button>
           </div>
           <div class="proto-fsep"></div>
           <button class="proto-btn-report rh-only" onclick="abrirModalRelatorio()">
@@ -1926,7 +1927,7 @@
 
 <script>
 // ─── Configuração ────────────────────────────────────────────────────────────
-let ANO_REF = 2026;
+let ANO_REF = 0; // 0 = todos os anos
 const HOJE  = new Date().toISOString().slice(0, 10);
 
 const REGRAS_FERIAS = {
@@ -3543,7 +3544,7 @@ function renderMetricas() {
     </div>
     <div class="metric m-amber" onclick="setSubTab('sem-agendado', document.querySelectorAll('.sub-tab')[2])">
       <div class="metric-val c-amber">${semAgendado}</div>
-      <div class="metric-label">Sem agendado em ${ANO_REF}</div>
+      <div class="metric-label">Sem agendado${ANO_REF ? ' em ' + ANO_REF : ''}</div>
       <div class="metric-sub">${pct(semAgendado)}</div>
     </div>
     <div class="metric" onclick="setSubTab('pendentes', document.querySelectorAll('.sub-tab')[3])">
@@ -3827,7 +3828,7 @@ function renderSemAgendado() {
 
   if (!lista.length) {
     document.getElementById('semContent').innerHTML =
-      `<div class="empty-state"><div class="icon">✅</div><p>Todos os colaboradores têm férias agendadas em ${ANO_REF}</p></div>`;
+      `<div class="empty-state"><div class="icon">✅</div><p>Todos os colaboradores têm férias agendadas${ANO_REF ? ' em ' + ANO_REF : ''}</p></div>`;
     return;
   }
 
@@ -3961,10 +3962,11 @@ function renderListaAnual() {
         return reg.lancamentos.some(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim);
       });
     } else if (_statusFiltro === 'sem') {
-      // PA vigente hoje E com ano === ANO_REF
+      // PA vigente hoje (sem filtro de ano quando ANO_REF=0)
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
-        return Number(reg.ano) === ano && reg.paInicio && reg.paFim && HOJE >= reg.paInicio && HOJE <= reg.paFim;
+        if (ano && Number(reg.ano) !== ano) return false;
+        return reg.paInicio && reg.paFim && HOJE >= reg.paInicio && HOJE <= reg.paFim;
       });
     } else if (_statusFiltro === 'ok') {
       // Pendentes: inclui status 'Pendente' (não exclui como os demais filtros)
@@ -3977,11 +3979,12 @@ function renderListaAnual() {
           reg.lancamentos.some(l => l.fim && l.fim >= HOJE);
       });
     } else {
-      // todos: PAs cujo ano de direito = ANO_REF OU que têm lançamento/gozo no ANO_REF
+      // todos: sem filtro de ano (ANO_REF=0) → todos os PAs ativos;
+      //        com ano → PAs cujo ano = ANO_REF OU lançamento ocorre nesse ano
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
+        if (!ano) return true; // todos os anos
         if (Number(reg.ano) === ano) return true;
-        // PA de ano anterior mas com lançamento (gozo) ocorrendo no ANO_REF
         return reg.lancamentos.some(l => {
           const iniAno = Number((l.inicio || '').slice(0,4));
           const fimAno = Number((l.fim || '').slice(0,4));
@@ -4288,7 +4291,7 @@ function renderMinhaEquipe() {
       const dlimR = dataLimiteDobra(reg);
       situBadge = riscoBadgeHtml(dpd, false, dlimR);
     } else if (semAg) {
-      situBadge = `<span class="badge badge-amber">Sem agendado ${ANO_REF}</span>`;
+      situBadge = `<span class="badge badge-amber">Sem agendado${ANO_REF ? ' ' + ANO_REF : ''}</span>`;
     } else {
       situBadge = `<span class="badge badge-verde">OK</span>`;
     }
@@ -4984,14 +4987,14 @@ function renderKPI() {
   if (elDobra) elDobra.textContent = nRisco;
   if (elPend)  elPend.textContent  = nPend;
 
-  // atualiza contador da Lista anual (colaboradores com PA no ANO_REF)
-  const anoIni = `${ANO_REF}-01-01`, anoFim = `${ANO_REF}-12-31`;
+  // atualiza contador da Lista anual (colaboradores com PA no ANO_REF, ou todos se ANO_REF=0)
   const excluirSet = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
-  const nLista = lista.filter(c => c.registros.some(r =>
-    !excluirSet.has(r.status) &&
-    (!r.paFim || r.paFim >= anoIni) &&
-    (!r.paInicio || r.paInicio <= anoFim)
-  )).length;
+  const nLista = lista.filter(c => c.registros.some(r => {
+    if (excluirSet.has(r.status)) return false;
+    if (!ANO_REF) return true;
+    const anoIni = `${ANO_REF}-01-01`, anoFim = `${ANO_REF}-12-31`;
+    return (!r.paFim || r.paFim >= anoIni) && (!r.paInicio || r.paInicio <= anoFim);
+  })).length;
   const elLista = document.getElementById('cnt-lista');
   if (elLista) elLista.textContent = nLista;
 }
