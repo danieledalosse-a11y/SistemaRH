@@ -6676,15 +6676,14 @@ function renderGestorAtencao() {
   if (gestorSel) {
     if (!GESTOR_APELIDO && gestorSel.options.length <= 1 && colabs.length) {
       // RH vendo todos — popula lista a partir de param_gestor (fonte de verdade)
-      try {
-        const pgRows = await sbGet('param_gestor', 'select=apelido&ativo=eq.true&order=ordem');
+      sbGet('param_gestor', 'select=apelido&ativo=eq.true&order=ordem').then(pgRows => {
         const gestores = pgRows.map(r => r.apelido).filter(Boolean);
         gestores.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; gestorSel.appendChild(o); });
-      } catch {
+      }).catch(() => {
         // fallback: lê dos colaboradores se param_gestor falhar
         const gestores = [...new Set(colabs.map(c => c.gestor).filter(Boolean))].sort();
         gestores.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; gestorSel.appendChild(o); });
-      }
+      });
     }
     gestorSel.style.display = GESTOR_APELIDO ? 'none' : '';
   }
