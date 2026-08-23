@@ -3112,7 +3112,11 @@ function renderDrawerLancar(colab) {
 
   if (saldo <= 0) {
     document.getElementById('drawerLancar').innerHTML = `
-      <div class="empty-state"><div class="icon">✓</div><p>Saldo zerado — sem dias disponíveis para lançar neste PA.</p></div>`;
+      <div class="empty-state">
+        <div class="icon">✓</div>
+        <p>Saldo zerado — sem dias disponíveis para lançar neste PA.</p>
+        ${IS_RH ? `<button id="btnRhNovoPa" onclick="rhCriarNovoPa('${_drawerKey}')" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Criar próximo período aquisitivo</button>` : ''}
+      </div>`;
     return;
   }
 
@@ -3208,6 +3212,51 @@ function validarDrawerForm() {
   if (dias > saldo) alertas.push({ tipo: 'erro', msg: `Saldo disponível: ${saldo} dias` });
 
   el.innerHTML = alertas.map(a => `<div class="alerta-form ${a.tipo === 'erro' ? 'erro' : 'aviso'}">${a.msg}</div>`).join('');
+}
+
+async function rhCriarNovoPa(key) {
+  const colab = COLABORADORES.find(c => c.__key === key);
+  if (!colab || !colab._sbColabId) { toast('Colaborador não encontrado.'); return; }
+
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const lastReg = [...colab.registros]
+    .filter(r => !excluir.has(r.status) && r.paFim)
+    .sort((a, b) => (a.paFim || '').localeCompare(b.paFim || ''))
+    .pop();
+
+  if (!lastReg?.paFim) { toast('Não foi possível determinar o fim do último PA.'); return; }
+
+  const paInicio = addDays(lastReg.paFim, 1);
+  const paFim    = addDays(paInicio, 364);
+  const ano      = Number(paFim.slice(0, 4));
+
+  const btn = document.getElementById('btnRhNovoPa');
+  if (btn) { btn.disabled = true; btn.textContent = 'Criando...'; }
+
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/ferias`, {
+      method:  'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+      body:    JSON.stringify({
+        colaborador_id:        colab._sbColabId,
+        matricula_colaborador: colab.matricula,
+        ano,
+        pa_inicio: paInicio,
+        pa_fim:    paFim,
+        status:    'Aprovado',
+      }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    toast('Novo PA criado! Recarregando...');
+    await carregarDoSupabase();
+    abrirDrawer(key);
+    // Vai direto para aba Lançar
+    const tabLancar = document.querySelector('.drawer-tab:nth-child(2)');
+    if (tabLancar) setDrawerTab('lancar', tabLancar);
+  } catch(e) {
+    toast('Erro ao criar PA: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '+ Criar próximo período aquisitivo'; }
+  }
 }
 
 async function confirmarDrawerLancamento() {
