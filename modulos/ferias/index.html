@@ -6997,7 +6997,7 @@ function renderGestorAtencao() {
     }
     else if (!lancs.length)   badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
     else {
-      const temSolicitado = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.fim >= hoje);
+      const temSolicitado = lancs.some(l => (l.status||'').toLowerCase() === 'solicitado'); // independente de data
       const temAprovado   = lancs.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.fim >= hoje);
       const temRecusado   = lancs.some(l => (l.status||'').toLowerCase() === 'recusado' && l.fim >= hoje);
       if (temSolicitado && !temAprovado)
@@ -7036,7 +7036,8 @@ function renderGestorAtencao() {
 
     const podeSlicitar = pa && saldo > 0;
     const lancsFuturosAtivos = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id) && l.fim >= hoje);
-    const temSolicitado = lancsFuturosAtivos.some(l => (l.status||'').toLowerCase() === 'solicitado');
+    const lancsPA = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
+    const temSolicitado = lancsPA.some(l => (l.status||'').toLowerCase() === 'solicitado'); // sem filtro de data
     const temRecusado   = lancsFuturosAtivos.some(l => (l.status||'').toLowerCase() === 'recusado');
     const temAprovado   = lancsFuturosAtivos.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
     let btnAcao;
