@@ -922,6 +922,11 @@
   .hist-gozo-del:hover { color: #C4150A; border-color: #FECACA; background: #FEF2F2; }
   .hist-edit-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--text-ter); cursor: pointer; padding: 0; flex-shrink: 0; transition: color 0.15s, border-color 0.15s, background 0.15s; }
   .hist-edit-btn:hover { color: #1849A9; border-color: #C7D7F9; background: var(--blue-bg); }
+  .hist-clock-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--text-ter); cursor: pointer; padding: 0; flex-shrink: 0; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+  .hist-clock-btn:hover { color: #D97706; border-color: #FDE68A; background: #FFFBEB; }
+  .hist-clock-btn.ativo { color: #D97706; background: #FEF3C7; border-color: #FDE68A; }
+  .hist-clock-btn.ativo:hover { background: #FDE68A; }
+  .chip-pend-gozo { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 4px; background: #FEF3C7; color: #D97706; border: 1px solid #FDE68A; font-size: 10px; font-weight: 600; }
   /* Form inline */
   .hist-gozo-form { display: none; padding: 10px 12px 8px; background: #F8FAFF; border: 1.5px solid #C7D7F9; border-radius: 6px; }
   .hist-gozo-form.open { display: block; }
@@ -3107,14 +3112,17 @@ function renderDrawerHistorico(colab) {
       const notaVisivelHtml = l.nota && !(!excluirPA && IS_RH) ? `<div class="drawer-tl-meta">${l.nota}</div>` : l.nota ? `<div class="drawer-tl-meta" id="hist-nota-${r._sbId}-${lancIdx}">${l.nota}</div>` : '';
       const dotColor = excluirPA ? '#CBD5E1' : l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)';
       const isPendGozoLanc = r._aguardandoGozoIdx === lancIdx;
+      const novoIdxClock = isPendGozoLanc ? 'null' : lancIdx;
+      const clockBtnHtml = (!excluirPA && IS_RH) ? `<button class="hist-clock-btn${isPendGozoLanc ? ' ativo' : ''}" onclick="rhToggleAguardandoGozo('${r._sbId}','${novoIdxClock}','${key}')" title="${isPendGozoLanc ? 'Remover marcação de pendente' : 'Marcar como pendente de gozo'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>` : '';
+      const chipPendHtml = isPendGozoLanc ? `<span class="chip-pend-gozo"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Pendente de gozo</span>` : '';
       return `<div class="drawer-tl-item">
         <div class="drawer-tl-dot" style="background:${dotColor}"></div>
         <div class="drawer-tl-info" style="flex:1;min-width:0;">
           <div class="drawer-tl-dates-row">
             <div class="drawer-tl-dates-left" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
-              <span class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>
+              <span class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>${chipPendHtml}
             </div>
-            <div style="display:flex;align-items:center;gap:4px;">${editBtnHtml}${iconoAcordo}</div>
+            <div style="display:flex;align-items:center;gap:4px;">${clockBtnHtml}${editBtnHtml}${iconoAcordo}</div>
           </div>
           ${editFormHtml}
           ${notaVisivelHtml}
