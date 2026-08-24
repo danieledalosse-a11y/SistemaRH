@@ -1191,6 +1191,23 @@
   .gsol-header { padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0; }
   .gsol-body { flex:1;overflow-y:auto;padding:20px; }
   .gsol-footer { padding:16px 20px;border-top:1px solid var(--border);flex-shrink:0; }
+  .gsol-tabs { display:flex;border-bottom:1px solid var(--border);margin:-20px -20px 16px;padding:0 20px;flex-shrink:0; }
+  .gsol-tab { padding:10px 14px 9px;font-size:12px;font-weight:600;color:var(--text-sec);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap;font-family:inherit; }
+  .gsol-tab.ativa { color:var(--blue);border-bottom-color:var(--blue); }
+  .gsol-tab:hover:not(.ativa) { color:var(--text); }
+  .gsol-tab-hint { font-size:10px;color:var(--text-ter);text-align:center;padding:0 0 12px;letter-spacing:.02em; }
+  .gsol-rh-chip { display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;background:#F5F3FF;color:#6D28D9;border:1px solid #DDD6FE; }
+  .gsol-pend-chip { display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;background:#FEF3C7;color:#D97706;border:1px solid #FDE68A; }
+  .gsol-rh-tl { padding:10px 14px;display:flex;flex-direction:column;gap:0; }
+  .gsol-rh-item { display:flex;gap:9px;position:relative;padding-bottom:12px; }
+  .gsol-rh-item:last-child { padding-bottom:0; }
+  .gsol-rh-item:not(:last-child)::before { content:'';position:absolute;left:5px;top:12px;bottom:0;width:1px;background:var(--border); }
+  .gsol-rh-dot { width:11px;height:11px;border-radius:50%;flex-shrink:0;margin-top:3px; }
+  .gsol-rh-body { flex:1;min-width:0; }
+  .gsol-rh-dates { font-size:12px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums; }
+  .gsol-rh-chips { display:flex;flex-wrap:wrap;gap:4px;margin-top:3px; }
+  .gsol-rh-nota { font-size:10px;color:var(--text-sec);margin-top:3px;font-style:italic; }
+  .gsol-rh-gozo { margin-top:5px;padding:5px 8px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;font-size:11px;color:#15803D;display:flex;align-items:center;justify-content:space-between; }
   .gsol-saldo-row { display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap; }
   .gsol-saldo-card { flex:1;min-width:100px;padding:10px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border); }
   .gsol-saldo-label { font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:4px; }
@@ -7411,7 +7428,9 @@ function gestorAbrirSolicitacoes(colabId) {
     btnHist.onclick = () => { fecharGestorSolicitacoes(); gestorAbrirHistorico(colabId); };
   }
 
+  gsolMostrarAba('sol');
   _renderGsolLista(c, pa);
+  _renderGsolHistoricoRH(c);
 
   document.getElementById('gsolOverlay').classList.add('open');
   document.getElementById('gsolDrawer').classList.add('open');
@@ -7891,6 +7910,98 @@ async function gestorEnviarSolicitacao() {
   }
 }
 
+function gsolMostrarAba(aba) {
+  const isSol = aba === 'sol';
+  document.getElementById('gsolLista').style.display    = isSol ? '' : 'none';
+  document.getElementById('gsolListaRH').style.display  = isSol ? 'none' : '';
+  document.getElementById('gsolTabSol').classList.toggle('ativa', isSol);
+  document.getElementById('gsolTabRH').classList.toggle('ativa', !isSol);
+}
+
+function _renderGsolHistoricoRH(c) {
+  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+  const hoje  = new Date().toISOString().slice(0,10);
+  const periodos = GESTOR_PERIODOS
+    .filter(p => String(p.colaborador_id) === String(c.id))
+    .sort((a, b) => (b.pa_fim || b.pa_inicio || '').localeCompare(a.pa_fim || a.pa_inicio || ''));
+
+  if (!periodos.length) {
+    document.getElementById('gsolListaRHConteudo').innerHTML =
+      `<div style="text-align:center;padding:32px 0;color:var(--text-ter);font-size:13px;">Nenhum registro encontrado.</div>`;
+    return;
+  }
+
+  const svgCal = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+  const svgClk = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+  const svgChk = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+  document.getElementById('gsolListaRHConteudo').innerHTML = periodos.map(per => {
+    const row     = per._feriasRow || {};
+    const paAno   = per.pa_fim ? per.pa_fim.slice(0,4) : per.pa_inicio?.slice(0,4) || '—';
+    const paIni   = _fmtD(per.pa_inicio);
+    const paFim   = _fmtD(per.pa_fim);
+    const diasDir = Number(per.dias_direito) || 30;
+    const lancamentos = GESTOR_LANCAMENTOS.filter(l =>
+      String(l.colaborador_id) === String(c.id) &&
+      String(l.periodo_id) === String(per.id) &&
+      l.status !== 'gozado'
+    );
+
+    if (!lancamentos.length) return '';
+
+    const usados = lancamentos.reduce((s, l) => s + (Number(l.dias) || 0), 0);
+    const saldo  = diasDir - usados;
+    const saldoColor = saldo <= 0 ? 'color:#EF4444;font-weight:700;' : '';
+
+    const itens = lancamentos.map((l, li) => {
+      const lancIdx = l.id.endsWith('-p2') ? 1 : 0;
+      const isPend  = (row.aguardando_gozo_idx ?? null) === lancIdx;
+      const dotColor = isPend ? '#F59E0B' : l.fim < hoje ? '#9CA3AF' : '#10B981';
+
+      const chipPend = isPend
+        ? `<span class="gsol-pend-chip">${svgClk} Pendente de gozo · ${l.dias}d</span>` : '';
+      const chipConcl = !isPend && l.fim < hoje
+        ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:10px;background:var(--bg);color:var(--text-sec);border:1px solid var(--border);">Concluído</span>` : '';
+
+      const nota = row.nota ? `<div class="gsol-rh-nota">${row.nota}</div>` : '';
+
+      const gozosDoLanc = Array.isArray(row.realizacoes)
+        ? row.realizacoes.filter((r, ri) => {
+            const rLancIdx = r.lancIdx !== undefined ? r.lancIdx : 0;
+            return rLancIdx === lancIdx;
+          })
+        : [];
+      const gozoHtml = gozosDoLanc.map(g => {
+        const ini = _fmtD(g.saida || g.inicio);
+        const fim = _fmtD(g.retorno || g.fim);
+        return `<div class="gsol-rh-gozo"><span>${svgChk} Gozo real</span><span style="font-variant-numeric:tabular-nums;">${ini} → ${fim} · ${g.dias}d</span></div>`;
+      }).join('');
+
+      return `<div class="gsol-rh-item">
+        <div class="gsol-rh-dot" style="background:${dotColor};"></div>
+        <div class="gsol-rh-body">
+          <div class="gsol-rh-dates">${_fmtD(l.inicio)} → ${_fmtD(l.fim)} · ${l.dias}d</div>
+          <div class="gsol-rh-chips">
+            <span class="gsol-rh-chip">${svgCal} Lançado RH</span>${chipPend}${chipConcl}
+          </div>
+          ${nota}${gozoHtml}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div>
+          <span style="font-size:12px;font-weight:700;color:var(--text);">PA ${paAno}</span>
+          <span style="font-size:11px;color:var(--text-ter);margin-left:8px;">${paIni} → ${paFim}</span>
+        </div>
+        <span style="font-size:11px;color:var(--text-sec);">Saldo <span style="${saldoColor}">${saldo}d</span> de ${diasDir}d</span>
+      </div>
+      <div class="gsol-rh-tl">${itens}</div>
+    </div>`;
+  }).join('');
+}
+
 function gestorFmtData(str) {
   if (!str) return '—';
   const [a, m, d] = str.slice(0,10).split('-');
@@ -7932,8 +8043,15 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
     <div class="gsol-body">
       <div class="gsol-saldo-row" id="gsolSaldo"></div>
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);margin-bottom:12px;">Solicitações</div>
+      <div class="gsol-tabs">
+        <button class="gsol-tab ativa" id="gsolTabSol" onclick="gsolMostrarAba('sol')">Solicitações</button>
+        <button class="gsol-tab" id="gsolTabRH" onclick="gsolMostrarAba('rh')">Histórico RH</button>
+      </div>
       <div id="gsolLista"></div>
+      <div id="gsolListaRH" style="display:none;">
+        <div class="gsol-tab-hint">Somente visualização — registros gerenciados pelo RH</div>
+        <div id="gsolListaRHConteudo"></div>
+      </div>
     </div>
     <div class="gsol-footer">
       <div style="display:flex;gap:8px;flex-direction:column;">
