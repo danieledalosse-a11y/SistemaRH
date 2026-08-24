@@ -1184,11 +1184,13 @@
   .gestor-alert-sub { font-size: 11px; color: var(--text-ter); margin-top: 4px; }
 
   /* Drawer gestor solicitações */
-  .gsol-overlay { position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1100;display:none; }
-  .gsol-overlay.open { display:block; }
-  .gsol-drawer { position:fixed;top:0;right:-480px;width:460px;max-width:100vw;height:100vh;background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.12);z-index:1101;transition:right .25s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden; }
-  .gsol-drawer.open { right:0; }
-  .gsol-header { padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0; }
+  .gsol-overlay { position:fixed;inset:0;background:rgba(0,0,0,0);z-index:1100;pointer-events:none;transition:background .2s; }
+  .gsol-overlay.open { background:rgba(0,0,0,.35);pointer-events:all; }
+  .gsol-drawer { position:fixed;top:50%;left:50%;transform:translate(-50%,-48%) scale(0.96);width:620px;max-width:96vw;max-height:92vh;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.20),0 4px 16px rgba(0,0,0,.10);display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:transform .22s ease,opacity .22s ease;z-index:1101;overflow:hidden; }
+  .gsol-drawer.open { transform:translate(-50%,-50%) scale(1);opacity:1;pointer-events:all; }
+  .gsol-drawer.dragging { transition:none;user-select:none; }
+  .gsol-header { padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0;cursor:grab; }
+  .gsol-header:active { cursor:grabbing; }
   .gsol-body { flex:1;overflow-y:auto;padding:20px; }
   .gsol-footer { padding:16px 20px;border-top:1px solid var(--border);flex-shrink:0; }
   .gestor-busca-dd { position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.10);z-index:900;overflow:hidden;display:none; }
@@ -7444,6 +7446,8 @@ function gestorAbrirSolicitacoes(colabId) {
   }
   document.getElementById('gsolNome').textContent  = c.nome;
   document.getElementById('gsolCargo').textContent = c.cargo || '—';
+  const _unidEl = document.getElementById('gsolUnidade');
+  if (_unidEl) { if (c.unidade) { _unidEl.textContent = c.unidade; _unidEl.style.display = ''; } else { _unidEl.style.display = 'none'; } }
 
   document.getElementById('gsolSaldo').innerHTML = `
     <div class="gsol-saldo-card">
@@ -7652,9 +7656,50 @@ function gestorRemarcarSolicitacao(feriasId, colabId) {
 
 function fecharGestorSolicitacoes() {
   document.getElementById('gsolOverlay').classList.remove('open');
-  document.getElementById('gsolDrawer').classList.remove('open');
+  const dr = document.getElementById('gsolDrawer');
+  dr.classList.remove('open');
+  // reseta posição para o centro ao fechar
+  dr.style.left = '';
+  dr.style.top  = '';
+  dr.style.transform = '';
   _gsolColabId = null;
 }
+
+// ─── Drag do modal gestor ───────────────────────────────────────────────────
+(function() {
+  let _dragging = false, _ox = 0, _oy = 0;
+  document.addEventListener('DOMContentLoaded', () => {
+    const handle = document.getElementById('gsolDragHandle');
+    const modal  = document.getElementById('gsolDrawer');
+    if (!handle || !modal) return;
+
+    handle.addEventListener('mousedown', e => {
+      if (e.target.closest('button')) return; // não draga se clicar no ✕
+      const rect = modal.getBoundingClientRect();
+      _ox = e.clientX - rect.left;
+      _oy = e.clientY - rect.top;
+      _dragging = true;
+      modal.classList.add('dragging');
+      modal.style.transform = 'none';
+      modal.style.left = rect.left + 'px';
+      modal.style.top  = rect.top  + 'px';
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!_dragging) return;
+      const x = Math.max(0, Math.min(e.clientX - _ox, window.innerWidth  - modal.offsetWidth));
+      const y = Math.max(0, Math.min(e.clientY - _oy, window.innerHeight - modal.offsetHeight));
+      modal.style.left = x + 'px';
+      modal.style.top  = y + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!_dragging) return;
+      _dragging = false;
+      modal.classList.remove('dragging');
+    });
+  });
+})();
 
 async function gestorCancelarSolicitacao(feriasId, colabId, lancId) {
   const lancAtual = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
@@ -8192,13 +8237,18 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ═══ Drawer Gestor — Solicitações ═══ -->
 <div class="gsol-overlay" id="gsolOverlay" onclick="fecharGestorSolicitacoes()">
   <div class="gsol-drawer" id="gsolDrawer" onclick="event.stopPropagation()">
-    <div class="gsol-header">
-      <div id="gsolAvatar" style="width:40px;height:40px;border-radius:50%;background:#1849A9;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;"></div>
+    <div class="gsol-header" id="gsolDragHandle">
+      <div id="gsolAvatar" style="width:44px;height:44px;border-radius:50%;background:#1849A9;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0;"></div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:15px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="gsolNome">—</div>
-        <div style="font-size:12px;color:var(--text-sec);" id="gsolCargo">—</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:2px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--text-sec);" id="gsolCargo">—</span>
+          <span id="gsolUnidade" style="display:none;font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--bg);border:1px solid var(--border);color:var(--text-sec);"></span>
+        </div>
       </div>
-      <button onclick="fecharGestorSolicitacoes()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--text-sec);padding:4px;line-height:1;flex-shrink:0;">✕</button>
+      <button onclick="fecharGestorSolicitacoes()" style="background:none;border:none;cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--text-sec);flex-shrink:0;transition:background .12s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
     <div class="gsol-body">
       <div class="gsol-saldo-row" id="gsolSaldo"></div>
