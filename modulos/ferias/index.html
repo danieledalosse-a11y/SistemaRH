@@ -1191,6 +1191,15 @@
   .gsol-header { padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0; }
   .gsol-body { flex:1;overflow-y:auto;padding:20px; }
   .gsol-footer { padding:16px 20px;border-top:1px solid var(--border);flex-shrink:0; }
+  .gestor-busca-dd { position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.10);z-index:900;overflow:hidden;display:none; }
+  .gestor-busca-dd.open { display:block; }
+  .gestor-dd-item { display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s; }
+  .gestor-dd-item:last-child { border-bottom:none; }
+  .gestor-dd-item:hover,.gestor-dd-item.focus { background:var(--bg); }
+  .gestor-dd-avatar { width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0; }
+  .gestor-dd-nome { font-size:13px;font-weight:600;color:var(--text); }
+  .gestor-dd-sub { font-size:11px;color:var(--text-sec); }
+  .gestor-dd-empty { padding:12px;text-align:center;font-size:12px;color:var(--text-ter); }
   .gsol-tabs { display:flex;border-bottom:1px solid var(--border);margin:-20px -20px 16px;padding:0 20px;flex-shrink:0; }
   .gsol-tab { padding:10px 14px 9px;font-size:12px;font-weight:600;color:var(--text-sec);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap;font-family:inherit; }
   .gsol-tab.ativa { color:var(--blue);border-bottom-color:var(--blue); }
@@ -1691,9 +1700,14 @@
         </div>
         <div style="display:flex;gap:10px;align-items:center;padding:0 20px 12px;flex-wrap:wrap;">
           <div style="position:relative;flex:1;min-width:200px;">
-            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-ter);" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="gestorBusca" placeholder="Buscar colaborador..." oninput="(()=>{const x=document.getElementById('gestorBuscaX');if(x)x.style.display=this.value?'flex':'none';renderGestorAtencao();})()" style="width:100%;box-sizing:border-box;padding:7px 28px 7px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
-            <button id="gestorBuscaX" onclick="const el=document.getElementById('gestorBusca');el.value='';this.style.display='none';renderGestorAtencao();" title="Limpar busca" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;color:var(--text-ter);padding:2px 4px;font-size:14px;line-height:1;align-items:center;justify-content:center;">✕</button>
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-ter);pointer-events:none;z-index:1;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="gestorBusca" placeholder="Buscar colaborador..." autocomplete="off"
+              oninput="gestorBuscaInput(this.value)"
+              onkeydown="gestorBuscaKeydown(event)"
+              onfocus="gestorBuscaInput(this.value)"
+              style="width:100%;box-sizing:border-box;padding:7px 28px 7px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+            <button id="gestorBuscaX" onclick="gestorBuscaLimpar()" title="Limpar busca" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;color:var(--text-ter);padding:2px 4px;font-size:14px;line-height:1;align-items:center;justify-content:center;">✕</button>
+            <div class="gestor-busca-dd" id="gestorBuscaDD"></div>
           </div>
           <select id="gestorFiltroCargo2" onchange="renderGestorAtencao()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:160px;">
             <option value="">Todos os cargos</option>
@@ -7909,6 +7923,105 @@ async function gestorEnviarSolicitacao() {
     btn.disabled = false; btn.textContent = 'Enviar para RH aprovar';
   }
 }
+
+// ─── Autocomplete busca gestor ────────────────────────────────────────────────
+let _gestorDdIdx = -1;
+
+function gestorBuscaInput(q) {
+  const dd  = document.getElementById('gestorBuscaDD');
+  const xEl = document.getElementById('gestorBuscaX');
+  if (xEl) xEl.style.display = q ? 'flex' : 'none';
+
+  if (!q || q.length < 2 || !GESTOR_COLABS.length) {
+    dd.classList.remove('open');
+    renderGestorAtencao();
+    return;
+  }
+
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const termo = _norm(q);
+  const matches = GESTOR_COLABS.filter(c => _norm(c.nome).includes(termo)).slice(0, 8);
+
+  const _cor = nome => { let h=0; for(let i=0;i<nome.length;i++) h=(h*31+nome.charCodeAt(i))&0xFFFFFF; const COLS=['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C']; return COLS[Math.abs(h)%COLS.length]; };
+  const _ini = nome => nome.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+
+  if (!matches.length) {
+    dd.innerHTML = `<div class="gestor-dd-empty">Nenhum colaborador encontrado</div>`;
+    dd.classList.add('open');
+    return;
+  }
+
+  dd.innerHTML = matches.map((c, i) => {
+    const hoje = new Date().toISOString().slice(0,10);
+    const pa = GESTOR_PERIODOS.filter(p => p.colaborador_id === c.id).sort((a,b)=>(b.pa_fim||'').localeCompare(a.pa_fim||''))[0];
+    const saldo = pa ? gestorSaldoPeriodo(pa) : null;
+    const paAno = pa ? (pa.pa_fim||pa.pa_inicio||'').slice(0,4) : null;
+    const saldoTag = saldo !== null
+      ? `<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${saldo<=0?'#ECFDF3':'#EFF6FF'};color:${saldo<=0?'#15803D':'#1849A9'};font-weight:600;">${saldo<=0?'Concluído':saldo+'d saldo'}</span>`
+      : '';
+    const avatarHtml = c.foto_url
+      ? `<img src="${c.foto_url}" class="gestor-dd-avatar" style="object-fit:cover;" alt="">`
+      : `<div class="gestor-dd-avatar" style="background:${_cor(c.nome)};">${_ini(c.nome)}</div>`;
+    return `<div class="gestor-dd-item" data-id="${c.id}" data-idx="${i}" onclick="gestorBuscaSelecionar('${c.id}')">
+      ${avatarHtml}
+      <div style="flex:1;min-width:0;">
+        <div class="gestor-dd-nome">${c.nome}</div>
+        <div class="gestor-dd-sub">${c.cargo||'—'}${paAno ? ' · PA '+paAno : ''}</div>
+      </div>
+      ${saldoTag}
+    </div>`;
+  }).join('');
+
+  _gestorDdIdx = -1;
+  dd.classList.add('open');
+}
+
+function gestorBuscaSelecionar(colabId) {
+  gestorBuscaFechar();
+  document.getElementById('gestorBusca').value = '';
+  document.getElementById('gestorBuscaX').style.display = 'none';
+  renderGestorAtencao();
+  gestorAbrirSolicitacoes(colabId);
+}
+
+function gestorBuscaFechar() {
+  document.getElementById('gestorBuscaDD').classList.remove('open');
+  _gestorDdIdx = -1;
+}
+
+function gestorBuscaLimpar() {
+  const el = document.getElementById('gestorBusca');
+  el.value = '';
+  gestorBuscaFechar();
+  document.getElementById('gestorBuscaX').style.display = 'none';
+  renderGestorAtencao();
+}
+
+function gestorBuscaKeydown(e) {
+  const dd = document.getElementById('gestorBuscaDD');
+  const items = dd.querySelectorAll('.gestor-dd-item');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _gestorDdIdx = Math.min(_gestorDdIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('focus', i === _gestorDdIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _gestorDdIdx = Math.max(_gestorDdIdx - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('focus', i === _gestorDdIdx));
+  } else if (e.key === 'Enter' && _gestorDdIdx >= 0) {
+    items[_gestorDdIdx]?.click();
+  } else if (e.key === 'Escape') {
+    gestorBuscaFechar();
+  }
+}
+
+// Fecha dropdown ao clicar fora
+document.addEventListener('click', e => {
+  if (!e.target.closest('#gestorBusca') && !e.target.closest('#gestorBuscaDD')) {
+    gestorBuscaFechar();
+  }
+});
 
 function gsolMostrarAba(aba) {
   const isSol = aba === 'sol';
