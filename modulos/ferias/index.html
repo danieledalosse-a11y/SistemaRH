@@ -6276,9 +6276,10 @@ function renderGestorAtividade() {
   const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const fmtDm = d => d ? d.slice(0,10).split('-').reverse().slice(0,2).join('/') : '—';
 
-  const filtroGestor = (document.getElementById('gestorFiltroGestor')?.value || '').toLowerCase();
+  const _normGA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const filtroGestor = _normGA(document.getElementById('gestorFiltroGestor')?.value || '');
   const colabsFiltrados = filtroGestor
-    ? GESTOR_COLABS.filter(c => (c.gestor||'').toLowerCase() === filtroGestor)
+    ? GESTOR_COLABS.filter(c => _normGA(c.gestor) === filtroGestor)
     : GESTOR_COLABS;
   const idsPermitidos = new Set(colabsFiltrados.map(c => String(c.id)));
 
@@ -6958,7 +6959,8 @@ function renderGestorAtencao() {
   const filtroGestor = document.getElementById('gestorFiltroGestor')?.value || '';
   if (busca) colabs = colabs.filter(c => c.nome.toLowerCase().includes(busca));
   if (filtroCargo) colabs = colabs.filter(c => c.cargo === filtroCargo);
-  if (filtroGestor) colabs = colabs.filter(c => (c.gestor||'').toLowerCase() === filtroGestor.toLowerCase());
+  const _normG = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if (filtroGestor) colabs = colabs.filter(c => _normG(c.gestor) === _normG(filtroGestor));
 
   // Atualiza cards e atividade recente com base na lista filtrada
   renderGestorAlerts(colabs);
