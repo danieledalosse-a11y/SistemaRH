@@ -6362,9 +6362,12 @@ function setGestorMsg(msg) {
 
 function gestorSaldoPeriodo(periodo) {
   const direito = Number(periodo.dias_direito) || 30;
-  const usados  = GESTOR_LANCAMENTOS
+  const candidatos = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id) === String(periodo.colaborador_id));
+  const usados  = candidatos
     .filter(l => String(l.periodo_id) === String(periodo.id) && ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()))
     .reduce((s, l) => s + (Number(l.dias) || 0), 0);
+  // DEBUG — abre DevTools > Console e procure "DEBUG-SALDO"
+  console.log('DEBUG-SALDO', { periodoId: periodo.id, colaborador_id: periodo.colaborador_id, direito, usados, candidatos: candidatos.map(l=>({id:l.id,periodo_id:l.periodo_id,status:l.status,dias:l.dias})) });
   return direito - usados;
 }
 
