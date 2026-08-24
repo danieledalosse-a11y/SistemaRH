@@ -6228,6 +6228,13 @@ function processGestorFerias(rows) {
                      : (_rowSt2 === 'concluído' || _rowSt2 === 'concluido') ? 'gozado'
                      : _rowSt2;
       const _obs2 = row.obs_gestor || null;
+      // Mescla obs_gestor do duplicado no survivor quando survivor não tem
+      if (_obs2) {
+        const _survivorPer = periodos.find(p => String(p.id) === String(_survivorId));
+        if (_survivorPer && !_survivorPer._feriasRow.obs_gestor) {
+          _survivorPer._feriasRow = { ..._survivorPer._feriasRow, obs_gestor: _obs2 };
+        }
+      }
       const _temP2b = row.periodo2_inicio && Number(row.dias2) > 0;
       const _stP1b = (_stNorm2 === 'solicitado' && _temP2b) ? 'aprovado' : _stNorm2;
       if (row.periodo1_inicio && Number(row.dias1) > 0) {
