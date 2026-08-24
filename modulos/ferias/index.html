@@ -1165,10 +1165,10 @@
   .gstor-menu-item:hover { background:var(--bg);color:var(--blue); }
   .gstor-menu-item svg { flex-shrink:0;color:var(--text-sec); }
   .gestor-alerts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
-  .gestor-alerts .proto-alert-card { flex:1; min-width:180px; padding:10px 14px; gap:10px; }
+  .gestor-alerts .proto-alert-card { flex:1; min-width:180px; padding:20px; gap:10px; min-height:110px; }
   .gestor-alerts .proto-alert-icon { width:32px; height:32px; flex-shrink:0; }
   .gestor-alerts .proto-alert-icon svg { width:16px; height:16px; }
-  .gestor-alerts .proto-alert-num { font-size:22px; font-weight:800; line-height:1.1; }
+  .gestor-alerts .proto-alert-num { font-size:32px; font-weight:700; line-height:1; letter-spacing:-0.02em; }
   .gestor-alerts .proto-alert-eyebrow { font-size:10px; margin-bottom:1px; }
   .gestor-alerts .proto-alert-sub { font-size:11px; margin-top:1px; }
   .gestor-alert-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; cursor: pointer; transition: all 0.15s; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
@@ -1400,6 +1400,9 @@
       </div>
 
     </div>
+
+    <!-- ── Atividade recente RH ── -->
+    <div id="rhAtividade"></div>
 
     <!-- ── Card principal com view-tabs ── -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:visible;">
@@ -2305,6 +2308,7 @@ async function carregarDoSupabase() {
     }
     popularFiltros();
     renderAll();
+    renderRhAtividade();
     if (nCriados > 0) {
       toast(`✓ ${COLABORADORES.length} colaboradores · ${nCriados} PA${nCriados > 1 ? 's' : ''} criado${nCriados > 1 ? 's' : ''} automaticamente`);
     } else {
@@ -4858,6 +4862,7 @@ async function rhAprovarSolicitado(feriasId, idx) {
     toast('✓ Férias aprovadas');
     renderPendentes();
     renderListaAnual();
+    renderRhAtividade();
     if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
     if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
     if (typeof renderGestorAtencao === 'function') renderGestorAtencao();
@@ -4893,6 +4898,7 @@ async function rhRecusarSolicitado(feriasId, idx) {
     toast('Solicitação recusada');
     renderPendentes();
     renderListaAnual();
+    renderRhAtividade();
     if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
     if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
     if (typeof renderGestorAtencao === 'function') renderGestorAtencao();
@@ -6555,6 +6561,103 @@ function renderGestorAtividade() {
   </div>`;
 }
 
+// ─── Atividade recente — Visão RH ────────────────────────────────────────────
+let _rhAtivAberto     = true;
+let _rhAtivExpandido  = false;
+const _RH_ATIV_LIMITE = 5;
+
+function renderRhAtividade() {
+  const el = document.getElementById('rhAtividade');
+  if (!el) return;
+
+  const fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+
+  // Coleta lançamentos recentes com status relevante de todos os colaboradores
+  const eventos = [];
+  COLABORADORES.forEach(colab => {
+    colab.registros.forEach(reg => {
+      const st = (reg.status || '').toLowerCase();
+      if (!['aprovado','agendado','cancelado','rejeitado','pendente'].includes(st)) return;
+      reg.lancamentos.forEach(l => {
+        eventos.push({
+          nome:       colab.nome,
+          cargo:      colab.cargo,
+          setor:      colab.setor,
+          empresa:    colab.empresa,
+          inicio:     l.inicio,
+          fim:        l.fim,
+          dias:       l.dias,
+          status:     reg.status,
+          obsGestor:  reg._obsGestor || null,
+          paFim:      reg.paFim,
+          _sbId:      reg._sbId,
+        });
+      });
+      // Lançamento pendente do gestor
+      if (reg._novoLanc) {
+        eventos.push({
+          nome:       colab.nome,
+          cargo:      colab.cargo,
+          setor:      colab.setor,
+          empresa:    colab.empresa,
+          inicio:     reg._novoLanc.inicio,
+          fim:        reg._novoLanc.fim,
+          dias:       reg._novoLanc.dias,
+          status:     'Pendente',
+          obsGestor:  reg._obsGestor || reg._novoLanc.motivo || null,
+          paFim:      reg.paFim,
+          _sbId:      reg._sbId,
+        });
+      }
+    });
+  });
+
+  // Ordena por paFim desc, depois por fim desc
+  eventos.sort((a, b) => ((b.paFim||b.fim||'').localeCompare(a.paFim||a.fim||'')) || ((b.fim||'').localeCompare(a.fim||'')));
+
+  if (!eventos.length) { el.innerHTML = ''; return; }
+
+  const total   = eventos.length;
+  const visiveis = _rhAtivExpandido ? eventos.slice(0, 15) : eventos.slice(0, _RH_ATIV_LIMITE);
+  const ocultos  = Math.min(total, 15) - _RH_ATIV_LIMITE;
+
+  const items = visiveis.map(ev => {
+    const st  = (ev.status || '').toLowerCase();
+    const cls = st === 'aprovado' || st === 'agendado' ? 'aprov' : st === 'pendente' ? 'cancel' : 'recus';
+    const chipTxt = st === 'aprovado' ? 'Aprovado' : st === 'agendado' ? 'Agendado' : st === 'pendente' ? 'Pendente' : st === 'rejeitado' ? 'Rejeitado' : 'Cancelado';
+    const svgIcon = cls === 'aprov'
+      ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+      : cls === 'recus'
+      ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`;
+    const obsLine = ev.obsGestor ? `<div class="gstor-ativ-ts">Solicitado pelo gestor${ev.obsGestor !== 'Solicitado pelo gestor' ? ': ' + ev.obsGestor : ''}</div>` : '';
+    const subInfo = [ev.cargo, ev.setor, ev.empresa].filter(Boolean).join(' · ');
+    return `<div class="gstor-ativ-item">
+      <div class="gstor-ativ-icon ${cls}">${svgIcon}</div>
+      <div class="gstor-ativ-body">
+        <div><span class="gstor-ativ-nome">${ev.nome}</span>${subInfo ? `<span class="gstor-ativ-cargo">${subInfo}</span>` : ''}</div>
+        <div class="gstor-ativ-per">${fmtD(ev.inicio)} → ${fmtD(ev.fim)} · ${ev.dias}d</div>
+        ${obsLine}
+      </div>
+      <span class="gstor-ativ-chip ${cls}">${chipTxt}</span>
+    </div>`;
+  }).join('');
+
+  const verMaisBtn = !_rhAtivExpandido && ocultos > 0
+    ? `<button class="gstor-ativ-vermais" onclick="_rhAtivExpandido=true;renderRhAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
+    : _rhAtivExpandido
+    ? `<button class="gstor-ativ-vermais" onclick="_rhAtivExpandido=false;renderRhAtividade()">Mostrar menos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg></button>`
+    : '';
+
+  el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">
+    <div class="gstor-ativ-header" onclick="_rhAtivAberto=!_rhAtivAberto;renderRhAtividade()">
+      <span class="gstor-ativ-title">Atividade recente</span>
+      <span class="gstor-ativ-toggle">${_rhAtivAberto ? '▲ ocultar' : '▼ mostrar'}</span>
+    </div>
+    ${_rhAtivAberto ? `<div class="gstor-ativ-list">${items}</div>${verMaisBtn}` : ''}
+  </div>`;
+}
+
 function renderGestorAlerts(colabsBase) {
   const base = colabsBase || GESTOR_COLABS;
   const hoje = new Date().toISOString().slice(0,10);
@@ -6583,8 +6686,10 @@ function renderGestorAlerts(colabsBase) {
       ['aprovado','agendado','solicitado'].includes((l.status||'').toLowerCase())
     );
   });
-  const futuros     = gestorLancFuturos30(base);
-  const saiEmBreve  = [...new Set(futuros.map(l => l.colaborador_id))];
+  const emFeriasHoje = base.filter(c => GESTOR_LANCAMENTOS.some(l =>
+    String(l.colaborador_id) === String(c.id) &&
+    (l.inicio||'') <= hoje && (l.fim||'') >= hoje
+  ));
 
   // Conta solicitados (independente de data) + recusados com datas futuras/ativas
   const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
@@ -6598,11 +6703,11 @@ function renderGestorAlerts(colabsBase) {
   // Agendados: usa gestorIsAgendado como fonte de verdade única (= mesma lógica do badge da linha)
   const agendados = base.filter(c => gestorIsAgendado(c.id));
 
-  window._gestorRiscoDobra  = riscoDobra.map(c => String(c.id));
-  window._gestorSemAgendado = semAgendado.map(c => String(c.id));
-  window._gestorSaiEmBreve  = saiEmBreve.map(id => String(id));
-  window._gestorAguardAprov = aguardandoAprov.map(c => String(c.id));
-  window._gestorAgendados   = agendados.map(c => String(c.id));
+  window._gestorRiscoDobra   = riscoDobra.map(c => String(c.id));
+  window._gestorSemAgendado  = semAgendado.map(c => String(c.id));
+  window._gestorEmFeriasHoje = emFeriasHoje.map(c => String(c.id));
+  window._gestorAguardAprov  = aguardandoAprov.map(c => String(c.id));
+  window._gestorAgendados    = agendados.map(c => String(c.id));
 
   // Card "Pendentes" — sempre visível; visual muda conforme há pendências
   const _cardAprovHtml = aguardandoAprov.length > 0
@@ -6667,14 +6772,14 @@ function renderGestorAlerts(colabsBase) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>
-    <div class="proto-alert-card info${_gestorAlertaAtivo==='saindo'?' pa-active':''}" onclick="filtrarGestorAlerta('saindo')" style="cursor:pointer;">
+    <div class="proto-alert-card info${_gestorAlertaAtivo==='hoje'?' pa-active':''}" onclick="filtrarGestorAlerta('hoje')" style="cursor:pointer;">
       <div class="proto-alert-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       </div>
       <div style="flex:1;min-width:0;">
-        <div class="proto-alert-eyebrow" style="color:var(--blue);">Saem em breve</div>
-        <div class="proto-alert-num" style="color:var(--blue);">${saiEmBreve.length}</div>
-        <div class="proto-alert-sub">Férias iniciando nos próximos 30 dias</div>
+        <div class="proto-alert-eyebrow" style="color:var(--green);">Em férias hoje</div>
+        <div class="proto-alert-num" style="color:var(--green);">${emFeriasHoje.length}</div>
+        <div class="proto-alert-sub">Colaboradores atualmente em gozo de férias</div>
       </div>
       <div class="proto-alert-arr">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
@@ -7193,10 +7298,12 @@ function renderGestorAtencao() {
   } else if (_gestorAlertaAtivo === 'sem-agendado') {
     colabs = colabs.filter(c => !gestorIsAgendado(c.id) && GESTOR_PERIODOS.some(p => p.colaborador_id === c.id && gestorSaldoPeriodo(p) > 0));
     _sub = `${colabs.length} colaborador(es) sem período futuro lançado`;
-  } else if (_gestorAlertaAtivo === 'saindo') {
-    const saiIds = new Set(gestorLancFuturos30(colabs).map(l => String(l.colaborador_id)));
-    colabs = colabs.filter(c => saiIds.has(String(c.id)));
-    _sub = `${colabs.length} colaborador(es) iniciando férias nos próximos 30 dias`;
+  } else if (_gestorAlertaAtivo === 'hoje') {
+    colabs = colabs.filter(c => GESTOR_LANCAMENTOS.some(l =>
+      String(l.colaborador_id) === String(c.id) &&
+      (l.inicio||'') <= _hj && (l.fim||'') >= _hj
+    ));
+    _sub = `${colabs.length} colaborador(es) em férias hoje`;
   } else if (_gestorAlertaAtivo === 'aguard') {
     colabs = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => {
       const st = (l.status||'').toLowerCase();
