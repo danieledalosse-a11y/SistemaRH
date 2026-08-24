@@ -2211,6 +2211,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
       _obsGestor:       f.obs_gestor    || null,
       realizacoes:      Array.isArray(f.realizacoes) ? f.realizacoes : [],
       _aguardandoGozo:  f.aguardando_gozo || false,
+      _aguardandoGozoIdx: f.aguardando_gozo_idx ?? null,
       _novoLanc: _novoLancFromGestor,
       _motivoRejeicao: null,
     };
@@ -3105,15 +3106,22 @@ function renderDrawerHistorico(colab) {
       </div>` : '';
       const notaVisivelHtml = l.nota && !(!excluirPA && IS_RH) ? `<div class="drawer-tl-meta">${l.nota}</div>` : l.nota ? `<div class="drawer-tl-meta" id="hist-nota-${r._sbId}-${lancIdx}">${l.nota}</div>` : '';
       const dotColor = excluirPA ? '#CBD5E1' : l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)';
+      const isPendGozoLanc = r._aguardandoGozoIdx === lancIdx;
+      const pendGozoChip = isPendGozoLanc
+        ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:#FEF3C7;color:#B45309;border:1px solid #FDE68A;">⏳ Pendente de gozo</span>`
+        : '';
+      const toggleGozoBtn = (IS_RH && !excluirPA)
+        ? `<button onclick="rhToggleAguardandoGozo('${r._sbId}',${isPendGozoLanc ? 'null' : lancIdx},'${key}')" title="${isPendGozoLanc ? 'Remover pendência' : 'Marcar como pendente de gozo'}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;border:1px solid ${isPendGozoLanc ? '#FDE68A' : 'transparent'};background:${isPendGozoLanc ? '#FFFBEB' : 'none'};cursor:pointer;color:${isPendGozoLanc ? '#B45309' : 'var(--text-ter)'};padding:0;transition:all .15s;" title="${isPendGozoLanc ? 'Remover pendência de gozo' : 'Marcar como pendente de gozo'}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></button>`
+        : '';
       return `<div class="drawer-tl-item">
-        <div class="drawer-tl-dot" style="background:${dotColor}"></div>
+        <div class="drawer-tl-dot" style="background:${isPendGozoLanc ? '#F79009' : dotColor}"></div>
         <div class="drawer-tl-info" style="flex:1;min-width:0;">
           <div class="drawer-tl-dates-row">
             <div class="drawer-tl-dates-left" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
               <span class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>
-
+              ${pendGozoChip}
             </div>
-            <div style="display:flex;align-items:center;gap:4px;">${editBtnHtml}${iconoAcordo}</div>
+            <div style="display:flex;align-items:center;gap:4px;">${toggleGozoBtn}${editBtnHtml}${iconoAcordo}</div>
           </div>
           ${editFormHtml}
           ${notaVisivelHtml}
@@ -3165,8 +3173,6 @@ function renderDrawerHistorico(colab) {
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
           <span style="font-size:12px;color:var(--text-sec);">Saldo ${saldo}/${r.totalDias}d</span>
           ${situBadge}
-          ${r._aguardandoGozo ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:#FEF3C7;color:#B45309;border:1px solid #FDE68A;">⏳ Pendente de gozo</span>` : ''}
-          ${IS_RH && !excluirPA ? `<button onclick="rhToggleAguardandoGozo('${r._sbId}',${r._aguardandoGozo},'${key}')" title="${r._aguardandoGozo ? 'Remover marcação' : 'Marcar como pendente de gozo'}" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;border:1px solid ${r._aguardandoGozo ? '#FDE68A' : 'var(--border)'};background:${r._aguardandoGozo ? '#FFFBEB' : 'none'};cursor:pointer;color:${r._aguardandoGozo ? '#B45309' : 'var(--text-ter)'};font-size:11px;font-weight:500;font-family:inherit;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>${r._aguardandoGozo ? 'Pendente de gozo ✕' : '+ Pendente de gozo'}</button>` : ''}
         </div>
       </div>
       <div class="drawer-hist-pa-body">${lancs}</div>
@@ -3621,15 +3627,15 @@ async function removerGozoHist(key, sbId, lancIdx, gozoIdx) {
   } catch(e) { toast(_erroApi(e), 'erro'); }
 }
 
-async function rhToggleAguardandoGozo(sbId, currentVal, key) {
-  const novoVal = !currentVal;
+async function rhToggleAguardandoGozo(sbId, novoIdx, key) {
+  const val = novoIdx === 'null' || novoIdx === null ? null : Number(novoIdx);
   try {
-    await sbPatch('ferias', `id=eq.${sbId}`, { aguardando_gozo: novoVal });
+    await sbPatch('ferias', `id=eq.${sbId}`, { aguardando_gozo_idx: val });
     const colab = COLABORADORES.find(c => c.__key === key);
     const reg = colab?.registros.find(r => r._sbId == sbId);
-    if (reg) reg._aguardandoGozo = novoVal;
+    if (reg) reg._aguardandoGozoIdx = val;
     renderDrawerHistorico(colab);
-    toast(novoVal ? '⏳ Marcado como pendente de gozo.' : 'Marcação de pendente removida.');
+    toast(val !== null ? '⏳ Período marcado como pendente de gozo.' : 'Marcação removida.');
   } catch(e) { toast(_erroApi(e), 'erro'); }
 }
 
