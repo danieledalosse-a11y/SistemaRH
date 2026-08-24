@@ -2943,7 +2943,7 @@ function renderDrawerHistorico(colab) {
   document.getElementById('drawerHistorico').innerHTML = btnPrint + regs.map(r => {
     const saldo = calcSaldo(r);
     let situBadge = '';
-    if (r.status === 'Pendente')    situBadge = `<span class="badge badge-amber">Pendente aprovação</span>${IS_RH ? `<div style="display:flex;gap:6px;margin-top:8px;"><button onclick="rhAprovarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:5px 14px;border-radius:7px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprovar</button><button onclick="rhRecusarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:5px 14px;border-radius:7px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;">✕ Recusar</button></div>` : ''}`;
+    if (r.status === 'Pendente')    situBadge = `<span class="badge badge-amber">Pendente aprovação</span>`;
     else if (r.status === 'Rejeitado') situBadge = `<span class="badge badge-vermelho">Rejeitado</span>`;
     else if (r.status === 'Cancelado' || r.status === 'Descartado') situBadge = `<span class="badge badge-cinza">${r.status}</span>`;
     else if (r.lancamentos.length === 0 && saldo > 0) situBadge = `<span class="badge badge-amber">Sem agendamento</span>`;
@@ -3118,9 +3118,24 @@ function renderDrawerHistorico(colab) {
         <span class="drawer-abono-chip-dias">· ${abonoPec}d</span>
       </div>
     </div>` : '';
+    // Bloco do período pendente (_novoLanc) com borda âmbar e botões inline
+    let novoLancHtml = '';
+    if (r._novoLanc && r.status === 'Pendente') {
+      const nl = r._novoLanc;
+      const quemPediu = r._obsGestor ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">${r._obsGestor}</div>` : '';
+      const acaoBtns = IS_RH ? `<div style="display:flex;gap:6px;margin-top:8px;">
+        <button onclick="rhAprovarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprovar</button>
+        <button onclick="rhRecusarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;">✕ Recusar</button>
+      </div>` : '';
+      novoLancHtml = `<div style="margin-top:6px;border-left:3px solid #F79009;padding-left:10px;">
+        <div style="font-size:13px;font-weight:500;color:var(--text);">${formatDate(nl.inicio)} → ${formatDate(nl.fim)} · ${nl.dias}d</div>
+        ${quemPediu}
+        ${acaoBtns}
+      </div>`;
+    }
     const timelineHtml = lancsHtml ? `<div class="drawer-timeline">${lancsHtml}</div>` : '';
-    const lancs = (timelineHtml || abonoChipHtml)
-      ? (timelineHtml || '') + (abonoChipHtml || '')
+    const lancs = (timelineHtml || abonoChipHtml || novoLancHtml)
+      ? (timelineHtml || '') + (novoLancHtml || '') + (abonoChipHtml || '')
       : '<p style="font-size:12px;color:var(--text-sec);padding:4px 0;">Sem lançamentos neste PA.</p>';
     const temPendenciaPA = !excluirPA && realizacoes.length > 0 && r.lancamentos.some((l, li) => {
       const gozados = realizacoes.filter(rx => Number(rx.lancIdx) === li || (li === 0 && rx.lancIdx == null)).reduce((s, rx) => s + Number(rx.dias), 0);
