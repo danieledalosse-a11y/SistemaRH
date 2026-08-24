@@ -2141,7 +2141,12 @@ function supabaseParaModelo(feriasRows, colaborRows) {
     const lancamentos = [];
     const dias1 = Number(f.dias1) || 0;
     const dias2 = Number(f.dias2) || 0;
-    if (f.periodo1_inicio && dias1 > 0) {
+    const _isPendente = f.status === 'Pendente' || f.status === 'Solicitado';
+    const _temP2rh    = !!(f.periodo2_inicio && dias2 > 0);
+    // Períodos pendentes vão para _novoLanc, não para lancamentos (senão saldo é descontado antes da aprovação)
+    // Pendente + p2 existe → p1 já aprovado (add), p2 é pendente (skip)
+    // Pendente + só p1   → p1 é pendente (skip)
+    if (f.periodo1_inicio && dias1 > 0 && !(_isPendente && !_temP2rh)) {
       lancamentos.push({
         inicio: f.periodo1_inicio,
         fim:    f.periodo1_fim || addDays(f.periodo1_inicio, dias1 - 1),
@@ -2153,7 +2158,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
         _proximoPA: false,
       });
     }
-    if (f.periodo2_inicio && dias2 > 0) {
+    if (f.periodo2_inicio && dias2 > 0 && !(_isPendente && _temP2rh)) {
       lancamentos.push({
         inicio: f.periodo2_inicio,
         fim:    f.periodo2_fim || addDays(f.periodo2_inicio, dias2 - 1),
@@ -2184,9 +2189,6 @@ function supabaseParaModelo(feriasRows, colaborRows) {
           diasTrabalhar: null, motivo: f.obs_gestor || 'Solicitado pelo gestor',
           diasUsadosReal: null, nota: null, _proximoPA: false,
         };
-        // Marca o lançamento correspondente em lancamentos[] para destaque visual no drawer
-        const marcado = lancamentos.find(l => l.inicio === _pIni);
-        if (marcado) marcado._pendente = true;
       }
     }
 
@@ -3088,17 +3090,14 @@ function renderDrawerHistorico(colab) {
         <div style="display:flex;justify-content:flex-end;gap:6px;"><button style="padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;border:1.5px solid #D0D5DD;border-radius:6px;background:none;color:#374151;" onclick="fecharEditLanc('${r._sbId}',${lancIdx})">Cancelar</button><button style="padding:5px 14px;font-size:12px;font-family:inherit;font-weight:600;cursor:pointer;border:none;border-radius:6px;background:#1849A9;color:#fff;" onclick="salvarEditLanc('${key}','${r._sbId}',${lancIdx})">Salvar</button></div>
       </div>` : '';
       const notaVisivelHtml = l.nota && !(!excluirPA && IS_RH) ? `<div class="drawer-tl-meta">${l.nota}</div>` : l.nota ? `<div class="drawer-tl-meta" id="hist-nota-${r._sbId}-${lancIdx}">${l.nota}</div>` : '';
-      const pendChip = l._pendente
-        ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;margin-left:6px;">⏳ Aguardando aprovação</span>`
-        : '';
-      const dotColor = excluirPA ? '#CBD5E1' : l._pendente ? '#F79009' : l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)';
-      return `<div class="drawer-tl-item"${l._pendente ? ' style="background:#FFFBEB;border-radius:8px;margin:-4px;padding:4px;"' : ''}>
+      const dotColor = excluirPA ? '#CBD5E1' : l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)';
+      return `<div class="drawer-tl-item">
         <div class="drawer-tl-dot" style="background:${dotColor}"></div>
         <div class="drawer-tl-info" style="flex:1;min-width:0;">
           <div class="drawer-tl-dates-row">
             <div class="drawer-tl-dates-left" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
               <span class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>
-              ${pendChip}
+
             </div>
             <div style="display:flex;align-items:center;gap:4px;">${editBtnHtml}${iconoAcordo}</div>
           </div>
