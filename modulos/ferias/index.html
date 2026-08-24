@@ -6164,13 +6164,34 @@ function _addOneYear(dateStr) {
 function processGestorFerias(rows) {
   const periodos    = [];
   const lancamentos = [];
-  const _periodoKeys = new Set(); // deduplicação por colaborador_id + pa_inicio
+  const _periodoKeys = new Map(); // _pKey → periodo.id do sobrevivente
 
   rows.forEach(row => {
-    // Ignora linhas duplicadas (mesmo colaborador + mesmo início de PA)
+    // Deduplicação por colaborador_id + pa_inicio
     const _pKey = `${row.colaborador_id}|${row.pa_inicio || row.id}`;
-    if (_periodoKeys.has(_pKey)) return;
-    _periodoKeys.add(_pKey);
+    if (_periodoKeys.has(_pKey)) {
+      // Registro duplicado: ainda processa os lançamentos, linkando ao periodo sobrevivente
+      const _survivorId = _periodoKeys.get(_pKey);
+      const _rowSt2 = (row.status || 'aprovado').toLowerCase();
+      const _stNorm2 = (_rowSt2 === 'pendente' || _rowSt2 === 'solicitado') ? 'solicitado'
+                     : (_rowSt2 === 'rejeitado') ? 'recusado' : _rowSt2;
+      const _obs2 = row.obs_gestor || null;
+      const _temP2b = row.periodo2_inicio && Number(row.dias2) > 0;
+      const _stP1b = (_stNorm2 === 'solicitado' && _temP2b) ? 'aprovado' : _stNorm2;
+      if (row.periodo1_inicio && Number(row.dias1) > 0) {
+        lancamentos.push({ id:`${row.id}-p1`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo1_inicio, fim:row.periodo1_fim||row.periodo1_inicio, dias:Number(row.dias1), status:_stP1b });
+      }
+      if (_temP2b) {
+        lancamentos.push({ id:`${row.id}-p2`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo2_inicio, fim:row.periodo2_fim||row.periodo2_inicio, dias:Number(row.dias2), status:_stNorm2 });
+      }
+      if (Array.isArray(row.realizacoes)) {
+        row.realizacoes.forEach((r, i) => {
+          if (r.inicio && Number(r.dias) > 0) lancamentos.push({ id:`${row.id}-r${i}`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:r.inicio, fim:r.fim||r.inicio, dias:Number(r.dias), status:(r.status||'gozado').toLowerCase() });
+        });
+      }
+      return;
+    }
+    _periodoKeys.set(_pKey, row.id);
 
     const periodo = {
       id:            row.id,
@@ -6342,7 +6363,7 @@ function setGestorMsg(msg) {
 function gestorSaldoPeriodo(periodo) {
   const direito = Number(periodo.dias_direito) || 30;
   const usados  = GESTOR_LANCAMENTOS
-    .filter(l => l.periodo_id === periodo.id && ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()))
+    .filter(l => String(l.periodo_id) === String(periodo.id) && ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()))
     .reduce((s, l) => s + (Number(l.dias) || 0), 0);
   return direito - usados;
 }
