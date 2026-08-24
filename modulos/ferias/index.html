@@ -8286,6 +8286,17 @@ function _renderGsolHistoricoRH(c) {
   const svgClk = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
   const svgChk = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
+  // Mapa: inicio_lancamento → _obsGestor, construído a partir dos dados do RH (fonte de verdade para obs)
+  const _rhColab = COLABORADORES.find(rc => rc._sbColabId && String(rc._sbColabId) === String(c.id));
+  const _rhObsMap = new Map(); // inicio (YYYY-MM-DD) → obs_gestor
+  if (_rhColab) {
+    _rhColab.registros.forEach(reg => {
+      if (reg._obsGestor) {
+        reg.lancamentos.forEach(l => { if (l.inicio) _rhObsMap.set(l.inicio, reg._obsGestor); });
+      }
+    });
+  }
+
   document.getElementById('gsolListaRHConteudo').innerHTML = periodos.map(per => {
     const row     = per._feriasRow || {};
     const _firstLancInicio = GESTOR_LANCAMENTOS.find(l => String(l.periodo_id) === String(per.id))?.inicio;
@@ -8326,7 +8337,7 @@ function _renderGsolHistoricoRH(c) {
       const chipConcl = isConcluido
         ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:10px;background:var(--bg);color:var(--text-sec);border:1px solid var(--border);">Concluído</span>` : '';
 
-      const _notaTxt = li === 0 ? (row.obs_gestor || row.nota_livre || row.nota || null) : null;
+      const _notaTxt = li === 0 ? (_rhObsMap.get(l.inicio) || row.obs_gestor || row.nota_livre || row.nota || null) : null;
       const nota = _notaTxt ? `<div class="gsol-rh-nota">${_notaTxt}</div>` : '';
 
       const gozoHtml = gozosDoLanc.map(g => {
