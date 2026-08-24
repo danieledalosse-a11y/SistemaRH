@@ -417,7 +417,9 @@
   .drawer-overlay.open { background: rgba(0,0,0,0.32); pointer-events: all; }
   .drawer { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -48%) scale(0.96); width: 680px; max-width: 96vw; max-height: 92vh; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 24px 64px rgba(0,0,0,0.20), 0 4px 16px rgba(0,0,0,0.10); display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: transform 0.22s ease, opacity 0.22s ease; z-index: 151; }
   .drawer.open { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: all; }
-  .drawer-hdr { padding: 20px 20px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .drawer-hdr { padding: 20px 20px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; cursor: grab; }
+  .drawer-hdr:active { cursor: grabbing; }
+  .drawer.dragging { transition: none; user-select: none; }
   .drawer-hdr-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
   .drawer-nome { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; color: var(--text); }
   .drawer-cargo { font-size: 13px; font-weight: 400; color: var(--text-sec); margin-top: 2px; }
@@ -2835,10 +2837,50 @@ function _abrirDrawerInterno(key) {
 }
 
 function fecharDrawer() {
-  document.getElementById('drawer').classList.remove('open');
+  const dr = document.getElementById('drawer');
+  dr.classList.remove('open');
+  dr.style.left = '';
+  dr.style.top  = '';
+  dr.style.transform = '';
   document.getElementById('drawerOverlay').classList.remove('open');
   _drawerKey = null;
 }
+
+// ─── Drag do modal RH ───────────────────────────────────────────────────────
+(function() {
+  let _dragging = false, _ox = 0, _oy = 0;
+  document.addEventListener('DOMContentLoaded', () => {
+    const handle = document.querySelector('#drawer .drawer-hdr');
+    const modal  = document.getElementById('drawer');
+    if (!handle || !modal) return;
+
+    handle.addEventListener('mousedown', e => {
+      if (e.target.closest('button')) return;
+      const rect = modal.getBoundingClientRect();
+      _ox = e.clientX - rect.left;
+      _oy = e.clientY - rect.top;
+      _dragging = true;
+      modal.classList.add('dragging');
+      modal.style.transform = 'none';
+      modal.style.left = rect.left + 'px';
+      modal.style.top  = rect.top  + 'px';
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!_dragging) return;
+      const x = Math.max(0, Math.min(e.clientX - _ox, window.innerWidth  - modal.offsetWidth));
+      const y = Math.max(0, Math.min(e.clientY - _oy, window.innerHeight - modal.offsetHeight));
+      modal.style.left = x + 'px';
+      modal.style.top  = y + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!_dragging) return;
+      _dragging = false;
+      modal.classList.remove('dragging');
+    });
+  });
+})();
 
 function setDrawerTab(tab, btn) {
   document.getElementById('drawerHistorico').style.display = tab === 'historico' ? '' : 'none';
