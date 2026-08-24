@@ -6371,8 +6371,14 @@ function gestorSaldoPeriodo(periodo) {
     .filter(l => String(l.periodo_id) === String(periodo.id) && ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()))
     .reduce((s, l) => s + (Number(l.dias) || 0), 0);
   // DEBUG — abre DevTools > Console e procure "DEBUG-SALDO"
-  const _match = candidatos.filter(l => String(l.periodo_id) === String(periodo.id));
-  if (_match.length > 0 || usados === 0) console.log('DEBUG-SALDO', { periodoId: periodo.id, usados, matchPeriodo: _match.map(l=>({id:l.id,periodo_id:l.periodo_id,status:l.status,dias:l.dias})), todosPids: candidatos.map(l=>String(l.periodo_id)).filter((v,i,a)=>a.indexOf(v)===i) });
+  if (usados === 0) {
+    const _match = candidatos.filter(l => String(l.periodo_id) === String(periodo.id));
+    const _pids  = [...new Set(candidatos.map(l => String(l.periodo_id)))];
+    console.log(`DEBUG-SALDO periodoId=${periodo.id} usados=${usados} matchCount=${_match.length}`);
+    console.log(`  todosPids: [${_pids.join(', ')}]`);
+    _match.forEach(l => console.log(`  match: id=${l.id} periodo_id=${l.periodo_id} status="${l.status}" dias=${l.dias}`));
+    if (_match.length === 0) console.log(`  PROBLEMA: nenhum lançamento com periodo_id=${periodo.id} — os ${candidatos.length} lançamentos estão em outros periodos`);
+  }
   return direito - usados;
 }
 
