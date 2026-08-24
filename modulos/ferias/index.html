@@ -6369,20 +6369,11 @@ function setGestorMsg(msg) {
 
 function gestorSaldoPeriodo(periodo) {
   const direito = Number(periodo.dias_direito) || 30;
-  const candidatos = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id) === String(periodo.colaborador_id));
-  const usados  = candidatos
+  const abono   = Number(periodo._feriasRow?.abono_pecuniario) || 0;
+  const usados  = GESTOR_LANCAMENTOS
     .filter(l => String(l.periodo_id) === String(periodo.id) && ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()))
     .reduce((s, l) => s + (Number(l.dias) || 0), 0);
-  // DEBUG — abre DevTools > Console e procure "DEBUG-SALDO"
-  if (usados === 0) {
-    const _match = candidatos.filter(l => String(l.periodo_id) === String(periodo.id));
-    const _pids  = [...new Set(candidatos.map(l => String(l.periodo_id)))];
-    console.log(`DEBUG-SALDO periodoId=${periodo.id} usados=${usados} matchCount=${_match.length}`);
-    console.log(`  todosPids: [${_pids.join(', ')}]`);
-    _match.forEach(l => console.log(`  match: id=${l.id} periodo_id=${l.periodo_id} status="${l.status}" dias=${l.dias}`));
-    if (_match.length === 0) console.log(`  PROBLEMA: nenhum lançamento com periodo_id=${periodo.id} — os ${candidatos.length} lançamentos estão em outros periodos`);
-  }
-  return direito - usados;
+  return direito - usados - abono;
 }
 
 function gestorPeriodoAtivo(colaborador_id) {
@@ -7572,9 +7563,13 @@ function _renderGsolLista(c) {
     const paAno    = per?.pa_fim    ? per.pa_fim.slice(0,4) : per?.pa_inicio?.slice(0,4) || '—';
     const diasDir  = per ? (Number(per.dias_direito) || 30) : 30;
     const saldoPa  = per ? gestorSaldoPeriodo(per) : 0;
+    const abonoPa  = Number(per?._feriasRow?.abono_pecuniario) || 0;
     const temSolic = paMap.get(pid).some(l => (l.status||'').toLowerCase() === 'solicitado');
     const headerBg = temSolic ? '#FFFBEB' : 'var(--bg)';
     const headerBd = temSolic ? '#FDE68A' : 'var(--border)';
+    const abonoHtml = abonoPa > 0
+      ? `<div style="padding:6px 14px 0;"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;background:#F5F3FF;border:1px solid #DDD6FE;font-size:11px;color:#5B21B6;font-weight:600;">Abono pecuniário · ${abonoPa}d</span></div>`
+      : '';
 
     return `<div style="margin-bottom:16px;border:1px solid ${headerBd};border-radius:10px;overflow:hidden;">
       <div style="padding:10px 14px;background:${headerBg};display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
@@ -7586,6 +7581,7 @@ function _renderGsolLista(c) {
           Saldo: <strong style="color:${saldoPa<=5?'#D92D20':'var(--text)'};">${saldoPa}d</strong> de ${diasDir}d
         </div>
       </div>
+      ${abonoHtml}
       <div style="padding:0 14px;">
         ${paMap.get(pid).map(renderLanc).join('')}
       </div>
@@ -8103,8 +8099,9 @@ function _renderGsolHistoricoRH(c) {
 
     if (!lancamentos.length) return '';
 
+    const abono  = Number(row.abono_pecuniario) || 0;
     const usados = lancamentos.reduce((s, l) => s + (Number(l.dias) || 0), 0);
-    const saldo  = diasDir - usados;
+    const saldo  = diasDir - usados - abono;
     const saldoColor = saldo <= 0 ? 'color:#EF4444;font-weight:700;' : '';
 
     const itens = lancamentos.map((l, li) => {
@@ -8147,6 +8144,9 @@ function _renderGsolHistoricoRH(c) {
       </div>`;
     }).join('');
 
+    const abonoRhHtml = abono > 0
+      ? `<div style="padding:6px 12px 0;"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;background:#F5F3FF;border:1px solid #DDD6FE;font-size:11px;color:#5B21B6;font-weight:600;">Abono pecuniário · ${abono}d</span></div>`
+      : '';
     return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <div>
@@ -8155,6 +8155,7 @@ function _renderGsolHistoricoRH(c) {
         </div>
         <span style="font-size:11px;color:var(--text-sec);">Saldo <span style="${saldoColor}">${saldo}d</span> de ${diasDir}d</span>
       </div>
+      ${abonoRhHtml}
       <div class="gsol-rh-tl">${itens}</div>
     </div>`;
   }).join('');
