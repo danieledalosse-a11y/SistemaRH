@@ -824,18 +824,23 @@
   .gstor-ativ-title { font-size: 12px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.5px; }
   .gstor-ativ-toggle { font-size: 11px; color: var(--text-ter); }
   .gstor-ativ-list { border-top: 1px solid var(--border); }
-  .gstor-ativ-item { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .gstor-ativ-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--border); }
   .gstor-ativ-item:last-child { border-bottom: none; }
-  .gstor-ativ-icon { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .gstor-ativ-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; margin-top: 1px; }
   .gstor-ativ-icon.aprov  { background: #ECFDF3; color: #027A48; }
   .gstor-ativ-icon.recus  { background: #FEF2F2; color: #D92D20; }
   .gstor-ativ-icon.cancel { background: #F3F4F6; color: #6B7280; }
-  .gstor-ativ-nome { font-weight: 600; color: var(--text); min-width: 110px; }
-  .gstor-ativ-per  { color: var(--text-sec); flex: 1; }
-  .gstor-ativ-chip { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+  .gstor-ativ-body { flex: 1; min-width: 0; }
+  .gstor-ativ-nome { font-size: 13px; font-weight: 600; color: var(--text); }
+  .gstor-ativ-cargo { font-size: 11px; color: var(--text-ter); font-weight: 400; margin-left: 5px; }
+  .gstor-ativ-per { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
+  .gstor-ativ-ts { font-size: 11px; color: var(--text-ter); margin-top: 2px; }
+  .gstor-ativ-chip { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 99px; white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
   .gstor-ativ-chip.aprov  { background: #ECFDF3; color: #027A48; border: 1px solid #6CE9A6; }
   .gstor-ativ-chip.recus  { background: #FEF2F2; color: #D92D20; border: 1px solid #FECACA; }
   .gstor-ativ-chip.cancel { background: #F3F4F6; color: #6B7280; border: 1px solid #D1D5DB; }
+  .gstor-ativ-vermais { display: block; width: 100%; padding: 9px; text-align: center; font-size: 12px; color: var(--text-sec); background: none; border: none; border-top: 1px solid var(--border); cursor: pointer; font-family: inherit; }
+  .gstor-ativ-vermais:hover { background: var(--hover); color: var(--text); }
 
   /* ── Acordos (gozo real) ── */
   /* ── Acordos / Realizações ── */
@@ -6260,14 +6265,17 @@ function gestorLancFuturos30(colabsBase) {
   );
 }
 
-let _gestorAtivAberto = true;
+let _gestorAtivAberto   = true;
+let _gestorAtivExpandido = false;
+const _ATIV_LIMITE = 5;
+
 function renderGestorAtividade() {
   const el = document.getElementById('gestorAtividade');
   if (!el) return;
 
-  const fmtD = d => d ? d.slice(0,10).split('-').reverse().slice(0,2).join('/') : '—';
+  const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+  const fmtDm = d => d ? d.slice(0,10).split('-').reverse().slice(0,2).join('/') : '—';
 
-  // Lançamentos concluídos que passaram pelo fluxo gestor (obs_gestor preenchido)
   const eventos = GESTOR_LANCAMENTOS
     .filter(l => {
       const st = (l.status||'').toLowerCase();
@@ -6275,33 +6283,55 @@ function renderGestorAtividade() {
       const per = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
       return per && per._feriasRow && per._feriasRow.obs_gestor;
     })
-    .sort((a, b) => (b.fim||'').localeCompare(a.fim||''))
-    .slice(0, 10);
+    .sort((a, b) => (b.fim||'').localeCompare(a.fim||''));
 
   if (!eventos.length) { el.innerHTML = ''; return; }
 
-  const nomeMap = new Map(GESTOR_COLABS.map(c => [String(c.id), c.nome.split(' ')[0]]));
+  const colabMap = new Map(GESTOR_COLABS.map(c => [String(c.id), c]));
 
-  const items = eventos.map(l => {
-    const st   = (l.status||'').toLowerCase();
-    const cls  = st === 'aprovado' ? 'aprov' : st === 'recusado' ? 'recus' : 'cancel';
-    const icon = st === 'aprovado' ? '✓' : st === 'recusado' ? '✗' : '⊘';
-    const chip = st === 'aprovado' ? 'Aprovado pelo RH' : st === 'recusado' ? 'Recusado pelo RH' : 'Cancelado';
-    const nome = nomeMap.get(String(l.colaborador_id)) || '—';
+  const visiveis = _gestorAtivExpandido ? eventos : eventos.slice(0, _ATIV_LIMITE);
+  const total    = eventos.length;
+  const ocultos  = total - _ATIV_LIMITE;
+
+  const items = visiveis.map(l => {
+    const st    = (l.status||'').toLowerCase();
+    const cls   = st === 'aprovado' ? 'aprov' : st === 'recusado' ? 'recus' : 'cancel';
+    const chip  = st === 'aprovado' ? 'Aprovado pelo RH' : st === 'recusado' ? 'Recusado pelo RH' : 'Cancelado';
+    const colab = colabMap.get(String(l.colaborador_id));
+    const nome  = colab ? colab.nome : '—';
+    const cargo = colab ? [colab.cargo, colab.setor].filter(Boolean).join(' · ') : '';
+    const per   = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
+    const criadoEm = per && per._feriasRow && per._feriasRow.created_at
+      ? fmtDm(per._feriasRow.created_at) : null;
+    const svgIcon = st === 'aprovado'
+      ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+      : st === 'recusado'
+      ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>`;
+    const tsLine = criadoEm ? `<div class="gstor-ativ-ts">Solicitado em ${criadoEm}</div>` : '';
     return `<div class="gstor-ativ-item">
-      <div class="gstor-ativ-icon ${cls}">${icon}</div>
-      <span class="gstor-ativ-nome">${nome}</span>
-      <span class="gstor-ativ-per">${fmtD(l.inicio)} → ${fmtD(l.fim)} · ${l.dias}d</span>
+      <div class="gstor-ativ-icon ${cls}">${svgIcon}</div>
+      <div class="gstor-ativ-body">
+        <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
+        <div class="gstor-ativ-per">${fmtD(l.inicio)} → ${fmtD(l.fim)} · ${l.dias}d</div>
+        ${tsLine}
+      </div>
       <span class="gstor-ativ-chip ${cls}">${chip}</span>
     </div>`;
   }).join('');
+
+  const verMaisBtn = !_gestorAtivExpandido && ocultos > 0
+    ? `<button class="gstor-ativ-vermais" onclick="_gestorAtivExpandido=true;renderGestorAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} ↓</button>`
+    : _gestorAtivExpandido && total > _ATIV_LIMITE
+    ? `<button class="gstor-ativ-vermais" onclick="_gestorAtivExpandido=false;renderGestorAtividade()">Mostrar menos ↑</button>`
+    : '';
 
   el.innerHTML = `<div class="gstor-ativ-wrap">
     <div class="gstor-ativ-header" onclick="_gestorAtivAberto=!_gestorAtivAberto;renderGestorAtividade()">
       <span class="gstor-ativ-title">Atividade recente</span>
       <span class="gstor-ativ-toggle">${_gestorAtivAberto ? '▲ ocultar' : '▼ mostrar'}</span>
     </div>
-    ${_gestorAtivAberto ? `<div class="gstor-ativ-list">${items}</div>` : ''}
+    ${_gestorAtivAberto ? `<div class="gstor-ativ-list">${items}</div>${verMaisBtn}` : ''}
   </div>`;
 }
 
