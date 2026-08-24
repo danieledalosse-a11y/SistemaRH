@@ -2190,7 +2190,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
     if (f.periodo1_inicio && dias1 > 0 && !(_isPendente && !_temP2rh)) {
       lancamentos.push({
         inicio: f.periodo1_inicio,
-        fim:    f.periodo1_fim || addDays(f.periodo1_inicio, dias1 - 1),
+        fim:    addDays(f.periodo1_inicio, dias1 - 1),
         dias:   dias1,
         diasUsadosReal: null,
         motivo: f.motivo1 || null,
@@ -2202,7 +2202,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
     if (f.periodo2_inicio && dias2 > 0 && !(_isPendente && _temP2rh)) {
       lancamentos.push({
         inicio: f.periodo2_inicio,
-        fim:    f.periodo2_fim || addDays(f.periodo2_inicio, dias2 - 1),
+        fim:    addDays(f.periodo2_inicio, dias2 - 1),
         dias:   dias2,
         diasUsadosReal: null,
         motivo: f.motivo2 || null,
@@ -2221,8 +2221,8 @@ function supabaseParaModelo(feriasRows, colaborRows) {
     if ((f.status === 'Pendente' || f.status === 'Solicitado')) {
       const _temP2rh = f.periodo2_inicio && dias2 > 0;
       const _pIni = _temP2rh ? f.periodo2_inicio : f.periodo1_inicio;
-      const _pFim = _temP2rh ? (f.periodo2_fim || addDays(f.periodo2_inicio, dias2 - 1))
-                              : (f.periodo1_fim  || addDays(f.periodo1_inicio, dias1 - 1));
+      const _pFim = _temP2rh ? addDays(f.periodo2_inicio, dias2 - 1)
+                              : addDays(f.periodo1_inicio, dias1 - 1);
       const _pDias = _temP2rh ? dias2 : dias1;
       if (_pIni && _pDias > 0) {
         _novoLancFromGestor = {
@@ -6179,10 +6179,12 @@ function processGestorFerias(rows) {
       const _temP2b = row.periodo2_inicio && Number(row.dias2) > 0;
       const _stP1b = (_stNorm2 === 'solicitado' && _temP2b) ? 'aprovado' : _stNorm2;
       if (row.periodo1_inicio && Number(row.dias1) > 0) {
-        lancamentos.push({ id:`${row.id}-p1`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo1_inicio, fim:row.periodo1_fim||row.periodo1_inicio, dias:Number(row.dias1), status:_stP1b });
+        const _d1b = Number(row.dias1);
+        lancamentos.push({ id:`${row.id}-p1`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo1_inicio, fim:addDays(row.periodo1_inicio, _d1b - 1), dias:_d1b, status:_stP1b });
       }
       if (_temP2b) {
-        lancamentos.push({ id:`${row.id}-p2`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo2_inicio, fim:row.periodo2_fim||row.periodo2_inicio, dias:Number(row.dias2), status:_stNorm2 });
+        const _d2b = Number(row.dias2);
+        lancamentos.push({ id:`${row.id}-p2`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo2_inicio, fim:addDays(row.periodo2_inicio, _d2b - 1), dias:_d2b, status:_stNorm2 });
       }
       if (Array.isArray(row.realizacoes)) {
         row.realizacoes.forEach((r, i) => {
@@ -6219,13 +6221,14 @@ function processGestorFerias(rows) {
 
     // período 1
     if (row.periodo1_inicio && Number(row.dias1) > 0) {
+      const _dias1 = Number(row.dias1);
       const lanc1 = {
         id:            `${row.id}-p1`,
         colaborador_id: row.colaborador_id,
         periodo_id:    row.id,
         inicio:        row.periodo1_inicio,
-        fim:           row.periodo1_fim || row.periodo1_inicio,
-        dias:          Number(row.dias1),
+        fim:           addDays(row.periodo1_inicio, _dias1 - 1),
+        dias:          _dias1,
         status:        _stP1,
       };
       if (_stP1 === 'recusado' && _obsMotivo) lanc1._motivoRecusa = _obsMotivo;
@@ -6235,13 +6238,14 @@ function processGestorFerias(rows) {
 
     // período 2
     if (_temP2) {
+      const _dias2 = Number(row.dias2);
       const lanc2 = {
         id:            `${row.id}-p2`,
         colaborador_id: row.colaborador_id,
         periodo_id:    row.id,
         inicio:        row.periodo2_inicio,
-        fim:           row.periodo2_fim || row.periodo2_inicio,
-        dias:          Number(row.dias2),
+        fim:           addDays(row.periodo2_inicio, _dias2 - 1),
+        dias:          _dias2,
         status:        _rowStNorm,
       };
       if (_rowStNorm === 'recusado' && _obsMotivo) lanc2._motivoRecusa = _obsMotivo;
@@ -6367,7 +6371,8 @@ function gestorSaldoPeriodo(periodo) {
     .filter(l => String(l.periodo_id) === String(periodo.id) && ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()))
     .reduce((s, l) => s + (Number(l.dias) || 0), 0);
   // DEBUG — abre DevTools > Console e procure "DEBUG-SALDO"
-  console.log('DEBUG-SALDO', { periodoId: periodo.id, colaborador_id: periodo.colaborador_id, direito, usados, candidatos: candidatos.map(l=>({id:l.id,periodo_id:l.periodo_id,status:l.status,dias:l.dias})) });
+  const _match = candidatos.filter(l => String(l.periodo_id) === String(periodo.id));
+  if (_match.length > 0 || usados === 0) console.log('DEBUG-SALDO', { periodoId: periodo.id, usados, matchPeriodo: _match.map(l=>({id:l.id,periodo_id:l.periodo_id,status:l.status,dias:l.dias})), todosPids: candidatos.map(l=>String(l.periodo_id)).filter((v,i,a)=>a.indexOf(v)===i) });
   return direito - usados;
 }
 
