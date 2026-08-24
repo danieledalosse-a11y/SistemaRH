@@ -6276,8 +6276,15 @@ function renderGestorAtividade() {
   const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const fmtDm = d => d ? d.slice(0,10).split('-').reverse().slice(0,2).join('/') : '—';
 
+  const filtroGestor = (document.getElementById('gestorFiltroGestor')?.value || '').toLowerCase();
+  const colabsFiltrados = filtroGestor
+    ? GESTOR_COLABS.filter(c => (c.gestor||'').toLowerCase() === filtroGestor)
+    : GESTOR_COLABS;
+  const idsPermitidos = new Set(colabsFiltrados.map(c => String(c.id)));
+
   const eventos = GESTOR_LANCAMENTOS
     .filter(l => {
+      if (!idsPermitidos.has(String(l.colaborador_id))) return false;
       const st = (l.status||'').toLowerCase();
       if (!['aprovado','recusado','cancelado'].includes(st)) return false;
       const per = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
@@ -6951,7 +6958,7 @@ function renderGestorAtencao() {
   const filtroGestor = document.getElementById('gestorFiltroGestor')?.value || '';
   if (busca) colabs = colabs.filter(c => c.nome.toLowerCase().includes(busca));
   if (filtroCargo) colabs = colabs.filter(c => c.cargo === filtroCargo);
-  if (filtroGestor) colabs = colabs.filter(c => c.gestor === filtroGestor);
+  if (filtroGestor) colabs = colabs.filter(c => (c.gestor||'').toLowerCase() === filtroGestor.toLowerCase());
 
   // Atualiza cards e atividade recente com base na lista filtrada
   renderGestorAlerts(colabs);
