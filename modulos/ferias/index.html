@@ -7956,21 +7956,25 @@ function _renderGsolHistoricoRH(c) {
     const itens = lancamentos.map((l, li) => {
       const lancIdx = l.id.endsWith('-p2') ? 1 : 0;
       const isPend  = (row.aguardando_gozo_idx ?? null) === lancIdx;
-      const dotColor = isPend ? '#F59E0B' : l.fim < hoje ? '#9CA3AF' : '#10B981';
 
-      const chipPend = isPend
-        ? `<span class="gsol-pend-chip">${svgClk} Pendente de gozo · ${l.dias}d</span>` : '';
-      const chipConcl = !isPend && l.fim < hoje
+      const gozosDoLanc = Array.isArray(row.realizacoes)
+        ? row.realizacoes.filter(r => (r.lancIdx !== undefined ? r.lancIdx : 0) === lancIdx)
+        : [];
+      const diasGozados = gozosDoLanc.reduce((s, g) => s + (Number(g.dias) || 0), 0);
+      const residual    = l.dias - diasGozados;
+      const temParcial  = gozosDoLanc.length > 0 && residual > 0;
+      const pendDias    = temParcial ? residual : l.dias;
+      const showPend    = isPend || temParcial;
+      const isConcluido = !showPend && l.fim < hoje;
+
+      const dotColor = showPend ? '#F59E0B' : isConcluido ? '#9CA3AF' : '#10B981';
+      const chipPend = showPend
+        ? `<span class="gsol-pend-chip">${svgClk} Pendente de gozo · ${pendDias}d</span>` : '';
+      const chipConcl = isConcluido
         ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:10px;background:var(--bg);color:var(--text-sec);border:1px solid var(--border);">Concluído</span>` : '';
 
       const nota = row.nota ? `<div class="gsol-rh-nota">${row.nota}</div>` : '';
 
-      const gozosDoLanc = Array.isArray(row.realizacoes)
-        ? row.realizacoes.filter((r, ri) => {
-            const rLancIdx = r.lancIdx !== undefined ? r.lancIdx : 0;
-            return rLancIdx === lancIdx;
-          })
-        : [];
       const gozoHtml = gozosDoLanc.map(g => {
         const ini = _fmtD(g.saida || g.inicio);
         const fim = _fmtD(g.retorno || g.fim);
