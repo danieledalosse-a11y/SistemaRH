@@ -2210,6 +2210,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
       _notaLivre:       f.nota_livre    || null,
       _obsGestor:       f.obs_gestor    || null,
       realizacoes:      Array.isArray(f.realizacoes) ? f.realizacoes : [],
+      _aguardandoGozo:  f.aguardando_gozo || false,
       _novoLanc: _novoLancFromGestor,
       _motivoRejeicao: null,
     };
@@ -2992,14 +2993,22 @@ function renderDrawerHistorico(colab) {
           const barCls  = saldoPeriodo === 0 ? 'completo' : 'parcial';
           const txtCor  = saldoPeriodo === 0 ? '#027A48' : '#D97706';
           const saldoTxt = saldoPeriodo > 0 ? `${saldoPeriodo}d restantes` : 'Período concluído ✓';
-          const itensHtml = gozosDoLanc.map((gx, gi) => `<div class="hist-gozo-item">
-              <div class="hist-gozo-item-left">
-                <span class="hist-gozo-item-dates">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span>
-                ${gx.obs ? `<span class="hist-gozo-item-obs">${gx.obs}</span>` : ''}
+          const itensHtml = gozosDoLanc.map((gx, gi) => `<div>
+              <div class="hist-gozo-item">
+                <div class="hist-gozo-item-left">
+                  <span class="hist-gozo-item-dates">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span>
+                  ${gx.obs ? `<span class="hist-gozo-item-obs">${gx.obs}</span>` : ''}
+                </div>
+                <div style="display:flex;gap:2px;">
+                  <button class="hist-edit-btn" onclick="abrirEditGozo('${key}','${r._sbId}',${lancIdx},${gi})" title="Editar">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                  <button class="hist-gozo-del" onclick="removerGozoHist('${key}','${r._sbId}',${lancIdx},${gi})" title="Remover">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  </button>
+                </div>
               </div>
-              <button class="hist-gozo-del" onclick="removerGozoHist('${key}','${r._sbId}',${lancIdx},${gi})" title="Remover">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-              </button>
+              <div class="hist-gozo-form" id="hg-edit-${r._sbId}-${lancIdx}-${gi}" style="display:none;margin:0 0 4px;"></div>
             </div>`).join('');
           progressHtml = `<div class="hist-gozo-bar-wrap"><div class="hist-gozo-bar-fill ${barCls}" style="width:${pct}%;"></div></div>
             <div class="hist-gozo-progress-row">
@@ -3153,9 +3162,11 @@ function renderDrawerHistorico(colab) {
           <span class="drawer-hist-pa-year">PA ${r.ano}</span>
           <span class="drawer-hist-pa-period"> · ${formatDate(r.paInicio)} → ${formatDate(r.paFim)}</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
           <span style="font-size:12px;color:var(--text-sec);">Saldo ${saldo}/${r.totalDias}d</span>
           ${situBadge}
+          ${r._aguardandoGozo ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:#FEF3C7;color:#B45309;border:1px solid #FDE68A;">⏳ Pendente de gozo</span>` : ''}
+          ${IS_RH && !excluirPA ? `<button onclick="rhToggleAguardandoGozo('${r._sbId}',${r._aguardandoGozo},'${key}')" title="${r._aguardandoGozo ? 'Remover marcação' : 'Marcar como pendente de gozo'}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;border:1px solid ${r._aguardandoGozo ? '#FDE68A' : 'var(--border)'};background:${r._aguardandoGozo ? '#FFFBEB' : 'none'};cursor:pointer;color:${r._aguardandoGozo ? '#B45309' : 'var(--text-ter)'};padding:0;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></button>` : ''}
         </div>
       </div>
       <div class="drawer-hist-pa-body">${lancs}</div>
@@ -3607,6 +3618,96 @@ async function removerGozoHist(key, sbId, lancIdx, gozoIdx) {
       _gozoExpanded.add(`${sbId}-${lancIdx}`);
     renderDrawerHistorico(colab);
     toast('Acordo removido.');
+  } catch(e) { toast(_erroApi(e), 'erro'); }
+}
+
+async function rhToggleAguardandoGozo(sbId, currentVal, key) {
+  const novoVal = !currentVal;
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, { aguardando_gozo: novoVal });
+    const colab = COLABORADORES.find(c => c.__key === key);
+    const reg = colab?.registros.find(r => r._sbId == sbId);
+    if (reg) reg._aguardandoGozo = novoVal;
+    renderDrawerHistorico(colab);
+    toast(novoVal ? '⏳ Marcado como pendente de gozo.' : 'Marcação de pendente removida.');
+  } catch(e) { toast(_erroApi(e), 'erro'); }
+}
+
+function abrirEditGozo(key, sbId, lancIdx, gi) {
+  const colab = COLABORADORES.find(c => c.__key === key);
+  const reg = colab?.registros.find(r => r._sbId == sbId);
+  const lista = (reg?.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
+  let count = 0;
+  const gx = lista.find(rx => {
+    const desteP = Number(rx.lancIdx) === Number(lancIdx) || (Number(lancIdx) === 0 && rx.lancIdx == null);
+    if (desteP) { if (count++ === Number(gi)) return true; }
+    return false;
+  });
+  if (!gx) return;
+  const formId = `hg-edit-${sbId}-${lancIdx}-${gi}`;
+  const el = document.getElementById(formId);
+  if (!el) return;
+  el.innerHTML = `
+    <div style="font-size:10px;font-weight:700;color:#1849A9;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Editar acordo</div>
+    <div class="real-add-grid" style="padding:0 0 6px;grid-template-columns:repeat(3,1fr);">
+      <div class="real-add-field"><label class="real-add-label">Saída</label>
+        <input class="real-add-input" type="date" id="${formId}-saida" value="${gx.saida||''}" oninput="calcRetornoEditGozo('${formId}')">
+      </div>
+      <div class="real-add-field"><label class="real-add-label">Dias</label>
+        <input class="real-add-input" type="number" id="${formId}-dias" min="1" value="${gx.dias||''}" oninput="calcRetornoEditGozo('${formId}')">
+      </div>
+      <div class="real-add-field"><label class="real-add-label">Retorno <span style="font-size:10px;color:var(--text-ter);font-weight:400;">(auto)</span></label>
+        <input class="real-add-input" type="date" id="${formId}-retorno" readonly style="background:#F9FAFB;color:var(--text-sec);" value="${gx.retorno||''}">
+      </div>
+    </div>
+    <div class="real-add-field" style="margin-bottom:8px;"><label class="real-add-label">Obs.</label>
+      <input class="real-add-input" type="text" id="${formId}-obs" value="${gx.obs||''}" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div class="real-add-actions" style="padding:0;">
+      <button class="btn-real-cancel" onclick="fecharEditGozo('${formId}')">Cancelar</button>
+      <button class="btn-real-save" onclick="salvarEditGozo('${key}','${sbId}',${lancIdx},${gi},'${formId}')">Salvar</button>
+    </div>`;
+  el.classList.add('open');
+}
+
+function calcRetornoEditGozo(formId) {
+  const saida = document.getElementById(formId + '-saida')?.value;
+  const dias  = parseInt(document.getElementById(formId + '-dias')?.value);
+  const retEl = document.getElementById(formId + '-retorno');
+  if (!saida || !dias || !retEl) return;
+  const d = new Date(saida);
+  d.setDate(d.getDate() + dias);
+  retEl.value = d.toISOString().slice(0, 10);
+}
+
+function fecharEditGozo(formId) {
+  const el = document.getElementById(formId);
+  if (el) { el.innerHTML = ''; el.classList.remove('open'); }
+}
+
+async function salvarEditGozo(key, sbId, lancIdx, gi, formId) {
+  const saida   = document.getElementById(formId + '-saida')?.value;
+  const dias    = parseInt(document.getElementById(formId + '-dias')?.value);
+  const retorno = document.getElementById(formId + '-retorno')?.value;
+  const obs     = document.getElementById(formId + '-obs')?.value.trim();
+  if (!saida || !dias || !retorno) { toast('Preencha saída e dias.', 'erro'); return; }
+  const colab = COLABORADORES.find(c => c.__key === key);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  const lista = (reg.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
+  let count = 0, found = false;
+  const nova = lista.map(rx => {
+    const desteP = Number(rx.lancIdx) === Number(lancIdx) || (Number(lancIdx) === 0 && rx.lancIdx == null);
+    if (desteP && count++ === Number(gi)) { found = true; return { ...rx, saida, retorno, dias, obs: obs || undefined }; }
+    return rx;
+  });
+  if (!found) { toast('Acordo não encontrado.', 'erro'); return; }
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: nova });
+    reg.realizacoes = nova;
+    _gozoExpanded.add(`${sbId}-${lancIdx}`);
+    renderDrawerHistorico(colab);
+    toast('✓ Acordo atualizado!');
   } catch(e) { toast(_erroApi(e), 'erro'); }
 }
 
