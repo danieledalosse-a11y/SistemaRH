@@ -429,6 +429,28 @@ if (typeof pdfjsLib !== 'undefined') {
   </div>
 </div>
 
+<!-- Modal Confirmação de Aprovação -->
+<div class="modal-overlay" id="modalAprovar">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <span class="modal-title">Aprovar ficha</span>
+      <button class="modal-close" onclick="closeModal('modalAprovar')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="aprovarNomeCandidate" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px;"></div>
+      <p style="font-size:13px;color:var(--text-sec);margin-bottom:16px;">Ao aprovar, os seguintes workflows serão criados automaticamente:</p>
+      <div id="aprovarWorkflowsList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:6px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modalAprovar')">Cancelar</button>
+      <button class="btn btn-success" id="btnConfirmarAprovar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
+        Aprovar e criar workflows
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Cancelamento -->
 <div class="modal-overlay" id="modalCancelamento">
   <div class="modal" style="max-width:480px;">
@@ -944,24 +966,143 @@ function rotateImageB64(b64, degrees) {
   });
 }
 
-async function aprovarFicha(f) {
-  const token = currentConvite?.token || f.admissao_convites?.token;
+function aprovarFicha(f) {
+  const ficha = f || currentFicha;
+  if (!ficha) return;
+  const nomeCandidate = ficha.nome || ficha.admissao_convites?.nome_candidato || currentConvite?.nome_candidato || '—';
+  const temVT = !!(ficha.vale_transporte || ficha.vt_cartao || ficha.vt_linha);
+
+  document.getElementById('aprovarNomeCandidate').textContent = nomeCandidate;
+
+  const workflows = [
+    { icon: '👤', label: 'Workflow de Admissão', desc: 'Checklist completo de integração', cor: '#166534', bg: '#f0fdf4', border: '#bbf7d0' },
+  ];
+  if (temVT) {
+    workflows.push({ icon: '🚌', label: 'Workflow de Inclusão de VT', desc: 'Solicitação ao Financeiro para carga do cartão', cor: '#166534', bg: '#f0fdf4', border: '#bbf7d0' });
+  }
+
+  document.getElementById('aprovarWorkflowsList').innerHTML = workflows.map(w => `
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${w.bg};border:1px solid ${w.border};border-radius:8px;">
+      <span style="font-size:18px;line-height:1.2;">${w.icon}</span>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:${w.cor};">${w.label}</div>
+        <div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${w.desc}</div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('btnConfirmarAprovar').onclick = () => _confirmarAprovar(ficha, temVT);
+  openModal('modalAprovar');
+}
+
+async function _confirmarAprovar(f, temVT) {
+  const token = f.token || f.admissao_convites?.token || currentConvite?.token;
   if (!token) { alert('Não foi possível identificar o convite.'); return; }
-  const btnAp = document.getElementById('btnAprovar');
-  btnAp.disabled = true;
-  btnAp.textContent = 'Aprovando...';
+
+  const btn = document.getElementById('btnConfirmarAprovar');
+  btn.disabled = true; btn.textContent = 'Aprovando...';
+
   try {
+    // 1. Atualizar status do convite
     await fetch(`${SB_URL}/rest/v1/admissao_convites?token=eq.${token}`, {
       method: 'PATCH', headers: SB_HEADERS,
       body: JSON.stringify({ status: 'aprovado' })
     });
+
+    // 2. Criar workflows (colaborador_id null — será vinculado na efetivação)
+    const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    const nomeCandidate = f.nome || currentConvite?.nome_candidato || '—';
+    const conviteId = currentConvite?.id || null;
+
+    // Workflow de Admissão
+    const rProc = await fetch(`${SB_URL}/rest/v1/processos_rh`, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        tipo: 'admissao',
+        colaborador_id: null,
+        colaborador_nome: nomeCandidate.toUpperCase(),
+        criado_por: perfil.nome || 'RH',
+        dados_extras: {
+          convite_id: conviteId,
+          cargo: f.cargo_pretendido || null,
+          vt: temVT ? 'Sim' : 'Não',
+          vt_cartao: f.vt_cartao || null,
+          vt_passes: f.vt_passes || null,
+          vt_linha:  f.vt_linha  || null,
+        }
+      })
+    });
+    const [proc] = await rProc.json();
+
+    const _itensAdm = [
+      { item: 'Cadastro no sistema concluído',          prazo_dias: 0 },
+      { item: 'Enviar e-mail de contratação ao Escritório', prazo_dias: 1 },
+      { item: 'Exame admissional realizado',            prazo_dias: 1 },
+      { item: 'Apresentação à equipe realizada',        prazo_dias: 1 },
+      { item: 'Solicitar Vale Transporte ao Financeiro',prazo_dias: 2 },
+      { item: 'Cadastrar no Fronter',                   prazo_dias: 2 },
+      { item: 'Solicitar criação de e-mail para TI',    prazo_dias: 2 },
+      { item: 'Pedir cartão Alimentação',               prazo_dias: 2 },
+      { item: 'Uniforme entregue',                      prazo_dias: 3 },
+      { item: 'Cadastrar no Sênior',                    prazo_dias: 3 },
+      { item: 'Inserir na tabela Vale Alimentação Mensal', prazo_dias: 3 },
+      { item: 'Inserir no Vale Gás',                    prazo_dias: 3 },
+      { item: 'Incluir no Mixtra',                      prazo_dias: 5 },
+      { item: 'Incluir no Wellhub',                     prazo_dias: 5 },
+      { item: 'Incluir no Corplife',                    prazo_dias: 5 },
+      { item: 'Inserir no Seguro de Vida',              prazo_dias: 5 },
+      { item: 'Pedir crachá (Bulmarplac)',              prazo_dias: 5 },
+    ];
+    if (/vendedor/i.test(f.cargo_pretendido || '')) {
+      _itensAdm.push({ item: 'Pedir cartão Alelo Pagamento', prazo_dias: 3 });
+    }
+    await fetch(`${SB_URL}/rest/v1/processos_checklist`, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify(_itensAdm.map((it, i) => ({ ...it, processo_id: proc.id, ordem: i, concluido: false })))
+    });
+
+    // Workflow de VT (se aplicável)
+    if (temVT) {
+      const rVT = await fetch(`${SB_URL}/rest/v1/processos_rh`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          tipo: 'vt_alteracao',
+          colaborador_id: null,
+          colaborador_nome: nomeCandidate.toUpperCase(),
+          criado_por: perfil.nome || 'RH',
+          dados_extras: {
+            operacao: 'inclusao',
+            convite_id: conviteId,
+            vt_cartao: f.vt_cartao || null,
+            vt_passes: f.vt_passes || null,
+            vt_linha:  f.vt_linha  || null,
+            origem: 'admissao',
+          },
+        })
+      });
+      const [vtRow] = await rVT.json();
+      await fetch(`${SB_URL}/rest/v1/processos_checklist`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify([
+          { item: 'Solicitação registrada',                                        prazo_dias: 0 },
+          { item: 'Encaminhar solicitação ao Financeiro — inclusão de cartão VT', prazo_dias: 1 },
+          { item: 'Confirmar carga/ativação do cartão pelo Financeiro',            prazo_dias: 5 },
+          { item: 'Comunicar colaborador que VT está ativo',                       prazo_dias: 5 },
+        ].map((it, i) => ({ ...it, processo_id: vtRow.id, ordem: i, concluido: false })))
+      });
+    }
+
+    closeModal('modalAprovar');
     closePanel();
     await loadConvites();
     await loadFichas();
   } catch(e) {
     alert('Erro ao aprovar. Tente novamente.');
-    btnAp.disabled = false;
-    btnAp.textContent = 'Aprovar ficha';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Aprovar e criar workflows';
   }
 }
 
@@ -1744,84 +1885,25 @@ async function confirmarEfetivar() {
       method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ status: 'efetivado' })
     });
 
-    // Criar processo de admissão no workflow
+    // Vincular colaborador_id nos workflows criados na aprovação da ficha
     try {
-      const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-      const processo = await fetch(`${SB_URL}/rest/v1/processos_rh`, {
-        method: 'POST',
-        headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
-        body: JSON.stringify({
-          tipo: 'admissao',
-          colaborador_id: novoColaborador.id,
-          colaborador_nome: novoColaborador.nome,
-          criado_por: perfil.nome || 'RH',
-          dados_extras: {
-            data_admissao: admissao, empresa: unidade, cargo,
-            vt: f.vale_transporte ? 'Sim' : 'Não',
-            vt_cartao: f.vt_cartao || null,
-            vt_passes: f.vt_passes || null,
-            vt_linha:  f.vt_linha  || null,
-          }
-        })
-      });
-      const [proc] = await processo.json();
-      // Criar itens do checklist
-      const _itensBase = [
-        { item: 'Cadastro no sistema concluído', prazo_dias: 0, concluido: true, concluido_por: perfil.nome || 'RH', concluido_em: new Date().toISOString() },
-        { item: 'Exame admissional realizado', prazo_dias: 1 },
-        { item: 'Uniforme entregue', prazo_dias: 3 },
-        { item: 'Vale Alimentação solicitado', prazo_dias: 2 },
-        { item: 'Incluir no seguro de vida', prazo_dias: 5 },
-        { item: 'Crachá emitido', prazo_dias: 5 },
-        { item: 'Apresentação à equipe realizada', prazo_dias: 1 },
-      ];
-      // VT: só entra no checklist se o colaborador utiliza VT
-      if (f.vale_transporte) {
-        _itensBase.splice(4, 0, {
-          item: 'Vale Transporte — solicitar inclusão na compra (Financeiro)',
-          prazo_dias: 1,
-        });
+      const conviteId = currentConvite?.id || null;
+      if (conviteId) {
+        // Buscar processos criados com convite_id nos dados_extras (sem colaborador_id)
+        const rProcs = await fetch(
+          `${SB_URL}/rest/v1/processos_rh?colaborador_id=is.null&colaborador_nome=ilike.*${encodeURIComponent(novoColaborador.nome.split(' ')[0])}*&status=eq.aberto&select=id,dados_extras`,
+          { headers: SB_HEADERS }
+        );
+        const procsAbertos = await rProcs.json();
+        const procsDaAdmissao = procsAbertos.filter(p => p.dados_extras?.convite_id === conviteId);
+        for (const p of procsDaAdmissao) {
+          await fetch(`${SB_URL}/rest/v1/processos_rh?id=eq.${p.id}`, {
+            method: 'PATCH', headers: SB_HEADERS,
+            body: JSON.stringify({ colaborador_id: novoColaborador.id })
+          });
+        }
       }
-      const itens = _itensBase.map((it, i) => ({ ...it, processo_id: proc.id, ordem: i }));
-      await fetch(`${SB_URL}/rest/v1/processos_checklist`, {
-        method: 'POST',
-        headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
-        body: JSON.stringify(itens)
-      });
-
-      // Se usa VT: criar processo separado para o Financeiro realizar a carga do cartão
-      if (f.vale_transporte) {
-        const vtProc = await fetch(`${SB_URL}/rest/v1/processos_rh`, {
-          method: 'POST',
-          headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
-          body: JSON.stringify({
-            tipo: 'vt_alteracao',
-            colaborador_id: novoColaborador.id,
-            colaborador_nome: novoColaborador.nome,
-            criado_por: perfil.nome || 'RH',
-            dados_extras: {
-              operacao: 'inclusao',
-              vt_cartao: f.vt_cartao || null,
-              vt_passes: f.vt_passes || null,
-              vt_linha:  f.vt_linha  || null,
-              origem: 'admissao',
-            },
-          })
-        });
-        const [vtProcRow] = await vtProc.json();
-        const vtItens = [
-          { item: 'Solicitação registrada',                                          prazo_dias: 0 },
-          { item: 'Encaminhar solicitação ao Financeiro — inclusão de cartão VT',    prazo_dias: 1 },
-          { item: 'Confirmar carga/ativação do cartão pelo Financeiro',              prazo_dias: 5 },
-          { item: 'Comunicar colaborador que VT está ativo',                         prazo_dias: 5 },
-        ].map((it, i) => ({ ...it, processo_id: vtProcRow.id, ordem: i, concluido: false }));
-        await fetch(`${SB_URL}/rest/v1/processos_checklist`, {
-          method: 'POST',
-          headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
-          body: JSON.stringify(vtItens)
-        });
-      }
-    } catch(e) { console.warn('Workflow não criado:', e); }
+    } catch(e) { console.warn('Erro ao vincular workflows:', e); }
 
     // redireciona ao Cadastro para complementar dados internos
     window.location.href = `../../modulos/cadastro/index.html?efetivar=${novoColaborador.id}`;

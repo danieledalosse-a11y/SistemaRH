@@ -1353,6 +1353,7 @@ function buildCard(p) {
     </div>
     <div class="processo-row-detalhe">
       <div class="checklist">${bannerHomologacao}${checklistHtml}</div>
+      ${p.tipo === 'vt_alteracao' ? `<div class="ficha-vt-wrap" id="fichaVT-${p.id}" data-proc-id="${p.id}"></div>` : ''}
       <div class="card-actions">
         ${btnConcluir}
         <div class="card-actions-spacer"></div>
@@ -1365,7 +1366,99 @@ function buildCard(p) {
 
 function toggleRow(id) {
   const el = document.getElementById('card-' + id);
-  if (el) el.classList.toggle('open');
+  if (!el) return;
+  el.classList.toggle('open');
+  if (el.classList.contains('open')) {
+    const fichaWrap = document.getElementById('fichaVT-' + id);
+    if (fichaWrap && !fichaWrap._loaded) {
+      fichaWrap._loaded = true;
+      _renderFichaVT(id, fichaWrap);
+    }
+  }
+}
+
+async function _renderFichaVT(procId, wrap) {
+  const proc = _PROC_MAP[procId];
+  if (!proc) return;
+  const extras = proc.dados_extras || {};
+  const colabId = proc.colaborador_id;
+
+  wrap.innerHTML = '<div style="font-size:12px;color:var(--text-sec);padding:8px 0;">Carregando dados do colaborador...</div>';
+
+  let colab = {};
+  if (colabId) {
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${colabId}&select=nome,cargo,setor,matricula,data_admissao,empresa_registro,vt_cartao,vt_passes,vt_linha`, { headers: SB_HEADERS });
+      const [row] = await r.json();
+      if (row) colab = row;
+    } catch(_) {}
+  }
+
+  const opLabel = extras.operacao === 'exclusao' ? 'Exclusão de VT' : extras.operacao === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT';
+  const cartao  = extras.vt_cartao || colab.vt_cartao || '—';
+  const passes  = extras.vt_passes || colab.vt_passes || '—';
+  const linha   = extras.vt_linha  || colab.vt_linha  || '—';
+  const motivo  = extras.motivo ? extras.motivo.replace(/_/g,' ') : null;
+  const hoje    = new Date().toLocaleDateString('pt-BR');
+
+  wrap.innerHTML = `
+    <div style="margin:14px 0 4px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      <div style="padding:10px 14px;background:var(--surface-alt,#f8fafc);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span style="font-size:12px;font-weight:700;color:var(--text);letter-spacing:0.04em;">📋 FICHA DE ENCAMINHAMENTO — ${opLabel.toUpperCase()}</span>
+        <button onclick="_imprimirFichaVT(${procId})" style="font-size:11px;padding:4px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;display:flex;align-items:center;gap:5px;">
+          🖨️ Imprimir ficha
+        </button>
+      </div>
+      <div id="fichaVT-content-${procId}" style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;">
+        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Colaborador</div><div style="font-size:13px;font-weight:600;">${proc.colaborador_nome || '—'}</div></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Matrícula</div><div style="font-size:13px;">${colab.matricula || '—'}</div></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Cargo</div><div style="font-size:13px;">${colab.cargo || '—'}</div></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Setor</div><div style="font-size:13px;">${colab.setor || '—'}</div></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Empresa / Unidade</div><div style="font-size:13px;">${colab.empresa_registro || '—'}</div></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Data de Admissão</div><div style="font-size:13px;">${colab.data_admissao ? new Date(colab.data_admissao + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</div></div>
+        ${extras.operacao !== 'exclusao' ? `
+        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Nº Cartão VT</div><div style="font-size:13px;font-weight:600;">${cartao}</div></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Passes / Dia</div><div style="font-size:13px;font-weight:600;">${passes}</div></div>
+        <div style="grid-column:1/-1;"><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Linha de Ônibus</div><div style="font-size:13px;">${linha}</div></div>
+        ` : `
+        <div style="grid-column:1/-1;"><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Motivo da Exclusão</div><div style="font-size:13px;">${motivo || '—'}</div></div>
+        `}
+        <div style="grid-column:1/-1;"><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Data da Solicitação</div><div style="font-size:13px;">${hoje}</div></div>
+      </div>
+    </div>`;
+}
+
+function _imprimirFichaVT(procId) {
+  const content = document.getElementById('fichaVT-content-' + procId);
+  const proc = _PROC_MAP[procId];
+  if (!content || !proc) return;
+  const extras = proc.dados_extras || {};
+  const opLabel = extras.operacao === 'exclusao' ? 'Exclusão de VT' : extras.operacao === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT';
+  const w = window.open('', '_blank', 'width=700,height=600');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ficha VT — ${proc.colaborador_nome}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 32px; color: #111; }
+    h2 { font-size: 16px; margin: 0 0 4px; }
+    .sub { font-size: 12px; color: #555; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
+    .field label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #777; display: block; margin-bottom: 3px; }
+    .field span { font-size: 14px; }
+    .full { grid-column: 1/-1; }
+    hr { border: none; border-top: 1px solid #ddd; margin: 24px 0; }
+    .assinatura { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 40px; }
+    .assinatura div { border-top: 1px solid #aaa; padding-top: 6px; font-size: 11px; color: #555; }
+  </style></head><body>
+  <h2>FICHA DE ENCAMINHAMENTO — ${opLabel.toUpperCase()}</h2>
+  <div class="sub">Revest do Brasil Acabamentos Ltda — RH → Financeiro</div>
+  <div class="grid">${content.innerHTML}</div>
+  <hr>
+  <div class="assinatura">
+    <div>Solicitado por (RH)</div>
+    <div>Recebido por (Financeiro) — Data: ___/___/______</div>
+  </div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  w.document.close();
 }
 
 function calcularPrazoDesde(dataBase, diasUteis) {
