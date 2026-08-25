@@ -134,6 +134,19 @@ A visão Gestor usa arrays **separados** (não a estrutura `COLABORADORES[].regi
 
 **Nunca usar `data_inicio` ou `data_fim` em GESTOR_LANCAMENTOS** — esses campos não existem nos objetos gerados por `processGestorFerias`. Qualquer ordenação ou comparação de datas de lançamento usa `l.inicio` e `l.fim`.
 
+### Campo `nota` em GESTOR_LANCAMENTOS (crítico — corrigido 2026-08-25)
+
+Cada objeto em `GESTOR_LANCAMENTOS` carrega o campo `nota` mapeado diretamente de `nota1`/`nota2` da tabela `ferias`:
+
+```js
+// p1
+{ ..., _obsGestor: row.obs_gestor||null, nota: row.nota1||null }
+// p2
+{ ..., _obsGestor: row.obs_gestor||null, nota: row.nota2||null }
+```
+
+**Por quê:** `obs_gestor` e `nota1`/`nota2` são colunas **distintas** no Supabase. A visão RH exibe `l.nota` (vinda de `nota1`); antes da correção, a visão Gestor lia `obs_gestor` (campo diferente), causando divergência. Nunca confundir os dois campos.
+
 ## Visão Gestor — funções canônicas
 
 ```js
@@ -310,6 +323,108 @@ headers = {"apikey": SB_SECRET, "Authorization": f"Bearer {SB_SECRET}", "Content
 r = requests.get(f"{SB_URL}/rest/v1/ferias?...", headers=headers)
 rows = r.json()  # verificar isinstance(rows, list) antes de iterar
 ```
+
+## Timeline Gantt — regras de renderização de barra
+
+Barras são renderizadas célula a célula. Cada barra é desenhada **na célula do `drawDay`** (primeiro dia visível no mês):
+```js
+const drawDay = l.inicio >= mesInicio ? l.inicio : mesInicio;
+```
+
+**Label da barra:** usa `colsOriginais` (duração total do lançamento, não apenas dias visíveis) para decidir o threshold:
+```js
+const colsOriginais = Math.max(1, Math.round((new Date(l.fim+'T12:00:00') - new Date(l.inicio+'T12:00:00')) / 86400000) + 1);
+let label = '';
+if (colsOriginais >= 9) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
+else if (colsOriginais >= 4) label = `${l.dias}d`;
+```
+
+**Barras que vêm do mês anterior (`contLeft = true`):** o label pode ser mais largo que a barra visível — usar `overflow:visible` inline para deixar o texto flutuar para a direita:
+```js
+style="...${contLeft?'overflow:visible;':''}"
+// e no span do label:
+style="color:${txt};${contLeft?'overflow:visible;text-overflow:clip;':''}"
+```
+
+**Tooltip:** usa `c.nome.split(' ')[0]` (primeiro nome apenas) + datas em DD/MM/YYYY via `formatDate()`:
+```js
+title="${c.nome.split(' ')[0]}: ${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d..."
+```
+
+**Foto do colaborador:** visão RH usa `c.fotoUrl` (camelCase), visão Gestor usa `c.foto_url` (snake_case):
+```js
+// RH:
+c.fotoUrl ? `<img class="gantt-av" src="${c.fotoUrl}"...>` : `<div class="gantt-av">...</div>`
+// Gestor:
+c.foto_url ? `<img class="gantt-av" src="${c.foto_url}"...>` : `<div class="gantt-av">...</div>`
+```
+
+## Visão Gestor — filtros de data em lançamentos (regra crítica)
+
+**Solicitações com status `solicitado`** devem ser consideradas **independentemente de `l.fim >= hoje`**. O critério de data se aplica apenas a `recusado`. Aplicar esse padrão em todos os lugares que filtram `GESTOR_LANCAMENTOS`:
+
+```js
+// Card Pendentes (renderGestorAlerts):
+const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
+  const st = (l.status||'').toLowerCase();
+  if (st === 'solicitado') return true;           // sem filtro de data
+  return st === 'recusado' && l.fim >= hoje;
+});
+
+// Filtro de lista 'aguard' (renderGestorAtencao):
+colabs = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => {
+  const st = (l.status||'').toLowerCase();
+  if (!['solicitado','recusado'].includes(st)) return false;
+  if (String(l.colaborador_id) !== String(c.id)) return false;
+  return st === 'solicitado' || (l.fim||'') >= _hj;
+}));
+
+// Badge e botão na linha da lista:
+const lancsPA = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
+const temSolicitado = lancsPA.some(l => (l.status||'').toLowerCase() === 'solicitado'); // sem filtro de data
+```
+
+**Por quê:** solicitações com datas de gozo no passado (ex: gestor solicita férias retroativas para aprovação do RH) devem permanecer visíveis no painel até serem aprovadas/recusadas.
+
+## Visão Gestor — prevenção de solicitação duplicada
+
+Em `gestorEnviarSolicitacao`, antes de fazer o PATCH, verificar se já existe lançamento `solicitado` no PA:
+```js
+const jaSolicitado = GESTOR_LANCAMENTOS.some(l =>
+  String(l.periodo_id) === String(periodo.id) &&
+  (l.status||'').toLowerCase() === 'solicitado'
+);
+if (jaSolicitado) { /* mostrar erro e return */ }
+```
+
+## Visão Gestor — seção "Atividade recente"
+
+Container `<div id="gestorAtividade">` inserido entre `#gestorAlerts` e o card da lista no HTML.
+
+Função `renderGestorAtividade()` — mostra até 10 lançamentos com status `aprovado`/`recusado`/`cancelado` cujo PA tem `obs_gestor` preenchido (= passaram pelo fluxo gestor), ordenados por `fim` desc.
+
+Chamada em:
+- `renderGestorAtencao()` (após `renderGestorAlerts`)
+- Após aprovar/recusar no RH (`if (typeof renderGestorAtividade === 'function') renderGestorAtividade()`)
+
+Estado colapsável: variável `_gestorAtivAberto` (booleana, padrão `true`).
+
+## Histórico RH no drawer Gestor — prioridade de nota (`_renderGsolHistoricoRH`)
+
+A função `_renderGsolHistoricoRH` exibe o "Histórico RH" para o gestor. A nota de cada lançamento segue esta cadeia de prioridade (apenas no primeiro lançamento do PA, `li === 0`):
+
+```js
+const _notaTxt = li === 0
+  ? (l.nota || l._obsGestor || _rhObsMap.get(l.inicio) || row.obs_gestor || row.nota_livre || row.nota || null)
+  : null;
+```
+
+- `l.nota` — campo mapeado de `nota1`/`nota2` (fonte primária, visível também na visão RH)
+- `l._obsGestor` — `obs_gestor` da row Supabase (fallback)
+- `_rhObsMap` — mapa construído a partir de `COLABORADORES` (fallback quando Gestor abre direto, sem o array RH carregado)
+- `row.obs_gestor`, `row.nota_livre`, `row.nota` — fallbacks adicionais
+
+**Regra:** nunca trocar `l.nota` por `l._obsGestor` como fonte primária — são colunas diferentes e só `nota1`/`nota2` refletem o que o RH vê.
 
 ## Pendências conhecidas
 
