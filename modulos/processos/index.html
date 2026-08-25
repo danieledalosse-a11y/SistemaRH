@@ -1400,36 +1400,48 @@ async function _renderFichaVT(procId, wrap) {
   const opBg    = op === 'exclusao' ? '#fee2e2' : op === 'alteracao' ? '#ede9fe' : '#dcfce7';
   const opBord  = op === 'exclusao' ? '#fca5a5' : op === 'alteracao' ? '#c4b5fd' : '#86efac';
 
-  const cartao  = extras.vt_cartao || colab.vt_cartao || null;
-  const passes  = extras.vt_passes || colab.vt_passes || null;
-  const linha   = extras.vt_linha  || colab.vt_linha  || null;
+  const cartao  = extras.vt_cartao || null;
+  const passes  = extras.vt_passes || null;
+  const linha   = extras.vt_linha  || null;
   const motivo  = extras.motivo ? extras.motivo.replace(/_/g,' ') : null;
   const hoje    = new Date().toLocaleDateString('pt-BR');
 
-  const _field = (label, value, vazio) => {
+  // Dados do cadastro para o botão "Usar dados do cadastro"
+  const cadastroCartao = colab.vt_cartao || null;
+  const cadastroPasses = colab.vt_passes || null;
+  const cadastroLinha  = colab.vt_linha  || null;
+  const temDadosCadastro = !!(cadastroCartao || cadastroPasses || cadastroLinha);
+
+  const _field = (label, value) => {
     const isEmpty = !value;
     return `<div>
       <div style="font-size:10px;font-weight:700;color:${isEmpty?'#aaa':'#6b7280'};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">${label}</div>
-      <div style="font-size:13px;font-weight:${isEmpty?'400':'600'};color:${isEmpty?'#bbb':'var(--text)'};">${value || (vazio||'—')}</div>
+      <div style="font-size:13px;font-weight:${isEmpty?'400':'600'};color:${isEmpty?'#bbb':'var(--text)'};">${value||'—'}</div>
     </div>`;
   };
 
-  const _vtField = (label, value, unit) => {
-    const isEmpty = !value;
-    return `<div style="background:${isEmpty?'transparent':opBg};border:1px solid ${isEmpty?'var(--border)':opBord};border-radius:6px;padding:10px 12px;">
-      <div style="font-size:10px;font-weight:700;color:${isEmpty?'#aaa':opCor};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">${label}</div>
-      <div style="font-size:14px;font-weight:${isEmpty?'400':'700'};color:${isEmpty?'#bbb':opCor};">${value ? (value + (unit?' '+unit:'')) : '—'}</div>
-    </div>`;
-  };
+  const _inputStyle = `width:100%;border:1px solid ${opBord};border-radius:6px;padding:8px 10px;font-size:13px;font-weight:600;color:${opCor};background:${opBg};outline:none;font-family:inherit;`;
 
   const dadosVT = op !== 'exclusao'
-    ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        ${_vtField('Nº Cartão VT', cartao)}
-        ${_vtField('Passes / Dia', passes, 'passes')}
+    ? `${temDadosCadastro ? `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fefce8;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#92400e;">
+        <span>📋</span>
+        <span>Cadastro possui dados de VT anteriores: <strong>${cadastroCartao||'—'}</strong> · <strong>${cadastroPasses||'—'} passes</strong> · <strong>${cadastroLinha||'—'}</strong></span>
+        <button onclick="_usarDadosCadastroVT(${procId})" style="margin-left:auto;white-space:nowrap;font-size:11px;padding:4px 10px;border:1px solid #f59e0b;border-radius:5px;background:white;color:#92400e;cursor:pointer;font-weight:600;">Usar dados do cadastro</button>
+      </div>` : ''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="border:1px solid ${opBord};border-radius:6px;padding:10px 12px;background:${opBg};">
+          <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Nº Cartão VT</div>
+          <input id="fichaVT-cartao-${procId}" type="text" value="${cartao||''}" placeholder="Número do cartão" style="${_inputStyle}" oninput="_salvarDadosVT(${procId})">
+        </div>
+        <div style="border:1px solid ${opBord};border-radius:6px;padding:10px 12px;background:${opBg};">
+          <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Passes / Dia</div>
+          <input id="fichaVT-passes-${procId}" type="number" min="1" max="10" value="${passes||''}" placeholder="Ex: 2" style="${_inputStyle}" oninput="_salvarDadosVT(${procId})">
+        </div>
       </div>
-      <div style="background:${linha?opBg:'transparent'};border:1px solid ${linha?opBord:'var(--border)'};border-radius:6px;padding:10px 12px;">
-        <div style="font-size:10px;font-weight:700;color:${linha?opCor:'#aaa'};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Linha de Ônibus / Itinerário</div>
-        <div style="font-size:14px;font-weight:${linha?'700':'400'};color:${linha?opCor:'#bbb'};">${linha||'—'}</div>
+      <div style="border:1px solid ${opBord};border-radius:6px;padding:10px 12px;background:${opBg};">
+        <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Linha de Ônibus / Itinerário</div>
+        <input id="fichaVT-linha-${procId}" type="text" value="${linha||''}" placeholder="Ex: Mandaguaçu / Maringá" style="${_inputStyle}" oninput="_salvarDadosVT(${procId})">
       </div>`
     : `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 12px;">
         <div style="font-size:10px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Motivo da Exclusão</div>
@@ -1481,6 +1493,40 @@ async function _renderFichaVT(procId, wrap) {
       </div><!-- /body -->
 
     </div>`;
+}
+
+async function _salvarDadosVT(procId) {
+  const cartao = document.getElementById('fichaVT-cartao-' + procId)?.value?.trim() || null;
+  const passes = document.getElementById('fichaVT-passes-' + procId)?.value || null;
+  const linha  = document.getElementById('fichaVT-linha-'  + procId)?.value?.trim() || null;
+  const proc   = _PROC_MAP[procId];
+  if (!proc) return;
+  const extras = { ...(proc.dados_extras || {}), vt_cartao: cartao, vt_passes: passes ? parseInt(passes) : null, vt_linha: linha };
+  proc.dados_extras = extras;
+  clearTimeout(_salvarDadosVT._t);
+  _salvarDadosVT._t = setTimeout(async () => {
+    await fetch(`${SB_URL}/rest/v1/processos_rh?id=eq.${procId}`, {
+      method: 'PATCH', headers: SB_HEADERS,
+      body: JSON.stringify({ dados_extras: extras })
+    });
+  }, 800);
+}
+
+function _usarDadosCadastroVT(procId) {
+  const proc = _PROC_MAP[procId];
+  if (!proc || !proc.colaborador_id) return;
+  fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${proc.colaborador_id}&select=vt_cartao,vt_passes,vt_linha`, { headers: SB_HEADERS })
+    .then(r => r.json())
+    .then(([row]) => {
+      if (!row) return;
+      const inCartao = document.getElementById('fichaVT-cartao-' + procId);
+      const inPasses = document.getElementById('fichaVT-passes-' + procId);
+      const inLinha  = document.getElementById('fichaVT-linha-'  + procId);
+      if (inCartao) inCartao.value = row.vt_cartao || '';
+      if (inPasses) inPasses.value = row.vt_passes || '';
+      if (inLinha)  inLinha.value  = row.vt_linha  || '';
+      _salvarDadosVT(procId);
+    });
 }
 
 function _toggleFichaVT(procId) {
