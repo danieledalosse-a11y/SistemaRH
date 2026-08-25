@@ -1923,6 +1923,23 @@ async function _executarConclusao(processoId, justificativa) {
       try { const b = await r.json(); detail = b.message || b.hint || b.details || JSON.stringify(b); } catch(_) {}
       throw new Error(detail || `HTTP ${r.status}`);
     }
+
+    // VT inclusão/alteração concluída → gravar dados no cadastro do colaborador
+    const _proc = _PROC_MAP[processoId];
+    if (_proc && _proc.tipo === 'vt_alteracao' && ['inclusao','alteracao'].includes(_proc.dados_extras?.operacao) && _proc.colaborador_id) {
+      const _ex = _proc.dados_extras || {};
+      const _vtPatch = {};
+      if (_ex.vt_cartao != null) _vtPatch.vt_cartao = _ex.vt_cartao;
+      if (_ex.vt_passes != null) _vtPatch.vt_passes = parseInt(_ex.vt_passes);
+      if (_ex.vt_linha  != null) _vtPatch.vt_linha  = _ex.vt_linha;
+      if (Object.keys(_vtPatch).length) {
+        await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${_proc.colaborador_id}`, {
+          method: 'PATCH', headers: SB_HEADERS,
+          body: JSON.stringify(_vtPatch)
+        });
+      }
+    }
+
     showToast('Processo concluído!', 'success');
     cardEl?.remove();
     concluidosCarregados = false;
