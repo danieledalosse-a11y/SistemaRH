@@ -1788,6 +1788,38 @@ async function confirmarEfetivar() {
         headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
         body: JSON.stringify(itens)
       });
+
+      // Se usa VT: criar processo separado para o Financeiro realizar a carga do cartão
+      if (f.vale_transporte) {
+        const vtProc = await fetch(`${SB_URL}/rest/v1/processos_rh`, {
+          method: 'POST',
+          headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+          body: JSON.stringify({
+            tipo: 'vt_alteracao',
+            colaborador_id: novoColaborador.id,
+            colaborador_nome: novoColaborador.nome,
+            criado_por: perfil.nome || 'RH',
+            dados_extras: {
+              operacao: 'inclusao',
+              vt_cartao: f.vt_cartao || null,
+              vt_passes: f.vt_passes || null,
+              vt_linha:  f.vt_linha  || null,
+              origem: 'admissao',
+            },
+          })
+        });
+        const [vtProcRow] = await vtProc.json();
+        const vtItens = [
+          { item: 'Solicitação registrada',              prazo_dias: 0 },
+          { item: 'Encaminhar solicitação ao Financeiro', prazo_dias: 1 },
+          { item: 'Confirmar execução pelo Financeiro',   prazo_dias: 5 },
+        ].map((it, i) => ({ ...it, processo_id: vtProcRow.id, ordem: i, concluido: false }));
+        await fetch(`${SB_URL}/rest/v1/processos_checklist`, {
+          method: 'POST',
+          headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+          body: JSON.stringify(vtItens)
+        });
+      }
     } catch(e) { console.warn('Workflow não criado:', e); }
 
     // redireciona ao Cadastro para complementar dados internos
