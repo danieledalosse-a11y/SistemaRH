@@ -242,7 +242,7 @@ const TOTAL_STEPS = 5;
 
 const formData = {
   // Step 1
-  nome:'', nascimento:'', sexo:'', nacionalidade:'Brasileira', naturalidade:'',
+  nome:'', nascimento:'', sexo:'', nacionalidade:'Brasileira', naturalidade:'', estado_naturalidade:'',
   rg:'', rg_orgao:'', rg_data:'', cpf:'',
   titulo_eleitor:'', titulo_zona:'', titulo_secao:'',
   ctps_numero:'', ctps_serie:'', pis:'',
@@ -403,6 +403,25 @@ function fgSel(id, label, opts, req, val) {
   </div>`;
 }
 
+const UF_LIST = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+
+function fgSelUFs(id, label, val) {
+  const opts = UF_LIST.map(u => `<option value="${u}" ${val===u?'selected':''}>${u}</option>`).join('');
+  return `<div class="form-group">
+    <label class="form-label" for="${id}">${label}</label>
+    <select class="form-control" id="${id}" name="${id}"><option value="">Selecione</option>${opts}</select>
+  </div>`;
+}
+
+function fgNaturalidade(val, uf) {
+  const disabled = uf ? '' : 'disabled';
+  return `<div class="form-group" style="position:relative;">
+    <label class="form-label" for="naturalidade">Cidade de Nascimento</label>
+    <input class="form-control" type="text" id="naturalidade" name="naturalidade" value="${val||''}" placeholder="${uf?'Digite a cidade...':'Selecione a UF primeiro'}" autocomplete="off" ${disabled}>
+    <div id="naturAutoList" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:#fff;border:1.5px solid var(--border-focus);border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+  </div>`;
+}
+
 function secHeader(cls, iconPath, label) {
   return `<div class="form-section ${cls}">
     <div class="section-header">
@@ -426,7 +445,8 @@ function buildStep1() {
         ${fg('nascimento','Data de Nascimento','date',true,'',f.nascimento)}
         ${fgSel('sexo','Sexo',['Masculino','Feminino'],false,f.sexo)}
         ${fg('nacionalidade','Nacionalidade','text',false,'',f.nacionalidade||'Brasileira')}
-        ${fg('naturalidade','Cidade de Nascimento','text',false,'Ex: São Paulo - SP',f.naturalidade)}
+        ${fgSelUFs('estado_naturalidade','UF de Nascimento',f.estado_naturalidade)}
+        ${fgNaturalidade(f.naturalidade, f.estado_naturalidade)}
       </div>
     </div>
 
@@ -804,6 +824,76 @@ function bindStepEvents() {
     });
   }
 
+  // UF de nascimento → autocomplete cidades IBGE
+  (function() {
+    let _cidadesCache = null;
+    let _ufCache = null;
+
+    const ufSel = document.getElementById('estado_naturalidade');
+    const natInput = document.getElementById('naturalidade');
+    const natList = document.getElementById('naturAutoList');
+    if (!ufSel || !natInput || !natList) return;
+
+    async function loadCidades(uf) {
+      if (_ufCache === uf && _cidadesCache) return _cidadesCache;
+      try {
+        const r = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
+        const d = await r.json();
+        _cidadesCache = d.map(c => c.nome);
+        _ufCache = uf;
+      } catch(_) { _cidadesCache = []; }
+      return _cidadesCache;
+    }
+
+    function showSugestoes(cidades, q) {
+      const lower = q.toLowerCase();
+      const filtradas = cidades.filter(c => c.toLowerCase().includes(lower)).slice(0, 8);
+      if (!filtradas.length) { natList.style.display = 'none'; return; }
+      natList.innerHTML = filtradas.map(c =>
+        `<div style="padding:10px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border);" onmousedown="event.preventDefault();" data-nome="${c}">${c}</div>`
+      ).join('');
+      natList.style.display = '';
+    }
+
+    ufSel.addEventListener('change', async function() {
+      const uf = this.value;
+      formData.estado_naturalidade = uf;
+      natInput.value = '';
+      formData.naturalidade = '';
+      if (uf) {
+        natInput.disabled = false;
+        natInput.placeholder = 'Digite a cidade...';
+        await loadCidades(uf);
+      } else {
+        natInput.disabled = true;
+        natInput.placeholder = 'Selecione a UF primeiro';
+        natList.style.display = 'none';
+      }
+    });
+
+    natInput.addEventListener('input', async function() {
+      const uf = ufSel.value;
+      if (!uf) return;
+      const q = this.value;
+      if (q.length < 3) { natList.style.display = 'none'; return; }
+      const cidades = await loadCidades(uf);
+      showSugestoes(cidades, q);
+    });
+
+    natInput.addEventListener('blur', () => { setTimeout(() => { natList.style.display = 'none'; }, 150); });
+
+    natList.addEventListener('click', function(e) {
+      const item = e.target.closest('[data-nome]');
+      if (!item) return;
+      natInput.value = item.dataset.nome;
+      formData.naturalidade = item.dataset.nome;
+      natList.style.display = 'none';
+    });
+
+    // Carregar cidades se UF já está preenchida (rascunho)
+    if (ufSel.value) loadCidades(ufSel.value);
+  })();
+
   bindCpfMasks();
   bindDateMasks();
 
@@ -984,7 +1074,7 @@ const DATE_FIELDS_S2 = ['data_casamento','conjuge_nascimento'];
 // ─── Save / Validate ────────────────────────────────────
 function saveCurrentStep() {
   if (currentStep === 1) {
-    ['nome','sexo','nacionalidade','naturalidade','rg','rg_orgao','cpf',
+    ['nome','sexo','nacionalidade','naturalidade','estado_naturalidade','rg','rg_orgao','cpf',
      'titulo_eleitor','titulo_zona','titulo_secao','ctps_numero','ctps_serie','pis',
      'cnh_numero','cnh_categoria',
      'cep','logradouro','numero','complemento','bairro','cidade','uf',
@@ -1094,7 +1184,7 @@ async function submitForm() {
     const fichaPayload = {
       token: convite.token,
       nome: up(formData.nome), nascimento: formData.nascimento || null, sexo: formData.sexo,
-      nacionalidade: up(formData.nacionalidade), naturalidade: up(formData.naturalidade),
+      nacionalidade: up(formData.nacionalidade), naturalidade: up(formData.naturalidade), estado_naturalidade: up(formData.estado_naturalidade),
       rg: up(formData.rg), rg_orgao: up(formData.rg_orgao), rg_data: formData.rg_data || null,
       cpf: formData.cpf, titulo_eleitor: formData.titulo_eleitor, titulo_zona: formData.titulo_zona,
       titulo_secao: formData.titulo_secao, ctps_numero: formData.ctps_numero, ctps_serie: formData.ctps_serie,
