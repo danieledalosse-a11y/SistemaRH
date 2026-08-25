@@ -1,6 +1,6 @@
 ---
 name: admissao
-description: Especialista no módulo de Admissão Online do SistemaRH Revest. Use este skill quando for implementar, depurar ou documentar qualquer coisa em admissao-online.html (formulário do candidato) ou modulos/admissao/index.html (painel RH de admissão).
+description: Especialista no módulo de Admissão Online do SistemaRH Revest. Use este skill quando for implementar, depurar ou documentar qualquer coisa em admissao-online.html (formulário do candidato) ou modulos/admissao/index.html (painel RH de admissão). Também cobre modulos/cadastro/index.html quando a mudança envolve campos que vêm da ficha de admissão.
 ---
 
 # Skill: Módulo Admissão Online — SistemaRH Revest
@@ -10,9 +10,10 @@ description: Especialista no módulo de Admissão Online do SistemaRH Revest. Us
 Sistema RH da Revest do Brasil. Stack: HTML + CSS + JS puro, sem framework.
 Backend: Supabase REST API (`https://rujtbxwssiofiialnbbg.supabase.co`).
 
-Dois arquivos principais:
+Três arquivos principais:
 - `C:\Users\reves\SistemaRH\admissao-online.html` — formulário do candidato (público, acesso por link com token)
-- `C:\Users\reves\SistemaRH\modulos\admissao\index.html` — painel interno do RH
+- `C:\Users\reves\SistemaRH\modulos\admissao\index.html` — painel interno do RH (revisão e efetivação)
+- `C:\Users\reves\SistemaRH\modulos\cadastro\index.html` — cadastro do colaborador (recebe dados após efetivação)
 
 ## Regras obrigatórias
 
@@ -55,23 +56,30 @@ Convites efetivados permanecem visíveis no painel na aba "Efetivados" (históri
 
 ### `admissao_fichas`
 Campos principais:
-- Pessoais: `nome, nascimento, sexo, nacionalidade, naturalidade, rg, rg_orgao, rg_data, cpf`
+- Pessoais: `nome, nascimento, sexo, nacionalidade, naturalidade, estado_naturalidade, rg, rg_orgao, rg_data, cpf`
 - Eleitor: `titulo_eleitor, titulo_zona, titulo_secao`
 - Trabalho: `ctps_numero, ctps_serie, pis, cnh_numero, cnh_categoria`
 - Endereço: `endereco (concatenado), cep, logradouro, numero, complemento, bairro, cidade, uf`
 - Contato: `celular, tel_recado, tel_recado_nome, email`
 - Família: `nome_pai, nome_mae, estado_civil, data_casamento`
 - Cônjuge: `conjuge_nome, conjuge_cpf, conjuge_rg, conjuge_nascimento`
-- Dependentes: `tem_filhos (bool), dependentes (JSONB array)`
+- Filhos/Dependentes: `tem_filhos (bool), qtd_filhos (int), dependentes (JSONB array)`
 - Complementares: `escolaridade, cor_raca, vale_transporte, banco, agencia, conta, primeiro_emprego, hobby`
 - Docs: `docs (JSONB — paths no Storage)`
 - LGPD: `aceite_lgpd (bool), aceite_lgpd_em`
 
-Migrações executadas: 024 (criação), 027 (logradouro/numero/complemento/bairro)
+Migrações executadas: 024 (criação), 027 (logradouro/numero/complemento/bairro), 028 (estado_naturalidade), 029 (qtd_filhos)
 
 ### `colaboradores`
 Tabela master — alimentada na efetivação. Todos os outros módulos leem daqui.
 Chave: `matricula` (TEXT, gerada automaticamente com zero-padding)
+
+Campos relevantes para admissão:
+- `naturalidade` (TEXT) — cidade de nascimento
+- `estado_naturalidade` (TEXT) — UF de nascimento (2 letras, ex: "SP")
+- `escolaridade` (TEXT) — grau de formação em Title Case
+- `qtd_filhos` (INTEGER, nullable) — quantidade total de filhos (adicionado 2026-08-25)
+- `tem_filhos` (BOOL) — possui filhos menores de 6 anos
 
 ## Formulário candidato (admissao-online.html)
 
@@ -85,9 +93,23 @@ Chave: `matricula` (TEXT, gerada automaticamente com zero-padding)
 | 4 | Anexos obrigatórios + opcionais |
 | 5 | Confirmação + LGPD |
 
-### Campos de endereço (order obrigatória)
+### Campos de endereço (ordem obrigatória)
 CEP → logradouro → número → complemento → bairro → cidade → UF
 CEP tem autocomplete ViaCEP: preenche logradouro e bairro via API pública
+
+### Cidade e UF de nascimento (campo separado desde 2026-08-25)
+- **UF de Nascimento** (`estado_naturalidade`): `<select>` com as 27 UFs
+- **Cidade de Nascimento** (`naturalidade`): input texto com autocomplete via API IBGE
+  - Só habilita após UF selecionada
+  - Ao digitar 3+ letras busca municípios do estado selecionado (`https://servicodados.ibge.gov.br/api/v1/localidades/estados/{UF}/municipios`)
+  - Filtra localmente, exibe dropdown com até 8 sugestões
+- Antes era um único campo de texto livre ("Ex: São Paulo - SP") — NÃO voltar a esse formato
+
+### Grau de Formação (padronizado em 2026-08-25)
+- Campo interno: `escolaridade` (em todos os três arquivos)
+- Rótulo visual: **"Grau de Formação"** nas três visões
+- Opções (Title Case, igual em todos): `Fundamental Incompleto, Fundamental Completo, Médio Incompleto, Médio Completo, Superior Incompleto, Superior Completo, Pós-graduação, Mestrado, Doutorado`
+- Normalização na revisão (modulos/admissao): converte qualquer capitalização para Title Case antes de preencher o select
 
 ### Máscaras (funções reutilizáveis)
 - CPF: `bindCpfMasks()` — aplica em `#cpf`, `#conjuge_cpf`, `.dep-cpfval`; guarda flag `el._cpfMask`
@@ -97,9 +119,12 @@ CEP tem autocomplete ViaCEP: preenche logradouro e bairro via API pública
 
 **ATENÇÃO:** `bindDateMasks()` e `bindCpfMasks()` devem ser chamados sempre que novos elementos forem inseridos dinamicamente (ex: nova linha de dependente). Os flags `_dateMask` / `_cpfMask` evitam dupla aplicação.
 
-### Dependentes
-- Estrutura de cada item: `{ nome, tipo (Filho/Enteado/Outro), cpf (opcional), nascimento (DD/MM/AAAA) }`
-- Radio "Possui dependentes = Sim" auto-abre a primeira linha e chama `bindDepEvents()` + masks
+### Filhos e Dependentes
+- Seção renomeada: "Possui filhos?" (antes: "Possui dependentes?")
+- Campo `qtd_filhos` (number, min 1, max 20) aparece quando "Sim" — informa total de filhos
+- Os cards de dependentes (nome, tipo, CPF, nascimento, cidade) são **exclusivos para filhos menores de 6 anos**
+- Estrutura de cada dependente: `{ nome, tipo (Filho/Enteado/Outro), cpf (opcional), nascimento (DD/MM/AAAA), cidade_nascimento }`
+- Radio "Sim" auto-abre a primeira linha e chama `bindDepEvents()` + masks
 - Campos obrigatórios por dependente: nome, tipo, nascimento (CPF é opcional)
 
 ### Documentos
