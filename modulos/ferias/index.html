@@ -6239,15 +6239,15 @@ function processGestorFerias(rows) {
       const _stP1b = (_stNorm2 === 'solicitado' && _temP2b) ? 'aprovado' : _stNorm2;
       if (row.periodo1_inicio && Number(row.dias1) > 0) {
         const _d1b = Number(row.dias1);
-        lancamentos.push({ id:`${row.id}-p1`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo1_inicio, fim:addDays(row.periodo1_inicio, _d1b - 1), dias:_d1b, status:_stP1b });
+        lancamentos.push({ id:`${row.id}-p1`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo1_inicio, fim:addDays(row.periodo1_inicio, _d1b - 1), dias:_d1b, status:_stP1b, _obsGestor:row.obs_gestor||null });
       }
       if (_temP2b) {
         const _d2b = Number(row.dias2);
-        lancamentos.push({ id:`${row.id}-p2`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo2_inicio, fim:addDays(row.periodo2_inicio, _d2b - 1), dias:_d2b, status:_stNorm2 });
+        lancamentos.push({ id:`${row.id}-p2`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:row.periodo2_inicio, fim:addDays(row.periodo2_inicio, _d2b - 1), dias:_d2b, status:_stNorm2, _obsGestor:row.obs_gestor||null });
       }
       if (Array.isArray(row.realizacoes)) {
         row.realizacoes.forEach((r, i) => {
-          if (r.inicio && Number(r.dias) > 0) lancamentos.push({ id:`${row.id}-r${i}`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:r.inicio, fim:r.fim||r.inicio, dias:Number(r.dias), status:(r.status||'gozado').toLowerCase() });
+          if (r.inicio && Number(r.dias) > 0) lancamentos.push({ id:`${row.id}-r${i}`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:r.inicio, fim:r.fim||r.inicio, dias:Number(r.dias), status:(r.status||'gozado').toLowerCase(), _obsGestor:row.obs_gestor||null });
         });
       }
       return;
@@ -6290,6 +6290,7 @@ function processGestorFerias(rows) {
         fim:           addDays(row.periodo1_inicio, _dias1 - 1),
         dias:          _dias1,
         status:        _stP1,
+        _obsGestor:    row.obs_gestor || null,
       };
       if (_stP1 === 'recusado' && _obsMotivo) lanc1._motivoRecusa = _obsMotivo;
       if (_stP1 === 'cancelado' && _obsMotivo) lanc1._motivoCancelamento = _obsMotivo;
@@ -6307,6 +6308,7 @@ function processGestorFerias(rows) {
         fim:           addDays(row.periodo2_inicio, _dias2 - 1),
         dias:          _dias2,
         status:        _rowStNorm,
+        _obsGestor:    row.obs_gestor || null,
       };
       if (_rowStNorm === 'recusado' && _obsMotivo) lanc2._motivoRecusa = _obsMotivo;
       if (_rowStNorm === 'cancelado' && _obsMotivo) lanc2._motivoCancelamento = _obsMotivo;
@@ -8337,7 +8339,7 @@ function _renderGsolHistoricoRH(c) {
       const chipConcl = isConcluido
         ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:10px;background:var(--bg);color:var(--text-sec);border:1px solid var(--border);">Concluído</span>` : '';
 
-      const _notaTxt = li === 0 ? (_rhObsMap.get(l.inicio) || row.obs_gestor || row.nota_livre || row.nota || null) : null;
+      const _notaTxt = li === 0 ? (l._obsGestor || _rhObsMap.get(l.inicio) || row.obs_gestor || row.nota_livre || row.nota || null) : null;
       const nota = _notaTxt ? `<div class="gsol-rh-nota">${_notaTxt}</div>` : '';
 
       const gozoHtml = gozosDoLanc.map(g => {
