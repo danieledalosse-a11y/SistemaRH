@@ -1394,67 +1394,148 @@ async function _renderFichaVT(procId, wrap) {
     } catch(_) {}
   }
 
-  const opLabel = extras.operacao === 'exclusao' ? 'Exclusão de VT' : extras.operacao === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT';
-  const cartao  = extras.vt_cartao || colab.vt_cartao || '—';
-  const passes  = extras.vt_passes || colab.vt_passes || '—';
-  const linha   = extras.vt_linha  || colab.vt_linha  || '—';
+  const op      = extras.operacao || 'inclusao';
+  const opLabel = op === 'exclusao' ? 'Exclusão de VT' : op === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT';
+  const opCor   = op === 'exclusao' ? '#991b1b' : op === 'alteracao' ? '#5b21b6' : '#166534';
+  const opBg    = op === 'exclusao' ? '#fee2e2' : op === 'alteracao' ? '#ede9fe' : '#dcfce7';
+  const opBord  = op === 'exclusao' ? '#fca5a5' : op === 'alteracao' ? '#c4b5fd' : '#86efac';
+
+  const cartao  = extras.vt_cartao || colab.vt_cartao || null;
+  const passes  = extras.vt_passes || colab.vt_passes || null;
+  const linha   = extras.vt_linha  || colab.vt_linha  || null;
   const motivo  = extras.motivo ? extras.motivo.replace(/_/g,' ') : null;
   const hoje    = new Date().toLocaleDateString('pt-BR');
 
+  const _field = (label, value, vazio) => {
+    const isEmpty = !value;
+    return `<div>
+      <div style="font-size:10px;font-weight:700;color:${isEmpty?'#aaa':'#6b7280'};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">${label}</div>
+      <div style="font-size:13px;font-weight:${isEmpty?'400':'600'};color:${isEmpty?'#bbb':'var(--text)'};">${value || (vazio||'—')}</div>
+    </div>`;
+  };
+
+  const _vtField = (label, value, unit) => {
+    const isEmpty = !value;
+    return `<div style="background:${isEmpty?'transparent':opBg};border:1px solid ${isEmpty?'var(--border)':opBord};border-radius:6px;padding:10px 12px;">
+      <div style="font-size:10px;font-weight:700;color:${isEmpty?'#aaa':opCor};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">${label}</div>
+      <div style="font-size:14px;font-weight:${isEmpty?'400':'700'};color:${isEmpty?'#bbb':opCor};">${value ? (value + (unit?' '+unit:'')) : '—'}</div>
+    </div>`;
+  };
+
+  const dadosVT = op !== 'exclusao'
+    ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        ${_vtField('Nº Cartão VT', cartao)}
+        ${_vtField('Passes / Dia', passes, 'passes')}
+      </div>
+      <div style="background:${linha?opBg:'transparent'};border:1px solid ${linha?opBord:'var(--border)'};border-radius:6px;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;color:${linha?opCor:'#aaa'};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Linha de Ônibus / Itinerário</div>
+        <div style="font-size:14px;font-weight:${linha?'700':'400'};color:${linha?opCor:'#bbb'};">${linha||'—'}</div>
+      </div>`
+    : `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Motivo da Exclusão</div>
+        <div style="font-size:14px;font-weight:600;color:#991b1b;">${motivo||'—'}</div>
+      </div>`;
+
   wrap.innerHTML = `
-    <div style="margin:14px 0 4px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-      <div style="padding:10px 14px;background:var(--surface-alt,#f8fafc);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <span style="font-size:12px;font-weight:700;color:var(--text);letter-spacing:0.04em;">📋 FICHA DE ENCAMINHAMENTO — ${opLabel.toUpperCase()}</span>
-        <button onclick="_imprimirFichaVT(${procId})" style="font-size:11px;padding:4px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;display:flex;align-items:center;gap:5px;">
+    <div style="margin:14px 0 4px;border:1px solid ${opBord};border-radius:10px;overflow:hidden;">
+
+      <!-- Cabeçalho colorido -->
+      <div style="padding:12px 16px;background:${opBg};border-bottom:1px solid ${opBord};display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;">🚌</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:${opCor};letter-spacing:0.03em;">Ficha de Encaminhamento</div>
+            <div style="font-size:11px;font-weight:600;color:${opCor};opacity:0.8;">${opLabel} · Solicitação ao Financeiro · ${hoje}</div>
+          </div>
+        </div>
+        <button onclick="_imprimirFichaVT(${procId})" style="font-size:11px;padding:5px 14px;border:1px solid ${opBord};border-radius:6px;background:white;color:${opCor};cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;white-space:nowrap;">
           🖨️ Imprimir ficha
         </button>
       </div>
-      <div id="fichaVT-content-${procId}" style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;">
-        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Colaborador</div><div style="font-size:13px;font-weight:600;">${proc.colaborador_nome || '—'}</div></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Matrícula</div><div style="font-size:13px;">${colab.matricula || '—'}</div></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Cargo</div><div style="font-size:13px;">${colab.cargo || '—'}</div></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Setor</div><div style="font-size:13px;">${colab.setor || '—'}</div></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Empresa / Unidade</div><div style="font-size:13px;">${colab.empresa_registro || '—'}</div></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Data de Admissão</div><div style="font-size:13px;">${colab.data_admissao ? new Date(colab.data_admissao + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</div></div>
-        ${extras.operacao !== 'exclusao' ? `
-        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Nº Cartão VT</div><div style="font-size:13px;font-weight:600;">${cartao}</div></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Passes / Dia</div><div style="font-size:13px;font-weight:600;">${passes}</div></div>
-        <div style="grid-column:1/-1;"><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Linha de Ônibus</div><div style="font-size:13px;">${linha}</div></div>
-        ` : `
-        <div style="grid-column:1/-1;"><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Motivo da Exclusão</div><div style="font-size:13px;">${motivo || '—'}</div></div>
-        `}
-        <div style="grid-column:1/-1;"><div style="font-size:10px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Data da Solicitação</div><div style="font-size:13px;">${hoje}</div></div>
+
+      <!-- Seção colaborador -->
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">👤 Dados do Colaborador</div>
+        <div id="fichaVT-content-${procId}" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;">
+          ${_field('Colaborador', proc.colaborador_nome)}
+          ${_field('Matrícula', colab.matricula)}
+          ${_field('Cargo', colab.cargo)}
+          ${_field('Setor', colab.setor)}
+          ${_field('Empresa / Unidade', colab.empresa_registro)}
+          ${_field('Data de Admissão', colab.data_admissao ? new Date(colab.data_admissao+'T12:00:00').toLocaleDateString('pt-BR') : null)}
+        </div>
       </div>
+
+      <!-- Seção VT -->
+      <div style="padding:14px 16px;">
+        <div style="font-size:10px;font-weight:700;color:${opCor};opacity:0.75;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">🚌 Dados do Vale Transporte</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">${dadosVT}</div>
+      </div>
+
     </div>`;
 }
 
 function _imprimirFichaVT(procId) {
-  const content = document.getElementById('fichaVT-content-' + procId);
   const proc = _PROC_MAP[procId];
-  if (!content || !proc) return;
+  if (!proc) return;
   const extras = proc.dados_extras || {};
-  const opLabel = extras.operacao === 'exclusao' ? 'Exclusão de VT' : extras.operacao === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT';
-  const w = window.open('', '_blank', 'width=700,height=600');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ficha VT — ${proc.colaborador_nome}</title>
+  const content = document.getElementById('fichaVT-content-' + procId);
+  const op      = extras.operacao || 'inclusao';
+  const opLabel = op === 'exclusao' ? 'Exclusão de VT' : op === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT';
+  const opCor   = op === 'exclusao' ? '#991b1b' : op === 'alteracao' ? '#5b21b6' : '#166534';
+  const opBg    = op === 'exclusao' ? '#fee2e2' : op === 'alteracao' ? '#ede9fe' : '#dcfce7';
+  const opBord  = op === 'exclusao' ? '#fca5a5' : op === 'alteracao' ? '#c4b5fd' : '#86efac';
+  const hoje    = new Date().toLocaleDateString('pt-BR');
+  const fichaEl = document.querySelector(`#fichaVT-${procId} > div`);
+
+  const w = window.open('', '_blank', 'width=720,height=700');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Ficha VT — ${proc.colaborador_nome}</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 32px; color: #111; }
-    h2 { font-size: 16px; margin: 0 0 4px; }
-    .sub { font-size: 12px; color: #555; margin-bottom: 24px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
-    .field label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #777; display: block; margin-bottom: 3px; }
-    .field span { font-size: 14px; }
-    .full { grid-column: 1/-1; }
-    hr { border: none; border-top: 1px solid #ddd; margin: 24px 0; }
-    .assinatura { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 40px; }
-    .assinatura div { border-top: 1px solid #aaa; padding-top: 6px; font-size: 11px; color: #555; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; padding: 36px; color: #111; background: #fff; }
+    .header { background:${opBg}; border:1px solid ${opBord}; border-radius:10px 10px 0 0; padding:16px 20px; display:flex; align-items:center; gap:12px; margin-bottom:0; }
+    .header-icon { font-size:24px; }
+    .header-title { font-size:15px; font-weight:700; color:${opCor}; }
+    .header-sub { font-size:11px; color:${opCor}; opacity:.8; margin-top:2px; }
+    .section { border:1px solid ${opBord}; border-top:none; padding:16px 20px; }
+    .section:last-of-type { border-radius:0 0 10px 10px; }
+    .section-label { font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.08em; margin-bottom:12px; }
+    .section-label.vt { color:${opCor}; opacity:.75; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 28px; }
+    .field-label { font-size:10px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.07em; margin-bottom:3px; }
+    .field-value { font-size:13px; font-weight:600; color:#111; }
+    .field-empty .field-label { color:#bbb; }
+    .field-empty .field-value { color:#bbb; font-weight:400; }
+    .vt-card { background:${opBg}; border:1px solid ${opBord}; border-radius:6px; padding:10px 14px; }
+    .vt-card .field-label { color:${opCor}; }
+    .vt-card .field-value { font-size:15px; font-weight:700; color:${opCor}; }
+    .vt-empty { border:1px solid #e5e7eb; border-radius:6px; padding:10px 14px; }
+    .vt-empty .field-label { color:#bbb; }
+    .vt-empty .field-value { color:#bbb; font-weight:400; }
+    .sep { border:none; border-top:1px solid #e5e7eb; margin:20px 0; }
+    .assinatura { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:36px; }
+    .assinatura-box { border-top:1px solid #aaa; padding-top:6px; font-size:11px; color:#555; }
   </style></head><body>
-  <h2>FICHA DE ENCAMINHAMENTO — ${opLabel.toUpperCase()}</h2>
-  <div class="sub">Revest do Brasil Acabamentos Ltda — RH → Financeiro</div>
-  <div class="grid">${content.innerHTML}</div>
-  <hr>
+  <div class="header">
+    <div class="header-icon">🚌</div>
+    <div>
+      <div class="header-title">Ficha de Encaminhamento — ${opLabel}</div>
+      <div class="header-sub">Revest do Brasil Acabamentos Ltda · RH → Financeiro · ${hoje}</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-label">👤 Dados do Colaborador</div>
+    <div class="grid">${content ? content.innerHTML : ''}</div>
+  </div>
+  <div class="section">
+    <div class="section-label vt">🚌 Dados do Vale Transporte</div>
+    ${fichaEl ? fichaEl.querySelector('[style*="flex-direction:column"]')?.innerHTML || '' : ''}
+  </div>
+  <hr class="sep">
   <div class="assinatura">
-    <div>Solicitado por (RH)</div>
-    <div>Recebido por (Financeiro) — Data: ___/___/______</div>
+    <div class="assinatura-box">Solicitado por (RH) · Data: ${hoje}</div>
+    <div class="assinatura-box">Recebido por (Financeiro) · Data: ___/___/______</div>
   </div>
   <script>window.onload=()=>{window.print();}<\/script>
   </body></html>`);
