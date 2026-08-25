@@ -478,7 +478,7 @@
           <option value="">— selecione —</option>
           <option value="reajuste">Reajuste Salarial</option>
           <option value="vt_avulso">VT Avulso</option>
-          <option value="vt_alteracao">Alteração de VT (Inclusão / Cancelamento)</option>
+          <option value="vt_alteracao">VT — Inclusão / Exclusão / Alteração</option>
           <option value="bonus_indicacao">Bônus de Indicação</option>
           <option value="atestado">Atestado &gt; 3 dias</option>
           <option value="demissao">Demissão</option>
@@ -710,7 +710,7 @@ const TIPO_CONFIG = {
   demissao:        { label: 'Demissão',            cor: 'red',    icon: '🚪' },
   reajuste:        { label: 'Reajuste Salarial',   cor: 'blue',   icon: '💰' },
   vt_avulso:       { label: 'VT Avulso',           cor: 'purple', icon: '🚌' },
-  vt_alteracao:    { label: 'Alteração de VT',      cor: 'purple', icon: '🚌' },
+  vt_alteracao:    { label: 'VT',                    cor: 'purple', icon: '🚌' },
   bonus_indicacao:             { label: 'Bônus de Indicação',            cor: 'amber',  icon: '⭐' },
   atestado:                    { label: 'Atestado > 3 dias',             cor: 'amber',  icon: '📋' },
   prorrogacao_experiencia:     { label: 'Prorrogação de Experiência',    cor: 'amber',  icon: '📝' },
@@ -782,11 +782,24 @@ const CHECKLISTS = {
     { item: 'Incluir bônus na folha do mês', prazo_dias: 3 },
     { item: 'Comunicar ao colaborador que indicou', prazo_dias: 3 },
   ],
-  vt_alteracao: [
-    { item: 'Solicitação registrada', prazo_dias: 0 },
-    { item: 'Encaminhar solicitação ao Financeiro', prazo_dias: 1 },
-    { item: 'Confirmar execução pelo Financeiro', prazo_dias: 5, _acao_vt: true },
-  ],
+  vt_alteracao: {
+    inclusao: [
+      { item: 'Solicitação registrada', prazo_dias: 0 },
+      { item: 'Encaminhar solicitação ao Financeiro — inclusão de cartão VT', prazo_dias: 1 },
+      { item: 'Confirmar carga/ativação do cartão pelo Financeiro', prazo_dias: 5, _acao_vt: true },
+      { item: 'Comunicar colaborador que VT está ativo', prazo_dias: 5 },
+    ],
+    exclusao: [
+      { item: 'Solicitação registrada', prazo_dias: 0 },
+      { item: 'Encaminhar solicitação ao Financeiro — cancelamento de cartão VT', prazo_dias: 1 },
+      { item: 'Confirmar cancelamento pelo Financeiro', prazo_dias: 5, _acao_vt: true },
+    ],
+    alteracao: [
+      { item: 'Solicitação registrada', prazo_dias: 0 },
+      { item: 'Encaminhar solicitação ao Financeiro — alteração de dados VT', prazo_dias: 1 },
+      { item: 'Confirmar atualização pelo Financeiro', prazo_dias: 5, _acao_vt: true },
+    ],
+  },
   atestado: [
     { item: 'Registrar atestado no sistema', prazo_dias: 0 },
     { item: 'Digitalizar e salvar documento', prazo_dias: 1 },
@@ -895,7 +908,11 @@ async function carregarCancelados() {
 }
 
 function buildCardCancelado(p) {
-  const cfg = TIPO_CONFIG[p.tipo] || { label: p.tipo, cor: 'blue', icon: '📄' };
+  let cfg = TIPO_CONFIG[p.tipo] || { label: p.tipo, cor: 'blue', icon: '📄' };
+  if (p.tipo === 'vt_alteracao') {
+    const _exOp = (p.dados_extras || {}).operacao;
+    cfg = { icon: '🚌', label: _exOp === 'exclusao' ? 'Exclusão de VT' : _exOp === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT', cor: _exOp === 'exclusao' ? 'red' : _exOp === 'alteracao' ? 'purple' : 'green' };
+  }
   const extras = p.dados_extras || {};
   const motivoCancelamento = extras.motivo_cancelamento || '—';
   const canceladoEm = p.atualizado_em ? fmtData(p.atualizado_em.slice(0,10)) : '—';
@@ -1207,7 +1224,15 @@ function buildChecklistHtml(checklist, criadoBase, processoId, tipo) {
 }
 
 function buildCard(p) {
-  const cfg = TIPO_CONFIG[p.tipo] || { label: p.tipo, cor: 'blue', icon: '📄' };
+  let cfg = TIPO_CONFIG[p.tipo] || { label: p.tipo, cor: 'blue', icon: '📄' };
+  if (p.tipo === 'vt_alteracao') {
+    const _exOp = (p.dados_extras || {}).operacao;
+    cfg = {
+      icon: '🚌',
+      label: _exOp === 'exclusao' ? 'Exclusão de VT' : _exOp === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT',
+      cor:   _exOp === 'exclusao' ? 'red'            : _exOp === 'alteracao' ? 'purple'          : 'green',
+    };
+  }
   const checklist = (p.processos_checklist || []).sort((a, b) => a.ordem - b.ordem);
   const total = checklist.length;
   const feitos = checklist.filter(c => c.concluido).length;
@@ -1260,6 +1285,18 @@ function buildCard(p) {
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">CID: ${extras.cid} · ${extras.dias_afastamento || '?'} dia(s)</div>`;
   else if (p.tipo === 'demissao' && extras.data_demissao)
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Data: ${fmtData(extras.data_demissao)}${extras.motivo ? ' · ' + extras.motivo : ''}</div>`;
+  else if (p.tipo === 'vt_alteracao') {
+    const _opLabel = extras.operacao === 'exclusao' ? 'Exclusão de VT' : extras.operacao === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT';
+    const _opCor   = extras.operacao === 'exclusao' ? '#991b1b' : extras.operacao === 'alteracao' ? '#5b21b6' : '#166534';
+    const _opBg    = extras.operacao === 'exclusao' ? '#fee2e2' : extras.operacao === 'alteracao' ? '#ede9fe' : '#dcfce7';
+    const _vtInfo  = (extras.vt_cartao || extras.vt_passes)
+      ? ` · Cartão: ${extras.vt_cartao || '—'} · ${extras.vt_passes || '?'} passes/dia${extras.vt_linha ? ' · ' + extras.vt_linha : ''}`
+      : (extras.motivo ? ` · Motivo: ${extras.motivo.replace(/_/g, ' ')}` : '');
+    extraHtml = `<div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span style="font-size:11px;background:${_opBg};color:${_opCor};padding:2px 8px;border-radius:20px;font-weight:600;">${_opLabel}</span>
+      ${_vtInfo ? `<span style="font-size:11px;color:var(--text-sec);">${_vtInfo}</span>` : ''}
+    </div>`;
+  }
 
   // Checklist detalhado com agrupamento por categoria
   const checklistHtml = buildChecklistHtml(checklist, criadoBase, p.id, p.tipo);
@@ -2065,7 +2102,11 @@ const _PHIST_COR = {
 };
 
 async function phistAbrir(proc) {
-  const cfg = TIPO_CONFIG[proc.tipo] || { label: proc.tipo, icon: '📄', cor: 'blue' };
+  let cfg = TIPO_CONFIG[proc.tipo] || { label: proc.tipo, icon: '📄', cor: 'blue' };
+  if (proc.tipo === 'vt_alteracao') {
+    const _exOp = (proc.dados_extras || {}).operacao;
+    cfg = { icon: '🚌', label: _exOp === 'exclusao' ? 'Exclusão de VT' : _exOp === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT', cor: _exOp === 'exclusao' ? 'red' : _exOp === 'alteracao' ? 'purple' : 'green' };
+  }
   const pal = _PHIST_COR[cfg.cor] || _PHIST_COR.blue;
   // Header
   const badge = document.getElementById('phistTipoBadge');
@@ -2248,11 +2289,13 @@ document.addEventListener('click', e => {
 function onTipoChange() { atualizarCamposExtras(); }
 
 function toggleCamposVTAlteracao() {
-  const op = document.getElementById('xVtOperacao')?.value;
+  const op = document.querySelector('input[name="xVtOperacao"]:checked')?.value || 'inclusao';
   const inc = document.getElementById('camposVTInclusao');
-  const can = document.getElementById('camposVTCancelamento');
+  const exc = document.getElementById('camposVTExclusao');
+  const alt = document.getElementById('camposVTAlteracao');
   if (inc) inc.style.display = op === 'inclusao' ? '' : 'none';
-  if (can) can.style.display = op === 'cancelamento' ? '' : 'none';
+  if (exc) exc.style.display = op === 'exclusao' ? '' : 'none';
+  if (alt) alt.style.display = op === 'alteracao' ? '' : 'none';
 }
 
 function atualizarCamposExtras() {
@@ -2284,11 +2327,21 @@ function atualizarCamposExtras() {
   } else if (tipo === 'vt_alteracao') {
     html = `
       <div class="form-group">
-        <label class="form-label">Operação</label>
-        <select class="form-control" id="xVtOperacao" onchange="toggleCamposVTAlteracao()">
-          <option value="inclusao">Inclusão de VT</option>
-          <option value="cancelamento">Cancelamento de VT</option>
-        </select>
+        <label class="form-label">Tipo de movimentação</label>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+            <input type="radio" name="xVtOperacao" value="inclusao" checked onchange="toggleCamposVTAlteracao()">
+            <span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-weight:600;">Inclusão de VT</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+            <input type="radio" name="xVtOperacao" value="exclusao" onchange="toggleCamposVTAlteracao()">
+            <span style="background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:20px;font-weight:600;">Exclusão de VT</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+            <input type="radio" name="xVtOperacao" value="alteracao" onchange="toggleCamposVTAlteracao()">
+            <span style="background:#ede9fe;color:#5b21b6;padding:3px 10px;border-radius:20px;font-weight:600;">Alteração de VT</span>
+          </label>
+        </div>
       </div>
       <div id="camposVTInclusao">
         <div class="form-row">
@@ -2306,15 +2359,32 @@ function atualizarCamposExtras() {
           <input class="form-control" type="text" id="xVtLinha" placeholder="Ex: Mandaguaçu / Maringá">
         </div>
       </div>
-      <div id="camposVTCancelamento" style="display:none;">
+      <div id="camposVTExclusao" style="display:none;">
         <div class="form-group">
-          <label class="form-label">Motivo do cancelamento</label>
+          <label class="form-label">Motivo da exclusão</label>
           <select class="form-control" id="xVtMotivo">
             <option value="nao_utiliza">Não utiliza mais transporte público</option>
-            <option value="mudanca_endereco">Mudança de endereço</option>
             <option value="veiculo_proprio">Passou a utilizar veículo próprio</option>
+            <option value="mudanca_endereco">Mudança de endereço</option>
+            <option value="desligamento">Desligamento</option>
             <option value="outro">Outro motivo</option>
           </select>
+        </div>
+      </div>
+      <div id="camposVTAlteracao" style="display:none;">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Nº do Cartão VT</label>
+            <input class="form-control" type="text" id="xVtCartaoAlt" placeholder="Número do cartão">
+          </div>
+          <div class="form-group" style="max-width:120px;">
+            <label class="form-label">Passes/dia</label>
+            <input class="form-control" type="number" id="xVtPassesAlt" min="1" max="10" placeholder="2">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Linha de Ônibus</label>
+          <input class="form-control" type="text" id="xVtLinhaAlt" placeholder="Ex: Mandaguaçu / Maringá">
         </div>
       </div>`;
   } else if (tipo === 'vt_avulso') {
@@ -2387,7 +2457,12 @@ async function criarProcesso(tipo, colaboradorId, colaboradorNome, dadosExtras) 
   if (!r.ok) { const e = await r.json(); throw new Error(e?.message || 'Erro ao criar processo'); }
   const [proc] = await r.json();
 
-  let itensBase = [...(CHECKLISTS[tipo] || [])];
+  let _chklSrc = CHECKLISTS[tipo];
+  if (tipo === 'vt_alteracao') {
+    const op = dadosExtras?.operacao || 'inclusao';
+    _chklSrc = _chklSrc?.[op] || [];
+  }
+  let itensBase = [...(_chklSrc || [])];
   // Adiciona item Alelo somente se o cargo contiver "vendedor"
   if (tipo === 'admissao') {
     const cargo = (dadosExtras?.cargo || '').toLowerCase();
@@ -2434,7 +2509,7 @@ async function submitNovoProcesso() {
     if (!sn || !dv) { showToast('Preencha novo salário e data de vigência', 'error'); return; }
     dadosExtras = { salario_novo: sn, data_vigencia: dv };
   } else if (tipo === 'vt_alteracao') {
-    const op = document.getElementById('xVtOperacao')?.value || 'inclusao';
+    const op = document.querySelector('input[name="xVtOperacao"]:checked')?.value || 'inclusao';
     dadosExtras = { operacao: op };
     if (op === 'inclusao') {
       const cartao = document.getElementById('xVtCartao')?.value?.trim();
@@ -2443,8 +2518,15 @@ async function submitNovoProcesso() {
       dadosExtras.vt_cartao = cartao;
       dadosExtras.vt_passes = parseInt(passes);
       dadosExtras.vt_linha  = document.getElementById('xVtLinha')?.value?.trim() || null;
-    } else {
+    } else if (op === 'exclusao') {
       dadosExtras.motivo = document.getElementById('xVtMotivo')?.value || 'nao_utiliza';
+    } else if (op === 'alteracao') {
+      const cartao = document.getElementById('xVtCartaoAlt')?.value?.trim();
+      const passes = document.getElementById('xVtPassesAlt')?.value;
+      if (!cartao || !passes) { showToast('Informe cartão e passes para alteração de VT', 'error'); return; }
+      dadosExtras.vt_cartao = cartao;
+      dadosExtras.vt_passes = parseInt(passes);
+      dadosExtras.vt_linha  = document.getElementById('xVtLinhaAlt')?.value?.trim() || null;
     }
   } else if (tipo === 'vt_avulso') {
     dadosExtras = {
