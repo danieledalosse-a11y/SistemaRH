@@ -1172,13 +1172,17 @@ function renderPanelFamilia(f) {
     <div class="data-section">
       <div class="data-section-title">Dependentes</div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-        <span style="font-size:13px;color:var(--text-sec);">Possui dependentes?</span>
+        <span style="font-size:13px;color:var(--text-sec);">Possui filhos?</span>
         <button id="btn-dep-sim" onclick="panelToggleDep(true)"
           style="font-size:12px;padding:4px 16px;border-radius:20px;border:2px solid ${deps.length ? 'var(--primary)' : 'var(--border)'};background:${deps.length ? 'var(--primary)' : 'transparent'};color:${deps.length ? '#fff' : 'var(--text-sec)'};cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s;">Sim</button>
         <button id="btn-dep-nao" onclick="panelToggleDep(false)"
           style="font-size:12px;padding:4px 16px;border-radius:20px;border:2px solid ${!deps.length ? 'var(--primary)' : 'var(--border)'};background:${!deps.length ? 'var(--primary)' : 'transparent'};color:${!deps.length ? '#fff' : 'var(--text-sec)'};cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s;">Não</button>
       </div>
       <div id="panel-dep-container" style="display:${deps.length ? 'block' : 'none'}">
+        <div class="data-row" style="max-width:220px;margin-bottom:10px;">
+          <label class="data-label">Quantidade de filhos</label>
+          <input id="panel-qtd-filhos" type="number" class="form-control-sm" min="1" max="20" placeholder="Ex: 2" value="${f.qtd_filhos||''}">
+        </div>
         <div id="panel-dep-list">
           ${deps.map((d,i) => panelDepRow(d,i)).join('')}
         </div>
@@ -1372,6 +1376,7 @@ async function savePanel() {
     hobby: fv('hobby'), banco: fv('banco'), agencia: fv('agencia'), conta: fv('conta'),
     dependentes: getPanelDeps(),
     tem_filhos: getPanelDeps().length > 0,
+    qtd_filhos: (() => { const el = document.getElementById('panel-qtd-filhos'); return el && el.value ? parseInt(el.value) : null; })(),
   };
   try {
     const res = await fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${currentFicha.id}`, {

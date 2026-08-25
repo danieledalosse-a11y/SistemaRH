@@ -252,7 +252,7 @@ const formData = {
   // Step 2
   nome_pai:'', nome_mae:'', estado_civil:'', data_casamento:'',
   conjuge_nome:'', conjuge_cpf:'', conjuge_rg:'', conjuge_nascimento:'',
-  tem_filhos: false, dependentes:[],
+  tem_filhos: false, qtd_filhos: '', dependentes:[],
   // Step 3
   escolaridade:'', cor_raca:'', vale_transporte: false, vt_cartao:'', vt_passes:'', vt_linha:'',
   banco:'', agencia:'', conta:'', primeiro_emprego: false, hobby:'',
@@ -526,12 +526,16 @@ function buildStep2() {
     </div>
 
     ${secHeader('sec-dep','<path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2z"/><path d="M12 14c-5.33 0-8 2.67-8 4v2h16v-2c0-1.33-2.67-4-8-4z"/>','Dependentes')}
-      <div class="radio-group-label">Possui dependentes?</div>
+      <div class="radio-group-label">Possui filhos?</div>
       <div class="radio-group">
         ${radioP('tem_filhos','sim','Sim',f.tem_filhos)}
         ${radioP('tem_filhos','nao','Não',!f.tem_filhos)}
       </div>
       <div id="depsSection" ${f.tem_filhos?'':'style="display:none"'} style="margin-top:16px;">
+        <div class="field-row" style="margin-bottom:14px;">
+          <label class="field-label">Quantidade de filhos</label>
+          <input type="number" id="qtd_filhos" name="qtd_filhos" class="form-control" min="1" max="20" placeholder="Ex: 2" value="${f.qtd_filhos||''}">
+        </div>
         <div class="dep-list" id="depList">${depsHtml}</div>
         <button class="btn-add" id="btnAddDep"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Adicionar dependente</button>
       </div>
@@ -1094,6 +1098,8 @@ function saveCurrentStep() {
     });
     const rf = document.querySelector('input[name="tem_filhos"]:checked');
     formData.tem_filhos = rf ? rf.value === 'sim' : false;
+    const qtdEl = document.getElementById('qtd_filhos');
+    if (qtdEl) formData.qtd_filhos = qtdEl.value;
     document.querySelectorAll('.dep-row').forEach((row, i) => {
       if (!formData.dependentes[i]) formData.dependentes[i] = {};
       const n = row.querySelector('.dep-nome'); if (n) formData.dependentes[i].nome = n.value;
@@ -1198,7 +1204,7 @@ async function submitForm() {
       estado_civil: formData.estado_civil, data_casamento: formData.data_casamento || null,
       conjuge_nome: up(formData.conjuge_nome), conjuge_cpf: formData.conjuge_cpf,
       conjuge_rg: up(formData.conjuge_rg), conjuge_nascimento: formData.conjuge_nascimento || null,
-      tem_filhos: formData.tem_filhos, dependentes: deps,
+      tem_filhos: formData.tem_filhos, qtd_filhos: formData.qtd_filhos ? parseInt(formData.qtd_filhos) : null, dependentes: deps,
       escolaridade: formData.escolaridade, cor_raca: formData.cor_raca,
       vale_transporte: formData.vale_transporte, vt_cartao: formData.vt_cartao || null, vt_passes: formData.vt_passes ? parseInt(formData.vt_passes) : null, vt_linha: formData.vt_linha || null,
       banco: up(formData.banco), agencia: formData.agencia,
