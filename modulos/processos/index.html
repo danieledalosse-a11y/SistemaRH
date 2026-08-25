@@ -1439,8 +1439,8 @@ async function _renderFichaVT(procId, wrap) {
   wrap.innerHTML = `
     <div style="margin:14px 0 4px;border:1px solid ${opBord};border-radius:10px;overflow:hidden;">
 
-      <!-- Cabeçalho colorido -->
-      <div style="padding:12px 16px;background:${opBg};border-bottom:1px solid ${opBord};display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <!-- Cabeçalho colorido (clicável para expandir/recolher) -->
+      <div onclick="_toggleFichaVT(${procId})" style="padding:12px 16px;background:${opBg};border-bottom:1px solid ${opBord};display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;user-select:none;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:20px;">🚌</span>
           <div>
@@ -1448,31 +1448,48 @@ async function _renderFichaVT(procId, wrap) {
             <div style="font-size:11px;font-weight:600;color:${opCor};opacity:0.8;">${opLabel} · Solicitação ao Financeiro · ${hoje}</div>
           </div>
         </div>
-        <button onclick="_imprimirFichaVT(${procId})" style="font-size:11px;padding:5px 14px;border:1px solid ${opBord};border-radius:6px;background:white;color:${opCor};cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;white-space:nowrap;">
-          🖨️ Imprimir ficha
-        </button>
-      </div>
-
-      <!-- Seção colaborador -->
-      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
-        <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">👤 Dados do Colaborador</div>
-        <div id="fichaVT-content-${procId}" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;">
-          ${_field('Colaborador', proc.colaborador_nome)}
-          ${_field('Matrícula', colab.matricula)}
-          ${_field('Cargo', colab.cargo)}
-          ${_field('Setor', colab.setor)}
-          ${_field('Empresa / Unidade', colab.empresa_registro)}
-          ${_field('Data de Admissão', colab.data_admissao ? new Date(colab.data_admissao+'T12:00:00').toLocaleDateString('pt-BR') : null)}
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button onclick="event.stopPropagation();_imprimirFichaVT(${procId})" style="font-size:11px;padding:5px 14px;border:1px solid ${opBord};border-radius:6px;background:white;color:${opCor};cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;white-space:nowrap;">
+            🖨️ Imprimir ficha
+          </button>
+          <span id="fichaVT-chevron-${procId}" style="font-size:16px;color:${opCor};font-weight:700;transition:transform 0.2s;display:inline-block;transform:rotate(90deg);">›</span>
         </div>
       </div>
 
-      <!-- Seção VT -->
-      <div style="padding:14px 16px;">
-        <div style="font-size:10px;font-weight:700;color:${opCor};opacity:0.75;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">🚌 Dados do Vale Transporte</div>
-        <div style="display:flex;flex-direction:column;gap:8px;">${dadosVT}</div>
-      </div>
+      <!-- Corpo colapsável -->
+      <div id="fichaVT-body-${procId}" style="display:none;">
+
+        <!-- Seção colaborador -->
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+          <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">👤 Dados do Colaborador</div>
+          <div id="fichaVT-content-${procId}" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;">
+            ${_field('Colaborador', proc.colaborador_nome)}
+            ${_field('Matrícula', colab.matricula)}
+            ${_field('Cargo', colab.cargo)}
+            ${_field('Setor', colab.setor)}
+            ${_field('Empresa / Unidade', colab.empresa_registro)}
+            ${_field('Data de Admissão', colab.data_admissao ? new Date(colab.data_admissao+'T12:00:00').toLocaleDateString('pt-BR') : null)}
+          </div>
+        </div>
+
+        <!-- Seção VT -->
+        <div style="padding:14px 16px;">
+          <div style="font-size:10px;font-weight:700;color:${opCor};opacity:0.75;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">🚌 Dados do Vale Transporte</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">${dadosVT}</div>
+        </div>
+
+      </div><!-- /body -->
 
     </div>`;
+}
+
+function _toggleFichaVT(procId) {
+  const body    = document.getElementById('fichaVT-body-' + procId);
+  const chevron = document.getElementById('fichaVT-chevron-' + procId);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display    = open ? 'none' : '';
+  if (chevron) chevron.style.transform = open ? 'rotate(90deg)' : 'rotate(-90deg)';
 }
 
 function _imprimirFichaVT(procId) {
