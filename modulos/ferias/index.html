@@ -3861,6 +3861,8 @@ function getColabsVisao(contexto) {
   const setoresSel  = MS_INSTANCES['msSetor'   + s]?.getValues() || [];
   const ativoVal    = document.getElementById('filtroAtivo' + s)?.value ?? 'ativo';
   const modoVal     = document.getElementById('filtroModoEmpresa' + s)?.value ?? 'registro';
+  const sbEmp = document.getElementById('sidebarEmpresa')?.value || '';
+  const sbSet = document.getElementById('sidebarSetor')?.value   || '';
   return COLABORADORES.filter(c => {
     if (ativoVal === 'ativo'   && c.ativo === false) return false;
     if (ativoVal === 'inativo' && c.ativo !== false) return false;
@@ -3869,6 +3871,8 @@ function getColabsVisao(contexto) {
       if (!empresasSel.includes(limparNomeEmpresa(campo))) return false;
     }
     if (setoresSel.length && !setoresSel.includes(normSetor(c.setor))) return false;
+    if (sbEmp && (c.empresaRegistro||c.unidade||'') !== sbEmp) return false;
+    if (sbSet && c.setor !== sbSet) return false;
     return true;
   });
 }
@@ -4393,6 +4397,8 @@ function renderListaAnual() {
   });
 
   document.getElementById('cnt-lista').textContent = colabsSet.size;
+  const _elCntTodos = document.getElementById('cnt-todos');
+  if (_elCntTodos) _elCntTodos.textContent = colabsSet.size;
 
   if (!items.length) {
     document.getElementById('listaAnualContent').innerHTML =
@@ -5352,6 +5358,8 @@ function renderKPI() {
   if (elHoje)  elHoje.textContent  = nHoje;
   if (elSem)   elSem.textContent   = nSem;
   if (elDobra) elDobra.textContent = nRisco;
+  const elTodosCnt = document.getElementById('cnt-todos');
+  if (elTodosCnt) elTodosCnt.textContent = lista.length;
   if (elPend)  elPend.textContent  = nPend;
 
   // atualiza contador da Lista anual (colaboradores com PA no ANO_REF, ou todos se ANO_REF=0)
