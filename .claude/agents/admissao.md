@@ -39,9 +39,17 @@ RH cria convite (painel admissão)
   → faz upload dos documentos no Storage
   → envia ficha (POST admissao_fichas)
   → RH valida no painel
-  → clica "Efetivar Contratação"
+  → clica "Aprovar Ficha"
+  → modal confirma candidato + lista workflows que serão criados
+  → RH confirma → PATCH convite status='aprovado'
+             → POST processos_rh tipo='admissao' (colaborador_id=null, dados_extras.convite_id)
+             → POST checklist admissão (17 itens + Alelo se vendedor)
+             → se vale_transporte=true: POST processos_rh tipo='vt_alteracao' operacao='inclusao'
+             → POST checklist VT inclusão (4 itens)
+  → RH clica "Efetivar Contratação"
   → modal auto-preenche dados + gera matrícula
   → RH confirma → POST colaboradores + PATCH convite status='efetivado'
+             → vincula colaborador_id nos processos criados na aprovação (filtra por convite_id em dados_extras)
   → colaborador aparece em TODOS os módulos (férias, cadastro, etc.)
 ```
 
@@ -155,12 +163,38 @@ const rows = await sb.GET('colaboradores?select=matricula&order=matricula.desc&l
 ```
 Matrícula é editável pelo RH antes de confirmar.
 
+### Aprovar Ficha (cria workflows)
+
+```js
+function aprovarFicha(f) {
+  // Abre #modalAprovar mostrando candidato + workflows a criar
+  // Botão "Aprovar e criar workflows" chama _confirmarAprovar(ficha, temVT)
+}
+
+async function _confirmarAprovar(f, temVT) {
+  // 1. PATCH admissao_convites status='aprovado'
+  // 2. POST processos_rh tipo='admissao' { colaborador_id: null, dados_extras: { convite_id } }
+  // 3. POST checklist admissão (17 itens, +Alelo se vendedor)
+  // 4. if (temVT): POST processos_rh tipo='vt_alteracao' operacao='inclusao' + 4 itens
+}
+```
+
+**Regra:** workflows são criados com `colaborador_id=null` e `dados_extras.convite_id=<id>`. O vínculo ocorre na efetivação.
+
+**VT:** só cria workflow de VT se `ficha.vale_transporte === true`.
+
 ### Efetivar Contratação
+
 1. `efetivarContratacao(f)`: abre modal com dados pré-preenchidos da ficha
 2. `confirmarEfetivar()`:
    - Valida: matrícula, data_admissao, empresa, cargo, tipo_contrato, salario
    - POST `colaboradores` com TODOS os dados da ficha mapeados
    - PATCH `admissao_convites` → `status = 'efetivado'`
+   - Vincula `colaborador_id` nos processos criados na aprovação:
+     ```js
+     // Busca processos abertos com colaborador_id=null e dados_extras.convite_id correspondente
+     // PATCH colaborador_id em cada um
+     ```
    - Recarrega painel (loadFichas + loadConvites)
 
 ## Deploy

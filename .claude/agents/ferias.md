@@ -426,6 +426,108 @@ const _notaTxt = li === 0
 
 **Regra:** nunca trocar `l.nota` por `l._obsGestor` como fonte primária — são colunas diferentes e só `nota1`/`nota2` refletem o que o RH vê.
 
+## Acordos / Gozo Real (feature ativa)
+
+A coluna `realizacoes` (JSONB) na tabela `ferias` armazena a lista de utilizações reais do período de férias, separada do período oficial homologado.
+
+### Estrutura de cada item
+
+```js
+{
+  saida:   'YYYY-MM-DD',  // data de saída real
+  retorno: 'YYYY-MM-DD',  // data de retorno real
+  dias:    14,            // dias efetivamente gozados
+  lancIdx: 0,             // índice do lançamento ao qual pertence (0 = p1, 1 = p2; null = p1 por default)
+  obs:     'texto livre', // observação opcional
+}
+```
+
+### Cálculo de saldo por lançamento
+
+```js
+const gozosDoLanc = realizacoes.filter(rx =>
+  Number(rx.lancIdx) === lancIdx || (lancIdx === 0 && rx.lancIdx == null)
+);
+const totalGozado = gozosDoLanc.reduce((s, rx) => s + Number(rx.dias), 0);
+const saldoPeriodo = (l.dias || 0) - totalGozado; // saldo restante
+```
+
+### Funções de persistência
+
+- `sbPatch('ferias', 'id=eq.'+sbId, { realizacoes: [...] })` — salva a lista completa substituindo o JSONB
+- Persistência ocorre no Supabase REST; `reg.realizacoes` local é atualizado após cada operação
+
+### UI no drawer RH
+
+- Ícone de "acordo" (calendário) em cada lançamento; muda de estado (neutro / ativo / completo)
+- `temGozos` → abre seção colapsável com lista e barra de progresso
+- `!temGozos` + IS_RH → abre form inline para criar primeiro acordo
+- `toggleGozoSecao(sbId, lancIdx)` — expande/recolhe seção de acordos
+- `expandirGozoHist(sbId, lancIdx)` — abre form inline para novo acordo
+- `fecharGozoHist(sbId, lancIdx)` — fecha e recolhe se vazio
+- `salvarGozo(key, sbId, lancIdx)` — valida e adiciona item à lista; PATCH Supabase
+- `removerGozo(key, sbId, lancIdx, gi)` — remove item pelo índice; PATCH Supabase
+- `abrirEditGozo(key, sbId, lancIdx, gi)` — edita item existente inline
+- Ponto âmbar no cabeçalho do PA quando há pendência (saldo não zerado com acordo)
+
+### Leitura no `processGestorFerias`
+
+`row.realizacoes` também é processado para a visão Gestor — cada item vira lançamento com `status:'gozado'`.
+
+## Modal arrastável (Drawer RH e Drawer Gestor)
+
+Tanto o drawer do RH quanto o modal do gestor são arrastáveis pela barra do cabeçalho.
+
+- Evento `mousedown` no cabeçalho inicia drag; `mousemove` no `document` atualiza `modal.style.left/top`; `mouseup` encerra
+- Modal RH: `#drawer` — arrastável + botão de reset de posição no cabeçalho
+- Modal Gestor: mesmo padrão (adicionado em 9889a5f)
+- Classe `.dragging` aplicada durante o arraste (desativa seleção de texto)
+- Posição não é salva — volta ao centro em cada nova abertura
+
+## Deduplicação de PAs em `processGestorFerias`
+
+**Chave de dedup:** `colaborador_id + ano` (usando `row.ano`), com fallback para `pa_inicio` ou `row.id`.
+
+```js
+const _pKey = `${row.colaborador_id}|${row.ano || row.pa_inicio || row.id}`;
+```
+
+Quando há duplicata:
+1. Lançamentos do row duplicado são vinculados ao `periodo_id` do sobrevivente
+2. `obs_gestor` do row duplicado prevalece se preenchido (tende a ser mais recente)
+3. Status é normalizado antes de criar o lançamento
+
+**Por quê `row.ano` e não `row.pa_inicio`:** dois rows do mesmo PA podem ter datas `pa_inicio` ligeiramente diferentes (ex: ajuste retroativo), mas `ano` é estável — usar `pa_inicio` como chave causava merge incorreto de PAs de anos diferentes.
+
+## Normalização de status
+
+Em `processGestorFerias`, o status do row é normalizado antes de virar lançamento:
+
+```js
+const _stNorm = (_rowSt === 'pendente' || _rowSt === 'solicitado') ? 'solicitado'
+              : (_rowSt === 'rejeitado') ? 'recusado'
+              : (_rowSt === 'concluído' || _rowSt === 'concluido') ? 'gozado'
+              : _rowSt;
+```
+
+**Regra:** `'concluído'` e `'concluido'` (com ou sem acento) são normalizados para `'gozado'`. Nunca usar `'concluído'` em comparações de status — sempre `'gozado'`.
+
+## "Em férias hoje" na Visão Gestor
+
+```js
+window._gestorEmFeriasHoje = emFeriasHoje.map(c => String(c.id));
+```
+
+Array de IDs de colaboradores em férias hoje, populado durante `renderGestorAtencao`. Usado para destacar linhas e compor o card KPI.
+
+## Filtro setor/empresa na Visão RH
+
+O dropdown de setor/empresa na aba Lista Anual usa `MultiSelect` com instâncias independentes:
+- `msEmpresaLista` + `msSetorLista` para a Lista Anual
+- `msEmpresaCal` + `msSetorCal` para o Calendário
+
+**Contagem "Todos":** ao contar colaboradores para o filtro, o total inclui colaboradores sem setor/empresa definido — não restringir apenas aos que possuem o campo preenchido.
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
