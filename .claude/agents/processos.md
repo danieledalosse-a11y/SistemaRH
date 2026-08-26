@@ -271,14 +271,15 @@ Correção aplicada em 2026-08-26 via script Python (scratchpad): 152 colaborado
 1. `Avaliar colaborador {nome} — 1º período de experiência vence em {data}` *(gerado dinamicamente)*
 2. `Obter parecer do gestor: prorrogar por mais 45 dias ou encerrar contrato`
 3. `Enviar prorrogação de contrato ao escritório contábil`
-4. `Registrar decisão no cadastro do colaborador`
+4. `Arquivar documento assinado de prorrogação`
 
 ### `avaliacao_final_experiencia` (Experiência — 90 dias)
 1. `Avaliação final de {nome} — experiência vence em {data}` *(gerado dinamicamente)*
 2. `Obter parecer do gestor: confirmar efetivação ou iniciar desligamento`
-3. `Registrar decisão no cadastro do colaborador`
 
-**Regra:** o item 3 dos 45 dias (envio ao escritório) **não existe** nos 90 dias — a continuidade para contrato por prazo indeterminado é automática.
+**Regras:**
+- Nos 45 dias, o escritório emite um documento que o gestor e colaborador assinam — por isso os itens 3 e 4.
+- Nos 90 dias, a continuidade para contrato por prazo indeterminado é **automática em lei** (se não demitiu, virou indeterminado). Não há ação de sistema nem envio ao escritório — checklist intencional mente curto.
 
 ## Cards de processo — informações exibidas no subtítulo
 
