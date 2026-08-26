@@ -1905,6 +1905,43 @@ async function confirmarEfetivar() {
       }
     } catch(e) { console.warn('Erro ao vincular workflows:', e); }
 
+    // Copia docs da ficha de admissão para a Pasta Funcional do colaborador
+    try {
+      const _docLabels = {
+        foto3x4:'Foto 3x4', rg_frente:'RG', cpf_doc:'CPF',
+        comp_res:'Comprovante de Residência', ctps:'CTPS',
+        cert_nasc:'Certidão de Nascimento/Casamento', titulo:'Título de Eleitor',
+        pis_doc:'PIS/PASEP', cnh_doc:'CNH', rg_conjuge:'RG do Cônjuge',
+        cpf_conjuge:'CPF do Cônjuge', comp_banco:'Comprovante de Conta Bancária',
+        cart_vt:'Cartão de Vale-Transporte', cert_dep:'Certidão dos Dependentes',
+        cart_vacina:'Carteira de Vacinação', historico_escolar:'Histórico Escolar',
+        exame_admissional:'Exame Admissional', antecedentes_criminais:'Antecedentes Criminais',
+      };
+      const _docCategoria = {
+        exame_admissional:'saude', antecedentes_criminais:'saude',
+        comp_banco:'financeiro', cart_vt:'vt',
+      };
+      const _docs = f.docs || {};
+      const _docRows = Object.entries(_docs)
+        .filter(([, path]) => !!path)
+        .map(([key, path]) => ({
+          colaborador_id: novoColaborador.id,
+          nome:           _docLabels[key] || key,
+          categoria:      _docCategoria[key] || 'admissao',
+          url:            `${SB_URL}/storage/v1/object/public/admissao-docs/${path}`,
+          tipo_arquivo:   /\.(jpg|jpeg|png|gif|webp)$/i.test(path) ? 'imagem' : 'pdf',
+          data_documento: admissao,
+          criado_por:     _usuarioRH || 'Admissão Online',
+        }));
+      if (_docRows.length) {
+        await fetch(`${SB_URL}/rest/v1/colaborador_documentos`, {
+          method: 'POST',
+          headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+          body: JSON.stringify(_docRows),
+        });
+      }
+    } catch(e) { console.warn('Erro ao copiar docs para pasta funcional:', e); }
+
     // redireciona ao Cadastro para complementar dados internos
     window.location.href = `../../modulos/cadastro/index.html?efetivar=${novoColaborador.id}`;
   } catch(e) {
