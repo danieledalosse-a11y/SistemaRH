@@ -1305,8 +1305,13 @@ function buildCard(p) {
   }
   else if (p.tipo === 'atestado' && extras.cid)
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">CID: ${extras.cid} · ${extras.dias_afastamento || '?'} dia(s)</div>`;
-  else if (p.tipo === 'demissao' && extras.data_demissao)
-    extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Data: ${fmtData(extras.data_demissao)}${extras.motivo ? ' · ' + extras.motivo : ''}</div>`;
+  else if (p.tipo === 'demissao' && extras.data_demissao) {
+    const _prazo = _prazoHomologacao(extras.data_demissao);
+    const _hoje0 = new Date(); _hoje0.setHours(0,0,0,0);
+    const _diff  = Math.round((_prazo - _hoje0) / 86400000);
+    const _diffTxt = _diff > 0 ? ` · ${_diff} dia${_diff>1?'s':''} restante${_diff>1?'s':''}` : _diff === 0 ? ' · hoje' : ` · vencido há ${Math.abs(_diff)} dia${Math.abs(_diff)>1?'s':''}`;
+    extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Prazo homologação: ${fmtData(_prazo.toISOString().slice(0,10))}${_diffTxt}${extras.motivo ? ' · ' + extras.motivo : ''}</div>`;
+  }
   else if (p.tipo === 'prorrogacao_experiencia' && extras.fim_45_dias)
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Vence em: ${fmtData(extras.fim_45_dias)}${extras.dias_restantes != null ? ' · ' + (extras.dias_restantes > 0 ? extras.dias_restantes + ' dias restantes' : 'vencido') : ''}</div>`;
   else if (p.tipo === 'avaliacao_final_experiencia' && extras.fim_experiencia)
@@ -1330,11 +1335,9 @@ function buildCard(p) {
   // Banner de homologação para demissão
   let bannerHomologacao = '';
   if (p.tipo === 'demissao') {
-    // 9 dias úteis = prazo_dias do item de homologação; ajusta para último dia útil anterior se fim de semana
-    let dataHomol = calcularPrazoDesde(criadoBase, 9);
-    while (dataHomol.getDay() === 0 || dataHomol.getDay() === 6) {
-      dataHomol.setDate(dataHomol.getDate() - 1);
-    }
+    // Prazo de homologação: 10 dias corridos da demissão, antecipando fim de semana/feriado
+    const _dataDem = extras?.data_demissao || criadoBase.toISOString().slice(0,10);
+    let dataHomol = _prazoHomologacao(_dataDem);
     const hoje2 = new Date(); hoje2.setHours(0,0,0,0);
     const diffMs = dataHomol.getTime() - hoje2.getTime();
     const diffDias = Math.round(diffMs / 86400000);
@@ -1647,6 +1650,26 @@ function calcularPrazoDesde(dataBase, diasUteis) {
     d.setDate(d.getDate() + 1);
     const dow = d.getDay();
     if (dow !== 0 && dow !== 6) restantes--;
+  }
+  return d;
+}
+
+// Feriados nacionais fixos (MM-DD) — não inclui feriados móveis (Carnaval, Páscoa, Corpus Christi)
+const _FERIADOS_FIXOS = new Set([
+  '01-01','04-21','05-01','09-07','10-12','11-02','11-15','11-20','12-25'
+]);
+function _isFeriado(d) {
+  const mmdd = String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  return _FERIADOS_FIXOS.has(mmdd);
+}
+
+// Prazo de homologação: 10 dias corridos contando o dia da demissão (+9 dias),
+// antecipando para o dia útil anterior se cair em fim de semana ou feriado nacional
+function _prazoHomologacao(dataDemissaoStr) {
+  const d = new Date(dataDemissaoStr + 'T00:00:00');
+  d.setDate(d.getDate() + 9);
+  while (d.getDay() === 0 || d.getDay() === 6 || _isFeriado(d)) {
+    d.setDate(d.getDate() - 1);
   }
   return d;
 }
