@@ -989,15 +989,15 @@ async function verificarBonusIndicacao() {
       gatilho75.setDate(gatilho75.getDate() + 75);
       if (hoje < gatilho75) continue; // abre no Workflow aos 75 dias (pagamento aos 90)
 
-      // Buscar valor do bônus vigente na data do gatilho (75 dias após admissão)
-      const dataGatilhoStr = gatilho75.toISOString().slice(0,10);
+      // Valor vigente na data de admissão do indicado (regra: admissão define a tabela)
+      const dataAdmStr = c.data_admissao.slice(0,10);
       let valorBonus = null;
       try {
         const rVal = await fetch(
           `${SB_URL}/rest/v1/param_bonus_indicacao` +
-          `?vigencia_inicio=lte.${dataGatilhoStr}` +
-          `&or=(vigencia_fim.is.null,vigencia_fim.gte.${dataGatilhoStr})` +
-          `&order=vigencia_inicio.desc&limit=1&select=valor,vigencia_inicio,vigencia_fim`,
+          `?vigencia_inicio=lte.${dataAdmStr}` +
+          `&or=(vigencia_fim.is.null,vigencia_fim.gte.${dataAdmStr})` +
+          `&order=vigencia_inicio.desc&limit=1&select=valor`,
           { headers: SB_HEADERS }
         );
         if (rVal.ok) {
@@ -1039,6 +1039,7 @@ async function verificarBonusIndicacao() {
           dados_extras: {
             indicado_id: c.id,
             indicado_nome: c.nome,
+            data_admissao_indicado: c.data_admissao.slice(0,10),
             data_conclusao_experiencia: fim90.toISOString().slice(0,10),
             mes_folha: mesBonus,
             valor_bonus: valorBonus,
@@ -1619,9 +1620,10 @@ async function _renderFichaBonus(procId, wrap) {
   let valorBonus = extras.valor_bonus || null;
   if (!valorBonus) {
     try {
-      const hoje = new Date().toISOString().slice(0,10);
+      // Usa data de admissão do indicado como referência (regra: admissão define a tabela)
+      const dataRef = extras.data_admissao_indicado || new Date().toISOString().slice(0,10);
       const r = await fetch(
-        `${SB_URL}/rest/v1/param_bonus_indicacao?vigencia_inicio=lte.${hoje}&or=(vigencia_fim.is.null,vigencia_fim.gte.${hoje})&order=vigencia_inicio.desc&limit=1`,
+        `${SB_URL}/rest/v1/param_bonus_indicacao?vigencia_inicio=lte.${dataRef}&or=(vigencia_fim.is.null,vigencia_fim.gte.${dataRef})&order=vigencia_inicio.desc&limit=1`,
         { headers: SB_HEADERS }
       );
       const [row] = await r.json();
