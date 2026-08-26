@@ -214,6 +214,57 @@ if (
 `_PROC_MAP` é um objeto `{ [id]: processoObj }` populado durante o carregamento dos cards.
 Usado por `_executarConclusao`, `_renderFichaVT` e demais funções que precisam do objeto processo pelo id.
 
+## Workflows automáticos disparados pelo módulo Cadastro
+
+Os workflows abaixo são criados automaticamente pelo módulo Cadastro (`modulos/cadastro/index.html`) ao carregar, via funções chamadas em `carregarDoSupabase()`:
+
+```js
+verificarBonusIndicacao();
+verificarExperienciaWorkflows();
+```
+
+### `verificarExperienciaWorkflows()`
+
+Varre `COLABORADORES` em busca de colaboradores com `em_experiencia=true` e cria workflows quando o prazo está a **≤ 12 dias**:
+
+| Workflow | tipo | Condição de disparo | Flag que impede duplicata |
+|---|---|---|---|
+| Avaliação 45 dias | `prorrogacao_experiencia` | `restantes45 >= 0 && <= 12` | `prorrogacao_45_gerado` |
+| Avaliação final 90 dias | `avaliacao_final_experiencia` | `restantes90 >= 0 && <= 12` | `avaliacao_90_gerado` |
+
+- Período do 1º prazo: `periodo_experiencia` (coluna da tabela) ou 45 dias como fallback
+- Período do 2º prazo: `data_fim_experiencia` (coluna) ou `data_admissao + 90d` como fallback
+- Após criar o processo, faz PATCH `prorrogacao_45_gerado=true` / `avaliacao_90_gerado=true` no colaborador
+
+### `verificarBonusIndicacao()`
+
+Cria workflow `bonus_indicacao` quando colaborador indicado completa **≤ 12 dias** antes dos 90 dias de casa:
+
+- Condição de entrada: `indicado_por_id != null && indicacao_bonus_gerado == false && ativo == true`
+- Após criar o processo, faz PATCH `indicacao_bonus_gerado=true`
+
+### Armadilha crítica — escopo de variáveis
+
+**Bug corrigido em 2026-08-26:** `SB_URL_CAD` e `headers` eram variáveis locais de outras funções (`_sincronizarProcessoDemissao`) e não existiam no escopo de `verificarExperienciaWorkflows` nem `verificarBonusIndicacao`. O `try/catch` engolia o `ReferenceError` silenciosamente e nenhum workflow era criado.
+
+**Regra:** sempre que qualquer função de verificação precisar de `SB_URL_CAD` ou `headers`, deve declará-las no seu próprio escopo:
+
+```js
+async function verificarXxx() {
+  try {
+    const SB_URL_CAD = SB_URL;
+    const headers = { ...SB_HEADERS, 'Content-Type': 'application/json' };
+    // ...
+  } catch(e) { console.error('Erro verificarXxx:', e); }
+}
+```
+
+### Campo `em_experiencia` — manutenção
+
+O campo `em_experiencia` deve ser `false` para colaboradores cujo período já encerrou. Colaboradores migrados vieram com `em_experiencia=true` sem data calculada.
+
+Correção aplicada em 2026-08-26 via script Python (scratchpad): 152 colaboradores corrigidos para `false`, 15 permaneceram `true` (ainda dentro do período). Para futuras correções em massa, usar o script `corrigir_em_experiencia.py` que compara `data_fim_experiencia` (ou `data_admissao + periodo_experiencia`) com a data atual.
+
 ## Integração com módulo Admissão
 
 Processos do tipo `admissao` e `vt_alteracao` são criados automaticamente ao **Aprovar Ficha** no módulo admissão:
