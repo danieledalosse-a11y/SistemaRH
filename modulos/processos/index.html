@@ -1381,7 +1381,8 @@ function buildCard(p) {
     </div>
     <div class="processo-row-detalhe">
       <div class="checklist">${bannerHomologacao}${checklistHtml}</div>
-      ${p.tipo === 'vt_alteracao' ? `<div class="ficha-vt-wrap" id="fichaVT-${p.id}" data-proc-id="${p.id}"></div>` : ''}
+      ${p.tipo === 'vt_alteracao'    ? `<div class="ficha-vt-wrap"    id="fichaVT-${p.id}"    data-proc-id="${p.id}"></div>` : ''}
+      ${p.tipo === 'bonus_indicacao' ? `<div class="ficha-bonus-wrap" id="fichaBonus-${p.id}" data-proc-id="${p.id}"></div>` : ''}
       <div class="card-actions">
         ${btnConcluir}
         <div class="card-actions-spacer"></div>
@@ -1401,6 +1402,11 @@ function toggleRow(id) {
     if (fichaWrap && !fichaWrap._loaded) {
       fichaWrap._loaded = true;
       _renderFichaVT(id, fichaWrap);
+    }
+    const fichaBonus = document.getElementById('fichaBonus-' + id);
+    if (fichaBonus && !fichaBonus._loaded) {
+      fichaBonus._loaded = true;
+      _renderFichaBonus(id, fichaBonus);
     }
   }
 }
@@ -1573,6 +1579,138 @@ function _toggleFichaVT(procId) {
   const open = body.style.display !== 'none';
   body.style.display    = open ? 'none' : '';
   if (chevron) chevron.style.transform = open ? 'rotate(90deg)' : 'rotate(-90deg)';
+}
+
+async function _renderFichaBonus(procId, wrap) {
+  const proc = _PROC_MAP[procId];
+  if (!proc) return;
+  const extras   = proc.dados_extras || {};
+  const corH     = '#92400e';
+  const bgH      = '#fef3c7';
+  const bordH    = '#fde68a';
+
+  // Busca dados do indicador (colaborador vinculado ao processo)
+  let indicador = {};
+  if (proc.colaborador_id) {
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${proc.colaborador_id}&select=nome,matricula,empresa_registro`, { headers: SB_HEADERS });
+      const [row] = await r.json();
+      if (row) indicador = row;
+    } catch(_) {}
+  }
+
+  // Busca valor vigente do bônus
+  let valorBonus = extras.valor_bonus || null;
+  if (!valorBonus) {
+    try {
+      const hoje = new Date().toISOString().slice(0,10);
+      const r = await fetch(
+        `${SB_URL}/rest/v1/param_bonus_indicacao?vigencia_inicio=lte.${hoje}&or=(vigencia_fim.is.null,vigencia_fim.gte.${hoje})&order=vigencia_inicio.desc&limit=1`,
+        { headers: SB_HEADERS }
+      );
+      const [row] = await r.json();
+      if (row) valorBonus = row.valor;
+    } catch(_) {}
+  }
+
+  const mesRef      = extras.mes_folha || extras.mes_referencia || '—';
+  const indicadoNome = extras.indicado_nome || '—';
+  const valorFmt    = valorBonus != null
+    ? 'R$ ' + Number(valorBonus).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+
+  const emailTexto =
+    `Bom dia!\n\nSolicito o lançamento do bônus de indicação referente à competência ${mesRef}:\n\n` +
+    `• Empresa: ${indicador.empresa_registro || '—'}\n` +
+    `• Matrícula: ${indicador.matricula || '—'}\n` +
+    `• Colaborador: ${indicador.nome || proc.colaborador_nome || '—'}\n` +
+    `• Competência: ${mesRef}\n` +
+    `• Valor: ${valorFmt}\n\n` +
+    `Motivo: indicação de colaborador (${indicadoNome}) que completou 90 dias de experiência.\n\n` +
+    `Fico à disposição.`;
+
+  const _field = (label, value) => {
+    const empty = !value || value === '—';
+    return `<div>
+      <div style="font-size:10px;font-weight:700;color:${empty?'#aaa':'#6b7280'};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">${label}</div>
+      <div style="font-size:13px;font-weight:${empty?'400':'600'};color:${empty?'#bbb':'var(--text)'};">${value||'—'}</div>
+    </div>`;
+  };
+
+  wrap.innerHTML = `
+    <div style="margin:14px 0 4px;border:1px solid ${bordH};border-radius:10px;overflow:hidden;">
+      <div onclick="_toggleFichaBonus(${procId})" style="padding:12px 16px;background:${bgH};border-bottom:1px solid ${bordH};display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;user-select:none;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;">⭐</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:${corH};letter-spacing:0.03em;">Solicitação de Bônus de Indicação</div>
+            <div style="font-size:11px;font-weight:600;color:${corH};opacity:0.8;">Encaminhamento ao Escritório · Competência ${mesRef}</div>
+          </div>
+        </div>
+        <span id="fichaBonus-chevron-${procId}" style="font-size:16px;color:${corH};font-weight:700;transition:transform 0.2s;display:inline-block;transform:rotate(90deg);">›</span>
+      </div>
+
+      <div id="fichaBonus-body-${procId}" style="display:none;">
+
+        <!-- Dados do Indicador -->
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+          <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">👤 Colaborador que recebe o bônus</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 24px;">
+            ${_field('Nome', indicador.nome || proc.colaborador_nome)}
+            ${_field('Matrícula', indicador.matricula)}
+            ${_field('Empresa', indicador.empresa_registro)}
+          </div>
+        </div>
+
+        <!-- Dados do Bônus -->
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+          <div style="font-size:10px;font-weight:700;color:${corH};opacity:0.75;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">⭐ Dados do Bônus</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 24px;">
+            ${_field('Colaborador Indicado', indicadoNome)}
+            ${_field('Competência', mesRef)}
+            ${_field('Valor', valorFmt)}
+          </div>
+        </div>
+
+        <!-- Texto do e-mail -->
+        <div style="padding:14px 16px;">
+          <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">✉️ Texto para envio ao escritório</div>
+          <div style="position:relative;">
+            <pre id="fichaBonus-email-${procId}" style="font-family:inherit;font-size:13px;line-height:1.6;color:var(--text);background:var(--bg-card);border:1px solid ${bordH};border-radius:8px;padding:14px 16px;white-space:pre-wrap;word-break:break-word;margin:0;">${emailTexto}</pre>
+            <button onclick="_copiarBonus(${procId})" id="fichaBonus-btn-${procId}"
+              style="position:absolute;top:10px;right:10px;font-size:11px;padding:5px 12px;border:1px solid ${bordH};border-radius:6px;background:white;color:${corH};cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;">
+              📋 Copiar
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>`;
+}
+
+function _toggleFichaBonus(procId) {
+  const body    = document.getElementById('fichaBonus-body-' + procId);
+  const chevron = document.getElementById('fichaBonus-chevron-' + procId);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  if (chevron) chevron.style.transform = open ? 'rotate(90deg)' : 'rotate(-90deg)';
+}
+
+function _copiarBonus(procId) {
+  const pre = document.getElementById('fichaBonus-email-' + procId);
+  const btn = document.getElementById('fichaBonus-btn-' + procId);
+  if (!pre) return;
+  navigator.clipboard.writeText(pre.textContent).then(() => {
+    btn.textContent = '✓ Copiado!';
+    btn.style.background = '#dcfce7';
+    btn.style.color = '#166534';
+    setTimeout(() => {
+      btn.innerHTML = '📋 Copiar';
+      btn.style.background = 'white';
+      btn.style.color = '#92400e';
+    }, 2000);
+  });
 }
 
 function _imprimirFichaVT(procId) {
