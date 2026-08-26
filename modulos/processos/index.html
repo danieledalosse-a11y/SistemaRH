@@ -1626,7 +1626,6 @@ async function _renderFichaBonus(procId, wrap) {
     `• Colaborador: ${indicador.nome || proc.colaborador_nome || '—'}\n` +
     `• Competência: ${mesRef}\n` +
     `• Valor: ${valorFmt}\n\n` +
-    `Motivo: indicação de colaborador (${indicadoNome}) que completou 90 dias de experiência.\n\n` +
     `Fico à disposição.`;
 
   const _field = (label, value) => {
@@ -1647,7 +1646,13 @@ async function _renderFichaBonus(procId, wrap) {
             <div style="font-size:11px;font-weight:600;color:${corH};opacity:0.8;">Encaminhamento ao Escritório · Competência ${mesRef}</div>
           </div>
         </div>
-        <span id="fichaBonus-chevron-${procId}" style="font-size:16px;color:${corH};font-weight:700;transition:transform 0.2s;display:inline-block;transform:rotate(90deg);">›</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button onclick="event.stopPropagation();_copiarBonus(${procId})" id="fichaBonus-btn-${procId}"
+            style="font-size:11px;padding:5px 14px;border:1px solid ${bordH};border-radius:6px;background:white;color:${corH};cursor:pointer;font-weight:600;white-space:nowrap;">
+            📋 Copiar solicitação
+          </button>
+          <span id="fichaBonus-chevron-${procId}" style="font-size:16px;color:${corH};font-weight:700;transition:transform 0.2s;display:inline-block;transform:rotate(90deg);">›</span>
+        </div>
       </div>
 
       <div id="fichaBonus-body-${procId}" style="display:none;">
@@ -1663,29 +1668,17 @@ async function _renderFichaBonus(procId, wrap) {
         </div>
 
         <!-- Dados do Bônus -->
-        <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="padding:14px 16px;">
           <div style="font-size:10px;font-weight:700;color:${corH};opacity:0.75;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">⭐ Dados do Bônus</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 24px;">
-            ${_field('Colaborador Indicado', indicadoNome)}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;">
             ${_field('Competência', mesRef)}
             ${_field('Valor', valorFmt)}
           </div>
         </div>
 
-        <!-- Texto do e-mail -->
-        <div style="padding:14px 16px;">
-          <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">✉️ Texto para envio ao escritório</div>
-          <div style="position:relative;">
-            <pre id="fichaBonus-email-${procId}" style="font-family:inherit;font-size:13px;line-height:1.6;color:var(--text);background:var(--bg-card);border:1px solid ${bordH};border-radius:8px;padding:14px 16px;white-space:pre-wrap;word-break:break-word;margin:0;">${emailTexto}</pre>
-            <button onclick="_copiarBonus(${procId})" id="fichaBonus-btn-${procId}"
-              style="position:absolute;top:10px;right:10px;font-size:11px;padding:5px 12px;border:1px solid ${bordH};border-radius:6px;background:white;color:${corH};cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;">
-              📋 Copiar
-            </button>
-          </div>
-        </div>
-
       </div>
     </div>`;
+  wrap._emailTexto = emailTexto;
 }
 
 function _toggleFichaBonus(procId) {
@@ -1698,18 +1691,14 @@ function _toggleFichaBonus(procId) {
 }
 
 function _copiarBonus(procId) {
-  const pre = document.getElementById('fichaBonus-email-' + procId);
-  const btn = document.getElementById('fichaBonus-btn-' + procId);
-  if (!pre) return;
-  navigator.clipboard.writeText(pre.textContent).then(() => {
+  const wrap = document.getElementById('fichaBonus-' + procId);
+  const btn  = document.getElementById('fichaBonus-btn-' + procId);
+  if (!wrap || !btn || !wrap._emailTexto) return;
+  navigator.clipboard.writeText(wrap._emailTexto).then(() => {
     btn.textContent = '✓ Copiado!';
     btn.style.background = '#dcfce7';
     btn.style.color = '#166534';
-    setTimeout(() => {
-      btn.innerHTML = '📋 Copiar';
-      btn.style.background = 'white';
-      btn.style.color = '#92400e';
-    }, 2000);
+    setTimeout(() => { btn.innerHTML = '📋 Copiar solicitação'; btn.style.background = 'white'; btn.style.color = '#92400e'; }, 2000);
   });
 }
 
