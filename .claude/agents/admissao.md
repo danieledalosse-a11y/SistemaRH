@@ -195,7 +195,56 @@ async function _confirmarAprovar(f, temVT) {
      // Busca processos abertos com colaborador_id=null e dados_extras.convite_id correspondente
      // PATCH colaborador_id em cada um
      ```
+   - **Copia documentos da ficha para a Pasta Funcional Digital** (ver seção abaixo)
    - Recarrega painel (loadFichas + loadConvites)
+
+## Pasta Funcional Digital
+
+### Conceito
+Cada colaborador tem uma pasta permanente de documentos acessível pela aba **Arquivos** no drawer do Cadastro. Armazena o ciclo de vida completo de documentos: admissão, contratos, ASOs, VT, rescisão, etc.
+
+### Tabela `colaborador_documentos`
+```sql
+id              uuid PK
+colaborador_id  bigint FK → colaboradores(id) ON DELETE CASCADE
+nome            text NOT NULL
+categoria       text CHECK (admissao|contrato|saude|vt|financeiro|rescisao|outros)
+url             text NOT NULL   -- URL pública do arquivo
+tipo_arquivo    text CHECK (pdf|imagem|outro)
+data_documento  date
+data_validade   date            -- se preenchida, gera alerta de vencimento
+criado_em       timestamptz
+criado_por      text
+```
+Migration: `migrations/030_colaborador_documentos.sql`  
+RLS: policies `anon_all` (TO anon) e `authenticated_all` (TO authenticated) — ambas obrigatórias porque o módulo Cadastro usa JWT de usuário autenticado.
+
+### Storage bucket `colaborador-docs`
+- Bucket público, RLS policy `anon_all` criada via Supabase UI
+- Path de upload: `${colaborador_id}/${categoria}/${timestamp}.${ext}`
+
+### Cópia automática na efetivação
+Em `confirmarEfetivar()`, após criar o colaborador:
+```js
+// DOC_LABELS: mapa key → nome legível (ex: rg_frente → 'RG')
+// DOC_CATEGORIA: exceções (exame_admissional→saude, comp_banco→financeiro, cart_vt→vt)
+// Itera f.docs (JSONB da ficha), constrói URL pública do bucket admissao-docs
+// POST colaborador_documentos com todos os docs encontrados
+// Erros são silenciosos (try/catch warn) — nunca bloqueiam a efetivação
+```
+
+### UI no Cadastro (`modulos/cadastro/index.html`)
+- Aba **Arquivos** na drawer (8ª aba, antes de Histórico)
+- Documentos agrupados por categoria em acordeão colapsável (fechado por padrão)
+- Cabeçalho de cada categoria mostra: dot colorido, nome, contagem, ponto laranja se há vencimento próximo
+- Funções JS: `loadDocsPasta(colabId)`, `renderDocsPasta()`, `togglePastaCat(id,btn)`, `abrirDocPasta()`, `deleteDocPasta()`, `abrirFormPasta()`, `fecharFormPasta()`, `salvarDocPasta()`
+- Badge laranja na aba se algum documento vence em ≤ 30 dias
+
+### Migração retroativa
+Script Python `migrar_docs_admissao.py` (no scratchpad da sessão):
+- Busca convites com `status='efetivado'` → fichas → colaboradores (match por CPF)
+- Insere em `colaborador_documentos` pulando duplicatas por `(colaborador_id, nome)`
+- Usado 1× em 2026-08-26 para migrar 73 docs de 9 colaboradores já efetivados antes do deploy
 
 ## Deploy
 
