@@ -422,6 +422,7 @@
         </button>
       </div>
     </div>
+    <div id="filtros-chips" class="filtros-tipo" style="display:none;"></div>
     <div id="andamentoConteudo">
       <div class="loading"><div class="spinner"></div> Carregando processos...</div>
     </div>
@@ -1103,18 +1104,44 @@ function renderProcessos(processos) {
   filtroAtivo = 'todos';
   const cntEl = document.getElementById('tab-cnt-andamento');
   if (cntEl) { cntEl.textContent = processos.length; cntEl.style.display = processos.length ? 'inline-block' : 'none'; }
+  _renderChips(processos);
   _renderAndamento(processos);
+}
+
+function _renderChips(processos) {
+  const wrap = document.getElementById('filtros-chips');
+  if (!wrap) return;
+  // Conta por tipo, preservando ordem de TIPO_CONFIG
+  const contagem = {};
+  processos.forEach(p => { contagem[p.tipo] = (contagem[p.tipo] || 0) + 1; });
+  const tipos = Object.keys(TIPO_CONFIG).filter(t => contagem[t]);
+  if (tipos.length < 2) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  wrap.innerHTML =
+    `<button class="filtro-chip ativo" data-tipo="todos" onclick="filtrarTipo('todos')">
+       Todos <span class="chip-count">${processos.length}</span>
+     </button>` +
+    tipos.map(t => {
+      const cfg = TIPO_CONFIG[t];
+      return `<button class="filtro-chip" data-tipo="${t}" onclick="filtrarTipo('${t}')">
+        ${cfg.icon} ${cfg.label} <span class="chip-count">${contagem[t]}</span>
+      </button>`;
+    }).join('');
 }
 
 function _filtrarAndamento() {
   const q = (document.getElementById('buscaAndamento')?.value || '').toLowerCase().trim();
-  const filtrados = q
-    ? _TODOS_PROCESSOS.filter(p =>
-        (p.colaborador_nome || '').toLowerCase().includes(q) ||
-        (TIPO_CONFIG[p.tipo]?.label || p.tipo || '').toLowerCase().includes(q)
-      )
-    : _TODOS_PROCESSOS;
-  _renderAndamento(filtrados);
+  if (q) {
+    // busca textual ignora filtro de chip — mostra tudo que bate
+    const filtrados = _TODOS_PROCESSOS.filter(p =>
+      (p.colaborador_nome || '').toLowerCase().includes(q) ||
+      (TIPO_CONFIG[p.tipo]?.label || p.tipo || '').toLowerCase().includes(q)
+    );
+    _renderAndamento(filtrados);
+  } else {
+    // ao limpar busca, reaplica chip ativo
+    filtrarTipo(filtroAtivo);
+  }
 }
 
 function _diasRestantesProcesso(p) {
