@@ -265,6 +265,59 @@ O campo `em_experiencia` deve ser `false` para colaboradores cujo período já e
 
 Correção aplicada em 2026-08-26 via script Python (scratchpad): 152 colaboradores corrigidos para `false`, 15 permaneceram `true` (ainda dentro do período). Para futuras correções em massa, usar o script `corrigir_em_experiencia.py` que compara `data_fim_experiencia` (ou `data_admissao + periodo_experiencia`) com a data atual.
 
+## Checklists de experiência — itens padrão
+
+### `prorrogacao_experiencia` (Experiência — 45 dias)
+1. `Avaliar colaborador {nome} — 1º período de experiência vence em {data}` *(gerado dinamicamente)*
+2. `Obter parecer do gestor: prorrogar por mais 45 dias ou encerrar contrato`
+3. `Enviar prorrogação de contrato ao escritório contábil`
+4. `Registrar decisão no cadastro do colaborador`
+
+### `avaliacao_final_experiencia` (Experiência — 90 dias)
+1. `Avaliação final de {nome} — experiência vence em {data}` *(gerado dinamicamente)*
+2. `Obter parecer do gestor: confirmar efetivação ou iniciar desligamento`
+3. `Registrar decisão no cadastro do colaborador`
+
+**Regra:** o item 3 dos 45 dias (envio ao escritório) **não existe** nos 90 dias — a continuidade para contrato por prazo indeterminado é automática.
+
+## Cards de processo — informações exibidas no subtítulo
+
+| Tipo | Subtítulo |
+|---|---|
+| `demissao` | `Prazo homologação: DD/MM/AAAA · N dias restantes` |
+| `prorrogacao_experiencia` | `Vence em: DD/MM/AAAA · N dias restantes` |
+| `avaliacao_final_experiencia` | `Vence em: DD/MM/AAAA · N dias restantes` |
+| `bonus_indicacao` | `Indicado: {nome} · Folha de {mes}` |
+| `atestado` | `CID: {cid} · {dias} dia(s)` |
+| `vt_alteracao` | badge colorido com operação + dados do cartão |
+
+### Prazo de homologação (demissão)
+
+Função `_prazoHomologacao(dataDemissaoStr)`:
+- Data da demissão + 9 dias corridos (= 10 dias contando o dia da demissão)
+- Se o resultado cair em sábado, domingo ou feriado nacional fixo → antecipa para o dia útil anterior
+- Feriados móveis (Carnaval, Sexta-feira Santa, Corpus Christi) **não são detectados** — verificar manualmente nesses casos
+
+```js
+const _FERIADOS_FIXOS = new Set([
+  '01-01','04-21','05-01','09-07','10-12','11-02','11-15','11-20','12-25'
+]);
+function _prazoHomologacao(dataDemissaoStr) {
+  const d = new Date(dataDemissaoStr + 'T00:00:00');
+  d.setDate(d.getDate() + 9);
+  while (d.getDay() === 0 || d.getDay() === 6 || _isFeriado(d)) {
+    d.setDate(d.getDate() - 1);
+  }
+  return d;
+}
+```
+
+O banner interno do card expandido usa a mesma função — prazo sempre consistente entre card e banner.
+
+## Busca nos painéis
+
+Todos os três painéis (Em andamento, Concluídos, Cancelados) têm campo de busca com botão **×** que aparece ao digitar e limpa o filtro com um clique.
+
 ## Integração com módulo Admissão
 
 Processos do tipo `admissao` e `vt_alteracao` são criados automaticamente ao **Aprovar Ficha** no módulo admissão:
