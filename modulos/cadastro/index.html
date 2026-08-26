@@ -276,11 +276,18 @@
   .pasta-section-hd .drawer-section-title { margin-bottom:0; border-bottom:none; padding-bottom:0; }
   .pasta-upload-btn { display:flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:var(--accent); background:none; border:1px solid var(--accent); border-radius:7px; padding:5px 12px; cursor:pointer; font-family:inherit; transition:background .15s; }
   .pasta-upload-btn:hover { background:var(--accent-bg); }
-  .pasta-cat-block { margin-bottom:14px; }
-  .pasta-cat-label { font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-ter); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
-  .pasta-cat-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
-  .pasta-doc-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin-bottom:5px; background:var(--surface); cursor:pointer; transition:border-color .15s; }
-  .pasta-doc-row:hover { border-color:var(--accent); }
+  .pasta-cat-block { margin-bottom:6px; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .pasta-cat-header { width:100%; display:flex; align-items:center; gap:8px; padding:10px 14px; background:var(--bg-alt); border:none; cursor:pointer; font-family:inherit; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-sec); transition:background .15s; }
+  .pasta-cat-header:hover { background:var(--border); }
+  .pasta-cat-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .pasta-cat-label-text { flex:1; text-align:left; }
+  .pasta-cat-count { font-size:10px; font-weight:600; background:var(--border); color:var(--text-ter); border-radius:10px; padding:1px 7px; }
+  .pasta-cat-alert-dot { width:7px; height:7px; border-radius:50%; background:#F79009; flex-shrink:0; }
+  .pasta-cat-chevron { flex-shrink:0; color:var(--text-ter); transition:transform .2s; }
+  .pasta-cat-body { border-top:1px solid var(--border); }
+  .pasta-doc-row { display:flex; align-items:center; gap:8px; padding:9px 14px; border-bottom:1px solid var(--border); background:var(--surface); cursor:pointer; transition:background .15s; }
+  .pasta-doc-row:last-child { border-bottom:none; }
+  .pasta-doc-row:hover { background:var(--bg-alt); }
   .pasta-doc-icon { width:32px; height:32px; border-radius:6px; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:15px; }
   .pasta-doc-body { flex:1; min-width:0; }
   .pasta-doc-name { font-size:13px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -4293,11 +4300,20 @@ function renderDocsPasta() {
           </button>
         </div>`;
       }).join('');
+      const catId = `pasta-grp-${cat}`;
+      const temAlertaCat = grupos[cat].some(d => d.data_validade && (d.data_validade < HOJE || d.data_validade <= em30));
+      const alertDot = temAlertaCat ? `<span class="pasta-cat-alert-dot"></span>` : '';
       return `<div class="pasta-cat-block">
-        <div class="pasta-cat-label">
-          <span class="pasta-cat-dot" style="background:${cfg.cor}"></span>${cfg.label}
+        <button class="pasta-cat-header" onclick="togglePastaCat('${catId}',this)" aria-expanded="false">
+          <span class="pasta-cat-dot" style="background:${cfg.cor}"></span>
+          <span class="pasta-cat-label-text">${cfg.label}</span>
+          <span class="pasta-cat-count">${grupos[cat].length}</span>
+          ${alertDot}
+          <svg class="pasta-cat-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="pasta-cat-body" id="${catId}" style="display:none;">
+          ${itens}
         </div>
-        ${itens}
       </div>`;
     }).join('');
 
@@ -4315,6 +4331,15 @@ function renderDocsPasta() {
       _tabDoc.appendChild(b);
     }
   } else if (_badge) { _badge.remove(); }
+}
+
+function togglePastaCat(id, btn) {
+  const body = document.getElementById(id);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  btn.setAttribute('aria-expanded', String(!open));
+  btn.querySelector('.pasta-cat-chevron').style.transform = open ? '' : 'rotate(180deg)';
 }
 
 function fmtDate(iso) {
