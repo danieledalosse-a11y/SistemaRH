@@ -456,7 +456,7 @@
   .drawer-pa-val { font-size: 13px; font-weight: 500; }
   .drawer-saldo { font-size: 28px; font-weight: 700; line-height: 1; }
   .drawer-timeline { display: flex; flex-direction: column; gap: 0; }
-  .drawer-tl-item { background: var(--surface-1, #F9FAFB); border: 0.5px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; }
+  .drawer-tl-item { background: var(--surface-1, #F9FAFB); border: 1px solid var(--border-light, #E5E7EB); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; }
   .drawer-tl-item:last-child { margin-bottom: 0; }
   .drawer-tl-dot { display: none; }
   .drawer-tl-info { flex: 1; min-width: 0; }
@@ -3142,10 +3142,14 @@ function renderDrawerHistorico(colab) {
           </div>
         </div>`;
 
-        secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);">
+        const secaoBorderStyle = temGozos ? 'margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);' : '';
+        secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="${secaoBorderStyle}">
           <div class="hist-gozo-section-body">
-            ${progressHtml}${listaHtml}${formHtml}
+            ${progressHtml}${listaHtml}
           </div>
+        </div>
+        <div id="hist-gozo-form-wrap-${r._sbId}-${lancIdx}" style="display:none;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);">
+          ${formHtml}
         </div>`;
       } else if (temGozos) {
         // gestor: só leitura
@@ -3690,7 +3694,8 @@ function toggleGozoSecao(sbId, lancIdx) {
   if (abrindo) _gozoExpanded.add(k); else _gozoExpanded.delete(k);
 }
 function expandirGozoHist(sbId, lancIdx) {
-  // garante que a seção está visível
+  const wrap = document.getElementById(`hist-gozo-form-wrap-${sbId}-${lancIdx}`);
+  if (wrap) wrap.style.display = '';
   const sec = document.getElementById(`hist-secao-${sbId}-${lancIdx}`);
   if (sec) { sec.style.display = ''; _gozoExpanded.add(`${sbId}-${lancIdx}`); }
   document.getElementById(`hist-gozo-${sbId}-${lancIdx}`)?.classList.add('open');
@@ -3707,6 +3712,8 @@ function fecharGozoHist(sbId, lancIdx) {
   const bar = document.getElementById(`hg-bar-${sbId}-${lancIdx}`);
   if (bar) bar.style.width = '0%';
   // se não há acordos salvos nesta seção, recolhe automaticamente
+  const wrap = document.getElementById(`hist-gozo-form-wrap-${sbId}-${lancIdx}`);
+  if (wrap) wrap.style.display = 'none';
   const sec = document.getElementById(`hist-secao-${sbId}-${lancIdx}`);
   const lista = document.getElementById(`hist-lista-${sbId}-${lancIdx}`);
   if (sec && !lista) {
