@@ -3039,6 +3039,9 @@ function renderDrawerHistorico(colab) {
     </button>
   </div>`;
   const key = colab.__key;
+  const novoPaBtn = (IS_RH && !regParaLancar && regs.some(r => !excluir.has(r.status)))
+    ? `<div style="text-align:center;padding:12px 0 4px;"><button id="btnRhNovoPa" onclick="rhCriarNovoPa('${key}')" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Criar próximo período aquisitivo</button></div>`
+    : '';
   document.getElementById('drawerHistorico').innerHTML = btnPrint + regs.map(r => {
     const saldo = calcSaldo(r);
     let situBadge = '';
@@ -3309,26 +3312,24 @@ function renderDrawerHistorico(colab) {
       ${inlineFormHtml}
       <div class="drawer-hist-pa-body">${lancs}</div>
     </div>`;
-  }).join('');
+  }).join('') + novoPaBtn;
 }
 
-function renderDrawerLancar(colab) {
+// renderDrawerLancar removida — lógica migrada para inline em renderDrawerHistorico
+function renderDrawerLancar(colab) { /* descontinuada */ }
+function _renderDrawerLancar_legado(colab) {
   const reg   = getRegistroParaLancar(colab);
   const saldo = reg ? calcSaldo(reg) : 0;
   const nPer  = reg ? reg.lancamentos.length : 0;
   const dlim  = reg ? dataLimiteDobra(reg) : null;
 
   if (saldo <= 0) {
-    document.getElementById('drawerLancar').innerHTML = `
-      <div class="empty-state">
-        <div class="icon">✓</div>
-        <p>Saldo zerado — sem dias disponíveis para lançar neste PA.</p>
-        ${IS_RH ? `<button id="btnRhNovoPa" onclick="rhCriarNovoPa('${_drawerKey}')" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Criar próximo período aquisitivo</button>` : ''}
-      </div>`;
+    // noop — botão agora em renderDrawerHistorico (novoPaBtn)
     return;
   }
 
-  document.getElementById('drawerLancar').innerHTML = `
+  /* template legado — nunca alcançado */
+  const _noop = `
     <div class="drawer-pa-card" style="margin:12px 20px 0;">
       <div>
         <div class="drawer-pa-label">PA ${reg ? reg.ano : ''} · ${reg ? `${formatDate(reg.paInicio)} → ${formatDate(reg.paFim)}` : '—'}</div>
