@@ -443,6 +443,12 @@
   .drawer-tab.active { color: #1849A9; background: rgba(24,73,169,0.07); font-weight: 600; }
   .drawer-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: #1849A9; border-radius: 2px 2px 0 0; }
   .drawer-tabs-line { height: 1px; background: var(--border); margin: 0; flex-shrink: 0; }
+  .btn-pa-lancar { padding:3px 10px;font-size:11px;font-weight:600;font-family:inherit;border:1.5px solid #1849A9;border-radius:6px;background:transparent;color:#1849A9;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap;flex-shrink:0; }
+  .btn-pa-lancar:hover { background:#1849A9;color:#fff; }
+  .btn-pa-lancar.ativo { background:#1849A9;color:#fff; }
+  .btn-pa-solicitar { padding:3px 10px;font-size:11px;font-weight:600;font-family:inherit;border:1.5px solid #067647;border-radius:6px;background:transparent;color:#067647;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap;flex-shrink:0; }
+  .btn-pa-solicitar:hover { background:#067647;color:#fff; }
+  .drawer-lancar-inline { margin:10px 0 4px;padding:14px 16px;border:1.5px solid #C7D7F9;border-radius:8px;background:#F8FAFF; }
   .drawer-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
   .drawer-section-title { font-size: 11px; font-weight: 600; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
   .drawer-pa-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
@@ -463,6 +469,11 @@
   .drawer-hist-pa-body { padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
   .drawer-form { display: flex; flex-direction: column; gap: 12px; }
   .drawer-aviso { background: var(--amber-bg); border: 1px solid var(--amber-bg); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--amber); line-height: 1.5; }
+  .drawer-hist-pa-lancar-btn { padding: 4px 12px; border-radius: 6px; border: none; background: #1849A9; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+  .drawer-hist-pa-lancar-btn:hover { background: #1340a0; }
+  .drawer-hist-pa-solicitar-btn { padding: 4px 12px; border-radius: 6px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text-sec); font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+  .drawer-hist-pa-solicitar-btn:hover { background: var(--bg); color: var(--text); }
+  .drawer-inline-form-wrap { border-top: 1px solid var(--border); background: #F8FAFC; padding: 14px 14px 10px; }
   /* ── multi-select ── */
   .ms-wrap { position: relative; display: inline-block; }
   .ms-btn {
@@ -1973,15 +1984,9 @@
       </div>
       <button class="drawer-close-btn" onclick="fecharDrawer()">✕</button>
     </div>
-    <div class="drawer-tabs">
-      <button class="drawer-tab active" onclick="setDrawerTab('historico',this)">Histórico</button>
-      <button class="drawer-tab" onclick="setDrawerTab('lancar',this)">Lançar</button>
-    </div>
-    <div class="drawer-tabs-line"></div>
   </div>
   <div class="drawer-body">
     <div id="drawerHistorico"></div>
-    <div id="drawerLancar" style="display:none;"></div>
   </div>
   <div style="padding:12px 20px;border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;">
     <a id="btnVerFichaFerias" href="#" target="_blank"
@@ -2822,13 +2827,6 @@ function _abrirDrawerInterno(key) {
   document.getElementById('drawerChips').innerHTML = chips.join('');
 
   renderDrawerHistorico(colab);
-  renderDrawerLancar(colab);
-
-  setDrawerTab('historico', document.querySelectorAll('.drawer-tab')[0]);
-
-  // modo gestor: oculta aba Lançar
-  const tabLancar = document.querySelectorAll('.drawer-tab')[1];
-  if (tabLancar) tabLancar.style.display = window._drawerModoGestor ? 'none' : '';
   window._drawerModoGestor = false;
 
   const fichaLink = document.getElementById('btnVerFichaFerias');
@@ -2889,10 +2887,17 @@ function fecharDrawer() {
 })();
 
 function setDrawerTab(tab, btn) {
-  document.getElementById('drawerHistorico').style.display = tab === 'historico' ? '' : 'none';
-  document.getElementById('drawerLancar').style.display    = tab === 'lancar'    ? '' : 'none';
+  // mantido por compatibilidade (pode ser chamado por código antigo)
   document.querySelectorAll('.drawer-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
+}
+
+function toggleInlineLancar(sbId) {
+  const el = document.getElementById('drawer-inline-form-' + sbId);
+  if (!el) return;
+  const visible = el.style.display !== 'none';
+  el.style.display = visible ? 'none' : '';
+  if (!visible) { calcDrawerFim(); validarDrawerForm(); }
 }
 
 function renderDrawerResumo(colab) {
@@ -3023,6 +3028,7 @@ function imprimirHistoricoDrawer() {
 function renderDrawerHistorico(colab) {
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const regs = [...colab.registros].reverse();
+  const regParaLancar = getRegistroParaLancar(colab);
   if (!regs.length) {
     document.getElementById('drawerHistorico').innerHTML = '<p style="font-size:12px;color:var(--text-sec);">Sem histórico.</p>';
     return;
@@ -3133,7 +3139,7 @@ function renderDrawerHistorico(colab) {
           </div>
         </div>`;
 
-        secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="${isExpanded ? '' : 'display:none;'}">
+        secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="">
           <div class="hist-gozo-section-hdr">
             <span class="hist-gozo-section-title">Gozo real</span>
             <button class="hist-gozo-section-close" onclick="toggleGozoSecao('${r._sbId}',${lancIdx})">
@@ -3155,7 +3161,7 @@ function renderDrawerHistorico(colab) {
             <span class="hist-gozo-item-dates">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span>
             ${gx.obs ? `<span class="hist-gozo-item-obs">${gx.obs}</span>` : ''}
           </div></div>`).join('');
-        secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="${isExpanded ? '' : 'display:none;'}">
+        secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="">
           <div class="hist-gozo-section-hdr">
             <span class="hist-gozo-section-title">Gozo real</span>
             <button class="hist-gozo-section-close" onclick="toggleGozoSecao('${r._sbId}',${lancIdx})">
@@ -3246,6 +3252,47 @@ function renderDrawerHistorico(colab) {
       const gozados = realizacoes.filter(rx => Number(rx.lancIdx) === li || (li === 0 && rx.lancIdx == null)).reduce((s, rx) => s + Number(rx.dias), 0);
       return gozados > 0 && gozados < (l.dias || 0);
     });
+    // ── botão Lançar / Solicitar inline
+    const isActivePa = regParaLancar && String(r._sbId) === String(regParaLancar._sbId);
+    const lancarBtnHtml = (() => {
+      if (!isActivePa || excluirPA) return '';
+      if (IS_RH) return `<button class="drawer-hist-pa-lancar-btn" onclick="toggleInlineLancar('${r._sbId}')">+ Lançar</button>`;
+      if (saldo > 0 && r.paFim >= HOJE) return `<button class="drawer-hist-pa-solicitar-btn" onclick="toggleInlineLancar('${r._sbId}')">Solicitar</button>`;
+      return '';
+    })();
+    // ── formulário inline de lançamento (mesmo campos do antigo drawerLancar)
+    const inlineFormHtml = (isActivePa && !excluirPA) ? `<div id="drawer-inline-form-${r._sbId}" class="drawer-inline-form-wrap" style="display:none;">
+      <div class="dform-section" style="margin:0;padding:0;">
+        <div class="dform-section-title" style="margin-bottom:8px;">Período de gozo</div>
+        <div class="dform-row" style="margin-bottom:10px;">
+          <div class="dform-field">
+            <label class="dform-label">Data de início <span class="req">*</span></label>
+            <input type="date" id="dInicio" class="dform-input" oninput="calcDrawerFim()">
+          </div>
+          <div class="dform-field">
+            <label class="dform-label">Dias <span class="req">*</span> <span class="hint">máx. ${saldo}</span></label>
+            <input type="number" id="dDias" class="dform-input" min="1" max="${saldo}" value="${saldo}" oninput="calcDrawerFim()">
+          </div>
+        </div>
+        <div class="dform-result-bar" id="dResultBar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span class="dform-result-label">Último dia de férias</span>
+          <span class="dform-result-val" id="dFimDisplay">—</span>
+          <input type="date" id="dFim" style="display:none;">
+        </div>
+      </div>
+      <div class="dform-section" style="margin:0;padding:0;margin-top:10px;">
+        <div class="dform-field">
+          <label class="dform-label">Observação <span class="hint">(opcional)</span></label>
+          <textarea id="dMotivo" class="dform-textarea" placeholder="Ex: Férias coletivas de fim de ano, solicitação do colaborador…"></textarea>
+        </div>
+      </div>
+      <div id="dAlerta" style="padding:6px 0 4px;"></div>
+      <div style="display:flex;justify-content:flex-end;gap:6px;padding-top:4px;">
+        <button style="padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;border:1.5px solid #D0D5DD;border-radius:6px;background:none;color:#374151;" onclick="toggleInlineLancar('${r._sbId}')">Cancelar</button>
+        <button class="dform-btn-submit" style="padding:5px 16px;font-size:12px;" onclick="confirmarDrawerLancamento()">${IS_RH ? 'Confirmar lançamento' : 'Enviar para aprovação'}</button>
+      </div>
+    </div>` : '';
     return `<div class="drawer-hist-pa">
       <div class="drawer-hist-pa-hdr">
         <div style="display:flex;align-items:center;">
@@ -3256,8 +3303,10 @@ function renderDrawerHistorico(colab) {
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
           <span style="font-size:12px;color:var(--text-sec);">Saldo ${saldo}/${r.totalDias}d</span>
           ${situBadge}
+          ${lancarBtnHtml}
         </div>
       </div>
+      ${inlineFormHtml}
       <div class="drawer-hist-pa-body">${lancs}</div>
     </div>`;
   }).join('');
@@ -3409,9 +3458,6 @@ async function rhCriarNovoPa(key) {
     toast('Novo PA criado! Recarregando...');
     await carregarDoSupabase();
     abrirDrawer(key);
-    // Vai direto para aba Lançar
-    const tabLancar = document.querySelector('.drawer-tab:nth-child(2)');
-    if (tabLancar) setDrawerTab('lancar', tabLancar);
   } catch(e) {
     toast('Erro ao criar PA: ' + e.message);
     if (btn) { btn.disabled = false; btn.textContent = '+ Criar próximo período aquisitivo'; }
