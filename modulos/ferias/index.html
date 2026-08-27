@@ -928,6 +928,8 @@
   .hist-clock-btn:hover { color: #D97706; border-color: #FDE68A; background: #FFFBEB; }
   .hist-clock-btn.ativo { color: #D97706; background: #FEF3C7; border-color: #FDE68A; }
   .hist-clock-btn.ativo:hover { background: #FDE68A; }
+  .hist-delete-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--text-ter); cursor: pointer; padding: 0; flex-shrink: 0; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+  .hist-delete-btn:hover { color: #DC2626; border-color: #FCA5A5; background: #FEF2F2; }
   .chip-pend-gozo { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 4px; background: #FEF3C7; color: #D97706; border: 1px solid #FDE68A; font-size: 10px; font-weight: 600; }
   /* Form inline */
   .hist-gozo-form { display: none; padding: 10px 12px 8px; background: #F8FAFF; border: 1.5px solid #C7D7F9; border-radius: 6px; }
@@ -3193,6 +3195,7 @@ function renderDrawerHistorico(colab) {
       const isPendGozoLanc = r._aguardandoGozoIdx === lancIdx;
       const novoIdxClock = isPendGozoLanc ? 'null' : lancIdx;
       const clockBtnHtml = (!excluirPA && IS_RH) ? `<button class="hist-clock-btn${isPendGozoLanc ? ' ativo' : ''}" onclick="rhToggleAguardandoGozo('${r._sbId}','${novoIdxClock}','${key}')" title="${isPendGozoLanc ? 'Remover marcação de pendente' : 'Marcar como pendente de gozo'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>` : '';
+      const deleteBtnHtml = IS_RH ? `<button class="hist-delete-btn" onclick="excluirLancamento('${key}','${r._sbId}',${lancIdx})" title="Excluir lançamento"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : '';
       const chipPendHtml = isPendGozoLanc ? `<span class="chip-pend-gozo"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Pendente de gozo · ${l.dias}d</span>` : '';
       return `<div class="drawer-tl-item">
         <div class="drawer-tl-dot" style="background:${dotColor}"></div>
@@ -3201,7 +3204,7 @@ function renderDrawerHistorico(colab) {
             <div class="drawer-tl-dates-left" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
               <span class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>${chipPendHtml}
             </div>
-            <div style="display:flex;align-items:center;gap:4px;">${clockBtnHtml}${editBtnHtml}${iconoAcordo}</div>
+            <div style="display:flex;align-items:center;gap:4px;">${clockBtnHtml}${editBtnHtml}${deleteBtnHtml}${iconoAcordo}</div>
           </div>
           ${editFormHtml}
           ${notaVisivelHtml}
@@ -3595,6 +3598,47 @@ async function salvarEditLanc(chave, sbId, lancIdx) {
     l.nota   = nota || null;
 
     toast('✓ Período atualizado');
+    renderDrawerHistorico(colab);
+  } catch(e) {
+    toast(_erroApi(e), 'erro');
+  }
+}
+
+async function excluirLancamento(chave, sbId, lancIdx) {
+  const colab = COLABORADORES.find(c => c.__key === chave);
+  if (!colab) return;
+  const reg = colab.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  const l = reg.lancamentos[lancIdx];
+  const descricao = `${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d`;
+
+  if (!confirm(`Excluir lançamento "${descricao}"?\n\nEssa ação não pode ser desfeita.`)) return;
+
+  const n = lancIdx + 1;
+  let payload;
+  if (n === 1 && reg.lancamentos.length === 2) {
+    const l2 = reg.lancamentos[1];
+    payload = {
+      periodo1_inicio: l2.inicio, periodo1_fim: l2.fim, dias1: l2.dias, nota1: l2.nota || null,
+      periodo2_inicio: null, periodo2_fim: null, dias2: null, nota2: null,
+    };
+  } else {
+    payload = {
+      [`periodo${n}_inicio`]: null, [`periodo${n}_fim`]: null, [`dias${n}`]: null, [`nota${n}`]: null,
+    };
+  }
+
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, payload);
+    if (colab._sbColabId) {
+      const rows = await sbGet('colaboradores', `id=eq.${colab._sbColabId}&select=historico`);
+      const hist = Array.isArray(rows[0]?.historico) ? rows[0].historico : [];
+      const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+      hist.push({ tipo: 'ferias_periodo_excluido', detalhe: `${n}º período excluído: ${descricao}`, data: new Date().toISOString(), usuario: perfil.nome || 'RH' });
+      await sbPatch('colaboradores', `id=eq.${colab._sbColabId}`, { historico: hist });
+    }
+    reg.lancamentos.splice(lancIdx, 1);
+    toast('Lançamento excluído');
     renderDrawerHistorico(colab);
   } catch(e) {
     toast(_erroApi(e), 'erro');
