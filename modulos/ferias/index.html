@@ -3042,6 +3042,12 @@ function renderDrawerHistorico(colab) {
   const novoPaBtn = (IS_RH && !regParaLancar && regs.some(r => !excluir.has(r.status)))
     ? `<div style="text-align:center;padding:12px 0 4px;"><button id="btnRhNovoPa" onclick="rhCriarNovoPa('${key}')" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Criar próximo período aquisitivo</button></div>`
     : '';
+
+  // SVG icons compartilhados (base Gestor)
+  const svgCal = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+  const svgClk = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+  const svgChk = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
   document.getElementById('drawerHistorico').innerHTML = btnPrint + regs.map(r => {
     const saldo = calcSaldo(r);
     let situBadge = '';
@@ -3056,7 +3062,6 @@ function renderDrawerHistorico(colab) {
     const excluirPA = excluir.has(r.status);
     const realizacoes = (r.realizacoes || []).filter(rx => rx.saida && Number(rx.dias) > 0);
 
-
     const lancsHtml = r.lancamentos.map((l, lancIdx) => {
       const gozosDoLanc = realizacoes.filter(rx =>
         Number(rx.lancIdx) === lancIdx || (lancIdx === 0 && rx.lancIdx == null)
@@ -3064,23 +3069,23 @@ function renderDrawerHistorico(colab) {
       const totalGozadoPeriodo = gozosDoLanc.reduce((s, rx) => s + Number(rx.dias), 0);
       const saldoPeriodo = (l.dias || 0) - totalGozadoPeriodo;
       const pct = Math.min(100, l.dias > 0 ? Math.round(totalGozadoPeriodo / l.dias * 100) : 0);
-      const expandKey = `${r._sbId}-${lancIdx}`;
-      const isExpanded = _gozoExpanded.has(expandKey);
       const temGozos = gozosDoLanc.length > 0;
 
-      // ── ícone de acordo — sempre presente, muda de estado
+      // ── dot color
+      const dotColor = excluirPA ? '#CBD5E1' : l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)';
+
+      // ── ícone de acordo (abre seção de gozo)
       let iconCls = 'hist-acordo-icon';
       if (temGozos) iconCls += saldoPeriodo === 0 ? ' completo' : ' ativo';
-      const badgeHtml = temGozos ? `<span class="hist-acordo-badge">${gozosDoLanc.length}</span>` : '';
+      const acordoBadgeHtml = temGozos ? `<span class="hist-acordo-badge">${gozosDoLanc.length}</span>` : '';
       const iconTitle = temGozos ? 'Ver acordos registrados' : 'Registrar acordo de gozo';
       const iconOnclick = temGozos
         ? `toggleGozoSecao('${r._sbId}',${lancIdx})`
         : (!excluirPA && IS_RH) ? `expandirGozoHist('${r._sbId}',${lancIdx})` : '';
-      // ícone: calendário com check
-      const svgIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>${temGozos ? '<polyline points="9 16 11 18 15 14"/>' : '<line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>'}</svg>`;
-      const iconoAcordo = (IS_RH || temGozos) ? `<button class="${iconCls}" onclick="${iconOnclick}" title="${iconTitle}">${svgIcon}${badgeHtml}</button>` : '';
+      const svgIconAcordo = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>${temGozos ? '<polyline points="9 16 11 18 15 14"/>' : '<line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>'}</svg>`;
+      const iconoAcordo = (IS_RH || temGozos) ? `<button class="${iconCls}" onclick="${iconOnclick}" title="${iconTitle}">${svgIconAcordo}${acordoBadgeHtml}</button>` : '';
 
-      // ── seção expansível (progresso + lista + form)
+      // ── seção expansível de gozo (RH: editável; Gestor: somente leitura via gsol-rh-gozo)
       let secaoHtml = '';
       if (IS_RH && !excluirPA) {
         let progressHtml = '';
@@ -3116,7 +3121,6 @@ function renderDrawerHistorico(colab) {
             </div>`;
           listaHtml = `<div class="hist-gozo-lista">${itensHtml}</div>`;
         }
-
         const formHtml = `<div class="hist-gozo-form" id="hist-gozo-${r._sbId}-${lancIdx}">
           <div style="font-size:10px;font-weight:700;color:#1849A9;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">
             Registrar acordo · ${lancIdx + 1}º período (${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d)
@@ -3141,7 +3145,6 @@ function renderDrawerHistorico(colab) {
             <button class="btn-real-save" onclick="salvarGozoHist('${key}','${r._sbId}',${lancIdx})">Salvar acordo</button>
           </div>
         </div>`;
-
         const secaoBorderStyle = temGozos ? 'margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);' : '';
         secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="${secaoBorderStyle}">
           <div class="hist-gozo-section-body">
@@ -3152,34 +3155,42 @@ function renderDrawerHistorico(colab) {
           ${formHtml}
         </div>`;
       } else if (temGozos) {
-        // gestor: só leitura
+        // Gestor: somente leitura — usa gsol-rh-gozo (mesmo visual do drawer do Gestor)
         const barCls = saldoPeriodo === 0 ? 'completo' : 'parcial';
         const txtCor = saldoPeriodo === 0 ? '#027A48' : '#D97706';
         const saldoTxt = saldoPeriodo > 0 ? `${saldoPeriodo}d restantes` : 'Concluído ✓';
-        const itensHtml = gozosDoLanc.map(gx => `<div class="hist-gozo-item">
-          <div class="hist-gozo-item-left">
-            <span class="hist-gozo-item-dates">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span>
-            ${gx.obs ? `<span class="hist-gozo-item-obs">${gx.obs}</span>` : ''}
-          </div></div>`).join('');
+        const gozoItens = gozosDoLanc.map(gx =>
+          `<div class="gsol-rh-gozo"><span>${svgChk} Gozo real</span><span style="font-variant-numeric:tabular-nums;">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span></div>`
+        ).join('');
         secaoHtml = `<div class="hist-gozo-section" id="hist-secao-${r._sbId}-${lancIdx}" style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);">
           <div class="hist-gozo-section-body">
             <div class="hist-gozo-bar-wrap"><div class="hist-gozo-bar-fill ${barCls}" style="width:${pct}%;"></div></div>
             <div class="hist-gozo-progress-row"><span class="hist-gozo-progress-txt" style="color:${txtCor};">${totalGozadoPeriodo}d de ${l.dias}d gozados · ${saldoTxt}</span></div>
-            <div class="hist-gozo-lista">${itensHtml}</div>
+            ${gozoItens}
           </div>
         </div>`;
       }
 
-      // chip de status de gozo (só quando há acordos)
-      let gozoResumoHtml = '';
+      // ── chips de gozo (base Gestor: só quando há acordos)
+      let gozoChipHtml = '';
       if (temGozos) {
         if (saldoPeriodo === 0)
-          gozoResumoHtml = `<div><span class="drawer-tl-gozo-chip ok">✓ Registrado</span></div>`;
+          gozoChipHtml = `<span class="drawer-tl-gozo-chip ok">✓ Registrado</span>`;
         else
-          gozoResumoHtml = `<div><span class="drawer-tl-gozo-chip pendente">⚠ ${saldoPeriodo}d a registrar</span></div>`;
+          gozoChipHtml = `<span class="drawer-tl-gozo-chip pendente">⚠ ${saldoPeriodo}d a registrar</span>`;
       }
 
+      // ── botões de ação exclusivos do RH
+      const isPendGozoLanc = r._aguardandoGozoIdx === lancIdx;
+      const novoIdxClock = isPendGozoLanc ? 'null' : lancIdx;
+      const clockBtnHtml = (!excluirPA && IS_RH) ? `<button class="hist-clock-btn${isPendGozoLanc ? ' ativo' : ''}" onclick="rhToggleAguardandoGozo('${r._sbId}','${novoIdxClock}','${key}')" title="${isPendGozoLanc ? 'Remover marcação de pendente' : 'Marcar como pendente de gozo'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>` : '';
       const editBtnHtml = (!excluirPA && IS_RH) ? `<button class="hist-edit-btn" onclick="abrirEditLanc('${r._sbId}',${lancIdx})" title="Editar período"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '';
+      const deleteBtnHtml = IS_RH ? `<button class="hist-delete-btn" onclick="excluirLancamento('${key}','${r._sbId}',${lancIdx})" title="Excluir lançamento"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : '';
+      const actionBtnsHtml = IS_RH
+        ? `<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">${clockBtnHtml}${editBtnHtml}${deleteBtnHtml}</div>`
+        : '';
+
+      // ── formulário de edição do lançamento (RH apenas)
       const editFormHtml = (!excluirPA && IS_RH) ? `<div class="hist-edit-form" id="hist-edit-${r._sbId}-${lancIdx}" style="display:none;margin-top:8px;">
         <div class="real-add-grid" style="padding:0 0 6px;grid-template-columns:repeat(3,1fr);">
           <div class="real-add-field"><label class="real-add-label">Início</label><input class="real-add-input" type="date" id="hedit-ini-${r._sbId}-${lancIdx}" oninput="calcFimEditLanc('${r._sbId}',${lancIdx})"></div>
@@ -3189,39 +3200,37 @@ function renderDrawerHistorico(colab) {
         <div class="real-add-field" style="margin-bottom:8px;"><label class="real-add-label">Observação</label><input class="real-add-input" type="text" id="hedit-nota-${r._sbId}-${lancIdx}" placeholder="observação opcional…" style="width:100%;box-sizing:border-box;"></div>
         <div style="display:flex;justify-content:flex-end;gap:6px;"><button style="padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;border:1.5px solid #D0D5DD;border-radius:6px;background:none;color:#374151;" onclick="fecharEditLanc('${r._sbId}',${lancIdx})">Cancelar</button><button style="padding:5px 14px;font-size:12px;font-family:inherit;font-weight:600;cursor:pointer;border:none;border-radius:6px;background:#1849A9;color:#fff;" onclick="salvarEditLanc('${key}','${r._sbId}',${lancIdx})">Salvar</button></div>
       </div>` : '';
-      const notaVisivelHtml = l.nota && !(!excluirPA && IS_RH) ? `<div class="drawer-tl-meta">${l.nota}</div>` : l.nota ? `<div class="drawer-tl-meta" id="hist-nota-${r._sbId}-${lancIdx}">${l.nota}</div>` : '';
-      const dotColor = excluirPA ? '#CBD5E1' : l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)';
-      const isPendGozoLanc = r._aguardandoGozoIdx === lancIdx;
-      const novoIdxClock = isPendGozoLanc ? 'null' : lancIdx;
-      const clockBtnHtml = (!excluirPA && IS_RH) ? `<button class="hist-clock-btn${isPendGozoLanc ? ' ativo' : ''}" onclick="rhToggleAguardandoGozo('${r._sbId}','${novoIdxClock}','${key}')" title="${isPendGozoLanc ? 'Remover marcação de pendente' : 'Marcar como pendente de gozo'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>` : '';
-      const deleteBtnHtml = IS_RH ? `<button class="hist-delete-btn" onclick="excluirLancamento('${key}','${r._sbId}',${lancIdx})" title="Excluir lançamento"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : '';
-      const chipPendHtml = isPendGozoLanc ? `<span class="chip-pend-gozo"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Pendente de gozo · ${l.dias}d</span>` : '';
-      return `<div class="drawer-tl-item">
-        <div class="drawer-tl-dot" style="background:${dotColor}"></div>
-        <div class="drawer-tl-info" style="flex:1;min-width:0;">
-          <div class="drawer-tl-dates-row">
-            <div class="drawer-tl-dates-left" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
-              <span class="drawer-tl-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</span>${chipPendHtml}
+
+      // ── nota do lançamento
+      const notaVisivelHtml = l.nota ? `<div class="gsol-rh-nota" id="hist-nota-${r._sbId}-${lancIdx}">${l.nota}</div>` : '';
+
+      // ── chips de status base (Gestor) + chip pendente de gozo
+      const isConcluido = !isPendGozoLanc && !temGozos && l.fim < HOJE;
+      const chipPendGozoHtml = isPendGozoLanc ? `<span class="gsol-pend-chip">${svgClk} Pendente de gozo · ${l.dias}d</span>` : '';
+      const chipConcluHtml = isConcluido ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:10px;background:var(--bg);color:var(--text-sec);border:1px solid var(--border);">Concluído</span>` : '';
+
+      // ── item (estrutura base do Gestor: gsol-rh-item + gsol-rh-dot + gsol-rh-body)
+      return `<div class="gsol-rh-item">
+        <div class="gsol-rh-dot" style="background:${dotColor};"></div>
+        <div class="gsol-rh-body" style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+            <div style="flex:1;min-width:0;">
+              <div class="gsol-rh-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</div>
+              <div class="gsol-rh-chips">
+                <span class="gsol-rh-chip">${svgCal} Lançado RH</span>${chipPendGozoHtml}${chipConcluHtml}${gozoChipHtml}${iconoAcordo}
+              </div>
+              ${notaVisivelHtml}
             </div>
-            <div style="display:flex;align-items:center;gap:4px;">${clockBtnHtml}${editBtnHtml}${deleteBtnHtml}</div>
+            ${actionBtnsHtml}
           </div>
           ${editFormHtml}
-          ${notaVisivelHtml}
-          ${gozoResumoHtml}
           ${secaoHtml}
         </div>
       </div>`;
     }).join('');
 
-    const abonoChipHtml = abonoPec > 0 ? `<div class="drawer-abono-row">
-      <div class="drawer-abono-chip">
-        <div class="drawer-abono-chip-icon">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        </div>
-        <span class="drawer-abono-chip-label">Abono pecuniário</span>
-        <span class="drawer-abono-chip-dias">· ${abonoPec}d</span>
-      </div>
-    </div>` : '';
+    const abonoChipHtml = abonoPec > 0 ? `<div style="padding:6px 12px 0;"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;background:#F5F3FF;border:1px solid #DDD6FE;font-size:11px;color:#5B21B6;font-weight:600;">Abono pecuniário · ${abonoPec}d</span></div>` : '';
+
     // Bloco do período pendente (_novoLanc) com borda âmbar e botões inline
     let novoLancHtml = '';
     if (r._novoLanc && r.status === 'Pendente') {
@@ -3231,16 +3240,18 @@ function renderDrawerHistorico(colab) {
         <button onclick="rhAprovarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprovar</button>
         <button onclick="rhRecusarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;">✕ Recusar</button>
       </div>` : '';
-      novoLancHtml = `<div style="margin-top:6px;border-left:3px solid #F79009;padding-left:10px;">
+      novoLancHtml = `<div style="margin:6px 12px 0;border-left:3px solid #F79009;padding-left:10px;">
         <div style="font-size:13px;font-weight:500;color:var(--text);">${formatDate(nl.inicio)} → ${formatDate(nl.fim)} · ${nl.dias}d</div>
         ${quemPediu}
         ${acaoBtns}
       </div>`;
     }
-    const timelineHtml = lancsHtml ? `<div class="drawer-timeline">${lancsHtml}</div>` : '';
+
+    const timelineHtml = lancsHtml ? `<div class="gsol-rh-tl">${lancsHtml}</div>` : '';
     const lancs = (timelineHtml || abonoChipHtml || novoLancHtml)
       ? (timelineHtml || '') + (novoLancHtml || '') + (abonoChipHtml || '')
-      : '<p style="font-size:12px;color:var(--text-sec);padding:4px 0;">Sem lançamentos neste PA.</p>';
+      : '<p style="font-size:12px;color:var(--text-sec);padding:4px 12px;">Sem lançamentos neste PA.</p>';
+
     const temPendenciaPA = !excluirPA && realizacoes.length > 0 && r.lancamentos.some((l, li) => {
       const gozados = realizacoes.filter(rx => Number(rx.lancIdx) === li || (li === 0 && rx.lancIdx == null)).reduce((s, rx) => s + Number(rx.dias), 0);
       return gozados > 0 && gozados < (l.dias || 0);
@@ -3253,7 +3264,7 @@ function renderDrawerHistorico(colab) {
       if (saldo > 0 && r.paFim >= HOJE) return `<button class="drawer-hist-pa-solicitar-btn" onclick="toggleInlineLancar('${r._sbId}')">Solicitar</button>`;
       return '';
     })();
-    // ── formulário inline de lançamento (mesmo campos do antigo drawerLancar)
+    // ── formulário inline de lançamento
     const inlineFormHtml = (isActivePa && !excluirPA) ? `<div id="drawer-inline-form-${r._sbId}" class="drawer-inline-form-wrap" style="display:none;">
       <div class="dform-section" style="margin:0;padding:0;">
         <div class="dform-section-title" style="margin-bottom:8px;">Período de gozo</div>
@@ -3286,15 +3297,18 @@ function renderDrawerHistorico(colab) {
         <button class="dform-btn-submit" style="padding:5px 16px;font-size:12px;" onclick="confirmarDrawerLancamento()">${IS_RH ? 'Confirmar lançamento' : 'Enviar para aprovação'}</button>
       </div>
     </div>` : '';
-    return `<div class="drawer-hist-pa">
-      <div class="drawer-hist-pa-hdr">
-        <div style="display:flex;align-items:center;">
+
+    // ── PA card (estrutura base do Gestor com saldo/badge/botão inline)
+    const saldoColor = saldo <= 0 ? 'color:#EF4444;font-weight:700;' : '';
+    return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;">
           ${temPendenciaPA ? '<span class="drawer-hist-pa-pendente-dot"></span>' : ''}
-          <span class="drawer-hist-pa-year">PA ${r.ano}</span>
-          <span class="drawer-hist-pa-period"> · ${formatDate(r.paInicio)} → ${formatDate(r.paFim)}</span>
+          <span style="font-size:12px;font-weight:700;color:var(--text);">PA ${r.ano}</span>
+          <span style="font-size:11px;color:var(--text-ter);">${formatDate(r.paInicio)} → ${formatDate(r.paFim)}</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
-          <span style="font-size:12px;color:var(--text-sec);">Saldo ${saldo}/${r.totalDias}d</span>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <span style="font-size:11px;color:var(--text-sec);">Saldo <span style="${saldoColor}">${saldo}d</span> de ${r.totalDias}d</span>
           ${situBadge}
           ${lancarBtnHtml}
         </div>
