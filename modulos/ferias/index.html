@@ -3142,15 +3142,21 @@ function renderDrawerHistorico(colab) {
               <div class="hist-gozo-form" id="hg-edit-${r._sbId}-${lancIdx}-${gi}" style="display:none;margin:0 0 4px;"></div>
             </div>`;
           }).join('');
+          const _temPend = gozosDoLanc.some(gx => gx.status === 'pendente_gestor');
+          const _listaExpanded = _temPend || _gozoExpanded.has(`${r._sbId}-${lancIdx}`);
+          const _chevRot = _listaExpanded ? 'rotate(180deg)' : '';
           progressHtml = `<div class="hist-gozo-bar-wrap"><div class="hist-gozo-bar-fill ${barCls}" style="width:${pct}%;"></div></div>
-            <div class="hist-gozo-progress-row">
+            <div class="hist-gozo-progress-row" style="cursor:pointer;" onclick="toggleGozoLista('${r._sbId}',${lancIdx})">
               <span class="hist-gozo-progress-txt" style="color:${txtCor};">${totalGozadoPeriodo}d de ${l.dias}d gozados · ${saldoTxt}</span>
-              <button class="hist-gozo-add-btn" onclick="expandirGozoHist('${r._sbId}',${lancIdx})">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Adicionar
-              </button>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <svg id="hist-chev-${r._sbId}-${lancIdx}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-ter);transition:transform .2s;transform:${_chevRot};flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+                <button class="hist-gozo-add-btn" onclick="event.stopPropagation();expandirGozoHist('${r._sbId}',${lancIdx})">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Adicionar
+                </button>
+              </div>
             </div>`;
-          listaHtml = `<div class="hist-gozo-lista">${itensHtml}</div>`;
+          listaHtml = `<div class="hist-gozo-lista" id="hist-lista-${r._sbId}-${lancIdx}" style="${_listaExpanded ? '' : 'display:none;'}">${itensHtml}</div>`;
         }
         const formHtml = `<div class="hist-gozo-form" id="hist-gozo-${r._sbId}-${lancIdx}">
           <div style="font-size:10px;font-weight:700;color:#1849A9;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">
@@ -3730,6 +3736,16 @@ async function excluirLancamento(chave, sbId, lancIdx) {
 // ─── Gozo real / Acordos (inline no Histórico) ────────────────────────────────
 const _gozoExpanded = new Set(); // keys: `${sbId}-${lancIdx}`
 
+function toggleGozoLista(sbId, lancIdx) {
+  const k = `${sbId}-${lancIdx}`;
+  const lista = document.getElementById(`hist-lista-${sbId}-${lancIdx}`);
+  if (!lista) return;
+  const abrindo = lista.style.display === 'none';
+  lista.style.display = abrindo ? '' : 'none';
+  const chev = document.getElementById(`hist-chev-${sbId}-${lancIdx}`);
+  if (chev) chev.style.transform = abrindo ? 'rotate(180deg)' : '';
+  if (abrindo) _gozoExpanded.add(k); else _gozoExpanded.delete(k);
+}
 function toggleGozoSecao(sbId, lancIdx) {
   const k    = `${sbId}-${lancIdx}`;
   const sec  = document.getElementById(`hist-secao-${sbId}-${lancIdx}`);
@@ -3743,6 +3759,11 @@ function expandirGozoHist(sbId, lancIdx) {
   if (wrap) wrap.style.display = '';
   const sec = document.getElementById(`hist-secao-${sbId}-${lancIdx}`);
   if (sec) { sec.style.display = ''; _gozoExpanded.add(`${sbId}-${lancIdx}`); }
+  // expand lista too
+  const lista = document.getElementById(`hist-lista-${sbId}-${lancIdx}`);
+  if (lista) lista.style.display = '';
+  const chev = document.getElementById(`hist-chev-${sbId}-${lancIdx}`);
+  if (chev) chev.style.transform = 'rotate(180deg)';
   document.getElementById(`hist-gozo-${sbId}-${lancIdx}`)?.classList.add('open');
   setTimeout(() => document.getElementById(`hg-saida-${sbId}-${lancIdx}`)?.focus(), 50);
 }
