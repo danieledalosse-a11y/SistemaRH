@@ -8460,11 +8460,54 @@ function _renderGsolHistoricoRH(c) {
         : (l.nota || null);
       const nota = _notaTxt ? `<div class="gsol-rh-nota">${_notaTxt}</div>` : '';
 
-      const gozoHtml = gozosDoLanc.map(g => {
-        const ini = _fmtD(g.saida || g.inicio);
-        const fim = _fmtD(g.retorno || g.fim);
-        return `<div class="gsol-rh-gozo"><span>${svgChk} Gozo real</span><span style="font-variant-numeric:tabular-nums;">${ini} → ${fim} · ${g.dias}d</span></div>`;
-      }).join('');
+      const gozosConfirmados = gozosDoLanc.filter(g => g.status !== 'pendente_gestor');
+      const gozosPendGestor  = gozosDoLanc.filter(g => g.status === 'pendente_gestor');
+      const jaSolGozoPend    = gozosPendGestor.length > 0;
+
+      const gozoHtml = [
+        ...gozosConfirmados.map(g => {
+          const ini = _fmtD(g.saida || g.inicio);
+          const fim = _fmtD(g.retorno || g.fim);
+          return `<div class="gsol-rh-gozo"><span>${svgChk} Gozo real</span><span style="font-variant-numeric:tabular-nums;">${ini} → ${fim} · ${g.dias}d</span></div>`;
+        }),
+        ...gozosPendGestor.map(g => {
+          const ini = _fmtD(g.saida || g.inicio);
+          const fim = _fmtD(g.retorno || g.fim);
+          return `<div class="gsol-rh-gozo" style="opacity:0.8;"><span style="color:#B45309;">${svgClk} Aguard. aprovação RH</span><span style="font-variant-numeric:tabular-nums;color:#B45309;">${ini} → ${fim} · ${g.dias}d</span></div>`;
+        }),
+      ].join('');
+
+      const _gozoFormId = `grh-gozo-form-${per.id}-${lancIdx}`;
+      const btnSolGozo = (showPend && !jaSolGozoPend)
+        ? `<button style="margin-top:6px;padding:5px 14px;font-size:12px;font-weight:600;background:#1570EF;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;" onclick="grhToggleSolicitarGozo('${per.id}',${lancIdx})">+ Solicitar gozo</button>`
+        : '';
+      const formSolGozo = (showPend && !jaSolGozoPend) ? `<div id="${_gozoFormId}" style="display:none;margin-top:8px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px;">Solicitar gozo · ${pendDias}d pendentes</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:3px;">Data de saída <span style="color:#EF4444;">*</span></label>
+            <input type="date" id="grh-gs-saida-${per.id}-${lancIdx}" style="width:100%;box-sizing:border-box;padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-family:inherit;" oninput="grhCalcGozoFim('${per.id}',${lancIdx},${pendDias})">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:3px;">Dias <span style="color:#EF4444;">*</span> <span style="font-weight:400;">(máx. ${pendDias})</span></label>
+            <input type="number" id="grh-gs-dias-${per.id}-${lancIdx}" min="1" max="${pendDias}" value="${pendDias}" style="width:100%;box-sizing:border-box;padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-family:inherit;" oninput="grhCalcGozoFim('${per.id}',${lancIdx},${pendDias})">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg-alt,#F9FAFB);border-radius:6px;margin-bottom:8px;font-size:12px;color:var(--text-sec);">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Último dia de férias: <strong id="grh-gs-fim-${per.id}-${lancIdx}" style="color:var(--text);">—</strong>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:3px;">Observação <span style="font-weight:400;">(opcional)</span></label>
+          <textarea id="grh-gs-obs-${per.id}-${lancIdx}" rows="2" style="width:100%;box-sizing:border-box;padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-family:inherit;resize:vertical;" placeholder="Ex: período preferencial, antecipação…"></textarea>
+        </div>
+        <div id="grh-gs-err-${per.id}-${lancIdx}" style="font-size:12px;color:#B42318;margin-bottom:6px;display:none;"></div>
+        <div style="font-size:11px;color:var(--text-ter);margin-bottom:8px;">A solicitação será avaliada pelo RH antes de ser registrada.</div>
+        <div style="display:flex;justify-content:flex-end;gap:6px;">
+          <button style="padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;border:1.5px solid var(--border);border-radius:6px;background:none;color:var(--text);" onclick="grhToggleSolicitarGozo('${per.id}',${lancIdx})">Cancelar</button>
+          <button id="grh-gs-btn-${per.id}-${lancIdx}" style="padding:5px 16px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:none;border-radius:6px;background:#1570EF;color:#fff;" onclick="grhEnviarSolicitarGozo('${per.id}',${lancIdx},'${c.id}',${lancIdx === 1 ? 1 : 0})">Enviar para RH</button>
+        </div>
+      </div>` : '';
 
       return `<div class="gsol-rh-item">
         <div class="gsol-rh-dot" style="background:${dotColor};"></div>
@@ -8473,7 +8516,7 @@ function _renderGsolHistoricoRH(c) {
           <div class="gsol-rh-chips">
             <span class="gsol-rh-chip">${svgCal} Lançado RH</span>${chipPend}${chipConcl}
           </div>
-          ${nota}${gozoHtml}
+          ${nota}${gozoHtml}${btnSolGozo}${formSolGozo}
         </div>
       </div>`;
     }).join('');
@@ -8625,6 +8668,77 @@ async function grhEnviarSolicitacaoInline(perId, colabId) {
     toast('✓ Solicitação enviada para o RH aprovar.');
   } catch(e) {
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Enviar para aprovação'; }
+    showErr('Erro ao enviar: ' + (e.message || e));
+  }
+}
+
+// ─── Solicitar gozo inline (botão dentro de cada lançamento pendente) ─────────
+function grhToggleSolicitarGozo(perId, lancIdx) {
+  const id = `grh-gozo-form-${perId}-${lancIdx}`;
+  const el = document.getElementById(id);
+  if (!el) return;
+  const visible = el.style.display !== 'none';
+  el.style.display = visible ? 'none' : '';
+  if (!visible) {
+    const saidaEl = document.getElementById(`grh-gs-saida-${perId}-${lancIdx}`);
+    if (saidaEl) saidaEl.focus();
+  }
+}
+
+function grhCalcGozoFim(perId, lancIdx, maxDias) {
+  const saida  = document.getElementById(`grh-gs-saida-${perId}-${lancIdx}`)?.value;
+  const diasRaw = parseInt(document.getElementById(`grh-gs-dias-${perId}-${lancIdx}`)?.value) || 0;
+  const dias   = Math.min(diasRaw, maxDias);
+  const el     = document.getElementById(`grh-gs-fim-${perId}-${lancIdx}`);
+  if (!el) return;
+  el.textContent = (saida && dias > 0) ? formatDate(addDays(saida, dias - 1)) : '—';
+}
+
+async function grhEnviarSolicitarGozo(perId, lancIdx, colabId, realLancIdx) {
+  const saida   = document.getElementById(`grh-gs-saida-${perId}-${lancIdx}`)?.value;
+  const diasVal = parseInt(document.getElementById(`grh-gs-dias-${perId}-${lancIdx}`)?.value) || 0;
+  const obs     = (document.getElementById(`grh-gs-obs-${perId}-${lancIdx}`)?.value || '').trim();
+  const errEl   = document.getElementById(`grh-gs-err-${perId}-${lancIdx}`);
+  const btnEl   = document.getElementById(`grh-gs-btn-${perId}-${lancIdx}`);
+
+  const showErr = msg => {
+    if (errEl) { errEl.textContent = msg; errEl.style.display = ''; setTimeout(() => { errEl.style.display = 'none'; }, 6000); }
+    else toast(msg);
+  };
+
+  if (!saida) { showErr('Informe a data de saída.'); return; }
+  if (!diasVal || diasVal < 1) { showErr('Informe a quantidade de dias (mínimo 1).'); return; }
+
+  const per = GESTOR_PERIODOS.find(p => String(p.id) === String(perId));
+  if (!per) { showErr('Período não encontrado.'); return; }
+
+  const row      = per._feriasRow || {};
+  const feriasId = row.id || per.id;
+  const retorno  = addDays(saida, diasVal - 1);
+  const _obsBase = `Solicitado pelo gestor: ${GESTOR_NOME_USUARIO}${obs ? ' — ' + obs : ''}`;
+
+  const listaAtual = Array.isArray(row.realizacoes) ? row.realizacoes.filter(rx => rx.saida && Number(rx.dias) > 0) : [];
+  const novaEntry  = { saida, retorno, dias: diasVal, obs: _obsBase, lancIdx: Number(realLancIdx), status: 'pendente_gestor' };
+  const novaLista  = [...listaAtual, novaEntry];
+
+  try {
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Enviando…'; }
+    const r = await fetch(`${SB_URL}/rest/v1/ferias?id=eq.${feriasId}`, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+      body: JSON.stringify({ realizacoes: novaLista }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+
+    // Atualizar cache local
+    const pIdx = GESTOR_PERIODOS.findIndex(p => String(p.id) === String(perId));
+    if (pIdx !== -1) GESTOR_PERIODOS[pIdx]._feriasRow = { ...row, realizacoes: novaLista };
+
+    const colab = GESTOR_COLABS.find(cc => String(cc.id) === String(colabId));
+    if (colab && typeof _renderGsolHistoricoRH === 'function') _renderGsolHistoricoRH(colab);
+    toast('✓ Solicitação de gozo enviada para o RH aprovar.');
+  } catch(e) {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Enviar para RH'; }
     showErr('Erro ao enviar: ' + (e.message || e));
   }
 }
