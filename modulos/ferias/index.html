@@ -4459,7 +4459,7 @@ function renderListaAnual() {
     if (_statusFiltro === 'hoje')     return regs.some(reg => reg.lancamentos.some(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim));
     if (_statusFiltro === 'risco')    return isRiscoDobra(c);
     if (_statusFiltro === 'sem')      return isSemAgendado(c);
-    if (_statusFiltro === 'ok')       return getPendentes().some(p => p.colab.__key === c.__key);
+    if (_statusFiltro === 'ok')       return getPendentes().some(p => p.colab.__key === c.__key) || c.registros.some(r => (r.realizacoes||[]).some(rx => rx.status === 'pendente_gestor'));
     if (_statusFiltro === 'agendado') return regs.some(reg =>
       ['aprovado','agendado'].includes((reg.status||'').toLowerCase()) &&
       reg.lancamentos.some(l => l.fim && l.fim >= HOJE)
@@ -6424,7 +6424,8 @@ function processGestorFerias(rows) {
       }
       if (Array.isArray(row.realizacoes)) {
         row.realizacoes.forEach((r, i) => {
-          if (r.inicio && Number(r.dias) > 0) lancamentos.push({ id:`${row.id}-r${i}`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:r.inicio, fim:r.fim||r.inicio, dias:Number(r.dias), status:(r.status||'gozado').toLowerCase(), _obsGestor:row.obs_gestor||null });
+          const _ini = r.inicio || r.saida;
+          if (_ini && Number(r.dias) > 0) lancamentos.push({ id:`${row.id}-r${i}`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:_ini, fim:r.fim||r.retorno||_ini, dias:Number(r.dias), status:(r.status||'gozado').toLowerCase(), _obsGestor:row.obs_gestor||null });
         });
       }
       return;
@@ -6497,13 +6498,14 @@ function processGestorFerias(rows) {
     // realizacoes JSONB
     if (Array.isArray(row.realizacoes)) {
       row.realizacoes.forEach((r, i) => {
-        if (r.inicio && Number(r.dias) > 0) {
+        const _ini = r.inicio || r.saida;
+        if (_ini && Number(r.dias) > 0) {
           lancamentos.push({
             id:            `${row.id}-r${i}`,
             colaborador_id: row.colaborador_id,
             periodo_id:    row.id,
-            inicio:        r.inicio,
-            fim:           r.fim || r.inicio,
+            inicio:        _ini,
+            fim:           r.fim || r.retorno || _ini,
             dias:          Number(r.dias),
             status:        (r.status || 'gozado').toLowerCase(),
           });
@@ -6879,10 +6881,11 @@ function renderGestorAlerts(colabsBase) {
     (l.inicio||'') <= hoje && (l.fim||'') >= hoje
   ));
 
-  // Conta solicitados (independente de data) + recusados com datas futuras/ativas
+  // Conta solicitados (independente de data) + recusados com datas futuras/ativas + gozos pendentes de aprovação RH
   const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
     const st = (l.status||'').toLowerCase();
     if (st === 'solicitado') return true;
+    if (st === 'pendente_gestor') return true;
     return st === 'recusado' && l.fim >= hoje;
   });
   const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
