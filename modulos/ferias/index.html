@@ -8420,12 +8420,19 @@ function _renderGsolHistoricoRH(c) {
       l.status !== 'gozado'
     );
 
-    if (!lancamentos.length) return '';
-
     const abono  = Number(row.abono_pecuniario) || 0;
     const usados = lancamentos.reduce((s, l) => s + (Number(l.dias) || 0), 0);
     const saldo  = diasDir - usados - abono;
     const saldoColor = saldo <= 0 ? 'color:#EF4444;font-weight:700;' : '';
+
+    const jaSolicitadoPA = GESTOR_LANCAMENTOS.some(l =>
+      String(l.colaborador_id) === String(c.id) &&
+      String(l.periodo_id) === String(per.id) &&
+      (l.status||'').toLowerCase() === 'solicitado'
+    );
+    const mostrarSolicitar = saldo > 0 && (per.pa_fim || '') >= hoje && !jaSolicitadoPA;
+
+    if (!lancamentos.length && !mostrarSolicitar) return '';
 
     const itens = lancamentos.map((l, li) => {
       const lancIdx = l.id.endsWith('-p2') ? 1 : 0;
@@ -8471,18 +8478,152 @@ function _renderGsolHistoricoRH(c) {
     const abonoRhHtml = abono > 0
       ? `<div style="padding:6px 12px 0;"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;background:#F5F3FF;border:1px solid #DDD6FE;font-size:11px;color:#5B21B6;font-weight:600;">Abono pecuniário · ${abono}d</span></div>`
       : '';
+    const grhSolicitarBtn = mostrarSolicitar
+      ? `<button class="drawer-hist-pa-solicitar-btn" onclick="grhToggleSolicitarInline('${per.id}')">✈ Solicitar</button>`
+      : '';
+    const grhInlineForm = mostrarSolicitar ? `<div id="grh-form-${per.id}" class="drawer-inline-form-wrap" style="display:none;">
+      <div class="dform-section" style="margin:0;padding:0;">
+        <div class="dform-section-title" style="margin-bottom:8px;">Solicitar período de gozo</div>
+        <div class="dform-row" style="margin-bottom:10px;">
+          <div class="dform-field">
+            <label class="dform-label">Data de início <span class="req">*</span></label>
+            <input type="date" id="grh-ini-${per.id}" class="dform-input" oninput="grhCalcFimInline('${per.id}')">
+          </div>
+          <div class="dform-field">
+            <label class="dform-label">Dias <span class="req">*</span> <span class="hint">máx. ${saldo}</span></label>
+            <input type="number" id="grh-dias-${per.id}" class="dform-input" min="5" max="${saldo}" value="${saldo}" oninput="grhCalcFimInline('${per.id}')">
+          </div>
+        </div>
+        <div class="dform-result-bar" id="grh-res-${per.id}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span class="dform-result-label">Último dia de férias</span>
+          <span class="dform-result-val" id="grh-fim-${per.id}">—</span>
+        </div>
+      </div>
+      <div class="dform-section" style="margin:0;padding:0;margin-top:10px;">
+        <div class="dform-field">
+          <label class="dform-label">Observação <span class="hint">(opcional)</span></label>
+          <textarea id="grh-obs-${per.id}" class="dform-textarea" placeholder="Ex: solicitação antecipada, preferência de período…"></textarea>
+        </div>
+      </div>
+      <div id="grh-err-${per.id}" style="font-size:12px;color:#B42318;padding:4px 0;display:none;"></div>
+      <div style="display:flex;justify-content:flex-end;gap:6px;padding-top:4px;">
+        <button style="padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;border:1.5px solid #D0D5DD;border-radius:6px;background:none;color:#374151;" onclick="grhToggleSolicitarInline('${per.id}')">Cancelar</button>
+        <button class="dform-btn-submit" style="padding:5px 16px;font-size:12px;" id="grh-btn-${per.id}" onclick="grhEnviarSolicitacaoInline('${per.id}','${c.id}')">Enviar para aprovação</button>
+      </div>
+    </div>` : '';
+
     return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <div>
           <span style="font-size:12px;font-weight:700;color:var(--text);">PA ${paAno}</span>
           <span style="font-size:11px;color:var(--text-ter);margin-left:8px;">${paIni} → ${paFim}</span>
         </div>
-        <span style="font-size:11px;color:var(--text-sec);">Saldo <span style="${saldoColor}">${saldo}d</span> de ${diasDir}d</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span style="font-size:11px;color:var(--text-sec);">Saldo <span style="${saldoColor}">${saldo}d</span> de ${diasDir}d</span>
+          ${grhSolicitarBtn}
+        </div>
       </div>
+      ${grhInlineForm}
       ${abonoRhHtml}
-      <div class="gsol-rh-tl">${itens}</div>
+      ${lancamentos.length ? `<div class="gsol-rh-tl">${itens}</div>` : ''}
     </div>`;
   }).join('');
+}
+
+// ─── Solicitar inline na aba Histórico RH (Gestor) ──────────────────────────
+function grhToggleSolicitarInline(perId) {
+  const form = document.getElementById('grh-form-' + perId);
+  if (!form) return;
+  const visible = form.style.display !== 'none';
+  form.style.display = visible ? 'none' : '';
+  if (!visible) {
+    const iniEl = document.getElementById('grh-ini-' + perId);
+    if (iniEl) iniEl.focus();
+  }
+}
+
+function grhCalcFimInline(perId) {
+  const ini  = document.getElementById('grh-ini-' + perId)?.value;
+  const dias = parseInt(document.getElementById('grh-dias-' + perId)?.value) || 0;
+  const el   = document.getElementById('grh-fim-' + perId);
+  if (!el) return;
+  if (ini && dias > 0) {
+    el.textContent = formatDate(addDays(ini, dias - 1));
+  } else {
+    el.textContent = '—';
+  }
+}
+
+async function grhEnviarSolicitacaoInline(perId, colabId) {
+  const inicio  = document.getElementById('grh-ini-' + perId)?.value;
+  const diasVal = parseInt(document.getElementById('grh-dias-' + perId)?.value) || 0;
+  const obs     = (document.getElementById('grh-obs-' + perId)?.value || '').trim();
+  const errEl   = document.getElementById('grh-err-' + perId);
+  const btnEl   = document.getElementById('grh-btn-' + perId);
+
+  const showErr = msg => {
+    if (errEl) { errEl.textContent = msg; errEl.style.display = ''; setTimeout(() => { errEl.style.display = 'none'; }, 6000); }
+    else toast(msg);
+  };
+
+  if (!inicio || !diasVal) { showErr('Preencha a data de início e a quantidade de dias.'); return; }
+  if (diasVal < 5) { showErr('O mínimo de dias por período é 5.'); return; }
+
+  const per = GESTOR_PERIODOS.find(p => String(p.id) === String(perId));
+  if (!per) { showErr('Período não encontrado.'); return; }
+
+  const row = per._feriasRow || {};
+  const fim = addDays(inicio, diasVal - 1);
+
+  const jaSolicitado = GESTOR_LANCAMENTOS.some(l =>
+    String(l.periodo_id) === String(perId) &&
+    (l.status||'').toLowerCase() === 'solicitado'
+  );
+  if (jaSolicitado) { showErr('Já existe uma solicitação aguardando aprovação do RH para este período.'); return; }
+
+  let patchData, slotKey;
+  const _obsBase = `Solicitado por: ${GESTOR_NOME_USUARIO}${obs ? ' — ' + obs : ''}`;
+  if (!row.periodo1_inicio) {
+    patchData = { periodo1_inicio: inicio, periodo1_fim: fim, dias1: diasVal, obs_gestor: _obsBase, status: 'Pendente' };
+    slotKey = 'p1';
+  } else if (!row.periodo2_inicio) {
+    patchData = { periodo2_inicio: inicio, periodo2_fim: fim, dias2: diasVal, obs_gestor: _obsBase, status: 'Pendente' };
+    slotKey = 'p2';
+  } else {
+    showErr('Ambos os períodos já estão preenchidos. Contate o RH.'); return;
+  }
+
+  try {
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Enviando...'; }
+    const r = await fetch(`${SB_URL}/rest/v1/ferias?id=eq.${perId}`, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+      body: JSON.stringify(patchData),
+    });
+    if (!r.ok) throw new Error(await r.text());
+
+    const pIdx = GESTOR_PERIODOS.findIndex(p => String(p.id) === String(perId));
+    if (pIdx !== -1) GESTOR_PERIODOS[pIdx]._feriasRow = { ...row, ...patchData };
+
+    GESTOR_LANCAMENTOS.push({
+      id: `${perId}-${slotKey}`, colaborador_id: colabId, periodo_id: perId,
+      inicio, fim, dias: diasVal, status: 'solicitado', _obsGestor: _obsBase,
+    });
+
+    if (window._gestorAguardAprov && !window._gestorAguardAprov.some(id => String(id) === String(colabId))) {
+      window._gestorAguardAprov.push(String(colabId));
+    }
+
+    const colab = GESTOR_COLABS.find(cc => String(cc.id) === String(colabId));
+    if (colab && typeof _renderGsolHistoricoRH === 'function') _renderGsolHistoricoRH(colab);
+    if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
+    if (typeof renderGestorAtencao === 'function') renderGestorAtencao();
+    toast('✓ Solicitação enviada para o RH aprovar.');
+  } catch(e) {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Enviar para aprovação'; }
+    showErr('Erro ao enviar: ' + (e.message || e));
+  }
 }
 
 function gestorFmtData(str) {
