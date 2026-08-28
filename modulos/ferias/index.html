@@ -2626,6 +2626,16 @@ function iniciaFeriasNoMes(colab, anoMes) {
   return result;
 }
 
+function countGozoPendentes() {
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  let n = 0;
+  COLABORADORES.forEach(c => c.registros.forEach(r => {
+    if (!excluir.has(r.status))
+      n += (r.realizacoes || []).filter(rx => rx.status === 'pendente_gestor').length;
+  }));
+  return n;
+}
+
 function getPendentes() {
   const result = [];
   COLABORADORES.forEach(colab => {
@@ -3066,10 +3076,11 @@ function renderDrawerHistorico(colab) {
       const gozosDoLanc = realizacoes.filter(rx =>
         Number(rx.lancIdx) === lancIdx || (lancIdx === 0 && rx.lancIdx == null)
       );
-      const totalGozadoPeriodo = gozosDoLanc.reduce((s, rx) => s + Number(rx.dias), 0);
+      const gozosConf = gozosDoLanc.filter(gx => gx.status !== 'pendente_gestor');
+      const totalGozadoPeriodo = gozosConf.reduce((s, rx) => s + Number(rx.dias), 0);
       const saldoPeriodo = (l.dias || 0) - totalGozadoPeriodo;
       const pct = Math.min(100, l.dias > 0 ? Math.round(totalGozadoPeriodo / l.dias * 100) : 0);
-      const temGozos = gozosDoLanc.length > 0;
+      const temGozos = gozosConf.length > 0;
 
       // ── dot color
       const dotColor = excluirPA ? '#CBD5E1' : l.fim < HOJE ? 'var(--text-ter)' : 'var(--green)';
@@ -3094,7 +3105,26 @@ function renderDrawerHistorico(colab) {
           const barCls  = saldoPeriodo === 0 ? 'completo' : 'parcial';
           const txtCor  = saldoPeriodo === 0 ? '#027A48' : '#D97706';
           const saldoTxt = saldoPeriodo > 0 ? `${saldoPeriodo}d restantes` : 'Período concluído ✓';
-          const itensHtml = gozosDoLanc.map((gx, gi) => `<div>
+          const itensHtml = gozosDoLanc.map((gx, gi) => {
+            if (gx.status === 'pendente_gestor') {
+              return `<div class="hist-gozo-item" style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;padding:6px 8px;margin-bottom:4px;gap:8px;">
+                <div class="hist-gozo-item-left" style="flex:1;">
+                  <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+                    <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:#92400E;">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      Aguard. aprovação RH
+                    </span>
+                  </div>
+                  <span class="hist-gozo-item-dates">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span>
+                  ${gx.obs ? `<span class="hist-gozo-item-obs">${gx.obs}</span>` : ''}
+                </div>
+                <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+                  <button onclick="rhAprovarGozoPendente('${key}','${r._sbId}',${lancIdx},'${gx.saida}')" style="padding:3px 10px;border-radius:5px;border:none;background:#16A34A;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">✓ Aprovar</button>
+                  <button onclick="rhRejeitarGozoPendente('${key}','${r._sbId}',${lancIdx},'${gx.saida}')" style="padding:3px 10px;border-radius:5px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:11px;font-weight:600;cursor:pointer;">✕ Rejeitar</button>
+                </div>
+              </div>`;
+            }
+            return `<div>
               <div class="hist-gozo-item">
                 <div class="hist-gozo-item-left">
                   <span class="hist-gozo-item-dates">${formatDate(gx.saida)} → ${formatDate(gx.retorno)} · ${gx.dias}d</span>
@@ -3110,7 +3140,8 @@ function renderDrawerHistorico(colab) {
                 </div>
               </div>
               <div class="hist-gozo-form" id="hg-edit-${r._sbId}-${lancIdx}-${gi}" style="display:none;margin:0 0 4px;"></div>
-            </div>`).join('');
+            </div>`;
+          }).join('');
           progressHtml = `<div class="hist-gozo-bar-wrap"><div class="hist-gozo-bar-fill ${barCls}" style="width:${pct}%;"></div></div>
             <div class="hist-gozo-progress-row">
               <span class="hist-gozo-progress-txt" style="color:${txtCor};">${totalGozadoPeriodo}d de ${l.dias}d gozados · ${saldoTxt}</span>
@@ -3895,6 +3926,45 @@ async function salvarEditGozo(key, sbId, lancIdx, gi, formId) {
   } catch(e) { toast(_erroApi(e), 'erro'); }
 }
 
+// ─── Gozo pendente gestor: aprovar / rejeitar (RH) ───────────────────────────
+async function rhAprovarGozoPendente(colabKey, sbId, lancIdx, saida) {
+  const colab = COLABORADORES.find(c => c.__key === colabKey);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  const nova = (reg.realizacoes || []).map(rx => {
+    if (rx.status === 'pendente_gestor' && Number(rx.lancIdx) === Number(lancIdx) && rx.saida === saida) {
+      const { status, ...rest } = rx;
+      return rest; // remove o campo status → gozo confirmado
+    }
+    return rx;
+  });
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: nova });
+    reg.realizacoes = nova;
+    _gozoExpanded.add(`${sbId}-${lancIdx}`);
+    renderDrawerHistorico(colab);
+    renderMetricas();
+    toast('✓ Gozo aprovado e registrado!');
+  } catch(e) { toast(_erroApi(e), 'erro'); }
+}
+
+async function rhRejeitarGozoPendente(colabKey, sbId, lancIdx, saida) {
+  if (!confirm('Rejeitar esta solicitação de gozo?')) return;
+  const colab = COLABORADORES.find(c => c.__key === colabKey);
+  const reg   = colab?.registros.find(r => r._sbId == sbId);
+  if (!reg) return;
+  const nova = (reg.realizacoes || []).filter(rx =>
+    !(rx.status === 'pendente_gestor' && Number(rx.lancIdx) === Number(lancIdx) && rx.saida === saida)
+  );
+  try {
+    await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: nova });
+    reg.realizacoes = nova;
+    renderDrawerHistorico(colab);
+    renderMetricas();
+    toast('Solicitação rejeitada.');
+  } catch(e) { toast(_erroApi(e), 'erro'); }
+}
+
 // ─── Navegação ───────────────────────────────────────────────────────────────
 function setTab(nome, btn) {
   ['visao-rh','lancar','minha-equipe','historico'].forEach(t => {
@@ -3982,7 +4052,7 @@ function renderMetricas() {
   const deFeriasAgora = base.filter(c => deFeriasNoPeriodo(c, anoMes).length > 0).length;
   const riscoDobra    = base.filter(c => isRiscoDobra(c)).length;
   const semAgendado   = base.filter(c => isSemAgendado(c)).length;
-  const pendentes     = getPendentes().length;
+  const pendentes     = getPendentes().length + countGozoPendentes();
 
   document.getElementById('cnt-cal').textContent   = deFeriasAgora;
   document.getElementById('cnt-dobra').textContent  = riscoDobra;
@@ -4331,7 +4401,7 @@ function renderSemAgendado() {
 // ─── Pendentes ───────────────────────────────────────────────────────────────
 function renderPendentes() {
   const lista = getPendentes();
-  document.getElementById('cnt-pend').textContent = lista.length;
+  document.getElementById('cnt-pend').textContent = lista.length + countGozoPendentes();
 
   if (!lista.length) {
     document.getElementById('pendContent').innerHTML =
@@ -5403,7 +5473,7 @@ function renderKPI() {
     );
     if (temAgendado) nAgendados++;
   });
-  nPend = getPendentes().length;
+  nPend = getPendentes().length + countGozoPendentes();
 
   document.getElementById('kpiTotal').textContent = lista.length;
   document.getElementById('kpiHoje').textContent  = nHoje;
@@ -5658,6 +5728,7 @@ function atualizarSidebarContadores() {
     if (isRiscoDobra(c)) risco++;
     if (reg.status === 'Pendente' && reg._novoLanc) pend++;
   });
+  pend += countGozoPendentes();
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('sc2-cnt-todos', tot);
   set('sc2-cnt-hoje', hj);
