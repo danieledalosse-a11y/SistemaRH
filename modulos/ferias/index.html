@@ -4502,8 +4502,11 @@ function renderListaAnual() {
         return reg.paInicio && reg.paFim && HOJE >= reg.paInicio && HOJE <= reg.paFim;
       });
     } else if (_statusFiltro === 'ok') {
-      // Pendentes: inclui status 'Pendente' (não exclui como os demais filtros)
-      pasDoAno = c.registros.filter(reg => reg.status === 'Pendente' && reg._novoLanc);
+      // Pendentes: inclui status 'Pendente' OU realizacoes com pendente_gestor
+      pasDoAno = c.registros.filter(reg =>
+        (reg.status === 'Pendente' && reg._novoLanc) ||
+        (reg.realizacoes||[]).some(rx => rx.status === 'pendente_gestor')
+      );
     } else if (_statusFiltro === 'agendado') {
       // Agendados: PAs com ao menos um lançamento aprovado com fim >= hoje
       pasDoAno = c.registros.filter(reg => {
@@ -7498,9 +7501,9 @@ function renderGestorAtencao() {
   } else if (_gestorAlertaAtivo === 'aguard') {
     colabs = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => {
       const st = (l.status||'').toLowerCase();
-      if (!['solicitado','recusado'].includes(st)) return false;
+      if (!['solicitado','recusado','pendente_gestor'].includes(st)) return false;
       if (String(l.colaborador_id) !== String(c.id)) return false;
-      return st === 'solicitado' || (l.fim||'') >= _hj; // solicitado: sem filtro de data
+      return st === 'solicitado' || st === 'pendente_gestor' || (l.fim||'') >= _hj; // solicitado/pendente_gestor: sem filtro de data
     }));
     _sub = `${colabs.length} colaborador(es) com solicitações pendentes ou recusas para analisar`;
   } else if (_gestorAlertaAtivo === 'agendado') {
