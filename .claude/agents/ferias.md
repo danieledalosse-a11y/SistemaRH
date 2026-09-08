@@ -528,7 +528,134 @@ O dropdown de setor/empresa na aba Lista Anual usa `MultiSelect` com instâncias
 
 **Contagem "Todos":** ao contar colaboradores para o filtro, o total inclui colaboradores sem setor/empresa definido — não restringir apenas aos que possuem o campo preenchido.
 
+## Fluxo Gestor → RH: solicitação de gozo (`pendente_gestor`)
+
+O Gestor pode solicitar o registro de dias de gozo real para lançamentos com saldo pendente. A solicitação fica aguardando aprovação do RH.
+
+### Status especial em `realizacoes`
+
+```js
+// Entrada salva pelo Gestor ao solicitar gozo
+{
+  saida:   'YYYY-MM-DD',
+  retorno: 'YYYY-MM-DD',
+  dias:    8,
+  lancIdx: 0,
+  obs:     'Solicitado pelo gestor: Nome — obs opcional',
+  status:  'pendente_gestor',   // ← diferencia de gozo confirmado
+}
+```
+
+### Regra crítica: `pendente_gestor` NÃO é lançamento autônomo
+
+Em `_renderGsolHistoricoRH` (Gestor), o filtro de lançamentos **exclui** `pendente_gestor`:
+
+```js
+const lancamentos = GESTOR_LANCAMENTOS.filter(l =>
+  String(l.colaborador_id) === String(c.id) &&
+  String(l.periodo_id) === String(per.id) &&
+  l.status !== 'gozado' &&
+  l.status !== 'pendente_gestor'   // ← obrigatório: evita bloco duplicado
+);
+```
+
+Entradas `pendente_gestor` são renderizadas **somente** dentro do `gozoHtml` do lançamento pai (via `row.realizacoes`).
+
+### Funções de aprovação/rejeição (RH)
+
+```js
+rhAprovarGozoPendente(colabKey, sbId, lancIdx, saida)
+// Remove o campo `status` da entry → gozo efetivado
+
+rhRejeitarGozoPendente(colabKey, sbId, lancIdx, saida)
+// Remove a entry inteira da lista realizacoes
+```
+
+**Padrão de error handling obrigatório** (separar PATCH de re-render):
+```js
+try {
+  await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: nova });
+} catch(e) { toast(_erroApi(e), 'erro'); return; }
+reg.realizacoes = nova;
+try { renderDrawerHistorico(colab); } catch(_) {}
+try { renderMetricas(); } catch(_) {}
+toast('✓ Gozo aprovado e registrado!');
+```
+**Por quê:** erros na re-renderização (JS, não Supabase) eram capturados pelo mesmo catch e exibiam "Erro ao salvar" mesmo quando o PATCH havia funcionado.
+
+### Contagem de pendentes
+
+`countGozoPendentes()` — varre `COLABORADORES[].registros[].realizacoes` somando entradas com `status === 'pendente_gestor'`. Somado ao `getPendentes().length` em todas as métricas/KPIs.
+
+### Botão "+ Solicitar gozo" (Gestor)
+
+Aparece no lançamento quando `showPend && !jaSolGozoPend`. Ao clicar, abre form inline via `grhToggleSolicitarGozo(perId, lancIdx)`.
+
+Função de envio: `grhEnviarSolicitarGozo(perId, lancIdx, colabId, realLancIdx)` — faz PATCH em `ferias.realizacoes` com a nova entry `pendente_gestor`.
+
+### isActivePa — regra de exibição do botão Solicitar
+
+```js
+const isActivePa = (per.pa_inicio || '') <= hoje;
+// PA já iniciou — pode ser vencido (usuário consegue solicitar saldo retroativo)
+```
+PAs futuros (pa_inicio > hoje) não exibem o botão. PAs vencidos com saldo exibem normalmente.
+
+## Drawer Gestor — aba "Férias" (ex-"Histórico RH")
+
+- Aba renomeada de "Histórico RH" para **"Férias"**
+- Aba "Solicitações" está **oculta** (`style="display:none;"`) — não excluída, para testes
+- Footer com botões "Nova solicitação" / "Histórico" também oculto
+- `gestorAbrirSolicitacoes` abre direto na aba `'rh'` (não `'sol'`)
+
+## Drawer Gestor — gozos colapsados
+
+Os itens de gozo real ficam colapsados por padrão na visão do Gestor. Toggle via pill azul:
+
+```js
+function gsolToggleGozoLista(perId, lancIdx) {
+  const lista = document.getElementById(`gsol-lista-${perId}-${lancIdx}`);
+  const abrindo = lista.style.display === 'none';
+  lista.style.display = abrindo ? '' : 'none';
+  const chev = document.getElementById(`gsol-chev-${perId}-${lancIdx}`);
+  if (chev) chev.style.transform = abrindo ? 'rotate(180deg)' : '';
+}
+```
+
+IDs: `gsol-lista-${per.id}-${lancIdx}` (div colapsável) e `gsol-chev-${per.id}-${lancIdx}` (ícone chevron).
+
+O chip **"Pendente de gozo · Xd"** sempre visível. Entradas `pendente_gestor` forçam expansão automática.
+
+## Drawer RH — gozos colapsados
+
+Lista de itens de gozo colapsada por padrão com chevron na linha de progresso:
+
+```js
+function toggleGozoLista(sbId, lancIdx) {
+  const lista = document.getElementById(`hist-lista-${sbId}-${lancIdx}`);
+  // toggle display + chevron rotate
+}
+```
+
+IDs: `hist-lista-${sbId}-${lancIdx}` e `hist-chev-${sbId}-${lancIdx}`.
+
+- Entradas `pendente_gestor` forçam expansão automática (`_temPend`)
+- Botão "Adicionar" só aparece quando `saldoPeriodo > 0`
+- `expandirGozoHist` também expande a lista ao abrir o form
+
+## Saldo destacado no cabeçalho do PA (Gestor drawer)
+
+O número de saldo usa tipografia maior e cor semântica:
+
+```js
+// saldo <= 0 → verde (concluído); saldo <= 5 → âmbar (crítico); saldo > 5 → azul (normal)
+`<span style="font-size:15px;font-weight:800;${saldo<=0?'color:#10B981;':saldo<=5?'color:#F59E0B;':'color:#1570EF;'}">${saldo}d</span>`
+```
+
+Label "Saldo" e "de 30d" ficam em cinza pequeno (`font-size:10px; color:var(--text-ter)`).
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
 - Aprovação em lote
+- Eliminar aba "Solicitações" permanentemente (aguardando testes do novo fluxo unificado)
