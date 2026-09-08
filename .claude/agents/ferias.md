@@ -460,15 +460,36 @@ const saldoPeriodo = (l.dias || 0) - totalGozado; // saldo restante
 ### UI no drawer RH
 
 - Ícone de "acordo" (calendário) em cada lançamento; muda de estado (neutro / ativo / completo)
-- `temGozos` → abre seção colapsável com lista e barra de progresso
+- `temGozos` → renderiza seção com barra de progresso + lista colapsável. **Quando `!temGozos`, a seção inteira não é renderizada** (div vazia não aparece)
 - `!temGozos` + IS_RH → abre form inline para criar primeiro acordo
-- `toggleGozoSecao(sbId, lancIdx)` — expande/recolhe seção de acordos
-- `expandirGozoHist(sbId, lancIdx)` — abre form inline para novo acordo
+- **Ícone de calendário chama `toggleGozoLista`** (não `toggleGozoSecao`) — expande/colapsa apenas os itens, mantendo a barra de progresso visível
+- `toggleGozoLista(sbId, lancIdx)` — expande/recolhe lista de itens (`hist-lista-${sbId}-${lancIdx}`) + gira chevron (`hist-chev-${sbId}-${lancIdx}`)
+- `toggleGozoSecao(sbId, lancIdx)` — ainda existe mas **não é mais usado pelo ícone**; usado internamente
+- `expandirGozoHist(sbId, lancIdx)` — abre form inline para novo acordo; também expande a lista
 - `fecharGozoHist(sbId, lancIdx)` — fecha e recolhe se vazio
-- `salvarGozo(key, sbId, lancIdx)` — valida e adiciona item à lista; PATCH Supabase
-- `removerGozo(key, sbId, lancIdx, gi)` — remove item pelo índice; PATCH Supabase
+- `salvarGozoHist(key, sbId, lancIdx)` — valida e adiciona item à lista; PATCH Supabase
+- `removerGozoHist(key, sbId, lancIdx, gi)` — remove item pelo índice; PATCH Supabase
 - `abrirEditGozo(key, sbId, lancIdx, gi)` — edita item existente inline
+- Botão "Adicionar" só aparece quando `saldoPeriodo > 0` (oculto em períodos concluídos)
+- Lista de itens colapsada por padrão; `_gozoExpanded` Set controla estado; entradas `pendente_gestor` forçam expansão
 - Ponto âmbar no cabeçalho do PA quando há pendência (saldo não zerado com acordo)
+
+### Saldo destacado no cabeçalho do PA (drawer RH e Gestor)
+
+Mesmo padrão nas duas visões — número grande bold com cor semântica:
+
+```js
+// saldo <= 0 → verde (#10B981); saldo <= 5 → âmbar (#F59E0B); saldo > 5 → azul (#1570EF)
+const _saldoNumColor = saldo <= 0 ? '#10B981' : saldo <= 5 ? '#F59E0B' : '#1570EF';
+// HTML:
+`<span style="font-size:10px;color:var(--text-ter);font-weight:500;">Saldo</span>
+ <span style="font-size:15px;font-weight:800;line-height:1;color:${_saldoNumColor};">${saldo}d</span>
+ <span style="font-size:10px;color:var(--text-ter);">de ${totalDias}d</span>`
+```
+
+**Estilo do collapse difere entre visões** (comportamento igual, visual distinto):
+- RH: chevron integrado na linha de progresso (interface densa/técnica)
+- Gestor: pill azul explícito "N gozos registrados" (interface mais guiada)
 
 ### Leitura no `processGestorFerias`
 
