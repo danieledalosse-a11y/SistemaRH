@@ -8608,6 +8608,17 @@ function _renderGsolHistoricoRH(c) {
         </div>
       </div>` : '';
 
+      const _gsolListaId = `gsol-lista-${per.id}-${lancIdx}`;
+      const _gsolChevId  = `gsol-chev-${per.id}-${lancIdx}`;
+      const _gozoToggleHtml = gozosDoLanc.length > 0 ? `
+        <div style="margin-top:5px;">
+          <button onclick="gsolToggleGozoLista('${per.id}',${lancIdx})" style="display:inline-flex;align-items:center;gap:4px;background:none;border:none;padding:0;cursor:pointer;font-size:11px;color:var(--text-sec);font-family:inherit;">
+            <svg id="${_gsolChevId}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s;"><polyline points="6 9 12 15 18 9"/></svg>
+            ${gozosDoLanc.length} gozo${gozosDoLanc.length > 1 ? 's' : ''} registrado${gozosDoLanc.length > 1 ? 's' : ''}
+          </button>
+          <div id="${_gsolListaId}" style="display:none;margin-top:4px;">${gozoHtml}</div>
+        </div>` : '';
+
       return `<div class="gsol-rh-item">
         <div class="gsol-rh-dot" style="background:${dotColor};"></div>
         <div class="gsol-rh-body">
@@ -8615,7 +8626,7 @@ function _renderGsolHistoricoRH(c) {
           <div class="gsol-rh-chips">
             <span class="gsol-rh-chip">${svgCal} Lançado RH</span>${chipPend}${chipConcl}
           </div>
-          ${nota}${gozoHtml}${btnSolGozo}${formSolGozo}
+          ${nota}${_gozoToggleHtml}${btnSolGozo}${formSolGozo}
         </div>
       </div>`;
     }).join('');
@@ -8772,6 +8783,14 @@ async function grhEnviarSolicitacaoInline(perId, colabId) {
 }
 
 // ─── Solicitar gozo inline (botão dentro de cada lançamento pendente) ─────────
+function gsolToggleGozoLista(perId, lancIdx) {
+  const lista = document.getElementById(`gsol-lista-${perId}-${lancIdx}`);
+  if (!lista) return;
+  const abrindo = lista.style.display === 'none';
+  lista.style.display = abrindo ? '' : 'none';
+  const chev = document.getElementById(`gsol-chev-${perId}-${lancIdx}`);
+  if (chev) chev.style.transform = abrindo ? 'rotate(180deg)' : '';
+}
 function grhToggleSolicitarGozo(perId, lancIdx) {
   const id = `grh-gozo-form-${perId}-${lancIdx}`;
   const el = document.getElementById(id);
