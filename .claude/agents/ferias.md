@@ -675,6 +675,84 @@ O número de saldo usa tipografia maior e cor semântica:
 
 Label "Saldo" e "de 30d" ficam em cinza pequeno (`font-size:10px; color:var(--text-ter)`).
 
+## Lançamento RH — comportamento pós-confirmação (atualizado 2026-09-08)
+
+### Drawer permanece aberto após confirmar lançamento
+
+`confirmarDrawerLancamento` (função principal do botão "Confirmar lançamento"):
+
+```js
+// Salvar key ANTES do renderAll — renderAll fecha o drawer
+const _keyParaReabrir = _drawerKey;
+try { renderAll(); } catch(_) {}
+if (_keyParaReabrir) try { _abrirDrawerInterno(_keyParaReabrir); } catch(_) {}
+```
+
+**Regra crítica de ordem:** `renderAll()` sempre antes de `_abrirDrawerInterno()`. Inverter a ordem faz o renderAll fechar o drawer recém-aberto.
+
+**Por quê não usar só `renderDrawerHistorico`:** essa função atualiza apenas o conteúdo interno do drawer — não reabre o drawer se ele foi fechado por `renderAll`. É necessário chamar `_abrirDrawerInterno` para recolocar a classe `open`.
+
+### Observação salva no banco
+
+Campo `dMotivo` (textarea "Observação") capturado como `mot`. Incluído no PATCH como `nota1` ou `nota2` conforme o slot:
+
+```js
+const campo = reg.lancamentos.length === 0
+  ? { periodo1_inicio: ini, periodo1_fim: fim, dias1: dias, nota1: mot || null, status: 'Aprovado' }
+  : { periodo2_inicio: ini, periodo2_fim: fim, dias2: dias, nota2: mot || null, status: 'Aprovado' };
+```
+
+Objeto em memória também recebe a nota:
+```js
+reg.lancamentos.push({ inicio: ini, fim, dias, nota: mot || null });
+```
+
+Exibição: `l.nota` — aparece como `· texto` na linha do lançamento no drawer e no print/PDF.
+
+## Validação de campos de data — ano máximo 4 dígitos
+
+Listener global (capture phase) intercepta todos os inputs em campos `type="date"` não-readonly e trunca o ano se ultrapassar 4 dígitos:
+
+```js
+document.addEventListener('input', function(e) {
+  if (e.target.type !== 'date' || e.target.readOnly) return;
+  const parts = (e.target.value || '').split('-');
+  if (parts[0] && parts[0].length > 4) {
+    parts[0] = parts[0].slice(0, 4);
+    e.target.value = parts.join('-');
+  }
+}, true);
+```
+
+Cobre todos os formulários do módulo (lançamento, edição, gozo real, filtros) sem precisar adicionar `oninput` campo a campo.
+
+## Colaborador sem PA no módulo Férias
+
+O módulo exibe apenas colaboradores que têm pelo menos um registro na tabela `ferias`. Colaborador ativo em `colaboradores` mas sem row em `ferias` aparece no autocomplete mas mostra "Todos 0" na lista.
+
+**Solução:** criar PAs via script Python direto no Supabase:
+
+```python
+import urllib.request, json
+SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co'
+KEY = '<SB_SECRET_KEY>'  # chave secreta — ver memory supabase_config.md
+headers = {'apikey': KEY, 'Authorization': 'Bearer ' + KEY,
+           'Content-Type': 'application/json', 'Prefer': 'return=representation'}
+
+# Campos mínimos obrigatórios (nunca incluir dias_direito):
+pa = {'colaborador_id': <id>, 'matricula_colaborador': '<mat>',
+      'ano': <ano_pa_fim>, 'pa_inicio': 'YYYY-MM-DD', 'pa_fim': 'YYYY-MM-DD', 'status': 'Aprovado'}
+req = urllib.request.Request(SB_URL + '/rest/v1/ferias', headers=headers,
+                              data=json.dumps(pa).encode(), method='POST')
+```
+
+`autocriarPasFaltantes()` (chamado no carregamento) só estende PAs a partir de um registro existente — se não houver nenhum, cria manualmente todos os PAs (do PA inicial até o vigente).
+
+**Caso Cleber Pastorelli (2026-09-08):** dois vínculos distintos:
+- mat.229 / id=1966 — Matriz, admissão 2014-03-08 → PAs 2020–2026 já existiam
+- mat.208 / id=1796 — Paranavaí, admissão 2023-10-01 → PAs criados manualmente (ids 1877, 1878, 1879)
+Ambos aparecem separadamente na lista (vínculos distintos, comportamento correto).
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
