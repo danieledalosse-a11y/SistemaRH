@@ -3592,15 +3592,16 @@ async function confirmarDrawerLancamento() {
   if (IS_RH && reg._sbId) {
     // RH lança direto como Aprovado — persiste imediatamente
     const lancamentos = [...reg.lancamentos, { inicio: ini, fim, dias }];
-    const campo = reg.lancamentos.length === 0 ? { periodo1_inicio: ini, periodo1_fim: fim, dias1: dias, status: 'Aprovado' }
-                                                : { periodo2_inicio: ini, periodo2_fim: fim, dias2: dias, status: 'Aprovado' };
+    const campo = reg.lancamentos.length === 0
+      ? { periodo1_inicio: ini, periodo1_fim: fim, dias1: dias, nota1: mot || null, status: 'Aprovado' }
+      : { periodo2_inicio: ini, periodo2_fim: fim, dias2: dias, nota2: mot || null, status: 'Aprovado' };
     try {
       await sbPatch('ferias', `id=eq.${reg._sbId}`, campo);
     } catch(e) {
       toast(_erroApi(e), 'erro');
       return;
     }
-    reg.lancamentos.push({ inicio: ini, fim, dias });
+    reg.lancamentos.push({ inicio: ini, fim, dias, nota: mot || null });
     reg.status = 'Aprovado';
     toast(`✓ Férias lançadas — ${colab.nome}`);
     const _keyParaReabrir = _drawerKey;
