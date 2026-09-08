@@ -3596,14 +3596,20 @@ async function confirmarDrawerLancamento() {
                                                 : { periodo2_inicio: ini, periodo2_fim: fim, dias2: dias, status: 'Aprovado' };
     try {
       await sbPatch('ferias', `id=eq.${reg._sbId}`, campo);
-      reg.lancamentos.push({ inicio: ini, fim, dias });
-      reg.status = 'Aprovado';
-      toast(`✓ Férias lançadas — ${colab.nome}`);
-      fecharDrawer();
-      renderAll();
     } catch(e) {
       toast(_erroApi(e), 'erro');
+      return;
     }
+    reg.lancamentos.push({ inicio: ini, fim, dias });
+    reg.status = 'Aprovado';
+    toast(`✓ Férias lançadas — ${colab.nome}`);
+    // Fecha apenas o formulário inline, mantendo o drawer aberto
+    if (reg._sbId) {
+      const formEl = document.getElementById('drawer-inline-form-' + reg._sbId);
+      if (formEl) formEl.style.display = 'none';
+    }
+    try { renderDrawerHistorico(colab); } catch(_) {}
+    try { renderAll(); } catch(_) {}
   } else {
     reg._novoLanc = novoLanc;
     reg.status    = 'Pendente';
