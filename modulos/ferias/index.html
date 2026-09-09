@@ -6539,11 +6539,75 @@ function _buildRelatorioHTML(linhas, mesLabel) {
   </body></html>`;
 }
 
+function _buildExcelHTML(linhas, mesLabel) {
+  const sorted = [...linhas].sort((a, b) => {
+    const ea = (a.empresa||'').localeCompare(b.empresa||'', 'pt-BR');
+    if (ea !== 0) return ea;
+    const sa = (a.setor||'').localeCompare(b.setor||'', 'pt-BR');
+    if (sa !== 0) return sa;
+    return (a.nome||'').localeCompare(b.nome||'', 'pt-BR');
+  });
+  const gerado = new Date().toLocaleDateString('pt-BR');
+
+  let trs = '';
+  let empAtual = null;
+  sorted.forEach(l => {
+    if (l.empresa !== empAtual) {
+      empAtual = l.empresa;
+      trs += `<tr><td colspan="8" style="background:#e2e8f0;color:#334155;font-size:11pt;font-weight:700;padding:5px 10px;border-bottom:1px solid #cbd5e1;">— ${(l.empresa||'').toUpperCase()}</td></tr>`;
+    }
+    const cor = _corSetor(l.setor);
+    const cs = `background:${cor.bg};color:${cor.text};`;
+    trs += `<tr>
+      <td style="${cs}padding:5px 10px;">${l.empresa}</td>
+      <td style="${cs}font-weight:700;padding:5px 10px;">${l.setor}</td>
+      <td style="${cs}text-align:center;font-weight:700;padding:5px 10px;">${l.matricula}</td>
+      <td style="${cs}padding:5px 10px;">${l.nome}</td>
+      <td style="padding:5px 10px;">${l.cargo}</td>
+      <td style="text-align:center;padding:5px 10px;">${l.dias}</td>
+      <td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.inicio)}</td>
+      <td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.fim)}</td>
+    </tr>`;
+  });
+
+  // Legenda: células coloridas simples
+  const setoresUnicos = [...new Map(sorted.map(l => [l.setor, _corSetor(l.setor)])).entries()];
+  const legendaCells = setoresUnicos.map(([s, c]) =>
+    `<td style="background:${c.bg};color:${c.text};padding:4px 10px;font-size:10pt;border:1px solid rgba(0,0,0,0.1);">${s}</td>`
+  ).join('');
+
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11pt; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background:#1e3a5f; color:#fff; font-size:11pt; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; padding:8px 10px; border:1px solid #16304f; text-align:left; }
+    td { font-size:11pt; border-bottom:1px solid rgba(0,0,0,0.08); }
+  </style>
+  </head><body>
+  <table>
+    <tr><td colspan="8" style="font-size:18pt;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;padding:12px 10px 4px;border:none;">FÉRIAS — ${mesLabel.toUpperCase()}</td></tr>
+    <tr><td colspan="8" style="font-size:10pt;color:#64748b;padding:0 10px 10px;border:none;">${sorted.length} registro(s) · Gerado em ${gerado}</td></tr>
+    <tr>
+      <th>Empresa de Registro</th>
+      <th>Setor</th>
+      <th style="text-align:center;">Matrícula</th>
+      <th>Nome do Colaborador</th>
+      <th>Cargo</th>
+      <th style="text-align:center;">Dias</th>
+      <th style="text-align:center;">Início</th>
+      <th style="text-align:center;">Fim</th>
+    </tr>
+    ${trs}
+    <tr><td colspan="8" style="padding:6px 0;border:none;"></td></tr>
+    <tr>${legendaCells}</tr>
+  </table>
+  </body></html>`;
+}
+
 function exportarRelatorioExcel() {
   const { linhas, mesLabel } = _getDadosRelatorio();
-  const html = _buildRelatorioHTML(linhas, mesLabel);
-  // Encapsula como XLS (HTML reconhecido pelo Excel com cores preservadas)
-  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">${html.replace(/<!DOCTYPE[^>]*>/i,'').replace(/<html[^>]*>/i,'').replace(/<\/html>/i,'')}</html>`;
+  const xls = _buildExcelHTML(linhas, mesLabel);
   const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
