@@ -334,3 +334,34 @@ GitHub Pages — branch `main`:
 `https://danieledalosse-a11y.github.io/SistemaRH`
 
 Deploy automático após push (2–3 min).
+
+## Renovação automática de JWT (2026-09-09)
+
+`_sbRefreshSession()` adicionada ao módulo — mesmo padrão do módulo Cadastro:
+
+```js
+async function _sbRefreshSession() {
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    if (!sess.refresh_token) return false;
+    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: sess.refresh_token }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    if (!data.access_token) return false;
+    const newSess = { ...sess, access_token: data.access_token,
+      refresh_token: data.refresh_token || sess.refresh_token,
+      expires_at: Date.now() + (data.expires_in || 3600) * 1000 };
+    localStorage.setItem('sb_session', JSON.stringify(newSess));
+    SB_HEADERS = { ...SB_HEADERS, Authorization: `Bearer ${data.access_token}` };
+    return true;
+  } catch { return false; }
+}
+```
+
+**Onde é usado:** `_executarConclusao` — ao PATCH `processos_rh`, se retornar JWT expired, chama `_sbRefreshSession()` e refaz a requisição. Evita que a usuária veja "Erro ao concluir processo: JWT expired" quando a sessão expira com o módulo aberto.
+
+**Padrão a seguir em novas operações críticas:** qualquer fetch PATCH/POST de ação irreversível deve ter o mesmo padrão de retry — testa o texto da resposta por `JWT expired` ou `PGRST303`, chama `_sbRefreshSession()`, refaz se obteve `true`.
