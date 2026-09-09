@@ -7588,18 +7588,17 @@ function gestorExportarExcel() {
     const semPA = !pa && !temPeriodos && !!c.data_admissao;
     if (!pa && !semPA) return;
     const saldo = pa ? gestorSaldoPeriodo(pa) : 30;
+    // Ano PA: apenas o ano de início (ex. "2025")
     let paAno = '—';
     let paStr = '—';
     if (pa) {
-      const iniA = pa.pa_inicio?.slice(0,4) || '—';
-      const fimA = pa.pa_fim?.slice(0,4)   || '—';
-      paAno = iniA === fimA ? iniA : `${iniA}/${fimA}`;
+      paAno = pa.pa_inicio?.slice(0,4) || '—';
       const ini = pa.pa_inicio ? _fmtData(pa.pa_inicio) : '—';
       const fim = pa.pa_fim   ? _fmtData(pa.pa_fim)   : '—';
       paStr = `${ini} → ${fim}`;
     } else if (semPA) {
       const fimPrev = addDays(c.data_admissao.slice(0,10), 364);
-      paAno = fimPrev.slice(0,4);
+      paAno = String(parseInt(fimPrev.slice(0,4)) - 1);
       paStr = 'Previsto';
     }
     const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
@@ -7622,6 +7621,20 @@ function gestorExportarExcel() {
     linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendStr, saldo, situacao });
   });
 
+  // Cores de situação para célula Excel (inline, Excel ignora <style>)
+  const _sitXls = (sit) => {
+    const map = {
+      'Crítico':         { bg:'#FEF3F2', text:'#D92D20' },
+      'Atenção':         { bg:'#FFFAEB', text:'#B54708' },
+      'No radar':        { bg:'#EFF6FF', text:'#1D4ED8' },
+      'Agendado':        { bg:'#ECFDF3', text:'#027A48' },
+      'Concluído':       { bg:'#ECFDF3', text:'#027A48' },
+      'Sem agendamento': { bg:'#FFFAEB', text:'#92400E' },
+      'Período futuro':  { bg:'#EFF6FF', text:'#1849A9' },
+    };
+    return map[sit] || { bg:'#F1F5F9', text:'#475569' };
+  };
+
   const TH  = 'background:#1e3a5f;color:#fff;font-family:Arial,sans-serif;font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;border:1px solid #16304f;text-align:left;';
   const THC = TH + 'text-align:center;';
   const TD  = 'font-family:Arial,sans-serif;font-size:10pt;padding:5px 10px;border:1px solid #cbd5e1;vertical-align:middle;';
@@ -7633,18 +7646,18 @@ function gestorExportarExcel() {
     if (l.setor !== setorAtual) {
       setorAtual = l.setor;
       const cor = _corSetor(l.setor);
-      trs += `<tr><td colspan="8" style="background:${cor.bg};color:${cor.text};font-family:Arial,sans-serif;font-size:10pt;font-weight:700;letter-spacing:.05em;padding:5px 10px;border:1px solid #cbd5e1;">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
+      trs += `<tr><td colspan="6" style="background:${cor.bg};color:${cor.text};font-family:Arial,sans-serif;font-size:10pt;font-weight:700;letter-spacing:.05em;padding:5px 10px;border:1px solid #cbd5e1;">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
     }
     const cor = _corSetor(l.setor);
+    const sit = _sitXls(l.situacao);
     trs += `<tr>
       <td style="${TD}background:${cor.bg};color:${cor.text};">${l.nome}</td>
       <td style="${TD}">${l.cargo}</td>
-      <td style="${TD}background:${cor.bg};color:${cor.text};font-weight:700;">${l.setor}</td>
       <td style="${TDC}font-weight:700;">${l.paAno}</td>
       <td style="${TD}font-size:9pt;">${l.paStr}</td>
       <td style="${TD}">${l.agendStr}</td>
       <td style="${TDC}font-weight:800;color:${_saldoCor(l.saldo)};">${l.saldo}d</td>
-      <td style="${TD}">${l.situacao}</td>
+      <td style="${TD}background:${sit.bg};color:${sit.text};font-weight:700;">${l.situacao}</td>
     </tr>`;
   });
 
@@ -7658,11 +7671,11 @@ function gestorExportarExcel() {
   <x:Name>Férias da Equipe</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
   </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
   <body><table border="1" cellpadding="0" cellspacing="0">
-    <tr><td colspan="8" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe — ${dataLabel.charAt(0).toUpperCase()+dataLabel.slice(1)}</td></tr>
-    <tr><td colspan="8" style="font-family:Arial,sans-serif;font-size:9pt;color:#64748b;padding:4px 10px;border:1px solid #cbd5e1;">${linhas.length} colaborador(es) · Gerado em ${gerado}</td></tr>
-    <tr><td style="${TH}">Nome</td><td style="${TH}">Cargo</td><td style="${TH}">Setor</td><td style="${THC}">Ano PA</td><td style="${TH}">Período Aquisitivo</td><td style="${TH}">Agendamento</td><td style="${THC}">Saldo</td><td style="${TH}">Situação</td></tr>
+    <tr><td colspan="7" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe — ${dataLabel.charAt(0).toUpperCase()+dataLabel.slice(1)}</td></tr>
+    <tr><td colspan="7" style="font-family:Arial,sans-serif;font-size:9pt;color:#64748b;padding:4px 10px;border:1px solid #cbd5e1;">${linhas.length} colaborador(es) · Gerado em ${gerado}</td></tr>
+    <tr><td style="${TH}">Nome</td><td style="${TH}">Cargo</td><td style="${THC}">Ano PA</td><td style="${TH}">Período Aquisitivo</td><td style="${TH}">Agendamento</td><td style="${THC}">Saldo</td><td style="${TH}">Situação</td></tr>
     ${trs}
-    <tr><td colspan="8" style="${TD}"></td></tr>
+    <tr><td colspan="7" style="${TD}"></td></tr>
     <tr><td colspan="2" style="${TD}font-weight:700;">Legenda de Setores:</td>${legendaRows}</tr>
   </table></body></html>`;
 
