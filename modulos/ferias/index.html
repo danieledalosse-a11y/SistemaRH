@@ -1733,10 +1733,24 @@
           <select id="gestorFiltroGestor" onchange="renderGestorAtencao()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:160px;">
             <option value="">Todos os gestores</option>
           </select>
-          <button onclick="gestorExportarPDF()" title="Exportar lista como relatório PDF" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-sec);cursor:pointer;white-space:nowrap;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            Exportar
-          </button>
+          <div style="position:relative;" id="gestorExportarWrap">
+            <button onclick="toggleGestorExportMenu()" title="Exportar lista" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-sec);cursor:pointer;white-space:nowrap;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Exportar
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div id="gestorExportMenu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:160px;z-index:200;overflow:hidden;">
+              <button onclick="gestorExportarPDF();document.getElementById('gestorExportMenu').style.display='none';" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:none;background:transparent;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer;text-align:left;" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background='transparent'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Visualizar PDF
+              </button>
+              <div style="height:1px;background:var(--border);margin:0 10px;"></div>
+              <button onclick="gestorExportarExcel();document.getElementById('gestorExportMenu').style.display='none';" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:none;background:transparent;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer;text-align:left;" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background='transparent'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6M3 15h6M15 9l-3 6 3 6M21 9l-3 6 3 6"/></svg>
+                Exportar Excel
+              </button>
+            </div>
+          </div>
         </div>
         <div class="proto-table-head" id="gestorTableHead" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 100px;padding-left:20px;">
           <div class="proto-th" id="gsort-nome" onclick="gestorSortBy('nome')" style="cursor:pointer;user-select:none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Colaborador<span id="gsort-ind-nome" style="margin-left:4px;opacity:.5;font-size:10px;">↑</span></div>
@@ -7458,9 +7472,8 @@ function gestorExportarPDF() {
       <td style="${cs}font-weight:600;padding:5px 10px;">${l.setor}</td>
       <td style="padding:5px 10px;font-size:10px;">${l.paStr}</td>
       <td style="padding:5px 10px;">${l.agendStr}</td>
-      <td style="padding:5px 10px;">
-        <span style="font-weight:800;color:${_saldoCor(l.saldo)};margin-right:8px;">${l.saldo}d</span>${_sitBadge(l.situacao)}
-      </td>
+      <td style="text-align:center;font-weight:800;color:${_saldoCor(l.saldo)};padding:5px 10px;">${l.saldo}d</td>
+      <td style="padding:5px 10px;">${_sitBadge(l.situacao)}</td>
     </tr>`;
   });
 
@@ -7488,12 +7501,13 @@ function gestorExportarPDF() {
     th:last-child { border-right: none; }
     td { padding: 5px 10px; border-bottom: 1px solid rgba(0,0,0,.07); border-right: 1px solid rgba(0,0,0,.07); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; vertical-align: middle; }
     td:last-child { border-right: none; }
-    colgroup col:nth-child(1) { width: 22%; }
-    colgroup col:nth-child(2) { width: 16%; }
-    colgroup col:nth-child(3) { width: 11%; }
-    colgroup col:nth-child(4) { width: 17%; }
+    colgroup col:nth-child(1) { width: 20%; }
+    colgroup col:nth-child(2) { width: 14%; }
+    colgroup col:nth-child(3) { width: 10%; }
+    colgroup col:nth-child(4) { width: 18%; }
     colgroup col:nth-child(5) { width: 14%; }
-    colgroup col:nth-child(6) { width: 20%; }
+    colgroup col:nth-child(6) { width: 6%; }
+    colgroup col:nth-child(7) { width: 18%; }
     .rel-footer { position: fixed; bottom: 8mm; left: 12mm; right: 12mm; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; }
     @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
   </style>
@@ -7506,14 +7520,15 @@ function gestorExportarPDF() {
     </div>
   </div>
   <table>
-    <colgroup><col><col><col><col><col><col></colgroup>
+    <colgroup><col><col><col><col><col><col><col></colgroup>
     <thead><tr>
       <th>Nome</th>
       <th>Cargo</th>
       <th>Setor</th>
       <th>Período Aquisitivo</th>
       <th>Agendamento</th>
-      <th>Saldo · Situação</th>
+      <th style="text-align:center;">Saldo</th>
+      <th>Situação</th>
     </tr></thead>
     <tbody>${trs}</tbody>
   </table>
@@ -7526,6 +7541,125 @@ function gestorExportarPDF() {
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
+}
+
+function toggleGestorExportMenu() {
+  const menu = document.getElementById('gestorExportMenu');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    const close = (e) => {
+      if (!document.getElementById('gestorExportarWrap')?.contains(e.target)) {
+        menu.style.display = 'none';
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+}
+
+function gestorExportarExcel() {
+  const hoje = new Date().toISOString().slice(0,10);
+  const busca   = (document.getElementById('gestorBusca')?.value || '').toLowerCase();
+  const cargof  = document.getElementById('gestorFiltroCargo2')?.value || '';
+  const gestorf = document.getElementById('gestorFiltroGestor')?.value || '';
+  const gerado  = new Date().toLocaleDateString('pt-BR');
+  const dataLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  const _saldoCor = (saldo) => saldo <= 0 ? '#10B981' : saldo <= 5 ? '#F59E0B' : '#1570EF';
+
+  const linhas = [];
+  GESTOR_COLABS.filter(c => {
+    if (busca && !c.nome.toLowerCase().includes(busca)) return false;
+    if (cargof && c.cargo !== cargof) return false;
+    if (gestorf && c.gestor !== gestorf) return false;
+    return true;
+  }).sort((a,b) => (a.setor||'').localeCompare(b.setor||'','pt-BR') || a.nome.localeCompare(b.nome,'pt-BR')).forEach(c => {
+    const pa = gestorPeriodoAtivo(c.id);
+    const temPeriodos = GESTOR_PERIODOS.some(p => p.colaborador_id === c.id);
+    const semPA = !pa && !temPeriodos && !!c.data_admissao;
+    if (!pa && !semPA) return;
+    const saldo = pa ? gestorSaldoPeriodo(pa) : 30;
+    let paStr = '—';
+    if (pa) {
+      const ini = pa.pa_inicio ? _fmtData(pa.pa_inicio) : '—';
+      const fim = pa.pa_fim   ? _fmtData(pa.pa_fim)   : '—';
+      paStr = `${ini} → ${fim}`;
+    } else if (semPA) {
+      const fimPrev = addDays(c.data_admissao.slice(0,10), 364);
+      paStr = `Previsto ${fimPrev.slice(0,4)}`;
+    }
+    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
+    const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
+    const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
+    const lRef   = ativo || futuro;
+    let agendStr = '—';
+    if (lRef) {
+      const fmtShort = d => { const p = _fmtData(d).split('/'); return `${p[0]}/${p[1]}`; };
+      agendStr = `${fmtShort(lRef.inicio)} → ${fmtShort(lRef.fim)} · ${lRef.dias}d`;
+    }
+    const dpd   = pa ? gestorDpd(pa) : 9999;
+    const nivel = nivelRisco(dpd);
+    let situacao;
+    if (saldo > 0 && pa && nivel) situacao = nivel === 'critico' ? 'Crítico' : nivel === 'atencao' ? 'Atenção' : 'No radar';
+    else if (semPA) situacao = 'Período futuro';
+    else if (saldo <= 0) situacao = 'Concluído';
+    else if (!lancs.length) situacao = 'Sem agendamento';
+    else situacao = 'Agendado';
+    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paStr, agendStr, saldo, situacao });
+  });
+
+  const TH  = 'background:#1e3a5f;color:#fff;font-family:Arial,sans-serif;font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;border:1px solid #16304f;text-align:left;';
+  const THC = TH + 'text-align:center;';
+  const TD  = 'font-family:Arial,sans-serif;font-size:10pt;padding:5px 10px;border:1px solid #cbd5e1;vertical-align:middle;';
+  const TDC = TD + 'text-align:center;';
+
+  let trs = '';
+  let setorAtual = null;
+  linhas.forEach(l => {
+    if (l.setor !== setorAtual) {
+      setorAtual = l.setor;
+      const cor = _corSetor(l.setor);
+      trs += `<tr><td colspan="7" style="background:${cor.bg};color:${cor.text};font-family:Arial,sans-serif;font-size:10pt;font-weight:700;letter-spacing:.05em;padding:5px 10px;border:1px solid #cbd5e1;">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
+    }
+    const cor = _corSetor(l.setor);
+    trs += `<tr>
+      <td style="${TD}background:${cor.bg};color:${cor.text};">${l.nome}</td>
+      <td style="${TD}">${l.cargo}</td>
+      <td style="${TD}background:${cor.bg};color:${cor.text};font-weight:700;">${l.setor}</td>
+      <td style="${TD}font-size:9pt;">${l.paStr}</td>
+      <td style="${TD}">${l.agendStr}</td>
+      <td style="${TDC}font-weight:800;color:${_saldoCor(l.saldo)};">${l.saldo}d</td>
+      <td style="${TD}">${l.situacao}</td>
+    </tr>`;
+  });
+
+  const setoresUnicos = [...new Map(linhas.map(l => [l.setor, _corSetor(l.setor)])).entries()];
+  const legendaRows = setoresUnicos.map(([s, c]) =>
+    `<td style="${TD}background:${c.bg};color:${c.text};font-weight:700;">${s}</td>`
+  ).join('');
+
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+  <x:Name>Férias da Equipe</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+  </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+  <body><table border="1" cellpadding="0" cellspacing="0">
+    <tr><td colspan="7" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe — ${dataLabel.charAt(0).toUpperCase()+dataLabel.slice(1)}</td></tr>
+    <tr><td colspan="7" style="font-family:Arial,sans-serif;font-size:9pt;color:#64748b;padding:4px 10px;border:1px solid #cbd5e1;">${linhas.length} colaborador(es) · Gerado em ${gerado}</td></tr>
+    <tr><td style="${TH}">Nome</td><td style="${TH}">Cargo</td><td style="${TH}">Setor</td><td style="${TH}">Período Aquisitivo</td><td style="${TH}">Agendamento</td><td style="${THC}">Saldo</td><td style="${TH}">Situação</td></tr>
+    ${trs}
+    <tr><td colspan="7" style="${TD}"></td></tr>
+    <tr><td colspan="2" style="${TD}font-weight:700;">Legenda de Setores:</td>${legendaRows}</tr>
+  </table></body></html>`;
+
+  const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Ferias_Equipe_${dataLabel.replace(' ','_')}.xls`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function renderGestorRelatorio() {
