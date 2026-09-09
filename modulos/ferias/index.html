@@ -3058,7 +3058,16 @@ function renderDrawerHistorico(colab) {
   const svgClk = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
   const svgChk = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
-  document.getElementById('drawerHistorico').innerHTML = btnPrint + regs.map(r => {
+  // Banner: aviso quando o PA ativo está abaixo dos primeiros visíveis
+  const paAtivoNaoEhOPrimeiro = regParaLancar && regs.length > 0 && String(regs[0]._sbId) !== String(regParaLancar._sbId);
+  const bannerPaAtivo = (IS_RH && paAtivoNaoEhOPrimeiro) ? `
+    <div onclick="document.getElementById('pa-block-${regParaLancar._sbId}')?.scrollIntoView({behavior:'smooth',block:'center'})"
+         style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:8px;cursor:pointer;font-size:12px;color:#92400E;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span><strong>PA ${regParaLancar.ano}</strong> tem ${calcSaldo(regParaLancar)}d de saldo pendente — <u>clique para ir ao período ativo</u></span>
+    </div>` : '';
+
+  document.getElementById('drawerHistorico').innerHTML = btnPrint + bannerPaAtivo + regs.map(r => {
     const saldo = calcSaldo(r);
     let situBadge = '';
     if (r.status === 'Pendente')    situBadge = `<span class="badge badge-amber">Pendente aprovação</span>`;
@@ -3336,7 +3345,7 @@ function renderDrawerHistorico(colab) {
 
     // ── PA card (estrutura base do Gestor com saldo/badge/botão inline)
     const _saldoNumColor = saldo <= 0 ? '#10B981' : saldo <= 5 ? '#F59E0B' : '#1570EF';
-    return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+    return `<div id="pa-block-${r._sbId}" style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:6px;">
           ${temPendenciaPA ? '<span class="drawer-hist-pa-pendente-dot"></span>' : ''}
