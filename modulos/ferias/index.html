@@ -6447,34 +6447,56 @@ function _buildRelatorioHTML(linhas, mesLabel) {
 
   const gerado = new Date().toLocaleDateString('pt-BR');
 
-  const trs = sorted.map(l => {
+  // Linhas com separador por empresa
+  let trs = '';
+  let empAtual = null;
+  sorted.forEach(l => {
+    if (l.empresa !== empAtual) {
+      empAtual = l.empresa;
+      trs += `<tr class="emp-sep"><td colspan="8">— ${(l.empresa||'').toUpperCase()}</td></tr>`;
+    }
     const cor = _corSetor(l.setor);
     const cs = `background:${cor.bg};color:${cor.text};`;
-    return `<tr>
+    trs += `<tr>
       <td style="${cs}">${l.empresa}</td>
       <td style="${cs}font-weight:600;">${l.setor}</td>
-      <td style="${cs}text-align:center;font-weight:600;">${l.matricula}</td>
+      <td style="${cs}text-align:center;font-weight:700;">${l.matricula}</td>
       <td style="${cs}">${l.nome}</td>
       <td>${l.cargo}</td>
       <td style="text-align:center;">${l.dias}</td>
       <td style="${cs}text-align:center;">${_fmtData(l.inicio)}</td>
       <td style="${cs}text-align:center;">${_fmtData(l.fim)}</td>
     </tr>`;
-  }).join('');
+  });
+
+  // Legenda de setores únicos
+  const setoresUnicos = [...new Map(sorted.map(l => [l.setor, _corSetor(l.setor)])).entries()];
+  const legenda = setoresUnicos.map(([s, c]) =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:16px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:${c.bg};border:1px solid rgba(0,0,0,0.15);display:inline-block;"></span>
+      <span>${s}</span>
+    </span>`
+  ).join('');
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
   <title>Férias ${mesLabel}</title>
   <style>
-    @page { size: A4 landscape; margin: 10mm 8mm; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 16px; background: #fff; }
-    .rel-header { margin-bottom: 14px; border-bottom: 2px solid #111; padding-bottom: 6px; }
-    .rel-mes { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #111; margin-bottom: 2px; }
-    .rel-sub { font-size: 11pt; color: #666; }
-    table { width: 100%; border-collapse: collapse; border: 1px solid #bbb; table-layout: fixed; }
-    thead tr { background: #e8e8e8 !important; color: #111 !important; }
-    th { padding: 7px 8px; font-size: 11pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 2px solid #888; border-right: 1px solid #bbb; text-align: left; white-space: nowrap; }
-    td { padding: 5px 8px; border-bottom: 1px solid rgba(0,0,0,0.1); border-right: 1px solid rgba(0,0,0,0.1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    th:last-child, td:last-child { border-right: none; }
+    @page { size: A4 landscape; margin: 10mm 12mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a2e; background: #fff; padding: 20px 20px 60px; }
+    /* Header */
+    .rel-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1.5px solid #e2e8f0; }
+    .rel-icon { font-size: 28px; line-height: 1; margin-top: 2px; }
+    .rel-mes { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #1a1a2e; margin-bottom: 3px; }
+    .rel-sub { font-size: 11px; color: #64748b; }
+    /* Tabela */
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; border-radius: 6px; overflow: hidden; border: 1px solid #cbd5e1; }
+    thead tr { background: #1e3a5f; }
+    th { padding: 9px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #fff; border-right: 1px solid rgba(255,255,255,0.15); text-align: left; white-space: nowrap; }
+    th:last-child { border-right: none; }
+    td { padding: 5px 10px; border-bottom: 1px solid rgba(0,0,0,0.07); border-right: 1px solid rgba(0,0,0,0.07); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+    td:last-child { border-right: none; }
+    tr.emp-sep td { background: #f1f5f9; color: #334155; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; padding: 5px 10px; border-bottom: 1px solid #cbd5e1; border-right: none; }
     colgroup col:nth-child(1) { width: 15%; }
     colgroup col:nth-child(2) { width: 11%; }
     colgroup col:nth-child(3) { width: 7%;  }
@@ -6483,12 +6505,18 @@ function _buildRelatorioHTML(linhas, mesLabel) {
     colgroup col:nth-child(6) { width: 5%;  }
     colgroup col:nth-child(7) { width: 9%;  }
     colgroup col:nth-child(8) { width: 8%;  }
+    /* Rodapé */
+    .rel-footer { position: fixed; bottom: 8mm; left: 12mm; right: 12mm; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; }
+    .legenda { display: flex; flex-wrap: wrap; gap: 4px; }
     @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
   </style>
   </head><body>
   <div class="rel-header">
-    <div class="rel-mes">Férias — ${mesLabel}</div>
-    <div class="rel-sub">${sorted.length} registro(s) · Gerado em ${gerado}</div>
+    <div class="rel-icon">📅</div>
+    <div>
+      <div class="rel-mes">Férias — ${mesLabel}</div>
+      <div class="rel-sub">${sorted.length} registro(s) &bull; Gerado em ${gerado}</div>
+    </div>
   </div>
   <table>
     <colgroup><col><col><col><col><col><col><col><col></colgroup>
@@ -6504,6 +6532,10 @@ function _buildRelatorioHTML(linhas, mesLabel) {
     </tr></thead>
     <tbody>${trs}</tbody>
   </table>
+  <div class="rel-footer">
+    <div class="legenda">${legenda}</div>
+    <div>FÉRIAS — ${mesLabel.toUpperCase()} &nbsp;|&nbsp; 1 de 1</div>
+  </div>
   </body></html>`;
 }
 
