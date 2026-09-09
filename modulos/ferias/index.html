@@ -7380,6 +7380,24 @@ function gestorExportarPDF() {
   const gerado  = new Date().toLocaleDateString('pt-BR');
   const dataLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
+  // Badge de situação (cores do sistema)
+  const _sitBadge = (sit) => {
+    const map = {
+      'Crítico':         { bg:'#FEF3F2', text:'#D92D20', border:'#FECDCA' },
+      'Atenção':         { bg:'#FFFAEB', text:'#B54708', border:'#FDE68A' },
+      'No radar':        { bg:'#EFF6FF', text:'#1D4ED8', border:'#BFDBFE' },
+      'Agendado':        { bg:'#ECFDF3', text:'#027A48', border:'#A7F3D0' },
+      'Concluído':       { bg:'#ECFDF3', text:'#027A48', border:'#A7F3D0' },
+      'Sem agendamento': { bg:'#FFFAEB', text:'#92400E', border:'#FDE68A' },
+      'Período futuro':  { bg:'#EFF6FF', text:'#1849A9', border:'#BFDBFE' },
+    };
+    const s = map[sit] || { bg:'#F1F5F9', text:'#475569', border:'#CBD5E1' };
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:${s.bg};color:${s.text};border:1px solid ${s.border};white-space:nowrap;">${sit}</span>`;
+  };
+
+  // Cor semântica do saldo
+  const _saldoCor = (saldo) => saldo <= 0 ? '#10B981' : saldo <= 5 ? '#F59E0B' : '#1570EF';
+
   const linhas = [];
   GESTOR_COLABS.filter(c => {
     if (busca && !c.nome.toLowerCase().includes(busca)) return false;
@@ -7392,12 +7410,26 @@ function gestorExportarPDF() {
     const semPA = !pa && !temPeriodos && !!c.data_admissao;
     if (!pa && !semPA) return;
     const saldo = pa ? gestorSaldoPeriodo(pa) : 30;
-    const paAno = pa ? (pa.pa_fim?.slice(0,4) || '—') : (semPA ? addDays(c.data_admissao.slice(0,10), 364).slice(0,4) : '—');
+    // PA: período completo DD/MM/AA → DD/MM/AA
+    let paStr = '—';
+    if (pa) {
+      const ini = pa.pa_inicio ? _fmtData(pa.pa_inicio) : '—';
+      const fim = pa.pa_fim   ? _fmtData(pa.pa_fim)   : '—';
+      paStr = `${ini} → ${fim}`;
+    } else if (semPA) {
+      const fimPrev = addDays(c.data_admissao.slice(0,10), 364);
+      paStr = `Previsto ${fimPrev.slice(0,4)}`;
+    }
     const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
     const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
     const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
     const lRef   = ativo || futuro;
-    const agendStr = lRef ? `${_fmtData(lRef.inicio)} a ${_fmtData(lRef.fim)} · ${lRef.dias}d` : '—';
+    // Agendamento: formato compacto DD/MM → DD/MM · Xd
+    let agendStr = '—';
+    if (lRef) {
+      const fmtShort = d => { const p = _fmtData(d).split('/'); return `${p[0]}/${p[1]}`; };
+      agendStr = `${fmtShort(lRef.inicio)} → ${fmtShort(lRef.fim)} · ${lRef.dias}d`;
+    }
     const dpd   = pa ? gestorDpd(pa) : 9999;
     const nivel = nivelRisco(dpd);
     let situacao;
@@ -7406,29 +7438,29 @@ function gestorExportarPDF() {
     else if (saldo <= 0) situacao = 'Concluído';
     else if (!lancs.length) situacao = 'Sem agendamento';
     else situacao = 'Agendado';
-    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', gestor: c.gestor||'', paAno, agendStr, saldo, situacao });
+    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paStr, agendStr, saldo, situacao });
   });
 
-  // Agrupa por setor com separador (mesmo padrão do relatório RH)
+  // Agrupa por setor com separador colorido
   let trs = '';
   let setorAtual = null;
   linhas.forEach(l => {
     if (l.setor !== setorAtual) {
       setorAtual = l.setor;
       const cor = _corSetor(l.setor);
-      trs += `<tr class="emp-sep"><td colspan="7" style="background:${cor.bg};color:${cor.text};font-size:10px;font-weight:700;letter-spacing:.05em;padding:5px 10px;border-bottom:1px solid rgba(0,0,0,0.1);">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
+      trs += `<tr><td colspan="6" style="background:${cor.bg};color:${cor.text};font-size:10px;font-weight:700;letter-spacing:.05em;padding:5px 10px;border-bottom:1px solid rgba(0,0,0,0.1);">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
     }
     const cor = _corSetor(l.setor);
     const cs = `background:${cor.bg};color:${cor.text};`;
-    const sitColor = l.situacao === 'Crítico' ? '#D92D20' : l.situacao === 'Atenção' ? '#B54708' : l.situacao === 'Agendado' || l.situacao === 'Concluído' ? '#027A48' : 'inherit';
     trs += `<tr>
       <td style="${cs}padding:5px 10px;">${l.nome}</td>
       <td style="padding:5px 10px;">${l.cargo}</td>
       <td style="${cs}font-weight:600;padding:5px 10px;">${l.setor}</td>
-      <td style="padding:5px 10px;">${l.gestor}</td>
-      <td style="text-align:center;padding:5px 10px;">${l.paAno}</td>
+      <td style="padding:5px 10px;font-size:10px;">${l.paStr}</td>
       <td style="padding:5px 10px;">${l.agendStr}</td>
-      <td style="text-align:center;font-weight:700;color:${sitColor};padding:5px 10px;">${l.saldo}d · ${l.situacao}</td>
+      <td style="padding:5px 10px;">
+        <span style="font-weight:800;color:${_saldoCor(l.saldo)};margin-right:8px;">${l.saldo}d</span>${_sitBadge(l.situacao)}
+      </td>
     </tr>`;
   });
 
@@ -7454,15 +7486,14 @@ function gestorExportarPDF() {
     thead tr { background: #1e3a5f; }
     th { padding: 9px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #fff; border-right: 1px solid rgba(255,255,255,.15); text-align: left; white-space: nowrap; }
     th:last-child { border-right: none; }
-    td { padding: 5px 10px; border-bottom: 1px solid rgba(0,0,0,.07); border-right: 1px solid rgba(0,0,0,.07); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+    td { padding: 5px 10px; border-bottom: 1px solid rgba(0,0,0,.07); border-right: 1px solid rgba(0,0,0,.07); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; vertical-align: middle; }
     td:last-child { border-right: none; }
-    colgroup col:nth-child(1) { width: 20%; }
-    colgroup col:nth-child(2) { width: 14%; }
+    colgroup col:nth-child(1) { width: 22%; }
+    colgroup col:nth-child(2) { width: 16%; }
     colgroup col:nth-child(3) { width: 11%; }
-    colgroup col:nth-child(4) { width: 9%; }
-    colgroup col:nth-child(5) { width: 6%; }
-    colgroup col:nth-child(6) { width: 18%; }
-    colgroup col:nth-child(7) { width: 22%; }
+    colgroup col:nth-child(4) { width: 17%; }
+    colgroup col:nth-child(5) { width: 14%; }
+    colgroup col:nth-child(6) { width: 20%; }
     .rel-footer { position: fixed; bottom: 8mm; left: 12mm; right: 12mm; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; }
     @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
   </style>
@@ -7475,13 +7506,12 @@ function gestorExportarPDF() {
     </div>
   </div>
   <table>
-    <colgroup><col><col><col><col><col><col><col></colgroup>
+    <colgroup><col><col><col><col><col><col></colgroup>
     <thead><tr>
       <th>Nome</th>
       <th>Cargo</th>
       <th>Setor</th>
-      <th>Gestor</th>
-      <th style="text-align:center;">PA</th>
+      <th>Período Aquisitivo</th>
       <th>Agendamento</th>
       <th>Saldo · Situação</th>
     </tr></thead>
