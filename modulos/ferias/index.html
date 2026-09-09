@@ -6509,28 +6509,13 @@ function _buildRelatorioHTML(linhas, mesLabel) {
 
 function exportarRelatorioExcel() {
   const { linhas, mesLabel } = _getDadosRelatorio();
-  // Agrupa por empresa para o CSV estruturado
-  const porEmpresa = {};
-  linhas.forEach(l => {
-    const emp = l.empresa || 'Sem empresa';
-    if (!porEmpresa[emp]) porEmpresa[emp] = [];
-    porEmpresa[emp].push(l);
-  });
-
-  const cab = ['Setor','Registro','Nome do Colaborador','Cargo','Qtde dias','Início','Fim'];
-  const linhasCSV = [];
-  Object.entries(porEmpresa).forEach(([empresa, rows]) => {
-    linhasCSV.push([empresa.toUpperCase(),'','','','','','']);
-    linhasCSV.push(cab);
-    rows.forEach(l => linhasCSV.push([l.setor, l.matricula, l.nome, l.cargo, l.dias, _fmtData(l.inicio), _fmtData(l.fim)]));
-    linhasCSV.push(['','','','','','','']);
-  });
-
-  const csv = linhasCSV.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const html = _buildRelatorioHTML(linhas, mesLabel);
+  // Encapsula como XLS (HTML reconhecido pelo Excel com cores preservadas)
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">${html.replace(/<!DOCTYPE[^>]*>/i,'').replace(/<html[^>]*>/i,'').replace(/<\/html>/i,'')}</html>`;
+  const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `Ferias_${mesLabel.replace(' ','_')}.csv`;
+  a.href = url; a.download = `Ferias_${mesLabel.replace(' ','_')}.xls`;
   a.click(); URL.revokeObjectURL(url);
   document.getElementById('modalRelatorio')?.classList.remove('open');
 }
