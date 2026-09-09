@@ -753,6 +753,28 @@ req = urllib.request.Request(SB_URL + '/rest/v1/ferias', headers=headers,
 - mat.208 / id=1796 — Paranavaí, admissão 2023-10-01 → PAs criados manualmente (ids 1877, 1878, 1879)
 Ambos aparecem separadamente na lista (vínculos distintos, comportamento correto).
 
+## Banner de PA ativo fora da área visível do drawer (2026-09-09)
+
+**Contexto:** `getRegistroParaLancar` retorna o **PA mais antigo com saldo > 0** (regra CLT — esgota o mais velho primeiro). Quando esse PA é antigo (ex: PA 2022 com 24d de saldo), o botão "+ Lançar" aparece lá embaixo no drawer, fora da área visível. O RH vê apenas PAs recentes sem botão e conclui que "o botão sumiu".
+
+**Diagnóstico:** Se o botão "+ Lançar" parece desaparecer para um colaborador, verificar se há PAs mais antigos na rolagem do drawer com saldo > 0.
+
+**Fix implementado:** Banner âmbar no topo de `#drawerHistorico` quando `regParaLancar` não é o primeiro PA da lista (regs reversed = mais recente primeiro):
+
+```js
+const paAtivoNaoEhOPrimeiro = regParaLancar && regs.length > 0
+  && String(regs[0]._sbId) !== String(regParaLancar._sbId);
+const bannerPaAtivo = (IS_RH && paAtivoNaoEhOPrimeiro) ? `
+  <div onclick="document.getElementById('pa-block-${regParaLancar._sbId}')
+                  ?.scrollIntoView({behavior:'smooth',block:'center'})"
+       style="...cursor:pointer;...background:#FFFBEB;border:1.5px solid #FDE68A;...">
+    ⚠️ PA ${regParaLancar.ano} tem ${calcSaldo(regParaLancar)}d de saldo pendente
+    — clique para ir ao período ativo
+  </div>` : '';
+```
+
+Cada bloco de PA tem `id="pa-block-${r._sbId}"` para o scroll funcionar. Banner só aparece na visão RH.
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
