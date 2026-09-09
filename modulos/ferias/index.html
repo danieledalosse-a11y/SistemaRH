@@ -6379,11 +6379,11 @@ function _getDadosRelatorio() {
     c.registros.forEach(reg => {
       const lans = reg.lancamentos.filter(l => l.inicio <= mesFim && l.fim >= mesInicio);
       lans.forEach(l => {
-        if (reg.status === 'Aprovado' && chkAprov) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresaRegistro||c.unidade||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Aprovado' });
-        else if (reg.status === 'Pendente' && chkPend) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresaRegistro||c.unidade||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Pend. aprovação' });
+        if (reg.status === 'Aprovado' && chkAprov) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresaRegistro||c.unidade||'', matricula: c.matricula||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Aprovado' });
+        else if (reg.status === 'Pendente' && chkPend) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresaRegistro||c.unidade||'', matricula: c.matricula||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Pend. aprovação' });
       });
       if (chkRisco && isSemAgendado(c)) {
-        if (!linhas.find(x => x.nome === c.nome)) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresaRegistro||c.unidade||'', inicio: '—', fim: '—', dias: '—', status: 'Sem agendamento' });
+        if (!linhas.find(x => x.nome === c.nome)) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresaRegistro||c.unidade||'', matricula: c.matricula||'', inicio: '—', fim: '—', dias: '—', status: 'Sem agendamento' });
       }
     });
   });
@@ -6391,32 +6391,157 @@ function _getDadosRelatorio() {
   return { linhas, mesLabel: mesVal ? `${meses[mesR]} ${anoR}` : '—', empLabel: empVal || 'Todas as empresas' };
 }
 
+// Mapa de cores por setor — chave em minúsculas sem acento para match tolerante
+const _SETOR_CORES = {
+  'matriz vendas':        { bg: '#FFFF00', text: '#000' },
+  'matriz vendas/ projetos': { bg: '#FFFF00', text: '#000' },
+  'matriz vendas/projetos':  { bg: '#FFFF00', text: '#000' },
+  'projetos':             { bg: '#FFFF00', text: '#000' },
+  'financ':               { bg: '#FFFACD', text: '#000' },
+  'financeiro':           { bg: '#FFFACD', text: '#000' },
+  'ti':                   { bg: '#FFFACD', text: '#000' },
+  'marketing':            { bg: '#FFFACD', text: '#000' },
+  'financ/ ti/ marketing':{ bg: '#FFFACD', text: '#000' },
+  'financ/ti/marketing':  { bg: '#FFFACD', text: '#000' },
+  'cd':                   { bg: '#90EE90', text: '#000' },
+  'compras':              { bg: '#FFB6C1', text: '#000' },
+  'e-commerce':           { bg: '#FFB6C1', text: '#000' },
+  'compras/ e-commerce':  { bg: '#FFB6C1', text: '#000' },
+  'compras/e-commerce':   { bg: '#FFB6C1', text: '#000' },
+  'porto rico':           { bg: '#E6E6FA', text: '#000' },
+  'pvai':                 { bg: '#FFDAB9', text: '#000' },
+  'pvaí':                 { bg: '#FFDAB9', text: '#000' },
+  'red':                  { bg: '#000000', text: '#fff' },
+  'atelier':              { bg: '#D3D3D3', text: '#000' },
+  'aprendiz':             { bg: '#C0C0C0', text: '#000' },
+  'sarandi':              { bg: '#ADD8E6', text: '#000' },
+  'sarandi (sdi)':        { bg: '#ADD8E6', text: '#000' },
+  'sdi':                  { bg: '#ADD8E6', text: '#000' },
+};
+
+function _corSetor(setor) {
+  if (!setor) return { bg: '#f5f5f5', text: '#000' };
+  const key = setor.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  for (const [k, v] of Object.entries(_SETOR_CORES)) {
+    const kn = k.normalize('NFD').replace(/[̀-ͯ]/g,'');
+    if (key.includes(kn) || kn.includes(key)) return v;
+  }
+  return { bg: '#f5f5f5', text: '#000' };
+}
+
+function _fmtData(iso) {
+  if (!iso || iso === '—') return iso;
+  const p = iso.split('-');
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
+}
+
+function _buildRelatorioHTML(linhas, mesLabel, paraImpressao) {
+  // Agrupa: empresa → lista de linhas
+  const porEmpresa = {};
+  linhas.forEach(l => {
+    const emp = l.empresa || 'Sem empresa';
+    if (!porEmpresa[emp]) porEmpresa[emp] = [];
+    porEmpresa[emp].push(l);
+  });
+
+  const gerado = new Date().toLocaleDateString('pt-BR');
+  const totalReg = linhas.length;
+
+  let corpoEmpresas = '';
+  Object.entries(porEmpresa).forEach(([empresa, rows]) => {
+    let trs = '';
+    rows.forEach(l => {
+      const cor = _corSetor(l.setor);
+      trs += `<tr style="background:${cor.bg};color:${cor.text};">
+        <td>${l.setor}</td>
+        <td style="text-align:center;">${l.matricula}</td>
+        <td>${l.nome}</td>
+        <td>${l.cargo}</td>
+        <td style="text-align:center;">${l.dias}</td>
+        <td style="text-align:center;">${_fmtData(l.inicio)}</td>
+        <td style="text-align:center;">${_fmtData(l.fim)}</td>
+      </tr>`;
+    });
+
+    corpoEmpresas += `
+      <div class="empresa-bloco">
+        <div class="empresa-header">${empresa.toUpperCase()}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Setor</th>
+              <th style="text-align:center;">Registro</th>
+              <th>Nome do Colaborador</th>
+              <th>Cargo</th>
+              <th style="text-align:center;">Qtde dias</th>
+              <th style="text-align:center;">Início</th>
+              <th style="text-align:center;">Fim</th>
+            </tr>
+          </thead>
+          <tbody>${trs}</tbody>
+        </table>
+      </div>`;
+  });
+
+  const onload = paraImpressao ? 'onload="window.print()"' : '';
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+  <title>Férias ${mesLabel}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #111; padding: 20px; background: #fff; }
+    .rel-header { margin-bottom: 24px; }
+    .rel-mes { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; color: #111; margin-bottom: 2px; }
+    .rel-sub { font-size: 11px; color: #666; }
+    .empresa-bloco { margin-bottom: 24px; }
+    .empresa-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; background: #222; color: #fff; padding: 5px 10px; border-radius: 2px 2px 0 0; }
+    table { width: 100%; border-collapse: collapse; border: 1px solid #ccc; }
+    thead tr { background: #f0f0f0 !important; color: #333 !important; }
+    th { padding: 5px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #999; border-right: 1px solid #ccc; text-align: left; }
+    td { padding: 5px 8px; border-bottom: 1px solid rgba(0,0,0,0.08); border-right: 1px solid rgba(0,0,0,0.08); }
+    th:last-child, td:last-child { border-right: none; }
+    @media print { body { padding: 10px; } .empresa-bloco { page-break-inside: avoid; } }
+  </style>
+  </head><body ${onload}>
+  <div class="rel-header">
+    <div class="rel-mes">Férias — ${mesLabel}</div>
+    <div class="rel-sub">${totalReg} registro(s) · Gerado em ${gerado}</div>
+  </div>
+  ${corpoEmpresas}
+  </body></html>`;
+}
+
 function exportarRelatorioExcel() {
-  const { linhas, mesLabel, empLabel } = _getDadosRelatorio();
-  const cab = ['Nome','Cargo','Setor','Empresa','Início','Fim','Dias','Status'];
-  const rows = [cab, ...linhas.map(l => [l.nome, l.cargo, l.setor, l.empresa, l.inicio, l.fim, l.dias, l.status])];
-  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const { linhas, mesLabel } = _getDadosRelatorio();
+  // Agrupa por empresa para o CSV estruturado
+  const porEmpresa = {};
+  linhas.forEach(l => {
+    const emp = l.empresa || 'Sem empresa';
+    if (!porEmpresa[emp]) porEmpresa[emp] = [];
+    porEmpresa[emp].push(l);
+  });
+
+  const cab = ['Setor','Registro','Nome do Colaborador','Cargo','Qtde dias','Início','Fim'];
+  const linhasCSV = [];
+  Object.entries(porEmpresa).forEach(([empresa, rows]) => {
+    linhasCSV.push([empresa.toUpperCase(),'','','','','','']);
+    linhasCSV.push(cab);
+    rows.forEach(l => linhasCSV.push([l.setor, l.matricula, l.nome, l.cargo, l.dias, _fmtData(l.inicio), _fmtData(l.fim)]));
+    linhasCSV.push(['','','','','','','']);
+  });
+
+  const csv = linhasCSV.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `Ferias_${mesLabel.replace(' ','_')}_${empLabel.replace(/\s/g,'_')}.csv`;
+  a.href = url; a.download = `Ferias_${mesLabel.replace(' ','_')}.csv`;
   a.click(); URL.revokeObjectURL(url);
   document.getElementById('modalRelatorio')?.classList.remove('open');
 }
 
 function exportarRelatorioPDF() {
-  const { linhas, mesLabel, empLabel } = _getDadosRelatorio();
-  const rows = linhas.map(l =>
-    `<tr><td>${l.nome}</td><td>${l.cargo}</td><td>${l.setor}</td><td>${l.empresa}</td><td>${l.inicio}</td><td>${l.fim}</td><td>${l.dias}</td><td>${l.status}</td></tr>`
-  ).join('');
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório Férias</title>
-  <style>body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#222;}h2{margin:0 0 4px;font-size:16px;}p{margin:0 0 16px;color:#666;font-size:11px;}table{width:100%;border-collapse:collapse;}th{text-align:left;padding:5px 8px;border-bottom:2px solid #333;font-size:11px;text-transform:uppercase;}td{padding:5px 8px;border-bottom:1px solid #e5e5e5;}tr:nth-child(even){background:#f9f9f9;}</style>
-  </head><body onload="window.print()">
-  <h2>Relatório de Férias — ${mesLabel}</h2>
-  <p>${empLabel} · ${linhas.length} registro(s) · Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
-  <table><thead><tr><th>Nome</th><th>Cargo</th><th>Setor</th><th>Empresa</th><th>Início</th><th>Fim</th><th>Dias</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
-  </body></html>`;
-  const w = window.open('','_blank');
+  const { linhas, mesLabel } = _getDadosRelatorio();
+  const html = _buildRelatorioHTML(linhas, mesLabel, true);
+  const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
   document.getElementById('modalRelatorio')?.classList.remove('open');
