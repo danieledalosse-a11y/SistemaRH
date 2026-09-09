@@ -7394,19 +7394,18 @@ function gestorExportarPDF() {
   const gerado  = new Date().toLocaleDateString('pt-BR');
   const dataLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-  // Badge de situação (cores do sistema)
-  const _sitBadge = (sit) => {
+  // Cores de situação (padrão do sistema)
+  const _sitCor = (sit) => {
     const map = {
-      'Crítico':         { bg:'#FEF3F2', text:'#D92D20', border:'#FECDCA' },
-      'Atenção':         { bg:'#FFFAEB', text:'#B54708', border:'#FDE68A' },
-      'No radar':        { bg:'#EFF6FF', text:'#1D4ED8', border:'#BFDBFE' },
-      'Agendado':        { bg:'#ECFDF3', text:'#027A48', border:'#A7F3D0' },
-      'Concluído':       { bg:'#ECFDF3', text:'#027A48', border:'#A7F3D0' },
-      'Sem agendamento': { bg:'#FFFAEB', text:'#92400E', border:'#FDE68A' },
-      'Período futuro':  { bg:'#EFF6FF', text:'#1849A9', border:'#BFDBFE' },
+      'Crítico':         { bg:'#FEF3F2', text:'#D92D20' },
+      'Atenção':         { bg:'#FFFAEB', text:'#B54708' },
+      'No radar':        { bg:'#EFF6FF', text:'#1D4ED8' },
+      'Agendado':        { bg:'#ECFDF3', text:'#027A48' },
+      'Concluído':       { bg:'#ECFDF3', text:'#027A48' },
+      'Sem agendamento': { bg:'#FFFAEB', text:'#92400E' },
+      'Período futuro':  { bg:'#EFF6FF', text:'#1849A9' },
     };
-    const s = map[sit] || { bg:'#F1F5F9', text:'#475569', border:'#CBD5E1' };
-    return `<span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:${s.bg};color:${s.text};border:1px solid ${s.border};white-space:nowrap;">${sit}</span>`;
+    return map[sit] || { bg:'#F1F5F9', text:'#475569' };
   };
 
   // Cor semântica do saldo
@@ -7424,19 +7423,17 @@ function gestorExportarPDF() {
     const semPA = !pa && !temPeriodos && !!c.data_admissao;
     if (!pa && !semPA) return;
     const saldo = pa ? gestorSaldoPeriodo(pa) : 30;
-    // Ano PA: ex. "2025/2026"
+    // Ano PA: apenas o ano de início (ex. "2025")
     let paAno = '—';
     let paStr = '—';
     if (pa) {
-      const iniA = pa.pa_inicio?.slice(0,4) || '—';
-      const fimA = pa.pa_fim?.slice(0,4)   || '—';
-      paAno = iniA === fimA ? iniA : `${iniA}/${fimA}`;
+      paAno = pa.pa_inicio?.slice(0,4) || '—';
       const ini = pa.pa_inicio ? _fmtData(pa.pa_inicio) : '—';
       const fim = pa.pa_fim   ? _fmtData(pa.pa_fim)   : '—';
       paStr = `${ini} → ${fim}`;
     } else if (semPA) {
       const fimPrev = addDays(c.data_admissao.slice(0,10), 364);
-      paAno = fimPrev.slice(0,4);
+      paAno = String(parseInt(fimPrev.slice(0,4)) - 1);
       paStr = 'Previsto';
     }
     const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
@@ -7470,6 +7467,7 @@ function gestorExportarPDF() {
     }
     const cor = _corSetor(l.setor);
     const cs = `background:${cor.bg};color:${cor.text};`;
+    const sit = _sitCor(l.situacao);
     trs += `<tr>
       <td style="${cs}padding:5px 10px;">${l.nome}</td>
       <td style="padding:5px 10px;">${l.cargo}</td>
@@ -7477,7 +7475,7 @@ function gestorExportarPDF() {
       <td style="padding:5px 10px;font-size:10px;">${l.paStr}</td>
       <td style="padding:5px 10px;">${l.agendStr}</td>
       <td style="text-align:center;font-weight:800;color:${_saldoCor(l.saldo)};padding:5px 10px;">${l.saldo}d</td>
-      <td style="padding:5px 10px;">${_sitBadge(l.situacao)}</td>
+      <td style="background:${sit.bg};color:${sit.text};font-weight:700;padding:5px 10px;">${l.situacao}</td>
     </tr>`;
   });
 
