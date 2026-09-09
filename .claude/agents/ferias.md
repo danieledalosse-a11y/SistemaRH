@@ -815,7 +815,7 @@ O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre 
 | Aprendiz | `#C0C0C0` | `#000` |
 | Sarandi / SDI | `#ADD8E6` | `#000` |
 
-### Layout do relatório (PDF)
+### Layout do relatório RH (PDF)
 
 - Cabeçalho: ícone 📅 + título maiúsculas + subtítulo de contagem/data
 - Tabela: `table-layout:fixed`, header `#1e3a5f` branco, colunas com `colgroup` percentuais
@@ -823,6 +823,27 @@ O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre 
 - Colunas coloridas: Empresa, Setor, Matrícula, Nome, Início, Fim (cor do setor); Cargo e Dias brancos
 - Legenda: `position:fixed;bottom:8mm` com bolinhas CSS + nome do setor
 - Footer: `FÉRIAS — MÊS | 1 de 1` alinhado à direita
+
+## Visão Gestor — abas e exportação (2026-09-09)
+
+### Estrutura das abas
+
+- **Abas:** Painel | Timeline — aba "Relatório" removida (padrão de mercado: gestor exporta a lista, não gera relatório separado)
+- KPIs (`gestorAlerts`, `gestorAtividade`) ficam **fora** do card de abas — sempre visíveis em qualquer aba ativa
+- Abas dentro do card principal usando `.proto-view-tabs` — mesmo padrão da visão RH
+- `setGestorTab(tab)` itera apenas `['painel','timeline']`
+
+### Exportação do Gestor (`gestorExportarPDF`)
+
+O botão "Exportar" na lista do Gestor chama `gestorExportarPDF()` — abre nova aba com relatório visual idêntico ao padrão RH.
+
+**Colunas:** Nome | Cargo | Setor | Gestor | PA | Agendamento | Saldo · Situação  
+**Ordenação:** setor → nome (agrupa equipe por área)  
+**Cores de setor:** usa `_corSetor()` — separador por setor com cor do setor como fundo  
+**Situação em cor semântica:** vermelho=Crítico, âmbar=Atenção, verde=Agendado/Concluído  
+**Filtros respeitados:** busca, cargo, gestor ativos na lista no momento da exportação
+
+**Nunca usar `gestorExportarCSV`** para o botão principal — função pode existir mas não é chamada pela UI.
 
 ## Pendências conhecidas
 
