@@ -6435,85 +6435,74 @@ function _fmtData(iso) {
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
 }
 
-function _buildRelatorioHTML(linhas, mesLabel, paraImpressao) {
-  // Agrupa: empresa → linhas ordenadas por setor
-  const porEmpresa = {};
-  linhas.forEach(l => {
-    const emp = l.empresa || 'Sem empresa';
-    if (!porEmpresa[emp]) porEmpresa[emp] = [];
-    porEmpresa[emp].push(l);
+function _buildRelatorioHTML(linhas, mesLabel) {
+  // Ordena: empresa → setor → nome
+  const sorted = [...linhas].sort((a, b) => {
+    const ea = (a.empresa||'').localeCompare(b.empresa||'', 'pt-BR');
+    if (ea !== 0) return ea;
+    const sa = (a.setor||'').localeCompare(b.setor||'', 'pt-BR');
+    if (sa !== 0) return sa;
+    return (a.nome||'').localeCompare(b.nome||'', 'pt-BR');
   });
-  Object.values(porEmpresa).forEach(rows => rows.sort((a, b) => (a.setor||'').localeCompare(b.setor||'', 'pt-BR')));
 
   const gerado = new Date().toLocaleDateString('pt-BR');
-  const totalReg = linhas.length;
 
-  let corpoEmpresas = '';
-  Object.entries(porEmpresa).forEach(([empresa, rows]) => {
-    let trs = '';
-    rows.forEach(l => {
-      const cor = _corSetor(l.setor);
-      // Cor apenas nas colunas de identidade (setor, matrícula, nome); demais ficam branco
-      trs += `<tr>
-        <td style="background:${cor.bg};color:${cor.text};font-weight:600;">${l.setor}</td>
-        <td style="background:${cor.bg};color:${cor.text};text-align:center;font-weight:600;">${l.matricula}</td>
-        <td style="background:${cor.bg};color:${cor.text};">${l.nome}</td>
-        <td>${l.cargo}</td>
-        <td style="text-align:center;">${l.dias}</td>
-        <td style="text-align:center;">${_fmtData(l.inicio)}</td>
-        <td style="text-align:center;">${_fmtData(l.fim)}</td>
-      </tr>`;
-    });
-
-    corpoEmpresas += `
-      <div class="empresa-bloco">
-        <div class="empresa-header">${empresa.toUpperCase()}</div>
-        <table>
-          <colgroup><col class="c-setor"><col class="c-reg"><col class="c-nome"><col class="c-cargo"><col class="c-dias"><col class="c-inicio"><col class="c-fim"></colgroup>
-          <thead><tr>
-            <th>Setor</th>
-            <th style="text-align:center;">Registro</th>
-            <th>Nome do Colaborador</th>
-            <th>Cargo</th>
-            <th style="text-align:center;">Dias</th>
-            <th style="text-align:center;">Início</th>
-            <th style="text-align:center;">Fim</th>
-          </tr></thead>
-          <tbody>${trs}</tbody>
-        </table>
-      </div>`;
-  });
+  const trs = sorted.map(l => {
+    const cor = _corSetor(l.setor);
+    return `<tr style="background:${cor.bg};color:${cor.text};">
+      <td>${l.empresa}</td>
+      <td>${l.setor}</td>
+      <td style="text-align:center;">${l.matricula}</td>
+      <td>${l.nome}</td>
+      <td>${l.cargo}</td>
+      <td style="text-align:center;">${l.dias}</td>
+      <td style="text-align:center;">${_fmtData(l.inicio)}</td>
+      <td style="text-align:center;">${_fmtData(l.fim)}</td>
+    </tr>`;
+  }).join('');
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
   <title>Férias ${mesLabel}</title>
   <style>
-    @page { size: A4 portrait; margin: 15mm 12mm; }
-    body { font-family: Arial, sans-serif; font-size: 10px; color: #111; padding: 16px; background: #fff; }
-    .rel-header { margin-bottom: 18px; border-bottom: 2px solid #111; padding-bottom: 8px; }
+    @page { size: A4 landscape; margin: 12mm 10mm; }
+    body { font-family: Arial, sans-serif; font-size: 9px; color: #111; padding: 12px; background: #fff; }
+    .rel-header { margin-bottom: 14px; border-bottom: 2px solid #111; padding-bottom: 6px; }
     .rel-mes { font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #111; margin-bottom: 2px; }
-    .rel-sub { font-size: 9px; color: #666; }
-    .empresa-bloco { margin-bottom: 18px; }
-    .empresa-header { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; background: #222; color: #fff; padding: 4px 8px; }
+    .rel-sub { font-size: 8px; color: #666; }
     table { width: 100%; border-collapse: collapse; border: 1px solid #bbb; table-layout: fixed; }
-    thead tr { background: #f0f0f0; }
-    th { padding: 3px 6px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1.5px solid #888; border-right: 1px solid #ccc; text-align: left; white-space: nowrap; overflow: hidden; }
-    td { padding: 3px 6px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; background: #fff; color: #111; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    thead tr { background: #e8e8e8 !important; color: #111 !important; }
+    th { padding: 4px 6px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #888; border-right: 1px solid #bbb; text-align: left; white-space: nowrap; }
+    td { padding: 3px 6px; border-bottom: 1px solid rgba(0,0,0,0.1); border-right: 1px solid rgba(0,0,0,0.1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     th:last-child, td:last-child { border-right: none; }
-    col.c-setor    { width: 14%; }
-    col.c-reg      { width: 8%;  }
-    col.c-nome     { width: 29%; }
-    col.c-cargo    { width: 22%; }
-    col.c-dias     { width: 6%;  }
-    col.c-inicio   { width: 11%; }
-    col.c-fim      { width: 10%; }
-    @media print { .empresa-bloco { page-break-inside: avoid; } }
+    colgroup col:nth-child(1) { width: 18%; }
+    colgroup col:nth-child(2) { width: 13%; }
+    colgroup col:nth-child(3) { width: 6%;  }
+    colgroup col:nth-child(4) { width: 25%; }
+    colgroup col:nth-child(5) { width: 18%; }
+    colgroup col:nth-child(6) { width: 5%;  }
+    colgroup col:nth-child(7) { width: 8%;  }
+    colgroup col:nth-child(8) { width: 7%;  }
+    @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
   </style>
   </head><body>
   <div class="rel-header">
     <div class="rel-mes">Férias — ${mesLabel}</div>
-    <div class="rel-sub">${totalReg} registro(s) · Gerado em ${gerado}</div>
+    <div class="rel-sub">${sorted.length} registro(s) · Gerado em ${gerado}</div>
   </div>
-  ${corpoEmpresas}
+  <table>
+    <colgroup><col><col><col><col><col><col><col><col></colgroup>
+    <thead><tr>
+      <th>Empresa de Registro</th>
+      <th>Setor</th>
+      <th style="text-align:center;">Matrícula</th>
+      <th>Nome do Colaborador</th>
+      <th>Cargo</th>
+      <th style="text-align:center;">Dias</th>
+      <th style="text-align:center;">Início</th>
+      <th style="text-align:center;">Fim</th>
+    </tr></thead>
+    <tbody>${trs}</tbody>
+  </table>
   </body></html>`;
 }
 
@@ -6547,7 +6536,7 @@ function exportarRelatorioExcel() {
 
 function exportarRelatorioPDF() {
   const { linhas, mesLabel } = _getDadosRelatorio();
-  const html = _buildRelatorioHTML(linhas, mesLabel, true);
+  const html = _buildRelatorioHTML(linhas, mesLabel);
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
