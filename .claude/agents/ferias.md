@@ -775,6 +775,55 @@ const bannerPaAtivo = (IS_RH && paAtivoNaoEhOPrimeiro) ? `
 
 Cada bloco de PA tem `id="pa-block-${r._sbId}"` para o scroll funcionar. Banner só aparece na visão RH.
 
+## Relatório Mensal de Férias — funções e regras (2026-09-09)
+
+### Funções
+
+| Função | Responsabilidade |
+|---|---|
+| `_getDadosRelatorio()` | Lê `COLABORADORES`, filtra pelo mês selecionado, retorna `{ linhas, mesLabel }` |
+| `_SETOR_CORES` | Map de setor normalizado → `{ bg, text }`. Chave: `_normKey(setor)` |
+| `_corSetor(setor)` | Retorna `{ bg, text }` via `_SETOR_CORES`; fallback `#f8fafc`/`#111` |
+| `_fmtData(str)` | Converte `YYYY-MM-DD` → `DD/MM/YYYY` |
+| `_buildRelatorioHTML(linhas, mesLabel)` | Gera HTML para **PDF/visualização**: ícone 📅, cabeçalho azul escuro, separador por empresa, legenda com bolinhas CSS, footer `position:fixed` |
+| `_buildExcelHTML(linhas, mesLabel)` | Gera HTML para **Excel**: sem emoji, sem `position:fixed`, legenda em células coloridas, **todos os estilos inline** (Excel ignora `<style>`) |
+| `exportarRelatorioPDF()` | Abre nova aba com `_buildRelatorioHTML` |
+| `exportarRelatorioExcel()` | Gera blob `.xls` com `_buildExcelHTML` |
+
+### Campo empresa
+
+`c.empresa` (não `c.empresaRegistro`) é o campo correto na camada de dados do módulo férias. `c.empresaRegistro` nunca é preenchido neste módulo.
+
+### Regra crítica — Excel
+
+**Excel ignora completamente a tag `<style>`** — todos os estilos devem ser `style=""` inline nos elementos. Usar `_buildExcelHTML` separada do PDF por esse motivo. Nunca reusar `_buildRelatorioHTML` no Excel.
+
+O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre mas exibe aviso de formato. Isso é esperado; o usuário clica "Sim" para continuar.
+
+### Cores por setor (`_SETOR_CORES`)
+
+| Setor(es) | bg | text |
+|---|---|---|
+| Matriz Vendas / Projetos | `#FFFF00` | `#000` |
+| Financ / TI / Marketing | `#FFFACD` | `#000` |
+| CD | `#90EE90` | `#000` |
+| Compras / E-commerce | `#FFB6C1` | `#000` |
+| Porto Rico | `#E6E6FA` | `#000` |
+| PVAÍ | `#FFDAB9` | `#000` |
+| RED | `#000000` | `#fff` |
+| Atelier | `#D3D3D3` | `#000` |
+| Aprendiz | `#C0C0C0` | `#000` |
+| Sarandi / SDI | `#ADD8E6` | `#000` |
+
+### Layout do relatório (PDF)
+
+- Cabeçalho: ícone 📅 + título maiúsculas + subtítulo de contagem/data
+- Tabela: `table-layout:fixed`, header `#1e3a5f` branco, colunas com `colgroup` percentuais
+- Separador por empresa: `<tr class="emp-sep">` com fundo `#f1f5f9`
+- Colunas coloridas: Empresa, Setor, Matrícula, Nome, Início, Fim (cor do setor); Cargo e Dias brancos
+- Legenda: `position:fixed;bottom:8mm` com bolinhas CSS + nome do setor
+- Footer: `FÉRIAS — MÊS | 1 de 1` alinhado à direita
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
