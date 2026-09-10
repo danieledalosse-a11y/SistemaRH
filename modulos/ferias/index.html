@@ -7396,7 +7396,7 @@ function gestorExportarPDF() {
   const dataLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   // Badge de situação (cores do sistema)
-  const _sitBadge = (sit) => {
+  const _sitBadge = (sit, label) => {
     const map = {
       'Crítico':         { bg:'#FEF3F2', text:'#D92D20', border:'#FECDCA' },
       'Atenção':         { bg:'#FFFAEB', text:'#B54708', border:'#FDE68A' },
@@ -7407,7 +7407,7 @@ function gestorExportarPDF() {
       'Período futuro':  { bg:'#EFF6FF', text:'#1849A9', border:'#BFDBFE' },
     };
     const s = map[sit] || { bg:'#F1F5F9', text:'#475569', border:'#CBD5E1' };
-    return `<span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:${s.bg};color:${s.text};border:1px solid ${s.border};white-space:nowrap;">${sit}</span>`;
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:${s.bg};color:${s.text};border:1px solid ${s.border};white-space:nowrap;">${label||sit}</span>`;
   };
 
   // Cor semântica do saldo
@@ -7448,13 +7448,16 @@ function gestorExportarPDF() {
     const agendFim = lRef ? _fmtData(lRef.fim)   : '—';
     const dpd   = pa ? gestorDpd(pa) : 9999;
     const nivel = nivelRisco(dpd);
-    let situacao;
-    if (saldo > 0 && pa && nivel) situacao = nivel === 'critico' ? 'Crítico' : nivel === 'atencao' ? 'Atenção' : 'No radar';
-    else if (semPA) situacao = 'Período futuro';
-    else if (saldo <= 0) situacao = 'Concluído';
-    else if (!lRef) situacao = 'Sem agendamento';
-    else situacao = 'Agendado';
-    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendIni, agendFim, saldo, situacao });
+    let situacao, sitKey;
+    if (saldo > 0 && pa && nivel) {
+      const dobra = _fmtData(_addOneYear(pa.pa_fim));
+      sitKey = nivel === 'critico' ? 'Crítico' : nivel === 'atencao' ? 'Atenção' : 'No radar';
+      situacao = `${sitKey} · Dobra em ${dobra}`;
+    } else if (semPA) { situacao = sitKey = 'Período futuro'; }
+    else if (saldo <= 0) { situacao = sitKey = 'Concluído'; }
+    else if (!lRef) { situacao = sitKey = 'Sem agendamento'; }
+    else { situacao = sitKey = 'Agendado'; }
+    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendIni, agendFim, saldo, situacao, sitKey });
   });
 
   if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
@@ -7478,7 +7481,7 @@ function gestorExportarPDF() {
       <td style="text-align:center;padding:5px 10px;">${l.agendIni}</td>
       <td style="text-align:center;padding:5px 10px;">${l.agendFim}</td>
       <td style="text-align:center;font-weight:800;color:${_saldoCor(l.saldo)};padding:5px 10px;">${l.saldo}d</td>
-      <td style="padding:5px 10px;">${_sitBadge(l.situacao)}</td>
+      <td style="padding:5px 10px;">${_sitBadge(l.sitKey, l.situacao)}</td>
     </tr>`;
   });
 
@@ -7611,13 +7614,16 @@ function gestorExportarExcel() {
     const agendFim = lRef ? _fmtData(lRef.fim)   : '—';
     const dpd   = pa ? gestorDpd(pa) : 9999;
     const nivel = nivelRisco(dpd);
-    let situacao;
-    if (saldo > 0 && pa && nivel) situacao = nivel === 'critico' ? 'Crítico' : nivel === 'atencao' ? 'Atenção' : 'No radar';
-    else if (semPA) situacao = 'Período futuro';
-    else if (saldo <= 0) situacao = 'Concluído';
-    else if (!lRef) situacao = 'Sem agendamento';
-    else situacao = 'Agendado';
-    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendIni, agendFim, saldo, situacao });
+    let situacao, sitKey;
+    if (saldo > 0 && pa && nivel) {
+      const dobra = _fmtData(_addOneYear(pa.pa_fim));
+      sitKey = nivel === 'critico' ? 'Crítico' : nivel === 'atencao' ? 'Atenção' : 'No radar';
+      situacao = `${sitKey} · Dobra em ${dobra}`;
+    } else if (semPA) { situacao = sitKey = 'Período futuro'; }
+    else if (saldo <= 0) { situacao = sitKey = 'Concluído'; }
+    else if (!lRef) { situacao = sitKey = 'Sem agendamento'; }
+    else { situacao = sitKey = 'Agendado'; }
+    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendIni, agendFim, saldo, situacao, sitKey });
   });
 
   if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
@@ -7650,7 +7656,7 @@ function gestorExportarExcel() {
       trs += `<tr><td colspan="8" style="background:${cor.bg};color:${cor.text};font-family:Arial,sans-serif;font-size:10pt;font-weight:700;letter-spacing:.05em;padding:5px 10px;border:1px solid #cbd5e1;">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
     }
     const cor = _corSetor(l.setor);
-    const sit = _sitXls(l.situacao);
+    const sit = _sitXls(l.sitKey);
     trs += `<tr>
       <td style="${TD}background:${cor.bg};color:${cor.text};">${l.nome}</td>
       <td style="${TD}">${l.cargo}</td>
