@@ -7388,9 +7388,9 @@ function renderGestorGantt() {
 
 function gestorExportarPDF() {
   const hoje = new Date().toISOString().slice(0,10);
-  const busca   = (document.getElementById('gestorBusca')?.value || '').toLowerCase();
   const cargof  = document.getElementById('gestorFiltroCargo2')?.value || '';
   const gestorf = document.getElementById('gestorFiltroGestor')?.value || '';
+  const _normG  = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const gerado  = new Date().toLocaleDateString('pt-BR');
   const dataLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
@@ -7412,11 +7412,12 @@ function gestorExportarPDF() {
   // Cor semântica do saldo
   const _saldoCor = (saldo) => saldo <= 0 ? '#10B981' : saldo <= 5 ? '#F59E0B' : '#1570EF';
 
+  if (!GESTOR_COLABS.length) { toast('Dados da equipe não carregados. Aguarde e tente novamente.', 'aviso'); return; }
+
   const linhas = [];
   GESTOR_COLABS.filter(c => {
-    if (busca && !c.nome.toLowerCase().includes(busca)) return false;
     if (cargof && c.cargo !== cargof) return false;
-    if (gestorf && c.gestor !== gestorf) return false;
+    if (gestorf && _normG(c.gestor) !== _normG(gestorf)) return false;
     return true;
   }).sort((a,b) => (a.setor||'').localeCompare(b.setor||'','pt-BR') || a.nome.localeCompare(b.nome,'pt-BR')).forEach(c => {
     const pa = gestorPeriodoAtivo(c.id);
@@ -7456,6 +7457,8 @@ function gestorExportarPDF() {
     else situacao = 'Agendado';
     linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendStr, saldo, situacao });
   });
+
+  if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
 
   // Agrupa por setor com separador colorido
   let trs = '';
@@ -7571,11 +7574,12 @@ function gestorExportarExcel() {
 
   const _saldoCor = (saldo) => saldo <= 0 ? '#10B981' : saldo <= 5 ? '#F59E0B' : '#1570EF';
 
+  if (!GESTOR_COLABS.length) { toast('Dados da equipe não carregados. Aguarde e tente novamente.', 'aviso'); return; }
+
   const linhas = [];
   GESTOR_COLABS.filter(c => {
-    if (busca && !c.nome.toLowerCase().includes(busca)) return false;
     if (cargof && c.cargo !== cargof) return false;
-    if (gestorf && c.gestor !== gestorf) return false;
+    if (gestorf && _normG(c.gestor) !== _normG(gestorf)) return false;
     return true;
   }).sort((a,b) => (a.setor||'').localeCompare(b.setor||'','pt-BR') || a.nome.localeCompare(b.nome,'pt-BR')).forEach(c => {
     const pa = gestorPeriodoAtivo(c.id);
@@ -7615,6 +7619,8 @@ function gestorExportarExcel() {
     else situacao = 'Agendado';
     linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendStr, saldo, situacao });
   });
+
+  if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
 
   // Cores de situação para célula Excel (inline, Excel ignora <style>)
   const _sitXls = (sit) => {
