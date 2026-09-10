@@ -7435,19 +7435,17 @@ function gestorExportarPDF() {
       const fim = pa.pa_fim   ? _fmtData(pa.pa_fim)   : '—';
       paStr = `${ini} → ${fim}`;
     } else if (semPA) {
-      const fimPrev = addDays(c.data_admissao.slice(0,10), 364);
+      const iniPrev = c.data_admissao.slice(0,10);
+      const fimPrev = addDays(iniPrev, 364);
       paAno = String(parseInt(fimPrev.slice(0,4)) - 1);
-      paStr = 'Previsto';
+      paStr = `${_fmtData(iniPrev)} → ${_fmtData(fimPrev)} (prev.)`;
     }
     const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
     const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
     const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
     const lRef   = ativo || futuro;
-    let agendStr = '—';
-    if (lRef) {
-      const fmtShort = d => { const p = _fmtData(d).split('/'); return `${p[0]}/${p[1]}`; };
-      agendStr = `${fmtShort(lRef.inicio)} → ${fmtShort(lRef.fim)} · ${lRef.dias}d`;
-    }
+    const agendIni = lRef ? _fmtData(lRef.inicio) : '—';
+    const agendFim = lRef ? _fmtData(lRef.fim)   : '—';
     const dpd   = pa ? gestorDpd(pa) : 9999;
     const nivel = nivelRisco(dpd);
     let situacao;
@@ -7456,7 +7454,7 @@ function gestorExportarPDF() {
     else if (saldo <= 0) situacao = 'Concluído';
     else if (!lancs.length) situacao = 'Sem agendamento';
     else situacao = 'Agendado';
-    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendStr, saldo, situacao });
+    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendIni, agendFim, saldo, situacao });
   });
 
   if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
@@ -7468,7 +7466,7 @@ function gestorExportarPDF() {
     if (l.setor !== setorAtual) {
       setorAtual = l.setor;
       const cor = _corSetor(l.setor);
-      trs += `<tr><td colspan="7" style="background:${cor.bg};color:${cor.text};font-size:10px;font-weight:700;letter-spacing:.05em;padding:5px 10px;border-bottom:1px solid rgba(0,0,0,0.1);">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
+      trs += `<tr><td colspan="8" style="background:${cor.bg};color:${cor.text};font-size:10px;font-weight:700;letter-spacing:.05em;padding:5px 10px;border-bottom:1px solid rgba(0,0,0,0.1);">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
     }
     const cor = _corSetor(l.setor);
     const cs = `background:${cor.bg};color:${cor.text};`;
@@ -7477,7 +7475,8 @@ function gestorExportarPDF() {
       <td style="padding:5px 10px;">${l.cargo}</td>
       <td style="text-align:center;font-weight:700;padding:5px 10px;">${l.paAno}</td>
       <td style="padding:5px 10px;font-size:10px;">${l.paStr}</td>
-      <td style="padding:5px 10px;">${l.agendStr}</td>
+      <td style="text-align:center;padding:5px 10px;">${l.agendIni}</td>
+      <td style="text-align:center;padding:5px 10px;">${l.agendFim}</td>
       <td style="text-align:center;font-weight:800;color:${_saldoCor(l.saldo)};padding:5px 10px;">${l.saldo}d</td>
       <td style="padding:5px 10px;">${_sitBadge(l.situacao)}</td>
     </tr>`;
@@ -7507,13 +7506,14 @@ function gestorExportarPDF() {
     th:last-child { border-right: none; }
     td { padding: 5px 10px; border-bottom: 1px solid rgba(0,0,0,.07); border-right: 1px solid rgba(0,0,0,.07); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; vertical-align: middle; }
     td:last-child { border-right: none; }
-    colgroup col:nth-child(1) { width: 22%; }
-    colgroup col:nth-child(2) { width: 16%; }
+    colgroup col:nth-child(1) { width: 20%; }
+    colgroup col:nth-child(2) { width: 14%; }
     colgroup col:nth-child(3) { width: 7%; }
-    colgroup col:nth-child(4) { width: 18%; }
-    colgroup col:nth-child(5) { width: 15%; }
-    colgroup col:nth-child(6) { width: 6%; }
-    colgroup col:nth-child(7) { width: 16%; }
+    colgroup col:nth-child(4) { width: 17%; }
+    colgroup col:nth-child(5) { width: 10%; }
+    colgroup col:nth-child(6) { width: 10%; }
+    colgroup col:nth-child(7) { width: 6%; }
+    colgroup col:nth-child(8) { width: 16%; }
     .rel-footer { position: fixed; bottom: 8mm; left: 12mm; right: 12mm; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; }
     @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
   </style>
@@ -7526,13 +7526,14 @@ function gestorExportarPDF() {
     </div>
   </div>
   <table>
-    <colgroup><col><col><col><col><col><col><col></colgroup>
+    <colgroup><col><col><col><col><col><col><col><col></colgroup>
     <thead><tr>
       <th>Nome</th>
       <th>Cargo</th>
       <th style="text-align:center;">Ano PA</th>
       <th>Período Aquisitivo</th>
-      <th>Agendamento</th>
+      <th style="text-align:center;">Férias Início</th>
+      <th style="text-align:center;">Férias Fim</th>
       <th style="text-align:center;">Saldo</th>
       <th>Situação</th>
     </tr></thead>
@@ -7597,19 +7598,17 @@ function gestorExportarExcel() {
       const fim = pa.pa_fim   ? _fmtData(pa.pa_fim)   : '—';
       paStr = `${ini} → ${fim}`;
     } else if (semPA) {
-      const fimPrev = addDays(c.data_admissao.slice(0,10), 364);
+      const iniPrev = c.data_admissao.slice(0,10);
+      const fimPrev = addDays(iniPrev, 364);
       paAno = String(parseInt(fimPrev.slice(0,4)) - 1);
-      paStr = 'Previsto';
+      paStr = `${_fmtData(iniPrev)} → ${_fmtData(fimPrev)} (prev.)`;
     }
     const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
     const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
     const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
     const lRef   = ativo || futuro;
-    let agendStr = '—';
-    if (lRef) {
-      const fmtShort = d => { const p = _fmtData(d).split('/'); return `${p[0]}/${p[1]}`; };
-      agendStr = `${fmtShort(lRef.inicio)} → ${fmtShort(lRef.fim)} · ${lRef.dias}d`;
-    }
+    const agendIni = lRef ? _fmtData(lRef.inicio) : '—';
+    const agendFim = lRef ? _fmtData(lRef.fim)   : '—';
     const dpd   = pa ? gestorDpd(pa) : 9999;
     const nivel = nivelRisco(dpd);
     let situacao;
@@ -7618,7 +7617,7 @@ function gestorExportarExcel() {
     else if (saldo <= 0) situacao = 'Concluído';
     else if (!lancs.length) situacao = 'Sem agendamento';
     else situacao = 'Agendado';
-    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendStr, saldo, situacao });
+    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', paAno, paStr, agendIni, agendFim, saldo, situacao });
   });
 
   if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
@@ -7648,7 +7647,7 @@ function gestorExportarExcel() {
     if (l.setor !== setorAtual) {
       setorAtual = l.setor;
       const cor = _corSetor(l.setor);
-      trs += `<tr><td colspan="6" style="background:${cor.bg};color:${cor.text};font-family:Arial,sans-serif;font-size:10pt;font-weight:700;letter-spacing:.05em;padding:5px 10px;border:1px solid #cbd5e1;">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
+      trs += `<tr><td colspan="8" style="background:${cor.bg};color:${cor.text};font-family:Arial,sans-serif;font-size:10pt;font-weight:700;letter-spacing:.05em;padding:5px 10px;border:1px solid #cbd5e1;">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
     }
     const cor = _corSetor(l.setor);
     const sit = _sitXls(l.situacao);
@@ -7657,7 +7656,8 @@ function gestorExportarExcel() {
       <td style="${TD}">${l.cargo}</td>
       <td style="${TDC}font-weight:700;">${l.paAno}</td>
       <td style="${TD}font-size:9pt;">${l.paStr}</td>
-      <td style="${TD}">${l.agendStr}</td>
+      <td style="${TDC}">${l.agendIni}</td>
+      <td style="${TDC}">${l.agendFim}</td>
       <td style="${TDC}font-weight:800;color:${_saldoCor(l.saldo)};">${l.saldo}d</td>
       <td style="${TD}background:${sit.bg};color:${sit.text};font-weight:700;">${l.situacao}</td>
     </tr>`;
@@ -7673,11 +7673,11 @@ function gestorExportarExcel() {
   <x:Name>Férias da Equipe</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
   </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
   <body><table border="1" cellpadding="0" cellspacing="0">
-    <tr><td colspan="7" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe — ${dataLabel.charAt(0).toUpperCase()+dataLabel.slice(1)}</td></tr>
-    <tr><td colspan="7" style="font-family:Arial,sans-serif;font-size:9pt;color:#64748b;padding:4px 10px;border:1px solid #cbd5e1;">${linhas.length} colaborador(es) · Gerado em ${gerado}</td></tr>
-    <tr><td style="${TH}">Nome</td><td style="${TH}">Cargo</td><td style="${THC}">Ano PA</td><td style="${TH}">Período Aquisitivo</td><td style="${TH}">Agendamento</td><td style="${THC}">Saldo</td><td style="${TH}">Situação</td></tr>
+    <tr><td colspan="8" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe — ${dataLabel.charAt(0).toUpperCase()+dataLabel.slice(1)}</td></tr>
+    <tr><td colspan="8" style="font-family:Arial,sans-serif;font-size:9pt;color:#64748b;padding:4px 10px;border:1px solid #cbd5e1;">${linhas.length} colaborador(es) · Gerado em ${gerado}</td></tr>
+    <tr><td style="${TH}">Nome</td><td style="${TH}">Cargo</td><td style="${THC}">Ano PA</td><td style="${TH}">Período Aquisitivo</td><td style="${THC}">Férias Início</td><td style="${THC}">Férias Fim</td><td style="${THC}">Saldo</td><td style="${TH}">Situação</td></tr>
     ${trs}
-    <tr><td colspan="7" style="${TD}"></td></tr>
+    <tr><td colspan="8" style="${TD}"></td></tr>
     <tr><td colspan="2" style="${TD}font-weight:700;">Legenda de Setores:</td>${legendaRows}</tr>
   </table></body></html>`;
 
