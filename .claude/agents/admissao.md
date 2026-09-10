@@ -183,6 +183,17 @@ async function _confirmarAprovar(f, temVT) {
 
 **VT:** só cria workflow de VT se `ficha.vale_transporte === true`.
 
+### Fluxo obrigatório: Aprovar → Efetivar (corrigido 2026-09-09)
+
+**Regra de negócio:** o checklist de admissão deve estar aberto *antes* da efetivação, para que o RH acompanhe os itens de onboarding (criação de usuário, VT, crachá, etc.) antecipadamente.
+
+**Implementação:** o botão "Efetivar" direto na lista de convites foi **removido**. Convites com `status='aprovado'` agora exibem apenas o botão **"Efetivar contratação"**, que abre o painel completo da ficha — onde o botão de efetivação real está disponível. A função `efetivarDireto` foi excluída.
+
+**Antes (errado):** lista de convites tinha dois botões para `status='aprovado'`: "Efetivar" (direto, pulava o Aprovar Ficha) + "Ver ficha".  
+**Agora (correto):** apenas "Efetivar contratação" → abre painel → RH usa o botão dentro do painel.
+
+**Consequência:** sem passar por `_confirmarAprovar`, nenhum processo de admissão é criado. `efetivarDireto` era o único caminho que permitia efetivar sem aprovação prévia.
+
 ### Efetivar Contratação
 
 1. `efetivarContratacao(f)`: abre modal com dados pré-preenchidos da ficha

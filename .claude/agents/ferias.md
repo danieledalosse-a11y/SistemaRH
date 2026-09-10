@@ -833,15 +833,39 @@ O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre 
 - Abas dentro do card principal usando `.proto-view-tabs` — mesmo padrão da visão RH
 - `setGestorTab(tab)` itera apenas `['painel','timeline']`
 
-### Exportação do Gestor (`gestorExportarPDF`)
+### Exportação do Gestor
 
-O botão "Exportar" na lista do Gestor chama `gestorExportarPDF()` — abre nova aba com relatório visual idêntico ao padrão RH.
+**Botão Exportar** — dropdown com duas opções:
+- "Visualizar PDF" → `gestorExportarPDF()` — abre nova aba com relatório visual
+- "Exportar Excel" → `gestorExportarExcel()` — baixa `.xls` com inline styles
+- `toggleGestorExportMenu()` controla abertura/fechamento (fecha ao clicar fora via `document.addEventListener`)
 
-**Colunas:** Nome | Cargo | Setor | Gestor | PA | Agendamento | Saldo · Situação  
-**Ordenação:** setor → nome (agrupa equipe por área)  
-**Cores de setor:** usa `_corSetor()` — separador por setor com cor do setor como fundo  
-**Situação em cor semântica:** vermelho=Crítico, âmbar=Atenção, verde=Agendado/Concluído  
-**Filtros respeitados:** busca, cargo, gestor ativos na lista no momento da exportação
+**7 colunas (PDF e Excel):** Nome | Cargo | Ano PA | Período Aquisitivo | Agendamento | Saldo | Situação
+
+- **Setor removido** das colunas — separador colorido entre grupos já identifica a área
+- **Ano PA:** apenas o ano de início do PA (`pa.pa_inicio.slice(0,4)`) — ex.: `2025` (nunca `2025/2026`)
+  - `semPA`: usa `parseInt(fimPrev.slice(0,4)) - 1`
+- **Período Aquisitivo:** datas completas `DD/MM/AAAA → DD/MM/AAAA`
+- **Agendamento:** formato compacto `DD/MM → DD/MM · Xd`
+- **Saldo:** cor semântica — azul (`#1570EF`) >5d, âmbar (`#F59E0B`) ≤5d, verde (`#10B981`) zerado — helper `_saldoCor(saldo)`
+- **Situação — diferença intencional entre PDF e Excel:**
+  - **PDF:** badge pill colorido com borda arredondada — helper `_sitBadge(sit)` — visual mais rico
+  - **Excel:** célula com fundo colorido — helper `_sitXls(sit)` — Excel ignora HTML de badge
+- Separador de setor: `colspan="7"`, fundo da cor do setor
+- Filtros respeitados: busca, cargo, gestor ativos no momento da exportação
+
+**Cores de situação** (usadas em `_sitBadge` e `_sitXls`):
+
+| Situação | bg | text |
+|---|---|---|
+| Crítico | `#FEF3F2` | `#D92D20` |
+| Atenção | `#FFFAEB` | `#B54708` |
+| No radar | `#EFF6FF` | `#1D4ED8` |
+| Agendado / Concluído | `#ECFDF3` | `#027A48` |
+| Sem agendamento | `#FFFAEB` | `#92400E` |
+| Período futuro | `#EFF6FF` | `#1849A9` |
+
+**`gestorExportarExcel()`** — estilos 100% inline (Excel ignora `<style>`); separador `colspan="7"`.
 
 **Nunca usar `gestorExportarCSV`** para o botão principal — função pode existir mas não é chamada pela UI.
 
