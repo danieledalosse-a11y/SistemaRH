@@ -843,7 +843,8 @@ O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre 
 **7 colunas (PDF e Excel):** Nome | Cargo | Ano PA | Período Aquisitivo | Agendamento | Saldo | Situação
 
 - **Setor removido** das colunas — separador colorido entre grupos já identifica a área
-- **Ano PA:** apenas o ano de início do PA (`pa.pa_inicio.slice(0,4)`) — ex.: `2025` (nunca `2025/2026`)
+- **Ano PA:** usa `pa.ano` (campo do banco, fonte correta) — ex.: `2025` ou `2027`. **Não usar `pa.pa_inicio.slice(0,4)`**: colaboradores com aniversário no 2º semestre têm `pa_inicio` no ano anterior ao PA real (PA 2027 inicia em set/2026 → slice retornaria "2026", errado).
+  - Fallback: `pa.pa_inicio?.slice(0,4)` só se `pa.ano` for nulo
   - `semPA`: usa `parseInt(fimPrev.slice(0,4)) - 1`
 - **Período Aquisitivo:** datas completas `DD/MM/AAAA → DD/MM/AAAA`
 - **Agendamento:** formato compacto `DD/MM → DD/MM · Xd`
@@ -852,7 +853,10 @@ O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre 
   - **PDF:** badge pill colorido com borda arredondada — helper `_sitBadge(sit)` — visual mais rico
   - **Excel:** célula com fundo colorido — helper `_sitXls(sit)` — Excel ignora HTML de badge
 - Separador de setor: `colspan="7"`, fundo da cor do setor
-- Filtros respeitados: busca, cargo, gestor ativos no momento da exportação
+- **Filtros respeitados:** cargo e gestor ativos. **Busca (`gestorBusca`) é ignorada** — é filtro de navegação na tela, não deve restringir exportação
+- **Guards de segurança:** se `GESTOR_COLABS.length === 0` → toast aviso + return. Se `linhas.length === 0` → toast aviso + return (nunca gerar arquivo vazio)
+- **Download (Excel):** obrigatório `document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)` — sem appendChild o click falha silenciosamente em alguns browsers
+- **`_normG` deve ser definida localmente** em cada função (`gestorExportarPDF` e `gestorExportarExcel`) — não é global. Usar para comparação do filtro de gestor: `_normG(c.gestor) === _normG(gestorf)`
 
 **Cores de situação** (usadas em `_sitBadge` e `_sitXls`):
 
