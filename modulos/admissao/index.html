@@ -523,6 +523,7 @@ let allConvites = [];
 let allFichas = [];
 let fichaStatusFilter = '';
 const _docRotations = {}; // key: `${fichaId}_${docKey}` → degrees (0|90|180|270)
+const _docVersions  = {}; // key: `${fichaId}_${docKey}` → timestamp (cache-bust após substituição)
 
 // ─── Auth ────────────────────────────────────────────────
 (function() {
@@ -1585,11 +1586,12 @@ function renderPanelDocs(f) {
   const docRow = (k, label, req, byRH) => {
     const path = docs[k];
     const has = !!path;
-    const url = has ? `${SB_URL}/storage/v1/object/public/admissao-docs/${path}` : '';
+    const mapKey = `${f.id}_${k}`;
+    const ver = _docVersions[mapKey] ? `?t=${_docVersions[mapKey]}` : '';
+    const url = has ? `${SB_URL}/storage/v1/object/public/admissao-docs/${path}${ver}` : '';
     const ext = has ? (path.split('.').pop() || 'arquivo') : 'arquivo';
     const filename = has ? `${k}.${ext}` : '';
     const isImage = has && !path.toLowerCase().endsWith('.pdf');
-    const mapKey = `${f.id}_${k}`;
     const rot = _docRotations[mapKey] || 0;
     const viewBtn = has ? `<a href="${url}" target="_blank" title="Ver documento" style="color:var(--blue);display:flex;align-items:center;padding:4px 5px;border-radius:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${icoEye}</a>` : '';
     const dlBtn  = has ? iconBtn('Baixar documento', 'var(--blue)', icoDownload, `panelDownloadDoc('${url}','${filename}')`) : '';
@@ -1707,6 +1709,7 @@ async function panelUploadDoc(key, input) {
     method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ docs: newDocs })
   });
   currentFicha.docs = newDocs;
+  _docVersions[`${currentFicha.id}_${key}`] = Date.now();
   renderPanelDocs(currentFicha);
 }
 
