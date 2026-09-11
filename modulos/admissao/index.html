@@ -523,7 +523,6 @@ let allConvites = [];
 let allFichas = [];
 let fichaStatusFilter = '';
 const _docRotations = {}; // key: `${fichaId}_${docKey}` → degrees (0|90|180|270)
-const _docVersions  = {}; // key: `${fichaId}_${docKey}` → timestamp (cache-bust após substituição)
 
 // ─── Auth ────────────────────────────────────────────────
 (function() {
@@ -1587,7 +1586,7 @@ function renderPanelDocs(f) {
     const path = docs[k];
     const has = !!path;
     const mapKey = `${f.id}_${k}`;
-    const ver = _docVersions[mapKey] ? `?t=${_docVersions[mapKey]}` : '';
+    const ver = docs[`_v_${k}`] ? `?t=${docs[`_v_${k}`]}` : '';
     const url = has ? `${SB_URL}/storage/v1/object/public/admissao-docs/${path}${ver}` : '';
     const ext = has ? (path.split('.').pop() || 'arquivo') : 'arquivo';
     const filename = has ? `${k}.${ext}` : '';
@@ -1704,12 +1703,11 @@ async function panelUploadDoc(key, input) {
     body: file
   });
   if (!res.ok) { const err = await res.text(); alert('Erro ao enviar arquivo.\n' + res.status + ': ' + err); return; }
-  const newDocs = { ...(currentFicha.docs || {}), [key]: path };
+  const newDocs = { ...(currentFicha.docs || {}), [key]: path, [`_v_${key}`]: Date.now() };
   await fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${currentFicha.id}`, {
     method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ docs: newDocs })
   });
   currentFicha.docs = newDocs;
-  _docVersions[`${currentFicha.id}_${key}`] = Date.now();
   renderPanelDocs(currentFicha);
 }
 
@@ -2118,7 +2116,7 @@ async function gerarPDFFicha(f, c, dadosAdm = {}) {
     Object.entries(DOC_LABELS).map(async ([k, label]) => {
       const path = docs[k];
       if (!path) return { k, label, b64: null };
-      const ver = _docVersions[`${f.id}_${k}`] ? `?t=${_docVersions[`${f.id}_${k}`]}` : '';
+      const ver = docs[`_v_${k}`] ? `?t=${docs[`_v_${k}`]}` : '';
       const url = `${SB_URL}/storage/v1/object/public/admissao-docs/${path}${ver}`;
       let b64 = await docUrlToBase64(url);
       const rot = _docRotations[`${f.id}_${k}`] || 0;
