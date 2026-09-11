@@ -143,6 +143,9 @@ O objeto `periodo` em `processGestorFerias` inclui explicitamente `ano: row.ano`
 **Situação no export gestor — critério correto (corrigido 2026-09-10):**
 Usa `!lRef` (não `!lancs.length`) para determinar "Sem agendamento". `lRef = ativo || futuro` — só há agendamento se existir lançamento ativo hoje ou futuro. Lançamentos concluídos no passado **não** contam como "Agendado".
 
+**Coluna Agendamentos — `lRef` sem fallback para passado (corrigido 2026-09-11):**
+Tanto na visão RH quanto no Gestor, `lRef = ativo || futuro` — **sem `|| passado`**. Lançamentos já concluídos (`fim < hoje`) não devem aparecer na coluna Agendamentos mesmo que pertençam ao PA vigente com saldo pendente. A coluna exibe `—` nesses casos. O fallback `|| passado` existia em ambas as funções de render e foi removido das duas.
+
 **Exportação gestor — 8 colunas (PDF e Excel):**
 Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo | Situação
 
@@ -214,7 +217,7 @@ gestorSaldoPeriodo(pa)
 2. `semPA` sem paEfetivo → mostra "XXXX Previsto" (baseado no `pa_fim` do último PA histórico + 1 dia)
 3. Nenhum → `—`
 
-**Coluna Agendamentos:** mostra apenas lançamentos do `paEfetivo` (`lancsPa`), não de PAs históricos. Colaborador com PA 2027 e lançamento apenas no PA 2026 encerrado mostra `—` na coluna, não o lançamento antigo.
+**Coluna Agendamentos:** mostra apenas lançamentos do `paEfetivo` (`lancsPa`), não de PAs históricos. Colaborador com PA 2027 e lançamento apenas no PA 2026 encerrado mostra `—` na coluna, não o lançamento antigo. Além disso, `lRef = ativo || futuro` (sem `|| passado`) — lançamentos passados do próprio PA também não aparecem.
 
 ## Visão Gestor — paEfetivo (padrão crítico)
 
