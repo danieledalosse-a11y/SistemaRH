@@ -8985,9 +8985,10 @@ function _renderGsolHistoricoRH(c) {
       l.status !== 'pendente_gestor'
     );
 
-    const abono  = Number(row.abono_pecuniario) || 0;
+    const abono       = Number(row.abono_pecuniario) || 0;
+    const antecipados = Number(row.dias_antecipados) || 0;
     const usados = lancamentos.reduce((s, l) => s + (Number(l.dias) || 0), 0);
-    const saldo  = diasDir - usados - abono;
+    const saldo  = diasDir - usados - abono - antecipados;
     const saldoColor = saldo <= 0 ? 'color:#EF4444;font-weight:700;' : '';
 
     const jaSolicitadoPA = GESTOR_LANCAMENTOS.some(l =>
@@ -9100,6 +9101,9 @@ function _renderGsolHistoricoRH(c) {
     const abonoRhHtml = abono > 0
       ? `<div style="padding:6px 12px 0;"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;background:#F5F3FF;border:1px solid #DDD6FE;font-size:11px;color:#5B21B6;font-weight:600;">Abono pecuniário · ${abono}d</span></div>`
       : '';
+    const antecipHtml = antecipados > 0
+      ? `<div style="padding:6px 12px 0;"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;background:#FFF7ED;border:1px solid #FED7AA;font-size:11px;color:#C2410C;font-weight:600;">Dias antecipados ao PA anterior · ${antecipados}d</span></div>`
+      : '';
     const grhSolicitarBtn = mostrarSolicitar
       ? `<button class="drawer-hist-pa-solicitar-btn" onclick="grhToggleSolicitarInline('${per.id}')">✈ Solicitar</button>`
       : '';
@@ -9152,6 +9156,7 @@ function _renderGsolHistoricoRH(c) {
       </div>
       ${grhInlineForm}
       ${abonoRhHtml}
+      ${antecipHtml}
       ${lancamentos.length ? `<div class="gsol-rh-tl">${itens}</div>` : ''}
     </div>`;
   }).join('');
