@@ -134,6 +134,34 @@ A visão Gestor usa arrays **separados** (não a estrutura `COLABORADORES[].regi
 
 **Nunca usar `data_inicio` ou `data_fim` em GESTOR_LANCAMENTOS** — esses campos não existem nos objetos gerados por `processGestorFerias`. Qualquer ordenação ou comparação de datas de lançamento usa `l.inicio` e `l.fim`.
 
+**Campo `ano` em GESTOR_PERIODOS (crítico — corrigido 2026-09-10):**
+O objeto `periodo` em `processGestorFerias` inclui explicitamente `ano: row.ano`. **Nunca usar `pa.pa_inicio?.slice(0,4)` para derivar o ano do PA** — colaboradores com aniversário no 2º semestre têm `pa_inicio` no ano anterior ao PA real (ex: PA 2027 começa em set/2026 → slice retorna "2026", errado). Usar sempre `pa.ano` diretamente.
+
+**Busca gestor (`gestorBusca`) — comportamento correto (corrigido 2026-09-10):**
+`gestorBuscaSelecionar(colabId)` apenas fecha o dropdown e abre o drawer — **não limpa o input**. O texto digitado permanece no campo após fechar o drawer, permitindo nova seleção sem redigitar. O botão ✕ (`gestorBuscaLimpar`) é o único que deve limpar o campo.
+
+**Situação no export gestor — critério correto (corrigido 2026-09-10):**
+Usa `!lRef` (não `!lancs.length`) para determinar "Sem agendamento". `lRef = ativo || futuro` — só há agendamento se existir lançamento ativo hoje ou futuro. Lançamentos concluídos no passado **não** contam como "Agendado".
+
+**Exportação gestor — 8 colunas (PDF e Excel):**
+Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo | Situação
+
+- Separador de setor usa `colspan="8"` — atualizar se adicionar/remover colunas
+- Período Aquisitivo para `semPA` (sem PA no banco): exibir datas calculadas `_fmtData(data_admissao) → _fmtData(addDays(data_admissao, 364)) (prev.)`. Nunca mostrar apenas "Previsto".
+- Ano PA para `semPA`: `fimPrev.slice(0,4)` (ano em que o PA termina). **Nunca** `fimPrev.year - 1`.
+- Férias Início/Fim: campos `agendIni` e `agendFim` no objeto `linhas` — `_fmtData(lRef.inicio)` e `_fmtData(lRef.fim)`, ou `'—'` quando sem lançamento.
+- **Situação com data da dobra:** níveis de risco exibem texto completo `"Nível · Dobra em DD/MM/AAAA"` (campo `situacao`). Campo `sitKey` guarda apenas o nível ("Crítico"/"Atenção"/"No radar") para lookup de cor em `_sitBadge(sitKey, situacao)` e `_sitXls(sitKey)`.
+- **Cores dos níveis de risco (PDF e Excel):**
+
+| Nível | Fundo | Texto |
+|---|---|---|
+| Crítico | `#FEE2E2` | `#7F1D1D` |
+| Atenção | `#FDE68A` | `#78350F` |
+| No radar | `#DBEAFE` | `#1E3A8A` |
+
+- **Excel — cor por situação nas colunas Nome e Saldo:** fundo `sit.bg` e texto `sit.text` (da `_sitXls`) aplicados ao Nome (bold) e ao Saldo. Coluna Período Aquisitivo mantém cor do setor (`_corSetor`) para identificar o grupo visual.
+- **Excel — AutoFilter + Freeze:** `<x:AutoFilter x:Range="A3:H3"/>` ativa setas de filtro nas 8 colunas. Freeze nas 3 primeiras linhas via `<x:SplitHorizontal>3</x:SplitHorizontal>` + `<x:TopRowBottomPane>3</x:TopRowBottomPane>`. Ajustar range se mudar número de colunas.
+
 ### Campo `nota` em GESTOR_LANCAMENTOS (crítico — corrigido 2026-08-25)
 
 Cada objeto em `GESTOR_LANCAMENTOS` carrega o campo `nota` mapeado diretamente de `nota1`/`nota2` da tabela `ferias`:
@@ -160,8 +188,15 @@ gestorIsAgendado(colabId)
 // Dias até o prazo de dobra do PA
 gestorDpd(pa)
 
-// Saldo restante do PA (dias_direito - dias já lançados)
+// Saldo restante do PA (dias_direito - usados - abono - dias_antecipados)
+// CRÍTICO: deve subtrair dias_antecipados — correto como na visão RH (corrigido 2026-09-11)
 gestorSaldoPeriodo(pa)
+// Implementação correta:
+// const direito    = Number(periodo.dias_direito) || 30;
+// const abono      = Number(periodo._feriasRow?.abono_pecuniario) || 0;
+// const antecipados = Number(periodo._feriasRow?.dias_antecipados) || 0;
+// const usados     = GESTOR_LANCAMENTOS.filter(...).reduce(...);
+// return direito - usados - abono - antecipados;
 ```
 
 ## Visão Gestor — filtro KPI ativo
@@ -840,36 +875,38 @@ O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre 
 - "Exportar Excel" → `gestorExportarExcel()` — baixa `.xls` com inline styles
 - `toggleGestorExportMenu()` controla abertura/fechamento (fecha ao clicar fora via `document.addEventListener`)
 
-**7 colunas (PDF e Excel):** Nome | Cargo | Ano PA | Período Aquisitivo | Agendamento | Saldo | Situação
+**8 colunas (PDF e Excel):** Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo | Situação
 
 - **Setor removido** das colunas — separador colorido entre grupos já identifica a área
 - **Ano PA:** usa `pa.ano` (campo do banco, fonte correta) — ex.: `2025` ou `2027`. **Não usar `pa.pa_inicio.slice(0,4)`**: colaboradores com aniversário no 2º semestre têm `pa_inicio` no ano anterior ao PA real (PA 2027 inicia em set/2026 → slice retornaria "2026", errado).
   - Fallback: `pa.pa_inicio?.slice(0,4)` só se `pa.ano` for nulo
-  - `semPA`: usa `parseInt(fimPrev.slice(0,4)) - 1`
+  - `semPA`: usa `fimPrev.slice(0,4)` (ano em que o PA termina). **Nunca** `fimPrev.year - 1`
 - **Período Aquisitivo:** datas completas `DD/MM/AAAA → DD/MM/AAAA`
-- **Agendamento:** formato compacto `DD/MM → DD/MM · Xd`
+- **Férias Início / Férias Fim:** duas colunas — `_fmtData(lRef.inicio)` e `_fmtData(lRef.fim)`, ou `'—'` quando sem lançamento
 - **Saldo:** cor semântica — azul (`#1570EF`) >5d, âmbar (`#F59E0B`) ≤5d, verde (`#10B981`) zerado — helper `_saldoCor(saldo)`
 - **Situação — diferença intencional entre PDF e Excel:**
-  - **PDF:** badge pill colorido com borda arredondada — helper `_sitBadge(sit)` — visual mais rico
-  - **Excel:** célula com fundo colorido — helper `_sitXls(sit)` — Excel ignora HTML de badge
-- Separador de setor: `colspan="7"`, fundo da cor do setor
+  - **PDF:** badge pill colorido com borda arredondada — helper `_sitBadge(sitKey, situacao)` — visual mais rico
+  - **Excel:** célula com fundo colorido — helper `_sitXls(sitKey)` — Excel ignora HTML de badge
+- **Situação com data da dobra:** níveis de risco exibem `"Nível · Dobra em DD/MM/AAAA"` (campo `situacao`). Campo `sitKey` = só o nível para lookup de cor
+- Separador de setor: `colspan="8"`, fundo da cor do setor
 - **Filtros respeitados:** cargo e gestor ativos. **Busca (`gestorBusca`) é ignorada** — é filtro de navegação na tela, não deve restringir exportação
 - **Guards de segurança:** se `GESTOR_COLABS.length === 0` → toast aviso + return. Se `linhas.length === 0` → toast aviso + return (nunca gerar arquivo vazio)
 - **Download (Excel):** obrigatório `document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)` — sem appendChild o click falha silenciosamente em alguns browsers
 - **`_normG` deve ser definida localmente** em cada função (`gestorExportarPDF` e `gestorExportarExcel`) — não é global. Usar para comparação do filtro de gestor: `_normG(c.gestor) === _normG(gestorf)`
+- **Excel — AutoFilter + Freeze:** `<x:AutoFilter x:Range="A3:H3"/>` + freeze 3 linhas (`SplitHorizontal=3`, `TopRowBottomPane=3`). Atualizar range se mudar colunas.
 
 **Cores de situação** (usadas em `_sitBadge` e `_sitXls`):
 
 | Situação | bg | text |
 |---|---|---|
-| Crítico | `#FEF3F2` | `#D92D20` |
-| Atenção | `#FFFAEB` | `#B54708` |
-| No radar | `#EFF6FF` | `#1D4ED8` |
+| Crítico | `#FEE2E2` | `#7F1D1D` |
+| Atenção | `#FDE68A` | `#78350F` |
+| No radar | `#DBEAFE` | `#1E3A8A` |
 | Agendado / Concluído | `#ECFDF3` | `#027A48` |
 | Sem agendamento | `#FFFAEB` | `#92400E` |
 | Período futuro | `#EFF6FF` | `#1849A9` |
 
-**`gestorExportarExcel()`** — estilos 100% inline (Excel ignora `<style>`); separador `colspan="7"`.
+**`gestorExportarExcel()`** — estilos 100% inline (Excel ignora `<style>`); separador `colspan="8"`.
 
 **Nunca usar `gestorExportarCSV`** para o botão principal — função pode existir mas não é chamada pela UI.
 
