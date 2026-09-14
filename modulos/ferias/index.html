@@ -4628,18 +4628,11 @@ function renderListaAnual() {
       });
     } else {
       // todos: sem filtro de mês → todos os PAs ativos;
-      //        com mês → PAs com ao menos um lançamento que cruze aquele mês (qualquer ano)
+      //        com mês → PAs com ao menos um lançamento que INICIA naquele mês
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
         if (!mes) return true;
-        return reg.lancamentos.some(l => {
-          if (!l.inicio || !l.fim) return false;
-          const iniM = Number(l.inicio.slice(5,7));
-          const fimM = Number(l.fim.slice(5,7));
-          // lançamento pode cruzar virada de ano (ex: dez→jan)
-          if (iniM <= fimM) return mes >= iniM && mes <= fimM;
-          return mes >= iniM || mes <= fimM;
-        });
+        return reg.lancamentos.some(l => l.inicio && Number(l.inicio.slice(5,7)) === mes);
       });
     }
     pasDoAno = pasDoAno.sort((a, b) => (a.paInicio || '').localeCompare(b.paInicio || ''));
@@ -5682,13 +5675,7 @@ function renderKPI() {
   const nLista = lista.filter(c => c.registros.some(r => {
     if (excluirSet.has(r.status)) return false;
     if (!MES_REF) return true;
-    return r.lancamentos.some(l => {
-      if (!l.inicio || !l.fim) return false;
-      const iniM = Number(l.inicio.slice(5,7));
-      const fimM = Number(l.fim.slice(5,7));
-      if (iniM <= fimM) return MES_REF >= iniM && MES_REF <= fimM;
-      return MES_REF >= iniM || MES_REF <= fimM;
-    });
+    return r.lancamentos.some(l => l.inicio && Number(l.inicio.slice(5,7)) === MES_REF);
   })).length;
   const elLista = document.getElementById('cnt-lista');
   if (elLista) elLista.textContent = nLista;
