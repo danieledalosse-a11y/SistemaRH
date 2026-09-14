@@ -5033,8 +5033,8 @@ async function rhAprovarSolicitado(feriasId, idx) {
   const btn = (typeof event !== 'undefined' && event?.target) || null;
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
-    await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Aprovado' });
     const _agora = new Date().toISOString();
+    await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Aprovado', atualizado_em: _agora });
     COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
       if (String(reg._sbId) === String(feriasId)) {
         reg.status = 'Aprovado';
@@ -5074,8 +5074,8 @@ async function rhRecusarSolicitado(feriasId, idx) {
   const motivo = prompt('Motivo da recusa (obrigatório):');
   if (!motivo?.trim()) return;
   try {
-    await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Rejeitado', obs_gestor: motivo.trim() });
     const _agoraRec = new Date().toISOString();
+    await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Rejeitado', obs_gestor: motivo.trim(), atualizado_em: _agoraRec });
     COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
       if (String(reg._sbId) === String(feriasId)) {
         reg.status = 'Rejeitado';
@@ -8788,13 +8788,14 @@ async function gestorEnviarSolicitacao() {
 
     const _obsGestor = (document.getElementById('mgObs')?.value || '').trim();
     const _obsBase = `Solicitado por: ${GESTOR_NOME_USUARIO}${_obsGestor ? ' — ' + _obsGestor : ''}`;
+    const _agoraSolic = new Date().toISOString();
     if (slotForcado === 'p1' || (!slotForcado && !row.periodo1_inicio)) {
       patchData = { periodo1_inicio: inicio, periodo1_fim: fim, dias1: diasVal,
-                    obs_gestor: _obsBase, status: 'Pendente' };
+                    obs_gestor: _obsBase, status: 'Pendente', atualizado_em: _agoraSolic };
       slotKey = 'p1';
     } else if (slotForcado === 'p2' || (!slotForcado && !row.periodo2_inicio)) {
       patchData = { periodo2_inicio: inicio, periodo2_fim: fim, dias2: diasVal,
-                    obs_gestor: _obsBase, status: 'Pendente' };
+                    obs_gestor: _obsBase, status: 'Pendente', atualizado_em: _agoraSolic };
       slotKey = 'p2';
     } else {
       toast('Ambos os períodos já estão preenchidos para este PA. Contate o RH.');
