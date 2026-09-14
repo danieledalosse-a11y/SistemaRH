@@ -7478,25 +7478,6 @@ function renderGestorGantt() {
 
   const statusFiltro = document.getElementById('gestorFiltroStatus')?.value || '';
 
-  // Contador próximos 30/60/90 dias
-  const d30 = new Date(); d30.setDate(d30.getDate() + 30); const s30 = d30.toISOString().slice(0,10);
-  const d60 = new Date(); d60.setDate(d60.getDate() + 60); const s60 = d60.toISOString().slice(0,10);
-  const d90 = new Date(); d90.setDate(d90.getDate() + 90); const s90 = d90.toISOString().slice(0,10);
-  const c30 = new Set(GESTOR_LANCAMENTOS.filter(l => l.fim >= hoje && l.inicio <= s30).map(l => l.colaborador_id)).size;
-  const c60 = new Set(GESTOR_LANCAMENTOS.filter(l => l.fim >= hoje && l.inicio <= s60).map(l => l.colaborador_id)).size;
-  const c90 = new Set(GESTOR_LANCAMENTOS.filter(l => l.fim >= hoje && l.inicio <= s90).map(l => l.colaborador_id)).size;
-  const _chipStyle = (ativo) => ativo
-    ? 'display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:12px;background:var(--blue);border:1px solid var(--blue);color:#fff;cursor:pointer;'
-    : 'display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:12px;background:#F8FAFC;border:1px solid var(--border);color:var(--text-sec);cursor:pointer;';
-  const _chip = (n, label, janela) => {
-    const ativo = _gestorJanelaDias === janela;
-    return `<button onclick="_gestorJanelaDias=(_gestorJanelaDias===${janela}?null:${janela});renderGestorGantt();" style="${_chipStyle(ativo)}"><span style="font-weight:700;${ativo?'color:#fff;':'color:var(--text);'}">${n}</span>${label}</button>`;
-  };
-  const counterHtml = `<div style="display:flex;gap:8px;align-items:center;padding:10px 16px 0;flex-wrap:wrap;">
-    <span style="font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;margin-right:4px;">Agendados nos próximos</span>
-    ${_chip(c30,'30 dias',30)} ${_chip(c60,'60 dias',60)} ${_chip(c90,'90 dias',90)}
-    ${_gestorJanelaDias ? `<button onclick="_gestorJanelaDias=null;renderGestorGantt();" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text-ter);cursor:pointer;">✕ limpar</button>` : ''}
-  </div>`;
 
   const janelaFim = _gestorJanelaDias ? (() => { const d = new Date(); d.setDate(d.getDate() + _gestorJanelaDias); return d.toISOString().slice(0,10); })() : null;
 
@@ -7512,7 +7493,7 @@ function renderGestorGantt() {
   ).sort((a, b) => a.nome.localeCompare(b.nome));
 
   if (!colabs.length) {
-    content.innerHTML = counterHtml + `<div class="gantt-empty" style="padding:32px;text-align:center;color:var(--text-ter);font-size:13px;">Nenhum colaborador com férias em ${MESES[mes]} ${ano}</div>`;
+    content.innerHTML = `<div class="gantt-empty" style="padding:32px;text-align:center;color:var(--text-ter);font-size:13px;">Nenhum colaborador com férias em ${MESES[mes]} ${ano}</div>`;
     return;
   }
 
@@ -7603,7 +7584,7 @@ function renderGestorGantt() {
     rows += `</tr>`;
   });
 
-  content.innerHTML = counterHtml + `<div class="gantt-scroll"><table class="gantt-table">
+  content.innerHTML = `<div class="gantt-scroll"><table class="gantt-table">
     <thead><tr>${thDias}</tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
