@@ -1197,6 +1197,29 @@ Suprime as setas ▲▼ nativas que apareciam à direita dos chips de filtro de 
 
 ---
 
+## Filtros da aba Timeline (visão RH) (2026-09-14)
+
+A Timeline tem dois filtros no canto superior direito do cabeçalho (`div.gantt-nav-filters`):
+
+| ID | Fonte | Comportamento |
+|---|---|---|
+| `ganttFiltroSetor` | valores únicos de `COLABORADORES[].setor` | repopulado a cada `renderTimeline()`, preserva seleção |
+| `ganttFiltroGestor` | `param_gestor` via `sbGet` assíncrono | populado uma vez (`options.length <= 1`), preserva seleção |
+
+Ambos chamam `renderTimeline()` no `onchange` e usam `syncFilterClear` para exibir o botão ✕.
+
+Lógica de filtro em `renderTimeline()` (aplicada antes de montar as linhas):
+```js
+const ganttGestorFiltro = document.getElementById('ganttFiltroGestor')?.value || '';
+const _normGT = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+// ...
+if (ganttGestorFiltro && _normGT(c.gestor) !== _normGT(ganttGestorFiltro)) return false;
+```
+
+Normalização sem acento para tolerância a grafias (`JUNINHO` == `Juninho`).
+
+---
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
