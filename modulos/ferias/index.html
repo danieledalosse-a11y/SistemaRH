@@ -5454,11 +5454,12 @@ class MultiSelect {
     this.options     = [];
     if (!this.container) return;
     this.container.innerHTML = `
-      <div class="ms-wrap" id="${containerId}-wrap">
+      <div class="ms-wrap" id="${containerId}-wrap" style="display:flex;align-items:center;gap:4px;">
         <button class="ms-btn" type="button" id="${containerId}-btn">
           <span class="ms-btn-label" id="${containerId}-label">${placeholder}</span>
           <span class="ms-btn-arrow">▼</span>
         </button>
+        <button id="${containerId}-x" onclick="msClear('${containerId}')" title="Limpar seleção" style="display:none;border:none;background:none;cursor:pointer;color:var(--text-ter);font-size:14px;padding:2px 4px;line-height:1;">✕</button>
         <div class="ms-dropdown" id="${containerId}-dd">
           <div class="ms-search"><input type="text" placeholder="Buscar..." id="${containerId}-search" oninput="msSearch('${containerId}')"></div>
           <div class="ms-list" id="${containerId}-list"></div>
@@ -5469,6 +5470,8 @@ class MultiSelect {
       e.stopPropagation(); msToggle(containerId);
     });
     document.getElementById(`${containerId}-dd`).addEventListener('click', e => e.stopPropagation());
+    const xEl = document.getElementById(`${containerId}-x`);
+    if (xEl) xEl.addEventListener('click', e => e.stopPropagation());
     MS_INSTANCES[containerId] = this;
   }
 
@@ -5499,16 +5502,24 @@ class MultiSelect {
   _updateBtn() {
     const lbl = document.getElementById(`${this.container.id}-label`);
     const btn = document.getElementById(`${this.container.id}-btn`);
+    const xBtn = document.getElementById(`${this.container.id}-x`);
     if (!lbl) return;
-    if (this.selected.size === 0 || this.selected.size === this.options.length) {
+    const hasSelection = this.selected.size > 0 && this.selected.size < this.options.length;
+    if (!hasSelection) {
       lbl.textContent = this.placeholder;
       btn.classList.remove('has-selection');
+      btn.title = '';
+      if (xBtn) xBtn.style.display = 'none';
     } else if (this.selected.size === 1) {
       lbl.textContent = [...this.selected][0];
       btn.classList.add('has-selection');
+      btn.title = [...this.selected][0];
+      if (xBtn) xBtn.style.display = '';
     } else {
       lbl.textContent = `${this.selected.size} selecionados`;
       btn.classList.add('has-selection');
+      btn.title = [...this.selected].join(', ');
+      if (xBtn) xBtn.style.display = '';
     }
   }
 
