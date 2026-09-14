@@ -2233,6 +2233,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
       _aguardandoGozoIdx: f.aguardando_gozo_idx ?? null,
       _novoLanc: _novoLancFromGestor,
       _motivoRejeicao: null,
+      _atualizadoEm: f.atualizado_em || f.criado_em || null,
     };
 
     TODOS_REGISTROS.push({ __key, reg: mat, nome, cargo, setor: normSetor(colabDados.setor || ''), unidade: '', registro });
@@ -6919,7 +6920,13 @@ function renderGestorAtividade() {
       const per = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
       return per && per._feriasRow && per._feriasRow.obs_gestor;
     })
-    .sort((a, b) => (b.fim||'').localeCompare(a.fim||''));
+    .sort((a, b) => {
+      const perA = GESTOR_PERIODOS.find(p => String(p.id) === String(a.periodo_id));
+      const perB = GESTOR_PERIODOS.find(p => String(p.id) === String(b.periodo_id));
+      const dA = perA?._feriasRow?.atualizado_em || perA?._feriasRow?.criado_em || a.fim || '';
+      const dB = perB?._feriasRow?.atualizado_em || perB?._feriasRow?.criado_em || b.fim || '';
+      return dB.localeCompare(dA);
+    });
 
   if (!eventos.length) { el.innerHTML = ''; return; }
 
@@ -7001,6 +7008,7 @@ function renderRhAtividade() {
           obsGestor:  reg._obsGestor || null,
           paFim:      reg.paFim,
           _sbId:      reg._sbId,
+          _atualizadoEm: reg._atualizadoEm || null,
         });
       });
       // Lançamento pendente do gestor
@@ -7017,13 +7025,14 @@ function renderRhAtividade() {
           obsGestor:  reg._obsGestor || reg._novoLanc.motivo || null,
           paFim:      reg.paFim,
           _sbId:      reg._sbId,
+          _atualizadoEm: reg._atualizadoEm || null,
         });
       }
     });
   });
 
-  // Ordena por paFim desc, depois por fim desc
-  eventos.sort((a, b) => ((b.paFim||b.fim||'').localeCompare(a.paFim||a.fim||'')) || ((b.fim||'').localeCompare(a.fim||'')));
+  // Ordena por data de atualização/criação desc (ação mais recente no topo)
+  eventos.sort((a, b) => ((b._atualizadoEm||b.fim||'').localeCompare(a._atualizadoEm||a.fim||'')));
 
   if (!eventos.length) { el.innerHTML = ''; return; }
 
