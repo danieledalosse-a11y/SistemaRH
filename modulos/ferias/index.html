@@ -1957,8 +1957,14 @@
       <button class="drawer-close-btn" onclick="fecharDrawer()">✕</button>
     </div>
   </div>
+  <div class="drawer-tabs">
+    <button class="drawer-tab active" id="drawerTabPeriodos" onclick="setDrawerTab('periodos')">Períodos</button>
+    <button class="drawer-tab" id="drawerTabAuditoria" onclick="setDrawerTab('auditoria')">Histórico</button>
+  </div>
+  <div class="drawer-tabs-line"></div>
   <div class="drawer-body">
     <div id="drawerHistorico"></div>
+    <div id="drawerAuditoria" style="display:none;"></div>
   </div>
   <div style="padding:12px 20px;border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;">
     <a id="btnVerFichaFerias" href="#" target="_blank"
@@ -1976,6 +1982,9 @@
 // ─── Configuração ────────────────────────────────────────────────────────────
 let ANO_REF = 0; // 0 = todos os anos
 const HOJE  = new Date().toISOString().slice(0, 10);
+
+let FERIAS_HISTORICO = [];
+let _drawerTab = 'periodos';
 
 const REGRAS_FERIAS = {
   // Prazo de dobra: PAFim + 1 ano + 1 dia
@@ -2143,6 +2152,13 @@ async function sbPatch(tabela, filtro, dados) {
   });
 }
 
+async function sbPost(tabela, dados) {
+  const extra = { 'Prefer': 'return=minimal' };
+  await _sbFetch(`${SB_URL}/rest/v1/${tabela}`, {
+    method: 'POST', headers: { ...SB_HEADERS, ...extra }, body: JSON.stringify(dados),
+  });
+}
+
 function setLoadingMsg(msg) {
   const el = document.getElementById('loadingMsg');
   if (el) el.textContent = msg;
@@ -2271,10 +2287,12 @@ async function carregarDoSupabase() {
   document.getElementById('visaoContent').style.display = 'none';
   setLoadingMsg('Buscando registros de férias...');
   try {
-    const [feriasRows, colaborRows] = await Promise.all([
+    const [feriasRows, colaborRows, histRows] = await Promise.all([
       sbGet('ferias', 'select=*&order=matricula_colaborador,ano'),
       sbGet('colaboradores', 'select=id,matricula,nome,cargo,setor,empresa_registro,empresa_registro_nome,empresa_atuacao,empresa_atuacao_nome,data_demissao,foto_url'),
+      sbGet('ferias_historico', 'select=*&order=criado_em.desc&limit=500').catch(() => []),
     ]);
+    FERIAS_HISTORICO = histRows || [];
     setLoadingMsg('Processando dados...');
     supabaseParaModelo(feriasRows, colaborRows);
     setLoadingMsg('Verificando períodos aquisitivos...');
@@ -2809,6 +2827,11 @@ function _abrirDrawerInterno(key) {
   }
   document.getElementById('drawerChips').innerHTML = chips.join('');
 
+  _drawerTab = 'periodos';
+  document.getElementById('drawerHistorico').style.display = '';
+  document.getElementById('drawerAuditoria').style.display = 'none';
+  document.getElementById('drawerTabPeriodos')?.classList.add('active');
+  document.getElementById('drawerTabAuditoria')?.classList.remove('active');
   renderDrawerHistorico(colab);
   window._drawerModoGestor = false;
 
@@ -3006,6 +3029,54 @@ function imprimirHistoricoDrawer() {
     ${rows}
     <div class="pr-footer">Sistema RH · ${new Date().toLocaleDateString('pt-BR')}</div>`;
   window.print();
+}
+
+function setDrawerTab(tab) {
+  _drawerTab = tab;
+  document.getElementById('drawerHistorico').style.display = tab === 'periodos' ? '' : 'none';
+  document.getElementById('drawerAuditoria').style.display = tab === 'auditoria' ? '' : 'none';
+  document.getElementById('drawerTabPeriodos').classList.toggle('active', tab === 'periodos');
+  document.getElementById('drawerTabAuditoria').classList.toggle('active', tab === 'auditoria');
+  if (tab === 'auditoria') {
+    const colab = COLABORADORES.find(c => c.__key === _drawerKey);
+    if (colab) renderDrawerAuditoria(colab);
+  }
+}
+
+function renderDrawerAuditoria(colab) {
+  const el = document.getElementById('drawerAuditoria');
+  if (!el) return;
+  const fmtDH = d => { if (!d) return '—'; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`; };
+  const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '';
+  const sbIds = new Set(colab.registros.map(r => String(r._sbId)));
+  const hist  = FERIAS_HISTORICO.filter(h => sbIds.has(String(h.ferias_id)));
+  if (!hist.length) {
+    el.innerHTML = '<div style="padding:24px 20px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhum evento registrado ainda.<br><span style="font-size:12px;">Os eventos aparecerão aqui após solicitações, aprovações e recusas.</span></div>';
+    return;
+  }
+  const acaoLabel = { solicitado: 'Solicitação enviada', aprovado: 'Aprovado pelo RH', rejeitado: 'Recusado pelo RH' };
+  const acaoCor   = { solicitado: 'var(--blue)', aprovado: 'var(--green)', rejeitado: '#D92D20' };
+  el.innerHTML = `<div style="padding:16px 20px;">
+    <div style="display:flex;flex-direction:column;">
+      ${hist.map((h, i) => {
+        const det    = h.detalhe || {};
+        const perStr = det.inicio && det.fim ? `${fmtD(det.inicio)} → ${fmtD(det.fim)}${det.dias ? ' · ' + det.dias + 'd' : ''}` : '';
+        const motivo = det.obs_gestor || '';
+        return `<div style="display:flex;gap:12px;position:relative;">
+          <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:16px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:${acaoCor[h.acao]||'var(--border)'};margin-top:4px;flex-shrink:0;border:2px solid var(--surface);box-shadow:0 0 0 1.5px ${acaoCor[h.acao]||'var(--border)'};"></div>
+            ${i < hist.length-1 ? '<div style="width:1.5px;flex:1;background:var(--border);margin:4px auto;"></div>' : ''}
+          </div>
+          <div style="padding-bottom:${i < hist.length-1 ? '16' : '4'}px;min-width:0;flex:1;">
+            <div style="font-size:13px;font-weight:600;color:var(--text-pri);">${acaoLabel[h.acao] || h.acao}</div>
+            ${perStr ? `<div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${perStr}</div>` : ''}
+            ${motivo ? `<div style="font-size:12px;color:#D92D20;margin-top:2px;">Motivo: ${motivo}</div>` : ''}
+            <div style="font-size:11px;color:var(--text-ter);margin-top:3px;">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
 }
 
 function renderDrawerHistorico(colab) {
@@ -5038,8 +5109,10 @@ async function rhAprovarSolicitado(feriasId, idx) {
   try {
     const _agora = new Date().toISOString();
     await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Aprovado', atualizado_em: _agora });
+    let _aprovColabId = null;
     COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
       if (String(reg._sbId) === String(feriasId)) {
+        _aprovColabId = colab._sbColabId;
         reg.status = 'Aprovado';
         reg._atualizadoEm = _agora;
         if (reg._novoLanc) {
@@ -5060,6 +5133,8 @@ async function rhAprovarSolicitado(feriasId, idx) {
       const syncL = GESTOR_LANCAMENTOS.find(l => String(l.periodo_id) === String(feriasId));
       if (syncL) window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(syncL.colaborador_id));
     }
+    const _perfAprov = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    if (_aprovColabId) await _logAtiv(feriasId, _aprovColabId, 'aprovado', _perfAprov.nome || 'RH', { status: 'Aprovado' });
     toast('✓ Férias aprovadas');
     renderPendentes();
     renderListaAnual();
@@ -5079,8 +5154,10 @@ async function rhRecusarSolicitado(feriasId, idx) {
   try {
     const _agoraRec = new Date().toISOString();
     await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Rejeitado', obs_gestor: motivo.trim(), atualizado_em: _agoraRec });
+    let _recColabId = null;
     COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
       if (String(reg._sbId) === String(feriasId)) {
+        _recColabId = colab._sbColabId;
         reg.status = 'Rejeitado';
         reg._novoLanc = null;
         reg._motivoRejeicao = motivo.trim();
@@ -5100,6 +5177,8 @@ async function rhRecusarSolicitado(feriasId, idx) {
       const syncL = GESTOR_LANCAMENTOS.find(l => String(l.periodo_id) === String(feriasId));
       if (syncL) window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(syncL.colaborador_id));
     }
+    const _perfRec = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    if (_recColabId) await _logAtiv(feriasId, _recColabId, 'rejeitado', _perfRec.nome || 'RH', { status: 'Rejeitado', obs_gestor: motivo.trim() });
     toast('Solicitação recusada');
     renderPendentes();
     renderListaAnual();
@@ -6759,7 +6838,11 @@ async function _carregarEquipeGestor(apelido) {
   if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado');
   const ids = GESTOR_COLABS.map(c => c.id).join(',');
   setGestorMsg('Buscando férias da equipe...');
-  const feriasRows = await sbGet('ferias', `colaborador_id=in.(${ids})&select=*&order=colaborador_id,ano`);
+  const [feriasRows, histRowsG] = await Promise.all([
+    sbGet('ferias', `colaborador_id=in.(${ids})&select=*&order=colaborador_id,ano`),
+    sbGet('ferias_historico', `colaborador_id=in.(${ids})&select=*&order=criado_em.desc&limit=500`).catch(() => []),
+  ]);
+  FERIAS_HISTORICO = histRowsG || [];
   const { periodos, lancamentos } = processGestorFerias(feriasRows);
   GESTOR_PERIODOS    = periodos;
   GESTOR_LANCAMENTOS = lancamentos;
@@ -6910,6 +6993,12 @@ let _gestorAtivExpandido = false;
 const _ATIV_LIMITE = 1;
 
 // ─── Atividade Recente — dismiss (localStorage) ──────────────────────────────
+async function _logAtiv(feriasId, colabId, acao, usuario, detalhe) {
+  const entry = { ferias_id: Number(feriasId), colaborador_id: Number(colabId), acao, usuario: usuario || null, detalhe: detalhe || null };
+  try { await sbPost('ferias_historico', entry); } catch(_) {}
+  FERIAS_HISTORICO.unshift({ ...entry, id: Date.now(), criado_em: new Date().toISOString() });
+}
+
 function _ativDismissed(tipo) {
   try { return new Set(JSON.parse(localStorage.getItem(`ferias_ativ_dismissed_${tipo}`) || '[]')); } catch { return new Set(); }
 }
@@ -6936,105 +7025,83 @@ function renderGestorAtividade() {
   if (!el) return;
 
   const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
-  const fmtDm = d => d ? d.slice(0,10).split('-').reverse().slice(0,2).join('/') : '—';
+  const fmtDH = d => { if (!d) return ''; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`; };
 
   const _normGA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const filtroGestor = _normGA(document.getElementById('gestorFiltroGestor')?.value || '');
-  const colabsFiltrados = filtroGestor
-    ? GESTOR_COLABS.filter(c => _normGA(c.gestor) === filtroGestor)
-    : GESTOR_COLABS;
+  const colabsFiltrados = filtroGestor ? GESTOR_COLABS.filter(c => _normGA(c.gestor) === filtroGestor) : GESTOR_COLABS;
   const idsPermitidos = new Set(colabsFiltrados.map(c => String(c.id)));
 
   const _cutoff90 = new Date(HOJE); _cutoff90.setDate(_cutoff90.getDate() - 90);
-  const _cutoff90str = _cutoff90.toISOString().slice(0,10);
+  const _cutoff90str = _cutoff90.toISOString();
   const _dismissedG = _ativDismissed('g');
-
-  const eventos = GESTOR_LANCAMENTOS
-    .filter(l => {
-      if (!idsPermitidos.has(String(l.colaborador_id))) return false;
-      const st = (l.status||'').toLowerCase();
-      if (!['aprovado','recusado','cancelado'].includes(st)) return false;
-      if (l.fim && l.fim < _cutoff90str) return false;
-      if (_dismissedG.has(`${l.periodo_id}_${l.id}`)) return false;
-      const per = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
-      return per && per._feriasRow && per._feriasRow.obs_gestor;
-    })
-    .sort((a, b) => {
-      const perA = GESTOR_PERIODOS.find(p => String(p.id) === String(a.periodo_id));
-      const perB = GESTOR_PERIODOS.find(p => String(p.id) === String(b.periodo_id));
-      const dA = perA?._feriasRow?.atualizado_em || perA?._feriasRow?.criado_em || a.fim || '';
-      const dB = perB?._feriasRow?.atualizado_em || perB?._feriasRow?.criado_em || b.fim || '';
-      return dB.localeCompare(dA) || (Number(b.periodo_id) - Number(a.periodo_id));
-    });
-
-  if (!eventos.length) { el.innerHTML = ''; return; }
-
   const colabMap = new Map(GESTOR_COLABS.map(c => [String(c.id), c]));
+
+  const eventos = FERIAS_HISTORICO.filter(h => {
+    if (!idsPermitidos.has(String(h.colaborador_id))) return false;
+    if ((h.criado_em || '') < _cutoff90str) return false;
+    if (_dismissedG.has(String(h.id))) return false;
+    return true;
+  });
 
   const visiveis = _gestorAtivExpandido ? eventos : eventos.slice(0, _ATIV_LIMITE);
   const total    = eventos.length;
   const ocultos  = total - _ATIV_LIMITE;
 
-  const items = visiveis.map(l => {
-    const st    = (l.status||'').toLowerCase();
-    const cls   = st === 'aprovado' ? 'aprov' : st === 'recusado' ? 'recus' : 'cancel';
-    const chip  = st === 'aprovado' ? 'Aprovado pelo RH' : st === 'recusado' ? 'Recusado pelo RH' : 'Cancelado';
-    const colab = colabMap.get(String(l.colaborador_id));
+  const items = visiveis.map(h => {
+    const acao  = h.acao || '';
+    const cls   = acao === 'aprovado' ? 'aprov' : acao === 'rejeitado' ? 'recus' : 'cancel';
+    const chip  = acao === 'aprovado' ? 'Aprovado' : acao === 'rejeitado' ? 'Recusado' : 'Solicitado';
+    const colab = colabMap.get(String(h.colaborador_id));
     const nome  = colab ? colab.nome : '—';
     const cargo = colab ? [colab.cargo, colab.setor].filter(Boolean).join(' · ') : '';
-    const per   = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
-    const criadoEm = per && per._feriasRow && per._feriasRow.created_at
-      ? fmtDm(per._feriasRow.created_at) : null;
-    const svgIcon = st === 'aprovado'
+    const det   = h.detalhe || {};
+    const svgIcon = acao === 'aprovado'
       ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
-      : st === 'recusado'
+      : acao === 'rejeitado'
       ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
-      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>`;
-    const tsLine = criadoEm ? `<div class="gstor-ativ-ts">Solicitado em ${criadoEm}</div>` : '';
-    const dismissKey = `${l.periodo_id}_${l.id}`;
+      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14 14"/></svg>`;
+    const perLine = det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD(det.inicio)} → ${fmtD(det.fim)}${det.dias ? ' · ' + det.dias + 'd' : ''}</div>` : '';
+    const tsLine  = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
+    const dismissKey = String(h.id);
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${cls}">${svgIcon}</div>
       <div class="gstor-ativ-body">
         <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
-        <div class="gstor-ativ-per">${fmtD(l.inicio)} → ${fmtD(l.fim)} · ${l.dias}d</div>
-        ${tsLine}
+        ${perLine}${tsLine}
       </div>
       <span class="gstor-ativ-chip ${cls}">${chip}</span>
       <button class="gstor-ativ-dismiss" onclick="event.stopPropagation();_ativDismiss('g','${dismissKey}')" title="Arquivar">×</button>
     </div>`;
   }).join('');
 
-  // Itens arquivados (para exibir na seção "Ver arquivados")
-  const arquivadosG = GESTOR_LANCAMENTOS.filter(l => {
-    if (!idsPermitidos.has(String(l.colaborador_id))) return false;
-    const st = (l.status||'').toLowerCase();
-    if (!['aprovado','recusado','cancelado'].includes(st)) return false;
-    const per = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
-    if (!per || !per._feriasRow || !per._feriasRow.obs_gestor) return false;
-    return _dismissedG.has(`${l.periodo_id}_${l.id}`);
+  const arquivadosG = FERIAS_HISTORICO.filter(h => {
+    if (!idsPermitidos.has(String(h.colaborador_id))) return false;
+    return _dismissedG.has(String(h.id));
   });
-  const itemsArqG = arquivadosG.map(l => {
-    const colab = colabMap.get(String(l.colaborador_id));
+  const itemsArqG = arquivadosG.map(h => {
+    const colab = colabMap.get(String(h.colaborador_id));
     const nome = colab ? colab.nome : '—';
-    const dismissKey = `${l.periodo_id}_${l.id}`;
+    const det  = h.detalhe || {};
+    const fmtD2 = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+    const dismissKey = String(h.id);
     return `<div class="gstor-ativ-item" style="opacity:.6;">
       <div class="gstor-ativ-icon cancel"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2M5 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg></div>
       <div class="gstor-ativ-body">
         <div><span class="gstor-ativ-nome">${nome}</span></div>
-        <div class="gstor-ativ-per">${fmtD(l.inicio)} → ${fmtD(l.fim)} · ${l.dias}d</div>
+        ${det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD2(det.inicio)} → ${fmtD2(det.fim)}</div>` : ''}
       </div>
       <button class="gstor-ativ-dismiss" style="opacity:1;color:var(--blue);" onclick="event.stopPropagation();_ativRestore('g','${dismissKey}')" title="Restaurar">↩</button>
     </div>`;
   }).join('');
 
-  const allKeysG = eventos.map(l => `${l.periodo_id}_${l.id}`);
+  const allKeysG = eventos.map(h => String(h.id));
   const arquivarTodosBtn = eventos.length > 0
     ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_ativDismissAll('g',${JSON.stringify(allKeysG)})">Arquivar todos</button>`
     : '';
   const verArqBtnG = arquivadosG.length > 0
     ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_gestorAtivMostrarArq=!_gestorAtivMostrarArq;renderGestorAtividade()">${_gestorAtivMostrarArq ? 'Ocultar arquivados' : `Ver arquivados (${arquivadosG.length})`}</button>`
     : '';
-
   const verMaisBtn = !_gestorAtivExpandido && ocultos > 0
     ? `<button class="gstor-ativ-vermais" onclick="_gestorAtivExpandido=true;renderGestorAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
     : _gestorAtivExpandido && total > _ATIV_LIMITE
@@ -7059,115 +7126,78 @@ function renderRhAtividade() {
   const el = document.getElementById('rhAtividade');
   if (!el) return;
 
-  const fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+  const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+  const fmtDH = d => { if (!d) return ''; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`; };
 
-  // Coleta lançamentos recentes com status relevante de todos os colaboradores
-  const eventos = [];
-  COLABORADORES.forEach(colab => {
-    colab.registros.forEach(reg => {
-      const st = (reg.status || '').toLowerCase();
-      if (!['aprovado','agendado','cancelado','rejeitado','pendente'].includes(st)) return;
-      reg.lancamentos.forEach(l => {
-        eventos.push({
-          nome:       colab.nome,
-          cargo:      colab.cargo,
-          setor:      colab.setor,
-          empresa:    colab.empresa,
-          inicio:     l.inicio,
-          fim:        l.fim,
-          dias:       l.dias,
-          status:     reg.status,
-          obsGestor:  reg._obsGestor || null,
-          paFim:      reg.paFim,
-          _sbId:      reg._sbId,
-          _atualizadoEm: reg._atualizadoEm || null,
-        });
-      });
-      // Lançamento pendente do gestor
-      if (reg._novoLanc) {
-        eventos.push({
-          nome:       colab.nome,
-          cargo:      colab.cargo,
-          setor:      colab.setor,
-          empresa:    colab.empresa,
-          inicio:     reg._novoLanc.inicio,
-          fim:        reg._novoLanc.fim,
-          dias:       reg._novoLanc.dias,
-          status:     'Pendente',
-          obsGestor:  reg._obsGestor || reg._novoLanc.motivo || null,
-          paFim:      reg.paFim,
-          _sbId:      reg._sbId,
-          _atualizadoEm: reg._atualizadoEm || null,
-        });
-      }
-    });
+  const _cutoff90 = new Date(HOJE); _cutoff90.setDate(_cutoff90.getDate() - 90);
+  const _cutoff90str = _cutoff90.toISOString();
+  const _dismissedRH = _ativDismissed('r');
+
+  // Monta mapa colaborador_id → dados para exibição
+  const colabMap = new Map();
+  COLABORADORES.forEach(c => colabMap.set(String(c._sbColabId), c));
+
+  const eventos = FERIAS_HISTORICO.filter(h => {
+    if ((h.criado_em || '') < _cutoff90str) return false;
+    if (_dismissedRH.has(String(h.id))) return false;
+    return true;
   });
 
-  // Filtro 90 dias e dismissed
-  const _cutoff90rh = new Date(HOJE); _cutoff90rh.setDate(_cutoff90rh.getDate() - 90);
-  const _cutoff90rhStr = _cutoff90rh.toISOString().slice(0,10);
-  const _dismissedRH = _ativDismissed('r');
-  const eventosFiltrados = eventos.filter(ev =>
-    (!ev.fim || ev.fim >= _cutoff90rhStr) &&
-    !_dismissedRH.has(`${ev._sbId}_${ev.inicio}`)
-  );
-
-  // Ordena por data de atualização desc, desempate pelo id do registro (maior = mais recente)
-  eventosFiltrados.sort((a, b) => ((b._atualizadoEm||b.fim||'').localeCompare(a._atualizadoEm||a.fim||'')) || (Number(b._sbId) - Number(a._sbId)));
-
-  if (!eventosFiltrados.length) { el.innerHTML = ''; return; }
-
-  const total   = eventosFiltrados.length;
-  const visiveis = _rhAtivExpandido ? eventosFiltrados.slice(0, 15) : eventosFiltrados.slice(0, _RH_ATIV_LIMITE);
+  const total    = eventos.length;
+  const visiveis = _rhAtivExpandido ? eventos.slice(0, 15) : eventos.slice(0, _RH_ATIV_LIMITE);
   const ocultos  = Math.min(total, 15) - _RH_ATIV_LIMITE;
 
-  const items = visiveis.map(ev => {
-    const st  = (ev.status || '').toLowerCase();
-    const cls = st === 'aprovado' || st === 'agendado' ? 'aprov' : st === 'pendente' ? 'cancel' : 'recus';
-    const chipTxt = st === 'aprovado' ? 'Aprovado' : st === 'agendado' ? 'Agendado' : st === 'pendente' ? 'Pendente' : st === 'rejeitado' ? 'Rejeitado' : 'Cancelado';
-    const svgIcon = cls === 'aprov'
+  const items = visiveis.map(h => {
+    const acao  = h.acao || '';
+    const cls   = acao === 'aprovado' ? 'aprov' : acao === 'rejeitado' ? 'recus' : 'cancel';
+    const chip  = acao === 'aprovado' ? 'Aprovado' : acao === 'rejeitado' ? 'Recusado' : 'Solicitado';
+    const colab = colabMap.get(String(h.colaborador_id));
+    const nome  = colab ? colab.nome : '—';
+    const cargo = colab ? [colab.cargo, colab.setor].filter(Boolean).join(' · ') : '';
+    const det   = h.detalhe || {};
+    const svgIcon = acao === 'aprovado'
       ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
-      : cls === 'recus'
+      : acao === 'rejeitado'
       ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
-      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`;
-    const obsLine = ev.obsGestor ? `<div class="gstor-ativ-ts">Solicitado pelo gestor${ev.obsGestor !== 'Solicitado pelo gestor' ? ': ' + ev.obsGestor : ''}</div>` : '';
-    const subInfo = [ev.cargo, ev.setor, ev.empresa].filter(Boolean).join(' · ');
-    const dismissKeyRh = `${ev._sbId}_${ev.inicio}`;
+      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14 14"/></svg>`;
+    const perLine = det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD(det.inicio)} → ${fmtD(det.fim)}${det.dias ? ' · ' + det.dias + 'd' : ''}</div>` : '';
+    const tsLine  = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
+    const dismissKey = String(h.id);
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${cls}">${svgIcon}</div>
       <div class="gstor-ativ-body">
-        <div><span class="gstor-ativ-nome">${ev.nome}</span>${subInfo ? `<span class="gstor-ativ-cargo">${subInfo}</span>` : ''}</div>
-        <div class="gstor-ativ-per">${fmtD(ev.inicio)} → ${fmtD(ev.fim)} · ${ev.dias}d</div>
-        ${obsLine}
+        <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
+        ${perLine}${tsLine}
       </div>
-      <span class="gstor-ativ-chip ${cls}">${chipTxt}</span>
-      <button class="gstor-ativ-dismiss" onclick="event.stopPropagation();_ativDismiss('r','${dismissKeyRh}')" title="Arquivar">×</button>
+      <span class="gstor-ativ-chip ${cls}">${chip}</span>
+      <button class="gstor-ativ-dismiss" onclick="event.stopPropagation();_ativDismiss('r','${dismissKey}')" title="Arquivar">×</button>
     </div>`;
   }).join('');
 
-  // Itens arquivados
-  const arquivadosRH = eventos.filter(ev => _dismissedRH.has(`${ev._sbId}_${ev.inicio}`));
-  const itemsArqRH = arquivadosRH.map(ev => {
-    const subInfo = [ev.cargo, ev.setor, ev.empresa].filter(Boolean).join(' · ');
-    const dismissKeyRh2 = `${ev._sbId}_${ev.inicio}`;
+  const arquivadosRH = FERIAS_HISTORICO.filter(h => _dismissedRH.has(String(h.id)));
+  const itemsArqRH = arquivadosRH.map(h => {
+    const colab = colabMap.get(String(h.colaborador_id));
+    const nome  = colab ? colab.nome : '—';
+    const det   = h.detalhe || {};
+    const fmtD2 = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+    const dismissKey = String(h.id);
     return `<div class="gstor-ativ-item" style="opacity:.6;">
       <div class="gstor-ativ-icon cancel"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2M5 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg></div>
       <div class="gstor-ativ-body">
-        <div><span class="gstor-ativ-nome">${ev.nome}</span>${subInfo ? `<span class="gstor-ativ-cargo">${subInfo}</span>` : ''}</div>
-        <div class="gstor-ativ-per">${fmtD(ev.inicio)} → ${fmtD(ev.fim)} · ${ev.dias}d</div>
+        <div><span class="gstor-ativ-nome">${nome}</span></div>
+        ${det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD2(det.inicio)} → ${fmtD2(det.fim)}</div>` : ''}
       </div>
-      <button class="gstor-ativ-dismiss" style="opacity:1;color:var(--blue);" onclick="event.stopPropagation();_ativRestore('r','${dismissKeyRh2}')" title="Restaurar">↩</button>
+      <button class="gstor-ativ-dismiss" style="opacity:1;color:var(--blue);" onclick="event.stopPropagation();_ativRestore('r','${dismissKey}')" title="Restaurar">↩</button>
     </div>`;
   }).join('');
 
-  const allKeysRH = eventosFiltrados.map(ev => `${ev._sbId}_${ev.inicio}`);
-  const arquivarTodosBtnRH = eventosFiltrados.length > 0
+  const allKeysRH = eventos.map(h => String(h.id));
+  const arquivarTodosBtnRH = eventos.length > 0
     ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_ativDismissAll('r',${JSON.stringify(allKeysRH)})">Arquivar todos</button>`
     : '';
   const verArqBtnRH = arquivadosRH.length > 0
     ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_rhAtivMostrarArq=!_rhAtivMostrarArq;renderRhAtividade()">${_rhAtivMostrarArq ? 'Ocultar arquivados' : `Ver arquivados (${arquivadosRH.length})`}</button>`
     : '';
-
   const verMaisBtn = !_rhAtivExpandido && ocultos > 0
     ? `<button class="gstor-ativ-vermais" onclick="_rhAtivExpandido=true;renderRhAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
     : _rhAtivExpandido
@@ -8941,9 +8971,11 @@ async function gestorEnviarSolicitacao() {
     if (window._gestorAguardAprov && !window._gestorAguardAprov.some(id => String(id) === String(colab.id))) {
       window._gestorAguardAprov.push(String(colab.id));
     }
+    await _logAtiv(feriasId, colab.id, 'solicitado', GESTOR_NOME_USUARIO, { inicio, fim, dias: diasVal, slot: slotKey });
     fecharModalGestor();
     renderGestorAlerts();
     renderGestorAtencao();
+    renderGestorAtividade();
     toast('✓ Solicitação enviada para o RH aprovar.');
   } catch(e) {
     toast('Erro ao enviar: ' + (e.message || e));
