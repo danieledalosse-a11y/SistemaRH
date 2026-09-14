@@ -1064,6 +1064,125 @@ O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre 
 
 **Nunca usar `gestorExportarCSV`** para o botão principal — função pode existir mas não é chamada pela UI.
 
+## Componente MultiSelect — regras e comportamentos (2026-09-14)
+
+O `MultiSelect` é um dropdown de múltipla seleção com checkboxes, busca interna e botões "Aplicar" / "Limpar". Registrado em `MS_INSTANCES[containerId]`.
+
+### HTML gerado pelo construtor
+
+```html
+<div class="ms-wrap" style="display:flex;align-items:center;gap:4px;">
+  <button class="ms-btn" id="{id}-btn">
+    <span class="ms-btn-label" id="{id}-label">{placeholder}</span>
+    <span class="ms-btn-arrow">▼</span>
+  </button>
+  <button id="{id}-x" style="display:none;">✕</button>   <!-- X externo, aparece com seleção -->
+  <div class="ms-dropdown" id="{id}-dd">
+    <div class="ms-search"><input id="{id}-search" ...></div>
+    <div class="ms-list" id="{id}-list"></div>
+    <div class="ms-footer" style="display:flex;gap:6px;justify-content:space-between;">
+      <button class="ms-clear">✕ Limpar</button>
+      <button class="ms-clear" style="background:var(--blue);color:#fff;">Aplicar</button>
+    </div>
+  </div>
+</div>
+```
+
+### Regras críticas de propagação de eventos
+
+- O botão principal (`{id}-btn`) chama `e.stopPropagation()` antes de `msToggle`
+- O dropdown (`{id}-dd`) tem `addEventListener('click', e => e.stopPropagation())` — impede que cliques nos checkboxes fechem o dropdown via handler global
+- O X externo (`{id}-x`) também tem `stopPropagation` no click
+
+**Por quê:** o `document` tem um listener global que fecha todos `.ms-dropdown.open` em qualquer clique. Sem `stopPropagation` no dropdown, clicar nos checkboxes fecha o combo imediatamente.
+
+### Labels do botão (`_updateBtn`)
+
+| Estado | Label | X externo |
+|---|---|---|
+| 0 selecionados ou todos | `placeholder` (ex: "Todos os cargos") | oculto |
+| 1 selecionado | nome do item | visível |
+| 2+ selecionados | `"Cargos: N"` | visível |
+
+O atributo `title` do botão exibe os itens selecionados separados por vírgula (tooltip ao passar o mouse).
+
+### API pública
+
+```js
+MS_INSTANCES['id'].getValues()   // [] quando nenhum ou todos selecionados; [...selecionados] nos demais
+MS_INSTANCES['id'].setOptions(arr) // atualiza opções (reseta busca, mantém seleção compatível)
+MS_INSTANCES['id'].selected      // Set<string> dos valores selecionados
+```
+
+### Filtro de cargo na Visão Gestor (`gestorFiltroCargo2`)
+
+Substituiu o `<select>` simples. Declarado como `<div id="gestorFiltroCargo2" style="min-width:160px;position:relative;">`.
+
+Inicialização (dentro de `renderGestorAtencao` / `carregarGestorData`):
+```js
+if (!MS_INSTANCES['gestorFiltroCargo2']) {
+  new MultiSelect('gestorFiltroCargo2', 'Todos os cargos', () => renderGestorAtencao());
+}
+MS_INSTANCES['gestorFiltroCargo2'].setOptions(cargos);
+```
+
+Leitura do filtro:
+```js
+const filtroCargos = MS_INSTANCES['gestorFiltroCargo2']?.getValues() || [];
+if (filtroCargos.length) colabs = colabs.filter(c => filtroCargos.includes(c.cargo));
+```
+
+Filtro respeitado também em `gestorExportarPDF` e `gestorExportarExcel` (variável local `cargofs`).
+
+Reset ao carregar novos dados:
+```js
+if (MS_INSTANCES['gestorFiltroCargo2']) {
+  MS_INSTANCES['gestorFiltroCargo2'].selected.clear();
+  MS_INSTANCES['gestorFiltroCargo2']._updateBtn();
+}
+```
+
+---
+
+## Modal "Relatório do mês" — filtros de Setor e Gestor (2026-09-14)
+
+O modal da visão RH (`#modalRelatorio`) ganhou dois novos campos além de Empresa:
+
+```html
+<div class="rel-field">
+  <label>Setor</label>
+  <select id="relSetor"><option value="">Todos os setores</option></select>
+</div>
+<div class="rel-field">
+  <label>Gestor</label>
+  <select id="relGestor"><option value="">Todos os gestores</option></select>
+</div>
+```
+
+Populados em `popularSidebarFiltros()` junto com os demais selects. Gestor usa `c.gestor` (campo do colaborador).
+
+`_getDadosRelatorio()` lê os três filtros e combina:
+```js
+if (empVal  && (c.empresaRegistro||c.unidade||'') !== empVal) return;
+if (setVal  && (c.setor||'') !== setVal) return;
+if (gestVal && (c.gestor||'') !== gestVal) return;
+```
+
+`empLabel` do retorno inclui os filtros ativos combinados (`"Matriz · Matriz Vendas · Gestor: Juninho"` etc.).
+
+---
+
+## `.proto-status-tabs` — scrollbar oculta (2026-09-14)
+
+```css
+.proto-status-tabs { overflow-x: auto; scrollbar-width: none; }
+.proto-status-tabs::-webkit-scrollbar { display: none; }
+```
+
+Suprime as setas ▲▼ nativas que apareciam à direita dos chips de filtro de status sem remover o scroll horizontal em telas estreitas.
+
+---
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
