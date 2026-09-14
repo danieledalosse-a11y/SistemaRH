@@ -30,9 +30,11 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\ferias\index.html` (~3.200 
 ## Tabelas Supabase (módulo férias)
 
 ### `colaboradores`
-`id, matricula, nome, cargo, setor, empresa_registro_nome, empresa_atuacao_nome, data_demissao`
+`id, matricula, nome, cargo, setor, gestor, empresa_registro, empresa_registro_nome, empresa_atuacao, empresa_atuacao_nome, data_demissao, foto_url`
 - `ativo = !data_demissao`
 - Matrículas repetem entre empresas → identificar por matricula + nome
+- `gestor` = apelido do gestor responsável (mesmo valor de `param_gestor.apelido`)
+- O campo `gestor` **deve estar no `select=`** da query `sbGet('colaboradores', ...)` e deve ser atribuído ao objeto do colaborador em `supabaseParaModelo()` — caso contrário filtros por gestor ficam vazios
 
 ### `ferias`
 `id, colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status, dias_antecipados, abono_pecuniario` + colunas de lançamentos
@@ -1159,7 +1161,19 @@ O modal da visão RH (`#modalRelatorio`) ganhou dois novos campos além de Empre
 </div>
 ```
 
-Populados em `popularSidebarFiltros()` junto com os demais selects. Gestor usa `c.gestor` (campo do colaborador).
+Populados em `popularSidebarFiltros()` junto com os demais selects.
+
+- **Setor**: derivado de `COLABORADORES.map(c => c.setor)` (valores únicos, ordem alfabética)
+- **Gestor**: busca assíncrona em `param_gestor` (mesma fonte da visão Gestor) — **não** usa `c.gestor` dos colaboradores, para garantir mesma lista e ordem:
+
+```js
+sbGet('param_gestor', 'select=apelido&ativo=eq.true&order=ordem').then(pgRows => {
+  const gestores = pgRows.map(r => r.apelido).filter(Boolean);
+  gestores.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; relGest.appendChild(o); });
+});
+```
+
+O filtro em `_getDadosRelatorio()` compara `c.gestor === gestVal` (string exata), por isso é importante que `param_gestor.apelido` e `colaboradores.gestor` usem exatamente o mesmo valor.
 
 `_getDadosRelatorio()` lê os três filtros e combina:
 ```js
