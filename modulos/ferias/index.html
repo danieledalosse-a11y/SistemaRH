@@ -6918,6 +6918,18 @@ function _ativDismiss(tipo, key) {
   try { localStorage.setItem(`ferias_ativ_dismissed_${tipo}`, JSON.stringify([...s])); } catch {}
   if (tipo === 'g') renderGestorAtividade(); else renderRhAtividade();
 }
+function _ativDismissAll(tipo, keys) {
+  const s = _ativDismissed(tipo); keys.forEach(k => s.add(k));
+  try { localStorage.setItem(`ferias_ativ_dismissed_${tipo}`, JSON.stringify([...s])); } catch {}
+  if (tipo === 'g') renderGestorAtividade(); else renderRhAtividade();
+}
+function _ativRestore(tipo, key) {
+  const s = _ativDismissed(tipo); s.delete(key);
+  try { localStorage.setItem(`ferias_ativ_dismissed_${tipo}`, JSON.stringify([...s])); } catch {}
+  if (tipo === 'g') renderGestorAtividade(); else renderRhAtividade();
+}
+let _gestorAtivMostrarArq = false;
+let _rhAtivMostrarArq     = false;
 
 function renderGestorAtividade() {
   const el = document.getElementById('gestorAtividade');
@@ -6992,6 +7004,37 @@ function renderGestorAtividade() {
     </div>`;
   }).join('');
 
+  // Itens arquivados (para exibir na seção "Ver arquivados")
+  const arquivadosG = GESTOR_LANCAMENTOS.filter(l => {
+    if (!idsPermitidos.has(String(l.colaborador_id))) return false;
+    const st = (l.status||'').toLowerCase();
+    if (!['aprovado','recusado','cancelado'].includes(st)) return false;
+    const per = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
+    if (!per || !per._feriasRow || !per._feriasRow.obs_gestor) return false;
+    return _dismissedG.has(`${l.periodo_id}_${l.id}`);
+  });
+  const itemsArqG = arquivadosG.map(l => {
+    const colab = colabMap.get(String(l.colaborador_id));
+    const nome = colab ? colab.nome : '—';
+    const dismissKey = `${l.periodo_id}_${l.id}`;
+    return `<div class="gstor-ativ-item" style="opacity:.6;">
+      <div class="gstor-ativ-icon cancel"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2M5 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg></div>
+      <div class="gstor-ativ-body">
+        <div><span class="gstor-ativ-nome">${nome}</span></div>
+        <div class="gstor-ativ-per">${fmtD(l.inicio)} → ${fmtD(l.fim)} · ${l.dias}d</div>
+      </div>
+      <button class="gstor-ativ-dismiss" style="opacity:1;color:var(--blue);" onclick="event.stopPropagation();_ativRestore('g','${dismissKey}')" title="Restaurar">↩</button>
+    </div>`;
+  }).join('');
+
+  const allKeysG = eventos.map(l => `${l.periodo_id}_${l.id}`);
+  const arquivarTodosBtn = eventos.length > 0
+    ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_ativDismissAll('g',${JSON.stringify(allKeysG)})">Arquivar todos</button>`
+    : '';
+  const verArqBtnG = arquivadosG.length > 0
+    ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_gestorAtivMostrarArq=!_gestorAtivMostrarArq;renderGestorAtividade()">${_gestorAtivMostrarArq ? 'Ocultar arquivados' : `Ver arquivados (${arquivadosG.length})`}</button>`
+    : '';
+
   const verMaisBtn = !_gestorAtivExpandido && ocultos > 0
     ? `<button class="gstor-ativ-vermais" onclick="_gestorAtivExpandido=true;renderGestorAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
     : _gestorAtivExpandido && total > _ATIV_LIMITE
@@ -7003,7 +7046,7 @@ function renderGestorAtividade() {
       <span class="gstor-ativ-title">Atividade recente</span>
       <span class="gstor-ativ-toggle">${_gestorAtivAberto ? '▲ ocultar' : '▼ mostrar'}</span>
     </div>
-    ${_gestorAtivAberto ? `<div class="gstor-ativ-list">${items}</div>${verMaisBtn}` : ''}
+    ${_gestorAtivAberto ? `<div class="gstor-ativ-list">${items || '<div style="padding:14px 16px;font-size:13px;color:var(--text-ter);">Nenhuma atividade recente.</div>'}</div>${verMaisBtn}${arquivarTodosBtn}${verArqBtnG}${_gestorAtivMostrarArq && itemsArqG ? `<div class="gstor-ativ-list" style="border-top:1px dashed var(--border);">${itemsArqG}</div>` : ''}` : ''}
   </div>`;
 }
 
@@ -7102,6 +7145,29 @@ function renderRhAtividade() {
     </div>`;
   }).join('');
 
+  // Itens arquivados
+  const arquivadosRH = eventos.filter(ev => _dismissedRH.has(`${ev._sbId}_${ev.inicio}`));
+  const itemsArqRH = arquivadosRH.map(ev => {
+    const subInfo = [ev.cargo, ev.setor, ev.empresa].filter(Boolean).join(' · ');
+    const dismissKeyRh2 = `${ev._sbId}_${ev.inicio}`;
+    return `<div class="gstor-ativ-item" style="opacity:.6;">
+      <div class="gstor-ativ-icon cancel"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2M5 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg></div>
+      <div class="gstor-ativ-body">
+        <div><span class="gstor-ativ-nome">${ev.nome}</span>${subInfo ? `<span class="gstor-ativ-cargo">${subInfo}</span>` : ''}</div>
+        <div class="gstor-ativ-per">${fmtD(ev.inicio)} → ${fmtD(ev.fim)} · ${ev.dias}d</div>
+      </div>
+      <button class="gstor-ativ-dismiss" style="opacity:1;color:var(--blue);" onclick="event.stopPropagation();_ativRestore('r','${dismissKeyRh2}')" title="Restaurar">↩</button>
+    </div>`;
+  }).join('');
+
+  const allKeysRH = eventosFiltrados.map(ev => `${ev._sbId}_${ev.inicio}`);
+  const arquivarTodosBtnRH = eventosFiltrados.length > 0
+    ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_ativDismissAll('r',${JSON.stringify(allKeysRH)})">Arquivar todos</button>`
+    : '';
+  const verArqBtnRH = arquivadosRH.length > 0
+    ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_rhAtivMostrarArq=!_rhAtivMostrarArq;renderRhAtividade()">${_rhAtivMostrarArq ? 'Ocultar arquivados' : `Ver arquivados (${arquivadosRH.length})`}</button>`
+    : '';
+
   const verMaisBtn = !_rhAtivExpandido && ocultos > 0
     ? `<button class="gstor-ativ-vermais" onclick="_rhAtivExpandido=true;renderRhAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
     : _rhAtivExpandido
@@ -7113,7 +7179,7 @@ function renderRhAtividade() {
       <span class="gstor-ativ-title">Atividade recente</span>
       <span class="gstor-ativ-toggle">${_rhAtivAberto ? '▲ ocultar' : '▼ mostrar'}</span>
     </div>
-    ${_rhAtivAberto ? `<div class="gstor-ativ-list">${items}</div>${verMaisBtn}` : ''}
+    ${_rhAtivAberto ? `<div class="gstor-ativ-list">${items || '<div style="padding:14px 16px;font-size:13px;color:var(--text-ter);">Nenhuma atividade recente.</div>'}</div>${verMaisBtn}${arquivarTodosBtnRH}${verArqBtnRH}${_rhAtivMostrarArq && itemsArqRH ? `<div class="gstor-ativ-list" style="border-top:1px dashed var(--border);">${itemsArqRH}</div>` : ''}` : ''}
   </div>`;
 }
 
