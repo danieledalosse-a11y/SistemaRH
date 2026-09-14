@@ -8269,7 +8269,18 @@ function renderGestorAtencao() {
   const _fmtD = d => d ? d.split('-').reverse().join('/') : '—';
 
   list.innerHTML = colabs.map(c => {
-    const pa = gestorPeriodoAtivo(c.id);
+    // quando filtro "hoje": usa o PA do lançamento em curso, não o próximo PA com saldo
+    let pa;
+    if (_gestorAlertaAtivo === 'hoje') {
+      const lancHoje = GESTOR_LANCAMENTOS.find(l =>
+        String(l.colaborador_id) === String(c.id) && (l.inicio||'') <= hoje && (l.fim||'') >= hoje
+      );
+      pa = lancHoje
+        ? GESTOR_PERIODOS.find(p => String(p.id) === String(lancHoje.periodo_id)) || gestorPeriodoAtivo(c.id)
+        : gestorPeriodoAtivo(c.id);
+    } else {
+      pa = gestorPeriodoAtivo(c.id);
+    }
     // semPA: qualquer colaborador sem PA ativo com saldo (inclui quem tem PAs históricos já gozados)
     const semPA = !pa && !!c.data_admissao;
     if (!pa && !semPA && !_gestorAlertaAtivo) return '';
