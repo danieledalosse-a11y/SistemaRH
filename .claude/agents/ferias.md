@@ -37,6 +37,22 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\ferias\index.html` (~3.200 
 ### `ferias`
 `id, colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status, dias_antecipados, abono_pecuniario` + colunas de lançamentos
 
+### `ferias_historico` (criada 2026-09-14)
+
+Tabela de auditoria imutável — nunca editada, só recebe INSERT.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | bigserial PK | auto |
+| `ferias_id` | bigint | FK para `ferias.id` |
+| `colaborador_id` | bigint | FK para `colaboradores.id` |
+| `acao` | text | `'solicitado'` / `'aprovado'` / `'rejeitado'` |
+| `usuario` | text | Nome/email de quem executou a ação |
+| `detalhe` | jsonb | Snapshot do evento (`inicio`, `fim`, `dias`, `obs_gestor`, `slot`) |
+| `criado_em` | timestamptz | Gerado pelo banco (`DEFAULT NOW()`) |
+
+Índices: `ferias_id`, `colaborador_id`, `criado_em DESC`.
+
 ## Cálculo de saldo
 
 ```js
@@ -435,21 +451,156 @@ const jaSolicitado = GESTOR_LANCAMENTOS.some(l =>
 if (jaSolicitado) { /* mostrar erro e return */ }
 ```
 
-## Visão Gestor — seção "Atividade recente"
+## Sistema de auditoria — `ferias_historico` (2026-09-14)
+
+### Global `FERIAS_HISTORICO`
+
+Array carregado na inicialização de cada visão:
+- **RH:** no `Promise.all` de `carregarDoSupabase` — `sbGet('ferias_historico', 'select=*&order=criado_em.desc&limit=500').catch(() => [])`
+- **Gestor:** junto com `feriasRows` no load do gestor — filtrado por `colaborador_id=in.(${ids})`
+
+Sempre com `.catch(() => [])` — tabela pode não existir em ambientes antigos sem quebrar o sistema.
+
+### Helper `sbPost(tabela, dados)`
+
+```js
+async function sbPost(tabela, dados) {
+  const extra = { 'Prefer': 'return=minimal' };
+  await _sbFetch(`${SB_URL}/rest/v1/${tabela}`, {
+    method: 'POST', headers: { ...SB_HEADERS, ...extra }, body: JSON.stringify(dados),
+  });
+}
+```
+
+### Helper `_logAtiv(feriasId, colabId, acao, usuario, detalhe)`
+
+```js
+async function _logAtiv(feriasId, colabId, acao, usuario, detalhe) {
+  const entry = { ferias_id: Number(feriasId), colaborador_id: Number(colabId), acao, usuario: usuario || null, detalhe: detalhe || null };
+  try { await sbPost('ferias_historico', entry); } catch(_) {}
+  FERIAS_HISTORICO.unshift({ ...entry, id: Date.now(), criado_em: new Date().toISOString() });
+}
+```
+
+O `unshift` garante atualização otimista de `FERIAS_HISTORICO` mesmo que o POST falhe silenciosamente.
+
+### Onde `_logAtiv` é chamado
+
+| Função | `acao` | `usuario` | `detalhe` |
+|---|---|---|---|
+| `gestorEnviarSolicitacao` | `'solicitado'` | `GESTOR_NOME_USUARIO` | `{ inicio, fim, dias, slot }` |
+| `rhAprovarSolicitado` | `'aprovado'` | `perfil.nome \|\| 'RH'` | `{ status: 'Aprovado' }` |
+| `rhRecusarSolicitado` | `'rejeitado'` | `perfil.nome \|\| 'RH'` | `{ status: 'Rejeitado', obs_gestor: motivo }` |
+
+`perfil` = `JSON.parse(localStorage.getItem('sb_perfil') || '{}')`.
+
+### Atividade Recente — arquitetura atual (baseada em `FERIAS_HISTORICO`)
+
+`renderGestorAtividade()` e `renderRhAtividade()` leem **diretamente de `FERIAS_HISTORICO`** — já ordenado por `criado_em DESC` conforme vem do Supabase.
+
+**Filtros:**
+- 90 dias: `h.criado_em >= _cutoff90str` (ISO string comparável diretamente)
+- Arquivados: `!_dismissedG.has(String(h.id))` — dismiss key é o `h.id` numérico como string
+
+**Dismiss key:** `String(h.id)` — simples e único. Salvo em localStorage por tipo: `ferias_ativ_dismissed_g` (Gestor) e `ferias_ativ_dismissed_r` (RH).
+
+**Helpers de dismiss/restore:**
+- `_ativDismissed(tipo)` → `Set` dos ids arquivados
+- `_ativDismiss(tipo, key)` → arquiva um item + re-render
+- `_ativDismissAll(tipo, keys)` → arquiva todos visíveis
+- `_ativRestore(tipo, key)` → restaura item arquivado
+- `_gestorAtivMostrarArq` / `_rhAtivMostrarArq` → bool que controla seção de arquivados
+
+**O que cada item exibe:**
+- Nome e cargo do colaborador
+- Período de férias (`detalhe.inicio → detalhe.fim · dias`)
+- Data/hora exata + nome do usuário (`fmtDH(h.criado_em) · h.usuario`)
+- Chip de status (Solicitado / Aprovado / Recusado)
+- Botão × para arquivar
+
+### Drawer RH — abas "Períodos" e "Histórico"
+
+HTML:
+```html
+<div class="drawer-tabs">
+  <button class="drawer-tab active" id="drawerTabPeriodos" onclick="setDrawerTab('periodos')">Períodos</button>
+  <button class="drawer-tab" id="drawerTabAuditoria" onclick="setDrawerTab('auditoria')">Histórico</button>
+</div>
+<div class="drawer-tabs-line"></div>
+<div class="drawer-body">
+  <div id="drawerHistorico"></div>
+  <div id="drawerAuditoria" style="display:none;"></div>
+</div>
+```
+
+`setDrawerTab(tab)` — troca visibilidade entre os dois divs e atualiza `.active`. Ao mudar para `'auditoria'`, chama `renderDrawerAuditoria(colab)`.
+
+`renderDrawerAuditoria(colab)` — filtra `FERIAS_HISTORICO` pelos `_sbId`s dos registros do colaborador e renderiza linha do tempo vertical com dot colorido por ação.
+
+`_drawerTab` — variável global (`'periodos'` por padrão), resetada para `'periodos'` a cada abertura de drawer em `_abrirDrawerInterno`.
+
+### Drawer Gestor — aba "Histórico"
+
+`gsolDrawer` tem três abas: Solicitações (oculta) | **Férias** | **Histórico**
+
+```html
+<button class="gsol-tab" id="gsolTabHist" onclick="gsolMostrarAba('hist')">Histórico</button>
+<div id="gsolListaHist" style="display:none;"></div>
+```
+
+`gsolMostrarAba('hist')` — exibe `gsolListaHist`, oculta os outros dois, chama `_renderGsolHistoricoAuditoria()`.
+
+`_renderGsolHistoricoAuditoria()` — filtra `FERIAS_HISTORICO` por `colaborador_id === _gsolColabId` e renderiza mesma linha do tempo da visão RH (font-size menor, 12px/10px).
+
+**Variável `_gsolColabId`** — id do colaborador atualmente aberto no gsolDrawer (string). Definida em `gestorAbrirSolicitacoes`.
+
+### Visão Gestor — seção "Atividade recente"
 
 Container `<div id="gestorAtividade">` inserido entre `#gestorAlerts` e o card da lista no HTML.
 
-Função `renderGestorAtividade()` — mostra até 10 lançamentos com status `aprovado`/`recusado`/`cancelado` cujo PA tem `obs_gestor` preenchido (= passaram pelo fluxo gestor), ordenados por `fim` desc.
+Função `renderGestorAtividade()` — lê `FERIAS_HISTORICO` filtrando pelos `idsPermitidos` (colaboradores do gestor logado), ordenado por `criado_em DESC`.
 
 Chamada em:
 - `renderGestorAtencao()` (após `renderGestorAlerts`)
+- `gestorEnviarSolicitacao()` (após enviar)
 - Após aprovar/recusar no RH (`if (typeof renderGestorAtividade === 'function') renderGestorAtividade()`)
 
 Estado colapsável: variável `_gestorAtivAberto` (booleana, padrão `true`).
 
-## Histórico RH no drawer Gestor — prioridade de nota (`_renderGsolHistoricoRH`)
+## Histórico RH no drawer Gestor — saldo e chip (`_renderGsolHistoricoRH`)
 
-A função `_renderGsolHistoricoRH` exibe o "Histórico RH" para o gestor. A nota de cada lançamento segue esta cadeia de prioridade (apenas no primeiro lançamento do PA, `li === 0`):
+A função `_renderGsolHistoricoRH` (linha ~8988) renderiza os blocos de PA no drawer do Gestor e tem **seu próprio cálculo local de saldo** — independente de `gestorSaldoPeriodo`. Ambos devem ser mantidos em sincronia.
+
+### Cálculo de saldo (corrigido 2026-09-11)
+
+```js
+const abono       = Number(row.abono_pecuniario) || 0;
+const antecipados = Number(row.dias_antecipados) || 0;
+const usados = lancamentos.reduce((s, l) => s + (Number(l.dias) || 0), 0);
+const saldo  = diasDir - usados - abono - antecipados;
+```
+
+**Bug original:** `antecipados` não era subtraído → bloco do PA mostrava 30d enquanto o header do drawer (via `gestorSaldoPeriodo`) mostrava 28d.
+
+### Chip "Dias antecipados ao PA anterior"
+
+Quando `antecipados > 0`, exibir chip laranja após `${abonoRhHtml}` no template:
+
+```js
+const antecipHtml = antecipados > 0
+  ? `<div style="padding:6px 12px 0;"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;background:#FFF7ED;border:1px solid #FED7AA;font-size:11px;color:#C2410C;font-weight:600;">Dias antecipados ao PA anterior · ${antecipados}d</span></div>`
+  : '';
+```
+
+Analogia: chip roxo para `abono_pecuniario`, chip laranja para `dias_antecipados`.
+
+### Quando PAs sem lançamentos aparecem no drawer
+
+`paMap` é construído a partir de lançamentos — PAs sem lançamentos (`dias1=0`) **não entram** no `paMap`. Porém o PA ainda aparece no drawer quando `mostrarSolicitar=true` (saldo>0, PA já iniciou, sem solicitação pendente), pois `periodos` vem de `GESTOR_PERIODOS` (todos os PAs).
+
+### Prioridade de nota (`_renderGsolHistoricoRH`)
+
+A nota de cada lançamento segue esta cadeia de prioridade (apenas no primeiro lançamento do PA, `li === 0`):
 
 ```js
 const _notaTxt = li === 0
