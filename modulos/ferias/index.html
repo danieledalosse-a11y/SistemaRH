@@ -1745,9 +1745,7 @@
             <button id="gestorBuscaX" onclick="gestorBuscaLimpar()" title="Limpar busca" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;color:var(--text-ter);padding:2px 4px;font-size:14px;line-height:1;align-items:center;justify-content:center;">✕</button>
             <div class="gestor-busca-dd" id="gestorBuscaDD"></div>
           </div>
-          <select id="gestorFiltroCargo2" onchange="renderGestorAtencao()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:160px;">
-            <option value="">Todos os cargos</option>
-          </select>
+          <div id="gestorFiltroCargo2" style="min-width:160px;position:relative;"></div>
           <select id="gestorFiltroGestor" onchange="renderGestorAtencao()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);min-width:160px;">
             <option value="">Todos os gestores</option>
           </select>
@@ -6880,11 +6878,16 @@ async function _carregarEquipeGestor(apelido) {
   const { periodos, lancamentos } = processGestorFerias(feriasRows);
   GESTOR_PERIODOS    = periodos;
   GESTOR_LANCAMENTOS = lancamentos;
-  // Reseta selects de filtro para repopular com novos dados
-  ['gestorFiltroCargo2','gestorFiltroGestor'].forEach(id => {
+  // Reseta filtro de gestor para repopular com novos dados
+  ['gestorFiltroGestor'].forEach(id => {
     const el = document.getElementById(id);
     if (el) { const first = el.options[0]; el.innerHTML = ''; el.appendChild(first); }
   });
+  // Reseta MultiSelect de cargo
+  if (MS_INSTANCES['gestorFiltroCargo2']) {
+    MS_INSTANCES['gestorFiltroCargo2'].selected.clear();
+    MS_INSTANCES['gestorFiltroCargo2']._updateBtn();
+  }
   document.getElementById('gestorLoading').style.display = 'none';
   document.getElementById('gestorContent').style.display = 'block';
   const hoje = new Date();
@@ -7568,7 +7571,7 @@ function renderGestorGantt() {
 
 function gestorExportarPDF() {
   const hoje = new Date().toISOString().slice(0,10);
-  const cargof  = document.getElementById('gestorFiltroCargo2')?.value || '';
+  const cargofs = MS_INSTANCES['gestorFiltroCargo2']?.getValues() || [];
   const gestorf = document.getElementById('gestorFiltroGestor')?.value || '';
   const _normG  = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const gerado  = new Date().toLocaleDateString('pt-BR');
@@ -7596,7 +7599,7 @@ function gestorExportarPDF() {
 
   const linhas = [];
   GESTOR_COLABS.filter(c => {
-    if (cargof && c.cargo !== cargof) return false;
+    if (cargofs.length && !cargofs.includes(c.cargo)) return false;
     if (gestorf && _normG(c.gestor) !== _normG(gestorf)) return false;
     return true;
   }).sort((a,b) => (a.setor||'').localeCompare(b.setor||'','pt-BR') || a.nome.localeCompare(b.nome,'pt-BR')).forEach(c => {
@@ -7750,7 +7753,7 @@ function toggleGestorExportMenu() {
 
 function gestorExportarExcel() {
   const hoje = new Date().toISOString().slice(0,10);
-  const cargof  = document.getElementById('gestorFiltroCargo2')?.value || '';
+  const cargofs = MS_INSTANCES['gestorFiltroCargo2']?.getValues() || [];
   const gestorf = document.getElementById('gestorFiltroGestor')?.value || '';
   const _normG  = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const gerado  = new Date().toLocaleDateString('pt-BR');
@@ -7762,7 +7765,7 @@ function gestorExportarExcel() {
 
   const linhas = [];
   GESTOR_COLABS.filter(c => {
-    if (cargof && c.cargo !== cargof) return false;
+    if (cargofs.length && !cargofs.includes(c.cargo)) return false;
     if (gestorf && _normG(c.gestor) !== _normG(gestorf)) return false;
     return true;
   }).sort((a,b) => (a.setor||'').localeCompare(b.setor||'','pt-BR') || a.nome.localeCompare(b.nome,'pt-BR')).forEach(c => {
@@ -8112,11 +8115,13 @@ function renderGestorAtencao() {
   const hoje = new Date().toISOString().slice(0,10);
   let colabs = GESTOR_COLABS.slice();
 
-  // Popula selects de cargo e gestor na primeira chamada com dados
-  const cargoSel = document.getElementById('gestorFiltroCargo2');
-  if (cargoSel && cargoSel.options.length <= 1 && colabs.length) {
+  // Inicializa/atualiza MultiSelect de cargo
+  if (!MS_INSTANCES['gestorFiltroCargo2']) {
+    new MultiSelect('gestorFiltroCargo2', 'Todos os cargos', () => renderGestorAtencao());
+  }
+  if (colabs.length) {
     const cargos = [...new Set(colabs.map(c => c.cargo).filter(Boolean))].sort();
-    cargos.forEach(cg => { const o = document.createElement('option'); o.value = cg; o.textContent = cg; cargoSel.appendChild(o); });
+    MS_INSTANCES['gestorFiltroCargo2'].setOptions(cargos);
   }
   const gestorSel = document.getElementById('gestorFiltroGestor');
   if (gestorSel) {
@@ -8136,10 +8141,10 @@ function renderGestorAtencao() {
 
   // Filtros de busca, cargo e gestor — base para os cards
   const busca = (document.getElementById('gestorBusca')?.value || '').toLowerCase().trim();
-  const filtroCargo = document.getElementById('gestorFiltroCargo2')?.value || '';
+  const filtroCargos = MS_INSTANCES['gestorFiltroCargo2']?.getValues() || [];
   const filtroGestor = document.getElementById('gestorFiltroGestor')?.value || '';
   if (busca) colabs = colabs.filter(c => c.nome.toLowerCase().includes(busca));
-  if (filtroCargo) colabs = colabs.filter(c => c.cargo === filtroCargo);
+  if (filtroCargos.length) colabs = colabs.filter(c => filtroCargos.includes(c.cargo));
   const _normG = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   if (filtroGestor) colabs = colabs.filter(c => _normG(c.gestor) === _normG(filtroGestor));
 
