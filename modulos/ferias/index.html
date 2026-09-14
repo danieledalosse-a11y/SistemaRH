@@ -1465,12 +1465,16 @@
             <button class="filter-clear" id="clr-sidebarSetor" onclick="clearFilter('sidebarSetor','',()=>{renderAll()})" tabindex="-1" title="Limpar filtro">✕</button>
           </div>
           <div class="filter-wrap">
-            <select class="proto-fsel" id="listaAnualAno" onchange="ANO_REF=parseInt(this.value)||0;renderListaAnual();syncFilterClear('listaAnualAno','0')">
-              <option value="0" selected>Todos os anos</option>
-              <option value="2024">2024</option><option value="2025">2025</option>
-              <option value="2026">2026</option><option value="2027">2027</option>
+            <select class="proto-fsel" id="listaMes" onchange="MES_REF=parseInt(this.value)||0;renderListaAnual();syncFilterClear('listaMes','0')">
+              <option value="0" selected>Todos os meses</option>
+              <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+              <option value="3">Março</option><option value="4">Abril</option>
+              <option value="5">Maio</option><option value="6">Junho</option>
+              <option value="7">Julho</option><option value="8">Agosto</option>
+              <option value="9">Setembro</option><option value="10">Outubro</option>
+              <option value="11">Novembro</option><option value="12">Dezembro</option>
             </select>
-            <button class="filter-clear" id="clr-listaAnualAno" onclick="clearFilter('listaAnualAno','0',()=>{ANO_REF=0;renderListaAnual()})" tabindex="-1" title="Limpar filtro">✕</button>
+            <button class="filter-clear" id="clr-listaMes" onclick="clearFilter('listaMes','0',()=>{MES_REF=0;renderListaAnual()})" tabindex="-1" title="Limpar filtro">✕</button>
           </div>
           <div class="proto-fsep"></div>
           <button class="proto-btn-report rh-only" onclick="abrirModalRelatorio()">
@@ -1993,7 +1997,8 @@
 
 <script>
 // ─── Configuração ────────────────────────────────────────────────────────────
-let ANO_REF = 0; // 0 = todos os anos
+let ANO_REF = 0; // 0 = todos os anos (usado pelo calendário/timeline)
+let MES_REF = 0; // 0 = todos os meses (filtro da lista)
 const HOJE  = new Date().toISOString().slice(0, 10);
 
 let FERIAS_HISTORICO = [];
@@ -4553,6 +4558,7 @@ function renderPendentes() {
 function renderListaAnual() {
   const base = getColabsVisao('lista-anual');
   const ano  = ANO_REF;
+  const mes  = MES_REF;
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const anoStr  = String(ano);
   const anoIni  = `${ano}-01-01`;
@@ -4621,16 +4627,18 @@ function renderListaAnual() {
           reg.lancamentos.some(l => l.fim && l.fim >= HOJE);
       });
     } else {
-      // todos: sem filtro de ano (ANO_REF=0) → todos os PAs ativos;
-      //        com ano → PAs cujo ano = ANO_REF OU lançamento ocorre nesse ano
+      // todos: sem filtro de mês → todos os PAs ativos;
+      //        com mês → PAs com ao menos um lançamento que cruze aquele mês (qualquer ano)
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
-        if (!ano) return true; // todos os anos
-        if (Number(reg.ano) === ano) return true;
+        if (!mes) return true;
         return reg.lancamentos.some(l => {
-          const iniAno = Number((l.inicio || '').slice(0,4));
-          const fimAno = Number((l.fim || '').slice(0,4));
-          return iniAno === ano || fimAno === ano;
+          if (!l.inicio || !l.fim) return false;
+          const iniM = Number(l.inicio.slice(5,7));
+          const fimM = Number(l.fim.slice(5,7));
+          // lançamento pode cruzar virada de ano (ex: dez→jan)
+          if (iniM <= fimM) return mes >= iniM && mes <= fimM;
+          return mes >= iniM || mes <= fimM;
         });
       });
     }
@@ -5669,13 +5677,18 @@ function renderKPI() {
   if (elTodosCnt) elTodosCnt.textContent = lista.length;
   if (elPend)  elPend.textContent  = nPend;
 
-  // atualiza contador da Lista anual (colaboradores com PA no ANO_REF, ou todos se ANO_REF=0)
+  // atualiza contador da Lista (colaboradores com lançamento no MES_REF, ou todos se MES_REF=0)
   const excluirSet = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const nLista = lista.filter(c => c.registros.some(r => {
     if (excluirSet.has(r.status)) return false;
-    if (!ANO_REF) return true;
-    const anoIni = `${ANO_REF}-01-01`, anoFim = `${ANO_REF}-12-31`;
-    return (!r.paFim || r.paFim >= anoIni) && (!r.paInicio || r.paInicio <= anoFim);
+    if (!MES_REF) return true;
+    return r.lancamentos.some(l => {
+      if (!l.inicio || !l.fim) return false;
+      const iniM = Number(l.inicio.slice(5,7));
+      const fimM = Number(l.fim.slice(5,7));
+      if (iniM <= fimM) return MES_REF >= iniM && MES_REF <= fimM;
+      return MES_REF >= iniM || MES_REF <= fimM;
+    });
   })).length;
   const elLista = document.getElementById('cnt-lista');
   if (elLista) elLista.textContent = nLista;
@@ -5881,7 +5894,7 @@ function atualizarSidebarContadores() {
 }
 
 function popularSidebarFiltros() {
-  const empresas = [...new Set(COLABORADORES.map(c => c.empresaRegistro || c.unidade || '').filter(Boolean))].sort();
+  const empresas = [...new Set(COLABORADORES.map(c => c.empresa || '').filter(Boolean))].sort();
   const setores  = [...new Set(COLABORADORES.map(c => c.setor || '').filter(Boolean))].sort();
   const gestores = [...new Set(COLABORADORES.map(c => c.gestor || '').filter(Boolean))].sort();
   const selEmp = document.getElementById('sidebarEmpresa');
