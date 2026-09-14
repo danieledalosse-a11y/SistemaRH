@@ -854,6 +854,9 @@
   .gstor-ativ-chip.cancel { background: #F3F4F6; color: #6B7280; border: 1px solid #D1D5DB; }
   .gstor-ativ-vermais { display: flex; align-items: center; justify-content: center; gap: 6px; width: fit-content; margin: 10px auto 8px; padding: 5px 16px; font-size: 12px; font-weight: 600; color: var(--text-sec); background: var(--bg); border: 1.5px solid var(--border); border-radius: 99px; cursor: pointer; font-family: inherit; transition: border-color .15s, color .15s, background .15s; }
   .gstor-ativ-vermais:hover { background: var(--hover); color: var(--text); border-color: var(--text-ter); }
+  .gstor-ativ-dismiss { flex-shrink: 0; margin-top: 2px; width: 20px; height: 20px; border-radius: 50%; border: none; background: transparent; color: var(--text-ter); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; padding: 0; opacity: 0; transition: opacity .15s, background .15s, color .15s; font-family: inherit; }
+  .gstor-ativ-item:hover .gstor-ativ-dismiss { opacity: 1; }
+  .gstor-ativ-dismiss:hover { background: var(--border); color: var(--text-sec); }
 
   /* ── Acordos (gozo real) ── */
   /* ── Acordos / Realizações ── */
@@ -6906,6 +6909,16 @@ let _gestorAtivAberto   = true;
 let _gestorAtivExpandido = false;
 const _ATIV_LIMITE = 1;
 
+// ─── Atividade Recente — dismiss (localStorage) ──────────────────────────────
+function _ativDismissed(tipo) {
+  try { return new Set(JSON.parse(localStorage.getItem(`ferias_ativ_dismissed_${tipo}`) || '[]')); } catch { return new Set(); }
+}
+function _ativDismiss(tipo, key) {
+  const s = _ativDismissed(tipo); s.add(key);
+  try { localStorage.setItem(`ferias_ativ_dismissed_${tipo}`, JSON.stringify([...s])); } catch {}
+  if (tipo === 'g') renderGestorAtividade(); else renderRhAtividade();
+}
+
 function renderGestorAtividade() {
   const el = document.getElementById('gestorAtividade');
   if (!el) return;
@@ -6920,11 +6933,17 @@ function renderGestorAtividade() {
     : GESTOR_COLABS;
   const idsPermitidos = new Set(colabsFiltrados.map(c => String(c.id)));
 
+  const _cutoff90 = new Date(HOJE); _cutoff90.setDate(_cutoff90.getDate() - 90);
+  const _cutoff90str = _cutoff90.toISOString().slice(0,10);
+  const _dismissedG = _ativDismissed('g');
+
   const eventos = GESTOR_LANCAMENTOS
     .filter(l => {
       if (!idsPermitidos.has(String(l.colaborador_id))) return false;
       const st = (l.status||'').toLowerCase();
       if (!['aprovado','recusado','cancelado'].includes(st)) return false;
+      if (l.fim && l.fim < _cutoff90str) return false;
+      if (_dismissedG.has(`${l.periodo_id}_${l.id}`)) return false;
       const per = GESTOR_PERIODOS.find(p => String(p.id) === String(l.periodo_id));
       return per && per._feriasRow && per._feriasRow.obs_gestor;
     })
@@ -6960,6 +6979,7 @@ function renderGestorAtividade() {
       ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
       : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>`;
     const tsLine = criadoEm ? `<div class="gstor-ativ-ts">Solicitado em ${criadoEm}</div>` : '';
+    const dismissKey = `${l.periodo_id}_${l.id}`;
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${cls}">${svgIcon}</div>
       <div class="gstor-ativ-body">
@@ -6968,6 +6988,7 @@ function renderGestorAtividade() {
         ${tsLine}
       </div>
       <span class="gstor-ativ-chip ${cls}">${chip}</span>
+      <button class="gstor-ativ-dismiss" onclick="event.stopPropagation();_ativDismiss('g','${dismissKey}')" title="Arquivar">×</button>
     </div>`;
   }).join('');
 
@@ -7039,13 +7060,22 @@ function renderRhAtividade() {
     });
   });
 
+  // Filtro 90 dias e dismissed
+  const _cutoff90rh = new Date(HOJE); _cutoff90rh.setDate(_cutoff90rh.getDate() - 90);
+  const _cutoff90rhStr = _cutoff90rh.toISOString().slice(0,10);
+  const _dismissedRH = _ativDismissed('r');
+  const eventosFiltrados = eventos.filter(ev =>
+    (!ev.fim || ev.fim >= _cutoff90rhStr) &&
+    !_dismissedRH.has(`${ev._sbId}_${ev.inicio}`)
+  );
+
   // Ordena por data de atualização desc, desempate pelo id do registro (maior = mais recente)
-  eventos.sort((a, b) => ((b._atualizadoEm||b.fim||'').localeCompare(a._atualizadoEm||a.fim||'')) || (Number(b._sbId) - Number(a._sbId)));
+  eventosFiltrados.sort((a, b) => ((b._atualizadoEm||b.fim||'').localeCompare(a._atualizadoEm||a.fim||'')) || (Number(b._sbId) - Number(a._sbId)));
 
-  if (!eventos.length) { el.innerHTML = ''; return; }
+  if (!eventosFiltrados.length) { el.innerHTML = ''; return; }
 
-  const total   = eventos.length;
-  const visiveis = _rhAtivExpandido ? eventos.slice(0, 15) : eventos.slice(0, _RH_ATIV_LIMITE);
+  const total   = eventosFiltrados.length;
+  const visiveis = _rhAtivExpandido ? eventosFiltrados.slice(0, 15) : eventosFiltrados.slice(0, _RH_ATIV_LIMITE);
   const ocultos  = Math.min(total, 15) - _RH_ATIV_LIMITE;
 
   const items = visiveis.map(ev => {
@@ -7059,6 +7089,7 @@ function renderRhAtividade() {
       : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`;
     const obsLine = ev.obsGestor ? `<div class="gstor-ativ-ts">Solicitado pelo gestor${ev.obsGestor !== 'Solicitado pelo gestor' ? ': ' + ev.obsGestor : ''}</div>` : '';
     const subInfo = [ev.cargo, ev.setor, ev.empresa].filter(Boolean).join(' · ');
+    const dismissKeyRh = `${ev._sbId}_${ev.inicio}`;
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${cls}">${svgIcon}</div>
       <div class="gstor-ativ-body">
@@ -7067,6 +7098,7 @@ function renderRhAtividade() {
         ${obsLine}
       </div>
       <span class="gstor-ativ-chip ${cls}">${chipTxt}</span>
+      <button class="gstor-ativ-dismiss" onclick="event.stopPropagation();_ativDismiss('r','${dismissKeyRh}')" title="Arquivar">×</button>
     </div>`;
   }).join('');
 
