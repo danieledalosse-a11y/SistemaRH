@@ -63,6 +63,36 @@ calcSaldo(reg) = reg.totalDias - usado - reg.diasAntecipados - reg.abonoPecuniar
 
 `diasAntecipados`: fica no PA **de onde os dias foram retirados** (ano seguinte ao das coletivas).
 
+### `dias_antecipados` — marcador provisório vs. período registrado
+
+`dias_antecipados > 0` é um marcador **provisório** — usado enquanto os dias emprestados ainda não estão registrados como um período concreto no PA. Quando o período é criado corretamente, o campo deve ser zerado para evitar dupla dedução no saldo.
+
+**Regra obrigatória:** ao criar `periodo1` para os dias antecipados, sempre zerar `dias_antecipados = 0` no mesmo registro.
+
+**Padrão correto (coletivas dez/2025–jan/2026, 2d antecipados do PA 2026):**
+```python
+# Atualizar a row do PA 2026 do colaborador
+sb.table('ferias').update({
+    'periodo1_inicio': '2026-01-03',
+    'periodo1_fim':    '2026-01-05',
+    'dias1':           2,
+    'nota1':           'usou 2 dias desse saldo para emendar nas coletivas',
+    'dias_antecipados': 0,  # ← obrigatório: zerar para não subtrair duas vezes
+}).eq('id', ferias_id).execute()
+```
+
+**Referência:** VALDIR FELIX DA CRUZ (mat. 439) — PA 2026 id=1699 com `dias_antecipados=0` e `periodo1=2026-01-03`.
+
+**Colaboradores já padronizados (set/2026):** mat. 104, 108, 110, 124, 125, 126, 133, 216, 3, 403 (Alisson), 463, 465, 466 — todos com `periodo1=Jan 3-5 2026, dias1=2, dias_antecipados=0`.
+
+**Casos pendentes de análise manual:**
+- Everton Sales (113): `antec=16` usado para registrar dias **perdidos por INSS** — significado diferente, não tocar
+- Geovani Barnabe (132): `p1=30d` quando saldo seria 28d — inconsistência a resolver manualmente
+- Ana Carla Kojo (132): p1+p2 já totalizam 28d — antecipados implícitos no saldo
+- Fabio Segantini (403): dois PAs com `antec=2` em situação complexa
+- Gabriela Scoqui (574): nota1 já documenta os 2d ("usou 2 dias desse saldo para emendar nas coletivas")
+- Mateus Fossa (577): `dias1=16` sem data (período suspenso por Flavio) — alterar sobrescreveria essa info
+
 ## Risco de dobra
 
 Função `nivelRisco(dpd)` — `dpd` = dias até o prazo de dobra:
