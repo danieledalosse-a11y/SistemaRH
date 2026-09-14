@@ -1465,6 +1465,14 @@
             <button class="filter-clear" id="clr-sidebarSetor" onclick="clearFilter('sidebarSetor','',()=>{renderAll()})" tabindex="-1" title="Limpar filtro">✕</button>
           </div>
           <div class="filter-wrap">
+            <select class="proto-fsel" id="listaAnualAno" onchange="ANO_REF=parseInt(this.value)||0;renderListaAnual();syncFilterClear('listaAnualAno','0')">
+              <option value="0" selected>Todos os anos</option>
+              <option value="2024">2024</option><option value="2025">2025</option>
+              <option value="2026">2026</option><option value="2027">2027</option>
+            </select>
+            <button class="filter-clear" id="clr-listaAnualAno" onclick="clearFilter('listaAnualAno','0',()=>{ANO_REF=0;renderListaAnual()})" tabindex="-1" title="Limpar filtro">✕</button>
+          </div>
+          <div class="filter-wrap">
             <select class="proto-fsel" id="listaMes" onchange="MES_REF=parseInt(this.value)||0;renderListaAnual();syncFilterClear('listaMes','0')">
               <option value="0" selected>Todos os meses</option>
               <option value="1">Janeiro</option><option value="2">Fevereiro</option>
@@ -4627,12 +4635,21 @@ function renderListaAnual() {
           reg.lancamentos.some(l => l.fim && l.fim >= HOJE);
       });
     } else {
-      // todos: sem filtro de mês → todos os PAs ativos;
-      //        com mês → PAs com ao menos um lançamento que INICIA naquele mês
+      // filtro de ano e/ou mês
+      // sem nenhum filtro: exclui PAs já expirados (paFim < hoje) para não trazer histórico antigo
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
-        if (!mes) return true;
-        return reg.lancamentos.some(l => l.inicio && Number(l.inicio.slice(5,7)) === mes);
+        if (ano && Number(reg.ano) !== ano) {
+          // aceita também se algum lançamento ocorre no ano
+          const temLanc = reg.lancamentos.some(l => {
+            const y = Number((l.inicio || '').slice(0,4));
+            return y === ano;
+          });
+          if (!temLanc) return false;
+        }
+        if (mes) return reg.lancamentos.some(l => l.inicio && Number(l.inicio.slice(5,7)) === mes);
+        if (!ano && !mes) return !reg.paFim || reg.paFim >= HOJE; // default: só PAs não expirados
+        return true;
       });
     }
     pasDoAno = pasDoAno.sort((a, b) => (a.paInicio || '').localeCompare(b.paInicio || ''));
@@ -5670,12 +5687,14 @@ function renderKPI() {
   if (elTodosCnt) elTodosCnt.textContent = lista.length;
   if (elPend)  elPend.textContent  = nPend;
 
-  // atualiza contador da Lista (colaboradores com lançamento no MES_REF, ou todos se MES_REF=0)
+  // atualiza contador da Lista respeitando filtros de Ano e Mês
   const excluirSet = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const nLista = lista.filter(c => c.registros.some(r => {
     if (excluirSet.has(r.status)) return false;
-    if (!MES_REF) return true;
-    return r.lancamentos.some(l => l.inicio && Number(l.inicio.slice(5,7)) === MES_REF);
+    if (ANO_REF && Number(r.ano) !== ANO_REF) return false;
+    if (MES_REF) return r.lancamentos.some(l => l.inicio && Number(l.inicio.slice(5,7)) === MES_REF);
+    if (!ANO_REF && !MES_REF) return !r.paFim || r.paFim >= HOJE;
+    return true;
   })).length;
   const elLista = document.getElementById('cnt-lista');
   if (elLista) elLista.textContent = nLista;
