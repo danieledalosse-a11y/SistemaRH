@@ -6933,7 +6933,7 @@ function renderGestorAtividade() {
       const perB = GESTOR_PERIODOS.find(p => String(p.id) === String(b.periodo_id));
       const dA = perA?._feriasRow?.atualizado_em || perA?._feriasRow?.criado_em || a.fim || '';
       const dB = perB?._feriasRow?.atualizado_em || perB?._feriasRow?.criado_em || b.fim || '';
-      return dB.localeCompare(dA);
+      return dB.localeCompare(dA) || (Number(b.periodo_id) - Number(a.periodo_id));
     });
 
   if (!eventos.length) { el.innerHTML = ''; return; }
@@ -7039,8 +7039,8 @@ function renderRhAtividade() {
     });
   });
 
-  // Ordena por data de atualização/criação desc (ação mais recente no topo)
-  eventos.sort((a, b) => ((b._atualizadoEm||b.fim||'').localeCompare(a._atualizadoEm||a.fim||'')));
+  // Ordena por data de atualização desc, desempate pelo id do registro (maior = mais recente)
+  eventos.sort((a, b) => ((b._atualizadoEm||b.fim||'').localeCompare(a._atualizadoEm||a.fim||'')) || (Number(b._sbId) - Number(a._sbId)));
 
   if (!eventos.length) { el.innerHTML = ''; return; }
 
