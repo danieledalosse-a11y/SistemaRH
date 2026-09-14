@@ -1522,6 +1522,13 @@
                 </select>
                 <button class="filter-clear" id="clr-ganttFiltroSetor" onclick="clearFilter('ganttFiltroSetor','',()=>{renderTimeline()})" tabindex="-1" title="Limpar filtro" style="right:22px;">✕</button>
               </div>
+              <span class="gantt-filter-label" style="margin-left:8px;">Gestor</span>
+              <div class="filter-wrap">
+                <select id="ganttFiltroGestor" class="gantt-filter-select" onchange="renderTimeline();syncFilterClear('ganttFiltroGestor','')">
+                  <option value="">Todos os gestores</option>
+                </select>
+                <button class="filter-clear" id="clr-ganttFiltroGestor" onclick="clearFilter('ganttFiltroGestor','',()=>{renderTimeline()})" tabindex="-1" title="Limpar filtro" style="right:22px;">✕</button>
+              </div>
             </div>
           </div>
           <div id="ganttContent"></div>
@@ -6316,12 +6323,26 @@ function renderTimeline() {
   } catch(e) { console.warn('ganttFiltroSetor populate error:', e); }
   syncFilterClear('ganttFiltroSetor', '');
 
+  // popula filtro de gestor a partir de param_gestor (mesma fonte do restante do sistema)
+  const ganttGestorSel = document.getElementById('ganttFiltroGestor');
+  const ganttGestorFiltro = ganttGestorSel?.value || '';
+  if (ganttGestorSel && ganttGestorSel.options.length <= 1) {
+    sbGet('param_gestor', 'select=apelido&ativo=eq.true&order=ordem').then(pgRows => {
+      const gestores = pgRows.map(r => r.apelido).filter(Boolean);
+      ganttGestorSel.innerHTML = '<option value="">Todos os gestores</option>' +
+        gestores.map(g => `<option value="${g}"${g === ganttGestorFiltro ? ' selected' : ''}>${g}</option>`).join('');
+    });
+  }
+  syncFilterClear('ganttFiltroGestor', '');
+
+  const _normGT = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const filtrados = COLABORADORES.filter(c => {
     if (sbAtivo === 'ativo'   && c.ativo === false) return false;
     if (sbAtivo === 'inativo' && c.ativo !== false) return false;
     if (sbEmp && (c.empresaRegistro||c.unidade||'') !== sbEmp) return false;
     if (sbSet && c.setor !== sbSet) return false;
     if (ganttSetorFiltro && normSetor(c.setor) !== ganttSetorFiltro) return false;
+    if (ganttGestorFiltro && _normGT(c.gestor) !== _normGT(ganttGestorFiltro)) return false;
     return c.registros.some(reg => {
       const lans = [...reg.lancamentos, ...(reg._novoLanc ? [reg._novoLanc] : [])];
       return lans.some(l => l.inicio <= mesFim && l.fim >= mesInicio);
