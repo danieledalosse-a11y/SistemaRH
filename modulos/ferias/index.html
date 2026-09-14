@@ -1472,18 +1472,6 @@
             </select>
             <button class="filter-clear" id="clr-listaAnualAno" onclick="clearFilter('listaAnualAno','0',()=>{ANO_REF=0;renderListaAnual()})" tabindex="-1" title="Limpar filtro">✕</button>
           </div>
-          <div class="filter-wrap">
-            <select class="proto-fsel" id="listaMes" onchange="MES_REF=parseInt(this.value)||0;renderListaAnual();syncFilterClear('listaMes','0')">
-              <option value="0" selected>Todos os meses</option>
-              <option value="1">Janeiro</option><option value="2">Fevereiro</option>
-              <option value="3">Março</option><option value="4">Abril</option>
-              <option value="5">Maio</option><option value="6">Junho</option>
-              <option value="7">Julho</option><option value="8">Agosto</option>
-              <option value="9">Setembro</option><option value="10">Outubro</option>
-              <option value="11">Novembro</option><option value="12">Dezembro</option>
-            </select>
-            <button class="filter-clear" id="clr-listaMes" onclick="clearFilter('listaMes','0',()=>{MES_REF=0;renderListaAnual()})" tabindex="-1" title="Limpar filtro">✕</button>
-          </div>
           <div class="proto-fsep"></div>
           <button class="proto-btn-report rh-only" onclick="abrirModalRelatorio()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -2005,8 +1993,7 @@
 
 <script>
 // ─── Configuração ────────────────────────────────────────────────────────────
-let ANO_REF = 0; // 0 = todos os anos (usado pelo calendário/timeline)
-let MES_REF = 0; // 0 = todos os meses (filtro da lista)
+let ANO_REF = 0; // 0 = todos os anos
 const HOJE  = new Date().toISOString().slice(0, 10);
 
 let FERIAS_HISTORICO = [];
@@ -4566,7 +4553,6 @@ function renderPendentes() {
 function renderListaAnual() {
   const base = getColabsVisao('lista-anual');
   const ano  = ANO_REF;
-  const mes  = MES_REF;
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const anoStr  = String(ano);
   const anoIni  = `${ano}-01-01`;
@@ -4635,21 +4621,17 @@ function renderListaAnual() {
           reg.lancamentos.some(l => l.fim && l.fim >= HOJE);
       });
     } else {
-      // filtro de ano e/ou mês
-      // sem nenhum filtro: exclui PAs já expirados (paFim < hoje) para não trazer histórico antigo
+      // todos: sem filtro de ano (ANO_REF=0) → todos os PAs ativos;
+      //        com ano → PAs cujo ano = ANO_REF OU lançamento ocorre nesse ano
       pasDoAno = c.registros.filter(reg => {
         if (excluir.has(reg.status)) return false;
-        if (ano && Number(reg.ano) !== ano) {
-          // aceita também se algum lançamento ocorre no ano
-          const temLanc = reg.lancamentos.some(l => {
-            const y = Number((l.inicio || '').slice(0,4));
-            return y === ano;
-          });
-          if (!temLanc) return false;
-        }
-        if (mes) return reg.lancamentos.some(l => l.inicio && Number(l.inicio.slice(5,7)) === mes);
-        if (!ano && !mes) return !reg.paFim || reg.paFim >= HOJE; // default: só PAs não expirados
-        return true;
+        if (!ano) return true; // todos os anos
+        if (Number(reg.ano) === ano) return true;
+        return reg.lancamentos.some(l => {
+          const iniAno = Number((l.inicio || '').slice(0,4));
+          const fimAno = Number((l.fim || '').slice(0,4));
+          return iniAno === ano || fimAno === ano;
+        });
       });
     }
     pasDoAno = pasDoAno.sort((a, b) => (a.paInicio || '').localeCompare(b.paInicio || ''));
@@ -5687,14 +5669,13 @@ function renderKPI() {
   if (elTodosCnt) elTodosCnt.textContent = lista.length;
   if (elPend)  elPend.textContent  = nPend;
 
-  // atualiza contador da Lista respeitando filtros de Ano e Mês
+  // atualiza contador da Lista anual (colaboradores com PA no ANO_REF, ou todos se ANO_REF=0)
   const excluirSet = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const nLista = lista.filter(c => c.registros.some(r => {
     if (excluirSet.has(r.status)) return false;
-    if (ANO_REF && Number(r.ano) !== ANO_REF) return false;
-    if (MES_REF) return r.lancamentos.some(l => l.inicio && Number(l.inicio.slice(5,7)) === MES_REF);
-    if (!ANO_REF && !MES_REF) return !r.paFim || r.paFim >= HOJE;
-    return true;
+    if (!ANO_REF) return true;
+    const anoIni = `${ANO_REF}-01-01`, anoFim = `${ANO_REF}-12-31`;
+    return (!r.paFim || r.paFim >= anoIni) && (!r.paInicio || r.paInicio <= anoFim);
   })).length;
   const elLista = document.getElementById('cnt-lista');
   if (elLista) elLista.textContent = nLista;
@@ -5900,7 +5881,7 @@ function atualizarSidebarContadores() {
 }
 
 function popularSidebarFiltros() {
-  const empresas = [...new Set(COLABORADORES.map(c => c.empresa || '').filter(Boolean))].sort();
+  const empresas = [...new Set(COLABORADORES.map(c => c.empresaRegistro || c.unidade || '').filter(Boolean))].sort();
   const setores  = [...new Set(COLABORADORES.map(c => c.setor || '').filter(Boolean))].sort();
   const gestores = [...new Set(COLABORADORES.map(c => c.gestor || '').filter(Boolean))].sort();
   const selEmp = document.getElementById('sidebarEmpresa');
