@@ -1549,7 +1549,7 @@
 <div class="modal-relatorio" id="modalRelatorio" onclick="fecharModalRelatorio(event)">
   <div class="modal-rel-box">
     <div class="modal-rel-title">Relatório do mês</div>
-    <div class="modal-rel-sub">Exporte os dados de férias filtrados por período e empresa</div>
+    <div class="modal-rel-sub">Exporte os dados de férias filtrados por período, setor ou gestor</div>
 
     <div class="rel-field">
       <label>Mês de referência</label>
@@ -1560,6 +1560,20 @@
       <label>Empresa</label>
       <select id="relEmpresa">
         <option value="">Todas as empresas</option>
+      </select>
+    </div>
+
+    <div class="rel-field">
+      <label>Setor</label>
+      <select id="relSetor">
+        <option value="">Todos os setores</option>
+      </select>
+    </div>
+
+    <div class="rel-field">
+      <label>Gestor</label>
+      <select id="relGestor">
+        <option value="">Todos os gestores</option>
       </select>
     </div>
 
@@ -5855,6 +5869,7 @@ function atualizarSidebarContadores() {
 function popularSidebarFiltros() {
   const empresas = [...new Set(COLABORADORES.map(c => c.empresaRegistro || c.unidade || '').filter(Boolean))].sort();
   const setores  = [...new Set(COLABORADORES.map(c => c.setor || '').filter(Boolean))].sort();
+  const gestores = [...new Set(COLABORADORES.map(c => c.gestor || '').filter(Boolean))].sort();
   const selEmp = document.getElementById('sidebarEmpresa');
   const selSet = document.getElementById('sidebarSetor');
   if (selEmp && selEmp.options.length <= 1) {
@@ -5863,10 +5878,18 @@ function popularSidebarFiltros() {
   if (selSet && selSet.options.length <= 1) {
     setores.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; selSet.appendChild(o); });
   }
-  // relatório modal empresa options
+  // relatório modal options
   const relEmp = document.getElementById('relEmpresa');
   if (relEmp && relEmp.options.length <= 1) {
     empresas.forEach(e => { const o = document.createElement('option'); o.value = e; o.textContent = e; relEmp.appendChild(o); });
+  }
+  const relSet = document.getElementById('relSetor');
+  if (relSet && relSet.options.length <= 1) {
+    setores.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; relSet.appendChild(o); });
+  }
+  const relGest = document.getElementById('relGestor');
+  if (relGest && relGest.options.length <= 1) {
+    gestores.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; relGest.appendChild(o); });
   }
 }
 
@@ -6420,8 +6443,10 @@ function fecharModalRelatorio(e) {
 }
 
 function _getDadosRelatorio() {
-  const mesVal = document.getElementById('relMes')?.value || '';
-  const empVal = document.getElementById('relEmpresa')?.value || '';
+  const mesVal  = document.getElementById('relMes')?.value || '';
+  const empVal  = document.getElementById('relEmpresa')?.value || '';
+  const setVal  = document.getElementById('relSetor')?.value || '';
+  const gestVal = document.getElementById('relGestor')?.value || '';
   const chkAprov = document.getElementById('relChkAprovadas')?.checked;
   const chkPend  = document.getElementById('relChkPendentes')?.checked;
   const chkRisco = document.getElementById('relChkRisco')?.checked;
@@ -6435,7 +6460,9 @@ function _getDadosRelatorio() {
   const linhas = [];
   COLABORADORES.forEach(c => {
     if (c.ativo === false) return;
-    if (empVal && (c.empresaRegistro||c.unidade||'') !== empVal) return;
+    if (empVal  && (c.empresaRegistro||c.unidade||'') !== empVal) return;
+    if (setVal  && (c.setor||'') !== setVal) return;
+    if (gestVal && (c.gestor||'') !== gestVal) return;
     c.registros.forEach(reg => {
       const lans = reg.lancamentos.filter(l => l.inicio <= mesFim && l.fim >= mesInicio);
       lans.forEach(l => {
@@ -6448,7 +6475,13 @@ function _getDadosRelatorio() {
     });
   });
 
-  return { linhas, mesLabel: mesVal ? `${meses[mesR]} ${anoR}` : '—', empLabel: empVal || 'Todas as empresas' };
+  const filtroLabel = [
+    empVal  || null,
+    setVal  || null,
+    gestVal ? `Gestor: ${gestVal}` : null,
+  ].filter(Boolean).join(' · ') || 'Todos';
+
+  return { linhas, mesLabel: mesVal ? `${meses[mesR]} ${anoR}` : '—', empLabel: filtroLabel };
 }
 
 // Mapa de cores por setor — chave em minúsculas sem acento para match tolerante
