@@ -9082,13 +9082,53 @@ document.addEventListener('click', e => {
 });
 
 function gsolMostrarAba(aba) {
-  const isSol = aba === 'sol';
-  document.getElementById('gsolLista').style.display    = isSol ? '' : 'none';
-  document.getElementById('gsolListaRH').style.display  = isSol ? 'none' : '';
+  const isSol  = aba === 'sol';
+  const isHist = aba === 'hist';
+  const isRH   = !isSol && !isHist;
+  document.getElementById('gsolLista').style.display      = isSol  ? '' : 'none';
+  document.getElementById('gsolListaRH').style.display    = isRH   ? '' : 'none';
+  document.getElementById('gsolListaHist').style.display  = isHist ? '' : 'none';
   document.getElementById('gsolTabSol').classList.toggle('ativa', isSol);
-  document.getElementById('gsolTabRH').classList.toggle('ativa', !isSol);
+  document.getElementById('gsolTabRH').classList.toggle('ativa', isRH);
+  document.getElementById('gsolTabHist').classList.toggle('ativa', isHist);
   const footer = document.querySelector('.gsol-footer');
-  if (footer) footer.style.display = isSol ? '' : 'none';
+  if (footer) footer.style.display = (isSol || isHist) ? '' : 'none';
+  if (isHist) _renderGsolHistoricoAuditoria();
+}
+
+function _renderGsolHistoricoAuditoria() {
+  const el = document.getElementById('gsolListaHist');
+  if (!el) return;
+  const fmtDH = d => { if (!d) return '—'; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`; };
+  const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '';
+  const hist  = FERIAS_HISTORICO.filter(h => String(h.colaborador_id) === String(_gsolColabId));
+  if (!hist.length) {
+    el.innerHTML = '<div style="padding:24px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhum evento registrado ainda.<br><span style="font-size:12px;">Os eventos aparecerão aqui após solicitações e aprovações.</span></div>';
+    return;
+  }
+  const acaoLabel = { solicitado: 'Solicitação enviada', aprovado: 'Aprovado pelo RH', rejeitado: 'Recusado pelo RH' };
+  const acaoCor   = { solicitado: 'var(--blue)', aprovado: 'var(--green)', rejeitado: '#D92D20' };
+  el.innerHTML = `<div style="padding:14px 16px;">
+    <div style="display:flex;flex-direction:column;">
+      ${hist.map((h, i) => {
+        const det    = h.detalhe || {};
+        const perStr = det.inicio && det.fim ? `${fmtD(det.inicio)} → ${fmtD(det.fim)}${det.dias ? ' · ' + det.dias + 'd' : ''}` : '';
+        const motivo = det.obs_gestor || '';
+        return `<div style="display:flex;gap:10px;position:relative;">
+          <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:14px;">
+            <div style="width:9px;height:9px;border-radius:50%;background:${acaoCor[h.acao]||'var(--border)'};margin-top:4px;flex-shrink:0;border:2px solid var(--surface);box-shadow:0 0 0 1.5px ${acaoCor[h.acao]||'var(--border)'};"></div>
+            ${i < hist.length-1 ? '<div style="width:1.5px;flex:1;background:var(--border);margin:4px auto;"></div>' : ''}
+          </div>
+          <div style="padding-bottom:${i < hist.length-1 ? '14' : '4'}px;min-width:0;flex:1;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-pri);">${acaoLabel[h.acao] || h.acao}</div>
+            ${perStr ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">${perStr}</div>` : ''}
+            ${motivo ? `<div style="font-size:11px;color:#D92D20;margin-top:2px;">Motivo: ${motivo}</div>` : ''}
+            <div style="font-size:10px;color:var(--text-ter);margin-top:3px;">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
 }
 
 function _renderGsolHistoricoRH(c) {
@@ -9533,8 +9573,10 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="gsol-tabs">
         <button class="gsol-tab" id="gsolTabSol" onclick="gsolMostrarAba('sol')" style="display:none;">Solicitações</button>
         <button class="gsol-tab ativa" id="gsolTabRH" onclick="gsolMostrarAba('rh')">Férias</button>
+        <button class="gsol-tab" id="gsolTabHist" onclick="gsolMostrarAba('hist')">Histórico</button>
       </div>
       <div id="gsolLista"></div>
+      <div id="gsolListaHist" style="display:none;"></div>
       <div id="gsolListaRH" style="display:none;">
         <div class="gsol-tab-hint">Somente visualização — registros gerenciados pelo RH</div>
         <div id="gsolListaRHConteudo"></div>
