@@ -761,11 +761,22 @@
   .an-ano-wrap { position: relative; }
   .an-ano-bars { display: flex; align-items: flex-end; gap: 5px; height: 200px; }
   .an-ano-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: default; height: 100%; justify-content: flex-end; }
-  .an-ano-col:hover .an-ano-bar { opacity: .75; }
-  .an-ano-count { font-size: 9px; font-weight: 700; line-height: 1; min-height: 11px; }
-  .an-ano-bar { width: 85%; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .an-ano-col:hover .an-ano-subbar { opacity: .72; }
+  .an-ano-subgroup { display: flex; align-items: flex-end; gap: 2px; width: 92%; justify-content: center; }
+  .an-ano-subbar { border-radius: 3px 3px 0 0; min-height: 2px; flex: 1; transition: opacity .1s; }
   .an-ano-lbls { display: flex; gap: 5px; margin-top: 4px; }
   .an-ano-lbl { flex: 1; text-align: center; font-size: 9px; color: var(--text-ter); }
+  /* chips de seleção de ano */
+  .an-ano-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .an-ano-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 20px; border: 1.5px solid; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity .15s, transform .1s, background .15s; background: none; }
+  .an-ano-chip:hover { transform: translateY(-1px); }
+  .an-ano-chip.inactive { opacity: .32; }
+  /* legenda */
+  .an-ano-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .an-ano-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-sec); font-weight: 600; }
+  .an-ano-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  /* nota informativa */
+  .an-ano-note { font-size: 10px; color: var(--text-ter); margin-top: 8px; }
   /* tooltip flutuante do gráfico anual */
   .an-ano-tooltip {
     position: fixed; z-index: 9999; pointer-events: none;
@@ -2087,7 +2098,8 @@ let _dashCalYear   = new Date().getFullYear();
 let _dashCalMonth  = new Date().getMonth();
 let _dashCalData   = null; // { excluir, ativos } — populado por renderAnalytics()
 let _dashCalLocked = null; // dateStr travado por clique
-let _dashAnoYear   = new Date().getFullYear(); // ano do gráfico anual (independente do calendário)
+let _dashAnoYears    = new Set([new Date().getFullYear()]); // anos ativos no gráfico comparativo
+let _dashAnoAllYears = []; // todos os anos detectados nos dados
 const HOJE  = new Date().toISOString().slice(0, 10);
 
 let FERIAS_HISTORICO = [];
@@ -6336,115 +6348,191 @@ function _computeDashAnoData(year, excluir, ativos) {
   });
 }
 
+const _ANO_CORES = ['#1849A9','#0EA5E9','#7C3AED','#059669','#F59E0B','#EC4899','#64748B'];
+
+function _anoColor(year) {
+  return _ANO_CORES[_dashAnoAllYears.indexOf(year) % _ANO_CORES.length];
+}
+
 function renderDashAnoChart() {
   const wrap = document.getElementById('dashAnoWrap');
   if (!wrap || !_dashCalData) return;
   const { excluir, ativos } = _dashCalData;
-  const data    = _computeDashAnoData(_dashAnoYear, excluir, ativos);
-  const maxVal  = Math.max(Math.sqrt(Math.max(...data.map(d => d.total), 1)), 1);
+
+  // detecta todos os anos presentes nos dados
+  const yearsSet = new Set();
+  ativos.forEach(c => c.registros.forEach(r => r.lancamentos.forEach(l => {
+    yearsSet.add(parseInt(l.inicio.slice(0, 4)));
+    yearsSet.add(parseInt(l.fim.slice(0, 4)));
+  })));
+  _dashAnoAllYears = [...yearsSet].sort();
+  if (_dashAnoAllYears.length === 0) _dashAnoAllYears = [new Date().getFullYear()];
+
+  // garante que anos ativos existem nos dados
+  _dashAnoYears = new Set([..._dashAnoYears].filter(y => _dashAnoAllYears.includes(y)));
+  if (_dashAnoYears.size === 0) {
+    const cur = new Date().getFullYear();
+    _dashAnoYears.add(_dashAnoAllYears.includes(cur) ? cur : _dashAnoAllYears[_dashAnoAllYears.length - 1]);
+  }
+
+  const activeYears = _dashAnoAllYears.filter(y => _dashAnoYears.has(y));
+
+  // computa dados para cada ano ativo
+  const allData = {};
+  activeYears.forEach(y => { allData[y] = _computeDashAnoData(y, excluir, ativos); });
+
+  // escala global (sqrt) sobre todos os totais ativos
+  const allTotals = activeYears.flatMap(y => allData[y].map(d => d.total));
+  const maxVal = Math.max(Math.sqrt(Math.max(...allTotals, 1)), 1);
+
+  const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const mesAtual = new Date().getMonth();
   const anoAtual = new Date().getFullYear();
 
-  const barsHtml = data.map((d, i) => {
-    const h      = Math.max(Math.round(Math.sqrt(d.total) / maxVal * 188), d.total > 0 ? 4 : 1);
-    const isCur  = i === mesAtual && _dashAnoYear === anoAtual;
-    const fill   = isCur ? '#1849A9' : (d.total === 0 ? '#F1F5F9' : '#BFDBFE');
-    const cColor = d.total > 0 ? (isCur ? '#1849A9' : '#64748B') : 'transparent';
+  const barsHtml = MESES.map((mes, i) => {
+    const subBars = activeYears.map(y => {
+      const total = allData[y][i].total;
+      const h = Math.max(Math.round(Math.sqrt(total) / maxVal * 188), total > 0 ? 4 : 1);
+      const isCur = y === anoAtual && i === mesAtual;
+      const color = _anoColor(y);
+      const opacity = isCur ? '1' : '0.82';
+      return `<div class="an-ano-subbar" style="height:${h}px;background:${color};opacity:${opacity}"></div>`;
+    }).join('');
+    const hasAny = activeYears.some(y => allData[y][i].total > 0);
     return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i},this)" onmouseleave="dashAnoHoverOut()">
-      <div class="an-ano-count" style="color:${cColor}">${d.total || ''}</div>
-      <div class="an-ano-bar" style="height:${h}px;background:${fill}"></div>
+      <div class="an-ano-subgroup">${subBars}</div>
     </div>`;
   }).join('');
 
-  const lblsHtml = data.map((d, i) => {
-    const isCur = i === mesAtual && _dashAnoYear === anoAtual;
-    return `<div class="an-ano-lbl" style="color:${isCur?'#1849A9':'var(--text-ter)'}">${d.mes}</div>`;
+  const lblsHtml = MESES.map((mes, i) => {
+    const isCur = activeYears.includes(anoAtual) && i === mesAtual;
+    return `<div class="an-ano-lbl" style="color:${isCur ? '#1849A9' : 'var(--text-ter)'};font-weight:${isCur ? 700 : 400}">${mes}</div>`;
   }).join('');
 
+  const chipsHtml = _dashAnoAllYears.map(y => {
+    const color   = _anoColor(y);
+    const active  = _dashAnoYears.has(y);
+    return `<button class="an-ano-chip${active ? '' : ' inactive'}"
+      style="border-color:${color};color:${active ? color : 'var(--text-ter)'};background:${active ? color + '18' : 'transparent'}"
+      onclick="dashAnoToggleYear(${y})">
+      <span style="width:8px;height:8px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0"></span>
+      ${y}
+    </button>`;
+  }).join('');
+
+  const legendHtml = activeYears.map(y =>
+    `<div class="an-ano-legend-item">
+      <div class="an-ano-legend-dot" style="background:${_anoColor(y)}"></div>${y}
+    </div>`
+  ).join('');
+
+  const noteHtml = activeYears.length > 3
+    ? `<div class="an-ano-note">Recomendamos comparar até 4 anos para melhor leitura — com muitos anos as barras ficam estreitas.</div>` : '';
+
   wrap.innerHTML = `
-    <div class="an-cal-nav" style="margin-bottom:10px">
-      <button class="an-cal-nav-btn" onclick="dashAnoNav(-1)">&#8249;</button>
-      <span class="an-cal-nav-label">Férias no ano — ${_dashAnoYear}</span>
-      <button class="an-cal-nav-btn" onclick="dashAnoNav(1)">&#8250;</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <span class="an-cal-nav-label">Comparativo de férias por ano</span>
+      <div class="an-ano-chips">${chipsHtml}</div>
     </div>
+    <div class="an-ano-legend">${legendHtml}</div>
     <div class="an-ano-wrap">
       <div class="an-ano-bars">${barsHtml}</div>
       <div class="an-ano-lbls">${lblsHtml}</div>
-    </div>`;
+    </div>
+    ${noteHtml}`;
 
-  wrap._data = data;
+  wrap._allData     = allData;
+  wrap._activeYears = activeYears;
 }
 
-function dashAnoNav(dir) {
-  _dashAnoYear += dir;
+function dashAnoToggleYear(y) {
+  if (_dashAnoYears.has(y)) {
+    if (_dashAnoYears.size > 1) _dashAnoYears.delete(y);
+  } else {
+    _dashAnoYears.add(y);
+  }
   renderDashAnoChart();
 }
 
 function dashAnoHover(idx, colEl) {
   const wrap = document.getElementById('dashAnoWrap');
-  if (!wrap) return;
-  const d = wrap._data[idx];
+  if (!wrap || !wrap._allData) return;
+
+  const activeYears = wrap._activeYears;
+  const allData     = wrap._allData;
+  const hasAny      = activeYears.some(y => allData[y][idx].total > 0);
 
   let tt = document.getElementById('dashAnoTooltip');
   if (!tt) {
     tt = document.createElement('div');
     tt.id = 'dashAnoTooltip';
     tt.className = 'an-ano-tooltip';
-    tt.innerHTML = '<div class="an-ano-tooltip-arrow down"></div>';
     document.body.appendChild(tt);
   }
 
-  if (!d || d.total === 0) { tt.classList.remove('visible'); return; }
+  if (!hasAny) { tt.classList.remove('visible'); return; }
 
-  const maxN = d.setores[0]?.n || 1;
-  const rows = d.setores.slice(0, 8).map(s => {
-    const pct = Math.round(s.n / maxN * 100);
-    return `<div class="an-ano-tt-row">
-      <span class="an-ano-tt-label">${s.nome}</span>
-      <div class="an-ano-tt-bar-track"><div class="an-ano-tt-bar-fill" style="width:${pct}%"></div></div>
-      <span class="an-ano-tt-n">${s.n}</span>
-    </div>`;
-  }).join('');
-  const mais = d.setores.length > 8
-    ? `<div style="font-size:10px;color:var(--text-ter);margin-top:4px">+ ${d.setores.length-8} outros</div>` : '';
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let content;
 
-  const arrow = tt.querySelector('.an-ano-tooltip-arrow');
-  tt.innerHTML = `<div class="an-ano-tt-title">${d.mes} · ${d.total} ausente${d.total!==1?'s':''}</div>${rows}${mais}<div class="an-ano-tooltip-arrow down"></div>`;
+  if (activeYears.length === 1) {
+    // um ano: mostra breakdown por setor
+    const y = activeYears[0];
+    const d = allData[y][idx];
+    const color = _anoColor(y);
+    const maxN  = d.setores[0]?.n || 1;
+    const rows  = d.setores.slice(0, 8).map(s => {
+      const pct = Math.round(s.n / maxN * 100);
+      return `<div class="an-ano-tt-row">
+        <span class="an-ano-tt-label">${s.nome}</span>
+        <div class="an-ano-tt-bar-track"><div class="an-ano-tt-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+        <span class="an-ano-tt-n">${s.n}</span>
+      </div>`;
+    }).join('');
+    const mais = d.setores.length > 8 ? `<div style="font-size:10px;color:var(--text-ter);margin-top:4px">+ ${d.setores.length - 8} outros</div>` : '';
+    content = `<div class="an-ano-tt-title">${MESES_PT[idx]} · ${d.total} ausente${d.total !== 1 ? 's' : ''}</div>${rows}${mais}`;
+  } else {
+    // múltiplos anos: comparativo de barras por ano
+    const maxTotal = Math.max(...activeYears.map(y => allData[y][idx].total), 1);
+    const rows = activeYears.map(y => {
+      const total = allData[y][idx].total;
+      const pct   = Math.round(total / maxTotal * 100);
+      const color = _anoColor(y);
+      return `<div class="an-ano-tt-row">
+        <span class="an-ano-tt-label" style="display:flex;align-items:center;gap:5px">
+          <span style="width:8px;height:8px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0"></span>${y}
+        </span>
+        <div class="an-ano-tt-bar-track"><div class="an-ano-tt-bar-fill" style="width:${total > 0 ? Math.max(pct, 4) : 0}%;background:${color}"></div></div>
+        <span class="an-ano-tt-n" style="color:${color}">${total}</span>
+      </div>`;
+    }).join('');
+    content = `<div class="an-ano-tt-title">${MESES_PT[idx]}</div>${rows}`;
+  }
 
+  tt.innerHTML = `${content}<div class="an-ano-tooltip-arrow down"></div>`;
   tt.classList.add('visible');
   tt.style.visibility = 'hidden';
   tt.style.opacity = '0';
 
-  // posiciona após render para medir dimensões reais
   requestAnimationFrame(() => {
     const cr  = colEl.getBoundingClientRect();
     const tw  = tt.offsetWidth;
     const th  = tt.offsetHeight;
     const gap = 10;
-
     let left = cr.left + cr.width / 2 - tw / 2;
-    // mantém dentro da viewport
     left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
-
-    const spaceAbove = cr.top;
     const arrowEl = tt.querySelector('.an-ano-tooltip-arrow');
-
     let top;
-    if (spaceAbove >= th + gap + 14) {
-      // acima da barra
+    if (cr.top >= th + gap + 14) {
       top = cr.top - th - gap;
       arrowEl.className = 'an-ano-tooltip-arrow down';
     } else {
-      // abaixo
       top = cr.bottom + gap;
       arrowEl.className = 'an-ano-tooltip-arrow up';
     }
-
-    // posiciona a seta horizontalmente sobre o centro da coluna
     const arrowLeft = cr.left + cr.width / 2 - left;
     arrowEl.style.left = Math.max(14, Math.min(arrowLeft, tw - 14)) + 'px';
     arrowEl.style.transform = 'none';
-
     tt.style.left = left + window.scrollX + 'px';
     tt.style.top  = top  + window.scrollY + 'px';
     tt.style.visibility = '';
