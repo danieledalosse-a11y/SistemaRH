@@ -787,6 +787,20 @@
   .an-hbar-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
   .an-hbar-fill { height: 100%; border-radius: 4px; background: #1849A9; transition: width 0.3s; }
   .an-hbar-count { font-size: 11px; font-weight: 700; color: var(--text-sec); min-width: 18px; text-align: right; }
+  .an-hbar-pct { font-size: 10px; color: var(--text-ter); min-width: 30px; text-align: right; }
+  /* ── Card unificado Calendário + Ausentes por setor */
+  .an-cal-card-unified { padding: 0 !important; overflow: hidden; }
+  .an-cal-card-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 12px; border-bottom: 0.5px solid var(--border); }
+  .an-cal-card-hdr-title { font-size: 13px; font-weight: 700; color: var(--text); }
+  .an-cal-card-body { display: flex; }
+  .an-cal-card-left { flex: 3; padding: 16px 18px; min-width: 0; }
+  .an-cal-card-divider { width: 0.5px; background: var(--border); flex-shrink: 0; align-self: stretch; }
+  .an-cal-card-right { flex: 2; padding: 16px 18px; min-width: 0; }
+  .an-cal-card-right-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  @media (max-width: 760px) {
+    .an-cal-card-body { flex-direction: column; }
+    .an-cal-card-divider { width: auto; height: 0.5px; align-self: auto; }
+  }
   /* ── Gráfico anual */
   .an-ano-wrap { position: relative; }
   .an-ano-bars { display: flex; align-items: flex-end; gap: 5px; height: 200px; }
@@ -6326,15 +6340,26 @@ function renderAnalytics() {
       <div id="dashAnoWrap"></div>
     </div>
 
-    <!-- Calendário + Ausentes por setor -->
-    <div style="display:grid;grid-template-columns:3fr 2fr;gap:10px;margin-bottom:10px">
-      <div class="an-card">
-        <div id="dashCalWrap"></div>
+    <!-- Calendário + Ausentes por setor — card unificado -->
+    <div class="an-card an-cal-card-unified" style="margin-bottom:10px">
+      <div class="an-cal-card-hdr">
+        <span class="an-cal-card-hdr-title">Calendário de férias</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="an-cal-nav-btn" onclick="dashCalNav(-1)">&#8249;</button>
+          <span class="an-cal-nav-label" id="dashCalNavLabel">—</span>
+          <button class="an-cal-nav-btn" onclick="dashCalNav(1)">&#8250;</button>
+        </div>
       </div>
-      <div class="an-card">
-        <div class="an-card-title">Ausentes por setor</div>
-        <div class="an-card-sub" id="dashSectorSub" style="margin-bottom:10px">—</div>
-        <div id="dashSectorChart"></div>
+      <div class="an-cal-card-body">
+        <div class="an-cal-card-left">
+          <div id="dashCalWrap"></div>
+        </div>
+        <div class="an-cal-card-divider"></div>
+        <div class="an-cal-card-right">
+          <div class="an-cal-card-right-title">Ausentes por setor</div>
+          <div class="an-card-sub" id="dashSectorSub" style="margin-bottom:12px">—</div>
+          <div id="dashSectorChart"></div>
+        </div>
       </div>
     </div>
 
@@ -6707,23 +6732,24 @@ function renderDashCalendar() {
     if (setorEntries.length === 0) {
       sectorChart.innerHTML = `<div class="an-empty">Sem ausências em ${MESES_PT_FULL[m]}</div>`;
     } else {
+      const _totalAus = new Set([...setorCount.values()].flatMap(s => [...s])).size;
       sectorChart.innerHTML = setorEntries.map(([s, n]) => {
-        const w = Math.round(n / maxSetorVal * 100);
+        const w   = Math.round(n / maxSetorVal * 100);
+        const pct = _totalAus > 0 ? Math.round(n / _totalAus * 100) : 0;
+        const cor = corDoSetor(s);
         return `<div class="an-hbar-row">
           <div class="an-hbar-label" title="${s}">${s}</div>
-          <div class="an-hbar-track"><div class="an-hbar-fill" style="width:${w}%"></div></div>
+          <div class="an-hbar-track"><div class="an-hbar-fill" style="width:${w}%;background:${cor.borda}"></div></div>
           <div class="an-hbar-count">${n}</div>
+          <div class="an-hbar-pct">${pct}%</div>
         </div>`;
       }).join('');
     }
   }
 
+  const _navLbl = document.getElementById('dashCalNavLabel');
+  if (_navLbl) _navLbl.textContent = `${MESES_PT[m]} ${y}`;
   wrap.innerHTML = `
-    <div class="an-cal-nav">
-      <button class="an-cal-nav-btn" onclick="dashCalNav(-1)">&#8249;</button>
-      <span class="an-cal-nav-label">${MESES_PT[m]} ${y}</span>
-      <button class="an-cal-nav-btn" onclick="dashCalNav(1)">&#8250;</button>
-    </div>
     <div class="an-cal-dow">${dowHtml}</div>
     <div class="an-cal-grid" onmouseleave="dashCalGridLeave()">${gridHtml}</div>`;
 }
