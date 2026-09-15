@@ -6435,7 +6435,7 @@ function renderDashAnoChart() {
       const opacity = isCur ? '1' : '0.82';
       return `<div class="an-ano-subbar" style="height:${h}px;background:${color};opacity:${opacity}"></div>`;
     }).join('');
-    return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i})" onmouseleave="dashAnoHoverOut()">
+    return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i},event)" onmouseleave="dashAnoHoverOut()">
       <div class="an-ano-subcounts">${subCounts}</div>
       <div class="an-ano-subgroup">${subBars}</div>
     </div>`;
@@ -6491,7 +6491,7 @@ function dashAnoToggleYear(y) {
   renderDashAnoChart();
 }
 
-function dashAnoHover(idx) {
+function dashAnoHover(idx, ev) {
   const wrap = document.getElementById('dashAnoWrap');
   if (!wrap || !wrap._allData) return;
 
@@ -6548,30 +6548,26 @@ function dashAnoHover(idx) {
 
   tt.innerHTML = `${content}<div class="an-ano-tooltip-arrow down"></div>`;
   tt.style.visibility = 'hidden';
-  tt.style.opacity = '0';
+  tt.style.opacity    = '0';
   tt.classList.add('visible');
 
-  // ancora no fundo da área de barras (eixo), sempre acima — evita descer para meses com barras baixas
+  // posiciona próximo ao cursor (padrão Tableau/Power BI)
   requestAnimationFrame(() => {
-    const barsEl = document.querySelector('#dashAnoWrap .an-ano-bars');
-    const cols   = barsEl ? barsEl.querySelectorAll('.an-ano-col') : [];
-    const colEl  = cols[idx] || barsEl;
-    const barsRect = barsEl ? barsEl.getBoundingClientRect() : colEl.getBoundingClientRect();
-    const colRect  = colEl.getBoundingClientRect();
+    const mx  = ev ? ev.clientX : window.innerWidth / 2;
+    const my  = ev ? ev.clientY : window.innerHeight / 2;
     const tw  = tt.offsetWidth;
     const th  = tt.offsetHeight;
-    const gap = 10;
-    // posição horizontal: centro da coluna
-    let left = colRect.left + colRect.width / 2 - tw / 2;
-    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
-    // posição vertical: sempre acima do eixo (bottom da área de barras)
-    const axisY = barsRect.bottom;
-    const top   = axisY - th - gap;
+    const gap = 14;
+    // horizontal: à direita do cursor; vira para esquerda se não couber
+    let left = mx + gap;
+    if (left + tw > window.innerWidth - 8) left = mx - tw - gap;
+    left = Math.max(8, left);
+    // vertical: alinhado ao cursor; sobe se não couber embaixo
+    let top = my - th / 2;
+    top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
+    // sem seta (tooltip lateral ao cursor não precisa de seta)
     const arrowEl = tt.querySelector('.an-ano-tooltip-arrow');
-    arrowEl.className = 'an-ano-tooltip-arrow down';
-    const arrowLeft = colRect.left + colRect.width / 2 - left;
-    arrowEl.style.left = Math.max(14, Math.min(arrowLeft, tw - 14)) + 'px';
-    arrowEl.style.transform = 'none';
+    if (arrowEl) arrowEl.style.display = 'none';
     tt.style.left       = left + 'px';
     tt.style.top        = top  + 'px';
     tt.style.visibility = '';
