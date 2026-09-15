@@ -757,11 +757,20 @@
   .an-hbar-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
   .an-hbar-fill { height: 100%; border-radius: 4px; background: #1849A9; transition: width 0.3s; }
   .an-hbar-count { font-size: 11px; font-weight: 700; color: var(--text-sec); min-width: 18px; text-align: right; }
-  /* ── Mini barras anuais */
-  .an-minibar-wrap { display: flex; align-items: flex-end; gap: 3px; height: 52px; }
-  .an-minibar-col { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
-  .an-minibar-bar { width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; }
-  .an-minibar-lbl { font-size: 8px; color: var(--text-ter); }
+  /* ── Gráfico anual */
+  .an-ano-wrap { position: relative; }
+  .an-ano-bars { display: flex; align-items: flex-end; gap: 5px; height: 88px; }
+  .an-ano-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: default; height: 100%; justify-content: flex-end; }
+  .an-ano-col:hover .an-ano-bar { opacity: .75; }
+  .an-ano-count { font-size: 9px; font-weight: 700; line-height: 1; min-height: 11px; }
+  .an-ano-bar { width: 85%; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .an-ano-lbls { display: flex; gap: 5px; margin-top: 4px; }
+  .an-ano-lbl { flex: 1; text-align: center; font-size: 9px; color: var(--text-ter); }
+  .an-ano-detail { margin-top: 10px; padding: 10px 12px; background: var(--surface-alt, #F8FAFC); border-radius: 8px; border: 1px solid var(--border); min-height: 36px; }
+  .an-ano-detail-title { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .an-ano-sector-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; font-size: 11px; }
+  .an-ano-sector-name { color: var(--text-sec); }
+  .an-ano-sector-n { font-weight: 700; color: var(--text); }
   @media (max-width: 900px) {
     .an-kpi-row { grid-template-columns: repeat(2,1fr); }
     .an-row-bar, .an-row-bottom { grid-template-columns: 1fr; }
@@ -2042,6 +2051,7 @@ let _dashCalYear   = new Date().getFullYear();
 let _dashCalMonth  = new Date().getMonth();
 let _dashCalData   = null; // { excluir, ativos } — populado por renderAnalytics()
 let _dashCalLocked = null; // dateStr travado por clique
+let _dashAnoYear   = new Date().getFullYear(); // ano do gráfico anual (independente do calendário)
 const HOJE  = new Date().toISOString().slice(0, 10);
 
 let FERIAS_HISTORICO = [];
@@ -6197,36 +6207,6 @@ function renderAnalytics() {
       }).join('');
   const maisRisco = nRisco > 7 ? `<div class="an-risk-more">+ ${nRisco - 7} outros colaboradores</div>` : '';
 
-  // ── distribuição mensal anual (mini barras)
-  const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const distSets = Array.from({length: 12}, () => new Set());
-  ativos.forEach(c => {
-    c.registros.filter(r => !excluir.has(r.status)).forEach(reg => {
-      reg.lancamentos.forEach(l => {
-        const lIni = new Date(l.inicio + 'T12:00:00');
-        const lFim = new Date(l.fim    + 'T12:00:00');
-        for (let m = 0; m < 12; m++) {
-          const mIni = new Date(ano, m, 1);
-          const mFim = new Date(ano, m + 1, 0);
-          if (lIni <= mFim && lFim >= mIni) distSets[m].add(c.__key);
-        }
-      });
-    });
-  });
-  const distMensal = distSets.map(s => s.size);
-  const mesAtual   = new Date().getMonth();
-  const anoAtual   = new Date().getFullYear();
-  const maxDist    = Math.max(...distMensal, 1);
-  const miniBarHtml = distMensal.map((v, i) => {
-    const h      = Math.max(Math.round(v / maxDist * 44), v > 0 ? 2 : 1);
-    const isCur  = i === mesAtual && ano === anoAtual;
-    const fill   = isCur ? '#1849A9' : (v === 0 ? '#E2E8F0' : '#BFDBFE');
-    return `<div class="an-minibar-col">
-      <div class="an-minibar-bar" style="height:${h}px;background:${fill}" title="${v} ausente${v!==1?'s':''} em ${MESES_ABREV[i]}"></div>
-      <div class="an-minibar-lbl" style="color:${isCur?'#1849A9':'var(--text-ter)'}">${MESES_ABREV[i].slice(0,1)}</div>
-    </div>`;
-  }).join('');
-
   // ── salva dados para o calendário interativo
   _dashCalData = { excluir, ativos };
 
@@ -6260,21 +6240,20 @@ function renderAnalytics() {
       </div>
     </div>
 
-    <div class="an-charts-row an-row-bar">
+    <!-- Gráfico anual — largura total -->
+    <div class="an-card" style="margin-bottom:10px">
+      <div id="dashAnoWrap"></div>
+    </div>
+
+    <!-- Calendário + Ausentes por setor -->
+    <div style="display:grid;grid-template-columns:3fr 2fr;gap:10px;margin-bottom:10px">
       <div class="an-card">
         <div id="dashCalWrap"></div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div class="an-card">
-          <div class="an-card-title">Férias no ano — ${ano}</div>
-          <div class="an-card-sub" style="margin-bottom:8px">Colaboradores únicos com férias em cada mês</div>
-          <div class="an-minibar-wrap">${miniBarHtml}</div>
-        </div>
-        <div class="an-card" style="flex:1">
-          <div class="an-card-title">Ausentes por setor</div>
-          <div class="an-card-sub" id="dashSectorSub" style="margin-bottom:10px">—</div>
-          <div id="dashSectorChart"></div>
-        </div>
+      <div class="an-card">
+        <div class="an-card-title">Ausentes por setor</div>
+        <div class="an-card-sub" id="dashSectorSub" style="margin-bottom:10px">—</div>
+        <div id="dashSectorChart"></div>
       </div>
     </div>
 
@@ -6290,7 +6269,103 @@ function renderAnalytics() {
     </div>
 
   </div>`;
+  renderDashAnoChart();
   renderDashCalendar();
+}
+
+// ─── Gráfico anual do Dashboard ───────────────────────────────────────────────
+function _computeDashAnoData(year, excluir, ativos) {
+  const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return MESES.map((mes, m) => {
+    const totalDias = new Date(year, m + 1, 0).getDate();
+    const pessoasSet = new Set();
+    const setorMap   = new Map();
+    for (let d = 1; d <= totalDias; d++) {
+      const ds = `${year}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      ativos.forEach(c => {
+        const ausente = c.registros.some(r => !excluir.has(r.status) &&
+          r.lancamentos.some(l => l.inicio <= ds && l.fim >= ds));
+        if (ausente) {
+          pessoasSet.add(c.__key);
+          const s = normSetor(c.setor) || c.setor || 'Outros';
+          if (!setorMap.has(s)) setorMap.set(s, new Set());
+          setorMap.get(s).add(c.__key);
+        }
+      });
+    }
+    const setores = [...setorMap.entries()]
+      .map(([s, set]) => ({ nome: s, n: set.size }))
+      .sort((a, b) => b.n - a.n);
+    return { mes, total: pessoasSet.size, setores };
+  });
+}
+
+function renderDashAnoChart() {
+  const wrap = document.getElementById('dashAnoWrap');
+  if (!wrap || !_dashCalData) return;
+  const { excluir, ativos } = _dashCalData;
+  const data    = _computeDashAnoData(_dashAnoYear, excluir, ativos);
+  const maxVal  = Math.max(...data.map(d => d.total), 1);
+  const mesAtual = new Date().getMonth();
+  const anoAtual = new Date().getFullYear();
+
+  const barsHtml = data.map((d, i) => {
+    const h      = Math.max(Math.round(d.total / maxVal * 72), d.total > 0 ? 3 : 1);
+    const isCur  = i === mesAtual && _dashAnoYear === anoAtual;
+    const fill   = isCur ? '#1849A9' : (d.total === 0 ? '#F1F5F9' : '#BFDBFE');
+    const cColor = d.total > 0 ? (isCur ? '#1849A9' : '#64748B') : 'transparent';
+    return `<div class="an-ano-col" onmouseenter="dashAnoHover(${i})" onmouseleave="dashAnoHoverOut()">
+      <div class="an-ano-count" style="color:${cColor}">${d.total || ''}</div>
+      <div class="an-ano-bar" style="height:${h}px;background:${fill}"></div>
+    </div>`;
+  }).join('');
+
+  const lblsHtml = data.map((d, i) => {
+    const isCur = i === mesAtual && _dashAnoYear === anoAtual;
+    return `<div class="an-ano-lbl" style="color:${isCur?'#1849A9':'var(--text-ter)'}">${d.mes}</div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="an-cal-nav" style="margin-bottom:10px">
+      <button class="an-cal-nav-btn" onclick="dashAnoNav(-1)">&#8249;</button>
+      <span class="an-cal-nav-label">Férias no ano — ${_dashAnoYear}</span>
+      <button class="an-cal-nav-btn" onclick="dashAnoNav(1)">&#8250;</button>
+    </div>
+    <div class="an-ano-wrap">
+      <div class="an-ano-bars">${barsHtml}</div>
+      <div class="an-ano-lbls">${lblsHtml}</div>
+      <div id="dashAnoDetail" class="an-ano-detail" style="display:none"></div>
+    </div>`;
+
+  wrap._data = data;
+}
+
+function dashAnoNav(dir) {
+  _dashAnoYear += dir;
+  renderDashAnoChart();
+}
+
+function dashAnoHover(idx) {
+  const wrap   = document.getElementById('dashAnoWrap');
+  const detail = document.getElementById('dashAnoDetail');
+  if (!wrap || !detail) return;
+  const d = wrap._data[idx];
+  if (!d || d.total === 0) { detail.style.display = 'none'; return; }
+  const setoresHtml = d.setores.slice(0, 7).map(s =>
+    `<div class="an-ano-sector-row">
+      <span class="an-ano-sector-name">${s.nome}</span>
+      <span class="an-ano-sector-n">${s.n}</span>
+    </div>`
+  ).join('');
+  const mais = d.setores.length > 7
+    ? `<div style="font-size:10px;color:var(--text-ter);margin-top:3px">+ ${d.setores.length-7} outros setores</div>` : '';
+  detail.innerHTML = `<div class="an-ano-detail-title">${d.total} ausente${d.total!==1?'s':''} em ${d.mes} — por setor</div>${setoresHtml}${mais}`;
+  detail.style.display = 'block';
+}
+
+function dashAnoHoverOut() {
+  const detail = document.getElementById('dashAnoDetail');
+  if (detail) detail.style.display = 'none';
 }
 
 // ─── Calendário mensal do Dashboard ──────────────────────────────────────────
