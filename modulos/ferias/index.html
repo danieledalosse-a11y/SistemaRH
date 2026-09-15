@@ -741,8 +741,9 @@
   .an-cal-cell.empty:hover { filter: none !important; }
   .an-cal-day-num { font-size: 14px; font-weight: 500; color: var(--text); line-height: 1; }
   .an-cal-cell.today .an-cal-day-num { font-weight: 700; }
-  .an-cal-dots { display: flex; gap: 3px; justify-content: center; margin-top: 4px; flex-wrap: wrap; }
+  .an-cal-dots { display: flex; gap: 3px; justify-content: center; margin-top: 4px; flex-wrap: wrap; align-items: center; }
   .an-cal-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .an-cal-dot-extra { font-size: 9px; font-weight: 700; color: var(--text-sec); line-height: 7px; align-self: flex-end; }
   .an-cal-legend { display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
   .an-cal-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-sec); }
   .an-cal-legend-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -6684,34 +6685,39 @@ function renderDashCalendar() {
   let inicioGrid = (primeiroDia.getDay() + 6) % 7;
   const hoje = HOJE; // 'YYYY-MM-DD'
 
-  // conta ausentes por dia com categorias
+  // conta ausentes por dia com setores únicos
   const counts = [];
   for (let d = 1; d <= totalDias; d++) {
     const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    let nFerias = 0, nOutros = 0;
+    let n = 0;
+    const setoresDoDia = [];
     ativos.forEach(c => {
       const ausente = c.registros.some(r => !excluir.has(r.status) &&
         r.lancamentos.some(l => l.inicio <= ds && l.fim >= ds));
       if (ausente) {
-        const st = (c.registros.find(r => !excluir.has(r.status) &&
-          r.lancamentos.some(l => l.inicio <= ds && l.fim >= ds))?.status || '').toLowerCase();
-        if (['aprovado','agendado','concluído','concluido','gozado','solicitado'].includes(st)) nFerias++;
-        else nOutros++;
+        n++;
+        const s = normSetor(c.setor) || c.setor || 'Outros';
+        if (!setoresDoDia.includes(s)) setoresDoDia.push(s);
       }
     });
-    const n = nFerias + nOutros;
-    counts.push({ d, ds, n, nFerias, nOutros });
+    counts.push({ d, ds, n, setoresDoDia });
   }
 
   const dowHtml = DOW.map(l => `<div class="an-cal-dow-lbl">${l}</div>`).join('');
   let gridHtml  = '';
   for (let i = 0; i < inicioGrid; i++) gridHtml += '<div class="an-cal-cell empty"></div>';
-  counts.forEach(({ d, ds, n, nFerias, nOutros }) => {
+  counts.forEach(({ d, ds, n, setoresDoDia }) => {
     const isHoje  = ds === hoje;
-    const dots = [];
-    if (nFerias > 0) dots.push(`<div class="an-cal-dot" style="background:#3B82F6" title="${nFerias} em férias"></div>`);
-    if (nOutros > 0) dots.push(`<div class="an-cal-dot" style="background:#A78BFA" title="${nOutros} outros"></div>`);
-    const dotsHtml = dots.length > 0 ? `<div class="an-cal-dots">${dots.join('')}</div>` : '';
+    const maxDots = 4;
+    const dotsToShow = setoresDoDia.slice(0, maxDots);
+    const extra = setoresDoDia.length - maxDots;
+    const dotsHtml = setoresDoDia.length > 0 ? `<div class="an-cal-dots">${
+      dotsToShow.map(s => {
+        const cor = corDoSetor(s);
+        return `<div class="an-cal-dot" style="background:${cor.borda}" title="${s}"></div>`;
+      }).join('') +
+      (extra > 0 ? `<span class="an-cal-dot-extra">+${extra}</span>` : '')
+    }</div>` : '';
     let cellBg = 'transparent', numColor = '';
     if      (n >= 10) { cellBg = '#3B82F6'; numColor = '#fff'; }
     else if (n >= 6)  { cellBg = '#93C5FD'; numColor = '#1e3a8a'; }
@@ -6775,16 +6781,9 @@ function renderDashCalendar() {
 
   const _navLbl = document.getElementById('dashCalNavLabel');
   if (_navLbl) _navLbl.textContent = `${MESES_PT[m]} ${y}`;
-  const legendHtml = `
-    <div class="an-cal-legend">
-      <div class="an-cal-legend-item"><div class="an-cal-legend-dot" style="background:#3B82F6"></div>Férias</div>
-      <div class="an-cal-legend-item"><div class="an-cal-legend-dot" style="background:#22C55E"></div>Férias coletivas</div>
-      <div class="an-cal-legend-item"><div class="an-cal-legend-dot" style="background:#A78BFA"></div>Outros</div>
-    </div>`;
   wrap.innerHTML = `
     <div class="an-cal-dow">${dowHtml}</div>
-    <div class="an-cal-grid" onmouseleave="dashCalGridLeave()">${gridHtml}</div>
-    ${legendHtml}`;
+    <div class="an-cal-grid" onmouseleave="dashCalGridLeave()">${gridHtml}</div>`;
 }
 
 function dashCalNav(dir) {
