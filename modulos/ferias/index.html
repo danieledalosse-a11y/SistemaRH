@@ -6626,8 +6626,8 @@ function renderDashCalendar() {
          <div class="an-cal-count-sub" style="color:${c.cnt}">ausente${n!==1?'s':''}</div>`
       : '';
     gridHtml += `<div class="an-cal-cell${isHoje?' today':''}" style="background:${c.bg}"
-      onmouseenter="dashCalHover('${ds}',${n})"
-      onclick="dashCalClick('${ds}',${n})">
+      onmouseenter="dashCalHover('${ds}',${n},this)"
+      onclick="dashCalClick('${ds}',${n},this)">
       <div class="an-cal-day-num" style="color:${c.num}">${d}</div>
       ${cntHtml}
     </div>`;
@@ -6780,11 +6780,10 @@ function _dashCalBuildTT(dateStr, count, locked) {
     <div class="an-cal-tt-arrow down"></div>`;
 }
 
-function dashCalHover(dateStr, count) {
+function dashCalHover(dateStr, count, cellEl) {
   if (_dashCalLocked) return;
   if (count === 0) { dashCalGridLeave(); return; }
   const tt = _dashCalGetOrCreateTT();
-  const cellEl = event.currentTarget || event.target;
   tt.classList.remove('locked');
   tt.innerHTML = _dashCalBuildTT(dateStr, count, false);
   _dashCalPositionTT(tt, cellEl);
@@ -6796,7 +6795,7 @@ function dashCalGridLeave() {
   if (tt) tt.classList.remove('visible');
 }
 
-function dashCalClick(dateStr, count) {
+function dashCalClick(dateStr, count, cellEl) {
   if (count === 0) return;
   if (_dashCalLocked === dateStr) {
     _dashCalUnlock();
@@ -6804,7 +6803,6 @@ function dashCalClick(dateStr, count) {
   }
   _dashCalLocked = dateStr;
   const tt = _dashCalGetOrCreateTT();
-  const cellEl = event.currentTarget || event.target;
   tt.classList.add('locked');
   tt.innerHTML = _dashCalBuildTT(dateStr, count, true);
   _dashCalPositionTT(tt, cellEl);
