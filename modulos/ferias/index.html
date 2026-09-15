@@ -2027,9 +2027,10 @@
 <script>
 // ─── Configuração ────────────────────────────────────────────────────────────
 let ANO_REF = 0; // 0 = todos os anos
-let _dashCalYear  = new Date().getFullYear();
-let _dashCalMonth = new Date().getMonth();
-let _dashCalData  = null; // { excluir, ativos } — populado por renderAnalytics()
+let _dashCalYear   = new Date().getFullYear();
+let _dashCalMonth  = new Date().getMonth();
+let _dashCalData   = null; // { excluir, ativos } — populado por renderAnalytics()
+let _dashCalLocked = null; // dateStr travado por clique
 const HOJE  = new Date().toISOString().slice(0, 10);
 
 let FERIAS_HISTORICO = [];
@@ -6290,7 +6291,8 @@ function renderDashCalendar() {
          <div class="an-cal-count-sub" style="color:${c.cnt}">ausente${n!==1?'s':''}</div>`
       : '';
     gridHtml += `<div class="an-cal-cell${isHoje?' today':''}" style="background:${c.bg}"
-      onmouseenter="dashCalDayClick('${ds}',${n})">
+      onmouseenter="dashCalHover('${ds}',${n})"
+      onclick="dashCalClick('${ds}',${n})">
       <div class="an-cal-day-num" style="color:${c.num}">${d}</div>
       ${cntHtml}
     </div>`;
@@ -6308,24 +6310,33 @@ function renderDashCalendar() {
 }
 
 function dashCalNav(dir) {
+  _dashCalLocked = null;
   _dashCalMonth += dir;
   if (_dashCalMonth < 0)  { _dashCalMonth = 11; _dashCalYear--; }
   if (_dashCalMonth > 11) { _dashCalMonth = 0;  _dashCalYear++; }
   renderDashCalendar();
 }
 
-function dashCalDayClick(dateStr, count) {
+function _dashCalRenderDetail(dateStr, count, locked) {
   const detail = document.getElementById('dashCalDetail');
   if (!detail) return;
-  if (count === 0) { detail.innerHTML = ''; return; }
+  if (count === 0) {
+    if (!locked) detail.innerHTML = `<div style="font-size:11px;color:var(--text-ter);padding:10px 0 2px;text-align:center">Passe o mouse em um dia para ver quem está de férias</div>`;
+    return;
+  }
   const { excluir, ativos } = _dashCalData;
   const pessoas = ativos.filter(c => c.registros.some(r => !excluir.has(r.status) &&
     r.lancamentos.some(l => l.inicio <= dateStr && l.fim >= dateStr)));
   const [yy, mm, dd] = dateStr.split('-');
   const MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const label = `${parseInt(dd)}/${MESES_PT[parseInt(mm)-1]}/${yy}`;
+  const lockIcon = locked ? ' 🔒' : '';
+  const closeBtn = locked
+    ? `<button class="an-cal-detail-close" onclick="_dashCalUnlock()" title="Soltar seleção">✕</button>`
+    : '';
+  const hint = locked ? '' : `<div style="font-size:10px;color:var(--text-ter);margin-top:6px;text-align:center">Clique no dia para travar a lista e rolar</div>`;
   const pessoasHtml = pessoas.map(c => {
-    const ini  = (c.nome||'').split(' ');
+    const ini = (c.nome||'').split(' ');
     const initials = ((ini[0]||'')[0]||'') + ((ini[ini.length-1]||'')[0]||'');
     const setor = normSetor(c.setor) || c.setor || c.empresa || '—';
     return `<div class="an-cal-person">
@@ -6338,11 +6349,33 @@ function dashCalDayClick(dateStr, count) {
   }).join('');
   detail.innerHTML = `<div class="an-cal-detail">
     <div class="an-cal-detail-hdr">
-      <span class="an-cal-detail-title">${count} ausente${count!==1?'s':''} em ${label}</span>
-      <button class="an-cal-detail-close" onclick="document.getElementById('dashCalDetail').innerHTML=''">✕</button>
+      <span class="an-cal-detail-title">${count} ausente${count!==1?'s':''} em ${label}${lockIcon}</span>
+      ${closeBtn}
     </div>
-    ${pessoasHtml}
+    <div style="max-height:220px;overflow-y:auto">${pessoasHtml}</div>
+    ${hint}
   </div>`;
+}
+
+function dashCalHover(dateStr, count) {
+  if (_dashCalLocked) return; // lista travada — hover não interfere
+  _dashCalRenderDetail(dateStr, count, false);
+}
+
+function dashCalClick(dateStr, count) {
+  if (count === 0) return;
+  if (_dashCalLocked === dateStr) {
+    _dashCalUnlock();
+  } else {
+    _dashCalLocked = dateStr;
+    _dashCalRenderDetail(dateStr, count, true);
+  }
+}
+
+function _dashCalUnlock() {
+  _dashCalLocked = null;
+  const detail = document.getElementById('dashCalDetail');
+  if (detail) detail.innerHTML = `<div style="font-size:11px;color:var(--text-ter);padding:10px 0 2px;text-align:center">Passe o mouse em um dia para ver quem está de férias</div>`;
 }
 
 // ─── Timeline / Gantt ────────────────────────────────────────────────────────
