@@ -6806,7 +6806,7 @@ function processGestorFerias(rows) {
       if (Array.isArray(row.realizacoes)) {
         row.realizacoes.forEach((r, i) => {
           const _ini = r.inicio || r.saida;
-          if (_ini && Number(r.dias) > 0) lancamentos.push({ id:`${row.id}-r${i}`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:_ini, fim:r.fim||r.retorno||_ini, dias:Number(r.dias), status:(r.status||'gozado').toLowerCase(), _obsGestor:row.obs_gestor||null });
+          if (_ini && Number(r.dias) > 0) lancamentos.push({ id:`${row.id}-r${i}`, colaborador_id:row.colaborador_id, periodo_id:_survivorId, inicio:_ini, fim:r.fim||r.retorno||_ini, dias:Number(r.dias), status:(r.status||'gozado').toLowerCase(), _obsGestor:row.obs_gestor||null, _isRealizacao:true });
         });
       }
       return;
@@ -6890,6 +6890,7 @@ function processGestorFerias(rows) {
             fim:           r.fim || r.retorno || _ini,
             dias:          Number(r.dias),
             status:        (r.status || 'gozado').toLowerCase(),
+            _isRealizacao: true,
           });
         }
       });
@@ -7525,7 +7526,7 @@ function renderGestorGantt() {
   const W_CELL = 28;
   let rows = '';
   colabs.forEach(c => {
-    const lancColabs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id);
+    const lancColabs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && !l._isRealizacao);
     const cor  = avColor(c.nome);
     const ini  = avInit(c.nome);
     const sub  = [c.cargo, c.setor].filter(Boolean).join(' · ');
