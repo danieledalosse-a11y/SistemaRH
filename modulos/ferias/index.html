@@ -734,14 +734,18 @@
   .an-cal-dow { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; margin-bottom: 3px; }
   .an-cal-dow-lbl { font-size: 9px; font-weight: 600; color: var(--text-ter); text-align: center; padding: 2px 0; text-transform: uppercase; letter-spacing: .04em; }
   .an-cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
-  .an-cal-cell { border-radius: 7px; padding: 5px 6px; min-height: 44px; cursor: pointer; transition: box-shadow 0.1s; }
-  .an-cal-cell:hover { box-shadow: 0 0 0 1.5px #1849A9; }
-  .an-cal-cell.empty { cursor: default; background: transparent !important; min-height: 44px; }
-  .an-cal-cell.empty:hover { box-shadow: none; }
-  .an-cal-cell.today { box-shadow: 0 0 0 1.5px #1849A9; }
-  .an-cal-day-num { font-size: 11px; font-weight: 600; }
-  .an-cal-count { font-size: 13px; font-weight: 700; margin-top: 3px; line-height: 1; }
-  .an-cal-count-sub { font-size: 9px; font-weight: 500; margin-top: 1px; opacity: .75; }
+  .an-cal-cell { border-radius: 8px; padding: 6px 4px 5px; min-height: 52px; cursor: pointer; display: flex; flex-direction: column; align-items: center; background: transparent; transition: background .1s; }
+  .an-cal-cell:hover { background: var(--surface-hover, #F1F5F9); }
+  .an-cal-cell.today { background: #EFF6FF; border: 1.5px solid #3B82F6; }
+  .an-cal-cell.empty { background: transparent !important; cursor: default; min-height: 52px; }
+  .an-cal-cell.empty:hover { background: transparent !important; }
+  .an-cal-day-num { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1; }
+  .an-cal-cell.today .an-cal-day-num { color: #1849A9; font-weight: 700; }
+  .an-cal-dots { display: flex; gap: 3px; justify-content: center; margin-top: 3px; flex-wrap: wrap; }
+  .an-cal-dot  { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .an-cal-legend { display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
+  .an-cal-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-sec); }
+  .an-cal-legend-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   /* tooltip flutuante do calendário */
   .an-cal-tt {
     position: fixed; z-index: 9998; pointer-events: none;
@@ -6340,26 +6344,25 @@ function renderAnalytics() {
       <div id="dashAnoWrap"></div>
     </div>
 
-    <!-- Calendário + Ausentes por setor — card unificado -->
-    <div class="an-card an-cal-card-unified" style="margin-bottom:10px">
-      <div class="an-cal-card-hdr">
-        <span class="an-cal-card-hdr-title">Calendário de férias</span>
-        <div style="display:flex;align-items:center;gap:6px">
-          <button class="an-cal-nav-btn" onclick="dashCalNav(-1)">&#8249;</button>
-          <span class="an-cal-nav-label" id="dashCalNavLabel">—</span>
-          <button class="an-cal-nav-btn" onclick="dashCalNav(1)">&#8250;</button>
+    <!-- Calendário + Ausentes por setor — dois cards lado a lado -->
+    <div style="display:flex;gap:12px;margin-bottom:10px;align-items:flex-start">
+      <div class="an-card" style="flex:3;min-width:0">
+        <div class="an-cal-card-hdr">
+          <span class="an-cal-card-hdr-title">Calendário de férias</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="an-cal-nav-btn" onclick="dashCalNav(-1)">&#8249;</button>
+            <span class="an-cal-nav-label" id="dashCalNavLabel">—</span>
+            <button class="an-cal-nav-btn" onclick="dashCalNav(1)">&#8250;</button>
+          </div>
         </div>
-      </div>
-      <div class="an-cal-card-body">
-        <div class="an-cal-card-left">
+        <div style="padding:14px 18px 16px">
           <div id="dashCalWrap"></div>
         </div>
-        <div class="an-cal-card-divider"></div>
-        <div class="an-cal-card-right">
-          <div class="an-cal-card-right-title">Ausentes por setor</div>
-          <div class="an-card-sub" id="dashSectorSub" style="margin-bottom:12px">—</div>
-          <div id="dashSectorChart"></div>
-        </div>
+      </div>
+      <div class="an-card" style="flex:2;min-width:0">
+        <div class="an-cal-card-right-title" style="padding:14px 18px 2px">Ausentes por setor</div>
+        <div class="an-card-sub" id="dashSectorSub" style="padding:0 18px 12px">—</div>
+        <div id="dashSectorChart" style="padding:0 18px 16px"></div>
       </div>
     </div>
 
@@ -6676,30 +6679,39 @@ function renderDashCalendar() {
   let inicioGrid = (primeiroDia.getDay() + 6) % 7;
   const hoje = HOJE; // 'YYYY-MM-DD'
 
-  // conta ausentes por dia
+  // conta ausentes por dia com categorias
   const counts = [];
   for (let d = 1; d <= totalDias; d++) {
     const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const n  = ativos.filter(c => c.registros.some(r => !excluir.has(r.status) &&
-      r.lancamentos.some(l => l.inicio <= ds && l.fim >= ds))).length;
-    counts.push({ d, ds, n });
+    let nFerias = 0, nOutros = 0;
+    ativos.forEach(c => {
+      const ausente = c.registros.some(r => !excluir.has(r.status) &&
+        r.lancamentos.some(l => l.inicio <= ds && l.fim >= ds));
+      if (ausente) {
+        const st = (c.registros.find(r => !excluir.has(r.status) &&
+          r.lancamentos.some(l => l.inicio <= ds && l.fim >= ds))?.status || '').toLowerCase();
+        if (['aprovado','agendado','concluído','concluido','gozado','solicitado'].includes(st)) nFerias++;
+        else nOutros++;
+      }
+    });
+    const n = nFerias + nOutros;
+    counts.push({ d, ds, n, nFerias, nOutros });
   }
 
   const dowHtml = DOW.map(l => `<div class="an-cal-dow-lbl">${l}</div>`).join('');
   let gridHtml  = '';
   for (let i = 0; i < inicioGrid; i++) gridHtml += '<div class="an-cal-cell empty"></div>';
-  counts.forEach(({ d, ds, n }) => {
-    const c       = _dashCalColor(n);
+  counts.forEach(({ d, ds, n, nFerias, nOutros }) => {
     const isHoje  = ds === hoje;
-    const cntHtml = n > 0
-      ? `<div class="an-cal-count" style="color:${c.cnt}">${n}</div>
-         <div class="an-cal-count-sub" style="color:${c.cnt}">ausente${n!==1?'s':''}</div>`
-      : '';
-    gridHtml += `<div class="an-cal-cell${isHoje?' today':''}" style="background:${c.bg}"
+    const dots = [];
+    if (nFerias > 0) dots.push(`<div class="an-cal-dot" style="background:#3B82F6" title="${nFerias} em férias"></div>`);
+    if (nOutros > 0) dots.push(`<div class="an-cal-dot" style="background:#A78BFA" title="${nOutros} outros"></div>`);
+    const dotsHtml = dots.length > 0 ? `<div class="an-cal-dots">${dots.join('')}</div>` : '';
+    gridHtml += `<div class="an-cal-cell${isHoje?' today':''}"
       onmouseenter="dashCalHover('${ds}',${n},this)"
       onclick="dashCalClick('${ds}',${n},this)">
-      <div class="an-cal-day-num" style="color:${c.num}">${d}</div>
-      ${cntHtml}
+      <div class="an-cal-day-num">${d}</div>
+      ${dotsHtml}
     </div>`;
   });
 
@@ -6737,8 +6749,11 @@ function renderDashCalendar() {
         const w   = Math.round(n / maxSetorVal * 100);
         const pct = _totalAus > 0 ? Math.round(n / _totalAus * 100) : 0;
         const cor = corDoSetor(s);
-        return `<div class="an-hbar-row">
-          <div class="an-hbar-label" title="${s}">${s}</div>
+        const initials = s.split(/\s+/).slice(0,2).map(w => w[0]||'').join('').toUpperCase().slice(0,2);
+        const iconHtml = `<div style="width:28px;height:28px;border-radius:50%;background:${cor.bg||'#e2e8f0'};color:${cor.texto||'#334155'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${initials}</div>`;
+        return `<div class="an-hbar-row" style="gap:8px">
+          ${iconHtml}
+          <div class="an-hbar-label" title="${s}" style="min-width:0">${s}</div>
           <div class="an-hbar-track"><div class="an-hbar-fill" style="width:${w}%;background:${cor.borda}"></div></div>
           <div class="an-hbar-count">${n}</div>
           <div class="an-hbar-pct">${pct}%</div>
@@ -6749,9 +6764,15 @@ function renderDashCalendar() {
 
   const _navLbl = document.getElementById('dashCalNavLabel');
   if (_navLbl) _navLbl.textContent = `${MESES_PT[m]} ${y}`;
+  const legendHtml = `
+    <div class="an-cal-legend">
+      <div class="an-cal-legend-item"><div class="an-cal-legend-dot" style="background:#3B82F6"></div>Férias</div>
+      <div class="an-cal-legend-item"><div class="an-cal-legend-dot" style="background:#A78BFA"></div>Outros</div>
+    </div>`;
   wrap.innerHTML = `
     <div class="an-cal-dow">${dowHtml}</div>
-    <div class="an-cal-grid" onmouseleave="dashCalGridLeave()">${gridHtml}</div>`;
+    <div class="an-cal-grid" onmouseleave="dashCalGridLeave()">${gridHtml}</div>
+    ${legendHtml}`;
 }
 
 function dashCalNav(dir) {
