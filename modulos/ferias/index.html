@@ -6435,7 +6435,7 @@ function renderDashAnoChart() {
       const opacity = isCur ? '1' : '0.82';
       return `<div class="an-ano-subbar" style="height:${h}px;background:${color};opacity:${opacity}"></div>`;
     }).join('');
-    return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i},this)" onmouseleave="dashAnoHoverOut()">
+    return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i})" onmouseleave="dashAnoHoverOut()">
       <div class="an-ano-subcounts">${subCounts}</div>
       <div class="an-ano-subgroup">${subBars}</div>
     </div>`;
@@ -6491,7 +6491,7 @@ function dashAnoToggleYear(y) {
   renderDashAnoChart();
 }
 
-function dashAnoHover(idx, colEl) {
+function dashAnoHover(idx) {
   const wrap = document.getElementById('dashAnoWrap');
   if (!wrap || !wrap._allData) return;
 
@@ -6547,34 +6547,35 @@ function dashAnoHover(idx, colEl) {
   }
 
   tt.innerHTML = `${content}<div class="an-ano-tooltip-arrow down"></div>`;
-  tt.classList.add('visible');
   tt.style.visibility = 'hidden';
   tt.style.opacity = '0';
+  tt.classList.add('visible');
 
+  // ancora no fundo da área de barras (eixo), sempre acima — evita descer para meses com barras baixas
   requestAnimationFrame(() => {
-    const cr  = colEl.getBoundingClientRect();
+    const barsEl = document.querySelector('#dashAnoWrap .an-ano-bars');
+    const cols   = barsEl ? barsEl.querySelectorAll('.an-ano-col') : [];
+    const colEl  = cols[idx] || barsEl;
+    const barsRect = barsEl ? barsEl.getBoundingClientRect() : colEl.getBoundingClientRect();
+    const colRect  = colEl.getBoundingClientRect();
     const tw  = tt.offsetWidth;
     const th  = tt.offsetHeight;
     const gap = 10;
-    let left = cr.left + cr.width / 2 - tw / 2;
+    // posição horizontal: centro da coluna
+    let left = colRect.left + colRect.width / 2 - tw / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+    // posição vertical: sempre acima do eixo (bottom da área de barras)
+    const axisY = barsRect.bottom;
+    const top   = axisY - th - gap;
     const arrowEl = tt.querySelector('.an-ano-tooltip-arrow');
-    let top;
-    if (cr.top >= th + gap + 14) {
-      top = cr.top - th - gap;
-      arrowEl.className = 'an-ano-tooltip-arrow down';
-    } else {
-      top = cr.bottom + gap;
-      arrowEl.className = 'an-ano-tooltip-arrow up';
-    }
-    const arrowLeft = cr.left + cr.width / 2 - left;
+    arrowEl.className = 'an-ano-tooltip-arrow down';
+    const arrowLeft = colRect.left + colRect.width / 2 - left;
     arrowEl.style.left = Math.max(14, Math.min(arrowLeft, tw - 14)) + 'px';
     arrowEl.style.transform = 'none';
-    tt.style.left = left + window.scrollX + 'px';
-    tt.style.top  = top  + window.scrollY + 'px';
+    tt.style.left       = left + window.scrollX + 'px';
+    tt.style.top        = top  + window.scrollY + 'px';
     tt.style.visibility = '';
-    tt.classList.add('visible');
-    tt.style.opacity = '';
+    tt.style.opacity    = '';
   });
 }
 
@@ -6703,6 +6704,7 @@ function _dashCalGetOrCreateTT() {
 }
 
 function _dashCalPositionTT(tt, cellEl) {
+  tt.style.opacity = '0';
   tt.style.visibility = 'hidden';
   requestAnimationFrame(() => {
     const cr  = cellEl.getBoundingClientRect();
@@ -6725,9 +6727,10 @@ function _dashCalPositionTT(tt, cellEl) {
       arrowEl.style.left = Math.max(14, Math.min(arrowLeft, tw - 14)) + 'px';
       arrowEl.style.transform = 'none';
     }
-    tt.style.left = left + window.scrollX + 'px';
-    tt.style.top  = top  + window.scrollY + 'px';
+    tt.style.left       = left + window.scrollX + 'px';
+    tt.style.top        = top  + window.scrollY + 'px';
     tt.style.visibility = '';
+    tt.style.opacity    = '';
     tt.classList.add('visible');
   });
 }
