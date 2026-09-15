@@ -6436,7 +6436,7 @@ function renderDashAnoChart() {
       const opacity = isCur ? '1' : '0.82';
       return `<div class="an-ano-subbar" style="height:${h}px;background:${color};opacity:${opacity}"></div>`;
     }).join('');
-    return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i},event)" onmouseleave="dashAnoHoverOut()" onclick="dashAnoClick(${i},event)">
+    return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i})" onmouseleave="dashAnoHoverOut()" onclick="dashAnoClick(${i})">
       <div class="an-ano-subcounts">${subCounts}</div>
       <div class="an-ano-subgroup">${subBars}</div>
     </div>`;
@@ -6541,21 +6541,37 @@ function _dashAnoBuildContent(idx, locked) {
   return body + hint;
 }
 
-function _dashAnoPosicionaTT(tt, ev) {
+function _dashAnoPosicionaTT(tt, idx) {
   tt.style.visibility = 'hidden';
   tt.style.opacity    = '0';
   tt.classList.add('visible');
   requestAnimationFrame(() => {
-    const mx  = ev ? ev.clientX : window.innerWidth / 2;
-    const my  = ev ? ev.clientY : window.innerHeight / 2;
+    const barsEl = document.querySelector('#dashAnoWrap .an-ano-bars');
+    const cols   = barsEl ? barsEl.querySelectorAll('.an-ano-col') : [];
+    const colEl  = cols[idx];
+    if (!colEl || !barsEl) return;
+    const colRect  = colEl.getBoundingClientRect();
+    const barsRect = barsEl.getBoundingClientRect();
     const tw  = tt.offsetWidth;
-    const th  = tt.offsetHeight;
-    const gap = 14;
-    let left = mx + gap;
-    if (left + tw > window.innerWidth - 8) left = mx - tw - gap;
-    left = Math.max(8, left);
-    let top = my - th / 2;
-    top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
+    const gap = 10;
+    // altura máxima = espaço acima do eixo menos margem
+    const maxH = barsRect.bottom - 8;
+    tt.style.maxHeight = Math.min(maxH, 320) + 'px';
+    const th = tt.offsetHeight;
+    // horizontal: centrado na coluna, dentro da viewport
+    let left = colRect.left + colRect.width / 2 - tw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+    // vertical: acima do eixo, seta aponta para baixo
+    const top = barsRect.bottom - th - gap;
+    // posiciona seta sobre o centro da coluna
+    const arrowEl = tt.querySelector('.an-ano-tooltip-arrow');
+    if (arrowEl) {
+      arrowEl.style.display = '';
+      arrowEl.className = 'an-ano-tooltip-arrow down';
+      const arrowLeft = colRect.left + colRect.width / 2 - left;
+      arrowEl.style.left = Math.max(14, Math.min(arrowLeft, tw - 14)) + 'px';
+      arrowEl.style.transform = 'none';
+    }
     tt.style.left       = left + 'px';
     tt.style.top        = top  + 'px';
     tt.style.visibility = '';
@@ -6563,7 +6579,7 @@ function _dashAnoPosicionaTT(tt, ev) {
   });
 }
 
-function dashAnoHover(idx, ev) {
+function dashAnoHover(idx) {
   if (_dashAnoLocked !== null) return;
   const wrap = document.getElementById('dashAnoWrap');
   if (!wrap || !wrap._allData) return;
@@ -6578,7 +6594,7 @@ function dashAnoHover(idx, ev) {
   if (!hasAny) { tt.classList.remove('visible'); return; }
   tt.style.pointerEvents = 'none';
   tt.innerHTML = _dashAnoBuildContent(idx, false);
-  _dashAnoPosicionaTT(tt, ev);
+  _dashAnoPosicionaTT(tt, idx);
 }
 
 function dashAnoHoverOut() {
@@ -6587,7 +6603,7 @@ function dashAnoHoverOut() {
   if (tt) tt.classList.remove('visible');
 }
 
-function dashAnoClick(idx, ev) {
+function dashAnoClick(idx) {
   const wrap = document.getElementById('dashAnoWrap');
   if (!wrap || !wrap._allData) return;
   const hasAny = wrap._activeYears.some(y => wrap._allData[y][idx].total > 0);
@@ -6603,7 +6619,7 @@ function dashAnoClick(idx, ev) {
   }
   tt.style.pointerEvents = 'auto';
   tt.innerHTML = _dashAnoBuildContent(idx, true);
-  _dashAnoPosicionaTT(tt, ev);
+  _dashAnoPosicionaTT(tt, idx);
 }
 
 function dashAnoUnlock() {
