@@ -445,6 +445,63 @@ c.fotoUrl ? `<img class="gantt-av" src="${c.fotoUrl}"...>` : `<div class="gantt-
 c.foto_url ? `<img class="gantt-av" src="${c.foto_url}"...>` : `<div class="gantt-av">...</div>`
 ```
 
+### Largura das barras e alinhamento com colunas (corrigido set/2026)
+
+**Problema:** sem `width` explícito na `<table>`, o browser estica as colunas para preencher o container — colunas ficam maiores que `W_CELL=28px` e as barras (calculadas com 28) terminam antes da data final.
+
+**Solução obrigatória:** definir `width` explícito na tabela ao renderizar:
+```js
+// No innerHTML de renderTimeline() e renderGestorGantt():
+`<table class="gantt-table" style="width:${250 + diasNoMes * 28}px">`
+// 250 = largura da coluna de nome (.gantt-name-col)
+// 28 = W_CELL (deve bater com CSS `th { width:28px }`)
+```
+
+**Largura da barra:** `left:0; width:${colsTotal * W_CELL}px` — preenche exatamente as colunas do período.
+
+**Border-radius:** `.gantt-bar` usa `border-radius: 3px 0 0 3px` (lado esquerdo arredondado, direito reto). Lado direito sempre reto → cor preenche até a borda exata da coluna da data final. Classes CSS complementares:
+```css
+.gantt-bar.bar-cont-left  { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.gantt-bar.bar-cont-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* contRight: direito já é 0 pelo base; classe mantida por semântica */
+```
+
+### Realizações não aparecem na Timeline
+
+**Regra:** a Timeline mostra apenas períodos registrados/aprovados (`periodo1`, `periodo2`). Realizações (gozo real) são retrospectivas e pertencem ao drawer de detalhes.
+
+Em `processGestorFerias`, todos os lançamentos gerados a partir de `row.realizacoes` recebem `_isRealizacao: true`. Em `renderGestorGantt`, filtrar ao construir `lancColabs`:
+```js
+const lancColabs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && !l._isRealizacao);
+```
+
+A visão RH não tem esse problema — `todosLancs` é construído de `reg.lancamentos` (só `periodo1`/`periodo2`), sem incluir realizações.
+
+### Visibilidade das abas Painel / Timeline (corrigido set/2026)
+
+`.pvtab` inativo usa `color: var(--text-sec)` (não `--text-ter`). Hover usa `color: var(--text)` para contraste suficiente. Aba ativa usa `#1849A9` bold.
+
+### KPIs ocultos na aba Timeline do Gestor (corrigido set/2026)
+
+Os elementos `#gestorAlerts` e `#gestorAtividade` ficam acima das abas no DOM (fora de `gsub-painel`), por isso não são ocultados automaticamente pela troca de aba. A solução é controlá-los em `setGestorTab`:
+
+```js
+function setGestorTab(tab) {
+  ['painel','timeline'].forEach(t => {
+    document.getElementById('gsub-' + t).style.display = t === tab ? '' : 'none';
+    document.getElementById('gtab-' + t)?.classList.toggle('active', t === tab);
+  });
+  const isTimeline = tab === 'timeline';
+  const alertsEl = document.getElementById('gestorAlerts');
+  const atividadeEl = document.getElementById('gestorAtividade');
+  if (alertsEl) alertsEl.style.display = isTimeline ? 'none' : '';
+  if (atividadeEl) atividadeEl.style.display = isTimeline ? 'none' : '';
+  if (isTimeline) renderGestorGantt();
+}
+```
+
+**Regra:** na aba Timeline o foco é visual/calendário — KPIs e atividade recente não têm contexto ali. No Painel voltam normalmente. `renderGestorAlerts()` pode ser chamado em outros lugares (aprovações, solicitações) sem resetar o `display`, pois só altera `innerHTML`.
+
 ## Visão Gestor — filtros de data em lançamentos (regra crítica)
 
 **Solicitações com status `solicitado`** devem ser consideradas **independentemente de `l.fim >= hoje`**. O critério de data se aplica apenas a `recusado`. Aplicar esse padrão em todos os lugares que filtram `GESTOR_LANCAMENTOS`:
@@ -1249,6 +1306,131 @@ if (ganttGestorFiltro && _normGT(c.gestor) !== _normGT(ganttGestorFiltro)) retur
 Normalização sem acento para tolerância a grafias (`JUNINHO` == `Juninho`).
 
 ---
+
+## Dashboard — Design Visual (atualizado 2026-09-15)
+
+### Layout geral do Dashboard
+
+A aba Dashboard (`renderDash()`) gera HTML com esta estrutura:
+
+```
+KPI row (4 cards)
+Card: Comparativo de férias por ano (renderDashAnoChart)
+[flex row gap:16px align-items:stretch]
+  Card: Calendário de férias (flex: 0 0 calc(50% - 8px))
+  Card: Ausentes por setor   (flex: 0 0 calc(50% - 8px))
+Card: Risco de dobra
+```
+
+Os dois cards do calendário e de setores têm **largura fixa `calc(50% - 8px)`** e `align-items: stretch` no container para ficarem com a mesma altura.
+
+### Calendário de férias — células com fundo por intensidade + bolinhas por setor
+
+`renderDashCalendar()` — lógica de cada célula:
+
+**Fundo de intensidade** (proporcional ao número de ausentes `n`):
+```js
+if      (n >= 10) cellBg = '#DBEAFE';  // azul muito suave
+else if (n >= 6)  cellBg = '#EFF6FF';
+else if (n >= 3)  cellBg = '#F5FAFF';
+else if (n >= 1)  cellBg = '#FAFCFF';  // quase branco
+else              cellBg = 'transparent';
+// numColor sempre '#1e40af' para n > 0
+```
+
+**Bolinhas por setor** (abaixo do número da data):
+- Uma bolinha por setor único presente naquele dia
+- Cor: `corDoSetor(s).borda` — usa `SETOR_COR_FIXA` / `SETOR_CORES_CICLO`
+- Máximo 4 bolinhas; excedente exibido como `+N` via `.an-cal-dot-extra`
+- Sem legenda de categorias (removida — não há como identificar coletivas vs normais pelo status)
+
+```js
+const setoresDoDia = [];
+ativos.forEach(c => {
+  const ausente = c.registros.some(r => !excluir.has(r.status) &&
+    r.lancamentos.some(l => l.inicio <= ds && l.fim >= ds));
+  if (ausente) {
+    const s = normSetor(c.setor) || c.setor || 'Outros';
+    if (!setoresDoDia.includes(s)) setoresDoDia.push(s);
+  }
+});
+```
+
+**Dia de hoje:** `outline: 2px solid #3B82F6; outline-offset: -2px` (não usa background — preserva a cor de intensidade).
+
+**Hover:** `filter: brightness(.93)` — escurece a célula sem alterar a cor.
+
+### `SETOR_COR_FIXA` — tabela completa
+
+```js
+const SETOR_COR_FIXA = {
+  'Administrativo':  { borda: '#1A3A8F', bg: '#EEF2FF', texto: '#1A3A8F' },
+  'Financeiro':      { borda: '#1A3A8F', bg: '#EEF2FF', texto: '#1A3A8F' },
+  'RH':              { borda: '#5925DC', bg: '#F4F3FF', texto: '#5925DC' },
+  'Logística':       { borda: '#0F5570', bg: '#E0F2F8', texto: '#0F5570' },
+  'Comercial':       { borda: '#027A48', bg: '#ECFDF3', texto: '#027A48' },
+  'Vendas':          { borda: '#027A48', bg: '#ECFDF3', texto: '#027A48' },
+  'Operacional':     { borda: '#92400E', bg: '#FFFAEB', texto: '#92400E' },
+  'Produção':        { borda: '#92400E', bg: '#FFFAEB', texto: '#92400E' },
+  'TI':              { borda: '#0F5570', bg: '#E0F2F8', texto: '#0F5570' },
+  'Marketing':       { borda: '#C01048', bg: '#FFF1F3', texto: '#C01048' },
+  'Compras':         { borda: '#5C3317', bg: '#FDF0E5', texto: '#5C3317' },
+  'Estoque':         { borda: '#1D4D3B', bg: '#E4F5EF', texto: '#1D4D3B' },
+  'Atendimento':     { borda: '#633806', bg: '#FAEEDA', texto: '#633806' },
+  'Expedição':       { borda: '#1D4D3B', bg: '#E4F5EF', texto: '#1D4D3B' },
+  'Cd':              { borda: '#0F5570', bg: '#E0F2F8', texto: '#0F5570' },
+  'Ecommerce':       { borda: '#B42318', bg: '#FEF3F2', texto: '#B42318' },
+  'Sarandi':         { borda: '#027A48', bg: '#ECFDF3', texto: '#027A48' },
+  'Paranavaí':       { borda: '#5925DC', bg: '#F4F3FF', texto: '#5925DC' },
+  'Matriz':          { borda: '#1A3A8F', bg: '#EEF2FF', texto: '#1A3A8F' },
+};
+```
+
+`corDoSetor(setor)` faz match por `includes()` case-insensitive. Setores não mapeados caem em `SETOR_CORES_CICLO` (7 cores, ciclo automático por índice no Map).
+
+### Ausentes por setor — painel direito
+
+Cada linha renderizada em `renderDashCalendar()`:
+```js
+const cor = corDoSetor(s);
+const initials = s.split(/\s+/).slice(0,2).map(w => w[0]||'').join('').toUpperCase().slice(0,2);
+// ícone circular 32×32px com iniciais, borda e fundo da cor do setor
+// barra horizontal com cor.borda
+// número de colaboradores únicos ausentes no mês
+// percentual sobre total de ausentes únicos no mês
+```
+
+O total de ausentes únicos (`_totalAus`) é calculado como `Set` de todos os `__key` ausentes no mês — não soma por setor (evita dupla contagem de quem ficou em 2 setores no período).
+
+### Cabeçalho do calendário
+
+```html
+<div class="an-cal-card-hdr">
+  <span class="an-cal-card-hdr-title">Calendário de férias</span>
+  <div style="display:flex;align-items:center;gap:6px">
+    <button class="an-cal-nav-btn" onclick="dashCalNav(-1)">‹</button>
+    <span class="an-cal-nav-label" id="dashCalNavLabel">—</span>
+    <button class="an-cal-nav-btn" onclick="dashCalNav(1)">›</button>
+  </div>
+</div>
+```
+
+`dashCalNav(dir)` incrementa `_dashCalMonth` / `_dashCalYear` e chama `renderDashCalendar()`.
+`_dashCalLocked` é resetado a `null` a cada navegação.
+
+### CSS das células do calendário (Dashboard)
+
+```css
+.an-cal-cell { border-radius: 8px; padding: 8px 4px 6px; min-height: 56px; cursor: pointer;
+               display: flex; flex-direction: column; align-items: center; transition: filter .1s; }
+.an-cal-cell:hover { filter: brightness(.93); }
+.an-cal-cell.empty { background: transparent !important; cursor: default; filter: none !important; }
+.an-cal-cell.today { outline: 2px solid #3B82F6; outline-offset: -2px; }
+.an-cal-day-num { font-size: 14px; font-weight: 500; color: var(--text); line-height: 1; }
+.an-cal-dots { display: flex; gap: 3px; justify-content: center; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.an-cal-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.an-cal-dot-extra { font-size: 9px; font-weight: 700; color: var(--text-sec); line-height: 7px; align-self: flex-end; }
+```
 
 ## Pendências conhecidas
 
