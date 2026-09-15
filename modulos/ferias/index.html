@@ -1436,7 +1436,7 @@
         </button>
         <button class="pvtab rh-only" id="vt-analytics" onclick="setVisTab('analytics')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          Analytics
+          Dashboard
         </button>
       </div>
 
@@ -6076,6 +6076,21 @@ function renderAnalytics() {
     c.registros.some(r => !excluir.has(r.status) &&
       r.lancamentos.some(l => l.inicio <= HOJE && l.fim >= HOJE))
   ).length;
+  const pctQuadro = ativos.length > 0 ? Math.round(emFeriasHoje / ativos.length * 100) : 0;
+
+  // ── 4b. Pico do mês atual (dia com mais ausências simultâneas)
+  const mesHoje = new Date().getMonth();
+  const anoHoje = new Date().getFullYear();
+  const diasMes = new Date(anoHoje, mesHoje + 1, 0).getDate();
+  let picoQtd = 0, picoDia = 0;
+  for (let d = 1; d <= diasMes; d++) {
+    const dataStr = `${anoHoje}-${String(mesHoje+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const qtd = ativos.filter(c => c.registros.some(r => !excluir.has(r.status) &&
+      r.lancamentos.some(l => l.inicio <= dataStr && l.fim >= dataStr))).length;
+    if (qtd > picoQtd) { picoQtd = qtd; picoDia = d; }
+  }
+  const MESES_FULL = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const picoLabel = picoDia > 0 ? `dia ${picoDia}/${MESES_FULL[mesHoje]}` : '—';
 
   // ── 5. Distribuição mensal (colaboradores únicos com ao menos 1 dia por mês)
   const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -6207,25 +6222,25 @@ function renderAnalytics() {
 
     <!-- KPIs executivos -->
     <div class="an-kpi-row">
-      <div class="an-kpi" style="border-top:3px solid #1849A9;">
-        <div class="an-kpi-num" style="color:#1849A9;">${pctCob}%</div>
-        <div class="an-kpi-label">Cobertura de agendamento</div>
-        <div class="an-kpi-sub">${comAgend} de ${total} colaboradores com férias agendadas em ${ano}</div>
+      <div class="an-kpi" style="border-top:3px solid #0E7490;">
+        <div class="an-kpi-num" style="color:#0E7490;">${emFeriasHoje}</div>
+        <div class="an-kpi-label">De férias hoje</div>
+        <div class="an-kpi-sub">${pctQuadro}% do quadro · ${ativos.length} colaboradores ativos</div>
+      </div>
+      <div class="an-kpi" style="border-top:3px solid #7C3AED;">
+        <div class="an-kpi-num" style="color:#7C3AED;">${picoQtd > 0 ? picoQtd : '—'}</div>
+        <div class="an-kpi-label">Pico de ausências no mês</div>
+        <div class="an-kpi-sub">${picoQtd > 0 ? `Maior concentração: ${picoLabel}` : 'Sem ausências registradas'}</div>
       </div>
       <div class="an-kpi" style="border-top:3px solid ${nRisco > 0 ? '#EF4444' : '#10B981'};">
         <div class="an-kpi-num" style="color:${nRisco > 0 ? '#EF4444' : '#10B981'};">${nRisco}</div>
-        <div class="an-kpi-label">Em risco de dobra</div>
-        <div class="an-kpi-sub">PA vencendo nos próximos 180 dias sem cobertura total</div>
+        <div class="an-kpi-label">Risco de dobra</div>
+        <div class="an-kpi-sub">Férias vencendo nos próximos 180 dias sem agendamento</div>
       </div>
-      <div class="an-kpi" style="border-top:3px solid #64748B;">
-        <div class="an-kpi-num" style="color:#475569;">${saldoMedio}d</div>
-        <div class="an-kpi-label">Saldo médio por colaborador</div>
-        <div class="an-kpi-sub">Média de dias restantes nos períodos aquisitivos de ${ano}</div>
-      </div>
-      <div class="an-kpi" style="border-top:3px solid #0E7490;">
-        <div class="an-kpi-num" style="color:#0E7490;">${emFeriasHoje}</div>
-        <div class="an-kpi-label">Em férias hoje</div>
-        <div class="an-kpi-sub">${HOJE.split('-').reverse().join('/')} — de ${ativos.length} colaboradores ativos</div>
+      <div class="an-kpi" style="border-top:3px solid #1849A9;">
+        <div class="an-kpi-num" style="color:#1849A9;">${comAgend}</div>
+        <div class="an-kpi-label">Agendados no ano</div>
+        <div class="an-kpi-sub">${pctCob}% do quadro · ${semAgend} ainda sem agendamento</div>
       </div>
     </div>
 
