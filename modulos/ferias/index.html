@@ -2132,6 +2132,7 @@ let _dashCalData   = null; // { excluir, ativos } — populado por renderAnalyti
 let _dashCalLocked = null; // dateStr travado por clique
 let _dashAnoYears    = new Set([new Date().getFullYear()]); // anos ativos no gráfico comparativo
 let _dashAnoAllYears = []; // todos os anos detectados nos dados
+let _dashAnoLocked   = null; // índice do mês travado por clique
 const HOJE  = new Date().toISOString().slice(0, 10);
 
 let FERIAS_HISTORICO = [];
@@ -6435,7 +6436,7 @@ function renderDashAnoChart() {
       const opacity = isCur ? '1' : '0.82';
       return `<div class="an-ano-subbar" style="height:${h}px;background:${color};opacity:${opacity}"></div>`;
     }).join('');
-    return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i},event)" onmouseleave="dashAnoHoverOut()">
+    return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i},event)" onmouseleave="dashAnoHoverOut()" onclick="dashAnoClick(${i},event)">
       <div class="an-ano-subcounts">${subCounts}</div>
       <div class="an-ano-subgroup">${subBars}</div>
     </div>`;
@@ -6491,34 +6492,20 @@ function dashAnoToggleYear(y) {
   renderDashAnoChart();
 }
 
-function dashAnoHover(idx, ev) {
+function _dashAnoBuildContent(idx, locked) {
   const wrap = document.getElementById('dashAnoWrap');
-  if (!wrap || !wrap._allData) return;
-
+  if (!wrap || !wrap._allData) return '';
   const activeYears = wrap._activeYears;
   const allData     = wrap._allData;
-  const hasAny      = activeYears.some(y => allData[y][idx].total > 0);
-
-  let tt = document.getElementById('dashAnoTooltip');
-  if (!tt) {
-    tt = document.createElement('div');
-    tt.id = 'dashAnoTooltip';
-    tt.className = 'an-ano-tooltip';
-    document.body.appendChild(tt);
-  }
-
-  if (!hasAny) { tt.classList.remove('visible'); return; }
-
   const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  let content;
-
+  const closeBtn = locked ? `<button style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--text-ter);padding:0 2px;line-height:1;flex-shrink:0" onclick="dashAnoUnlock()" title="Fechar">✕</button>` : '';
+  let body;
   if (activeYears.length === 1) {
-    // um ano: mostra breakdown por setor
     const y = activeYears[0];
     const d = allData[y][idx];
     const color = _anoColor(y);
-    const maxN  = d.setores[0]?.n || 1;
-    const rows  = d.setores.slice(0, 8).map(s => {
+    const maxN = d.setores[0]?.n || 1;
+    const rows = d.setores.map(s => {
       const pct = Math.round(s.n / maxN * 100);
       return `<div class="an-ano-tt-row">
         <span class="an-ano-tt-label">${s.nome}</span>
@@ -6526,10 +6513,12 @@ function dashAnoHover(idx, ev) {
         <span class="an-ano-tt-n">${s.n}</span>
       </div>`;
     }).join('');
-    const mais = d.setores.length > 8 ? `<div style="font-size:10px;color:var(--text-ter);margin-top:4px">+ ${d.setores.length - 8} outros</div>` : '';
-    content = `<div class="an-ano-tt-title">${MESES_PT[idx]} · ${d.total} ausente${d.total !== 1 ? 's' : ''}</div>${rows}${mais}`;
+    const title = `${MESES_PT[idx]} · ${d.total} ausente${d.total !== 1 ? 's' : ''}${locked ? ' 🔒' : ''}`;
+    body = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span class="an-ano-tt-title">${title}</span>${closeBtn}
+      </div>
+      <div style="max-height:240px;overflow-y:auto">${rows}</div>`;
   } else {
-    // múltiplos anos: comparativo de barras por ano
     const maxTotal = Math.max(...activeYears.map(y => allData[y][idx].total), 1);
     const rows = activeYears.map(y => {
       const total = allData[y][idx].total;
@@ -6539,35 +6528,34 @@ function dashAnoHover(idx, ev) {
         <span class="an-ano-tt-label" style="display:flex;align-items:center;gap:5px">
           <span style="width:8px;height:8px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0"></span>${y}
         </span>
-        <div class="an-ano-tt-bar-track"><div class="an-ano-tt-bar-fill" style="width:${total > 0 ? Math.max(pct, 4) : 0}%;background:${color}"></div></div>
+        <div class="an-ano-tt-bar-track"><div class="an-ano-tt-bar-fill" style="width:${total>0?Math.max(pct,4):0}%;background:${color}"></div></div>
         <span class="an-ano-tt-n" style="color:${color}">${total}</span>
       </div>`;
     }).join('');
-    content = `<div class="an-ano-tt-title">${MESES_PT[idx]}</div>${rows}`;
+    const title = `${MESES_PT[idx]}${locked ? ' 🔒' : ''}`;
+    body = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span class="an-ano-tt-title">${title}</span>${closeBtn}
+      </div>${rows}`;
   }
+  const hint = locked ? '' : `<div style="font-size:10px;color:var(--text-ter);margin-top:6px;text-align:center">Clique para travar</div>`;
+  return body + hint;
+}
 
-  tt.innerHTML = `${content}<div class="an-ano-tooltip-arrow down"></div>`;
+function _dashAnoPosicionaTT(tt, ev) {
   tt.style.visibility = 'hidden';
   tt.style.opacity    = '0';
   tt.classList.add('visible');
-
-  // posiciona próximo ao cursor (padrão Tableau/Power BI)
   requestAnimationFrame(() => {
     const mx  = ev ? ev.clientX : window.innerWidth / 2;
     const my  = ev ? ev.clientY : window.innerHeight / 2;
     const tw  = tt.offsetWidth;
     const th  = tt.offsetHeight;
     const gap = 14;
-    // horizontal: à direita do cursor; vira para esquerda se não couber
     let left = mx + gap;
     if (left + tw > window.innerWidth - 8) left = mx - tw - gap;
     left = Math.max(8, left);
-    // vertical: alinhado ao cursor; sobe se não couber embaixo
     let top = my - th / 2;
     top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
-    // sem seta (tooltip lateral ao cursor não precisa de seta)
-    const arrowEl = tt.querySelector('.an-ano-tooltip-arrow');
-    if (arrowEl) arrowEl.style.display = 'none';
     tt.style.left       = left + 'px';
     tt.style.top        = top  + 'px';
     tt.style.visibility = '';
@@ -6575,9 +6563,53 @@ function dashAnoHover(idx, ev) {
   });
 }
 
+function dashAnoHover(idx, ev) {
+  if (_dashAnoLocked !== null) return;
+  const wrap = document.getElementById('dashAnoWrap');
+  if (!wrap || !wrap._allData) return;
+  const hasAny = wrap._activeYears.some(y => wrap._allData[y][idx].total > 0);
+  let tt = document.getElementById('dashAnoTooltip');
+  if (!tt) {
+    tt = document.createElement('div');
+    tt.id = 'dashAnoTooltip';
+    tt.className = 'an-ano-tooltip';
+    document.body.appendChild(tt);
+  }
+  if (!hasAny) { tt.classList.remove('visible'); return; }
+  tt.style.pointerEvents = 'none';
+  tt.innerHTML = _dashAnoBuildContent(idx, false);
+  _dashAnoPosicionaTT(tt, ev);
+}
+
 function dashAnoHoverOut() {
+  if (_dashAnoLocked !== null) return;
   const tt = document.getElementById('dashAnoTooltip');
   if (tt) tt.classList.remove('visible');
+}
+
+function dashAnoClick(idx, ev) {
+  const wrap = document.getElementById('dashAnoWrap');
+  if (!wrap || !wrap._allData) return;
+  const hasAny = wrap._activeYears.some(y => wrap._allData[y][idx].total > 0);
+  if (!hasAny) return;
+  if (_dashAnoLocked === idx) { dashAnoUnlock(); return; }
+  _dashAnoLocked = idx;
+  let tt = document.getElementById('dashAnoTooltip');
+  if (!tt) {
+    tt = document.createElement('div');
+    tt.id = 'dashAnoTooltip';
+    tt.className = 'an-ano-tooltip';
+    document.body.appendChild(tt);
+  }
+  tt.style.pointerEvents = 'auto';
+  tt.innerHTML = _dashAnoBuildContent(idx, true);
+  _dashAnoPosicionaTT(tt, ev);
+}
+
+function dashAnoUnlock() {
+  _dashAnoLocked = null;
+  const tt = document.getElementById('dashAnoTooltip');
+  if (tt) { tt.classList.remove('visible'); tt.style.pointerEvents = 'none'; }
 }
 
 // ─── Calendário mensal do Dashboard ──────────────────────────────────────────
