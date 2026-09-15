@@ -760,12 +760,14 @@
   /* ── Gráfico anual */
   .an-ano-wrap { position: relative; }
   .an-ano-bars { display: flex; align-items: flex-end; gap: 5px; height: 200px; }
-  .an-ano-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: default; height: 100%; justify-content: flex-end; }
+  .an-ano-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0; cursor: default; height: 100%; justify-content: flex-end; }
   .an-ano-col:hover .an-ano-subbar { opacity: .72; }
+  .an-ano-subcounts { display: flex; gap: 2px; width: 92%; justify-content: center; margin-bottom: 2px; }
+  .an-ano-subcount { flex: 1; text-align: center; font-size: 8px; font-weight: 700; line-height: 1.2; min-height: 10px; }
   .an-ano-subgroup { display: flex; align-items: flex-end; gap: 2px; width: 92%; justify-content: center; }
   .an-ano-subbar { border-radius: 3px 3px 0 0; min-height: 2px; flex: 1; transition: opacity .1s; }
-  .an-ano-lbls { display: flex; gap: 5px; margin-top: 4px; }
-  .an-ano-lbl { flex: 1; text-align: center; font-size: 9px; color: var(--text-ter); }
+  .an-ano-lbls { display: flex; gap: 5px; margin-top: 5px; }
+  .an-ano-lbl { flex: 1; text-align: center; font-size: 10px; font-weight: 500; color: var(--text-sec); }
   /* chips de seleção de ano */
   .an-ano-chips { display: flex; gap: 6px; flex-wrap: wrap; }
   .an-ano-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 20px; border: 1.5px solid; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity .15s, transform .1s, background .15s; background: none; }
@@ -6348,7 +6350,7 @@ function _computeDashAnoData(year, excluir, ativos) {
   });
 }
 
-const _ANO_CORES = ['#1849A9','#0EA5E9','#7C3AED','#059669','#F59E0B','#EC4899','#64748B'];
+const _ANO_CORES = ['#4C7CB0','#7BA89B','#9B7BAD','#C4A44C','#7B9BAF','#AD7B7B','#6B8FAD'];
 
 function _anoColor(year) {
   return _ANO_CORES[_dashAnoAllYears.indexOf(year) % _ANO_CORES.length];
@@ -6390,23 +6392,28 @@ function renderDashAnoChart() {
   const anoAtual = new Date().getFullYear();
 
   const barsHtml = MESES.map((mes, i) => {
+    const subCounts = activeYears.map(y => {
+      const total = allData[y][i].total;
+      const color = _anoColor(y);
+      return `<div class="an-ano-subcount" style="color:${total > 0 ? color : 'transparent'}">${total || ''}</div>`;
+    }).join('');
     const subBars = activeYears.map(y => {
       const total = allData[y][i].total;
-      const h = Math.max(Math.round(Math.sqrt(total) / maxVal * 188), total > 0 ? 4 : 1);
+      const h = Math.max(Math.round(Math.sqrt(total) / maxVal * 172), total > 0 ? 4 : 1);
       const isCur = y === anoAtual && i === mesAtual;
       const color = _anoColor(y);
       const opacity = isCur ? '1' : '0.82';
       return `<div class="an-ano-subbar" style="height:${h}px;background:${color};opacity:${opacity}"></div>`;
     }).join('');
-    const hasAny = activeYears.some(y => allData[y][i].total > 0);
     return `<div class="an-ano-col" data-idx="${i}" onmouseenter="dashAnoHover(${i},this)" onmouseleave="dashAnoHoverOut()">
+      <div class="an-ano-subcounts">${subCounts}</div>
       <div class="an-ano-subgroup">${subBars}</div>
     </div>`;
   }).join('');
 
   const lblsHtml = MESES.map((mes, i) => {
     const isCur = activeYears.includes(anoAtual) && i === mesAtual;
-    return `<div class="an-ano-lbl" style="color:${isCur ? '#1849A9' : 'var(--text-ter)'};font-weight:${isCur ? 700 : 400}">${mes}</div>`;
+    return `<div class="an-ano-lbl" style="color:${isCur ? '#1849A9' : 'var(--text-sec)'};font-weight:${isCur ? 700 : 500}">${mes}</div>`;
   }).join('');
 
   const chipsHtml = _dashAnoAllYears.map(y => {
