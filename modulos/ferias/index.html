@@ -734,13 +734,13 @@
   .an-cal-dow { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; margin-bottom: 3px; }
   .an-cal-dow-lbl { font-size: 11px; font-weight: 600; color: var(--text-sec); text-align: center; padding: 2px 0; text-transform: uppercase; letter-spacing: .04em; }
   .an-cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
-  .an-cal-cell { border-radius: 8px; padding: 8px 4px 6px; min-height: 56px; cursor: pointer; display: flex; flex-direction: column; align-items: center; background: transparent; transition: background .1s; }
-  .an-cal-cell:hover { background: var(--surface-hover, #F1F5F9); }
-  .an-cal-cell.today { background: #EFF6FF; border: 1.5px solid #3B82F6; }
-  .an-cal-cell.empty { background: transparent !important; cursor: default; min-height: 56px; }
-  .an-cal-cell.empty:hover { background: transparent !important; }
+  .an-cal-cell { border-radius: 8px; padding: 8px 4px 6px; min-height: 56px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: filter .1s; }
+  .an-cal-cell:hover { filter: brightness(.93); }
+  .an-cal-cell.today { outline: 2px solid #3B82F6; outline-offset: -2px; }
+  .an-cal-cell.empty { background: transparent !important; cursor: default; filter: none !important; min-height: 56px; }
+  .an-cal-cell.empty:hover { filter: none !important; }
   .an-cal-day-num { font-size: 14px; font-weight: 500; color: var(--text); line-height: 1; }
-  .an-cal-cell.today .an-cal-day-num { color: #1849A9; font-weight: 700; }
+  .an-cal-cell.today .an-cal-day-num { font-weight: 700; }
   .an-cal-dots { display: flex; gap: 3px; justify-content: center; margin-top: 4px; flex-wrap: wrap; }
   .an-cal-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .an-cal-legend { display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
@@ -6712,10 +6712,16 @@ function renderDashCalendar() {
     if (nFerias > 0) dots.push(`<div class="an-cal-dot" style="background:#3B82F6" title="${nFerias} em férias"></div>`);
     if (nOutros > 0) dots.push(`<div class="an-cal-dot" style="background:#A78BFA" title="${nOutros} outros"></div>`);
     const dotsHtml = dots.length > 0 ? `<div class="an-cal-dots">${dots.join('')}</div>` : '';
-    gridHtml += `<div class="an-cal-cell${isHoje?' today':''}"
+    let cellBg = 'transparent', numColor = '';
+    if      (n >= 10) { cellBg = '#3B82F6'; numColor = '#fff'; }
+    else if (n >= 6)  { cellBg = '#93C5FD'; numColor = '#1e3a8a'; }
+    else if (n >= 3)  { cellBg = '#BFDBFE'; numColor = '#1e40af'; }
+    else if (n >= 1)  { cellBg = '#EFF6FF'; numColor = '#1e40af'; }
+    const numStyle = numColor ? ` style="color:${numColor}"` : '';
+    gridHtml += `<div class="an-cal-cell${isHoje?' today':''}" style="background:${cellBg}"
       onmouseenter="dashCalHover('${ds}',${n},this)"
       onclick="dashCalClick('${ds}',${n},this)">
-      <div class="an-cal-day-num">${d}</div>
+      <div class="an-cal-day-num"${numStyle}>${d}</div>
       ${dotsHtml}
     </div>`;
   });
