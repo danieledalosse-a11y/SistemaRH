@@ -751,6 +751,17 @@
   .an-cal-av { width: 24px; height: 24px; border-radius: 50%; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #dbeafe; color: #1e40af; }
   .an-cal-p-nome { font-size: 11px; font-weight: 600; color: var(--text); }
   .an-cal-p-det { font-size: 10px; color: var(--text-ter); margin-top: 1px; }
+  /* ── Barras horizontais por setor */
+  .an-hbar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .an-hbar-label { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 110px; flex-shrink: 0; }
+  .an-hbar-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .an-hbar-fill { height: 100%; border-radius: 4px; background: #1849A9; transition: width 0.3s; }
+  .an-hbar-count { font-size: 11px; font-weight: 700; color: var(--text-sec); min-width: 18px; text-align: right; }
+  /* ── Mini barras anuais */
+  .an-minibar-wrap { display: flex; align-items: flex-end; gap: 3px; height: 52px; }
+  .an-minibar-col { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+  .an-minibar-bar { width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; }
+  .an-minibar-lbl { font-size: 8px; color: var(--text-ter); }
   @media (max-width: 900px) {
     .an-kpi-row { grid-template-columns: repeat(2,1fr); }
     .an-row-bar, .an-row-bottom { grid-template-columns: 1fr; }
@@ -6186,6 +6197,36 @@ function renderAnalytics() {
       }).join('');
   const maisRisco = nRisco > 7 ? `<div class="an-risk-more">+ ${nRisco - 7} outros colaboradores</div>` : '';
 
+  // ── distribuição mensal anual (mini barras)
+  const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const distSets = Array.from({length: 12}, () => new Set());
+  ativos.forEach(c => {
+    c.registros.filter(r => !excluir.has(r.status)).forEach(reg => {
+      reg.lancamentos.forEach(l => {
+        const lIni = new Date(l.inicio + 'T12:00:00');
+        const lFim = new Date(l.fim    + 'T12:00:00');
+        for (let m = 0; m < 12; m++) {
+          const mIni = new Date(ano, m, 1);
+          const mFim = new Date(ano, m + 1, 0);
+          if (lIni <= mFim && lFim >= mIni) distSets[m].add(c.__key);
+        }
+      });
+    });
+  });
+  const distMensal = distSets.map(s => s.size);
+  const mesAtual   = new Date().getMonth();
+  const anoAtual   = new Date().getFullYear();
+  const maxDist    = Math.max(...distMensal, 1);
+  const miniBarHtml = distMensal.map((v, i) => {
+    const h      = Math.max(Math.round(v / maxDist * 44), v > 0 ? 2 : 1);
+    const isCur  = i === mesAtual && ano === anoAtual;
+    const fill   = isCur ? '#1849A9' : (v === 0 ? '#E2E8F0' : '#BFDBFE');
+    return `<div class="an-minibar-col">
+      <div class="an-minibar-bar" style="height:${h}px;background:${fill}" title="${v} ausente${v!==1?'s':''} em ${MESES_ABREV[i]}"></div>
+      <div class="an-minibar-lbl" style="color:${isCur?'#1849A9':'var(--text-ter)'}">${MESES_ABREV[i].slice(0,1)}</div>
+    </div>`;
+  }).join('');
+
   // ── salva dados para o calendário interativo
   _dashCalData = { excluir, ativos };
 
@@ -6223,12 +6264,16 @@ function renderAnalytics() {
       <div class="an-card">
         <div id="dashCalWrap"></div>
       </div>
-      <div class="an-card">
-        <div class="an-card-title">Distribuição por setor</div>
-        <div class="an-card-sub">Colaboradores ativos por setor</div>
-        <div class="an-donut-wrap" style="padding-top:8px">
-          ${svgDonut}
-          <div class="an-donut-legend">${donutLegend}</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="an-card">
+          <div class="an-card-title">Férias no ano — ${ano}</div>
+          <div class="an-card-sub" style="margin-bottom:8px">Colaboradores únicos com férias em cada mês</div>
+          <div class="an-minibar-wrap">${miniBarHtml}</div>
+        </div>
+        <div class="an-card" style="flex:1">
+          <div class="an-card-title">Ausentes por setor</div>
+          <div class="an-card-sub" id="dashSectorSub" style="margin-bottom:10px">—</div>
+          <div id="dashSectorChart"></div>
         </div>
       </div>
     </div>
@@ -6297,6 +6342,46 @@ function renderDashCalendar() {
       ${cntHtml}
     </div>`;
   });
+
+  // ── barras horizontais por setor para o mês exibido
+  const MESES_PT_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                         'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const totalDiasMes = new Date(y, m + 1, 0).getDate();
+  const setorCount = new Map();
+  for (let d2 = 1; d2 <= totalDiasMes; d2++) {
+    const ds2 = `${y}-${String(m+1).padStart(2,'0')}-${String(d2).padStart(2,'0')}`;
+    ativos.forEach(c => {
+      const ausente = c.registros.some(r => !excluir.has(r.status) &&
+        r.lancamentos.some(l => l.inicio <= ds2 && l.fim >= ds2));
+      if (ausente) {
+        const s = normSetor(c.setor) || c.setor || 'Outros';
+        setorCount.set(s, (setorCount.get(s) || new Set()));
+        setorCount.get(s).add(c.__key);
+      }
+    });
+  }
+  const setorEntries = [...setorCount.entries()]
+    .map(([s, set]) => [s, set.size])
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 6);
+  const maxSetorVal = setorEntries.length > 0 ? setorEntries[0][1] : 1;
+  const sectorChart = document.getElementById('dashSectorChart');
+  const sectorSub   = document.getElementById('dashSectorSub');
+  if (sectorSub) sectorSub.textContent = `Colaboradores com pelo menos 1 dia em ${MESES_PT_FULL[m].toLowerCase()}`;
+  if (sectorChart) {
+    if (setorEntries.length === 0) {
+      sectorChart.innerHTML = `<div class="an-empty">Sem ausências em ${MESES_PT_FULL[m]}</div>`;
+    } else {
+      sectorChart.innerHTML = setorEntries.map(([s, n]) => {
+        const w = Math.round(n / maxSetorVal * 100);
+        return `<div class="an-hbar-row">
+          <div class="an-hbar-label" title="${s}">${s}</div>
+          <div class="an-hbar-track"><div class="an-hbar-fill" style="width:${w}%"></div></div>
+          <div class="an-hbar-count">${n}</div>
+        </div>`;
+      }).join('');
+    }
+  }
 
   wrap.innerHTML = `
     <div class="an-cal-nav">
