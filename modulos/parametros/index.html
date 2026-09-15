@@ -236,6 +236,17 @@
   .modulo-check:has(input:checked) { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); font-weight: 600; }
   .modulo-check input { accent-color: var(--blue); width: 14px; height: 14px; flex-shrink: 0; }
   .modulo-check.disabled { opacity: 0.5; cursor: not-allowed; }
+  .perm-section { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 2px; }
+  .perm-section-label { font-size: 11px; font-weight: 700; color: var(--text-sec); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 10px; }
+  .perm-modulo-row { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .perm-modulo-row + .perm-modulo-row { margin-top: 6px; }
+  .perm-modulo-label { font-size: 13px; font-weight: 700; color: var(--text); }
+  .perm-group { display: flex; align-items: center; gap: 10px; }
+  .perm-group-label { font-size: 11px; color: var(--text-sec); min-width: 42px; }
+  .perm-checks { display: flex; flex-wrap: wrap; gap: 5px; }
+  .perm-check { display: flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text-sec); user-select: none; transition: border-color .12s, background .12s; }
+  .perm-check:has(input:checked) { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); font-weight: 600; }
+  .perm-check input { accent-color: var(--blue); width: 13px; height: 13px; flex-shrink: 0; }
   .modulo-icon { font-size: 14px; flex-shrink: 0; }
 
   /* Perfis */
@@ -405,6 +416,10 @@
           <div class="field">
             <label>Módulos com acesso</label>
             <div id="pModulosGrid" class="modulos-grid" style="margin-top:8px"></div>
+          </div>
+          <div id="pPermissoesSection" class="perm-section" style="display:none">
+            <div class="perm-section-label">Permissões por módulo</div>
+            <div id="pPermissoesGrid"></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -1639,6 +1654,20 @@ const MODULOS_SISTEMA = [
 
 const PERFIL_ACESSO_PADRAO = {}; // módulos sempre desmarcados ao criar — usuário seleciona manualmente
 
+// Abas e ações disponíveis por módulo (referência para a matriz de permissões)
+const MODULOS_PERMISSOES = {
+  ferias:    { abas: [{key:'lista',label:'Lista'},{key:'timeline',label:'Timeline'},{key:'dashboard',label:'Dashboard'}],
+               acoes: [{key:'visualizar',label:'Visualizar'},{key:'inserir',label:'Inserir'},{key:'alterar',label:'Alterar'}] },
+  cadastro:  { abas: [{key:'lista',label:'Lista'}],
+               acoes: [{key:'visualizar',label:'Visualizar'},{key:'inserir',label:'Inserir'},{key:'alterar',label:'Alterar'}] },
+  processos: { abas: [{key:'lista',label:'Lista'}],
+               acoes: [{key:'visualizar',label:'Visualizar'},{key:'inserir',label:'Inserir'},{key:'alterar',label:'Alterar'}] },
+  uniformes: { abas: [{key:'lista',label:'Lista'}],
+               acoes: [{key:'visualizar',label:'Visualizar'},{key:'inserir',label:'Inserir'},{key:'alterar',label:'Alterar'}] },
+  admissao:  { abas: [{key:'lista',label:'Lista'},{key:'ficha',label:'Ficha'}],
+               acoes: [{key:'visualizar',label:'Visualizar'},{key:'inserir',label:'Inserir'},{key:'alterar',label:'Alterar'}] },
+};
+
 const AVATAR_COLORS = {
   admin:  '#6d28d9',
   rh:     '#1d4ed8',
@@ -1694,10 +1723,11 @@ function abrirPerfilModal(id) {
   const mods = p ? (Array.isArray(p.modulos) ? p.modulos : JSON.parse(p.modulos || '[]')) : [];
   document.getElementById('pModulosGrid').innerHTML = MODULOS_SISTEMA.map(m =>
     `<label class="modulo-check">
-      <input type="checkbox" value="${m.key}" ${mods.includes(m.key) ? 'checked' : ''}>
+      <input type="checkbox" value="${m.key}" ${mods.includes(m.key) ? 'checked' : ''} onchange="atualizarPermissoesGrid()">
       <span class="modulo-icon">${m.icon}</span>${m.label}
     </label>`
   ).join('');
+  renderPermissoesGrid(mods, p?.permissoes || {});
   const btnToggle = document.getElementById('perfilBtnToggle');
   if (p) {
     btnToggle.style.display = '';
@@ -1711,6 +1741,52 @@ function abrirPerfilModal(id) {
   const ov = document.getElementById('perfilOverlay');
   ov.style.display = 'flex';
   requestAnimationFrame(() => { ov.style.opacity = '1'; ov.style.pointerEvents = ''; });
+}
+
+function renderPermissoesGrid(modsAtivos, permAtual) {
+  const section = document.getElementById('pPermissoesSection');
+  const grid = document.getElementById('pPermissoesGrid');
+  const modsComPerm = modsAtivos.filter(k => MODULOS_PERMISSOES[k]);
+  if (!modsComPerm.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  grid.innerHTML = modsComPerm.map(k => {
+    const def = MODULOS_PERMISSOES[k];
+    const mod = MODULOS_SISTEMA.find(m => m.key === k);
+    const permMod = permAtual[k] || {};
+    // padrão: todas as abas e ações marcadas quando não há config salva
+    const abasAtivas  = permMod.abas  || def.abas.map(a => a.key);
+    const acoesAtivas = permMod.acoes || def.acoes.map(a => a.key);
+    return `<div class="perm-modulo-row">
+      <div class="perm-modulo-label">${mod?.icon || ''} ${mod?.label || k}</div>
+      <div class="perm-group">
+        <span class="perm-group-label">Abas</span>
+        <div class="perm-checks">${def.abas.map(a =>
+          `<label class="perm-check"><input type="checkbox" data-modulo="${k}" data-type="aba" value="${a.key}" ${abasAtivas.includes(a.key) ? 'checked' : ''}> ${a.label}</label>`
+        ).join('')}</div>
+      </div>
+      <div class="perm-group">
+        <span class="perm-group-label">Ações</span>
+        <div class="perm-checks">${def.acoes.map(a =>
+          `<label class="perm-check"><input type="checkbox" data-modulo="${k}" data-type="acao" value="${a.key}" ${acoesAtivas.includes(a.key) ? 'checked' : ''}> ${a.label}</label>`
+        ).join('')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function atualizarPermissoesGrid() {
+  const mods = [...document.querySelectorAll('#pModulosGrid input:checked')].map(c => c.value);
+  renderPermissoesGrid(mods, coletarPermissoes());
+}
+
+function coletarPermissoes() {
+  const perm = {};
+  document.querySelectorAll('#pPermissoesGrid input[data-modulo]').forEach(el => {
+    const k = el.dataset.modulo;
+    if (!perm[k]) perm[k] = { abas: [], acoes: [] };
+    if (el.checked) perm[k][el.dataset.type === 'aba' ? 'abas' : 'acoes'].push(el.value);
+  });
+  return perm;
 }
 
 function fecharPerfilModal() {
@@ -1730,7 +1806,8 @@ async function salvarPerfil() {
   if (!nome) { showToast('Nome é obrigatório.', 'error'); return; }
   const modulos = [...document.querySelectorAll('#pModulosGrid input:checked')].map(c => c.value);
   const descricao = document.getElementById('pDesc').value.trim();
-  const body = { nome, descricao: descricao || null, modulos };
+  const permissoes = coletarPermissoes();
+  const body = { nome, descricao: descricao || null, modulos, permissoes };
   try {
     if (editingPerfilId) {
       await sbPatch('perfis', editingPerfilId, body);

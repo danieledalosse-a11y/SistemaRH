@@ -292,6 +292,20 @@ async function login(e) {
     });
     const perfil = perfis[0] || { nome: data.user.email, perfil: 'rh' };
     localStorage.setItem('sb_perfil', JSON.stringify(perfil));
+    // Carrega permissões do perfil (uma vez no login — módulos leem do localStorage)
+    try {
+      const perfilId = perfil.perfil_id;
+      if (perfilId) {
+        const perfisData = await sbFetch(`/rest/v1/perfis?id=eq.${perfilId}&select=permissoes`, {
+          headers: { 'Authorization': `Bearer ${data.access_token}` }
+        });
+        localStorage.setItem('sb_permissoes', JSON.stringify(perfisData?.[0]?.permissoes ?? {}));
+      } else {
+        localStorage.setItem('sb_permissoes', JSON.stringify({}));
+      }
+    } catch(_) {
+      localStorage.setItem('sb_permissoes', JSON.stringify({}));
+    }
     window.location.href = 'index.html';
   } catch(err2) {
     const msg = err2.error_description || err2.message || 'Erro ao entrar. Verifique e-mail e senha.';
