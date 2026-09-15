@@ -6335,15 +6335,34 @@ function _dashCalRenderDetail(dateStr, count, locked) {
     ? `<button class="an-cal-detail-close" onclick="_dashCalUnlock()" title="Soltar seleção">✕</button>`
     : '';
   const hint = locked ? '' : `<div style="font-size:10px;color:var(--text-ter);margin-top:6px;text-align:center">Clique no dia para travar a lista e rolar</div>`;
+  const MESES_ABR = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  function fmtData(ds) {
+    const [,mm,dd] = ds.split('-');
+    return `${parseInt(dd)}/${MESES_ABR[parseInt(mm)-1]}`;
+  }
   const pessoasHtml = pessoas.map(c => {
     const ini = (c.nome||'').split(' ');
     const initials = ((ini[0]||'')[0]||'') + ((ini[ini.length-1]||'')[0]||'');
     const setor = normSetor(c.setor) || c.setor || c.empresa || '—';
+    // encontra o lançamento ativo neste dia
+    let periodoStr = '—';
+    c.registros.forEach(r => {
+      if (excluir.has(r.status)) return;
+      r.lancamentos.forEach(l => {
+        if (l.inicio <= dateStr && l.fim >= dateStr) {
+          const ini1 = new Date(l.inicio + 'T12:00:00');
+          const fim1 = new Date(l.fim    + 'T12:00:00');
+          const dias = Math.round((fim1 - ini1) / 86400000) + 1;
+          periodoStr = `${fmtData(l.inicio)} → ${fmtData(l.fim)} · ${dias}d`;
+        }
+      });
+    });
     return `<div class="an-cal-person">
       <div class="an-cal-av">${initials.toUpperCase()}</div>
       <div>
         <div class="an-cal-p-nome">${c.nome}</div>
         <div class="an-cal-p-det">${c.cargo || '—'} · ${setor}</div>
+        <div class="an-cal-p-det" style="color:var(--text-sec);font-weight:500">${periodoStr}</div>
       </div>
     </div>`;
   }).join('');
