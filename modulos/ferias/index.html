@@ -742,10 +742,40 @@
   .an-cal-day-num { font-size: 11px; font-weight: 600; }
   .an-cal-count { font-size: 13px; font-weight: 700; margin-top: 3px; line-height: 1; }
   .an-cal-count-sub { font-size: 9px; font-weight: 500; margin-top: 1px; opacity: .75; }
-  .an-cal-detail { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
-  .an-cal-detail-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .an-cal-detail-title { font-size: 12px; font-weight: 700; color: var(--text); }
-  .an-cal-detail-close { background: none; border: none; cursor: pointer; font-size: 14px; color: var(--text-ter); padding: 0 2px; }
+  /* tooltip flutuante do calendário */
+  .an-cal-tt {
+    position: fixed; z-index: 9998; pointer-events: none;
+    background: var(--surface, #fff); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.13);
+    padding: 10px 13px 12px; min-width: 220px; max-width: 280px;
+    opacity: 0; transition: opacity .12s ease;
+  }
+  .an-cal-tt.visible { opacity: 1; }
+  .an-cal-tt.locked { pointer-events: auto; }
+  .an-cal-tt-arrow {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 7px solid transparent; border-right: 7px solid transparent;
+  }
+  .an-cal-tt-arrow.down { bottom: -7px; border-top: 7px solid var(--border); }
+  .an-cal-tt-arrow.down::after {
+    content: ''; position: absolute; left: -6px; top: -8px;
+    width: 0; height: 0;
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-top: 6px solid var(--surface, #fff);
+  }
+  .an-cal-tt-arrow.up { top: -7px; border-bottom: 7px solid var(--border); }
+  .an-cal-tt-arrow.up::after {
+    content: ''; position: absolute; left: -6px; top: 1px;
+    width: 0; height: 0;
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-bottom: 6px solid var(--surface, #fff);
+  }
+  .an-cal-tt-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .an-cal-tt-title { font-size: 12px; font-weight: 700; color: var(--text); }
+  .an-cal-tt-close { background: none; border: none; cursor: pointer; font-size: 15px; color: var(--text-ter); padding: 0 2px; line-height: 1; }
+  .an-cal-tt-close:hover { color: var(--text); }
+  .an-cal-tt-list { max-height: 240px; overflow-y: auto; }
   .an-cal-person { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
   .an-cal-person:last-child { border-bottom: none; }
   .an-cal-av { width: 24px; height: 24px; border-radius: 50%; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #dbeafe; color: #1e40af; }
@@ -6650,8 +6680,7 @@ function renderDashCalendar() {
       <button class="an-cal-nav-btn" onclick="dashCalNav(1)">&#8250;</button>
     </div>
     <div class="an-cal-dow">${dowHtml}</div>
-    <div class="an-cal-grid">${gridHtml}</div>
-    <div id="dashCalDetail"><div style="font-size:11px;color:var(--text-ter);padding:10px 0 2px;text-align:center">Passe o mouse em um dia para ver quem está de férias</div></div>`;
+    <div class="an-cal-grid" onmouseleave="dashCalGridLeave()">${gridHtml}</div>`;
 }
 
 function dashCalNav(dir) {
@@ -6662,42 +6691,70 @@ function dashCalNav(dir) {
   renderDashCalendar();
 }
 
-function _dashCalRenderDetail(dateStr, count, locked) {
-  const detail = document.getElementById('dashCalDetail');
-  if (!detail) return;
-  if (count === 0) {
-    if (!locked) detail.innerHTML = `<div style="font-size:11px;color:var(--text-ter);padding:10px 0 2px;text-align:center">Passe o mouse em um dia para ver quem está de férias</div>`;
-    return;
+function _dashCalGetOrCreateTT() {
+  let tt = document.getElementById('dashCalTooltip');
+  if (!tt) {
+    tt = document.createElement('div');
+    tt.id = 'dashCalTooltip';
+    tt.className = 'an-cal-tt';
+    document.body.appendChild(tt);
   }
+  return tt;
+}
+
+function _dashCalPositionTT(tt, cellEl) {
+  tt.style.visibility = 'hidden';
+  requestAnimationFrame(() => {
+    const cr  = cellEl.getBoundingClientRect();
+    const tw  = tt.offsetWidth;
+    const th  = tt.offsetHeight;
+    const gap = 8;
+    let left = cr.left + cr.width / 2 - tw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+    const arrowEl = tt.querySelector('.an-cal-tt-arrow');
+    let top;
+    if (cr.top >= th + gap + 14) {
+      top = cr.top - th - gap;
+      if (arrowEl) arrowEl.className = 'an-cal-tt-arrow down';
+    } else {
+      top = cr.bottom + gap;
+      if (arrowEl) arrowEl.className = 'an-cal-tt-arrow up';
+    }
+    if (arrowEl) {
+      const arrowLeft = cr.left + cr.width / 2 - left;
+      arrowEl.style.left = Math.max(14, Math.min(arrowLeft, tw - 14)) + 'px';
+      arrowEl.style.transform = 'none';
+    }
+    tt.style.left = left + window.scrollX + 'px';
+    tt.style.top  = top  + window.scrollY + 'px';
+    tt.style.visibility = '';
+    tt.classList.add('visible');
+  });
+}
+
+function _dashCalBuildTT(dateStr, count, locked) {
   const { excluir, ativos } = _dashCalData;
   const pessoas = ativos.filter(c => c.registros.some(r => !excluir.has(r.status) &&
     r.lancamentos.some(l => l.inicio <= dateStr && l.fim >= dateStr)));
   const [yy, mm, dd] = dateStr.split('-');
-  const MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-  const label = `${parseInt(dd)}/${MESES_PT[parseInt(mm)-1]}/${yy}`;
-  const lockIcon = locked ? ' 🔒' : '';
-  const closeBtn = locked
-    ? `<button class="an-cal-detail-close" onclick="_dashCalUnlock()" title="Soltar seleção">✕</button>`
-    : '';
-  const hint = locked ? '' : `<div style="font-size:10px;color:var(--text-ter);margin-top:6px;text-align:center">Clique no dia para travar a lista e rolar</div>`;
   const MESES_ABR = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const label = `${parseInt(dd)}/${MESES_ABR[parseInt(mm)-1]}`;
   function fmtData(ds) {
-    const [,mm,dd] = ds.split('-');
-    return `${parseInt(dd)}/${MESES_ABR[parseInt(mm)-1]}`;
+    const [,m2,d2] = ds.split('-');
+    return `${parseInt(d2)}/${MESES_ABR[parseInt(m2)-1]}`;
   }
   const pessoasHtml = pessoas.map(c => {
-    const ini = (c.nome||'').split(' ');
-    const initials = ((ini[0]||'')[0]||'') + ((ini[ini.length-1]||'')[0]||'');
+    const partes = (c.nome || '').split(' ');
+    const initials = ((partes[0]||'')[0]||'') + ((partes[partes.length-1]||'')[0]||'');
     const setor = normSetor(c.setor) || c.setor || c.empresa || '—';
-    // encontra o lançamento ativo neste dia
     let periodoStr = '—';
     c.registros.forEach(r => {
       if (excluir.has(r.status)) return;
       r.lancamentos.forEach(l => {
         if (l.inicio <= dateStr && l.fim >= dateStr) {
-          const ini1 = new Date(l.inicio + 'T12:00:00');
-          const fim1 = new Date(l.fim    + 'T12:00:00');
-          const dias = Math.round((fim1 - ini1) / 86400000) + 1;
+          const d1 = new Date(l.inicio + 'T12:00:00');
+          const d2 = new Date(l.fim    + 'T12:00:00');
+          const dias = Math.round((d2 - d1) / 86400000) + 1;
           periodoStr = `${fmtData(l.inicio)} → ${fmtData(l.fim)} · ${dias}d`;
         }
       });
@@ -6706,40 +6763,57 @@ function _dashCalRenderDetail(dateStr, count, locked) {
       <div class="an-cal-av">${initials.toUpperCase()}</div>
       <div>
         <div class="an-cal-p-nome">${c.nome}</div>
-        <div class="an-cal-p-det">${c.cargo || '—'} · ${setor}</div>
+        <div class="an-cal-p-det">${setor}</div>
         <div class="an-cal-p-det" style="color:var(--text-sec);font-weight:500">${periodoStr}</div>
       </div>
     </div>`;
   }).join('');
-  detail.innerHTML = `<div class="an-cal-detail">
-    <div class="an-cal-detail-hdr">
-      <span class="an-cal-detail-title">${count} ausente${count!==1?'s':''} em ${label}${lockIcon}</span>
+  const closeBtn = locked
+    ? `<button class="an-cal-tt-close" onclick="_dashCalUnlock()" title="Fechar">✕</button>` : '';
+  const hint = locked ? '' : `<div style="font-size:10px;color:var(--text-ter);margin-top:6px;text-align:center">Clique para travar e rolar a lista</div>`;
+  return `<div class="an-cal-tt-hdr">
+      <span class="an-cal-tt-title">${count} ausente${count!==1?'s':''} em ${label}${locked?' 🔒':''}</span>
       ${closeBtn}
     </div>
-    <div style="max-height:220px;overflow-y:auto">${pessoasHtml}</div>
+    <div class="an-cal-tt-list">${pessoasHtml}</div>
     ${hint}
-  </div>`;
+    <div class="an-cal-tt-arrow down"></div>`;
 }
 
 function dashCalHover(dateStr, count) {
-  if (_dashCalLocked) return; // lista travada — hover não interfere
-  _dashCalRenderDetail(dateStr, count, false);
+  if (_dashCalLocked) return;
+  if (count === 0) { dashCalGridLeave(); return; }
+  const tt = _dashCalGetOrCreateTT();
+  const cellEl = event.currentTarget || event.target;
+  tt.classList.remove('locked');
+  tt.innerHTML = _dashCalBuildTT(dateStr, count, false);
+  _dashCalPositionTT(tt, cellEl);
+}
+
+function dashCalGridLeave() {
+  if (_dashCalLocked) return;
+  const tt = document.getElementById('dashCalTooltip');
+  if (tt) tt.classList.remove('visible');
 }
 
 function dashCalClick(dateStr, count) {
   if (count === 0) return;
   if (_dashCalLocked === dateStr) {
     _dashCalUnlock();
-  } else {
-    _dashCalLocked = dateStr;
-    _dashCalRenderDetail(dateStr, count, true);
+    return;
   }
+  _dashCalLocked = dateStr;
+  const tt = _dashCalGetOrCreateTT();
+  const cellEl = event.currentTarget || event.target;
+  tt.classList.add('locked');
+  tt.innerHTML = _dashCalBuildTT(dateStr, count, true);
+  _dashCalPositionTT(tt, cellEl);
 }
 
 function _dashCalUnlock() {
   _dashCalLocked = null;
-  const detail = document.getElementById('dashCalDetail');
-  if (detail) detail.innerHTML = `<div style="font-size:11px;color:var(--text-ter);padding:10px 0 2px;text-align:center">Passe o mouse em um dia para ver quem está de férias</div>`;
+  const tt = document.getElementById('dashCalTooltip');
+  if (tt) { tt.classList.remove('visible', 'locked'); }
 }
 
 // ─── Timeline / Gantt ────────────────────────────────────────────────────────
