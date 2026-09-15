@@ -726,6 +726,31 @@
   .an-risk-area-badge { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 8px; margin-left: 4px; }
   .an-risk-more { font-size: 11px; color: var(--text-ter); padding: 4px 10px; }
   .an-empty { font-size: 12px; color: var(--text-ter); padding: 20px 0; text-align: center; }
+  /* ── Calendário mensal */
+  .an-cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .an-cal-nav-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 2px 10px; cursor: pointer; font-size: 16px; color: var(--text-sec); line-height: 1.4; }
+  .an-cal-nav-btn:hover { background: var(--surface-hover); }
+  .an-cal-nav-label { font-size: 13px; font-weight: 700; color: var(--text); }
+  .an-cal-dow { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; margin-bottom: 3px; }
+  .an-cal-dow-lbl { font-size: 9px; font-weight: 600; color: var(--text-ter); text-align: center; padding: 2px 0; text-transform: uppercase; letter-spacing: .04em; }
+  .an-cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
+  .an-cal-cell { border-radius: 7px; padding: 5px 6px; min-height: 44px; cursor: pointer; transition: box-shadow 0.1s; }
+  .an-cal-cell:hover { box-shadow: 0 0 0 1.5px #1849A9; }
+  .an-cal-cell.empty { cursor: default; background: transparent !important; min-height: 44px; }
+  .an-cal-cell.empty:hover { box-shadow: none; }
+  .an-cal-cell.today { box-shadow: 0 0 0 1.5px #1849A9; }
+  .an-cal-day-num { font-size: 11px; font-weight: 600; }
+  .an-cal-count { font-size: 13px; font-weight: 700; margin-top: 3px; line-height: 1; }
+  .an-cal-count-sub { font-size: 9px; font-weight: 500; margin-top: 1px; opacity: .75; }
+  .an-cal-detail { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .an-cal-detail-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .an-cal-detail-title { font-size: 12px; font-weight: 700; color: var(--text); }
+  .an-cal-detail-close { background: none; border: none; cursor: pointer; font-size: 14px; color: var(--text-ter); padding: 0 2px; }
+  .an-cal-person { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .an-cal-person:last-child { border-bottom: none; }
+  .an-cal-av { width: 24px; height: 24px; border-radius: 50%; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #dbeafe; color: #1e40af; }
+  .an-cal-p-nome { font-size: 11px; font-weight: 600; color: var(--text); }
+  .an-cal-p-det { font-size: 10px; color: var(--text-ter); margin-top: 1px; }
   @media (max-width: 900px) {
     .an-kpi-row { grid-template-columns: repeat(2,1fr); }
     .an-row-bar, .an-row-bottom { grid-template-columns: 1fr; }
@@ -2002,6 +2027,9 @@
 <script>
 // ─── Configuração ────────────────────────────────────────────────────────────
 let ANO_REF = 0; // 0 = todos os anos
+let _dashCalYear  = new Date().getFullYear();
+let _dashCalMonth = new Date().getMonth();
+let _dashCalData  = null; // { excluir, ativos } — populado por renderAnalytics()
 const HOJE  = new Date().toISOString().slice(0, 10);
 
 let FERIAS_HISTORICO = [];
@@ -6080,27 +6108,7 @@ function renderAnalytics() {
   const MESES_FULL = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const picoLabel  = picoDia > 0 ? `dia ${picoDia}/${MESES_FULL[mesHoje]}` : '—';
 
-  // ── 5. Distribuição mensal
-  const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const distSets = Array.from({length: 12}, () => new Set());
-  ativos.forEach(c => {
-    c.registros.filter(r => !excluir.has(r.status)).forEach(reg => {
-      reg.lancamentos.forEach(l => {
-        const ini = new Date(l.inicio + 'T12:00:00');
-        const fim = new Date(l.fim    + 'T12:00:00');
-        for (let m = 0; m < 12; m++) {
-          const mIni = new Date(ano, m, 1);
-          const mFim = new Date(ano, m + 1, 0);
-          if (ini <= mFim && fim >= mIni) distSets[m].add(c.__key);
-        }
-      });
-    });
-  });
-  const distMensal = distSets.map(s => s.size);
-  const mesAtual   = new Date().getMonth();
-  const anoAtual   = new Date().getFullYear();
-
-  // ── 6. Distribuição por unidade (donut)
+  // ── 5. Distribuição por unidade (donut)
   const DONUT_COLORS = ['#1849A9','#0f6e56','#854f0b','#7C3AED','#64748B'];
   const unidadeMap = new Map();
   ativos.forEach(c => {
@@ -6177,28 +6185,8 @@ function renderAnalytics() {
       }).join('');
   const maisRisco = nRisco > 7 ? `<div class="an-risk-more">+ ${nRisco - 7} outros colaboradores</div>` : '';
 
-  // ── SVG: barras mensais
-  const BAR_W = 36, GAP = 12, BAR_H_MAX = 100, CHART_H = 148, PAD_L = 8;
-  const CHART_W = 12 * (BAR_W + GAP) + PAD_L;
-  const maxVal  = Math.max(...distMensal, 1);
-  const svgBars = distMensal.map((v, i) => {
-    const x     = PAD_L + i * (BAR_W + GAP);
-    const bH    = maxVal > 0 ? Math.round(v / maxVal * BAR_H_MAX) : 0;
-    const y     = CHART_H - 24 - bH;
-    const isCur = i === mesAtual && ano === anoAtual;
-    const fill  = isCur ? '#1849A9' : (v === 0 ? '#F1F5F9' : '#BFDBFE');
-    return `
-      <rect x="${x}" y="${y}" width="${BAR_W}" height="${Math.max(bH,2)}" rx="3" fill="${fill}"/>
-      ${v > 0 ? `<text x="${x+BAR_W/2}" y="${y-5}" text-anchor="middle" font-size="9" font-weight="700" fill="${isCur?'#1849A9':'#64748B'}">${v}</text>` : ''}
-      <text x="${x+BAR_W/2}" y="${CHART_H-5}" text-anchor="middle" font-size="10" fill="${isCur?'#1849A9':'#94A3B8'}">${MESES_ABREV[i]}</text>
-    `;
-  }).join('');
-  const yRef = CHART_H - 24 - BAR_H_MAX / 2;
-  const svgChart = `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:420px;overflow:visible;">
-    <line x1="${PAD_L}" y1="${yRef}" x2="${CHART_W}" y2="${yRef}" stroke="#E2E8F0" stroke-dasharray="4,3"/>
-    <text x="${PAD_L}" y="${yRef-3}" font-size="9" fill="#CBD5E1">${Math.round(maxVal/2)}</text>
-    ${svgBars}
-  </svg>`;
+  // ── salva dados para o calendário interativo
+  _dashCalData = { excluir, ativos };
 
   // ── HTML final
   content.innerHTML = `<div class="an-wrap">
@@ -6232,9 +6220,7 @@ function renderAnalytics() {
 
     <div class="an-charts-row an-row-bar">
       <div class="an-card">
-        <div class="an-card-title">Ausências por mês — ${ano}</div>
-        <div class="an-card-sub">Colaboradores únicos com ao menos um dia de férias em cada mês</div>
-        <div class="an-bar-chart">${svgChart}</div>
+        <div id="dashCalWrap"></div>
       </div>
       <div class="an-card">
         <div class="an-card-title">Distribuição por setor</div>
@@ -6257,6 +6243,105 @@ function renderAnalytics() {
       </div>
     </div>
 
+  </div>`;
+  renderDashCalendar();
+}
+
+// ─── Calendário mensal do Dashboard ──────────────────────────────────────────
+function _dashCalColor(n) {
+  if (n === 0) return { bg:'#F8FAFC', num:'#94A3B8', cnt:'#CBD5E1' };
+  if (n <= 2)  return { bg:'#EFF6FF', num:'#1849A9', cnt:'#1849A9' };
+  if (n <= 5)  return { bg:'#BFDBFE', num:'#1e40af', cnt:'#1e40af' };
+  if (n <= 9)  return { bg:'#3b82f6', num:'#fff',    cnt:'#fff'    };
+  return              { bg:'#1849A9', num:'#fff',    cnt:'#fff'    };
+}
+
+function renderDashCalendar() {
+  const wrap = document.getElementById('dashCalWrap');
+  if (!wrap || !_dashCalData) return;
+  const { excluir, ativos } = _dashCalData;
+  const y = _dashCalYear, m = _dashCalMonth;
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                    'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const DOW = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+  const primeiroDia = new Date(y, m, 1);
+  const totalDias   = new Date(y, m + 1, 0).getDate();
+  // dia da semana do dia 1 (0=Dom…6=Sáb), ajusta para Mon=0
+  let inicioGrid = (primeiroDia.getDay() + 6) % 7;
+  const hoje = HOJE; // 'YYYY-MM-DD'
+
+  // conta ausentes por dia
+  const counts = [];
+  for (let d = 1; d <= totalDias; d++) {
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const n  = ativos.filter(c => c.registros.some(r => !excluir.has(r.status) &&
+      r.lancamentos.some(l => l.inicio <= ds && l.fim >= ds))).length;
+    counts.push({ d, ds, n });
+  }
+
+  const dowHtml = DOW.map(l => `<div class="an-cal-dow-lbl">${l}</div>`).join('');
+  let gridHtml  = '';
+  for (let i = 0; i < inicioGrid; i++) gridHtml += '<div class="an-cal-cell empty"></div>';
+  counts.forEach(({ d, ds, n }) => {
+    const c       = _dashCalColor(n);
+    const isHoje  = ds === hoje;
+    const cntHtml = n > 0
+      ? `<div class="an-cal-count" style="color:${c.cnt}">${n}</div>
+         <div class="an-cal-count-sub" style="color:${c.cnt}">ausente${n!==1?'s':''}</div>`
+      : '';
+    gridHtml += `<div class="an-cal-cell${isHoje?' today':''}" style="background:${c.bg}"
+      onclick="dashCalDayClick('${ds}',${n})" title="${ds}">
+      <div class="an-cal-day-num" style="color:${c.num}">${d}</div>
+      ${cntHtml}
+    </div>`;
+  });
+
+  wrap.innerHTML = `
+    <div class="an-cal-nav">
+      <button class="an-cal-nav-btn" onclick="dashCalNav(-1)">&#8249;</button>
+      <span class="an-cal-nav-label">${MESES_PT[m]} ${y}</span>
+      <button class="an-cal-nav-btn" onclick="dashCalNav(1)">&#8250;</button>
+    </div>
+    <div class="an-cal-dow">${dowHtml}</div>
+    <div class="an-cal-grid">${gridHtml}</div>
+    <div id="dashCalDetail"></div>`;
+}
+
+function dashCalNav(dir) {
+  _dashCalMonth += dir;
+  if (_dashCalMonth < 0)  { _dashCalMonth = 11; _dashCalYear--; }
+  if (_dashCalMonth > 11) { _dashCalMonth = 0;  _dashCalYear++; }
+  renderDashCalendar();
+}
+
+function dashCalDayClick(dateStr, count) {
+  const detail = document.getElementById('dashCalDetail');
+  if (!detail) return;
+  if (count === 0) { detail.innerHTML = ''; return; }
+  const { excluir, ativos } = _dashCalData;
+  const pessoas = ativos.filter(c => c.registros.some(r => !excluir.has(r.status) &&
+    r.lancamentos.some(l => l.inicio <= dateStr && l.fim >= dateStr)));
+  const [yy, mm, dd] = dateStr.split('-');
+  const MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const label = `${parseInt(dd)}/${MESES_PT[parseInt(mm)-1]}/${yy}`;
+  const pessoasHtml = pessoas.map(c => {
+    const ini  = (c.nome||'').split(' ');
+    const initials = ((ini[0]||'')[0]||'') + ((ini[ini.length-1]||'')[0]||'');
+    const setor = normSetor(c.setor) || c.setor || c.empresa || '—';
+    return `<div class="an-cal-person">
+      <div class="an-cal-av">${initials.toUpperCase()}</div>
+      <div>
+        <div class="an-cal-p-nome">${c.nome}</div>
+        <div class="an-cal-p-det">${c.cargo || '—'} · ${setor}</div>
+      </div>
+    </div>`;
+  }).join('');
+  detail.innerHTML = `<div class="an-cal-detail">
+    <div class="an-cal-detail-hdr">
+      <span class="an-cal-detail-title">${count} ausente${count!==1?'s':''} em ${label}</span>
+      <button class="an-cal-detail-close" onclick="document.getElementById('dashCalDetail').innerHTML=''">✕</button>
+    </div>
+    ${pessoasHtml}
   </div>`;
 }
 
