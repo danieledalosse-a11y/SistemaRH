@@ -15,10 +15,9 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\autoatendimento\index.html`
 
 1. **Nunca separar CSS ou JS em arquivos externos** — tudo inline no index.html.
 2. **Nunca usar a chave secreta do Supabase no browser** — chave publicável apenas.
-3. **Nunca duplicar lógica** — renderFerias() e funções de férias reutilizam a mesma lógica do módulo colaborador; não criar versões paralelas.
-4. **Somente leitura na Fase 1** — nenhuma operação de escrita (sbPost/sbPatch/sbDelete) neste módulo até liberação explícita de fase posterior.
-5. **modulos/colaborador/index.html é intocável** — qualquer mudança no colaborador deve ser feita apenas naquele arquivo, nunca como efeito colateral de alterações no autoatendimento.
-6. **Auditar antes de implementar** — apresentar proposta antes de qualquer alteração.
+3. **Somente leitura na Fase 1** — nenhuma operação de escrita (sbPost/sbPatch/sbDelete) neste módulo até liberação explícita de fase posterior.
+4. **modulos/colaborador/index.html é intocável** — qualquer mudança no colaborador deve ser feita apenas naquele arquivo, nunca como efeito colateral de alterações no autoatendimento.
+5. **Auditar antes de implementar** — apresentar proposta antes de qualquer alteração.
 
 ## Propósito e diferenças em relação ao módulo colaborador
 
@@ -35,13 +34,14 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\autoatendimento\index.html`
 
 ```
 login.html
+  └─ salva sb_session no localStorage (access_token, refresh_token, expires_at)
   └─ salva sb_perfil no localStorage (nome, perfil, perfil_id, acesso_modulos, colaborador_id)
        └─ index.html (painel principal)
             └─ se perfil === 'colaborador' → redireciona para modulos/autoatendimento/index.html
             └─ outros perfis → painel normal do RH
 ```
 
-O redirecionamento está em `index.html` (~linha 207):
+O redirecionamento está em `index.html`:
 ```js
 (function() {
   try {
@@ -53,24 +53,83 @@ O redirecionamento está em `index.html` (~linha 207):
 })();
 ```
 
-## Inicialização do módulo (init)
+## Autenticação no módulo
+
+O módulo usa **dois** itens do localStorage:
+
+- `sb_session` — `{ access_token, refresh_token, expires_at }` — JWT do usuário Supabase
+- `sb_perfil` — `{ nome, perfil, colaborador_id, ... }` — dados do perfil carregados no login
+
+```js
+const SB_KEY = 'eyJhbGci...'; // chave publicável (anon key)
+
+function getAuthHeaders() {
+  const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+  const token = sess.access_token || SB_KEY;
+  return { apikey: SB_KEY, Authorization: `Bearer ${token}` };
+}
+
+async function sbGet(path) {
+  const r = await fetch(SB_URL + path, { headers: getAuthHeaders() });
+  return r.ok ? r.json() : [];
+}
+```
+
+Quando `access_token` existe, o Supabase avalia as RLS policies com o JWT do colaborador. Quando não existe (anon), avalia com role `anon`.
+
+## getSession()
+
+Mescla `sb_session` e `sb_perfil` em um único objeto, com validação de expiração:
+
+```js
+function getSession() {
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session') || 'null');
+    const perf = JSON.parse(localStorage.getItem('sb_perfil') || 'null');
+    if (!sess) return null;
+    if (sess.expires_at < Date.now()) { localStorage.clear(); return null; }
+    return { ...sess, ...(perf || {}) };
+  } catch { return null; }
+}
+```
+
+`expires_at` é em milissegundos (timestamp JS, não Unix seconds).
+
+## Inicialização (init)
 
 ```js
 async function init() {
-  const sess = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-  if (!sess.perfil) { window.location.href = '../../login.html'; return; }
-  if ((sess.perfil || '').toLowerCase() !== 'colaborador') {
-    window.location.href = '../../index.html'; return;
-  }
+  initAuth();              // preenche topbar com nome/avatar
+  const sess = getSession();
+  if (!sess) return;       // initAuth já redirecionou para login
+
   const colabId = sess.colaborador_id;
-  if (!colabId) { mostrarErro('Nenhum colaborador vinculado a este usuário. Contate o RH.'); return; }
+  if (!colabId) {
+    mostrarErro('Nenhum colaborador vinculado a este usuário. Contate o RH.');
+    return;
+  }
+
   const [colabs, ferias] = await Promise.all([
     sbGet(`/rest/v1/colaboradores?id=eq.${colabId}&limit=1`),
     sbGet(`/rest/v1/ferias?colaborador_id=eq.${colabId}&order=ano.desc`),
   ]);
-  _colab = colabs[0];
-  _ferias = ferias;
+
+  if (!colabs || !colabs.length) {
+    mostrarErro('Colaborador não encontrado. Contate o RH.');
+    return;
+  }
+
+  _colab  = colabs[0];
+  _ferias = ferias || [];
+
+  renderHero();
   renderResumo();
+
+  // esconde spinner e exibe conteúdo
+  document.getElementById('mainContainer').style.display = 'none';
+  document.getElementById('heroArea').style.display = '';
+  document.getElementById('tabsArea').style.display = '';
+  document.getElementById('tabContent').style.display = '';
 }
 ```
 
@@ -83,38 +142,108 @@ let _colab  = null;   // objeto do colaborador logado
 let _ferias = [];     // array de períodos de férias do colaborador
 ```
 
-Não existem `_avaliacoes`, `_ciclos`, `_pdi`, `_historico` — esses são exclusivos do módulo colaborador.
+## Layout da página
+
+```
+Topbar (navy #101828 = var(--accent))
+├── "Revest / Meu RH" (esquerda)
+└── nome do usuário + avatar + botão logout (direita)
+
+Hero (#heroArea) — visível após carregamento
+├── foto circular (foto_url ou iniciais)
+├── nome completo + cargo · setor
+└── chips: Ativo/Inativo | empresa_registro | empresa_atuacao | Mat. N | Admitido em DD/MM/AAAA
+
+Tabs (#tabsArea)
+├── Resumo → #sec-resumo
+└── Minhas Férias → #sec-ferias
+
+Spinner (#mainContainer) — visível durante carregamento, escondido depois
+```
 
 ## Abas disponíveis
 
-| Tab ID | Seção | Função de render |
+| Tab | ID da seção | Função de render |
 |---|---|---|
-| tab-resumo | sec-resumo | renderResumo() |
-| tab-ferias | sec-ferias | renderFerias() |
+| Resumo | `sec-resumo` | `renderResumo()` |
+| Minhas Férias | `sec-ferias` | `renderFerias()` (lazy — só chama ao clicar) |
+
+## renderHero()
+
+Preenche o bloco hero com dados do `_colab`:
+
+```js
+function renderHero() {
+  const c = _colab;
+  const ini = (c.nome||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const ph  = document.getElementById('heroPhoto');
+  if (c.foto_url) {
+    ph.innerHTML = `<img src="${c.foto_url}" style="..." alt="${c.nome}">`;
+  } else {
+    ph.textContent = ini;
+  }
+  document.getElementById('heroNome').textContent = c.nome || '—';
+  document.getElementById('heroSub').textContent  = [c.cargo, c.setor].filter(Boolean).join(' · ');
+  // chips: status ativo/inativo, empresa_registro_nome, empresa_atuacao_nome, matricula, data_admissao
+  document.getElementById('heroChips').innerHTML = chips;
+}
+```
+
+Campos usados: `c.nome`, `c.cargo`, `c.setor`, `c.foto_url`, `c.data_demissao`, `c.empresa_registro_nome`, `c.empresa_atuacao_nome`, `c.matricula`, `c.data_admissao`.
 
 ## renderResumo()
 
-Exibe apenas 2 cards:
-1. **Tempo de casa** — calculado a partir de `_colab.data_admissao`
-2. **Saldo de férias** — calculado a partir dos dados de `_ferias`
+Dois blocos:
 
-Não exibe cards de avaliação, PDI ou histórico (esses pertencem ao módulo colaborador).
+**Cards superiores (`#resumoCards`):**
+- `c-blue` — Tempo de casa: `tempoStr(c.data_admissao)` + data desde
+- `c-amber` — Saldo de férias: soma de `saldo > 0` de todos os PAs não cancelados
+
+Cálculo de saldo por PA:
+```js
+const saldo = totalDias - usado - (pa.dias_antecipados||0) - (pa.abono_pecuniario||0);
+if (saldo > 0 && pa.status !== 'cancelado') saldoPendente += saldo;
+```
+
+**Info-grids (`#resumoInfo`):**
+- **Dados Pessoais:** CPF, RG, data_nascimento, naturalidade, estado_civil, escolaridade
+- **Dados Profissionais:** matricula, cargo, setor, tipo_contrato, regime_horas, data_admissao, data_demissao (só se existir)
+
+`infoRow(label, val)` — omite a linha se val for falsy ou `'—'`.
 
 ## renderFerias()
 
-Idêntica à lógica do módulo colaborador — exibe tabela com períodos de férias, status, datas, saldo. Não há diferença funcional; qualquer correção de bug em férias deve ser aplicada nos dois módulos separadamente (sem criar função compartilhada externa).
+Renderiza os períodos aquisitivos de `_ferias` em ordem decrescente de ano (já ordenado pela query `order=ano.desc`). Lazy — só é chamada ao clicar na aba.
+
+Para cada PA exibe:
+- Header: "Período YYYY" + datas `pa_inicio → pa_fim` + badge de saldo
+- Lista de lançamentos com dot colorido: verde (passado), azul (futuro), laranja (em andamento)
+- Se sem lançamentos: texto "Sem lançamentos"
+
+Cores do badge de saldo:
+```
+saldo > 15  → saldo-ok   (verde)
+saldo > 0   → saldo-warn (âmbar)
+saldo ≤ 0   → saldo-crit (vermelho)
+```
+
+Dot de lançamento:
+```js
+const dot = l.fim && l.fim < HOJE ? '' : (l.inicio && l.inicio > HOJE ? 'fut' : 'pen');
+// '' = passado (verde)  'fut' = futuro (azul)  'pen' = em andamento (laranja)
+```
 
 ## logout()
 
 ```js
 function logout() {
+  localStorage.removeItem('sb_session');
   localStorage.removeItem('sb_perfil');
-  localStorage.removeItem('sb_token');
   window.location.href = '../../login.html';
 }
 ```
 
-Mesma profundidade de path que `modulos/colaborador/index.html`.
+Remove ambos os itens — `sb_session` e `sb_perfil`. Profundidade do path: `modulos/autoatendimento/` → `../../login.html`.
 
 ## RLS — Segurança no banco
 
@@ -160,8 +289,8 @@ auth_perfil() IN ('admin', 'rh', 'gestor', 'diretoria', 'logistica')
 OR (
   auth_perfil() = 'colaborador'
   AND auth_colaborador_id() IS NOT NULL
-  AND id = auth_colaborador_id()   -- para colaboradores
-  -- AND colaborador_id = auth_colaborador_id()   -- para ferias
+  AND id = auth_colaborador_id()           -- para tabela colaboradores
+  -- AND colaborador_id = auth_colaborador_id()  -- para tabela ferias
 )
 ```
 
@@ -185,7 +314,7 @@ Contém: criação das funções helper + habilitação de RLS + criação das 6
 
 | Fase | Funcionalidade | Status |
 |---|---|---|
-| 1 | RLS + Meu Perfil (Resumo) + Minhas Férias (leitura) | Concluída |
+| 1 | RLS + Hero + Meu Perfil (Resumo) + Minhas Férias (leitura) | Concluída |
 | 2 | Solicitação de férias pelo colaborador | Pendente — não iniciar sem validação da Fase 1 |
 | 3+ | Outros autoatendimentos | Pendente |
 
