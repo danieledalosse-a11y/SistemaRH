@@ -6311,9 +6311,21 @@ function renderAnalytics() {
   if (_riscoDadosCompletos.length === 0) {
     topRiscoHtml = `<div class="an-empty">Nenhum colaborador em risco de dobra</div>`;
   } else {
+    // ── Ícones por setor (approximação dos ícones do exemplo) ────────────────
+    const _SETOR_ICONE = s => {
+      const sl = (s||'').toLowerCase();
+      if (sl.includes('cd') || sl.includes('distribui')) return '📦';
+      if (sl.includes('compra')) return '🛒';
+      if (sl.includes('venda') || sl.includes('comercial')) return '🏪';
+      if (sl.includes('matriz') || sl.includes('adm') || sl.includes('financ')) return '🏢';
+      if (sl.includes('logist') || sl.includes('expedi')) return '🚚';
+      if (sl.includes('rh') || sl.includes('pessoas')) return '👥';
+      if (sl.includes('ti') || sl.includes('tech')) return '💻';
+      return '📍';
+    };
+
     // ── Donut SVG ────────────────────────────────────────────────────────────
-    const _OR = 88, _IR = 54, _CX = 110, _CY = 110; // outer/inner radius, center
-    const _VW = 220, _VH = 220;
+    const _OR = 80, _IR = 50, _CX = 100, _CY = 100;
     const total = _riscoDadosCompletos.length;
     let _angulo = -Math.PI / 2;
     let _slices = '', _extLabels = '';
@@ -6321,10 +6333,8 @@ function renderAnalytics() {
       const frac = items.length / total;
       const ang  = frac * 2 * Math.PI;
       const midAng = _angulo + ang / 2;
-      // arco externo
       const ox1 = _CX + _OR * Math.cos(_angulo), oy1 = _CY + _OR * Math.sin(_angulo);
       const ox2 = _CX + _OR * Math.cos(_angulo + ang), oy2 = _CY + _OR * Math.sin(_angulo + ang);
-      // arco interno (sentido inverso)
       const ix1 = _CX + _IR * Math.cos(_angulo + ang), iy1 = _CY + _IR * Math.sin(_angulo + ang);
       const ix2 = _CX + _IR * Math.cos(_angulo), iy2 = _CY + _IR * Math.sin(_angulo);
       const large = ang > Math.PI ? 1 : 0;
@@ -6335,55 +6345,54 @@ function renderAnalytics() {
         fill="${corSet.bg}" stroke="${corSet.borda}" stroke-width="2.5" style="cursor:pointer;transition:filter .15s"
         onmouseover="dashPizzaTooltip(event,'${setorEsc}',${items.length},${pct})" onmouseout="dashPizzaTooltipHide()"
         onclick="dashRiscoFiltrar('${setorEsc}')"/>`;
-      // rótulo externo: linha + texto (só se fatia ≥ 8%)
-      if (frac >= 0.08) {
-        const _LR1 = _OR + 6, _LR2 = _OR + 18;
-        const lx1 = (_CX + _LR1 * Math.cos(midAng)).toFixed(1);
-        const ly1 = (_CY + _LR1 * Math.sin(midAng)).toFixed(1);
-        const lx2 = (_CX + _LR2 * Math.cos(midAng)).toFixed(1);
-        const ly2 = (_CY + _LR2 * Math.sin(midAng)).toFixed(1);
-        const anchor = Math.cos(midAng) > 0 ? 'start' : 'end';
-        const tx = (_CX + (_LR2 + 3) * Math.cos(midAng)).toFixed(1);
-        const ty = (_CY + (_LR2 + 3) * Math.sin(midAng)).toFixed(1);
-        _extLabels += `<line x1="${lx1}" y1="${ly1}" x2="${lx2}" y2="${ly2}" stroke="${corSet.borda}" stroke-width="1.2" style="pointer-events:none"/>
-          <text x="${tx}" y="${ty}" text-anchor="${anchor}" dominant-baseline="central" font-size="9" font-weight="700" fill="${corSet.borda}" style="pointer-events:none">${items.length} Colab.</text>`;
+      // rótulo externo com linha: nome + contagem + percentual
+      if (frac >= 0.06) {
+        const _LA = _OR + 8, _LB = _OR + 22;
+        const lax = (_CX + _LA * Math.cos(midAng)).toFixed(1), lay = (_CY + _LA * Math.sin(midAng)).toFixed(1);
+        const lbx = (_CX + _LB * Math.cos(midAng)).toFixed(1), lby = (_CY + _LB * Math.sin(midAng)).toFixed(1);
+        const anchor = Math.cos(midAng) >= 0 ? 'start' : 'end';
+        const tx = (_CX + (_LB + 3) * Math.cos(midAng)).toFixed(1);
+        const ty = (_CY + (_LB + 3) * Math.sin(midAng)).toFixed(1);
+        _extLabels += `
+          <line x1="${lax}" y1="${lay}" x2="${lbx}" y2="${lby}" stroke="${corSet.borda}" stroke-width="1" opacity=".7" style="pointer-events:none"/>
+          <text x="${tx}" y="${parseFloat(ty)-5}" text-anchor="${anchor}" font-size="8.5" font-weight="700" fill="${corSet.borda}" style="pointer-events:none">${setor}</text>
+          <text x="${tx}" y="${parseFloat(ty)+6}" text-anchor="${anchor}" font-size="8" fill="${corSet.borda}" opacity=".8" style="pointer-events:none">${items.length} Colab. · ${pct}%</text>`;
       }
       _angulo += ang;
     });
 
-    // legenda com barra horizontal
+    // ── Legenda: fundo colorido preenchido + ícone + barra + % ───────────────
     const _legendaHtml = _riscoSetores.map(([setor, items]) => {
       const corSet = corDoSetor(setor);
       const pct = Math.round(items.length / total * 100);
       const setorEsc = setor.replace(/'/g,"\\'");
-      return `<div onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:4px;transition:background .12s" onmouseover="this.style.background='${corSet.bg}'" onmouseout="this.style.background='transparent'">
-        <div style="width:32px;height:32px;border-radius:8px;background:${corSet.bg};border:1.5px solid ${corSet.borda};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <span style="font-size:10px;font-weight:800;color:${corSet.borda}">${setor.slice(0,2).toUpperCase()}</span>
-        </div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">${setor}</div>
-          <div style="height:5px;border-radius:3px;background:var(--border);overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${corSet.borda};border-radius:3px;transition:width .4s"></div>
+      const icone = _SETOR_ICONE(setor);
+      return `<div onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;border-radius:9px;overflow:hidden;margin-bottom:7px;box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 3px 10px rgba(0,0,0,0.12)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)'">
+        <div style="background:${corSet.borda};color:#fff;width:42px;min-height:44px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${icone}</div>
+        <div style="flex:1;background:${corSet.bg};padding:8px 12px;display:flex;align-items:center;gap:10px;min-height:44px">
+          <span style="font-size:12px;font-weight:700;color:${corSet.borda};flex:1">${setor}</span>
+          <div style="width:120px;height:6px;border-radius:3px;background:rgba(0,0,0,0.08);overflow:hidden;flex-shrink:0">
+            <div style="height:100%;width:${pct}%;background:${corSet.borda};border-radius:3px"></div>
           </div>
+          <span style="font-size:12px;font-weight:700;color:${corSet.borda};min-width:34px;text-align:right">${pct}%</span>
         </div>
-        <div style="font-size:13px;font-weight:700;color:${corSet.borda};min-width:28px;text-align:right">${pct}%</div>
       </div>`;
     }).join('');
 
     topRiscoHtml = `
       <div id="dashPizzaTip" style="display:none;position:fixed;background:#1e293b;color:#fff;font-size:12px;font-weight:600;padding:6px 10px;border-radius:7px;pointer-events:none;z-index:9999;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.2)"></div>
-      <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap">
-        <div style="flex-shrink:0;position:relative">
-          <svg width="${_VW}" height="${_VH}" viewBox="0 0 ${_VW} ${_VH}" overflow="visible">
+      <div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap;margin-bottom:20px">
+        <div style="flex-shrink:0">
+          <svg width="200" height="200" viewBox="0 0 200 200" overflow="visible">
             ${_slices}
             ${_extLabels}
-            <text x="${_CX}" y="${_CY - 8}" text-anchor="middle" font-size="32" font-weight="800" fill="var(--text)">${total}</text>
-            <text x="${_CX}" y="${_CY + 14}" text-anchor="middle" font-size="9" font-weight="600" fill="var(--text-ter)" letter-spacing="0.05em">COLABORADORES</text>
+            <text x="${_CX}" y="${_CY - 6}" text-anchor="middle" font-size="30" font-weight="800" fill="var(--text)">${total}</text>
+            <text x="${_CX}" y="${_CY + 14}" text-anchor="middle" font-size="8" font-weight="700" fill="var(--text-ter)" letter-spacing=".08em">COLABORADORES</text>
           </svg>
         </div>
-        <div style="flex:1;min-width:200px">${_legendaHtml}</div>
+        <div style="flex:1;min-width:220px">${_legendaHtml}</div>
       </div>
-      <div id="dashRiscoLista" style="margin-top:14px"></div>`;
+      <div id="dashRiscoLista"></div>`;
   }
   const maisRisco = '';
 
@@ -6447,23 +6456,19 @@ function renderAnalytics() {
       </div>
     </div>
 
-    <div class="an-card an-row-bottom" style="margin-bottom:0;padding:0;overflow:hidden">
-      <div style="background:#1e293b;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+    <div class="an-card an-row-bottom" style="margin-bottom:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px">Visão Executiva</div>
-          <div style="font-size:14px;font-weight:700;color:#f1f5f9">Gestão de Risco de Dobra de Férias</div>
+          <div style="font-size:15px;font-weight:700;color:var(--text)">Risco de dobra — férias a vencer em 180 dias sem agendamento</div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;background:${nRisco>0?'#7f1d1d':'#14532d'};padding:6px 14px;border-radius:20px">
-          <span style="font-size:20px;font-weight:800;color:#fff">${nRisco}</span>
-          <span style="font-size:11px;color:rgba(255,255,255,0.75);font-weight:500">colaborador${nRisco!==1?'es':''}</span>
-          ${nRisco>0?'<span style="font-size:14px">⚠️</span>':'<span style="font-size:14px">✅</span>'}
+        <div style="display:flex;align-items:center;gap:8px;background:${nRisco>0?'#FEF2F2':'#F0FDF4'};border:1.5px solid ${nRisco>0?'#FECACA':'#BBF7D0'};padding:6px 14px;border-radius:10px">
+          <span style="font-size:20px;font-weight:800;color:${nRisco>0?'#DC2626':'#16A34A'}">${nRisco}</span>
+          <span style="font-size:12px;color:${nRisco>0?'#DC2626':'#16A34A'};font-weight:600">colaborador${nRisco!==1?'es':''}</span>
+          <span style="font-size:15px">${nRisco>0?'⚠️':'✅'}</span>
         </div>
       </div>
-      <div style="padding:18px 20px 20px">
-        <div style="font-size:11px;color:var(--text-ter);margin-bottom:14px">Férias a vencer em 180 dias sem agendamento</div>
-        ${topRiscoHtml}
-        ${maisRisco}
-      </div>
+      ${topRiscoHtml}
+      ${maisRisco}
     </div>
 
   </div>`;
