@@ -1863,7 +1863,7 @@ function renderEstoque() {
             <div style="height:100%;width:${pct}%;background:${barColor};border-radius:99px;transition:width .4s;"></div>
           </div>
         </div>
-        <button onclick="abrirAjusteEstoque('${l.id}','${g.item?.nome || ''}','${l.tamanho || 'Único'}',${qtd})" title="Ajustar quantidade" style="flex-shrink:0;background:#EEF4FF;border:1px solid #C7D7FD;color:#1849A9;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .12s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#EEF4FF'">
+        <button onclick="abrirAjusteEstoque('${l.id}','${g.item?.nome || ''}','${l.tamanho || 'Único'}',${qtd},'${g.item?.id || ''}','${l.almoxarifado_id || ''}')" title="Ajustar quantidade" style="flex-shrink:0;background:#EEF4FF;border:1px solid #C7D7FD;color:#1849A9;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .12s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#EEF4FF'">
           ⚖ Ajuste
         </button>
       </div>`;
@@ -5030,10 +5030,16 @@ async function imprimirComprovante(tipo) {
 }
 
 // ─── Ajuste de Estoque ────────────────────────────────────────────────────────
-let _ajusteEstoqueId = null;
+let _ajusteEstoqueId  = null;
+let _ajusteItemId     = null;
+let _ajusteAlmoxId    = null;
+let _ajusteTamanho    = null;
 
-function abrirAjusteEstoque(estoqueId, itemNome, tamanho, qtdAtual) {
+function abrirAjusteEstoque(estoqueId, itemNome, tamanho, qtdAtual, itemId, almoxId) {
   _ajusteEstoqueId = estoqueId;
+  _ajusteItemId    = itemId  || null;
+  _ajusteAlmoxId   = almoxId || null;
+  _ajusteTamanho   = tamanho || null;
   document.getElementById('ajusteNomeItem').textContent = `${itemNome} — ${tamanho}`;
   document.getElementById('ajusteQtdAtual').textContent = qtdAtual;
   document.getElementById('ajusteNovaQtd').value = qtdAtual;
@@ -5044,7 +5050,7 @@ function abrirAjusteEstoque(estoqueId, itemNome, tamanho, qtdAtual) {
 
 function fecharAjusteEstoque() {
   document.getElementById('modalAjusteEstoque').style.display = 'none';
-  _ajusteEstoqueId = null;
+  _ajusteEstoqueId = _ajusteItemId = _ajusteAlmoxId = _ajusteTamanho = null;
 }
 
 async function confirmarAjusteEstoque() {
@@ -5062,11 +5068,16 @@ async function confirmarAjusteEstoque() {
     // 2. Registra movimentação de ajuste para auditoria
     const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     await sbPost('unif_movimentacoes', {
-      estoque_id:    _ajusteEstoqueId,
-      tipo:          'ajuste',
-      quantidade:    novaQtd,
-      observacao:    obs || 'Ajuste manual de balanço',
-      registrado_por: perfil.nome || 'RH'
+      item_id:           _ajusteItemId    || null,
+      almoxarifado_id:   _ajusteAlmoxId   || null,
+      tamanho:           _ajusteTamanho   || null,
+      tipo:              'ajuste',
+      motivo:            'ajuste',
+      quantidade:        novaQtd,
+      data_movimentacao: new Date().toISOString().split('T')[0],
+      confirmado:        true,
+      obs:               obs || 'Ajuste manual de balanço',
+      registrado_por:    perfil.nome || 'RH',
     });
 
     toast('✓ Estoque ajustado com sucesso');
