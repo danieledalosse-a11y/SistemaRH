@@ -75,6 +75,13 @@
   .btn-link-limpar:hover { text-decoration: underline; }
   .metric-val { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
   .metric-label { font-size: 12px; color: var(--text-sec); margin-top: 4px; line-height: 1.4; font-weight: 500; }
+  .kpi-rel-wrap { position:relative; display:inline-block; margin-top:6px; }
+  .kpi-rel-btn { background:none; border:1px solid var(--border); border-radius:6px; padding:3px 8px; font-size:11px; color:var(--text-sec); cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .kpi-rel-btn:hover { background:var(--surface); color:var(--navy); }
+  .kpi-rel-menu { display:none; position:absolute; left:0; top:calc(100% + 4px); background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.12); min-width:160px; z-index:999; overflow:hidden; }
+  .kpi-rel-menu button { display:block; width:100%; text-align:left; padding:9px 14px; border:none; background:none; font-size:13px; cursor:pointer; color:var(--text); font-family:inherit; }
+  .kpi-rel-menu button:hover { background:var(--surface); }
+  .kpi-rel-menu button+button { border-top:1px solid var(--border); }
   .metric-pending { position: absolute; top: 8px; right: 10px; font-size: 10px; background: #f0f0f0; color: #888; padding: 2px 6px; border-radius: 4px; }
 
   /* Barra de empresa */
@@ -393,6 +400,7 @@
       <div class="metric-right">
         <div class="metric-val" style="color:var(--green);" id="m-ativos">—</div>
         <div class="metric-label">Colaboradores ativos</div>
+        <div class="kpi-rel-wrap" id="wrap-kpi-ativos"><button class="kpi-rel-btn" onclick="event.stopPropagation();toggleMenuKPI(event,'ativos')">📄 Relatório ▾</button><div class="kpi-rel-menu" id="menu-kpi-ativos"><button onclick="gerarRelatorioKPI('ativos','pdf')">📄 PDF / Imprimir</button><button onclick="gerarRelatorioKPI('ativos','excel')">📊 Excel</button></div></div>
       </div>
     </div>
     <div class="metric clickable" onclick="filtrarGlobal('masc')">
@@ -402,6 +410,7 @@
       <div class="metric-right">
         <div class="metric-val" style="color:var(--blue);" id="m-masc">—</div>
         <div class="metric-label">Masculino</div>
+        <div class="kpi-rel-wrap" id="wrap-kpi-masc"><button class="kpi-rel-btn" onclick="event.stopPropagation();toggleMenuKPI(event,'masc')">📄 Relatório ▾</button><div class="kpi-rel-menu" id="menu-kpi-masc"><button onclick="gerarRelatorioKPI('masc','pdf')">📄 PDF / Imprimir</button><button onclick="gerarRelatorioKPI('masc','excel')">📊 Excel</button></div></div>
       </div>
     </div>
     <div class="metric clickable" onclick="filtrarGlobal('fem')">
@@ -411,6 +420,7 @@
       <div class="metric-right">
         <div class="metric-val" style="color:var(--purple);" id="m-fem">—</div>
         <div class="metric-label">Feminino</div>
+        <div class="kpi-rel-wrap" id="wrap-kpi-fem"><button class="kpi-rel-btn" onclick="event.stopPropagation();toggleMenuKPI(event,'fem')">📄 Relatório ▾</button><div class="kpi-rel-menu" id="menu-kpi-fem"><button onclick="gerarRelatorioKPI('fem','pdf')">📄 PDF / Imprimir</button><button onclick="gerarRelatorioKPI('fem','excel')">📊 Excel</button></div></div>
       </div>
     </div>
     <div class="metric clickable" onclick="filtrarGlobal('aprendiz')">
@@ -420,6 +430,7 @@
       <div class="metric-right">
         <div class="metric-val" style="color:#16A34A;" id="m-aprendiz">—</div>
         <div class="metric-label">Jovem Aprendiz</div>
+        <div class="kpi-rel-wrap" id="wrap-kpi-aprendiz"><button class="kpi-rel-btn" onclick="event.stopPropagation();toggleMenuKPI(event,'aprendiz')">📄 Relatório ▾</button><div class="kpi-rel-menu" id="menu-kpi-aprendiz"><button onclick="gerarRelatorioKPI('aprendiz','pdf')">📄 PDF / Imprimir</button><button onclick="gerarRelatorioKPI('aprendiz','excel')">📊 Excel</button></div></div>
       </div>
     </div>
     <div class="metric clickable" onclick="filtrarGlobal('pcd')">
@@ -429,6 +440,7 @@
       <div class="metric-right">
         <div class="metric-val" style="color:#EA580C;" id="m-pcd">—</div>
         <div class="metric-label">PCD</div>
+        <div class="kpi-rel-wrap" id="wrap-kpi-pcd"><button class="kpi-rel-btn" onclick="event.stopPropagation();toggleMenuKPI(event,'pcd')">📄 Relatório ▾</button><div class="kpi-rel-menu" id="menu-kpi-pcd"><button onclick="gerarRelatorioKPI('pcd','pdf')">📄 PDF / Imprimir</button><button onclick="gerarRelatorioKPI('pcd','excel')">📊 Excel</button></div></div>
       </div>
     </div>
     <div class="metric">
@@ -2476,6 +2488,58 @@ function exportarExcel() {
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   a.download = nomeArquivo;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function toggleMenuKPI(e, tipo) {
+  if (e) e.stopPropagation();
+  // fecha todos os outros menus KPI abertos
+  document.querySelectorAll('.kpi-rel-menu').forEach(m => {
+    if (m.id !== 'menu-kpi-' + tipo) m.style.display = 'none';
+  });
+  const m = document.getElementById('menu-kpi-' + tipo);
+  if (!m) return;
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+  if (m.style.display === 'block') {
+    const fechar = () => { m.style.display = 'none'; document.removeEventListener('click', fechar); };
+    setTimeout(() => document.addEventListener('click', fechar), 0);
+  }
+}
+
+function gerarRelatorioKPI(tipo, formato) {
+  // fecha menus
+  document.querySelectorAll('.kpi-rel-menu').forEach(m => m.style.display = 'none');
+  // monta lista filtrada direto de COLABORADORES (ignora filtros da tabela)
+  const labels = { ativos:'Colaboradores Ativos', masc:'Masculino', fem:'Feminino', aprendiz:'Jovem Aprendiz', pcd:'PCD' };
+  const lista = COLABORADORES.filter(c => {
+    if (c.proLabore) return false;
+    if (tipo === 'masc')    return c.situacao === 'ativo' && (c.sexo === 'M' || c.sexo === 'Masc');
+    if (tipo === 'fem')     return c.situacao === 'ativo' && (c.sexo === 'F' || c.sexo === 'Fem');
+    if (tipo === 'aprendiz') return c.situacao === 'ativo' && c.aprendiz;
+    if (tipo === 'pcd')     return c.situacao === 'ativo' && c.pcd;
+    return c.situacao === 'ativo'; // ativos
+  });
+  if (!lista.length) { alert('Nenhum dado para gerar relatório.'); return; }
+  // substitui temporariamente FILTRADOS e chips
+  const backupFiltrados = FILTRADOS;
+  FILTRADOS = lista;
+  // injeta chip personalizado via override temporário dos selects
+  const sitEl = document.getElementById('filtroSituacao');
+  const sexEl = document.getElementById('filtroSexo');
+  const backupSit = sitEl.value, backupSex = sexEl.value;
+  sitEl.value = 'ativo';
+  sexEl.value = tipo === 'masc' ? 'M' : tipo === 'fem' ? 'F' : '';
+  window._filtroAprendizBackup = window._filtroAprendiz;
+  window._filtroPcdBackup      = window._filtroPcd;
+  window._filtroAprendiz = tipo === 'aprendiz';
+  window._filtroPcd      = tipo === 'pcd';
+  if (formato === 'excel') gerarRelatorioExcel();
+  else gerarRelatorioPDF();
+  // restaura
+  FILTRADOS = backupFiltrados;
+  sitEl.value = backupSit;
+  sexEl.value = backupSex;
+  window._filtroAprendiz = window._filtroAprendizBackup;
+  window._filtroPcd      = window._filtroPcdBackup;
 }
 
 function toggleMenuRelatorio(e) {
