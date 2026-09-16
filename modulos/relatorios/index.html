@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central de Relatórios — Sistema RH</title>
+<style>
+  :root {
+    --bg:       #F0F2F5;
+    --surface:  #ffffff;
+    --border:   #E4E7EC;
+    --text:     #101828;
+    --text-sec: #667085;
+    --blue:     #1849A9;
+    --blue-bg:  #EFF4FF;
+    --radius:   12px;
+    --navy:     #2C3E6B;
+    --navy-dk:  #1a2d52;
+    --accent:   #3B72B0;
+    --teal:     #1A7F6A;
+    --teal-lt:  #5DD6B8;
+    --page-bg:  #EEF2F9;
+    --card-bg:  #FFFFFF;
+    --gray-bg:  #F0F4FB;
+    --bdr:      #DDE5F0;
+    --txt:      #1E2740;
+    --txt-sec:  #5E718A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; -webkit-font-smoothing: antialiased; }
+
+  /* ── Topbar ── */
+  .topbar { background: var(--navy); color: #fff; padding: 0 28px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+  .topbar-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; }
+  .topbar-icon svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .topbar-title { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.65); }
+  .topbar-sep { color: rgba(255,255,255,0.25); margin: 0 4px; }
+  .topbar-mod { font-size: 15px; font-weight: 600; color: #fff; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .topbar-user { font-size: 13px; color: rgba(255,255,255,0.65); }
+  .btn-logout { background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: rgba(255,255,255,0.65); padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: inherit; transition: background .15s; }
+  .btn-logout:hover { background: rgba(255,255,255,0.1); }
+
+  /* ── Layout principal ── */
+  .layout { display: flex; height: calc(100vh - 56px); overflow: hidden; }
+
+  /* ── Coluna esquerda: Central ── */
+  .central { flex: 1; overflow-y: auto; padding: 24px 22px 36px; background: var(--page-bg); }
+
+  /* Header do módulo */
+  .mod-header { background: var(--navy); border-radius: 12px; padding: 22px 26px 18px; margin-bottom: 24px; }
+  .mod-breadcrumb { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.38); margin-bottom: 6px; }
+  .mod-title { font-size: 19px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .mod-subtitle { font-size: 12px; color: rgba(255,255,255,.5); }
+
+  /* Categoria label */
+  .cat-label { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; margin-top: 22px; }
+  .cat-label:first-of-type { margin-top: 0; }
+  .cat-label-icon { font-size: 14px; color: var(--txt-sec); }
+  .cat-label-text { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--txt-sec); white-space: nowrap; }
+  .cat-label-line { flex: 1; height: 1px; background: var(--bdr); }
+
+  /* Grid de cards */
+  .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+
+  /* Card */
+  .rel-card {
+    background: var(--card-bg);
+    border: 1px solid var(--bdr);
+    border-radius: 10px;
+    padding: 14px 15px 12px;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .rel-card:hover { border-color: #A8C0E0; box-shadow: 0 2px 10px rgba(44,62,107,.07); }
+  .rel-card.active { border-color: var(--accent); background: #F5F9FF; box-shadow: 0 0 0 2px rgba(59,114,176,.15); }
+  .rel-card.future { opacity: .52; cursor: default; pointer-events: none; }
+
+  .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .card-name { font-size: 13px; font-weight: 700; color: var(--navy); line-height: 1.3; }
+  .card-arrow { color: var(--accent); opacity: 0; transition: opacity .15s; font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .rel-card:hover .card-arrow, .rel-card.active .card-arrow { opacity: 1; }
+  .card-desc { font-size: 11.5px; color: var(--txt-sec); line-height: 1.5; }
+  .card-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 9px; font-size: 10px; font-weight: 600; border-radius: 20px; padding: 2px 8px; }
+  .tag-new   { background: #FFF3E0; color: #BF6000; }
+  .tag-exist { background: #E8F0FE; color: #1A56C4; }
+  .tag-soon  { background: var(--gray-bg); color: var(--txt-sec); }
+
+  /* ── Painel lateral de detalhe ── */
+  .detail-panel {
+    width: 0; overflow: hidden;
+    background: var(--card-bg);
+    border-left: 1px solid var(--bdr);
+    transition: width .25s ease;
+    flex-shrink: 0;
+    display: flex; flex-direction: column;
+  }
+  .detail-panel.open { width: 360px; overflow-y: auto; }
+
+  .detail-inner { padding: 24px 22px 28px; min-width: 360px; }
+
+  .detail-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .detail-cat { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--txt-sec); }
+  .detail-close-btn { background: var(--gray-bg); border: none; border-radius: 7px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--txt-sec); font-size: 16px; transition: background .15s; line-height: 1; }
+  .detail-close-btn:hover { background: var(--bdr); }
+
+  .detail-title { font-size: 17px; font-weight: 700; color: var(--navy); line-height: 1.3; margin-bottom: 7px; }
+  .detail-desc { font-size: 12.5px; color: var(--txt-sec); line-height: 1.6; margin-bottom: 20px; }
+  .detail-divider { height: 1px; background: var(--bdr); margin-bottom: 16px; }
+
+  /* Filtros no painel */
+  .filters-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--txt-sec); margin-bottom: 12px; }
+  .filter-row { margin-bottom: 12px; }
+  .filter-label { font-size: 11px; font-weight: 600; color: var(--txt); margin-bottom: 5px; display: block; }
+  .filter-select, .filter-input {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--bdr);
+    border-radius: 7px; background: var(--gray-bg);
+    font-size: 12px; color: var(--txt); outline: none;
+    font-family: inherit; transition: border-color .15s;
+  }
+  .filter-select:focus, .filter-input:focus { border-color: var(--accent); background: #fff; }
+
+  /* Marcos chips */
+  .marcos-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .marco-chip { background: var(--navy); color: #fff; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 600; }
+
+  /* Botões de ação */
+  .detail-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .btn-pdf {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    width: 100%; background: var(--navy); color: #fff; border: none;
+    border-radius: 8px; padding: 11px; font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: background .15s;
+  }
+  .btn-pdf:hover { background: var(--navy-dk); }
+  .btn-excel {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    width: 100%; background: #1D6F42; color: #fff; border: none;
+    border-radius: 8px; padding: 11px; font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: background .15s;
+  }
+  .btn-excel:hover { background: #155230; }
+
+  /* Nota técnica */
+  .detail-note { margin-top: 16px; background: var(--gray-bg); border-radius: 8px; padding: 10px 12px; font-size: 11px; color: var(--txt-sec); line-height: 1.55; display: flex; gap: 7px; }
+  .note-icon { flex-shrink: 0; margin-top: 1px; color: var(--accent); }
+
+  /* Loading / erro */
+  #loadingOverlay { position: fixed; inset: 0; background: rgba(240,242,245,.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 999; }
+  #loadingOverlay p { font-size: 14px; color: var(--txt-sec); }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--bdr); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 700px) {
+    .layout { flex-direction: column; height: auto; overflow: visible; }
+    .central { overflow-y: visible; }
+    .detail-panel.open { width: 100%; border-left: none; border-top: 1px solid var(--bdr); overflow: visible; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<header class="topbar">
+  <a class="topbar-brand" href="../../index.html">
+    <div class="topbar-icon">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </div>
+    <span class="topbar-title">Sistema RH</span>
+  </a>
+  <span class="topbar-sep">›</span>
+  <span class="topbar-mod">Relatórios</span>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userNomeTopbar"></span>
+    <button class="btn-logout" onclick="logout()">Sair</button>
+  </div>
+</header>
+
+<!-- Loading -->
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <p>Carregando colaboradores…</p>
+</div>
+
+<!-- Layout principal -->
+<div class="layout">
+
+  <!-- ── Central (cards) ── -->
+  <div class="central">
+    <div class="mod-header">
+      <div class="mod-breadcrumb">Sistema RH › Módulo</div>
+      <div class="mod-title">Central de Relatórios</div>
+      <div class="mod-subtitle">Selecione um relatório para configurar e exportar</div>
+    </div>
+
+    <!-- Periódicos -->
+    <div class="cat-label">
+      <span class="cat-label-text">📅 Periódicos</span>
+      <span class="cat-label-line"></span>
+    </div>
+    <div class="cards-grid">
+      <div class="rel-card" id="card-aniversarios" onclick="abrirDetalhe('aniversarios')">
+        <div class="card-top">
+          <div class="card-name">Aniversários do Mês</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Aniversariantes agrupados por gestor para o mês escolhido.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
+      </div>
+      <div class="rel-card" id="card-tempocasa" onclick="abrirDetalhe('tempocasa')">
+        <div class="card-top">
+          <div class="card-name">Tempo de Casa</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Colaboradores que completam marcos de empresa (1, 5, 10… anos) no mês.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
+      </div>
+      <div class="rel-card" id="card-dependentes" onclick="abrirDetalhe('dependentes')">
+        <div class="card-top">
+          <div class="card-name">Dependentes</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Lista de dependentes cadastrados — nome, parentesco, data de nascimento e idade.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
+      </div>
+    </div>
+
+    <!-- Colaboradores -->
+    <div class="cat-label">
+      <span class="cat-label-text">👥 Colaboradores</span>
+      <span class="cat-label-line"></span>
+    </div>
+    <div class="cards-grid">
+      <div class="rel-card" id="card-cadastro" onclick="abrirDetalhe('cadastro')">
+        <div class="card-top">
+          <div class="card-name">Por Empresa e Setor</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Listagem com hierarquia Empresa → Setor. Filtros por situação, sexo e empresa.</div>
+        <span class="card-tag tag-exist">↺ Existente</span>
+      </div>
+      <div class="rel-card" id="card-genero" onclick="abrirDetalhe('genero')">
+        <div class="card-top">
+          <div class="card-name">Por Gênero</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Relatório segmentado por masculino ou feminino.</div>
+        <span class="card-tag tag-exist">↺ Existente</span>
+      </div>
+      <div class="rel-card" id="card-cotas" onclick="abrirDetalhe('cotas')">
+        <div class="card-top">
+          <div class="card-name">PCD e Jovem Aprendiz</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Controle de cotas legais — colaboradores PCD e jovens aprendizes ativos.</div>
+        <span class="card-tag tag-exist">↺ Existente</span>
+      </div>
+    </div>
+
+    <!-- RH -->
+    <div class="cat-label">
+      <span class="cat-label-text">📊 RH</span>
+      <span class="cat-label-line"></span>
+    </div>
+    <div class="cards-grid">
+      <div class="rel-card future">
+        <div class="card-top">
+          <div class="card-name">Próximo Relatório</div>
+        </div>
+        <div class="card-desc">Área reservada para novos relatórios conforme necessidade do RH.</div>
+        <span class="card-tag tag-soon">⏳ Em breve</span>
+      </div>
+    </div>
+  </div><!-- /central -->
+
+  <!-- ── Painel lateral de detalhe ── -->
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-inner" id="detailInner"></div>
+  </div>
+
+</div><!-- /layout -->
+
+<script>
+// ─── Supabase ────────────────────────────────────────────────────────────────
+const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
+let SB_HEADERS = {};
+
+async function sbGet(path, params) {
+  const url = `${SB_URL}/rest/v1/${path}?${params}`;
+  let r = await fetch(url, { headers: SB_HEADERS });
+  if (!r.ok) {
+    const txt = await r.text();
+    if ((txt.includes('JWT expired') || txt.includes('PGRST303')) && await _sbRefresh()) {
+      r = await fetch(url, { headers: SB_HEADERS });
+      if (!r.ok) throw new Error(await r.text());
+    } else throw new Error(txt);
+  }
+  return r.json();
+}
+
+async function _sbRefresh() {
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    if (!sess.refresh_token) return false;
+    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST', headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: sess.refresh_token }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    if (!data.access_token) return false;
+    const ns = { ...sess, access_token: data.access_token, refresh_token: data.refresh_token || sess.refresh_token, expires_at: Date.now() + (data.expires_in || 3600) * 1000 };
+    localStorage.setItem('sb_session', JSON.stringify(ns));
+    SB_HEADERS = { ...SB_HEADERS, Authorization: `Bearer ${data.access_token}` };
+    return true;
+  } catch { return false; }
+}
+
+// ─── Auth init ───────────────────────────────────────────────────────────────
+(function() {
+  const sess = localStorage.getItem('sb_session');
+  if (!sess) { window.location.href = '../../login.html'; return; }
+  try {
+    const s = JSON.parse(sess);
+    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' };
+    const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    const nome = (p.nome || s.email || '').split(' ')[0];
+    document.getElementById('userNomeTopbar').textContent = nome;
+  } catch(_) { window.location.href = '../../login.html'; }
+})();
+
+function logout() {
+  localStorage.removeItem('sb_session');
+  localStorage.removeItem('sb_perfil');
+  window.location.href = '../../login.html';
+}
+
+// ─── Dados ───────────────────────────────────────────────────────────────────
+let COLABORADORES = [];
+let EMPRESAS      = [];
+
+function parseSexo(v) {
+  if (!v) return '';
+  const s = String(v).trim().toUpperCase();
+  if (s === 'M' || s.startsWith('MAS')) return 'M';
+  if (s === 'F' || s.startsWith('FEM')) return 'F';
+  return s.charAt(0) || '';
+}
+
+function isAprendiz(cargo) {
+  return cargo && cargo.toLowerCase().includes('aprendiz');
+}
+
+function supabaseToJS(row) {
+  const dataDemissao = row.data_demissao || '';
+  const ativo = !!row.data_admissao && !dataDemissao;
+  const cargo = row.cargo || '';
+  return {
+    _sbId:          row.id,
+    nome:           row.nome || '',
+    cargo,
+    dataAdmissao:   row.data_admissao || '',
+    dataNascimento: row.data_nascimento || '',
+    empresa:        row.empresa_registro || '',
+    empresaAtuacao: row.empresa_atuacao || '',
+    setor:          row.setor || '',
+    gestor:         row.gestor || '',
+    sexo:           parseSexo(row.sexo),
+    pcd:            !!row.pcd,
+    aprendiz:       isAprendiz(cargo),
+    proLabore:      !!row.pro_labore,
+    situacao:       ativo ? 'Ativo' : 'Inativo',
+    dependentesLista: row.dependentes_lista || [],
+  };
+}
+
+function fmtDateBR(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function idadeAnos(iso) {
+  if (!iso) return null;
+  const nasc = new Date(iso + 'T00:00:00');
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - nasc.getFullYear();
+  if (hoje < new Date(hoje.getFullYear(), nasc.getMonth(), nasc.getDate())) anos--;
+  return anos;
+}
+
+function stripNum(s) { return (s || '').replace(/^\d+\s*[-–]\s*/, ''); }
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const dados = await sbGet('colaboradores',
+      'select=id,nome,cargo,data_admissao,data_nascimento,data_demissao,' +
+      'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,' +
+      'dependentes_lista&order=nome');
+    COLABORADORES = dados.map(supabaseToJS);
+    EMPRESAS = [...new Set(COLABORADORES.map(c => stripNum(c.empresaAtuacao)).filter(Boolean))].sort();
+    popularFiltroEmpresas();
+    document.getElementById('loadingOverlay').style.display = 'none';
+  } catch(e) {
+    document.getElementById('loadingOverlay').innerHTML =
+      `<p style="color:#B42318">Erro ao carregar: ${e.message}</p>`;
+  }
+}
+
+function popularFiltroEmpresas() {
+  document.querySelectorAll('select.emp-filter').forEach(sel => {
+    const val = sel.value;
+    sel.innerHTML = '<option value="">Todas as empresas</option>';
+    EMPRESAS.forEach(e => {
+      const o = document.createElement('option');
+      o.value = e; o.textContent = e; sel.appendChild(o);
+    });
+    sel.value = val;
+  });
+}
+
+// ─── Painel de detalhe ───────────────────────────────────────────────────────
+const RELATORIOS = {
+  aniversarios: {
+    cat: 'Periódico',
+    title: 'Aniversários do Mês',
+    desc: 'Lista de colaboradores que fazem aniversário no mês selecionado, agrupados por gestor. Ideal para que cada gestor parabenize seus colaboradores no dia certo.',
+    note: 'Novo relatório — lê data_nascimento diretamente do banco, sem depender do módulo Cadastro.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Mês de referência</label>
+        <select class="filter-select" id="f-mes">${opsMes()}</select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>`,
+    pdf:   () => gerarAniversariosPDF(),
+    excel: () => gerarAniversariosExcel(),
+  },
+  tempocasa: {
+    cat: 'Periódico',
+    title: 'Tempo de Casa por Mês',
+    desc: 'Colaboradores que completam marcos de aniversário de empresa (1, 5, 10, 15 ou 20 anos) no mês escolhido. Facilita reconhecimento e gestão de benefícios.',
+    note: 'Novo relatório — calculado a partir de data_admissao. Todos os colaboradores ativos aparecem; marcos são destacados visualmente.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Mês de referência</label>
+        <select class="filter-select" id="f-mes">${opsMes()}</select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Marcos destacados</label>
+        <div class="marcos-row">
+          <span class="marco-chip">1 ano</span>
+          <span class="marco-chip">5 anos</span>
+          <span class="marco-chip">10 anos</span>
+          <span class="marco-chip">15 anos</span>
+          <span class="marco-chip">20 anos</span>
+        </div>
+      </div>`,
+    pdf:   () => gerarTempoCasaPDF(),
+    excel: () => gerarTempoCasaExcel(),
+  },
+  dependentes: {
+    cat: 'Periódico',
+    title: 'Dependentes',
+    desc: 'Relação de todos os dependentes cadastrados, com nome, parentesco, data de nascimento e idade calculada. Útil para gestão de plano de saúde e benefícios.',
+    note: 'Novo relatório — lê o campo dependentes_lista (JSONB) de cada colaborador. Exibição proporcional ao preenchimento.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Situação do colaborador</label>
+        <select class="filter-select" id="f-situacao">
+          <option value="">Todos</option>
+          <option value="Ativo" selected>Ativos</option>
+          <option value="Inativo">Inativos</option>
+        </select>
+      </div>`,
+    pdf:   () => gerarDependentesPDF(),
+    excel: () => gerarDependentesExcel(),
+  },
+  cadastro: {
+    cat: 'Colaboradores',
+    title: 'Por Empresa e Setor',
+    desc: 'Listagem completa com hierarquia Empresa → Setor → Colaboradores. Mostra nome, cargo, data de admissão e gestor.',
+    note: 'Mesma lógica do módulo Cadastro — funções de geração reutilizadas, nova interface de acesso.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Situação</label>
+        <select class="filter-select" id="f-situacao">
+          <option value="">Todos</option>
+          <option value="Ativo" selected>Ativos</option>
+          <option value="Inativo">Inativos</option>
+        </select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Sexo</label>
+        <select class="filter-select" id="f-sexo">
+          <option value="">Todos</option>
+          <option value="M">Masculino</option>
+          <option value="F">Feminino</option>
+        </select>
+      </div>`,
+    pdf:   () => gerarCadastroPDF(),
+    excel: () => gerarCadastroExcel(),
+  },
+  genero: {
+    cat: 'Colaboradores',
+    title: 'Por Gênero',
+    desc: 'Colaboradores segmentados por gênero. Mesma estrutura do relatório por Empresa/Setor, pré-filtrado.',
+    note: 'Reutiliza a mesma função de geração de PDF/Excel — pré-configura o filtro de sexo.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Gênero</label>
+        <select class="filter-select" id="f-sexo">
+          <option value="M">Masculino</option>
+          <option value="F">Feminino</option>
+        </select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>`,
+    pdf:   () => gerarCadastroPDF({ sexoForce: document.getElementById('f-sexo')?.value }),
+    excel: () => gerarCadastroExcel({ sexoForce: document.getElementById('f-sexo')?.value }),
+  },
+  cotas: {
+    cat: 'Colaboradores',
+    title: 'PCD e Jovem Aprendiz',
+    desc: 'Colaboradores ativos com vínculo especial de cota legal — PCDs e jovens aprendizes. Útil para compliance e auditoria.',
+    note: 'Reutiliza a mesma lógica do gerarRelatorioKPI() do módulo Cadastro, adaptada para funcionar de forma independente.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Tipo</label>
+        <select class="filter-select" id="f-tipo">
+          <option value="pcd">PCD</option>
+          <option value="aprendiz">Jovem Aprendiz</option>
+          <option value="ambos">Ambos</option>
+        </select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>`,
+    pdf:   () => gerarCotasPDF(),
+    excel: () => gerarCotasExcel(),
+  },
+};
+
+let _relAtivo = null;
+
+function abrirDetalhe(id) {
+  _relAtivo = id;
+  const rel = RELATORIOS[id]; if (!rel) return;
+
+  document.querySelectorAll('.rel-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('card-' + id)?.classList.add('active');
+
+  const inner = document.getElementById('detailInner');
+  inner.innerHTML = `
+    <div class="detail-top">
+      <span class="detail-cat">${rel.cat}</span>
+      <button class="detail-close-btn" onclick="fecharDetalhe()">✕</button>
+    </div>
+    <div class="detail-title">${rel.title}</div>
+    <div class="detail-desc">${rel.desc}</div>
+    <div class="detail-divider"></div>
+    <div class="filters-title">Filtros</div>
+    ${rel.renderFiltros()}
+    <div class="detail-actions">
+      <button class="btn-pdf" onclick="RELATORIOS['${id}'].pdf()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Gerar PDF
+      </button>
+      <button class="btn-excel" onclick="RELATORIOS['${id}'].excel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+        Gerar Excel
+      </button>
+    </div>
+    <div class="detail-note">
+      <span class="note-icon">ℹ</span>
+      <span>${rel.note}</span>
+    </div>`;
+
+  document.getElementById('detailPanel').classList.add('open');
+  popularFiltroEmpresas();
+}
+
+function fecharDetalhe() {
+  _relAtivo = null;
+  document.getElementById('detailPanel').classList.remove('open');
+  document.querySelectorAll('.rel-card').forEach(c => c.classList.remove('active'));
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+               'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function opsMes() {
+  const cur = new Date().getMonth();
+  return MESES.map((m, i) => `<option value="${i+1}"${i===cur?' selected':''}>${m}</option>`).join('');
+}
+
+function mesAtual()   { return parseInt(document.getElementById('f-mes')?.value || new Date().getMonth()+1); }
+function empresaFiltro() { return (document.getElementById('f-empresa')?.value || '').trim(); }
+function situacaoFiltro(){ return (document.getElementById('f-situacao')?.value || ''); }
+
+function agora() {
+  const d = new Date();
+  return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+}
+
+// Filtra colaboradores pelo filtro de empresa do painel
+function filtrarBase(lista) {
+  const emp = empresaFiltro();
+  if (!emp) return lista;
+  return lista.filter(c => stripNum(c.empresaAtuacao) === emp);
+}
+
+// ─── PDF base: abre nova janela com HTML ─────────────────────────────────────
+function abrirPDF(html) {
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+}
+
+// ─── Excel base: baixa .xls ──────────────────────────────────────────────────
+function baixarExcel(xlsHtml, nomeArquivo) {
+  const blob = new Blob(['﻿' + xlsHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nomeArquivo + '.xls';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ─── HTML comum de relatório PDF ─────────────────────────────────────────────
+function htmlRelPDF(titulo, chips, total, label, dataHora, blocos) {
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${titulo} — Revest</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Inter',sans-serif;font-size:13px;color:#1E2740;background:#EEF2F9;padding:32px 20px}
+.w{max-width:980px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(44,62,107,.10)}
+.hd{background:#2C3E6B;padding:26px 36px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.he{font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:5px}
+.ht{font-size:20px;font-weight:700;color:#fff}
+.hf{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:20px;padding:3px 10px;font-size:11px;color:rgba(255,255,255,.8);font-weight:500}
+.hr{text-align:right;flex-shrink:0}.hd2{font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px}
+.tb{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:10px 20px;text-align:center}
+.tn{font-size:26px;font-weight:700;color:#fff;line-height:1}.tl{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-top:3px}
+.sh{background:#EDF1FA;padding:9px 36px;display:flex;align-items:center;justify-content:space-between;border-top:2px solid #3B72B0;border-bottom:1px solid #DDE5F0;margin-top:2px}
+.sn{font-size:12px;font-weight:700;color:#2C3E6B;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:.05em}
+.sn::before{content:'';display:inline-block;width:3px;height:14px;background:#3B72B0;border-radius:2px}
+.sc{font-size:11px;font-weight:600;color:#1A7F6A;background:#E0F5F0;border-radius:20px;padding:3px 11px}
+.ss{background:#F5F8FD;padding:7px 36px 7px 52px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #DDE5F0}
+.ssn{font-size:11px;font-weight:600;color:#3B72B0;text-transform:uppercase;letter-spacing:.04em}
+.ssc{font-size:10px;color:#5E718A}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead tr{background:#F0F4FB}
+thead th{padding:8px 12px 8px 36px;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#5E718A;text-align:left;border-bottom:1px solid #DDE5F0;white-space:nowrap}
+thead th:not(:first-child){padding-left:12px}
+tbody tr{border-bottom:1px solid #ECF0F8}
+tbody tr:nth-child(even){background:#F5F8FD}
+tbody td{padding:9px 12px 9px 36px;line-height:1.4}
+tbody td:not(:first-child){padding-left:12px}
+.td-nome{font-weight:600;font-size:13px}.td-c{font-size:12px;color:#5E718A}
+.td-mk{font-weight:700;color:#1A7F6A}
+.ft{border-top:1px solid #DDE5F0;padding:14px 36px;display:flex;align-items:center;justify-content:space-between;background:#FAFBFE}
+.fi{font-size:11px;color:#5E718A}.ft2{font-size:12px;font-weight:600;color:#2C3E6B;background:#EDF1FA;border-radius:6px;padding:6px 14px}
+@media print{body{background:#fff;padding:0}.w{box-shadow:none;border-radius:0}}
+</style></head><body><div class="w">
+<div class="hd"><div><div class="he">Revest do Brasil Acabamentos Ltda</div><div class="ht">${titulo}</div>
+<div class="hf">${chips.map(c=>`<span class="chip">${c}</span>`).join('')}<span class="chip">${total} registros</span></div></div>
+<div class="hr"><div class="hd2">Gerado em ${dataHora}</div><div class="tb"><div class="tn">${total}</div><div class="tl">${label}</div></div></div></div>
+${blocos}
+<div class="ft"><div class="fi">Sistema RH · Revest · ${dataHora}</div><div class="ft2">Total: ${total} ${label}</div></div>
+</div></body></html>`;
+}
+
+// ─── Aniversários do Mês ─────────────────────────────────────────────────────
+function _dadosAniversarios() {
+  const mes = mesAtual();
+  const emp = empresaFiltro();
+  let lista = COLABORADORES.filter(c =>
+    !c.proLabore &&
+    c.situacao === 'Ativo' &&
+    c.dataNascimento &&
+    parseInt(c.dataNascimento.split('-')[1]) === mes &&
+    (!emp || stripNum(c.empresaAtuacao) === emp)
+  );
+  if (!lista.length) { alert('Nenhum aniversariante encontrado para o filtro selecionado.'); return null; }
+  lista.sort((a, b) => {
+    const da = parseInt(a.dataNascimento.split('-')[2]);
+    const db = parseInt(b.dataNascimento.split('-')[2]);
+    return da - db || a.nome.localeCompare(b.nome, 'pt-BR');
+  });
+  // agrupa por gestor
+  const gestMap = {};
+  lista.forEach(c => {
+    const g = c.gestor || '(Sem gestor)';
+    if (!gestMap[g]) gestMap[g] = [];
+    gestMap[g].push(c);
+  });
+  const grupos = Object.entries(gestMap).sort(([a],[b]) => {
+    if (a==='(Sem gestor)') return 1; if (b==='(Sem gestor)') return -1;
+    return a.localeCompare(b,'pt-BR');
+  });
+  const chips = [`Mês: ${MESES[mes-1]}`];
+  if (emp) chips.push('Empresa: ' + emp);
+  return { lista, grupos, chips, total: lista.length, mes, dataHora: agora() };
+}
+
+function gerarAniversariosPDF() {
+  const d = _dadosAniversarios(); if (!d) return;
+  const { grupos, chips, total, mes, dataHora } = d;
+  let blocos = '';
+  for (const [gestor, lista] of grupos) {
+    blocos += `<div class="sh"><span class="sn">${gestor}</span><span class="sc">${lista.length} aniversariante${lista.length>1?'s':''}</span></div>`;
+    const linhas = lista.map(c => {
+      const dia = c.dataNascimento.split('-')[2];
+      const ano = c.dataNascimento.split('-')[0];
+      const idade = idadeAnos(c.dataNascimento);
+      return `<tr><td class="td-nome">${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${dia}/${String(mes).padStart(2,'0')}</td><td class="td-c">${idade != null ? idade + ' anos' : '—'}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`;
+    }).join('');
+    blocos += `<table><thead><tr><th style="width:35%">Nome</th><th>Cargo</th><th>Aniversário</th><th>Idade</th><th>Empresa</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  }
+  abrirPDF(htmlRelPDF(`Aniversários de ${MESES[mes-1]}`, chips, total, 'aniversariante' + (total>1?'s':''), dataHora, blocos));
+}
+
+function gerarAniversariosExcel() {
+  const d = _dadosAniversarios(); if (!d) return;
+  const { grupos, chips, total, mes, dataHora } = d;
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  const EMP_L = `style="${F}font-size:12pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#FFFFFF;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-left:2px solid #1a2d52;border-right:none;"`;
+  const EMP_R = `style="${F}font-size:11pt;padding:10px 16px;background:#2C3E6B;color:#5DD6B8;text-align:right;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-right:2px solid #1a2d52;border-left:none;"`;
+  const TH = (w) => `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;${w?'width:'+w+';':''}white-space:nowrap;"`;
+  const TD = (par) => `style="${F}font-size:10pt;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;"`;
+  const BLANK = 'style="padding:5px;border:none;background:#FFFFFF;"';
+  let rows = '';
+  for (const [gestor, lista] of grupos) {
+    rows += `<tr><td colspan="4" ${EMP_L}>${gestor}</td><td ${EMP_R}>${lista.length} aniversariante${lista.length>1?'s':''}</td></tr>`;
+    rows += `<tr><th ${TH('240pt')}>NOME</th><th ${TH()}>CARGO</th><th ${TH()}>ANIVERSÁRIO</th><th ${TH()}>IDADE</th><th ${TH()}>EMPRESA</th></tr>`;
+    lista.forEach((c, i) => {
+      const par = i%2===1;
+      const dia = c.dataNascimento.split('-')[2];
+      const idade = idadeAnos(c.dataNascimento);
+      const nomeStyle = `style="${F}font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;width:240pt;"`;
+      rows += `<tr><td ${nomeStyle}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${dia}/${String(mes).padStart(2,'0')}</td><td ${TD(par)}>${idade!=null?idade+' anos':''}</td><td ${TD(par)}>${stripNum(c.empresaAtuacao)||''}</td></tr>`;
+    });
+    rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+  }
+  const txt = chips.join(' | ');
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Aniversários</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>
+<tr><td colspan="5" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">Aniversários de ${MESES[mes-1]} — Revest</td></tr>
+<tr><td colspan="5" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${txt} · ${total} registros · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="5" style="padding:4px;border:none;background:#fff;"></td></tr>
+${rows}
+<tr><td colspan="4" style="background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:8px 12px;border:1px solid #DDE5F0;">Total</td><td style="background:#EDF1FA;color:#1A7F6A;${F}font-size:10pt;font-weight:bold;padding:8px 12px;text-align:right;border:1px solid #DDE5F0;">${total} aniversariante${total>1?'s':''}</td></tr>
+</table></body></html>`;
+  baixarExcel(xls, `Aniversarios_${MESES[mes-1]}`);
+}
+
+// ─── Tempo de Casa por Mês ───────────────────────────────────────────────────
+const MARCOS = [1, 5, 10, 15, 20];
+
+function _dadosTempoCasa() {
+  const mes = mesAtual();
+  const emp = empresaFiltro();
+  // colaboradores ativos que completam aniversário de empresa no mês
+  let lista = COLABORADORES.filter(c => {
+    if (c.proLabore || c.situacao !== 'Ativo' || !c.dataAdmissao) return false;
+    if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
+    const m = parseInt(c.dataAdmissao.split('-')[1]);
+    return m === mes;
+  });
+  if (!lista.length) { alert('Nenhum colaborador completa aniversário de empresa neste mês.'); return null; }
+  lista = lista.map(c => {
+    const adm  = new Date(c.dataAdmissao + 'T00:00:00');
+    const anos = new Date().getFullYear() - adm.getFullYear();
+    return { ...c, anosEmpresa: anos, marco: MARCOS.includes(anos) };
+  }).sort((a,b) => b.anosEmpresa - a.anosEmpresa || a.nome.localeCompare(b.nome,'pt-BR'));
+  const chips = [`Mês: ${MESES[mes-1]}`];
+  if (emp) chips.push('Empresa: ' + emp);
+  return { lista, chips, total: lista.length, mes, dataHora: agora() };
+}
+
+function gerarTempoCasaPDF() {
+  const d = _dadosTempoCasa(); if (!d) return;
+  const { lista, chips, total, mes, dataHora } = d;
+  const linhas = lista.map(c => {
+    const diaAdm = c.dataAdmissao.split('-')[2];
+    const mkClass = c.marco ? ' class="td-mk"' : ' class="td-c"';
+    const anos = c.anosEmpresa;
+    return `<tr><td class="td-nome"${c.marco?' style="color:#1A7F6A"':''}>${c.nome}${c.marco?` <strong>(${anos} anos 🏆)</strong>`:''}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${diaAdm}/${String(mes).padStart(2,'0')}/${c.dataAdmissao.split('-')[0]}</td><td${mkClass}>${anos} ano${anos!==1?'s':''}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`;
+  }).join('');
+  const blocos = `<table><thead><tr><th style="width:35%">Nome</th><th>Cargo</th><th>Data Admissão</th><th>Tempo de Casa</th><th>Empresa</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  abrirPDF(htmlRelPDF(`Tempo de Casa — ${MESES[mes-1]}`, chips, total, 'colaborador'+(total>1?'es':''), dataHora, blocos));
+}
+
+function gerarTempoCasaExcel() {
+  const d = _dadosTempoCasa(); if (!d) return;
+  const { lista, chips, total, mes, dataHora } = d;
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  const TH = (w) => `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;${w?'width:'+w+';':''}white-space:nowrap;"`;
+  const TD = (par, mk) => `style="${F}font-size:10pt;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:${mk?'#1A7F6A':'#1E2740'};${mk?'font-weight:bold;':''};"`;
+  const BLANK = 'style="padding:5px;border:none;background:#FFFFFF;"';
+  let rows = '';
+  rows += `<tr><th ${TH('240pt')}>NOME</th><th ${TH()}>CARGO</th><th ${TH()}>DATA ADMISSÃO</th><th ${TH()}>TEMPO DE CASA</th><th ${TH()}>EMPRESA</th></tr>`;
+  lista.forEach((c, i) => {
+    const par = i%2===1;
+    const nomeStyle = `style="${F}font-size:10pt;${c.marco?'font-weight:bold;color:#1A7F6A;':'font-weight:600;color:#1E2740;'}padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};width:240pt;"`;
+    const anos = c.anosEmpresa;
+    const tempoStr = anos + ' ano' + (anos!==1?'s':'') + (c.marco?' 🏆':'');
+    rows += `<tr><td ${nomeStyle}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par,c.marco)}>${tempoStr}</td><td ${TD(par)}>${stripNum(c.empresaAtuacao)||''}</td></tr>`;
+  });
+  const txt = chips.join(' | ');
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Tempo de Casa</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>
+<tr><td colspan="5" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">Tempo de Casa — ${MESES[mes-1]} — Revest</td></tr>
+<tr><td colspan="5" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${txt} · ${total} registros · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="5" style="padding:4px;border:none;background:#fff;"></td></tr>
+${rows}
+</table></body></html>`;
+  baixarExcel(xls, `TempoCasa_${MESES[mes-1]}`);
+}
+
+// ─── Dependentes ─────────────────────────────────────────────────────────────
+function _dadosDependentes() {
+  const emp = empresaFiltro();
+  const sit = situacaoFiltro();
+  let lista = COLABORADORES.filter(c => {
+    if (c.proLabore) return false;
+    if (sit && c.situacao !== sit) return false;
+    if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
+    return c.dependentesLista && c.dependentesLista.length > 0;
+  }).sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'));
+  if (!lista.length) { alert('Nenhum colaborador com dependentes cadastrados no filtro selecionado.'); return null; }
+  const totalDep = lista.reduce((s,c) => s + c.dependentesLista.length, 0);
+  const chips = [];
+  if (sit) chips.push('Situação: ' + sit + 's');
+  if (emp) chips.push('Empresa: ' + emp);
+  if (!chips.length) chips.push('Todos os colaboradores ativos');
+  return { lista, chips, total: lista.length, totalDep, dataHora: agora() };
+}
+
+function gerarDependentesPDF() {
+  const d = _dadosDependentes(); if (!d) return;
+  const { lista, chips, total, totalDep, dataHora } = d;
+  let blocos = '';
+  for (const c of lista) {
+    blocos += `<div class="sh"><span class="sn">${c.nome}</span><span class="sc">${c.dependentesLista.length} dep.</span></div>`;
+    const linhas = c.dependentesLista.map(dep => {
+      const idade = dep.data_nascimento ? idadeAnos(dep.data_nascimento) : null;
+      return `<tr><td class="td-nome">${dep.nome||'—'}</td><td class="td-c">${dep.parentesco||'—'}</td><td class="td-c">${fmtDateBR(dep.data_nascimento)}</td><td class="td-c">${idade!=null?idade+' anos':'—'}</td></tr>`;
+    }).join('');
+    blocos += `<table><thead><tr><th style="width:38%">Nome do Dependente</th><th>Parentesco</th><th>Nascimento</th><th>Idade</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  }
+  abrirPDF(htmlRelPDF('Relatório de Dependentes', chips, totalDep, 'dependente'+(totalDep>1?'s':''), dataHora, blocos));
+}
+
+function gerarDependentesExcel() {
+  const d = _dadosDependentes(); if (!d) return;
+  const { lista, chips, total, totalDep, dataHora } = d;
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  const EMP_L = `style="${F}font-size:12pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#FFFFFF;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-left:2px solid #1a2d52;border-right:none;"`;
+  const EMP_R = `style="${F}font-size:11pt;padding:10px 16px;background:#2C3E6B;color:#5DD6B8;text-align:right;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-right:2px solid #1a2d52;border-left:none;"`;
+  const TH = (w) => `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;${w?'width:'+w+';':''}white-space:nowrap;"`;
+  const TD = (par) => `style="${F}font-size:10pt;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;"`;
+  const BLANK = 'style="padding:5px;border:none;background:#FFFFFF;"';
+  let rows = '';
+  for (const c of lista) {
+    rows += `<tr><td colspan="3" ${EMP_L}>${c.nome} — ${c.cargo||''}</td><td ${EMP_R}>${c.dependentesLista.length} dep.</td></tr>`;
+    rows += `<tr><th ${TH('240pt')}>NOME DO DEPENDENTE</th><th ${TH()}>PARENTESCO</th><th ${TH()}>NASCIMENTO</th><th ${TH()}>IDADE</th></tr>`;
+    c.dependentesLista.forEach((dep, i) => {
+      const par = i%2===1;
+      const idade = dep.data_nascimento ? idadeAnos(dep.data_nascimento) : null;
+      const nomeStyle = `style="${F}font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;width:240pt;"`;
+      rows += `<tr><td ${nomeStyle}>${dep.nome||''}</td><td ${TD(par)}>${dep.parentesco||''}</td><td ${TD(par)}>${fmtDateBR(dep.data_nascimento)}</td><td ${TD(par)}>${idade!=null?idade+' anos':''}</td></tr>`;
+    });
+    rows += `<tr><td colspan="4" ${BLANK}></td></tr>`;
+  }
+  const txt = chips.join(' | ');
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Dependentes</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>
+<tr><td colspan="4" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">Relatório de Dependentes — Revest</td></tr>
+<tr><td colspan="4" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${txt} · ${totalDep} dependentes · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="4" style="padding:4px;border:none;background:#fff;"></td></tr>
+${rows}
+</table></body></html>`;
+  baixarExcel(xls, 'Relatorio_Dependentes');
+}
+
+// ─── Colaboradores (Por Empresa/Setor, Por Gênero) ───────────────────────────
+// Mesma lógica do módulo Cadastro — _dadosRelatorio() / gerarRelatorioPDF() / gerarRelatorioExcel()
+// Adaptada para funcionar de forma independente (sem DOM do Cadastro)
+
+function _dadosCadastro(opts = {}) {
+  const sit = opts.situacao  ?? situacaoFiltro() ?? 'Ativo';
+  const emp = opts.empresa   ?? empresaFiltro();
+  const sex = opts.sexo      ?? (document.getElementById('f-sexo')?.value || '');
+  let lista = COLABORADORES.filter(c => {
+    if (c.proLabore) return false;
+    if (sit && c.situacao !== sit) return false;
+    if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
+    if (sex === 'M' && !(c.sexo === 'M')) return false;
+    if (sex === 'F' && !(c.sexo === 'F')) return false;
+    return true;
+  });
+  if (!lista.length) { alert('Nenhum dado para o filtro selecionado.'); return null; }
+  const chips = [];
+  if (sit) chips.push('Situação: ' + (sit === 'Ativo' ? 'Ativos' : 'Inativos'));
+  if (emp) chips.push('Empresa: ' + emp);
+  if (sex) chips.push('Sexo: ' + (sex === 'M' ? 'Masculino' : 'Feminino'));
+  if (!chips.length) chips.push('Todos os colaboradores');
+  const total = lista.length;
+  const label = total===1?'colaborador':sex==='F'?'colaboradoras':'colaboradores';
+  // agrupa: Empresa → Setor
+  const empMap = {};
+  [...lista].sort((a,b) => {
+    const ea = stripNum(a.empresaAtuacao), eb = stripNum(b.empresaAtuacao);
+    if (!ea && eb) return 1; if (ea && !eb) return -1;
+    const ec = ea.localeCompare(eb,'pt-BR'); if (ec!==0) return ec;
+    const sc = stripNum(a.setor||'').localeCompare(stripNum(b.setor||''),'pt-BR');
+    return sc || a.nome.localeCompare(b.nome,'pt-BR');
+  }).forEach(c => {
+    const e = stripNum(c.empresaAtuacao) || '(Sem empresa)';
+    const s = stripNum(c.setor)          || '(Sem setor)';
+    if (!empMap[e]) empMap[e] = {};
+    if (!empMap[e][s]) empMap[e][s] = [];
+    empMap[e][s].push(c);
+  });
+  const grupos = Object.entries(empMap)
+    .sort(([a],[b]) => { if(a==='(Sem empresa)') return 1; if(b==='(Sem empresa)') return -1; return a.localeCompare(b,'pt-BR'); })
+    .map(([empresa, setMap]) => [empresa, Object.entries(setMap).sort(([a],[b]) => a.localeCompare(b,'pt-BR'))]);
+  return { chips, total, dataHora: agora(), label, grupos, sex };
+}
+
+function gerarCadastroPDF(opts = {}) {
+  const d = _dadosCadastro(opts); if (!d) return;
+  const { chips, total, dataHora, label, grupos, sex } = d;
+  let blocos = '';
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s+l.length, 0);
+    const cntEmpLabel = cntEmp===1?'1 colaborador':cntEmp+' '+(sex==='F'?'colaboradoras':'colaboradores');
+    blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntEmpLabel}</span></div>`;
+    for (const [setor, lista] of setores) {
+      const cnt = lista.length;
+      const cntLabel = cnt===1?'1 colaborador':cnt+' '+(sex==='F'?'colaboradoras':'colaboradores');
+      const linhas = lista.map(c =>
+        `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${c.gestor||'—'}</td></tr>`
+      ).join('');
+      blocos += `<div class="ss"><span class="ssn">${setor}</span><span class="ssc">${cntLabel}</span></div>
+        <table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
+    }
+  }
+  abrirPDF(htmlRelPDF('Relatório de Colaboradores', chips, total, label, dataHora, blocos));
+}
+
+function gerarCadastroExcel(opts = {}) {
+  const d = _dadosCadastro(opts); if (!d) return;
+  const { chips, total, dataHora, label, grupos, sex } = d;
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  const EMP_L = `style="${F}font-size:12pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#FFFFFF;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-left:2px solid #1a2d52;border-right:none;"`;
+  const EMP_R = `style="${F}font-size:11pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#5DD6B8;text-align:right;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-right:2px solid #1a2d52;border-left:none;"`;
+  const SET_L = `style="${F}font-size:10pt;font-weight:bold;padding:7px 16px 7px 28px;background:#EDF1FA;color:#2C5FA8;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-left:1px solid #C8D8EE;border-right:none;"`;
+  const SET_R = `style="${F}font-size:10pt;padding:7px 16px;background:#EDF1FA;color:#7A92B0;text-align:right;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-right:1px solid #C8D8EE;border-left:none;"`;
+  const TH_N  = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;width:260pt;"`;
+  const TH2   = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;"`;
+  const BLANK = 'style="padding:5px;border:none;background:#FFFFFF;"';
+  const TD = (par) => `style="${F}font-size:10pt;color:#5E718A;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};"`;
+  let rows = '';
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s+l.length, 0);
+    const cntEmpLabel = cntEmp===1?'1 colaborador':cntEmp+' '+(sex==='F'?'colaboradoras':'colaboradores');
+    rows += `<tr><td colspan="4" ${EMP_L}>${empresa}</td><td ${EMP_R}>${cntEmpLabel}</td></tr>`;
+    for (const [setor, lista] of setores) {
+      const cnt = lista.length;
+      const cntLabel = cnt===1?'1 colaborador':cnt+' '+(sex==='F'?'colaboradoras':'colaboradores');
+      rows += `<tr><td colspan="4" ${SET_L}>${setor}</td><td ${SET_R}>${cntLabel}</td></tr>`;
+      rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>ADMISSÃO</th><th ${TH2}>GESTOR</th><th ${TH2}></th></tr>`;
+      lista.forEach((c, i) => {
+        const par = i%2===1;
+        const bg  = par?'#F5F8FD':'#FFFFFF';
+        const nomeStyle = `style="${F}font-size:10pt;font-weight:600;padding:8px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${bg};color:#1E2740;width:260pt;"`;
+        rows += `<tr><td ${nomeStyle}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
+      });
+      rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+    }
+    rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+  }
+  const filtrosTexto = chips.join(' | ');
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Colaboradores</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>
+<tr><td colspan="5" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">Relatório de Colaboradores — Revest</td></tr>
+<tr><td colspan="5" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${filtrosTexto} · ${total} registros · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="5" style="padding:4px;border:none;background:#fff;"></td></tr>
+${rows}
+<tr><td colspan="3" style="background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:8px 12px;border:1px solid #DDE5F0;">Total geral</td><td colspan="2" style="background:#EDF1FA;color:#1A7F6A;${F}font-size:10pt;font-weight:bold;padding:8px 12px;text-align:right;border:1px solid #DDE5F0;">${total} ${label}</td></tr>
+</table></body></html>`;
+  const partes = ['Relatorio_Colaboradores'];
+  chips.filter(c=>!c.includes('registros')).forEach(c => partes.push(c.split(': ')[1]||c));
+  baixarExcel(xls, partes.join('_').replace(/[^a-zA-Z0-9À-ÿ_\- ]/g,'').replace(/\s+/g,'_'));
+}
+
+// ─── PCD e Jovem Aprendiz ────────────────────────────────────────────────────
+function _dadosCotas() {
+  const tipo = document.getElementById('f-tipo')?.value || 'pcd';
+  const emp  = empresaFiltro();
+  let lista = COLABORADORES.filter(c => {
+    if (c.proLabore || c.situacao !== 'Ativo') return false;
+    if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
+    if (tipo === 'pcd')      return c.pcd;
+    if (tipo === 'aprendiz') return c.aprendiz;
+    return c.pcd || c.aprendiz;
+  });
+  if (!lista.length) { alert('Nenhum colaborador encontrado para o filtro selecionado.'); return null; }
+  const labels = { pcd:'PCD', aprendiz:'Jovem Aprendiz', ambos:'PCD e Jovem Aprendiz' };
+  const chips = ['Situação: Ativos', `Tipo: ${labels[tipo]}`];
+  if (emp) chips.push('Empresa: ' + emp);
+  return { lista, chips, total: lista.length, label: labels[tipo], dataHora: agora(), tipo };
+}
+
+function gerarCotasPDF() {
+  const d = _dadosCotas(); if (!d) return;
+  const { chips, total, dataHora, label, lista } = d;
+  const linhas = lista.sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR')).map(c =>
+    `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td><td class="td-c">${c.pcd&&c.aprendiz?'PCD + Aprendiz':c.pcd?'PCD':'Aprendiz'}</td></tr>`
+  ).join('');
+  const blocos = `<table><thead><tr><th style="width:35%">Nome</th><th>Cargo</th><th>Admissão</th><th>Empresa</th><th>Tipo</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  abrirPDF(htmlRelPDF(`Relatório — ${label}`, chips, total, 'colaborador'+(total>1?'es':''), dataHora, blocos));
+}
+
+function gerarCotasExcel() {
+  const d = _dadosCotas(); if (!d) return;
+  const { chips, total, dataHora, label, lista } = d;
+  gerarCadastroPDF.__noop__;
+  // Reutiliza gerarCadastroExcel com lista pré-filtrada via _dadosCadastro simulado
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  const TH = (w) => `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;${w?'width:'+w+';':''}white-space:nowrap;"`;
+  const TD = (par) => `style="${F}font-size:10pt;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;"`;
+  let rows = '';
+  rows += `<tr><th ${TH('240pt')}>NOME</th><th ${TH()}>CARGO</th><th ${TH()}>ADMISSÃO</th><th ${TH()}>EMPRESA</th><th ${TH()}>TIPO</th></tr>`;
+  lista.sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR')).forEach((c, i) => {
+    const par = i%2===1;
+    const nomeStyle = `style="${F}font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;width:240pt;"`;
+    const tipo = c.pcd&&c.aprendiz?'PCD + Aprendiz':c.pcd?'PCD':'Aprendiz';
+    rows += `<tr><td ${nomeStyle}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${stripNum(c.empresaAtuacao)||''}</td><td ${TD(par)}>${tipo}</td></tr>`;
+  });
+  const txt = chips.join(' | ');
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${label}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>
+<tr><td colspan="5" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">${label} — Revest</td></tr>
+<tr><td colspan="5" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${txt} · ${total} registros · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="5" style="padding:4px;border:none;background:#fff;"></td></tr>
+${rows}
+</table></body></html>`;
+  baixarExcel(xls, `Relatorio_${label.replace(/\s/g,'_')}`);
+}
+
+// ─── Start ───────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
