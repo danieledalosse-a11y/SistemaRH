@@ -6284,12 +6284,17 @@ function renderAnalytics() {
 
   // ── 7. Risco de dobra — agrupado por setor para pizza
   const _riscoDadosCompletos = emRisco.map(c => {
-    let minDpd = 999, worstReg = null;
+    // pega o PA com dpd <= 180 e sem lançamento futuro — mesmo critério de isRiscoDobra
+    let bestDpd = 999, bestReg = null;
     c.registros.filter(r => !excluir.has(r.status)).forEach(r => {
+      const saldo = calcSaldo(r);
+      if (saldo <= 0) return;
       const dpd = diasParaDobra(r);
-      if (dpd !== null && dpd < minDpd) { minDpd = dpd; worstReg = r; }
+      if (dpd === null || dpd > REGRAS_FERIAS.diasAlertaDobra) return;
+      if (r.lancamentos.some(l => l.fim && l.fim >= HOJE)) return;
+      if (dpd < bestDpd) { bestDpd = dpd; bestReg = r; }
     });
-    return { c, dpd: minDpd, reg: worstReg };
+    return { c, dpd: bestDpd, reg: bestReg };
   }).sort((a,b) => a.dpd - b.dpd);
   window._dashRiscoDados = _riscoDadosCompletos;
 
@@ -6497,18 +6502,9 @@ function dashRiscoFiltrar(setor) {
   const rows = lista.map(({ c, dpd, reg }) => {
     const partes = (c.nome||'').trim().split(/\s+/);
     const initials = ((partes[0]||'')[0]||'') + ((partes[partes.length-1]||'')[0]||'');
-    // badge idêntico à coluna Situação — reusa dlim já calculado
+    // reutiliza riscoBadgeHtml — mesma função da coluna Situação da Lista
     const dlim = reg ? dataLimiteDobra(reg) : null;
-    const dobraLabel = dlim ? `Dobra em ${formatDate(dlim)}` : '';
-    const nivel = nivelRisco(dpd);
-    let badgeHtml;
-    if (nivel === 'critico') {
-      badgeHtml = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Crítico · ${dobraLabel}</span>`;
-    } else if (nivel === 'atencao') {
-      badgeHtml = `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção · ${dobraLabel}</span>`;
-    } else {
-      badgeHtml = `<span class="badge-status-r" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;"><span class="la-dot" style="background:#3B82F6;"></span>No radar · ${dobraLabel}</span>`;
-    }
+    const badgeHtml = riscoBadgeHtml(dpd, false, dlim);
     return `<div class="an-risk-row" onclick="abrirDrawer('${c.__key.replace(/'/g,"\\'")}')">
       <div class="an-risk-av" style="background:${corSet.bg};color:${corSet.borda};border:1.5px solid ${corSet.borda}">${initials.toUpperCase()}</div>
       <div style="flex:1;min-width:0">
