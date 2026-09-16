@@ -6291,6 +6291,7 @@ function renderAnalytics() {
     });
     return { c, dpd: minDpd, reg: worstReg };
   }).sort((a,b) => a.dpd - b.dpd);
+  window._dashRiscoDados = _riscoDadosCompletos;
 
   // Agrupa por setor
   const _riscoSetorMap = new Map();
@@ -6472,36 +6473,23 @@ function dashRiscoFiltrar(setor) {
     return;
   }
   _dashRiscoSetorAtivo = setor;
-  const excluir = new Set(['cancelado','recusado']);
-  const ativos  = (window._dashCachedAtivos || COLABORADORES.filter(c => c.ativo !== false));
-  const emRisco = ativos.filter(c => isRiscoDobra(c));
-  const lista   = emRisco.map(c => {
-    let minDpd = 999;
-    c.registros.filter(r => !excluir.has(r.status)).forEach(r => {
-      const dpd = diasParaDobra(r); if (dpd !== null && dpd < minDpd) minDpd = dpd;
-    });
-    return { c, dpd: minDpd };
-  }).filter(({ c }) => (normSetor(c.setor) || c.setor || 'Sem setor') === setor)
+  // reutiliza dados já calculados pelo dashboard — sem recalcular
+  const todos = window._dashRiscoDados || [];
+  const lista = todos
+    .filter(({ c }) => (normSetor(c.setor) || c.setor || 'Sem setor') === setor)
     .sort((a,b) => a.dpd - b.dpd);
 
-  const cor = corDoSetor(setor).borda;
-  const corBg = corDoSetor(setor).bg;
+  const corSet = corDoSetor(setor);
 
-  const rows = lista.map(({ c, dpd }) => {
+  const rows = lista.map(({ c, dpd, reg }) => {
     const partes = (c.nome||'').trim().split(/\s+/);
     const initials = ((partes[0]||'')[0]||'') + ((partes[partes.length-1]||'')[0]||'');
-    const corSet = corDoSetor(setor);
-    // badge idêntico à coluna Situação da Lista
-    const excluir = new Set(['cancelado','recusado']);
-    const reg = c.registros.filter(r => !excluir.has((r.status||'').toLowerCase()))
-      .find(r => { const d = diasParaDobra(r); return d !== null && d <= 180; });
+    // badge idêntico à coluna Situação — reusa dlim já calculado
     const dlim = reg ? dataLimiteDobra(reg) : null;
     const dobraLabel = dlim ? `Dobra em ${formatDate(dlim)}` : '';
     const nivel = nivelRisco(dpd);
     let badgeHtml;
-    if (dpd <= 0) {
-      badgeHtml = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Dobra vencida</span>`;
-    } else if (nivel === 'critico') {
+    if (nivel === 'critico') {
       badgeHtml = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Crítico · ${dobraLabel}</span>`;
     } else if (nivel === 'atencao') {
       badgeHtml = `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção · ${dobraLabel}</span>`;
