@@ -2504,28 +2504,26 @@ function _dadosRelatorio() {
   const agora = new Date();
   const dataHora = agora.toLocaleDateString('pt-BR') + ' às ' + agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const label = total === 1 ? 'colaborador' : sex === 'F' ? 'colaboradoras' : sex === 'M' ? 'colaboradores' : 'colaboradores';
-  const gruposMap = {};
+  const empMap = {};
   [...FILTRADOS]
     .sort((a, b) => {
       const ea = (a.empresaAtuacao || '').replace(/^\d+\s*[-–]\s*/,'');
       const eb = (b.empresaAtuacao || '').replace(/^\d+\s*[-–]\s*/,'');
-      if (!ea && eb) return 1;
-      if (ea && !eb) return -1;
-      const ec = ea.localeCompare(eb, 'pt-BR');
-      if (ec !== 0) return ec;
+      if (!ea && eb) return 1; if (ea && !eb) return -1;
+      const ec = ea.localeCompare(eb, 'pt-BR'); if (ec !== 0) return ec;
       const sc = (a.setor||'').replace(/^\d+\s*[-–]\s*/,'').localeCompare((b.setor||'').replace(/^\d+\s*[-–]\s*/,''), 'pt-BR');
       return sc || (a.nome||'').localeCompare(b.nome||'', 'pt-BR');
     })
     .forEach(c => {
-      const key = (c.empresaAtuacao || '').replace(/^\d+\s*[-–]\s*/, '') || '(Sem empresa)';
-      if (!gruposMap[key]) gruposMap[key] = [];
-      gruposMap[key].push(c);
+      const emp = (c.empresaAtuacao || '').replace(/^\d+\s*[-–]\s*/, '') || '(Sem empresa)';
+      const set = (c.setor || '').replace(/^\d+\s*[-–]\s*/, '') || '(Sem setor)';
+      if (!empMap[emp]) empMap[emp] = {};
+      if (!empMap[emp][set]) empMap[emp][set] = [];
+      empMap[emp][set].push(c);
     });
-  const grupos = Object.entries(gruposMap).sort(([a],[b]) => {
-    if (a === '(Sem empresa)') return 1;
-    if (b === '(Sem empresa)') return -1;
-    return a.localeCompare(b, 'pt-BR');
-  });
+  const grupos = Object.entries(empMap)
+    .sort(([a],[b]) => { if (a==='(Sem empresa)') return 1; if (b==='(Sem empresa)') return -1; return a.localeCompare(b,'pt-BR'); })
+    .map(([empresa, setMap]) => [empresa, Object.entries(setMap).sort(([a],[b]) => a.localeCompare(b,'pt-BR'))]);
   return { chips, total, dataHora, label, grupos, sex };
 }
 
@@ -2533,15 +2531,19 @@ function gerarRelatorioPDF() {
   const d = _dadosRelatorio(); if (!d) return;
   const { chips, total, dataHora, label, grupos, sex } = d;
   let blocos = '';
-  for (const [empresa, lista] of grupos) {
-    const cnt = lista.length;
-    const cntLabel = cnt === 1 ? '1 colaborador' : cnt + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
-    const linhas = lista.map(c => {
-      const set = (c.setor || '—').replace(/^\d+\s*[-–]\s*/, '');
-      return `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${set}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)||'—'}</td><td class="td-c">${c.gestor||'—'}</td></tr>`;
-    }).join('');
-    blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntLabel}</span></div>
-      <table><thead><tr><th>Nome</th><th>Cargo</th><th>Setor</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s + l.length, 0);
+    const cntEmpLabel = cntEmp === 1 ? '1 colaborador' : cntEmp + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
+    blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntEmpLabel}</span></div>`;
+    for (const [setor, lista] of setores) {
+      const cnt = lista.length;
+      const cntLabel = cnt === 1 ? '1 colaborador' : cnt + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
+      const linhas = lista.map(c =>
+        `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)||'—'}</td><td class="td-c">${c.gestor||'—'}</td></tr>`
+      ).join('');
+      blocos += `<div class="ss"><span class="ssn">${setor}</span><span class="ssc">${cntLabel}</span></div>
+        <table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
+    }
   }
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório — Revest</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
@@ -2560,7 +2562,10 @@ function gerarRelatorioPDF() {
 .sn{font-size:12px;font-weight:700;color:#2C3E6B;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:.05em}
 .sn::before{content:'';display:inline-block;width:3px;height:14px;background:#3B72B0;border-radius:2px}
 .sc{font-size:11px;font-weight:600;color:#1A7F6A;background:#E0F5F0;border-radius:20px;padding:3px 11px}
-table{width:100%;border-collapse:collapse}
+.ss{background:#F5F8FD;padding:7px 36px 7px 52px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #DDE5F0}
+.ssn{font-size:11px;font-weight:600;color:#3B72B0;text-transform:uppercase;letter-spacing:.04em}
+.ssc{font-size:10px;color:#5E718A}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
 thead tr{background:#F0F4FB}
 thead th{padding:8px 12px 8px 36px;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#5E718A;text-align:left;border-bottom:1px solid #DDE5F0;white-space:nowrap}
 thead th:not(:first-child){padding-left:12px}
@@ -2591,27 +2596,38 @@ function gerarRelatorioExcel() {
   const COUNT_TD = 'style="background:#2C3E6B;color:#E0F5F0;font-family:Calibri,Arial,sans-serif;font-size:10pt;padding:8px 12px;text-align:right;border:1px solid #1a2d52;"';
   const TD_NOME = (par) => `style="font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#fff'};"`;
   const TD = (par) => `style="font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#5E718A;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#fff'};"`;
+  const EMP_TD = 'style="background:#1E2E52;color:#fff;font-family:Calibri,Arial,sans-serif;font-size:12pt;font-weight:bold;padding:10px 12px;border:1px solid #111d38;"';
+  const EMP_CNT = 'style="background:#1E2E52;color:#A8C4E0;font-family:Calibri,Arial,sans-serif;font-size:10pt;padding:10px 12px;text-align:right;border:1px solid #111d38;"';
+  const SET_TD = 'style="background:#3B72B0;color:#fff;font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:bold;padding:7px 12px 7px 24px;border:1px solid #2a5a96;"';
+  const SET_CNT = 'style="background:#3B72B0;color:#D0E8FF;font-family:Calibri,Arial,sans-serif;font-size:9pt;padding:7px 12px;text-align:right;border:1px solid #2a5a96;"';
+  const TH_NOME = `style="background:#2C3E6B;color:#fff;font-family:Calibri,Arial,sans-serif;font-size:11pt;font-weight:bold;padding:8px 12px;text-align:left;border:1px solid #1a2d52;white-space:nowrap;width:260pt;"`;
   let linhasTotais = '';
-  for (const [empresa, lista] of grupos) {
-    const cntLabel = lista.length === 1 ? '1 colaborador' : lista.length + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
-    linhasTotais += `<tr><td colspan="5" ${SETOR_TD}>${empresa}</td><td ${COUNT_TD}>${cntLabel}</td></tr>`;
-    linhasTotais += `<tr><th ${TH}>Nome</th><th ${TH}>Cargo</th><th ${TH}>Setor</th><th ${TH}>Admissão</th><th ${TH}>Gestor</th><th ${TH}></th></tr>`;
-    lista.forEach((c, i) => {
-      const par = i % 2 === 1;
-      const set = (c.setor || '').replace(/^\d+\s*[-–]\s*/, '');
-      linhasTotais += `<tr><td ${TD_NOME(par)}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${set||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)||''}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
-    });
-    linhasTotais += `<tr><td colspan="6" style="padding:4px;border:none;background:#fff;"></td></tr>`;
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s + l.length, 0);
+    const cntEmpLabel = cntEmp === 1 ? '1 colaborador' : cntEmp + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
+    linhasTotais += `<tr><td colspan="4" ${EMP_TD}>${empresa}</td><td ${EMP_CNT}>${cntEmpLabel}</td></tr>`;
+    for (const [setor, lista] of setores) {
+      const cntLabel = lista.length === 1 ? '1 colaborador' : lista.length + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
+      linhasTotais += `<tr><td colspan="4" ${SET_TD}>${setor}</td><td ${SET_CNT}>${cntLabel}</td></tr>`;
+      linhasTotais += `<tr><th ${TH_NOME}>Nome</th><th ${TH}>Cargo</th><th ${TH}>Admissão</th><th ${TH}>Gestor</th><th ${TH}></th></tr>`;
+      lista.forEach((c, i) => {
+        const par = i % 2 === 1;
+        const nomeStyle = `style="font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#fff'};width:260pt;"`;
+        linhasTotais += `<tr><td ${nomeStyle}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)||''}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
+      });
+      linhasTotais += `<tr><td colspan="5" style="padding:3px;border:none;background:#fff;"></td></tr>`;
+    }
+    linhasTotais += `<tr><td colspan="5" style="padding:6px;border:none;background:#fff;"></td></tr>`;
   }
   const filtrosTexto = chips.join(' | ');
   const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Colaboradores</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
 <body><table>
-<tr><td colspan="6" style="background:#2C3E6B;color:#fff;font-family:Calibri,Arial,sans-serif;font-size:14pt;font-weight:bold;padding:12px;border:none;">Relatório de Colaboradores — Revest</td></tr>
-<tr><td colspan="6" style="background:#3B4F7A;color:rgba(255,255,255,0.8);font-family:Calibri,Arial,sans-serif;font-size:10pt;padding:6px 12px;border:none;">${filtrosTexto} · ${total} registros · Gerado em ${dataHora}</td></tr>
-<tr><td colspan="6" style="padding:4px;border:none;background:#fff;"></td></tr>
+<tr><td colspan="5" style="background:#2C3E6B;color:#fff;font-family:Calibri,Arial,sans-serif;font-size:14pt;font-weight:bold;padding:12px;border:none;">Relatório de Colaboradores — Revest</td></tr>
+<tr><td colspan="5" style="background:#3B4F7A;color:rgba(255,255,255,0.8);font-family:Calibri,Arial,sans-serif;font-size:10pt;padding:6px 12px;border:none;">${filtrosTexto} · ${total} registros · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="5" style="padding:4px;border:none;background:#fff;"></td></tr>
 ${linhasTotais}
-<tr><td colspan="4" style="background:#EDF1FA;color:#2C3E6B;font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:bold;padding:8px 12px;border:1px solid #DDE5F0;">Total geral</td><td colspan="2" style="background:#EDF1FA;color:#1A7F6A;font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:bold;padding:8px 12px;text-align:right;border:1px solid #DDE5F0;">${total} ${label}</td></tr>
+<tr><td colspan="3" style="background:#EDF1FA;color:#2C3E6B;font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:bold;padding:8px 12px;border:1px solid #DDE5F0;">Total geral</td><td colspan="2" style="background:#EDF1FA;color:#1A7F6A;font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:bold;padding:8px 12px;text-align:right;border:1px solid #DDE5F0;">${total} ${label}</td></tr>
 </table></body></html>`;
   const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8' });
   const a = document.createElement('a');
