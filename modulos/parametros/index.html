@@ -537,20 +537,25 @@ ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAUL
     <div class="modal-body">
       <input type="hidden" id="uColaboradorId">
       <div class="field-row" style="grid-template-columns:2fr 1fr">
-        <div class="field" style="position:relative">
-          <label>Colaborador <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></label>
-          <input type="text" id="uColaboradorBusca" placeholder="Digite para buscar..." oninput="buscarColaboradorUser()" autocomplete="off">
-          <div id="uColaboradorDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px;"></div>
-          <div id="uColaboradorSelecionado" style="display:none;margin-top:6px;padding:8px 12px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:8px;font-size:13px;color:var(--blue);display:none;align-items:center;justify-content:space-between;">
-            <span id="uColaboradorNomeLabel"></span>
-            <button type="button" onclick="limparColaboradorUser()" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;line-height:1;padding:0 0 0 8px">×</button>
-          </div>
+        <div class="field">
+          <label>Nome de exibição *</label>
+          <input type="text" id="uNomeExibicao" placeholder="Ex: Daniela Dalosse, Diretoria…" autocomplete="off">
         </div>
         <div class="field">
           <label>Perfil *</label>
           <select id="uPerfil" onchange="perfilChanged()">
             <option value="">Carregando...</option>
           </select>
+        </div>
+      </div>
+
+      <div id="uColaboradorWrap" style="display:none;" class="field" style="position:relative">
+        <label id="uColaboradorLabel">Colaborador *</label>
+        <input type="text" id="uColaboradorBusca" placeholder="Digite para buscar..." oninput="buscarColaboradorUser()" autocomplete="off">
+        <div id="uColaboradorDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px;"></div>
+        <div id="uColaboradorSelecionado" style="display:none;margin-top:6px;padding:8px 12px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:8px;font-size:13px;color:var(--blue);align-items:center;justify-content:space-between;">
+          <span id="uColaboradorNomeLabel"></span>
+          <button type="button" onclick="limparColaboradorUser()" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;line-height:1;padding:0 0 0 8px">×</button>
         </div>
       </div>
       <div class="field-row" style="grid-template-columns:1fr 1fr">
@@ -2025,8 +2030,31 @@ function renderModulosGrid(acessoAtual) {
   }).join('');
 }
 
+function _perfilIsColab() {
+  const perfilId = parseInt(document.getElementById('uPerfil').value) || null;
+  const perfil = allPerfis.find(p => p.id === perfilId);
+  return perfil && perfil.nome.toLowerCase().includes('colaborador');
+}
+
 function perfilChanged() {
   renderModulosGrid(null);
+  _atualizarCampoColab();
+}
+
+function _atualizarCampoColab() {
+  const wrap = document.getElementById('uColaboradorWrap');
+  if (!wrap) return;
+  const isColab = _perfilIsColab();
+  wrap.style.display = isColab ? '' : 'none';
+  if (!isColab) {
+    // limpa vínculo silenciosamente ao trocar de perfil
+    document.getElementById('uColaboradorId').value = '';
+    document.getElementById('uColaboradorNomeLabel').textContent = '';
+    document.getElementById('uColaboradorSelecionado').style.display = 'none';
+    document.getElementById('uColaboradorBusca').style.display = 'block';
+    document.getElementById('uColaboradorBusca').value = '';
+    document.getElementById('uColaboradorDropdown').style.display = 'none';
+  }
 }
 
 function getModulosSelecionados() {
@@ -2042,6 +2070,7 @@ function abrirUserModal(id) {
     : '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">Novo usuário</span>';
 
   document.getElementById('uColaboradorId').value = user?.colaborador_id || '';
+  document.getElementById('uNomeExibicao').value  = user?.nome || '';
   popularSelectPerfis(user?.perfil_id || '');
   document.getElementById('uEmail').value  = user?.email  || '';
   const senhaInput = document.getElementById('uSenha');
@@ -2055,20 +2084,21 @@ function abrirUserModal(id) {
     senhaInput.type = 'password';
     senhaHint.textContent = 'Sugestão de senha padrão';
   }
-  // Campo de busca: ao editar mostra nome salvo; ao criar começa vazio
+  // Estado do autocomplete de colaborador
   const busca = document.getElementById('uColaboradorBusca');
   const sel   = document.getElementById('uColaboradorSelecionado');
-  const label = document.getElementById('uColaboradorNomeLabel');
-  if (user?.nome) {
+  const lbl   = document.getElementById('uColaboradorNomeLabel');
+  if (user?.colaborador_id && user?.nome) {
     busca.style.display = 'none';
     sel.style.display = 'flex';
-    label.textContent = user.nome;
+    lbl.textContent = user.nome;
   } else {
     busca.style.display = 'block';
     busca.value = '';
     sel.style.display = 'none';
     document.getElementById('uColaboradorDropdown').style.display = 'none';
   }
+  _atualizarCampoColab();
 
   const btnToggle = document.getElementById('userBtnToggle');
   if (user) {
@@ -2228,6 +2258,9 @@ function selecionarColaboradorUser(id) {
   document.getElementById('uColaboradorSelecionado').style.display = 'flex';
   document.getElementById('uColaboradorBusca').style.display = 'none';
   document.getElementById('uColaboradorDropdown').style.display = 'none';
+  // preenche nome de exibição automaticamente se ainda estiver vazio
+  const nomeField = document.getElementById('uNomeExibicao');
+  if (nomeField && !nomeField.value.trim()) nomeField.value = c.nome;
   if (c.email) document.getElementById('uEmail').value = c.email;
 }
 
@@ -2250,7 +2283,7 @@ function toggleSenhaVis() {
 
 async function salvarUser() {
   const colaboradorId = parseInt(document.getElementById('uColaboradorId').value) || null;
-  const nomeColab = document.getElementById('uColaboradorNomeLabel').textContent.trim();
+  const nome      = document.getElementById('uNomeExibicao').value.trim();
   const email     = document.getElementById('uEmail').value.trim();
   const senha     = document.getElementById('uSenha').value.trim();
   const perfilId  = parseInt(document.getElementById('uPerfil').value) || null;
@@ -2258,9 +2291,8 @@ async function salvarUser() {
   const perfil    = perfilObj?.nome?.toLowerCase().replace(/\s+/g, '_') || '';
   const acesso    = getModulosSelecionados();
 
-  // colaborador é opcional — usa o e-mail como identificador quando não vinculado
-  const nome = nomeColab || email;
-  if (!nome) { showToast('Informe ao menos o e-mail de acesso.', 'error'); return; }
+  if (!nome) { showToast('Informe o nome de exibição.', 'error'); document.getElementById('uNomeExibicao').focus(); return; }
+  if (_perfilIsColab() && !colaboradorId) { showToast('Vincule um colaborador para este perfil.', 'error'); document.getElementById('uColaboradorBusca').focus(); return; }
 
   const temExtra = await testarColunaExtra();
   const bodyBase = { nome, perfil, acesso_modulos: acesso,
