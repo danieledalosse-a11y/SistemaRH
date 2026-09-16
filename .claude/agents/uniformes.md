@@ -79,6 +79,69 @@ let _ajusteTamanho    = null;  // tamanho (para uso futuro)
 
 Quando o erro não bate em nenhum código, retorna: `"Erro ao salvar. Verifique os campos e tente novamente."`
 
+## Exclusão de entrada (`excluirEntrada`) — 2026-09-16
+
+Botão 🗑️ ao lado do ✏️ na lista de movimentações (aba Movimentações > Posição). Aparece apenas para linhas do tipo `'entrada'` com `id` preenchido.
+
+```js
+async function excluirEntrada(id) {
+  if (!confirm('Excluir esta entrada permanentemente? Esta ação não pode ser desfeita.')) return;
+  await sbDelete('unif_entradas', `id=eq.${id}`);
+  await carregarEstoque();
+}
+```
+
+**⚠️ Auditoria pendente:** a exclusão atual não registra rastro. Ver seção "Auditoria — pendência" abaixo.
+
+## Modal "Editar entrada" — arrastável (2026-09-16)
+
+O modal é arrastável pelo cabeçalho (`cursor:move`). Implementado com IIFE que adiciona listeners `mousedown`/`mousemove`/`mouseup` no `DOMContentLoaded`.
+
+- Na primeira vez que arrasta, converte `transform:translateX(-50%)` para coordenadas absolutas `left/top`
+- `fecharEditEntrada()` reseta para `left:50%; top:80px; transform:translateX(-50%)` a cada fechamento
+- IDs relevantes: `modalEditEntrada` (overlay), `modalEditEntradaBox` (caixa), `modalEditEntradaHdr` (cabeçalho drag)
+- `modal-overlay` usa `align-items:flex-start; justify-content:flex-start` para não conflitar com o posicionamento absoluto
+
+## Auditoria — pendência crítica (2026-09-16)
+
+**Premissa do sistema:** todo módulo deve ter rastreabilidade completa de quem fez o quê e quando.
+
+O módulo de uniformes **não tem auditoria implementada**. As ações sem rastro hoje:
+- Edição de entrada (`salvarEditEntrada`)
+- Exclusão de entrada (`excluirEntrada`)
+- Ajuste de estoque (`confirmarAjusteEstoque`)
+
+**Por que não usa `unif_movimentacoes`:** a tabela exige `colaborador_id NOT NULL` — operações de estoque sem colaborador vinculado não podem ser registradas ali.
+
+**Solução planejada:** criar tabela `unif_log` no Supabase:
+
+```sql
+CREATE TABLE unif_log (
+  id            bigserial PRIMARY KEY,
+  acao          text NOT NULL,        -- 'entrada_editada', 'entrada_excluida', 'estoque_ajustado'
+  tabela        text,                 -- 'unif_entradas', 'unif_estoque'
+  registro_id   text,                 -- id do registro afetado
+  snapshot_antes jsonb,               -- estado antes da alteração
+  snapshot_depois jsonb,              -- estado após (null se exclusão)
+  usuario       text,                 -- perfil.nome
+  criado_em     timestamptz DEFAULT NOW()
+);
+```
+
+**Padrão de uso após criar a tabela:**
+```js
+async function _logUnif(acao, tabelaRef, registroId, antes, depois) {
+  const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  await sbPost('unif_log', {
+    acao, tabela: tabelaRef, registro_id: String(registroId),
+    snapshot_antes: antes || null, snapshot_depois: depois || null,
+    usuario: perfil.nome || 'RH',
+  }).catch(() => {}); // falha silenciosa — não bloqueia a operação principal
+}
+```
+
+Chamar antes de cada `sbPatch`/`sbDelete` passando o objeto original como `antes`.
+
 ## Tipos de movimentação (`tipo` em `unif_movimentacoes`)
 
 | Valor | Descrição |
