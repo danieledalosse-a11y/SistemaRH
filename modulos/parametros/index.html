@@ -237,19 +237,26 @@
   .modulo-check input { accent-color: var(--blue); width: 14px; height: 14px; flex-shrink: 0; }
   .modulo-check.disabled { opacity: 0.5; cursor: not-allowed; }
   /* ── Tela de Permissões ── */
-  .perm-page { padding: 24px 32px; max-width: 820px; }
+  .perm-page { padding: 24px 32px; max-width: 900px; }
   .perm-page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 16px; }
   .perm-perfil-sel { padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface); cursor: pointer; min-width: 200px; }
-  .perm-table { width: 100%; border-collapse: collapse; }
-  .perm-table th { font-size: 11px; font-weight: 700; color: var(--text-sec); text-transform: uppercase; letter-spacing: .04em; padding: 8px 12px; text-align: left; border-bottom: 1.5px solid var(--border); white-space: nowrap; }
-  .perm-table td { padding: 12px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  .perm-table tr:last-child td { border-bottom: none; }
-  .perm-table tr:hover td { background: var(--bg); }
+  .perm-matrix { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .perm-matrix th { font-size: 11px; font-weight: 700; color: var(--text-sec); text-transform: uppercase; letter-spacing: .05em; padding: 10px 14px; text-align: center; white-space: nowrap; background: #f8fafc; border-bottom: 1.5px solid var(--border); }
+  .perm-matrix th.th-mod { text-align: left; min-width: 160px; }
+  .perm-matrix th.th-group-label { font-size: 10px; color: var(--text-ter); padding-bottom: 4px; letter-spacing: .04em; }
+  .perm-matrix td { padding: 11px 14px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+  .perm-matrix td.td-mod { text-align: left; }
+  .perm-matrix tbody tr:last-child td { border-bottom: none; }
+  .perm-matrix tbody tr:hover td { background: #fafbfc; }
+  .perm-matrix td.td-sep { padding: 0; width: 1px; background: var(--border); }
+  .perm-matrix th.th-sep { padding: 0; width: 1px; background: var(--border); }
   .perm-mod-name { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
-  .perm-chips { display: flex; gap: 5px; flex-wrap: wrap; }
-  .perm-chip { padding: 3px 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; color: var(--text-sec); cursor: pointer; user-select: none; transition: background .1s, border-color .1s, color .1s; }
-  .perm-chip:has(input:checked) { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; font-weight: 600; }
-  .perm-chip input { display: none; }
+  .perm-cell { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 15px; user-select: none; transition: background .1s; }
+  .perm-cell:hover { background: #f1f5f9; }
+  .perm-cell.on { color: var(--green); }
+  .perm-cell.off { color: var(--red); }
+  .perm-cell.na { color: var(--text-ter); font-size: 13px; cursor: default; }
+  .perm-cell.na:hover { background: none; }
   .perm-empty { padding: 40px 0; text-align: center; color: var(--text-sec); font-size: 13px; }
   .modulo-icon { font-size: 14px; flex-shrink: 0; }
 
@@ -1794,29 +1801,65 @@ function renderPermTable() {
     return;
   }
   const permAtual = perfil.permissoes || {};
-  wrap.innerHTML = `<table class="perm-table">
-    <thead><tr>
-      <th style="width:160px">Módulo</th>
-      <th>Ações</th>
-      <th>Abas</th>
-    </tr></thead>
+
+  // Colunas de ações são fixas (todos os módulos têm as mesmas 3)
+  const colsAcoes = [{key:'visualizar',label:'Visualizar'},{key:'inserir',label:'Inserir'},{key:'alterar',label:'Alterar'}];
+  // Colunas de abas: união de todas as abas existentes nos módulos deste perfil
+  const allAbas = [];
+  modsComPerm.forEach(k => {
+    MODULOS_PERMISSOES[k].abas.forEach(a => {
+      if (!allAbas.find(x => x.key === a.key)) allAbas.push(a);
+    });
+  });
+
+  function cell(k, type, colKey, def) {
+    const permMod = permAtual[k] || {};
+    const lista = type === 'acao'
+      ? (permMod.acoes || def.acoes.map(a => a.key))
+      : (permMod.abas  || def.abas.map(a => a.key));
+    const exists = def[type === 'acao' ? 'acoes' : 'abas'].find(x => x.key === colKey);
+    if (!exists) return `<td><span class="perm-cell na">—</span></td>`;
+    const checked = lista.includes(colKey);
+    return `<td><span class="perm-cell ${checked ? 'on' : 'off'}" onclick="toggleCell(this,'${k}','${type}','${colKey}')">${checked ? '✓' : '✕'}</span><input type="checkbox" data-modulo="${k}" data-type="${type}" value="${colKey}" ${checked ? 'checked' : ''} style="display:none"></td>`;
+  }
+
+  wrap.innerHTML = `<table class="perm-matrix">
+    <thead>
+      <tr>
+        <th class="th-mod" rowspan="2">Módulo</th>
+        <th class="th-sep" rowspan="2"></th>
+        <th colspan="${colsAcoes.length}" class="th-group-label" style="border-right:1px solid var(--border)">AÇÕES</th>
+        <th class="th-sep" rowspan="2"></th>
+        <th colspan="${allAbas.length}" class="th-group-label">ABAS</th>
+      </tr>
+      <tr>
+        <th class="th-sep" style="display:none"></th>
+        ${colsAcoes.map(a => `<th>${a.label}</th>`).join('')}
+        <th class="th-sep" style="display:none"></th>
+        ${allAbas.map(a => `<th>${a.label}</th>`).join('')}
+      </tr>
+    </thead>
     <tbody>${modsComPerm.map(k => {
       const def = MODULOS_PERMISSOES[k];
       const mod = MODULOS_SISTEMA.find(m => m.key === k);
-      const permMod = permAtual[k] || {};
-      const abasAtivas  = permMod.abas  || def.abas.map(a => a.key);
-      const acoesAtivas = permMod.acoes || def.acoes.map(a => a.key);
       return `<tr>
-        <td><div class="perm-mod-name">${mod?.icon || ''} ${mod?.label || k}</div></td>
-        <td><div class="perm-chips">${def.acoes.map(a =>
-          `<label class="perm-chip"><input type="checkbox" data-modulo="${k}" data-type="acao" value="${a.key}" ${acoesAtivas.includes(a.key) ? 'checked' : ''}>${a.label}</label>`
-        ).join('')}</div></td>
-        <td><div class="perm-chips">${def.abas.map(a =>
-          `<label class="perm-chip"><input type="checkbox" data-modulo="${k}" data-type="aba" value="${a.key}" ${abasAtivas.includes(a.key) ? 'checked' : ''}>${a.label}</label>`
-        ).join('')}</div></td>
+        <td class="td-mod"><div class="perm-mod-name">${mod?.icon || ''} ${mod?.label || k}</div></td>
+        <td class="td-sep"></td>
+        ${colsAcoes.map(a => cell(k, 'acao', a.key, def)).join('')}
+        <td class="td-sep"></td>
+        ${allAbas.map(a => cell(k, 'aba', a.key, def)).join('')}
       </tr>`;
     }).join('')}</tbody>
   </table>`;
+}
+
+function toggleCell(el, modulo, type, colKey) {
+  const isOn = el.classList.contains('on');
+  el.classList.toggle('on', !isOn);
+  el.classList.toggle('off', isOn);
+  el.textContent = isOn ? '✕' : '✓';
+  const inp = el.nextElementSibling;
+  if (inp) inp.checked = !isOn;
 }
 
 async function salvarPermissoes() {
