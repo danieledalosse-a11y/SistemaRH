@@ -727,9 +727,9 @@
 </div><!-- /container -->
 
 <!-- ═══ Modal: Editar Entrada ═══ -->
-<div class="modal-overlay" id="modalEditEntrada">
-  <div class="modal" style="max-width:460px;">
-    <div class="modal-hdr">
+<div class="modal-overlay" id="modalEditEntrada" style="align-items:flex-start;justify-content:flex-start;">
+  <div class="modal" id="modalEditEntradaBox" style="max-width:460px;position:absolute;top:80px;left:50%;transform:translateX(-50%);">
+    <div class="modal-hdr" id="modalEditEntradaHdr" style="cursor:move;user-select:none;">
       <span class="modal-title">Editar entrada</span>
       <button class="modal-close" onclick="fecharEditEntrada()">✕</button>
     </div>
@@ -1661,12 +1661,23 @@ function renderMovimentacoes() {
       <td style="text-align:right;font-weight:600;">${vTotal}</td>
       <td style="color:var(--text-sec);">${r.origem || '—'}</td>
       <td style="color:var(--text-sec);font-size:12px;">${r.almoxNome}</td>
-      <td style="text-align:center;">${r.tipo === 'entrada' && r.id ? `<button onclick="abrirEditEntrada('${r.id}')" title="Editar entrada" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--text-ter);font-size:15px;line-height:1;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">✏️</button>` : ''}</td>
+      <td style="text-align:center;white-space:nowrap;">${r.tipo === 'entrada' && r.id ? `<button onclick="abrirEditEntrada('${r.id}')" title="Editar entrada" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--text-ter);font-size:15px;line-height:1;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">✏️</button><button onclick="excluirEntrada('${r.id}')" title="Excluir entrada" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--text-ter);font-size:15px;line-height:1;" onmouseover="this.style.color='#B42318';this.style.background='#FEF3F2'" onmouseout="this.style.color='var(--text-ter)';this.style.background='none'">🗑️</button>` : ''}</td>
     </tr>`;
   }).join('');
 }
 
 let _editEntradaId = null;
+async function excluirEntrada(id) {
+  if (!confirm('Excluir esta entrada permanentemente? Esta ação não pode ser desfeita.')) return;
+  try {
+    await sbDelete('unif_entradas', `id=eq.${id}`);
+    toast('Entrada excluída.');
+    await carregarEstoque();
+  } catch(e) {
+    toast(_erroApi(e), 'erro');
+  }
+}
+
 function abrirEditEntrada(id) {
   const entrada = ENTRADAS.find(e => String(e.id) === String(id));
   if (!entrada) { toast('Entrada não encontrada.', 'erro'); return; }
@@ -1701,8 +1712,42 @@ function abrirEditEntrada(id) {
 }
 function fecharEditEntrada() {
   document.getElementById('modalEditEntrada').classList.remove('open');
+  // reset posição para centralizar na próxima abertura
+  const box = document.getElementById('modalEditEntradaBox');
+  if (box) { box.style.left = '50%'; box.style.top = '80px'; box.style.transform = 'translateX(-50%)'; }
   _editEntradaId = null;
 }
+
+// drag do modal editar entrada
+(function() {
+  let _dx = 0, _dy = 0, _dragging = false;
+  document.addEventListener('DOMContentLoaded', () => {
+    const hdr = document.getElementById('modalEditEntradaHdr');
+    const box = document.getElementById('modalEditEntradaBox');
+    if (!hdr || !box) return;
+    hdr.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      // na primeira vez que arrastar, converte de transform para left/top absoluto
+      const r = box.getBoundingClientRect();
+      box.style.left      = r.left + 'px';
+      box.style.top       = r.top  + 'px';
+      box.style.transform = 'none';
+      _dx = e.clientX - r.left;
+      _dy = e.clientY - r.top;
+      _dragging = true;
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', e => {
+      if (!_dragging) return;
+      box.style.left = (e.clientX - _dx) + 'px';
+      box.style.top  = Math.max(0, e.clientY - _dy) + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      _dragging = false;
+      document.body.style.userSelect = '';
+    });
+  });
+})();
 async function salvarEditEntrada() {
   const itemId  = document.getElementById('editEntradaItem').value;
   const tamanho = document.getElementById('editEntradaTamanho').value;
