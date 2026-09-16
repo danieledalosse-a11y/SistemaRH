@@ -6307,13 +6307,14 @@ function renderAnalytics() {
     topRiscoHtml = `<div class="an-empty">Nenhum colaborador em risco de dobra</div>`;
   } else {
     // Gera SVG da pizza usando as cores do sistema por setor
-    const _PIE_R = 90, _PIE_CX = 100, _PIE_CY = 100;
+    const _PIE_R = 90, _PIE_CX = 100, _PIE_CY = 100, _PIE_LBL_R = 62;
     const total = _riscoDadosCompletos.length;
     let _angulo = -Math.PI / 2;
-    let _slices = '';
+    let _slices = '', _labels = '';
     _riscoSetores.forEach(([setor, items]) => {
       const frac = items.length / total;
       const ang = frac * 2 * Math.PI;
+      const midAng = _angulo + ang / 2;
       const x1 = _PIE_CX + _PIE_R * Math.cos(_angulo);
       const y1 = _PIE_CY + _PIE_R * Math.sin(_angulo);
       _angulo += ang;
@@ -6322,32 +6323,44 @@ function renderAnalytics() {
       const large = ang > Math.PI ? 1 : 0;
       const corSet = corDoSetor(setor);
       const setorEsc = setor.replace(/'/g,"\\'");
-      // fatia: fundo pastel (bg) com borda da cor do setor — visual leve
       _slices += `<path d="M${_PIE_CX},${_PIE_CY} L${x1.toFixed(2)},${y1.toFixed(2)} A${_PIE_R},${_PIE_R} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z"
-        fill="${corSet.bg}" stroke="${corSet.borda}" stroke-width="2.5" style="cursor:pointer;transition:filter .15s"
-        onmouseover="this.style.filter='brightness(0.95)'" onmouseout="this.style.filter='none'"
-        onclick="dashRiscoFiltrar('${setorEsc}')"/>`;
+        fill="${corSet.bg}" stroke="${corSet.borda}" stroke-width="2" style="cursor:pointer;transition:filter .15s"
+        onmouseover="dashPizzaTooltip(event,'${setorEsc}',${items.length},${Math.round(frac*100)})"
+        onmouseout="dashPizzaTooltipHide()"
+        onclick="dashRiscoFiltrar('${setorEsc}')">
+        <title>${setor}: ${items.length} colaborador${items.length!==1?'es':''}</title>
+      </path>`;
+      // número dentro da fatia (só se a fatia tiver espaço suficiente — ≥8%)
+      if (frac >= 0.08) {
+        const lx = (_PIE_CX + _PIE_LBL_R * Math.cos(midAng)).toFixed(2);
+        const ly = (_PIE_CY + _PIE_LBL_R * Math.sin(midAng)).toFixed(2);
+        _labels += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central"
+          font-size="${frac >= 0.25 ? 16 : 13}" font-weight="700" fill="${corSet.borda}"
+          style="pointer-events:none">${items.length}</text>`;
+      }
     });
 
-    // Legenda
+    // Legenda integrada: chip colorido com setor + número juntos
     const _legendaHtml = _riscoSetores.map(([setor, items]) => {
       const corSet = corDoSetor(setor);
       const pct = Math.round(items.length / total * 100);
       const setorEsc = setor.replace(/'/g,"\\'");
-      return `<div onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;transition:background .1s" onmouseover="this.style.background='${corSet.bg}'" onmouseout="this.style.background='transparent'">
-        <div style="width:10px;height:10px;border-radius:50%;background:${corSet.borda};flex-shrink:0"></div>
-        <span style="font-size:12px;font-weight:600;color:var(--text);flex:1">${setor}</span>
-        <span style="font-size:13px;font-weight:700;color:${corSet.borda}">${items.length}</span>
-        <span style="font-size:11px;color:var(--text-ter);min-width:30px;text-align:right">${pct}%</span>
+      return `<div onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;gap:0;border-radius:8px;overflow:hidden;border:1.5px solid ${corSet.borda};margin-bottom:6px;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.10)'" onmouseout="this.style.boxShadow='none'">
+        <div style="background:${corSet.borda};color:#fff;font-size:13px;font-weight:800;padding:6px 11px;min-width:32px;text-align:center">${items.length}</div>
+        <div style="background:${corSet.bg};flex:1;padding:6px 10px;font-size:12px;font-weight:600;color:${corSet.borda}">${setor}</div>
+        <div style="background:${corSet.bg};padding:6px 10px;font-size:11px;color:var(--text-ter)">${pct}%</div>
       </div>`;
     }).join('');
 
     topRiscoHtml = `
+      <div style="position:relative">
+        <div id="dashPizzaTip" style="display:none;position:fixed;background:#1e293b;color:#fff;font-size:12px;font-weight:600;padding:6px 10px;border-radius:7px;pointer-events:none;z-index:9999;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.2)"></div>
+      </div>
       <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
         <div style="flex-shrink:0">
-          <svg width="200" height="200" viewBox="0 0 200 200">${_slices}</svg>
+          <svg width="200" height="200" viewBox="0 0 200 200">${_slices}${_labels}</svg>
         </div>
-        <div style="flex:1;min-width:160px">${_legendaHtml}</div>
+        <div style="flex:1;min-width:180px">${_legendaHtml}</div>
       </div>
       <div id="dashRiscoLista" style="margin-top:12px"></div>`;
   }
@@ -6510,6 +6523,19 @@ function dashRiscoFiltrar(setor) {
     <div style="font-size:11px;font-weight:700;color:${corSet.borda};margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">${setor} — ${lista.length} colaborador${lista.length!==1?'es':''} <span style="font-weight:400;color:var(--text-ter);font-size:10px;text-transform:none">(clique novamente para fechar)</span></div>
     ${rows}
   </div>`;
+}
+
+function dashPizzaTooltip(e, setor, qtd, pct) {
+  const tip = document.getElementById('dashPizzaTip');
+  if (!tip) return;
+  tip.textContent = `${setor}  •  ${qtd} colaborador${qtd!==1?'es':''}  (${pct}%)`;
+  tip.style.display = 'block';
+  tip.style.left = (e.clientX + 14) + 'px';
+  tip.style.top  = (e.clientY - 10) + 'px';
+}
+function dashPizzaTooltipHide() {
+  const tip = document.getElementById('dashPizzaTip');
+  if (tip) tip.style.display = 'none';
 }
 
 function renderDashAnoChart() {
