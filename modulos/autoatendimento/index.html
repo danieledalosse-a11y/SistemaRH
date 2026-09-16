@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meu RH — Revest</title>
+<style>
+  :root {
+    --bg:#F0F2F5; --surface:#fff; --border:#E4E7EC; --border-light:#F0F2F5;
+    --text:#101828; --text-sec:#667085; --text-ter:#98A2B3; --accent:#101828;
+    --green:#027A48; --green-bg:#ECFDF3; --red:#B42318; --red-bg:#FEF3F2;
+    --blue:#1849A9;  --blue-bg:#EFF4FF;  --amber:#92400E; --amber-bg:#FFFAEB;
+    --purple:#5925DC; --purple-bg:#F4F3FF;
+    --radius:12px;
+    --shadow-sm:0 1px 2px rgba(16,24,40,0.05);
+    --shadow-md:0 4px 8px -2px rgba(16,24,40,0.10),0 2px 4px -2px rgba(16,24,40,0.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+
+  /* topbar */
+  .topbar{background:var(--accent);color:#fff;padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 0 rgba(255,255,255,0.08)}
+  .topbar-left{display:flex;align-items:center;gap:8px}
+  .topbar-brand{font-size:14px;font-weight:600;color:rgba(255,255,255,0.7)}
+  .topbar-sep{color:rgba(255,255,255,0.25);font-size:16px;margin:0 4px}
+  .topbar-mod{font-size:15px;font-weight:600;color:#fff}
+  .topbar-right{display:flex;align-items:center;gap:8px}
+  .topbar-user-name{font-size:13px;color:rgba(255,255,255,0.6)}
+  .avatar{width:32px;height:32px;border-radius:50%;background:#1570EF;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+  .btn-icon-top{background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.5);display:flex;align-items:center;padding:4px;border-radius:6px;transition:color .15s}
+  .btn-icon-top:hover{color:#fff}
+
+  /* hero */
+  .hero{background:var(--surface);border-bottom:1px solid var(--border);padding:28px;box-shadow:var(--shadow-sm)}
+  .hero-inner{max-width:1100px;margin:0 auto;display:flex;align-items:flex-start;gap:20px}
+  .hero-photo{width:72px;height:72px;border-radius:50%;object-fit:cover;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:var(--blue);flex-shrink:0;border:3px solid var(--border)}
+  .hero-info{flex:1;min-width:0}
+  .hero-nome{font-size:22px;font-weight:700;line-height:1.2;margin-bottom:4px}
+  .hero-sub{font-size:14px;color:var(--text-sec);margin-bottom:10px}
+  .hero-chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;background:var(--bg);border:1px solid var(--border);color:var(--text-sec)}
+  .chip-green{background:var(--green-bg);border-color:#A9EFC5;color:var(--green)}
+  .chip-red{background:var(--red-bg);border-color:#FCA5A5;color:var(--red)}
+
+  /* tabs */
+  .tabs{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;box-shadow:var(--shadow-sm)}
+  .tabs-inner{max-width:1100px;margin:0 auto;display:flex}
+  .tab{padding:14px 18px;font-size:13px;font-weight:500;color:var(--text-sec);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit;transition:color .15s}
+  .tab:hover{color:var(--text)}
+  .tab.active{color:var(--text);border-bottom-color:var(--text);font-weight:600}
+
+  /* container */
+  .container{max-width:1100px;margin:0 auto;padding:28px 24px}
+  .sec{display:none}
+  .sec.active{display:block}
+
+  /* resumo cards */
+  .resumo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px}
+  .rcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+  .rcard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+  .rcard.c-blue::before{background:var(--blue)}
+  .rcard.c-amber::before{background:#F79009}
+  .rcard-val{font-size:28px;font-weight:700;letter-spacing:-0.02em;margin-top:4px}
+  .rcard-val.blue{color:var(--blue)} .rcard-val.amber{color:var(--amber)}
+  .rcard-label{font-size:12px;color:var(--text-sec);margin-top:5px;font-weight:500}
+  .rcard-sub{font-size:11px;color:var(--text-ter);margin-top:2px}
+
+  /* info grid */
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+  .info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-sm)}
+  .info-card-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border-light)}
+  .info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px}
+  .info-row:last-child{border-bottom:none}
+  .info-row label{color:var(--text-sec);flex-shrink:0;margin-right:8px}
+  .info-row span{font-weight:500;text-align:right}
+
+  /* férias */
+  .ferias-pa{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:12px;box-shadow:var(--shadow-sm)}
+  .ferias-pa-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .ferias-pa-ano{font-size:14px;font-weight:600}
+  .ferias-pa-datas{font-size:12px;color:var(--text-sec)}
+  .ferias-lanc{display:flex;flex-direction:column;gap:6px}
+  .ferias-lanc-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;font-size:12px}
+  .ferias-lanc-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}
+  .ferias-lanc-dot.fut{background:var(--blue)}
+  .ferias-lanc-dot.pen{background:#F79009}
+  .saldo-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+  .saldo-ok{background:var(--green-bg);color:var(--green)}
+  .saldo-warn{background:var(--amber-bg);color:var(--amber)}
+  .saldo-crit{background:var(--red-bg);color:var(--red)}
+
+  /* utils */
+  .empty-state{text-align:center;padding:48px 24px;color:var(--text-sec)}
+  .empty-state svg{width:36px;height:36px;margin-bottom:10px;stroke:var(--text-ter)}
+  .empty-state p{font-size:13px}
+  .loader{display:flex;align-items:center;justify-content:center;padding:48px}
+  .spinner{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .sec-title{font-size:15px;font-weight:600;margin-bottom:4px}
+  .sec-sub{font-size:13px;color:var(--text-sec);margin-bottom:18px}
+  #toast{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+  .toast-item{padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;color:#fff;box-shadow:var(--shadow-md);animation:slideIn .25s ease}
+  .toast-item.ok{background:#101828} .toast-item.err{background:var(--red)}
+  @keyframes slideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+  @media(max-width:768px){
+    .hero-inner{flex-direction:column}
+    .info-grid{grid-template-columns:1fr}
+    .resumo-grid{grid-template-columns:1fr 1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-brand">Revest</span>
+    <span class="topbar-sep">/</span>
+    <span class="topbar-mod">Meu RH</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user-name" id="userName">—</span>
+    <div class="avatar" id="userAvatar">?</div>
+    <button class="btn-icon-top" onclick="logout()" title="Sair">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Hero -->
+<div class="hero" id="heroArea" style="display:none">
+  <div class="hero-inner">
+    <div class="hero-photo" id="heroPhoto"></div>
+    <div class="hero-info">
+      <div class="hero-nome" id="heroNome">—</div>
+      <div class="hero-sub" id="heroSub">—</div>
+      <div class="hero-chips" id="heroChips"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs — Fase 1: Resumo e Férias apenas -->
+<div class="tabs" id="tabsArea" style="display:none">
+  <div class="tabs-inner">
+    <button class="tab active" onclick="showTab('resumo',this)">Resumo</button>
+    <button class="tab" onclick="showTab('ferias',this)">Minhas Férias</button>
+  </div>
+</div>
+
+<div class="container" id="mainContainer">
+  <div class="loader"><div class="spinner"></div></div>
+</div>
+
+<!-- Conteúdo das abas -->
+<div id="tabContent" style="display:none">
+
+  <div id="sec-resumo" class="sec active">
+    <div class="container">
+      <div class="resumo-grid" id="resumoCards"></div>
+      <div class="info-grid" id="resumoInfo"></div>
+    </div>
+  </div>
+
+  <div id="sec-ferias" class="sec">
+    <div class="container">
+      <div class="sec-title">Meus Períodos Aquisitivos</div>
+      <div class="sec-sub">Histórico completo de férias — períodos, lançamentos e saldos.</div>
+      <div id="feriasContent"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ── Supabase ── */
+const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1anRieHdzc2lvZmlpYWxuYmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNjMxMzUsImV4cCI6MjA2MDkzOTEzNX0.KdWamfJDm3i0mPJN59-OKqFCzR4h4GVgxJCwvknH7SA';
+function getAuthHeaders() {
+  const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+  const token = sess.access_token || SB_KEY;
+  return { apikey: SB_KEY, Authorization: `Bearer ${token}` };
+}
+async function sbGet(path) { const r = await fetch(SB_URL+path,{headers:getAuthHeaders()}); return r.ok ? r.json() : []; }
+
+/* ── Auth ── */
+function getSession() {
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session')||'null');
+    const perf = JSON.parse(localStorage.getItem('sb_perfil')||'null');
+    if (!sess) return null;
+    if (sess.expires_at < Date.now()) { localStorage.clear(); return null; }
+    return { ...sess, ...(perf||{}) };
+  } catch { return null; }
+}
+function logout() {
+  localStorage.removeItem('sb_session');
+  localStorage.removeItem('sb_perfil');
+  window.location.href = '../../login.html';
+}
+function initAuth() {
+  const s = getSession();
+  if (!s) { window.location.href = '../../login.html'; return; }
+  const nome = s.nome || s.email || '—';
+  const ini  = nome.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  document.getElementById('userAvatar').textContent = ini || '?';
+  document.getElementById('userName').textContent   = nome.split(' ')[0] || '—';
+}
+
+/* ── Dados ── */
+let _colab = null, _ferias = [];
+
+/* ── Tabs ── */
+function showTab(id, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sec-'+id).classList.add('active');
+  if (id === 'ferias') renderFerias();
+}
+
+/* ── Formatação ── */
+function fd(d) {
+  if (!d) return '—';
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+function diasEntre(d1, d2) {
+  if (!d1||!d2) return null;
+  return Math.round((new Date(d2)-new Date(d1))/(1000*60*60*24));
+}
+function tempoStr(dataAdm) {
+  if (!dataAdm) return '—';
+  const ms = Date.now() - new Date(dataAdm).getTime();
+  const dias = Math.floor(ms/(1000*60*60*24));
+  if (dias < 30)  return `${dias} dia${dias!==1?'s':''}`;
+  const meses = Math.floor(dias/30.4);
+  if (meses < 12) return `${meses} mês${meses!==1?'es':''}`;
+  const anos  = Math.floor(meses/12);
+  const rm    = meses % 12;
+  return rm > 0 ? `${anos} ano${anos!==1?'s':''} e ${rm} mês${rm!==1?'es':''}` : `${anos} ano${anos!==1?'s':''}`;
+}
+
+/* ── Init ── */
+async function init() {
+  initAuth();
+  const sess = getSession();
+  if (!sess) return;
+
+  // Colaborador_id vem do perfil salvo no login — nunca da URL
+  const colabId = sess.colaborador_id;
+  if (!colabId) {
+    mostrarErro('Nenhum colaborador vinculado a este usuário. Contate o RH.');
+    return;
+  }
+
+  const [colabs, ferias] = await Promise.all([
+    sbGet(`/rest/v1/colaboradores?id=eq.${colabId}&limit=1`),
+    sbGet(`/rest/v1/ferias?colaborador_id=eq.${colabId}&order=ano.desc`),
+  ]);
+
+  if (!colabs || !colabs.length) {
+    mostrarErro('Colaborador não encontrado. Contate o RH.');
+    return;
+  }
+
+  _colab  = colabs[0];
+  _ferias = ferias || [];
+
+  renderHero();
+  renderResumo();
+
+  document.getElementById('mainContainer').style.display = 'none';
+  document.getElementById('heroArea').style.display = '';
+  document.getElementById('tabsArea').style.display = '';
+  document.getElementById('tabContent').style.display = '';
+}
+
+/* ── Hero ── */
+function renderHero() {
+  const c = _colab;
+  const ini = (c.nome||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const ph  = document.getElementById('heroPhoto');
+  if (c.foto_url) {
+    ph.innerHTML = `<img src="${c.foto_url}" style="width:72px;height:72px;border-radius:50%;object-fit:cover" alt="${c.nome}">`;
+  } else {
+    ph.textContent = ini;
+  }
+  document.getElementById('heroNome').textContent = c.nome || '—';
+  document.getElementById('heroSub').textContent  = [c.cargo, c.setor].filter(Boolean).join(' · ');
+
+  const ativo = !c.data_demissao;
+  const chips = [
+    `<span class="chip ${ativo?'chip-green':'chip-red'}">${ativo?'Ativo':'Inativo'}</span>`,
+    c.empresa_registro_nome ? `<span class="chip">${c.empresa_registro_nome}</span>` : '',
+    c.empresa_atuacao_nome  ? `<span class="chip">${c.empresa_atuacao_nome}</span>`  : '',
+    c.matricula ? `<span class="chip">Mat. ${c.matricula}</span>` : '',
+    c.data_admissao ? `<span class="chip">Admitido em ${fd(c.data_admissao)}</span>` : '',
+  ].filter(Boolean).join('');
+  document.getElementById('heroChips').innerHTML = chips;
+}
+
+/* ── Resumo ── */
+function renderResumo() {
+  const c = _colab;
+
+  // saldo total de férias pendente
+  let saldoPendente = 0;
+  _ferias.forEach(pa => {
+    const totalDias = pa.total_dias || 30;
+    let usado = 0;
+    (pa.lancamentos || []).forEach(l => { if (l.dias) usado += Number(l.dias); });
+    const saldo = totalDias - usado - (pa.dias_antecipados||0) - (pa.abono_pecuniario||0);
+    if (saldo > 0 && pa.status !== 'cancelado') saldoPendente += saldo;
+  });
+
+  document.getElementById('resumoCards').innerHTML = `
+    <div class="rcard c-blue">
+      <div class="rcard-label">Tempo de casa</div>
+      <div class="rcard-val blue" style="font-size:20px;margin-top:6px">${tempoStr(c.data_admissao)}</div>
+      <div class="rcard-sub">desde ${fd(c.data_admissao)}</div>
+    </div>
+    <div class="rcard c-amber">
+      <div class="rcard-label">Saldo de férias</div>
+      <div class="rcard-val amber">${saldoPendente}</div>
+      <div class="rcard-sub">${saldoPendente===1?'dia pendente':'dias pendentes'}</div>
+    </div>`;
+
+  document.getElementById('resumoInfo').innerHTML = `
+    <div class="info-card">
+      <div class="info-card-title">Dados Pessoais</div>
+      ${infoRow('CPF', c.cpf)}
+      ${infoRow('RG', c.rg)}
+      ${infoRow('Data de nascimento', fd(c.data_nascimento))}
+      ${infoRow('Naturalidade', c.naturalidade)}
+      ${infoRow('Estado civil', c.estado_civil)}
+      ${infoRow('Escolaridade', c.escolaridade)}
+    </div>
+    <div class="info-card">
+      <div class="info-card-title">Dados Profissionais</div>
+      ${infoRow('Matrícula', c.matricula)}
+      ${infoRow('Cargo', c.cargo)}
+      ${infoRow('Setor', c.setor)}
+      ${infoRow('Tipo de contrato', c.tipo_contrato)}
+      ${infoRow('Regime de horas', c.regime_horas)}
+      ${infoRow('Data de admissão', fd(c.data_admissao))}
+      ${c.data_demissao ? infoRow('Data de demissão', fd(c.data_demissao)) : ''}
+    </div>`;
+}
+
+function infoRow(label, val) {
+  if (!val || val === '—') return '';
+  return `<div class="info-row"><label>${label}</label><span>${val}</span></div>`;
+}
+
+/* ── Minhas Férias ── */
+function renderFerias() {
+  const el = document.getElementById('feriasContent');
+  if (!_ferias.length) {
+    el.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><p>Nenhum período aquisitivo encontrado.</p></div>`;
+    return;
+  }
+  const HOJE = new Date().toISOString().slice(0,10);
+  el.innerHTML = _ferias.map(pa => {
+    const totalDias = pa.total_dias || 30;
+    const lancs = pa.lancamentos || [];
+    let usado = 0;
+    lancs.forEach(l => { if (l.dias) usado += Number(l.dias); });
+    const saldo = totalDias - usado - (pa.dias_antecipados||0) - (pa.abono_pecuniario||0);
+    const saldoCls = saldo > 15 ? 'saldo-ok' : saldo > 0 ? 'saldo-warn' : 'saldo-crit';
+
+    const lancsHtml = lancs.length ? lancs.map(l => {
+      const dot = l.fim && l.fim < HOJE ? '' : (l.inicio && l.inicio > HOJE ? 'fut' : 'pen');
+      return `<div class="ferias-lanc-item">
+        <div class="ferias-lanc-dot ${dot}"></div>
+        <span>${fd(l.inicio)} → ${fd(l.fim)}</span>
+        <span style="color:var(--text-sec)">${l.dias||'?'} dias</span>
+        ${l.status ? `<span style="color:var(--text-ter);font-size:11px">${l.status}</span>` : ''}
+      </div>`;
+    }).join('') : `<div style="font-size:12px;color:var(--text-ter);padding:4px 0">Sem lançamentos</div>`;
+
+    return `<div class="ferias-pa">
+      <div class="ferias-pa-header">
+        <div>
+          <div class="ferias-pa-ano">Período ${pa.ano||'—'}</div>
+          <div class="ferias-pa-datas">${fd(pa.pa_inicio)} → ${fd(pa.pa_fim)}</div>
+        </div>
+        <span class="saldo-badge ${saldoCls}">${saldo} dia${saldo!==1?'s':''} de saldo</span>
+      </div>
+      <div class="ferias-lanc">${lancsHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function mostrarErro(msg) {
+  document.getElementById('mainContainer').innerHTML = `
+    <div class="empty-state" style="padding:80px 24px">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      <p style="font-size:15px;font-weight:600;margin-bottom:6px">${msg}</p>
+    </div>`;
+}
+
+init();
+</script>
+</body>
+</html>
