@@ -2452,10 +2452,22 @@ function exportarExcel() {
     fmtDateBR(c.dataAdmissao), calcTempoEmpresa(c.dataAdmissao), c.dependentes,
     c.situacao, fmtDateBR(c.dataDemissao), c.motivo
   ]);
-  let csv = '﻿' + [header, ...rows].map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join('\t')).join('\r\n');
+  const csv = '﻿' + [header, ...rows].map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(';')).join('\r\n');
+
+  const partes = ['Colaboradores'];
+  const sit = document.getElementById('filtroSituacao').value;
+  const emp = document.getElementById('filtroEmpresa').value;
+  const set = document.getElementById('filtroSetor').value;
+  const sex = document.getElementById('filtroSexo').value;
+  if (sit) partes.push(sit === 'ativo' ? 'Ativos' : sit === 'inativo' ? 'Inativos' : sit);
+  if (emp) partes.push(emp);
+  if (set) partes.push(set);
+  if (sex) partes.push(sex === 'M' ? 'Masculino' : sex === 'F' ? 'Feminino' : sex);
+  const nomeArquivo = partes.join('_').replace(/[^a-zA-Z0-9À-ÿ_\- ]/g, '').replace(/\s+/g, '_') + '.csv';
+
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/tab-separated-values;charset=utf-8' }));
-  a.download = 'Colaboradores_RH.xls';
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = nomeArquivo;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
