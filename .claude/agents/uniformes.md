@@ -91,7 +91,7 @@ async function excluirEntrada(id) {
 }
 ```
 
-**⚠️ Auditoria pendente:** a exclusão atual não registra rastro. Ver seção "Auditoria — pendência" abaixo.
+Captura snapshot de `ENTRADAS` antes de excluir e registra em `unif_log` via `_logUnif`.
 
 ## Modal "Editar entrada" — arrastável (2026-09-16)
 
@@ -102,33 +102,25 @@ O modal é arrastável pelo cabeçalho (`cursor:move`). Implementado com IIFE qu
 - IDs relevantes: `modalEditEntrada` (overlay), `modalEditEntradaBox` (caixa), `modalEditEntradaHdr` (cabeçalho drag)
 - `modal-overlay` usa `align-items:flex-start; justify-content:flex-start` para não conflitar com o posicionamento absoluto
 
-## Auditoria — pendência crítica (2026-09-16)
+## Auditoria — `unif_log` (implementada 2026-09-16)
 
-**Premissa do sistema:** todo módulo deve ter rastreabilidade completa de quem fez o quê e quando.
+### Tabela `unif_log` (criada no Supabase)
 
-O módulo de uniformes **não tem auditoria implementada**. As ações sem rastro hoje:
-- Edição de entrada (`salvarEditEntrada`)
-- Exclusão de entrada (`excluirEntrada`)
-- Ajuste de estoque (`confirmarAjusteEstoque`)
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | bigserial PK | auto |
+| `acao` | text NOT NULL | `'entrada_editada'` / `'entrada_excluida'` / `'estoque_ajustado'` |
+| `tabela` | text | `'unif_entradas'` / `'unif_estoque'` |
+| `registro_id` | text | id do registro afetado |
+| `snapshot_antes` | jsonb | estado antes da alteração |
+| `snapshot_depois` | jsonb | estado após (null se exclusão) |
+| `usuario` | text | `perfil.nome` do localStorage |
+| `criado_em` | timestamptz | `DEFAULT NOW()` |
 
-**Por que não usa `unif_movimentacoes`:** a tabela exige `colaborador_id NOT NULL` — operações de estoque sem colaborador vinculado não podem ser registradas ali.
+RLS habilitado com policy `anon_all` (leitura e escrita liberadas).
 
-**Solução planejada:** criar tabela `unif_log` no Supabase:
+### Helper `_logUnif(acao, tabelaRef, registroId, antes, depois)`
 
-```sql
-CREATE TABLE unif_log (
-  id            bigserial PRIMARY KEY,
-  acao          text NOT NULL,        -- 'entrada_editada', 'entrada_excluida', 'estoque_ajustado'
-  tabela        text,                 -- 'unif_entradas', 'unif_estoque'
-  registro_id   text,                 -- id do registro afetado
-  snapshot_antes jsonb,               -- estado antes da alteração
-  snapshot_depois jsonb,              -- estado após (null se exclusão)
-  usuario       text,                 -- perfil.nome
-  criado_em     timestamptz DEFAULT NOW()
-);
-```
-
-**Padrão de uso após criar a tabela:**
 ```js
 async function _logUnif(acao, tabelaRef, registroId, antes, depois) {
   const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
@@ -140,7 +132,15 @@ async function _logUnif(acao, tabelaRef, registroId, antes, depois) {
 }
 ```
 
-Chamar antes de cada `sbPatch`/`sbDelete` passando o objeto original como `antes`.
+### Onde é chamado
+
+| Função | `acao` | `antes` | `depois` |
+|---|---|---|---|
+| `excluirEntrada` | `'entrada_excluida'` | snapshot de `ENTRADAS` | `null` |
+| `salvarEditEntrada` | `'entrada_editada'` | snapshot de `ENTRADAS` | objeto com novos dados |
+| `confirmarAjusteEstoque` | `'estoque_ajustado'` | `{ quantidade: qtdAnterior }` | `{ quantidade: novaQtd, obs }` |
+
+**Regra:** sempre capturar o snapshot **antes** do `sbPatch`/`sbDelete`, nunca depois.
 
 ## Tipos de movimentação (`tipo` em `unif_movimentacoes`)
 

@@ -1667,10 +1667,24 @@ function renderMovimentacoes() {
 }
 
 let _editEntradaId = null;
+async function _logUnif(acao, tabelaRef, registroId, antes, depois) {
+  const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  await sbPost('unif_log', {
+    acao,
+    tabela:          tabelaRef || null,
+    registro_id:     String(registroId),
+    snapshot_antes:  antes  || null,
+    snapshot_depois: depois || null,
+    usuario:         perfil.nome || 'RH',
+  }).catch(() => {});
+}
+
 async function excluirEntrada(id) {
   if (!confirm('Excluir esta entrada permanentemente? Esta ação não pode ser desfeita.')) return;
+  const snapshot = ENTRADAS.find(e => String(e.id) === String(id)) || null;
   try {
     await sbDelete('unif_entradas', `id=eq.${id}`);
+    await _logUnif('entrada_excluida', 'unif_entradas', id, snapshot, null);
     toast('Entrada excluída.');
     await carregarEstoque();
   } catch(e) {
@@ -1767,12 +1781,12 @@ async function salvarEditEntrada() {
 
   const btn = document.getElementById('btnSalvarEditEntrada');
   btn.disabled = true;
+  const snapshotAntes = ENTRADAS.find(e => String(e.id) === String(_editEntradaId)) || null;
+  const novosDados = { item_id: itemId, tamanho, quantidade: qtd, valor_unitario: valor,
+    fornecedor_id: fornecId, fornecedor: fornecNome, almoxarifado_id: almoxId, data_entrada: data || undefined };
   try {
-    await sbPatch('unif_entradas', `id=eq.${_editEntradaId}`, {
-      item_id: itemId, tamanho, quantidade: qtd, valor_unitario: valor,
-      fornecedor_id: fornecId, fornecedor: fornecNome,
-      almoxarifado_id: almoxId, data_entrada: data || undefined,
-    });
+    await sbPatch('unif_entradas', `id=eq.${_editEntradaId}`, novosDados);
+    await _logUnif('entrada_editada', 'unif_entradas', _editEntradaId, snapshotAntes, novosDados);
     toast('Entrada atualizada com sucesso!');
     fecharEditEntrada();
     await carregarEstoque();
@@ -5106,12 +5120,16 @@ async function confirmarAjusteEstoque() {
 
   const btn = document.getElementById('btnConfirmarAjuste');
   btn.disabled = true; btn.textContent = 'Salvando…';
+  const estoqueAntes = ESTOQUE.find(e => String(e.id) === String(_ajusteEstoqueId)) || null;
+  const qtdAnterior  = estoqueAntes?.quantidade ?? null;
   try {
     // 1. Atualiza quantidade no estoque
     await sbPatch('unif_estoque', `id=eq.${_ajusteEstoqueId}`, { quantidade: novaQtd });
 
-    // 2. Registra ajuste na tabela de estoque (campo obs_ajuste, se existir)
-    // unif_movimentacoes exige colaborador_id NOT NULL — não se aplica a ajustes manuais
+    // 2. Registra auditoria
+    await _logUnif('estoque_ajustado', 'unif_estoque', _ajusteEstoqueId,
+      { quantidade: qtdAnterior, item: _ajusteTamanho },
+      { quantidade: novaQtd, obs: obs || null });
 
     toast('✓ Estoque ajustado com sucesso');
     fecharAjusteEstoque();
