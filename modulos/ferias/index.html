@@ -4408,7 +4408,7 @@ const SETOR_COR_FIXA = {
   'Estoque':         { borda: '#1D4D3B', bg: '#E4F5EF', texto: '#1D4D3B' },
   'Atendimento':     { borda: '#633806', bg: '#FAEEDA', texto: '#633806' },
   'Expedição':       { borda: '#1D4D3B', bg: '#E4F5EF', texto: '#1D4D3B' },
-  'Cd':              { borda: '#0F5570', bg: '#E0F2F8', texto: '#0F5570' },
+  'CD':              { borda: '#0F5570', bg: '#E0F2F8', texto: '#0F5570' },
   'Ecommerce':       { borda: '#B42318', bg: '#FEF3F2', texto: '#B42318' },
   'Sarandi':         { borda: '#027A48', bg: '#ECFDF3', texto: '#027A48' },
   'Paranavaí':       { borda: '#5925DC', bg: '#F4F3FF', texto: '#5925DC' },
@@ -6301,19 +6301,16 @@ function renderAnalytics() {
   });
   const _riscoSetores = [..._riscoSetorMap.entries()].sort((a,b) => b[1].length - a[1].length);
 
-  // Paleta de cores para pizza
-  const _PIZZA_CORES = ['#dc2626','#d97706','#7c3aed','#0e7490','#059669','#1849A9','#be185d','#b45309'];
-
   let topRiscoHtml = '';
   if (_riscoDadosCompletos.length === 0) {
     topRiscoHtml = `<div class="an-empty">Nenhum colaborador em risco de dobra</div>`;
   } else {
-    // Gera SVG da pizza
-    const _PIE_R = 72, _PIE_CX = 80, _PIE_CY = 80;
+    // Gera SVG da pizza usando as cores do sistema por setor
+    const _PIE_R = 90, _PIE_CX = 100, _PIE_CY = 100;
     const total = _riscoDadosCompletos.length;
     let _angulo = -Math.PI / 2;
     let _slices = '';
-    _riscoSetores.forEach(([setor, items], idx) => {
+    _riscoSetores.forEach(([setor, items]) => {
       const frac = items.length / total;
       const ang = frac * 2 * Math.PI;
       const x1 = _PIE_CX + _PIE_R * Math.cos(_angulo);
@@ -6322,7 +6319,7 @@ function renderAnalytics() {
       const x2 = _PIE_CX + _PIE_R * Math.cos(_angulo);
       const y2 = _PIE_CY + _PIE_R * Math.sin(_angulo);
       const large = ang > Math.PI ? 1 : 0;
-      const cor = _PIZZA_CORES[idx % _PIZZA_CORES.length];
+      const cor = corDoSetor(setor).borda;
       const setorEsc = setor.replace(/'/g,"\\'");
       _slices += `<path d="M${_PIE_CX},${_PIE_CY} L${x1.toFixed(2)},${y1.toFixed(2)} A${_PIE_R},${_PIE_R} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z"
         fill="${cor}" stroke="#fff" stroke-width="2" style="cursor:pointer;transition:opacity .15s"
@@ -6331,22 +6328,23 @@ function renderAnalytics() {
     });
 
     // Legenda
-    const _legendaHtml = _riscoSetores.map(([setor, items], idx) => {
-      const cor = _PIZZA_CORES[idx % _PIZZA_CORES.length];
+    const _legendaHtml = _riscoSetores.map(([setor, items]) => {
+      const cor = corDoSetor(setor).borda;
+      const bg  = corDoSetor(setor).bg;
       const pct = Math.round(items.length / total * 100);
       const setorEsc = setor.replace(/'/g,"\\'");
-      return `<div class="an-pizza-leg-row" onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:6px;transition:background .1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background='transparent'">
-        <div style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+      return `<div onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;transition:background .1s" onmouseover="this.style.background='${bg}'" onmouseout="this.style.background='transparent'">
+        <div style="width:11px;height:11px;border-radius:50%;background:${cor};flex-shrink:0"></div>
         <span style="font-size:12px;font-weight:600;color:var(--text);flex:1">${setor}</span>
-        <span style="font-size:12px;font-weight:700;color:${cor}">${items.length}</span>
-        <span style="font-size:11px;color:var(--text-ter)">${pct}%</span>
+        <span style="font-size:13px;font-weight:700;color:${cor}">${items.length}</span>
+        <span style="font-size:11px;color:var(--text-ter);min-width:30px;text-align:right">${pct}%</span>
       </div>`;
     }).join('');
 
     topRiscoHtml = `
-      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
         <div style="flex-shrink:0">
-          <svg width="160" height="160" viewBox="0 0 160 160">${_slices}</svg>
+          <svg width="200" height="200" viewBox="0 0 200 200">${_slices}</svg>
         </div>
         <div style="flex:1;min-width:160px">${_legendaHtml}</div>
       </div>
@@ -6486,35 +6484,38 @@ function dashRiscoFiltrar(setor) {
   }).filter(({ c }) => (normSetor(c.setor) || c.setor || 'Sem setor') === setor)
     .sort((a,b) => a.dpd - b.dpd);
 
-  const _PIZZA_CORES = ['#dc2626','#d97706','#7c3aed','#0e7490','#059669','#1849A9','#be185d','#b45309'];
-  const setores = [...new Set(emRisco.map(c => normSetor(c.setor) || c.setor || 'Sem setor'))].sort((a,b) => {
-    const ca = emRisco.filter(x => (normSetor(x.setor)||x.setor||'Sem setor')===a).length;
-    const cb = emRisco.filter(x => (normSetor(x.setor)||x.setor||'Sem setor')===b).length;
-    return cb - ca;
-  });
-  const cor = _PIZZA_CORES[setores.indexOf(setor) % _PIZZA_CORES.length];
+  const cor = corDoSetor(setor).borda;
+  const corBg = corDoSetor(setor).bg;
 
   const rows = lista.map(({ c, dpd }) => {
     const ini = (c.nome||'').split(' ');
     const initials = ((ini[0]||'')[0]||'') + ((ini[ini.length-1]||'')[0]||'');
-    const [bgC, txC, avBg, avTx] = dpd <= 30
-      ? ['#fee2e2','#991b1b','#fee2e2','#991b1b']
-      : dpd <= 90
-      ? ['#fef3c7','#92400e','#fef3c7','#92400e']
-      : ['#fffbeb','#92400e','#fef9c3','#b45309'];
-    const urgLabel = dpd <= 30 ? 'Crítico' : dpd <= 90 ? 'Alto' : 'Atenção';
+    let bgC, txC, avBg, avTx, urgLabel;
+    if (dpd <= 0) {
+      bgC = '#fee2e2'; txC = '#991b1b'; avBg = '#fee2e2'; avTx = '#991b1b';
+      urgLabel = 'Dobra vencida';
+    } else if (dpd <= 30) {
+      bgC = '#fee2e2'; txC = '#991b1b'; avBg = '#fee2e2'; avTx = '#991b1b';
+      urgLabel = `Vence em ${dpd} dia${dpd!==1?'s':''}`;
+    } else if (dpd <= 90) {
+      bgC = '#fef3c7'; txC = '#92400e'; avBg = '#fef3c7'; avTx = '#92400e';
+      urgLabel = `Vence em ${dpd} dias`;
+    } else {
+      bgC = '#fffbeb'; txC = '#b45309'; avBg = '#fef9c3'; avTx = '#b45309';
+      urgLabel = `Vence em ${dpd} dias`;
+    }
     return `<div class="an-risk-row" onclick="abrirDrawer('${c.__key.replace(/'/g,"\\'")}')">
       <div class="an-risk-av" style="background:${avBg};color:${avTx}">${initials.toUpperCase()}</div>
       <div style="flex:1;min-width:0">
         <div class="an-risk-nome">${c.nome}</div>
         <div class="an-risk-detail">${c.cargo || '—'}</div>
       </div>
-      <div class="an-risk-badge" style="background:${bgC};color:${txC}">${urgLabel} · ${dpd}d</div>
+      <div class="an-risk-badge" style="background:${bgC};color:${txC}">${urgLabel}</div>
     </div>`;
   }).join('');
 
-  el.innerHTML = `<div style="border-top:2px solid ${cor};padding-top:10px;margin-top:4px">
-    <div style="font-size:11px;font-weight:700;color:${cor};margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">${setor} — ${lista.length} colaborador${lista.length!==1?'es':''} <span style="font-weight:400;color:var(--text-ter);font-size:10px">(clique novamente para fechar)</span></div>
+  el.innerHTML = `<div style="border-top:2px solid ${cor};background:${corBg};border-radius:0 0 10px 10px;padding:12px 10px 8px;margin-top:4px">
+    <div style="font-size:11px;font-weight:700;color:${cor};margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">${setor} — ${lista.length} colaborador${lista.length!==1?'es':''} <span style="font-weight:400;color:var(--text-ter);font-size:10px;text-transform:none">(clique novamente para fechar)</span></div>
     ${rows}
   </div>`;
 }
