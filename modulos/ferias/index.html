@@ -6325,7 +6325,9 @@ function renderAnalytics() {
     };
 
     // ── Donut SVG ────────────────────────────────────────────────────────────
-    const _OR = 80, _IR = 50, _CX = 100, _CY = 100;
+    // donut: centro em (110,110), raio externo 90, interno 54
+    // viewBox 220×220 mas os rótulos à esquerda usam overflow:visible — o container tem padding-left p/ compensar
+    const _OR = 90, _IR = 54, _CX = 110, _CY = 110;
     const total = _riscoDadosCompletos.length;
     let _angulo = -Math.PI / 2;
     let _slices = '', _extLabels = '';
@@ -6341,56 +6343,57 @@ function renderAnalytics() {
       const corSet = corDoSetor(setor);
       const setorEsc = setor.replace(/'/g,"\\'");
       const pct = Math.round(frac * 100);
+      // fatia usa cor sólida (borda) como fill, mais escura e contraste
       _slices += `<path d="M${ox1.toFixed(1)},${oy1.toFixed(1)} A${_OR},${_OR} 0 ${large} 1 ${ox2.toFixed(1)},${oy2.toFixed(1)} L${ix1.toFixed(1)},${iy1.toFixed(1)} A${_IR},${_IR} 0 ${large} 0 ${ix2.toFixed(1)},${iy2.toFixed(1)} Z"
-        fill="${corSet.bg}" stroke="${corSet.borda}" stroke-width="2.5" style="cursor:pointer;transition:filter .15s"
-        onmouseover="dashPizzaTooltip(event,'${setorEsc}',${items.length},${pct})" onmouseout="dashPizzaTooltipHide()"
+        fill="${corSet.borda}" stroke="#fff" stroke-width="2" style="cursor:pointer;transition:opacity .15s" opacity=".88"
+        onmouseover="this.setAttribute('opacity','1');dashPizzaTooltip(event,'${setorEsc}',${items.length},${pct})" onmouseout="this.setAttribute('opacity','.88');dashPizzaTooltipHide()"
         onclick="dashRiscoFiltrar('${setorEsc}')"/>`;
-      // rótulo externo com linha: nome + contagem + percentual
+      // rótulo externo: linha + nome + dados
       if (frac >= 0.06) {
-        const _LA = _OR + 8, _LB = _OR + 22;
+        const _LA = _OR + 6, _LB = _OR + 20;
         const lax = (_CX + _LA * Math.cos(midAng)).toFixed(1), lay = (_CY + _LA * Math.sin(midAng)).toFixed(1);
         const lbx = (_CX + _LB * Math.cos(midAng)).toFixed(1), lby = (_CY + _LB * Math.sin(midAng)).toFixed(1);
         const anchor = Math.cos(midAng) >= 0 ? 'start' : 'end';
         const tx = (_CX + (_LB + 3) * Math.cos(midAng)).toFixed(1);
         const ty = (_CY + (_LB + 3) * Math.sin(midAng)).toFixed(1);
         _extLabels += `
-          <line x1="${lax}" y1="${lay}" x2="${lbx}" y2="${lby}" stroke="${corSet.borda}" stroke-width="1" opacity=".7" style="pointer-events:none"/>
-          <text x="${tx}" y="${parseFloat(ty)-5}" text-anchor="${anchor}" font-size="8.5" font-weight="700" fill="${corSet.borda}" style="pointer-events:none">${setor}</text>
-          <text x="${tx}" y="${parseFloat(ty)+6}" text-anchor="${anchor}" font-size="8" fill="${corSet.borda}" opacity=".8" style="pointer-events:none">${items.length} Colab. · ${pct}%</text>`;
+          <line x1="${lax}" y1="${lay}" x2="${lbx}" y2="${lby}" stroke="${corSet.borda}" stroke-width="1" opacity=".6" style="pointer-events:none"/>
+          <text x="${tx}" y="${parseFloat(ty)-5}" text-anchor="${anchor}" font-size="9" font-weight="700" fill="${corSet.borda}" style="pointer-events:none">${setor}</text>
+          <text x="${tx}" y="${parseFloat(ty)+6}" text-anchor="${anchor}" font-size="8" fill="${corSet.borda}" opacity=".75" style="pointer-events:none">${items.length} Colab. · ${pct}%</text>`;
       }
       _angulo += ang;
     });
 
-    // ── Legenda: fundo colorido preenchido + ícone + barra + % ───────────────
+    // ── Legenda compacta: fundo colorido escuro (borda) no ícone, bg claro na linha ──
     const _legendaHtml = _riscoSetores.map(([setor, items]) => {
       const corSet = corDoSetor(setor);
       const pct = Math.round(items.length / total * 100);
       const setorEsc = setor.replace(/'/g,"\\'");
       const icone = _SETOR_ICONE(setor);
-      return `<div onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;border-radius:9px;overflow:hidden;margin-bottom:7px;box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 3px 10px rgba(0,0,0,0.12)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)'">
-        <div style="background:${corSet.borda};color:#fff;width:42px;min-height:44px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${icone}</div>
-        <div style="flex:1;background:${corSet.bg};padding:8px 12px;display:flex;align-items:center;gap:10px;min-height:44px">
-          <span style="font-size:12px;font-weight:700;color:${corSet.borda};flex:1">${setor}</span>
-          <div style="width:120px;height:6px;border-radius:3px;background:rgba(0,0,0,0.08);overflow:hidden;flex-shrink:0">
+      return `<div onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;border-radius:8px;overflow:hidden;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.07);transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.14)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.07)'">
+        <div style="background:${corSet.borda};color:#fff;width:36px;min-height:38px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${icone}</div>
+        <div style="flex:1;background:${corSet.bg};padding:6px 10px;display:flex;align-items:center;gap:8px;min-height:38px">
+          <span style="font-size:11.5px;font-weight:700;color:${corSet.borda};min-width:80px">${setor}</span>
+          <div style="flex:1;height:5px;border-radius:3px;background:rgba(0,0,0,0.1);overflow:hidden">
             <div style="height:100%;width:${pct}%;background:${corSet.borda};border-radius:3px"></div>
           </div>
-          <span style="font-size:12px;font-weight:700;color:${corSet.borda};min-width:34px;text-align:right">${pct}%</span>
+          <span style="font-size:11.5px;font-weight:700;color:${corSet.borda};min-width:30px;text-align:right">${pct}%</span>
         </div>
       </div>`;
     }).join('');
 
     topRiscoHtml = `
       <div id="dashPizzaTip" style="display:none;position:fixed;background:#1e293b;color:#fff;font-size:12px;font-weight:600;padding:6px 10px;border-radius:7px;pointer-events:none;z-index:9999;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.2)"></div>
-      <div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap;margin-bottom:20px">
-        <div style="flex-shrink:0">
-          <svg width="200" height="200" viewBox="0 0 200 200" overflow="visible">
+      <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin-bottom:20px">
+        <div style="flex-shrink:0;padding-left:50px">
+          <svg width="220" height="220" viewBox="0 0 220 220" overflow="visible">
             ${_slices}
             ${_extLabels}
-            <text x="${_CX}" y="${_CY - 6}" text-anchor="middle" font-size="30" font-weight="800" fill="var(--text)">${total}</text>
+            <text x="${_CX}" y="${_CY - 6}" text-anchor="middle" font-size="32" font-weight="800" fill="var(--text)">${total}</text>
             <text x="${_CX}" y="${_CY + 14}" text-anchor="middle" font-size="8" font-weight="700" fill="var(--text-ter)" letter-spacing=".08em">COLABORADORES</text>
           </svg>
         </div>
-        <div style="flex:1;min-width:220px">${_legendaHtml}</div>
+        <div style="flex:1;min-width:180px;max-width:280px">${_legendaHtml}</div>
       </div>
       <div id="dashRiscoLista"></div>`;
   }
