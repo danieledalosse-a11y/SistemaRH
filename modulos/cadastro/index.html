@@ -2504,10 +2504,28 @@ function _dadosRelatorio() {
   const agora = new Date();
   const dataHora = agora.toLocaleDateString('pt-BR') + ' às ' + agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const label = total === 1 ? 'colaborador' : sex === 'F' ? 'colaboradoras' : sex === 'M' ? 'colaboradores' : 'colaboradores';
-  const grupos = {};
+  const gruposMap = {};
   [...FILTRADOS]
-    .sort((a, b) => (a.setor||'').replace(/^\d+\s*[-–]\s*/,'').localeCompare((b.setor||'').replace(/^\d+\s*[-–]\s*/,''), 'pt-BR') || (a.nome||'').localeCompare(b.nome||'', 'pt-BR'))
-    .forEach(c => { const s = (c.setor || '(Sem setor)').replace(/^\d+\s*[-–]\s*/, ''); if (!grupos[s]) grupos[s] = []; grupos[s].push(c); });
+    .sort((a, b) => {
+      const ea = (a.empresaAtuacao || '').replace(/^\d+\s*[-–]\s*/,'');
+      const eb = (b.empresaAtuacao || '').replace(/^\d+\s*[-–]\s*/,'');
+      if (!ea && eb) return 1;
+      if (ea && !eb) return -1;
+      const ec = ea.localeCompare(eb, 'pt-BR');
+      if (ec !== 0) return ec;
+      const sc = (a.setor||'').replace(/^\d+\s*[-–]\s*/,'').localeCompare((b.setor||'').replace(/^\d+\s*[-–]\s*/,''), 'pt-BR');
+      return sc || (a.nome||'').localeCompare(b.nome||'', 'pt-BR');
+    })
+    .forEach(c => {
+      const key = (c.empresaAtuacao || '').replace(/^\d+\s*[-–]\s*/, '') || '(Sem empresa)';
+      if (!gruposMap[key]) gruposMap[key] = [];
+      gruposMap[key].push(c);
+    });
+  const grupos = Object.entries(gruposMap).sort(([a],[b]) => {
+    if (a === '(Sem empresa)') return 1;
+    if (b === '(Sem empresa)') return -1;
+    return a.localeCompare(b, 'pt-BR');
+  });
   return { chips, total, dataHora, label, grupos, sex };
 }
 
@@ -2515,15 +2533,15 @@ function gerarRelatorioPDF() {
   const d = _dadosRelatorio(); if (!d) return;
   const { chips, total, dataHora, label, grupos, sex } = d;
   let blocos = '';
-  for (const [setor, lista] of Object.entries(grupos)) {
+  for (const [empresa, lista] of grupos) {
     const cnt = lista.length;
     const cntLabel = cnt === 1 ? '1 colaborador' : cnt + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
     const linhas = lista.map(c => {
-      const empReg = (c.empresa || '').replace(/^\d+\s*[-–]\s*/, '');
-      return `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${empReg||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)||'—'}</td><td class="td-c">${c.gestor||'—'}</td></tr>`;
+      const set = (c.setor || '—').replace(/^\d+\s*[-–]\s*/, '');
+      return `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${set}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)||'—'}</td><td class="td-c">${c.gestor||'—'}</td></tr>`;
     }).join('');
-    blocos += `<div class="sh"><span class="sn">${setor}</span><span class="sc">${cntLabel}</span></div>
-      <table><thead><tr><th>Nome</th><th>Cargo</th><th>Empresa Registro</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
+    blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntLabel}</span></div>
+      <table><thead><tr><th>Nome</th><th>Cargo</th><th>Setor</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
   }
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório — Revest</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
@@ -2574,14 +2592,14 @@ function gerarRelatorioExcel() {
   const TD_NOME = (par) => `style="font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#fff'};"`;
   const TD = (par) => `style="font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#5E718A;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#fff'};"`;
   let linhasTotais = '';
-  for (const [setor, lista] of Object.entries(grupos)) {
+  for (const [empresa, lista] of grupos) {
     const cntLabel = lista.length === 1 ? '1 colaborador' : lista.length + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
-    linhasTotais += `<tr><td colspan="5" ${SETOR_TD}>${setor}</td><td ${COUNT_TD}>${cntLabel}</td></tr>`;
-    linhasTotais += `<tr><th ${TH}>Nome</th><th ${TH}>Cargo</th><th ${TH}>Empresa Registro</th><th ${TH}>Admissão</th><th ${TH}>Gestor</th><th ${TH}></th></tr>`;
+    linhasTotais += `<tr><td colspan="5" ${SETOR_TD}>${empresa}</td><td ${COUNT_TD}>${cntLabel}</td></tr>`;
+    linhasTotais += `<tr><th ${TH}>Nome</th><th ${TH}>Cargo</th><th ${TH}>Setor</th><th ${TH}>Admissão</th><th ${TH}>Gestor</th><th ${TH}></th></tr>`;
     lista.forEach((c, i) => {
       const par = i % 2 === 1;
-      const empReg = (c.empresa || '').replace(/^\d+\s*[-–]\s*/, '');
-      linhasTotais += `<tr><td ${TD_NOME(par)}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${empReg||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)||''}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
+      const set = (c.setor || '').replace(/^\d+\s*[-–]\s*/, '');
+      linhasTotais += `<tr><td ${TD_NOME(par)}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${set||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)||''}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
     });
     linhasTotais += `<tr><td colspan="6" style="padding:4px;border:none;background:#fff;"></td></tr>`;
   }
@@ -2765,7 +2783,7 @@ function abrirFicha(idx) {
   toggleExperiencia();
   document.getElementById('df-empresa').value       = c.empresa || '';
   popularSelectSetor(c.setor || '', c.empresa || '');
-  document.getElementById('df-empresa-atuacao').value = c.empresaAtuacao || '';
+  popularSelectEmpresaAtuacao(c.empresaAtuacao || '');
   popularSelectGestor(c.gestor || '');
   document.getElementById('df-nascimento').value    = c.dataNascimento || '';
   document.getElementById('df-sexo').value          = c.sexo || '';
@@ -3188,7 +3206,7 @@ function salvarFicha() {
                         || document.getElementById('df-fimExperiencia').value;
   c.fimContrato           = document.getElementById('df-fimContrato').value;
   c.instituicaoAprendiz   = up(document.getElementById('df-instituicaoAprendiz').value);
-  c.empresaAtuacao    = up(document.getElementById('df-empresa-atuacao').value);
+  c.empresaAtuacao    = document.getElementById('df-empresa-atuacao').value.trim() || null;
   c.dataNascimento    = document.getElementById('df-nascimento').value;
   c.sexo              = document.getElementById('df-sexo').value;
   c.nacionalidade     = document.getElementById('df-nacionalidade').value;
