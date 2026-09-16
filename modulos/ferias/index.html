@@ -6195,6 +6195,7 @@ function renderAnalytics() {
   const anoIni  = `${ano}-01-01`;
   const anoFim  = `${ano}-12-31`;
   const ativos  = COLABORADORES.filter(c => c.ativo !== false);
+  window._dashCachedAtivos = ativos;
 
   const comPA = ativos.filter(c =>
     c.registros.some(r => !excluir.has(r.status) &&
@@ -6281,40 +6282,77 @@ function renderAnalytics() {
     </div>`;
   }).join('');
 
-  // ── 7. Top risco de dobra (lista)
-  const topRisco = emRisco.map(c => {
+  // ── 7. Risco de dobra — agrupado por setor para pizza
+  const _riscoDadosCompletos = emRisco.map(c => {
     let minDpd = 999, worstReg = null;
     c.registros.filter(r => !excluir.has(r.status)).forEach(r => {
       const dpd = diasParaDobra(r);
       if (dpd !== null && dpd < minDpd) { minDpd = dpd; worstReg = r; }
     });
     return { c, dpd: minDpd, reg: worstReg };
-  }).sort((a,b) => a.dpd - b.dpd).slice(0, 7);
+  }).sort((a,b) => a.dpd - b.dpd);
 
-  const topRiscoHtml = topRisco.length === 0
-    ? `<div class="an-empty">Nenhum colaborador em risco de dobra</div>`
-    : topRisco.map(({ c, dpd }) => {
-        const ini = (c.nome||'').split(' ');
-        const initials = ((ini[0]||'')[0]||'') + ((ini[ini.length-1]||'')[0]||'');
-        const unid  = c.empresa || c.unidade || c.setor || '—';
-        const [bgC, txC, avBg, avTx] = dpd <= 30
-          ? ['#fee2e2','#991b1b','#fee2e2','#991b1b']
-          : dpd <= 90
-          ? ['#fef3c7','#92400e','#fef3c7','#92400e']
-          : ['#fffbeb','#92400e','#fef9c3','#b45309'];
-        const urgLabel = dpd <= 30 ? 'Crítico' : dpd <= 90 ? 'Alto' : 'Atenção';
-        return `<div class="an-risk-row" onclick="abrirDrawer('${c.__key.replace(/'/g,"\\'")}')">
-          <div class="an-risk-av" style="background:${avBg};color:${avTx}">${initials.toUpperCase()}</div>
-          <div style="flex:1;min-width:0">
-            <div class="an-risk-nome">${c.nome}
-              <span class="an-risk-area-badge" style="background:#dbeafe;color:#1e40af">${unid}</span>
-            </div>
-            <div class="an-risk-detail">${c.cargo || '—'}</div>
-          </div>
-          <div class="an-risk-badge" style="background:${bgC};color:${txC}">${urgLabel} · vence em ${dpd}d</div>
-        </div>`;
-      }).join('');
-  const maisRisco = nRisco > 7 ? `<div class="an-risk-more">+ ${nRisco - 7} outros colaboradores</div>` : '';
+  // Agrupa por setor
+  const _riscoSetorMap = new Map();
+  _riscoDadosCompletos.forEach(item => {
+    const setor = normSetor(item.c.setor) || item.c.setor || 'Sem setor';
+    if (!_riscoSetorMap.has(setor)) _riscoSetorMap.set(setor, []);
+    _riscoSetorMap.get(setor).push(item);
+  });
+  const _riscoSetores = [..._riscoSetorMap.entries()].sort((a,b) => b[1].length - a[1].length);
+
+  // Paleta de cores para pizza
+  const _PIZZA_CORES = ['#dc2626','#d97706','#7c3aed','#0e7490','#059669','#1849A9','#be185d','#b45309'];
+
+  let topRiscoHtml = '';
+  if (_riscoDadosCompletos.length === 0) {
+    topRiscoHtml = `<div class="an-empty">Nenhum colaborador em risco de dobra</div>`;
+  } else {
+    // Gera SVG da pizza
+    const _PIE_R = 72, _PIE_CX = 80, _PIE_CY = 80;
+    const total = _riscoDadosCompletos.length;
+    let _angulo = -Math.PI / 2;
+    let _slices = '';
+    _riscoSetores.forEach(([setor, items], idx) => {
+      const frac = items.length / total;
+      const ang = frac * 2 * Math.PI;
+      const x1 = _PIE_CX + _PIE_R * Math.cos(_angulo);
+      const y1 = _PIE_CY + _PIE_R * Math.sin(_angulo);
+      _angulo += ang;
+      const x2 = _PIE_CX + _PIE_R * Math.cos(_angulo);
+      const y2 = _PIE_CY + _PIE_R * Math.sin(_angulo);
+      const large = ang > Math.PI ? 1 : 0;
+      const cor = _PIZZA_CORES[idx % _PIZZA_CORES.length];
+      const setorEsc = setor.replace(/'/g,"\\'");
+      _slices += `<path d="M${_PIE_CX},${_PIE_CY} L${x1.toFixed(2)},${y1.toFixed(2)} A${_PIE_R},${_PIE_R} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z"
+        fill="${cor}" stroke="#fff" stroke-width="2" style="cursor:pointer;transition:opacity .15s"
+        onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'"
+        onclick="dashRiscoFiltrar('${setorEsc}')"/>`;
+    });
+
+    // Legenda
+    const _legendaHtml = _riscoSetores.map(([setor, items], idx) => {
+      const cor = _PIZZA_CORES[idx % _PIZZA_CORES.length];
+      const pct = Math.round(items.length / total * 100);
+      const setorEsc = setor.replace(/'/g,"\\'");
+      return `<div class="an-pizza-leg-row" onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:6px;transition:background .1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background='transparent'">
+        <div style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+        <span style="font-size:12px;font-weight:600;color:var(--text);flex:1">${setor}</span>
+        <span style="font-size:12px;font-weight:700;color:${cor}">${items.length}</span>
+        <span style="font-size:11px;color:var(--text-ter)">${pct}%</span>
+      </div>`;
+    }).join('');
+
+    topRiscoHtml = `
+      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+        <div style="flex-shrink:0">
+          <svg width="160" height="160" viewBox="0 0 160 160">${_slices}</svg>
+        </div>
+        <div style="flex:1;min-width:160px">${_legendaHtml}</div>
+      </div>
+      <div id="dashRiscoLista" style="margin-top:12px"></div>`;
+  }
+  const maisRisco = '';
 
   // ── salva dados para o calendário interativo
   _dashCalData = { excluir, ativos };
@@ -6423,6 +6461,62 @@ const _ANO_CORES = ['#4C7CB0','#7BA89B','#9B7BAD','#C4A44C','#7B9BAF','#AD7B7B',
 
 function _anoColor(year) {
   return _ANO_CORES[_dashAnoAllYears.indexOf(year) % _ANO_CORES.length];
+}
+
+// ─── Risco de dobra: filtra lista por setor ao clicar na pizza ────────────────
+let _dashRiscoSetorAtivo = null;
+function dashRiscoFiltrar(setor) {
+  const el = document.getElementById('dashRiscoLista');
+  if (!el) return;
+  if (_dashRiscoSetorAtivo === setor) {
+    _dashRiscoSetorAtivo = null;
+    el.innerHTML = '';
+    return;
+  }
+  _dashRiscoSetorAtivo = setor;
+  const excluir = new Set(['cancelado','recusado']);
+  const ativos  = (window._dashCachedAtivos || COLABORADORES.filter(c => c.ativo !== false));
+  const emRisco = ativos.filter(c => isRiscoDobra(c));
+  const lista   = emRisco.map(c => {
+    let minDpd = 999;
+    c.registros.filter(r => !excluir.has(r.status)).forEach(r => {
+      const dpd = diasParaDobra(r); if (dpd !== null && dpd < minDpd) minDpd = dpd;
+    });
+    return { c, dpd: minDpd };
+  }).filter(({ c }) => (normSetor(c.setor) || c.setor || 'Sem setor') === setor)
+    .sort((a,b) => a.dpd - b.dpd);
+
+  const _PIZZA_CORES = ['#dc2626','#d97706','#7c3aed','#0e7490','#059669','#1849A9','#be185d','#b45309'];
+  const setores = [...new Set(emRisco.map(c => normSetor(c.setor) || c.setor || 'Sem setor'))].sort((a,b) => {
+    const ca = emRisco.filter(x => (normSetor(x.setor)||x.setor||'Sem setor')===a).length;
+    const cb = emRisco.filter(x => (normSetor(x.setor)||x.setor||'Sem setor')===b).length;
+    return cb - ca;
+  });
+  const cor = _PIZZA_CORES[setores.indexOf(setor) % _PIZZA_CORES.length];
+
+  const rows = lista.map(({ c, dpd }) => {
+    const ini = (c.nome||'').split(' ');
+    const initials = ((ini[0]||'')[0]||'') + ((ini[ini.length-1]||'')[0]||'');
+    const [bgC, txC, avBg, avTx] = dpd <= 30
+      ? ['#fee2e2','#991b1b','#fee2e2','#991b1b']
+      : dpd <= 90
+      ? ['#fef3c7','#92400e','#fef3c7','#92400e']
+      : ['#fffbeb','#92400e','#fef9c3','#b45309'];
+    const urgLabel = dpd <= 30 ? 'Crítico' : dpd <= 90 ? 'Alto' : 'Atenção';
+    return `<div class="an-risk-row" onclick="abrirDrawer('${c.__key.replace(/'/g,"\\'")}')">
+      <div class="an-risk-av" style="background:${avBg};color:${avTx}">${initials.toUpperCase()}</div>
+      <div style="flex:1;min-width:0">
+        <div class="an-risk-nome">${c.nome}</div>
+        <div class="an-risk-detail">${c.cargo || '—'}</div>
+      </div>
+      <div class="an-risk-badge" style="background:${bgC};color:${txC}">${urgLabel} · ${dpd}d</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div style="border-top:2px solid ${cor};padding-top:10px;margin-top:4px">
+    <div style="font-size:11px;font-weight:700;color:${cor};margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">${setor} — ${lista.length} colaborador${lista.length!==1?'es':''} <span style="font-weight:400;color:var(--text-ter);font-size:10px">(clique novamente para fechar)</span></div>
+    ${rows}
+  </div>`;
 }
 
 function renderDashAnoChart() {
