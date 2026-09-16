@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Férias — Sistema RH</title>
 <!-- SheetJS removido — dados vêm do Supabase -->
+<script src="../../permissoes.js"></script>
 <style>
   :root {
     --bg: #F0F2F5;
@@ -2253,14 +2254,14 @@ let SB_HEADERS = {};
 })();
 
 let IS_RH = true; // padrão RH; gestor é setado por setRole()
-let IS_DIRETORIA = false; // somente leitura — Dashboard + Timeline, sem ações
 (function() {
   try {
     const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-    IS_RH        = (p.perfil || 'rh') !== 'gestor';
-    IS_DIRETORIA = (p.perfil || '') === 'diretoria';
+    IS_RH = (p.perfil || 'rh') !== 'gestor';
   } catch(_) {}
 })();
+// Helpers de permissão (lidos do sb_permissoes carregado no login via permissoes.js)
+// podeAba('ferias','lista') / podeAcao('ferias','inserir') etc.
 
 function logoutFerias() {
   localStorage.removeItem('sb_session');
@@ -3267,7 +3268,7 @@ function renderDrawerHistorico(colab) {
     </button>
   </div>`;
   const key = colab.__key;
-  const novoPaBtn = (IS_RH && !IS_DIRETORIA && !regParaLancar && regs.some(r => !excluir.has(r.status)))
+  const novoPaBtn = (IS_RH && podeAcao('ferias','inserir') && !regParaLancar && regs.some(r => !excluir.has(r.status)))
     ? `<div style="text-align:center;padding:12px 0 4px;"><button id="btnRhNovoPa" onclick="rhCriarNovoPa('${key}')" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Criar próximo período aquisitivo</button></div>`
     : '';
 
@@ -3325,7 +3326,7 @@ function renderDrawerHistorico(colab) {
 
       // ── seção expansível de gozo (RH: editável; Gestor: somente leitura via gsol-rh-gozo)
       let secaoHtml = '';
-      if (IS_RH && !IS_DIRETORIA && !excluirPA) {
+      if (IS_RH && podeAcao('ferias','inserir') && !excluirPA) {
         let progressHtml = '';
         let listaHtml = '';
         if (temGozos) {
@@ -3446,10 +3447,10 @@ function renderDrawerHistorico(colab) {
       // ── botões de ação exclusivos do RH
       const isPendGozoLanc = r._aguardandoGozoIdx === lancIdx;
       const novoIdxClock = isPendGozoLanc ? 'null' : lancIdx;
-      const clockBtnHtml = (!excluirPA && IS_RH && !IS_DIRETORIA) ? `<button class="hist-clock-btn${isPendGozoLanc ? ' ativo' : ''}" onclick="rhToggleAguardandoGozo('${r._sbId}','${novoIdxClock}','${key}')" title="${isPendGozoLanc ? 'Remover marcação de pendente' : 'Marcar como pendente de gozo'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>` : '';
-      const editBtnHtml = (!excluirPA && IS_RH && !IS_DIRETORIA) ? `<button class="hist-edit-btn" onclick="abrirEditLanc('${r._sbId}',${lancIdx})" title="Editar período"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '';
-      const deleteBtnHtml = (IS_RH && !IS_DIRETORIA) ? `<button class="hist-delete-btn" onclick="excluirLancamento('${key}','${r._sbId}',${lancIdx})" title="Excluir lançamento"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : '';
-      const actionBtnsHtml = (IS_RH && !IS_DIRETORIA)
+      const clockBtnHtml = (!excluirPA && IS_RH && podeAcao('ferias','alterar')) ? `<button class="hist-clock-btn${isPendGozoLanc ? ' ativo' : ''}" onclick="rhToggleAguardandoGozo('${r._sbId}','${novoIdxClock}','${key}')" title="${isPendGozoLanc ? 'Remover marcação de pendente' : 'Marcar como pendente de gozo'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>` : '';
+      const editBtnHtml = (!excluirPA && IS_RH && podeAcao('ferias','alterar')) ? `<button class="hist-edit-btn" onclick="abrirEditLanc('${r._sbId}',${lancIdx})" title="Editar período"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '';
+      const deleteBtnHtml = (IS_RH && podeAcao('ferias','alterar')) ? `<button class="hist-delete-btn" onclick="excluirLancamento('${key}','${r._sbId}',${lancIdx})" title="Excluir lançamento"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : '';
+      const actionBtnsHtml = (IS_RH && podeAcao('ferias','alterar'))
         ? `<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">${clockBtnHtml}${editBtnHtml}${deleteBtnHtml}</div>`
         : '';
 
@@ -3499,7 +3500,7 @@ function renderDrawerHistorico(colab) {
     if (r._novoLanc && r.status === 'Pendente') {
       const nl = r._novoLanc;
       const quemPediu = r._obsGestor ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">${r._obsGestor}</div>` : '';
-      const acaoBtns = (IS_RH && !IS_DIRETORIA) ? `<div style="display:flex;gap:6px;margin-top:8px;">
+      const acaoBtns = (IS_RH && podeAcao('ferias','alterar')) ? `<div style="display:flex;gap:6px;margin-top:8px;">
         <button onclick="rhAprovarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprovar</button>
         <button onclick="rhRecusarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;">✕ Recusar</button>
       </div>` : '';
@@ -3523,7 +3524,7 @@ function renderDrawerHistorico(colab) {
     const isActivePa = regParaLancar && String(r._sbId) === String(regParaLancar._sbId);
     const lancarBtnHtml = (() => {
       if (!isActivePa || excluirPA) return '';
-      if (IS_RH && !IS_DIRETORIA) return `<button class="drawer-hist-pa-lancar-btn" onclick="toggleInlineLancar('${r._sbId}')">+ Lançar</button>`;
+      if (IS_RH && podeAcao('ferias','inserir')) return `<button class="drawer-hist-pa-lancar-btn" onclick="toggleInlineLancar('${r._sbId}')">+ Lançar</button>`;
       if (saldo > 0 && r.paFim >= HOJE) return `<button class="drawer-hist-pa-solicitar-btn" onclick="toggleInlineLancar('${r._sbId}')">Solicitar</button>`;
       return '';
     })();
@@ -3828,7 +3829,7 @@ async function confirmarDrawerLancamento() {
 
   const novoLanc = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
 
-  if (IS_RH && !IS_DIRETORIA && reg._sbId) {
+  if (IS_RH && podeAcao('ferias','inserir') && reg._sbId) {
     // RH lança direto como Aprovado — persiste imediatamente
     const lancamentos = [...reg.lancamentos, { inicio: ini, fim, dias }];
     const campo = reg.lancamentos.length === 0
@@ -10269,12 +10270,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!IS_RH) {
     initGestor();
   } else {
-    if (IS_DIRETORIA) {
+    if (!podeAba('ferias','lista')) {
       const vtLista = document.getElementById('vt-lista');
       if (vtLista) vtLista.style.display = 'none';
     }
     carregarDoSupabase().then(() => {
-      if (IS_DIRETORIA) setVisTab('timeline');
+      if (!podeAba('ferias','lista')) setVisTab('timeline');
     });
   }
 });
