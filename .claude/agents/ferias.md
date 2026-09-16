@@ -1378,7 +1378,7 @@ const SETOR_COR_FIXA = {
   'Estoque':         { borda: '#1D4D3B', bg: '#E4F5EF', texto: '#1D4D3B' },
   'Atendimento':     { borda: '#633806', bg: '#FAEEDA', texto: '#633806' },
   'Expedição':       { borda: '#1D4D3B', bg: '#E4F5EF', texto: '#1D4D3B' },
-  'Cd':              { borda: '#0F5570', bg: '#E0F2F8', texto: '#0F5570' },
+  'CD':              { borda: '#0F5570', bg: '#E0F2F8', texto: '#0F5570' },
   'Ecommerce':       { borda: '#B42318', bg: '#FEF3F2', texto: '#B42318' },
   'Sarandi':         { borda: '#027A48', bg: '#ECFDF3', texto: '#027A48' },
   'Paranavaí':       { borda: '#5925DC', bg: '#F4F3FF', texto: '#5925DC' },
@@ -1431,6 +1431,121 @@ O total de ausentes únicos (`_totalAus`) é calculado como `Set` de todos os `_
 .an-cal-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .an-cal-dot-extra { font-size: 9px; font-weight: 700; color: var(--text-sec); line-height: 7px; align-self: flex-end; }
 ```
+
+## `normSetor(s)` — preservação de siglas (corrigido 2026-09-16)
+
+```js
+return r.replace(/\w\S*/g, w =>
+  /^[A-Z]{2,4}$/.test(w) ? w
+  : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+);
+```
+
+**Regra:** palavras de 2–4 letras 100% maiúsculas (CD, RH, TI, etc.) são preservadas como estão. Sem essa guarda, `title-case` convertia "CD" → "Cd", quebrando lookups em `SETOR_COR_FIXA` e exibindo "Cd" no painel "Ausentes por setor" do Dashboard.
+
+**`SETOR_COR_FIXA`:** a chave deve ser `'CD'` (maiúscula), não `'Cd'` — qualquer adição futura de setores sigla deve usar maiúsculas.
+
+---
+
+## Visão Gestor — pré-preenchimento do campo de dias (2026-09-16)
+
+`gestorAbrirModal()` agora pré-preenche o campo "Quantidade de dias" com o saldo disponível e exibe hint "máx. X" no label:
+
+```js
+document.getElementById('mgDias').max            = saldo;
+document.getElementById('mgDiasHint').textContent = saldo > 0 ? `máx. ${saldo}` : '';
+document.getElementById('mgInicio').value         = '';
+document.getElementById('mgDias').value           = saldo > 0 ? saldo : '';
+document.getElementById('mgRetorno').value        = '';
+```
+
+HTML do label:
+```html
+<label>Quantidade de dias <span id="mgDiasHint" style="font-weight:400;color:var(--text-ter)"></span></label>
+```
+
+`saldo` = `gestorSaldoPeriodo(pa)` — saldo real do PA, consistente com o valor exibido no drawer.
+
+---
+
+## Dashboard — Card "Risco de Dobra" (atualizado 2026-09-16)
+
+### Estrutura geral
+
+```
+[card .an-card .an-row-bottom]
+  [cabeçalho flex: título + badge contador N colaboradores ⚠️/✅]
+  [flex row gap:24px]
+    [SVG donut 250×250 overflow:visible + padding-left:55px]
+    [legenda flex:1 min-width:200px]
+  [#dashRiscoLista — drill-down por setor]
+```
+
+### Dados e cache
+
+`_riscoDadosCompletos` — array de `{ c, dpd, reg }` por colaborador em risco, ordenado por `dpd` ascendente. Critério de seleção do PA (espelha `isRiscoDobra`):
+- `saldo > 0`
+- `dpd ≤ 180` (via `diasParaDobra`)
+- Sem lançamento futuro (`l.fim >= HOJE`)
+
+Armazenado em `window._dashRiscoDados` para reuso em `dashRiscoFiltrar`.
+
+`_riscoSetores` — `Map` de setor → lista de colaboradores, ordenado por quantidade decrescente.
+
+### SVG Donut
+
+| Parâmetro | Valor |
+|---|---|
+| Raio externo (`_OR`) | 105 |
+| Raio interno (`_IR`) | 63 |
+| Centro (`_CX`, `_CY`) | 125, 125 |
+| ViewBox | 250×250 |
+| Stroke | `#fff` 2px entre fatias |
+| Fill das fatias | `corSet.borda` (cor sólida escura) |
+| Opacidade | 0.88; hover → 1.0 |
+
+Rótulos externos (aparecem para fatias ≥ 6%): linha da borda da fatia + nome do setor (bold 9px) + "X Colab. · XX%" (8px).
+
+Centro do donut: número total (32px 800) + "COLABORADORES" (8px, letter-spacing .08em).
+
+### Legenda
+
+Cada linha da legenda:
+- Ícone colorido escuro (`corSet.borda`) à esquerda (36×38px) com emoji do setor
+- Fundo claro (`corSet.bg`) na parte direita
+- Nome do setor (bold 11.5px, cor `borda`)
+- Barra de progresso `flex:1` (fill `borda`)
+- Percentual (11.5px bold, cor `borda`) alinhado à direita
+
+`max-width` removido — legenda ocupa todo o espaço disponível (`flex:1`).
+
+### Ícones por setor (`_SETOR_ICONE`)
+
+```js
+const _SETOR_ICONE = s => {
+  const sl = (s||'').toLowerCase();
+  if (sl.includes('cd') || sl.includes('distribui')) return '📦';
+  if (sl.includes('compra')) return '🛒';
+  if (sl.includes('venda') || sl.includes('comercial')) return '🏪';
+  if (sl.includes('matriz') || sl.includes('adm') || sl.includes('financ')) return '🏢';
+  if (sl.includes('logist') || sl.includes('expedi')) return '🚚';
+  if (sl.includes('rh') || sl.includes('pessoas')) return '👥';
+  if (sl.includes('ti') || sl.includes('tech')) return '💻';
+  return '📍';
+};
+```
+
+### `dashRiscoFiltrar(setor)`
+
+Toggle: clicar no mesmo setor fecha o drill-down. Lê de `window._dashRiscoDados` (nunca recalcula).
+
+Cabeçalho do drill-down: `DETALHAMENTO POR UNIDADE — {setor} ({N} Colaboradores) ✕ fechar`
+
+Cada linha: avatar com iniciais + nome/cargo + badge de prioridade (ALTA PRIORIDADE / ATENÇÃO / NO RADAR) + badge de data "📅 Vence em DD/MM/AAAA". Clique abre `abrirDrawer`.
+
+Badges usam `riscoBadgeHtml(dpd, true, dlim)` — mesma função da aba Lista.
+
+---
 
 ## Pendências conhecidas
 
