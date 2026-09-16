@@ -529,7 +529,13 @@
           Novo Colaborador
         </button>
         <button class="btn btn-outline btn-sm" onclick="exportarExcel()">Exportar CSV</button>
-        <button class="btn btn-outline btn-sm" onclick="gerarRelatorio()" style="background:#2C3E6B;color:#fff;border-color:#2C3E6B;">Relatório</button>
+        <div style="position:relative;display:inline-block;" id="wrapRelatorio">
+          <button class="btn btn-outline btn-sm" onclick="toggleMenuRelatorio(event)" style="background:#2C3E6B;color:#fff;border-color:#2C3E6B;">Relatório ▾</button>
+          <div id="menuRelatorio" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #DDE5F0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:140px;z-index:999;overflow:hidden;">
+            <button onclick="gerarRelatorioPDF();toggleMenuRelatorio()" style="display:block;width:100%;text-align:left;padding:10px 16px;border:none;background:none;font-size:13px;cursor:pointer;color:#1E2740;" onmouseover="this.style.background='#EDF1FA'" onmouseout="this.style.background='none'">📄 PDF / Imprimir</button>
+            <button onclick="gerarRelatorioExcel();toggleMenuRelatorio()" style="display:block;width:100%;text-align:left;padding:10px 16px;border:none;background:none;font-size:13px;cursor:pointer;color:#1E2740;border-top:1px solid #EEF2F9;" onmouseover="this.style.background='#EDF1FA'" onmouseout="this.style.background='none'">📊 Excel</button>
+          </div>
+        </div>
 <button id="btnReloadTabela" onclick="recarregar()" title="Recarregar dados" style="background:var(--blue);border:none;border-radius:9px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(24,73,169,0.22);transition:background .15s;flex-shrink:0;">
           <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
@@ -2472,135 +2478,130 @@ function exportarExcel() {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
-function gerarRelatorio() {
-  if (!FILTRADOS.length) { alert('Nenhum dado para gerar relatório.'); return; }
+function toggleMenuRelatorio(e) {
+  if (e) e.stopPropagation();
+  const m = document.getElementById('menuRelatorio');
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+  if (m.style.display === 'block') {
+    const fechar = () => { m.style.display = 'none'; document.removeEventListener('click', fechar); };
+    setTimeout(() => document.addEventListener('click', fechar), 0);
+  }
+}
 
+function _dadosRelatorio() {
+  if (!FILTRADOS.length) { alert('Nenhum dado para gerar relatório.'); return null; }
   const sit = document.getElementById('filtroSituacao').value;
   const emp = document.getElementById('filtroEmpresa').value;
   const set = document.getElementById('filtroSetor').value;
   const sex = document.getElementById('filtroSexo').value;
-
   const chips = [];
   if (sit) chips.push(sit === 'ativo' ? 'Situação: Ativos' : sit === 'inativo' ? 'Situação: Inativos' : sit);
   if (emp) chips.push('Empresa: ' + emp);
   if (set) chips.push('Setor: ' + set);
   if (sex) chips.push('Sexo: ' + (sex === 'M' ? 'Masculino' : sex === 'F' ? 'Feminino' : sex));
   if (!chips.length) chips.push('Todos os colaboradores');
-
   const total = FILTRADOS.length;
   const agora = new Date();
   const dataHora = agora.toLocaleDateString('pt-BR') + ' às ' + agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-  // Agrupa por setor, ordenado alfabeticamente
+  const label = total === 1 ? 'colaborador' : sex === 'F' ? 'colaboradoras' : sex === 'M' ? 'colaboradores' : 'colaboradores';
   const grupos = {};
   [...FILTRADOS]
     .sort((a, b) => (a.setor || '').localeCompare(b.setor || '', 'pt-BR') || (a.nome || '').localeCompare(b.nome || '', 'pt-BR'))
-    .forEach(c => {
-      const s = c.setor || '(Sem setor)';
-      if (!grupos[s]) grupos[s] = [];
-      grupos[s].push(c);
-    });
+    .forEach(c => { const s = c.setor || '(Sem setor)'; if (!grupos[s]) grupos[s] = []; grupos[s].push(c); });
+  return { chips, total, dataHora, label, grupos, sex };
+}
 
-  const label = total === 1 ? 'colaborador' : sex === 'F' ? 'colaboradoras' : sex === 'M' ? 'colaboradores' : 'colaboradores';
-
+function gerarRelatorioPDF() {
+  const d = _dadosRelatorio(); if (!d) return;
+  const { chips, total, dataHora, label, grupos, sex } = d;
   let blocos = '';
   for (const [setor, lista] of Object.entries(grupos)) {
     const cnt = lista.length;
     const cntLabel = cnt === 1 ? '1 colaborador' : cnt + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
     const linhas = lista.map(c => {
-      // Remove código numérico do início da empresa_registro (ex: "148 - Matriz Adm" → "Matriz Adm")
       const empReg = (c.empresa || '').replace(/^\d+\s*[-–]\s*/, '');
-      return `<tr>
-        <td class="td-nome">${c.nome || '—'}</td>
-        <td class="td-cargo">${c.cargo || '—'}</td>
-        <td class="td-empresa">${empReg || '—'}</td>
-        <td class="td-data">${fmtDateBR(c.dataAdmissao) || '—'}</td>
-        <td class="td-gestor">${c.gestor || '—'}</td>
-      </tr>`;
+      return `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${empReg||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)||'—'}</td><td class="td-c">${c.gestor||'—'}</td></tr>`;
     }).join('');
-    blocos += `
-      <div class="grupo-setor-header">
-        <span class="setor-nome">${setor}</span>
-        <span class="setor-count">${cntLabel}</span>
-      </div>
-      <table>
-        <thead><tr><th>Nome</th><th>Cargo</th><th>Empresa Registro</th><th>Admissão</th><th>Gestor</th></tr></thead>
-        <tbody>${linhas}</tbody>
-      </table>`;
+    blocos += `<div class="sh"><span class="sn">${setor}</span><span class="sc">${cntLabel}</span></div>
+      <table><thead><tr><th>Nome</th><th>Cargo</th><th>Empresa Registro</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
   }
-
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Relatório de Colaboradores — Revest</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório — Revest</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
-  :root { --navy:#2C3E6B; --accent:#3B72B0; --teal:#1A7F6A; --teal-lt:#E0F5F0; --row-alt:#F5F8FD; --border:#DDE5F0; --text:#1E2740; --text-sec:#5E718A; --setor-bg:#EDF1FA; }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Inter',sans-serif; font-size:13px; color:var(--text); background:#EEF2F9; padding:32px 20px; }
-  .report-wrap { max-width:980px; margin:0 auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 16px rgba(44,62,107,.10); }
-  .report-header { background:var(--navy); padding:26px 36px 22px; display:flex; align-items:flex-start; justify-content:space-between; gap:24px; }
-  .report-empresa { font-size:10px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:rgba(255,255,255,.45); margin-bottom:5px; }
-  .report-titulo { font-size:20px; font-weight:700; color:#fff; }
-  .report-filtros { margin-top:12px; display:flex; flex-wrap:wrap; gap:6px; }
-  .filtro-chip { background:rgba(255,255,255,.13); border:1px solid rgba(255,255,255,.22); border-radius:20px; padding:3px 10px; font-size:11px; color:rgba(255,255,255,.8); font-weight:500; }
-  .report-header-right { text-align:right; flex-shrink:0; }
-  .report-data { font-size:11px; color:rgba(255,255,255,.4); margin-bottom:8px; }
-  .report-total-box { background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.16); border-radius:10px; padding:10px 20px; text-align:center; }
-  .report-total-num { font-size:26px; font-weight:700; color:#fff; line-height:1; }
-  .report-total-label { font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.45); margin-top:3px; }
-  .grupo-setor-header { background:var(--setor-bg); padding:9px 36px; display:flex; align-items:center; justify-content:space-between; border-top:2px solid var(--accent); border-bottom:1px solid var(--border); margin-top:2px; }
-  .setor-nome { font-size:12px; font-weight:700; color:var(--navy); display:flex; align-items:center; gap:8px; text-transform:uppercase; letter-spacing:.05em; }
-  .setor-nome::before { content:''; display:inline-block; width:3px; height:14px; background:var(--accent); border-radius:2px; }
-  .setor-count { font-size:11px; font-weight:600; color:var(--teal); background:var(--teal-lt); border-radius:20px; padding:3px 11px; }
-  table { width:100%; border-collapse:collapse; }
-  thead tr { background:#F0F4FB; }
-  thead th { padding:8px 12px 8px 36px; font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--text-sec); text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
-  thead th:not(:first-child) { padding-left:12px; }
-  tbody tr { border-bottom:1px solid #ECF0F8; }
-  tbody tr:nth-child(even) { background:var(--row-alt); }
-  tbody td { padding:9px 12px 9px 36px; line-height:1.4; }
-  tbody td:not(:first-child) { padding-left:12px; }
-  .td-nome { font-weight:600; font-size:13px; }
-  .td-cargo, .td-empresa, .td-data, .td-gestor { font-size:12px; color:var(--text-sec); }
-  .td-data { white-space:nowrap; font-variant-numeric:tabular-nums; }
-  .report-footer { border-top:1px solid var(--border); padding:14px 36px; display:flex; align-items:center; justify-content:space-between; background:#FAFBFE; }
-  .footer-info { font-size:11px; color:var(--text-sec); }
-  .footer-total { font-size:12px; font-weight:600; color:var(--navy); background:var(--setor-bg); border-radius:6px; padding:6px 14px; }
-  @media print { body { background:#fff; padding:0; } .report-wrap { box-shadow:none; border-radius:0; } }
-</style>
-</head>
-<body>
-<div class="report-wrap">
-  <div class="report-header">
-    <div>
-      <div class="report-empresa">Revest do Brasil Acabamentos Ltda</div>
-      <div class="report-titulo">Relatório de Colaboradores</div>
-      <div class="report-filtros">${chips.map(c => `<span class="filtro-chip">${c}</span>`).join('')}<span class="filtro-chip">${total} registros</span></div>
-    </div>
-    <div class="report-header-right">
-      <div class="report-data">Gerado em ${dataHora}</div>
-      <div class="report-total-box">
-        <div class="report-total-num">${total}</div>
-        <div class="report-total-label">${label}</div>
-      </div>
-    </div>
-  </div>
-  ${blocos}
-  <div class="report-footer">
-    <div class="footer-info">Sistema RH · Revest do Brasil Acabamentos Ltda · Gerado em ${dataHora}</div>
-    <div class="footer-total">Total geral: ${total} ${label}</div>
-  </div>
-</div>
-</body>
-</html>`;
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Inter',sans-serif;font-size:13px;color:#1E2740;background:#EEF2F9;padding:32px 20px}
+.w{max-width:980px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(44,62,107,.10)}
+.hd{background:#2C3E6B;padding:26px 36px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.he{font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:5px}
+.ht{font-size:20px;font-weight:700;color:#fff}
+.hf{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:20px;padding:3px 10px;font-size:11px;color:rgba(255,255,255,.8);font-weight:500}
+.hr{text-align:right;flex-shrink:0}.hd2{font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px}
+.tb{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:10px 20px;text-align:center}
+.tn{font-size:26px;font-weight:700;color:#fff;line-height:1}.tl{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-top:3px}
+.sh{background:#EDF1FA;padding:9px 36px;display:flex;align-items:center;justify-content:space-between;border-top:2px solid #3B72B0;border-bottom:1px solid #DDE5F0;margin-top:2px}
+.sn{font-size:12px;font-weight:700;color:#2C3E6B;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:.05em}
+.sn::before{content:'';display:inline-block;width:3px;height:14px;background:#3B72B0;border-radius:2px}
+.sc{font-size:11px;font-weight:600;color:#1A7F6A;background:#E0F5F0;border-radius:20px;padding:3px 11px}
+table{width:100%;border-collapse:collapse}
+thead tr{background:#F0F4FB}
+thead th{padding:8px 12px 8px 36px;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#5E718A;text-align:left;border-bottom:1px solid #DDE5F0;white-space:nowrap}
+thead th:not(:first-child){padding-left:12px}
+tbody tr{border-bottom:1px solid #ECF0F8}
+tbody tr:nth-child(even){background:#F5F8FD}
+tbody td{padding:9px 12px 9px 36px;line-height:1.4}
+tbody td:not(:first-child){padding-left:12px}
+.td-nome{font-weight:600;font-size:13px}.td-c{font-size:12px;color:#5E718A}
+.ft{border-top:1px solid #DDE5F0;padding:14px 36px;display:flex;align-items:center;justify-content:space-between;background:#FAFBFE}
+.fi{font-size:11px;color:#5E718A}.ft2{font-size:12px;font-weight:600;color:#2C3E6B;background:#EDF1FA;border-radius:6px;padding:6px 14px}
+@media print{body{background:#fff;padding:0}.w{box-shadow:none;border-radius:0}}
+</style></head><body><div class="w">
+<div class="hd"><div><div class="he">Revest do Brasil Acabamentos Ltda</div><div class="ht">Relatório de Colaboradores</div>
+<div class="hf">${chips.map(c=>`<span class="chip">${c}</span>`).join('')}<span class="chip">${total} registros</span></div></div>
+<div class="hr"><div class="hd2">Gerado em ${dataHora}</div><div class="tb"><div class="tn">${total}</div><div class="tl">${label}</div></div></div></div>
+${blocos}
+<div class="ft"><div class="fi">Sistema RH · Revest do Brasil Acabamentos Ltda · Gerado em ${dataHora}</div><div class="ft2">Total geral: ${total} ${label}</div></div>
+</div></body></html>`;
+  const w = window.open('', '_blank'); w.document.write(html); w.document.close();
+}
 
-  const w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
+function gerarRelatorioExcel() {
+  const d = _dadosRelatorio(); if (!d) return;
+  const { chips, total, dataHora, label, grupos, sex } = d;
+  // Excel abre HTML com estilos inline quando a extensão é .xls
+  const TH = 'style="background:#2C3E6B;color:#fff;font-family:Calibri,Arial,sans-serif;font-size:11pt;font-weight:bold;padding:8px 12px;text-align:left;border:1px solid #1a2d52;white-space:nowrap;"';
+  const SETOR_TD = 'style="background:#2C3E6B;color:#fff;font-family:Calibri,Arial,sans-serif;font-size:11pt;font-weight:bold;padding:8px 12px;border:1px solid #1a2d52;"';
+  const COUNT_TD = 'style="background:#2C3E6B;color:#E0F5F0;font-family:Calibri,Arial,sans-serif;font-size:10pt;padding:8px 12px;text-align:right;border:1px solid #1a2d52;"';
+  const TD_NOME = (par) => `style="font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#fff'};"`;
+  const TD = (par) => `style="font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#5E718A;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#fff'};"`;
+  let linhasTotais = '';
+  for (const [setor, lista] of Object.entries(grupos)) {
+    const cntLabel = lista.length === 1 ? '1 colaborador' : lista.length + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
+    linhasTotais += `<tr><td colspan="5" ${SETOR_TD}>${setor}</td><td ${COUNT_TD}>${cntLabel}</td></tr>`;
+    linhasTotais += `<tr><th ${TH}>Nome</th><th ${TH}>Cargo</th><th ${TH}>Empresa Registro</th><th ${TH}>Admissão</th><th ${TH}>Gestor</th><th ${TH}></th></tr>`;
+    lista.forEach((c, i) => {
+      const par = i % 2 === 1;
+      const empReg = (c.empresa || '').replace(/^\d+\s*[-–]\s*/, '');
+      linhasTotais += `<tr><td ${TD_NOME(par)}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${empReg||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)||''}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
+    });
+    linhasTotais += `<tr><td colspan="6" style="padding:4px;border:none;background:#fff;"></td></tr>`;
+  }
+  const filtrosTexto = chips.join(' | ');
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Colaboradores</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>
+<tr><td colspan="6" style="background:#2C3E6B;color:#fff;font-family:Calibri,Arial,sans-serif;font-size:14pt;font-weight:bold;padding:12px;border:none;">Relatório de Colaboradores — Revest</td></tr>
+<tr><td colspan="6" style="background:#3B4F7A;color:rgba(255,255,255,0.8);font-family:Calibri,Arial,sans-serif;font-size:10pt;padding:6px 12px;border:none;">${filtrosTexto} · ${total} registros · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="6" style="padding:4px;border:none;background:#fff;"></td></tr>
+${linhasTotais}
+<tr><td colspan="4" style="background:#EDF1FA;color:#2C3E6B;font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:bold;padding:8px 12px;border:1px solid #DDE5F0;">Total geral</td><td colspan="2" style="background:#EDF1FA;color:#1A7F6A;font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:bold;padding:8px 12px;text-align:right;border:1px solid #DDE5F0;">${total} ${label}</td></tr>
+</table></body></html>`;
+  const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const a = document.createElement('a');
+  const partes = ['Relatorio_Colaboradores'];
+  chips.filter(c => !c.includes('registros')).forEach(c => partes.push(c.split(': ')[1] || c));
+  a.href = URL.createObjectURL(blob);
+  a.download = partes.join('_').replace(/[^a-zA-Z0-9À-ÿ_\- ]/g,'').replace(/\s+/g,'_') + '.xls';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 // ─── Novo colaborador ────────────────────────────────────────────────────────
