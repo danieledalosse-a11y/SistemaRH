@@ -2597,29 +2597,33 @@ function gerarRelatorioExcel() {
   const TD_NOME = (par) => `style="font-family:Calibri,Arial,sans-serif;font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#fff'};"`;
   const TD = (par) => `style="font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#5E718A;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#fff'};"`;
   const F = 'font-family:Calibri,Arial,sans-serif;';
-  const EMP_TD  = `style="${F}font-size:12pt;font-weight:bold;padding:10px 14px;background:#E8F0FA;color:#1E2E52;border-top:3px solid #2C3E6B;border-bottom:2px solid #2C3E6B;border-left:5px solid #2C3E6B;border-right:1px solid #C8D8EE;"`;
-  const EMP_CNT = `style="${F}font-size:11pt;font-weight:bold;padding:10px 14px;background:#E8F0FA;color:#1A7F6A;text-align:right;border-top:3px solid #2C3E6B;border-bottom:2px solid #2C3E6B;border-right:1px solid #C8D8EE;border-left:none;"`;
-  const SET_TD  = `style="${F}font-size:10pt;font-weight:bold;padding:7px 14px 7px 22px;background:#F4F8FE;color:#2C5FA8;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-left:3px solid #5B8EC4;border-right:1px solid #C8D8EE;"`;
-  const TOT_TD  = `style="${F}font-size:10pt;font-weight:bold;padding:6px 14px;background:#EAF5F1;color:#1A7F6A;text-align:right;border-top:1px solid #B8DDD5;border-bottom:2px solid #B8DDD5;border-right:1px solid #B8DDD5;"`;
-  const TOT_L   = `style="${F}font-size:10pt;padding:6px 14px;background:#EAF5F1;color:#1A7F6A;border-top:1px solid #B8DDD5;border-bottom:2px solid #B8DDD5;border-left:3px solid #1A7F6A;border-right:none;"`;
-  const TH_NOME = `style="${F}font-size:10pt;font-weight:bold;padding:7px 12px;background:#2C3E6B;color:#FFFFFF;text-align:left;border:1px solid #1a2d52;white-space:nowrap;width:260pt;"`;
+  const B = `${F}border:1px solid `;
+  // Empresa: navy escuro igual ao header do PDF
+  const EMP_L   = `style="${F}font-size:12pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#FFFFFF;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-left:2px solid #1a2d52;border-right:none;"`;
+  const EMP_R   = `style="${F}font-size:11pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#5DD6B8;text-align:right;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-right:2px solid #1a2d52;border-left:none;"`;
+  // Setor: azul claro igual ao bloco de setor do PDF
+  const SET_L   = `style="${F}font-size:10pt;font-weight:bold;padding:7px 16px 7px 28px;background:#EDF1FA;color:#2C5FA8;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-left:1px solid #C8D8EE;border-right:none;"`;
+  const SET_R   = `style="${F}font-size:10pt;padding:7px 16px;background:#EDF1FA;color:#7A92B0;text-align:right;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-right:1px solid #C8D8EE;border-left:none;"`;
+  // Cabeçalho de colunas: cinza claro como no PDF
+  const TH_NOME = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;white-space:nowrap;width:260pt;"`;
+  const TH2     = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;white-space:nowrap;"`;
   const BLANK   = 'style="padding:5px;border:none;background:#FFFFFF;"';
   let linhasTotais = '';
   for (const [empresa, setores] of grupos) {
     const cntEmp = setores.reduce((s,[,l]) => s + l.length, 0);
     const cntEmpLabel = cntEmp === 1 ? '1 colaborador' : cntEmp + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
-    linhasTotais += `<tr><td colspan="4" ${EMP_TD}>${empresa}</td><td ${EMP_CNT}>${cntEmpLabel}</td></tr>`;
+    linhasTotais += `<tr><td colspan="4" ${EMP_L}>${empresa}</td><td ${EMP_R}>${cntEmpLabel}</td></tr>`;
     for (const [setor, lista] of setores) {
       const cnt = lista.length;
       const cntLabel = cnt === 1 ? '1 colaborador' : cnt + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
-      linhasTotais += `<tr><td colspan="5" ${SET_TD}>${setor}</td></tr>`;
-      linhasTotais += `<tr><th ${TH_NOME}>Nome</th><th ${TH}>Cargo</th><th ${TH}>Admissão</th><th ${TH}>Gestor</th><th ${TH}></th></tr>`;
+      linhasTotais += `<tr><td colspan="4" ${SET_L}>${setor}</td><td ${SET_R}>${cntLabel}</td></tr>`;
+      linhasTotais += `<tr><th ${TH_NOME}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>ADMISSÃO</th><th ${TH2}>GESTOR</th><th ${TH2}></th></tr>`;
       lista.forEach((c, i) => {
         const par = i % 2 === 1;
-        const nomeStyle = `style="${F}font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid #DDE5F0;background:${par?'#F5F8FD':'#FFFFFF'};width:260pt;"`;
+        const bg = par ? '#F5F8FD' : '#FFFFFF';
+        const nomeStyle = `style="${F}font-size:10pt;font-weight:600;padding:8px 12px;border:1px solid #ECF0F8;background:${bg};color:#1E2740;width:260pt;"`;
         linhasTotais += `<tr><td ${nomeStyle}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)||''}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
       });
-      linhasTotais += `<tr><td colspan="4" ${TOT_L}>Total — ${setor}</td><td ${TOT_TD}>${cntLabel}</td></tr>`;
       linhasTotais += `<tr><td colspan="5" ${BLANK}></td></tr>`;
     }
     linhasTotais += `<tr><td colspan="5" ${BLANK}></td></tr>`;
