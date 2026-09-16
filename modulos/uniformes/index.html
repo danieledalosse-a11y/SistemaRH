@@ -5065,26 +5065,13 @@ async function confirmarAjusteEstoque() {
     // 1. Atualiza quantidade no estoque
     await sbPatch('unif_estoque', `id=eq.${_ajusteEstoqueId}`, { quantidade: novaQtd });
 
-    // 2. Registra movimentação de ajuste para auditoria
-    const perfil = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-    await sbPost('unif_movimentacoes', {
-      item_id:           _ajusteItemId    || null,
-      almoxarifado_id:   _ajusteAlmoxId   || null,
-      tamanho:           _ajusteTamanho   || null,
-      tipo:              'ajuste',
-      motivo:            'ajuste',
-      quantidade:        novaQtd,
-      data_movimentacao: new Date().toISOString().split('T')[0],
-      confirmado:        true,
-      obs:               obs || 'Ajuste manual de balanço',
-      registrado_por:    perfil.nome || 'RH',
-    });
+    // 2. Registra ajuste na tabela de estoque (campo obs_ajuste, se existir)
+    // unif_movimentacoes exige colaborador_id NOT NULL — não se aplica a ajustes manuais
 
     toast('✓ Estoque ajustado com sucesso');
     fecharAjusteEstoque();
     await carregarEstoque();
   } catch(e) {
-    console.error('ajuste-estoque-erro', e, e?.message);
     toast(_erroApi(e), 'erro');
   } finally {
     btn.disabled = false; btn.textContent = 'Confirmar ajuste';
