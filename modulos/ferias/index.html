@@ -6319,24 +6319,24 @@ function renderAnalytics() {
       const x2 = _PIE_CX + _PIE_R * Math.cos(_angulo);
       const y2 = _PIE_CY + _PIE_R * Math.sin(_angulo);
       const large = ang > Math.PI ? 1 : 0;
-      const cor = corDoSetor(setor).borda;
+      const corSet = corDoSetor(setor);
       const setorEsc = setor.replace(/'/g,"\\'");
+      // fatia: fundo pastel (bg) com borda da cor do setor — visual leve
       _slices += `<path d="M${_PIE_CX},${_PIE_CY} L${x1.toFixed(2)},${y1.toFixed(2)} A${_PIE_R},${_PIE_R} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z"
-        fill="${cor}" stroke="#fff" stroke-width="2" style="cursor:pointer;transition:opacity .15s"
-        onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'"
+        fill="${corSet.bg}" stroke="${corSet.borda}" stroke-width="2.5" style="cursor:pointer;transition:filter .15s"
+        onmouseover="this.style.filter='brightness(0.95)'" onmouseout="this.style.filter='none'"
         onclick="dashRiscoFiltrar('${setorEsc}')"/>`;
     });
 
     // Legenda
     const _legendaHtml = _riscoSetores.map(([setor, items]) => {
-      const cor = corDoSetor(setor).borda;
-      const bg  = corDoSetor(setor).bg;
+      const corSet = corDoSetor(setor);
       const pct = Math.round(items.length / total * 100);
       const setorEsc = setor.replace(/'/g,"\\'");
-      return `<div onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;transition:background .1s" onmouseover="this.style.background='${bg}'" onmouseout="this.style.background='transparent'">
-        <div style="width:11px;height:11px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+      return `<div onclick="dashRiscoFiltrar('${setorEsc}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;transition:background .1s" onmouseover="this.style.background='${corSet.bg}'" onmouseout="this.style.background='transparent'">
+        <div style="width:10px;height:10px;border-radius:50%;background:${corSet.borda};flex-shrink:0"></div>
         <span style="font-size:12px;font-weight:600;color:var(--text);flex:1">${setor}</span>
-        <span style="font-size:13px;font-weight:700;color:${cor}">${items.length}</span>
+        <span style="font-size:13px;font-weight:700;color:${corSet.borda}">${items.length}</span>
         <span style="font-size:11px;color:var(--text-ter);min-width:30px;text-align:right">${pct}%</span>
       </div>`;
     }).join('');
@@ -6488,29 +6488,33 @@ function dashRiscoFiltrar(setor) {
   const corBg = corDoSetor(setor).bg;
 
   const rows = lista.map(({ c, dpd }) => {
-    const ini = (c.nome||'').split(' ');
-    const initials = ((ini[0]||'')[0]||'') + ((ini[ini.length-1]||'')[0]||'');
-    let bgC, txC, avBg, avTx, urgLabel;
+    const partes = (c.nome||'').trim().split(/\s+/);
+    const initials = ((partes[0]||'')[0]||'') + ((partes[partes.length-1]||'')[0]||'');
+    const corSet = corDoSetor(setor);
+    // badge idêntico à coluna Situação da Lista
+    const excluir = new Set(['cancelado','recusado']);
+    const reg = c.registros.filter(r => !excluir.has((r.status||'').toLowerCase()))
+      .find(r => { const d = diasParaDobra(r); return d !== null && d <= 180; });
+    const dlim = reg ? dataLimiteDobra(reg) : null;
+    const dobraLabel = dlim ? `Dobra em ${formatDate(dlim)}` : '';
+    const nivel = nivelRisco(dpd);
+    let badgeHtml;
     if (dpd <= 0) {
-      bgC = '#fee2e2'; txC = '#991b1b'; avBg = '#fee2e2'; avTx = '#991b1b';
-      urgLabel = 'Dobra vencida';
-    } else if (dpd <= 30) {
-      bgC = '#fee2e2'; txC = '#991b1b'; avBg = '#fee2e2'; avTx = '#991b1b';
-      urgLabel = `Vence em ${dpd} dia${dpd!==1?'s':''}`;
-    } else if (dpd <= 90) {
-      bgC = '#fef3c7'; txC = '#92400e'; avBg = '#fef3c7'; avTx = '#92400e';
-      urgLabel = `Vence em ${dpd} dias`;
+      badgeHtml = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Dobra vencida</span>`;
+    } else if (nivel === 'critico') {
+      badgeHtml = `<span class="badge-status-r" style="background:#D92D20;color:#fff;font-weight:700;padding:4px 10px;"><span class="la-dot" style="background:rgba(255,255,255,0.7);"></span>Crítico · ${dobraLabel}</span>`;
+    } else if (nivel === 'atencao') {
+      badgeHtml = `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção · ${dobraLabel}</span>`;
     } else {
-      bgC = '#fffbeb'; txC = '#b45309'; avBg = '#fef9c3'; avTx = '#b45309';
-      urgLabel = `Vence em ${dpd} dias`;
+      badgeHtml = `<span class="badge-status-r" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;"><span class="la-dot" style="background:#3B82F6;"></span>No radar · ${dobraLabel}</span>`;
     }
     return `<div class="an-risk-row" onclick="abrirDrawer('${c.__key.replace(/'/g,"\\'")}')">
-      <div class="an-risk-av" style="background:${avBg};color:${avTx}">${initials.toUpperCase()}</div>
+      <div class="an-risk-av" style="background:${corSet.bg};color:${corSet.borda};border:1.5px solid ${corSet.borda}">${initials.toUpperCase()}</div>
       <div style="flex:1;min-width:0">
         <div class="an-risk-nome">${c.nome}</div>
         <div class="an-risk-detail">${c.cargo || '—'}</div>
       </div>
-      <div class="an-risk-badge" style="background:${bgC};color:${txC}">${urgLabel}</div>
+      ${badgeHtml}
     </div>`;
   }).join('');
 
