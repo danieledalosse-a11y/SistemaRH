@@ -520,6 +520,7 @@
       <button class="sec-tab active" id="estab-posicao"       onclick="setEstoqueSubTab('posicao')">Posição</button>
       <button class="sec-tab"        id="estab-movimentacoes" onclick="setEstoqueSubTab('movimentacoes')">Movimentações</button>
       <button class="sec-tab"        id="estab-alertas"       onclick="setEstoqueSubTab('alertas')">Alertas</button>
+      <button class="sec-tab"        id="estab-auditoria"     onclick="setEstoqueSubTab('auditoria')">🔍 Auditoria</button>
     </div>
 
     <!-- ── Sub-aba: Posição ── -->
@@ -625,6 +626,29 @@
               <tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-ter);">Carregando…</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Sub-aba: Auditoria ── -->
+    <div id="essec-auditoria" style="display:none;">
+      <div class="card">
+        <div class="card-hdr" style="margin-bottom:16px;">
+          <div class="card-hdr-left">
+            <div class="card-title">🔍 Auditoria de Uniformes</div>
+            <div class="card-sub" style="margin:0;">Histórico de alterações registradas no módulo</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="filtroAuditoriaAcao" onchange="renderAuditoria()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
+              <option value="">Todas as ações</option>
+              <option value="entrada_excluida">Exclusão</option>
+              <option value="entrada_editada">Edição</option>
+              <option value="estoque_ajustado">Ajuste de estoque</option>
+            </select>
+          </div>
+        </div>
+        <div id="auditoriaLista">
+          <div style="text-align:center;padding:32px;color:var(--text-ter);">Carregando…</div>
         </div>
       </div>
     </div>
@@ -1577,13 +1601,12 @@ async function carregarEstoque() {
 // ─── Sub-abas do Estoque ──────────────────────────────────────────────────────
 function setEstoqueSubTab(tab) {
   _estoqueSubTab = tab;
-  ['posicao','movimentacoes','alertas'].forEach(t => {
+  ['posicao','movimentacoes','alertas','auditoria'].forEach(t => {
     document.getElementById(`estab-${t}`)?.classList.toggle('active', t === tab);
     const el = document.getElementById(`essec-${t}`);
     if (el) el.style.display = t === tab ? '' : 'none';
   });
   if (tab === 'movimentacoes') {
-    // popula filtro de almox no painel de movimentações
     const sel = document.getElementById('filtroMovAlmox');
     if (sel && sel.options.length <= 1) {
       const almoxIds = [...new Map(ENTRADAS.map(e => [e.almoxarifado_id, e.almox?.nome])).entries()];
@@ -1593,6 +1616,7 @@ function setEstoqueSubTab(tab) {
     renderMovimentacoes();
   }
   if (tab === 'alertas') renderAlertas();
+  if (tab === 'auditoria') renderAuditoria();
 }
 
 function renderMovimentacoes() {
@@ -1679,16 +1703,92 @@ async function _logUnif(acao, tabelaRef, registroId, antes, depois) {
   }).catch(() => {});
 }
 
-async function excluirEntrada(id) {
-  if (!confirm('Excluir esta entrada permanentemente? Esta ação não pode ser desfeita.')) return;
+let _excluirEntradaId = null;
+
+function excluirEntrada(id) {
+  const entrada = ENTRADAS.find(e => String(e.id) === String(id));
+  _excluirEntradaId = id;
+  const desc = entrada
+    ? `${entrada.itemNome || entrada.item?.nome || 'Item'} · ${entrada.tamanho || ''} · ${entrada.qtd ?? ''} un.`
+    : `Entrada #${id}`;
+  document.getElementById('excluirEntradaDesc').textContent = desc;
+  document.getElementById('excluirEntradaMotivo').value = '';
+  document.getElementById('excluirEntradaMotivo').style.borderColor = 'var(--border)';
+  document.getElementById('modalExcluirEntrada').style.display = 'flex';
+  setTimeout(() => document.getElementById('excluirEntradaMotivo').focus(), 80);
+}
+
+function fecharModalExcluir() {
+  document.getElementById('modalExcluirEntrada').style.display = 'none';
+  _excluirEntradaId = null;
+}
+
+async function confirmarExcluirEntrada() {
+  const motivo = document.getElementById('excluirEntradaMotivo').value.trim();
+  if (!motivo) {
+    document.getElementById('excluirEntradaMotivo').style.borderColor = 'var(--red)';
+    document.getElementById('excluirEntradaMotivo').focus();
+    toast('Informe o motivo da exclusão.', 'erro');
+    return;
+  }
+  const id = _excluirEntradaId;
   const snapshot = ENTRADAS.find(e => String(e.id) === String(id)) || null;
+  fecharModalExcluir();
   try {
     await sbDelete('unif_entradas', `id=eq.${id}`);
-    await _logUnif('entrada_excluida', 'unif_entradas', id, snapshot, null);
+    await _logUnif('entrada_excluida', 'unif_entradas', id, { ...snapshot, motivo_exclusao: motivo }, null);
     toast('Entrada excluída.');
     await carregarEstoque();
   } catch(e) {
     toast(_erroApi(e), 'erro');
+  }
+}
+
+async function renderAuditoria() {
+  const el = document.getElementById('auditoriaLista');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-ter);">Carregando…</div>';
+  const acaoF = document.getElementById('filtroAuditoriaAcao')?.value || '';
+  let params = 'order=criado_em.desc&limit=200';
+  if (acaoF) params += `&acao=eq.${encodeURIComponent(acaoF)}`;
+  try {
+    const rows = await sbGet('unif_log', params);
+    if (!rows.length) {
+      el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-ter);">Nenhum registro encontrado.</div>';
+      return;
+    }
+    const acaoBadge = {
+      entrada_excluida: `<span style="background:#FEF3F2;color:#B42318;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Exclusão</span>`,
+      entrada_editada:  `<span style="background:#EFF8FF;color:#1849A9;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Edição</span>`,
+      estoque_ajustado: `<span style="background:#F0FDF4;color:#027A48;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Ajuste</span>`,
+    };
+    el.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Data / Hora</th>
+        <th>Usuário</th>
+        <th>Ação</th>
+        <th>Registro</th>
+        <th>Antes</th>
+        <th>Depois</th>
+      </tr></thead>
+      <tbody>${rows.map(r => {
+        const dt = r.criado_em ? new Date(r.criado_em).toLocaleString('pt-BR') : '—';
+        const antes = r.snapshot_antes ? JSON.stringify(r.snapshot_antes).slice(0,120) : '—';
+        const depois = r.snapshot_depois ? JSON.stringify(r.snapshot_depois).slice(0,120) : '—';
+        const badge = acaoBadge[r.acao] || `<span style="background:var(--bg);padding:2px 8px;border-radius:6px;font-size:11px;">${r.acao}</span>`;
+        const motivo = r.snapshot_antes?.motivo_exclusao ? `<br><span style="font-size:11px;color:var(--text-sec);">Motivo: ${r.snapshot_antes.motivo_exclusao}</span>` : '';
+        return `<tr>
+          <td style="white-space:nowrap;color:var(--text-sec);font-size:12px;">${dt}</td>
+          <td style="font-weight:600;">${r.usuario || '—'}</td>
+          <td>${badge}${motivo}</td>
+          <td style="font-size:12px;color:var(--text-sec);">${r.tabela || '—'} #${r.registro_id || '—'}</td>
+          <td style="font-size:11px;color:var(--text-ter);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${antes}">${antes}</td>
+          <td style="font-size:11px;color:var(--text-ter);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${depois}">${depois}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  } catch(e) {
+    el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--red);">Erro ao carregar auditoria.</div>`;
   }
 }
 
@@ -5255,6 +5355,29 @@ function limparBuscaColab() {
 </div>
 
 <!-- Modal Ajuste de Estoque -->
+<!-- Modal de Confirmação de Exclusão com Motivo -->
+<div id="modalExcluirEntrada" style="display:none;position:fixed;inset:0;background:rgba(16,24,40,0.5);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:16px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="font-size:16px;font-weight:700;color:var(--text);">Excluir entrada</div>
+      <button onclick="fecharModalExcluir()" style="background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:20px;padding:4px;line-height:1;">×</button>
+    </div>
+    <div id="excluirEntradaDesc" style="font-size:13px;color:var(--text-sec);margin-bottom:20px;"></div>
+
+    <div style="background:#FEF3F2;border:1px solid #FECDCA;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#B42318;">
+      ⚠️ Esta ação não pode ser desfeita. O registro ficará salvo na auditoria.
+    </div>
+
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Motivo da exclusão <span style="color:#B42318;">*</span></label>
+    <input id="excluirEntradaMotivo" type="text" placeholder="Ex: Entrada duplicada, lançamento incorreto…" style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:9px;padding:10px 14px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);margin-bottom:20px;" oninput="this.style.borderColor=this.value.trim()?'var(--blue)':'var(--red)'">
+
+    <div style="display:flex;gap:10px;">
+      <button onclick="fecharModalExcluir()" style="flex:1;padding:11px;border:1px solid var(--border);border-radius:9px;background:var(--surface);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--text);">Cancelar</button>
+      <button onclick="confirmarExcluirEntrada()" style="flex:2;padding:11px;border:none;border-radius:9px;background:#D92D20;color:#fff;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;box-shadow:0 2px 6px rgba(217,45,32,0.22);">Confirmar exclusão</button>
+    </div>
+  </div>
+</div>
+
 <div id="modalAjusteEstoque" style="display:none;position:fixed;inset:0;background:rgba(16,24,40,0.5);z-index:200;align-items:center;justify-content:center;">
   <div style="background:var(--surface);border-radius:16px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.25);">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
