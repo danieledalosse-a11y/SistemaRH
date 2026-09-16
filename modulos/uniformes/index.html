@@ -641,9 +641,27 @@
           <div style="display:flex;gap:8px;align-items:center;">
             <select id="filtroAuditoriaAcao" onchange="renderAuditoria()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);">
               <option value="">Todas as ações</option>
-              <option value="entrada_excluida">Exclusão</option>
-              <option value="entrada_editada">Edição</option>
-              <option value="estoque_ajustado">Ajuste de estoque</option>
+              <optgroup label="Estoque">
+                <option value="entrada_excluida">Entrada excluída</option>
+                <option value="entrada_editada">Entrada editada</option>
+                <option value="estoque_ajustado">Ajuste de estoque</option>
+              </optgroup>
+              <optgroup label="Entregas / Devoluções">
+                <option value="entrega_registrada">Entrega registrada</option>
+                <option value="devolucao_registrada">Devolução registrada</option>
+                <option value="movimentacao_estornada">Movimentação estornada</option>
+              </optgroup>
+              <optgroup label="Catálogo">
+                <option value="item_criado">Item criado</option>
+                <option value="item_editado">Item editado</option>
+                <option value="item_excluido">Item excluído</option>
+              </optgroup>
+              <optgroup label="Configurações">
+                <option value="almoxarifado_criado">Almoxarifado criado</option>
+                <option value="almoxarifado_editado">Almoxarifado editado</option>
+                <option value="fornecedor_criado">Fornecedor criado</option>
+                <option value="fornecedor_editado">Fornecedor editado</option>
+              </optgroup>
             </select>
           </div>
         </div>
@@ -1758,9 +1776,19 @@ async function renderAuditoria() {
       return;
     }
     const acaoBadge = {
-      entrada_excluida: `<span style="background:#FEF3F2;color:#B42318;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Exclusão</span>`,
-      entrada_editada:  `<span style="background:#EFF8FF;color:#1849A9;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Edição</span>`,
-      estoque_ajustado: `<span style="background:#F0FDF4;color:#027A48;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Ajuste</span>`,
+      entrada_excluida:      `<span style="background:#FEF3F2;color:#B42318;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Entrada excluída</span>`,
+      entrada_editada:       `<span style="background:#EFF8FF;color:#1849A9;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Entrada editada</span>`,
+      estoque_ajustado:      `<span style="background:#F0FDF4;color:#027A48;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Ajuste de estoque</span>`,
+      entrega_registrada:    `<span style="background:#F0FDF4;color:#027A48;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Entrega</span>`,
+      devolucao_registrada:  `<span style="background:#FDF4FF;color:#6941C6;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Devolução</span>`,
+      movimentacao_estornada:`<span style="background:#FEF3F2;color:#B42318;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Estorno</span>`,
+      item_criado:           `<span style="background:#F0FDF4;color:#027A48;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Item criado</span>`,
+      item_editado:          `<span style="background:#EFF8FF;color:#1849A9;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Item editado</span>`,
+      item_excluido:         `<span style="background:#FEF3F2;color:#B42318;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Item excluído</span>`,
+      almoxarifado_criado:   `<span style="background:#F0FDF4;color:#027A48;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Almoxarifado criado</span>`,
+      almoxarifado_editado:  `<span style="background:#EFF8FF;color:#1849A9;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Almoxarifado editado</span>`,
+      fornecedor_criado:     `<span style="background:#F0FDF4;color:#027A48;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Fornecedor criado</span>`,
+      fornecedor_editado:    `<span style="background:#EFF8FF;color:#1849A9;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Fornecedor editado</span>`,
     };
     el.innerHTML = `<div class="tbl-wrap"><table>
       <thead><tr>
@@ -2305,9 +2333,12 @@ async function salvarAlmox() {
   const payload = { nome, tipo: document.getElementById('almoxTipo').value, obs: document.getElementById('almoxObs').value.trim() || null };
   try {
     if (_almoxEditId) {
+      const antes = ALMOXARIFADOS.find(a => a.id === _almoxEditId) || null;
       await sbPatch('unif_almoxarifados', `id=eq.${_almoxEditId}`, payload);
+      await _logUnif('almoxarifado_editado', 'unif_almoxarifados', _almoxEditId, antes, payload);
     } else {
-      await sbPost('unif_almoxarifados', payload);
+      const [novo] = await sbPost('unif_almoxarifados', payload);
+      await _logUnif('almoxarifado_criado', 'unif_almoxarifados', novo?.id || 'novo', null, payload);
     }
     toast('✓ Almoxarifado salvo');
     fecharModalAlmox();
@@ -2386,9 +2417,12 @@ async function salvarFornecedor() {
   };
   try {
     if (_fornecEditId) {
+      const antes = FORNECEDORES.find(f => f.id === _fornecEditId) || null;
       await sbPatch('unif_fornecedores', `id=eq.${_fornecEditId}`, payload);
+      await _logUnif('fornecedor_editado', 'unif_fornecedores', _fornecEditId, antes, payload);
     } else {
-      await sbPost('unif_fornecedores', { ...payload, ativo: true });
+      const [novo] = await sbPost('unif_fornecedores', { ...payload, ativo: true });
+      await _logUnif('fornecedor_criado', 'unif_fornecedores', novo?.id || 'novo', null, payload);
     }
     toast('✓ Fornecedor salvo');
     fecharModalFornecedor();
@@ -3312,6 +3346,9 @@ async function salvarEntrega() {
     }
 
     if (motivo === 'admissao') marcarUniformeEntregueNoProcesso(_colabAtual.id);
+    await _logUnif(tipoMov === 'devolucao' ? 'devolucao_registrada' : 'entrega_registrada',
+      'unif_movimentacoes', _colabAtual.id, null,
+      { colaborador_id: _colabAtual.id, item_id: itemId, tamanho, quantidade: qtd, motivo, almoxarifado_id: almoxId });
     toast(confirmarImediato ? '✓ Devolução registrada' : '✓ Entrega registrada — aguardando confirmação de entrega física');
     fecharModalEntrega();
     carregarHistoricoColab(_colabAtual.id);
@@ -3585,6 +3622,8 @@ async function executarEstorno(movId, itemId, tamanho, qtd, almoxId, tipo) {
       }
     }
 
+    await _logUnif('movimentacao_estornada', 'unif_movimentacoes', movId,
+      { movimentacao_id: movId, item_id: itemId, tamanho, quantidade: qtd, tipo }, null);
     toast('✓ Lançamento estornado');
     carregarHistoricoColab(_colabAtual.id);
   } catch(e) {
@@ -4355,13 +4394,16 @@ async function salvarItem() {
 
   try {
     if (_editItemId) {
+      const antes = ITENS.find(i => i.id === _editItemId) || null;
       await sbPatch('unif_catalogo', `id=eq.${_editItemId}`, payload);
       const idx = ITENS.findIndex(i => i.id === _editItemId);
       if (idx >= 0) ITENS[idx] = { ...ITENS[idx], ...payload };
+      await _logUnif('item_editado', 'unif_catalogo', _editItemId, antes, payload);
       toast('✓ Item atualizado');
     } else {
       const [novo] = await sbPost('unif_catalogo', payload);
       ITENS.push(novo);
+      await _logUnif('item_criado', 'unif_catalogo', novo?.id || 'novo', null, payload);
       toast('✓ Item criado');
     }
     fecharModalItem();
@@ -4373,10 +4415,12 @@ async function salvarItem() {
 
 async function confirmarExcluirItem(id, nome) {
   if (!confirm(`Excluir "${nome}"?\n\nEssa ação removerá o item do catálogo e de todos os kits.`)) return;
+  const snapshot = ITENS.find(i => i.id === id) || null;
   try {
     await sbDelete('unif_catalogo', `id=eq.${id}`);
     ITENS = ITENS.filter(i => i.id !== id);
     KITS  = KITS.filter(k => k.item_id !== id);
+    await _logUnif('item_excluido', 'unif_catalogo', id, snapshot, null);
     renderItens();
     toast('✓ Item excluído');
   } catch (e) {
@@ -4882,6 +4926,10 @@ async function salvarDevolucao() {
       }
     }
 
+    for (const x of itensADevolver) {
+      await _logUnif('devolucao_registrada', 'unif_movimentacoes', _colabAtual.id, null,
+        { colaborador_id: _colabAtual.id, item_id: x.item_id, tamanho: x.tamanho, quantidade: x.qtdDevolver, condicao: _devCondicao, almoxarifado_id: almoxId || x.almoxarifado_id });
+    }
     toast(`✓ Devolução registrada — ${itensADevolver.length} item(ns)`);
     fecharModalDevolucao();
     await carregarHistoricoColab(_colabAtual.id);
