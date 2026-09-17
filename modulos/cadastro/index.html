@@ -827,7 +827,7 @@
       </div>
 
       <!-- ④ Sinalizações -->
-      <div class="sec-card">
+      <div class="sec-card" id="sec-sinalizacoes">
         <div class="sec-head">
           <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           <span class="sec-head-t">Sinalizações</span>
@@ -851,7 +851,7 @@
       </div>
 
       <!-- ⑤ Indicação -->
-      <div class="sec-card">
+      <div class="sec-card" id="sec-indicacao">
         <div class="sec-head">
           <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
           <span class="sec-head-t">Indicação</span>
@@ -3255,6 +3255,25 @@ function _aplicarModoFicha(tipoVinculo) {
   // Aba Benefícios — dados bancários
   const secBanco = document.getElementById('df-banco')?.closest('.drawer-section');
   if (secBanco) secBanco.style.display = resumida ? 'none' : '';
+
+  // Aba Geral — seção Sinalizações inteira
+  const secSinalizacoes = document.getElementById('sec-sinalizacoes');
+  if (secSinalizacoes) secSinalizacoes.style.display = resumida ? 'none' : '';
+
+  // Aba Geral — seção Indicação inteira
+  const secIndicacao = document.getElementById('sec-indicacao');
+  if (secIndicacao) secIndicacao.style.display = resumida ? 'none' : '';
+
+  // Tab Remuneração — botão e conteúdo
+  const tabBtnRemun = document.querySelector('.drawer-tab[onclick*="remuneracao"]');
+  if (tabBtnRemun) tabBtnRemun.style.display = resumida ? 'none' : '';
+  const tabRemun = document.getElementById('tab-remuneracao');
+  if (tabRemun) tabRemun.style.display = resumida ? 'none' : '';
+  // Se a aba ativa for remuneração e modo for resumida, redireciona para geral
+  if (resumida && tabBtnRemun?.classList.contains('active')) {
+    const btnGeral = document.querySelector('.drawer-tab[onclick*="geral"]');
+    if (btnGeral) btnGeral.click();
+  }
 }
 
 function fecharFicha() {
@@ -3302,9 +3321,25 @@ function salvarFicha() {
     const admissao= document.getElementById('df-admissao').value;
     const matricula = document.getElementById('df-codigo').value.trim();
 
-    if (!nome)     { mostrarToast('Informe o nome do colaborador.', 'error'); return; }
-    if (!empresa)  { mostrarToast('Selecione a empresa de registro.', 'error'); return; }
-    if (!admissao) { mostrarToast('Informe a data de admissão.', 'error'); return; }
+    // Determina se matrícula é obrigatória (apenas CLT)
+    const tipoVincSel = document.getElementById('df-tipo-vinculo')?.value || 'clt';
+    const matriculaObrigatoria = tipoVincSel === 'clt';
+
+    // Valida campos obrigatórios e coleta pendências
+    const pendencias = [];
+    const _mark = (id, ok) => {
+      const el = document.getElementById(id);
+      if (el) el.style.outline = ok ? '' : '2px solid var(--red, #dc2626)';
+    };
+    if (!nome)     { pendencias.push('Nome do colaborador'); _mark('df-nome', false); } else _mark('df-nome', true);
+    if (!empresa)  { pendencias.push('Empresa de registro'); _mark('df-empresa', false); } else _mark('df-empresa', true);
+    if (!admissao) { pendencias.push('Data de admissão'); _mark('df-admissao', false); } else _mark('df-admissao', true);
+    if (matriculaObrigatoria && !matricula) { pendencias.push('Matrícula (obrigatória para CLT)'); _mark('df-codigo', false); } else _mark('df-codigo', true);
+
+    if (pendencias.length > 0) {
+      mostrarToast('Preencha os campos obrigatórios: ' + pendencias.join(', ') + '.', 'erro');
+      return;
+    }
 
     const sexoVal = document.getElementById('df-sexo').value;
     const payload = {
@@ -3353,7 +3388,7 @@ function salvarFicha() {
       carregarDoSupabase();
     })
     .catch(e => {
-      mostrarToast('Erro ao salvar: ' + e.message);
+      mostrarToast(_erroApi(e), 'erro');
       btn.disabled = false; btn.textContent = 'Criar colaborador';
     });
     return;
