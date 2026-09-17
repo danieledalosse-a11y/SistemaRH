@@ -560,11 +560,11 @@ function toggleHistorico() {
 // ─── Unidades ────────────────────────────────────────────
 async function loadUnidades() {
   try {
-    const res = await fetch(`${SB_URL}/rest/v1/param_empresa?select=nome_simplificado&ativo=eq.true&order=ordem`, { headers: SB_HEADERS });
+    const res = await fetch(`${SB_URL}/rest/v1/param_empresa?select=id,nome_simplificado&ativo=eq.true&order=ordem`, { headers: SB_HEADERS });
     const data = await res.json();
     const sel = document.getElementById('c_unidade');
     if (Array.isArray(data)) {
-      data.forEach(e => { const o = document.createElement('option'); o.value = e.nome_simplificado; o.textContent = e.nome_simplificado; sel.appendChild(o); });
+      data.forEach(e => { const o = document.createElement('option'); o.value = e.nome_simplificado; o.dataset.id = e.id; o.textContent = e.nome_simplificado; sel.appendChild(o); });
     }
   } catch(_) {}
 }
@@ -1738,6 +1738,8 @@ async function confirmarEfetivar() {
 
   const unidade        = currentConvite?.unidade || '';
   const empresaAtuacao = unidade;
+  const _selUnidade    = document.querySelector('#c_unidade option:checked');
+  const empresaId      = _selUnidade ? parseInt(_selUnidade.dataset.id) || null : null;
   const cargo          = currentConvite?.cargo_pretendido || '';
   const setor          = '';
   const gestor         = '';
@@ -1867,8 +1869,10 @@ async function confirmarEfetivar() {
     cargo:             cargo || null,
     setor:             setor || null,
     gestor:            gestor || null,
-    empresa_atuacao:   empresaAtuacao || null,
-    empresa_registro:  unidade || null,
+    empresa_atuacao:    empresaAtuacao || null,
+    empresa_atuacao_id: empresaId,
+    empresa_registro:   unidade || null,
+    empresa_registro_id: empresaId,
     data_admissao:     admissao,
     tipo_contrato:     contrato || null,
     salario:           salario ? parseFloat(salario.replace(/[^\d,]/g,'').replace(',','.')) || null : null,
