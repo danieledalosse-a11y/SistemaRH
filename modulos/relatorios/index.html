@@ -964,7 +964,11 @@ function _dadosTempoCasa() {
   if (!lista.length) { alert('Nenhum colaborador completa aniversário de empresa neste mês.'); return null; }
   if (filtro === 'marcos') lista = lista.filter(c => c.marco);
   if (!lista.length) { alert('Nenhum colaborador atinge um marco de tempo de casa neste mês.'); return null; }
-  lista = lista.sort((a,b) => b.anosEmpresa - a.anosEmpresa || a.nome.localeCompare(b.nome,'pt-BR'));
+  lista = lista.sort((a,b) => {
+    const diaA = parseInt(a.dataAdmissao.split('-')[2]);
+    const diaB = parseInt(b.dataAdmissao.split('-')[2]);
+    return diaA - diaB || a.nome.localeCompare(b.nome,'pt-BR');
+  });
   const chips = [`Mês: ${MESES[mes-1]}`];
   if (emp) chips.push('Empresa: ' + emp);
   if (filtro === 'marcos') chips.push('Somente marcos');
@@ -978,7 +982,8 @@ function gerarTempoCasaPDF() {
     const diaAdm = c.dataAdmissao.split('-')[2];
     const mkClass = c.marco ? ' class="td-mk"' : ' class="td-c"';
     const anos = c.anosEmpresa;
-    return `<tr><td class="td-nome"${c.marco?' style="color:#1A7F6A"':''}>${c.nome}${c.marco?` <strong>(${anos} anos 🏆)</strong>`:''}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${diaAdm}/${String(mes).padStart(2,'0')}/${c.dataAdmissao.split('-')[0]}</td><td${mkClass}>${anos} ano${anos!==1?'s':''}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`;
+    const tempoStr = anos + ' ano' + (anos!==1?'s':'') + (c.marco?' 🏆':'');
+    return `<tr><td class="td-nome"${c.marco?' style="color:#1A7F6A"':''}>${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${diaAdm}/${String(mes).padStart(2,'0')}/${c.dataAdmissao.split('-')[0]}</td><td${mkClass}>${tempoStr}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`;
   }).join('');
   const blocos = `<table><thead><tr><th style="width:35%">Nome</th><th>Cargo</th><th>Data Admissão</th><th>Tempo de Casa</th><th>Empresa</th></tr></thead><tbody>${linhas}</tbody></table>`;
   abrirPDF(htmlRelPDF(`Tempo de Casa — ${MESES[mes-1]}`, chips, total, 'colaborador'+(total>1?'es':''), dataHora, blocos));
