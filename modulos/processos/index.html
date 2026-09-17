@@ -2860,6 +2860,11 @@ function atualizarCamposExtras() {
           <label class="form-label">Linha de Ônibus</label>
           <input class="form-control" type="text" id="xVtLinha" placeholder="Ex: Mandaguaçu / Maringá">
         </div>
+        <div class="form-group">
+          <label class="form-label">Foto do cartão <span style="font-weight:400;color:#667085">(opcional)</span></label>
+          <input class="form-control" type="file" id="xVtFotoCartao" accept="image/jpeg,image/png,image/webp" style="padding:6px 10px;">
+          <div class="form-hint">A imagem será salva na aba Arquivos do colaborador (categoria Vale Transporte)</div>
+        </div>
       </div>
       <div id="camposVTExclusao" style="display:none;">
         <div class="form-group">
@@ -3091,6 +3096,40 @@ async function submitNovoProcesso() {
   btn.disabled = true; btn.textContent = 'Criando...';
   try {
     await criarProcesso(tipo, colabId || null, colabNome, dadosExtras);
+
+    // Upload opcional da foto do cartão VT (inclusão)
+    if (tipo === 'vt_alteracao' && dadosExtras.operacao === 'inclusao' && colabId) {
+      const fotoEl = document.getElementById('xVtFotoCartao');
+      const foto = fotoEl?.files?.[0];
+      if (foto) {
+        try {
+          const ext  = foto.name.split('.').pop().toLowerCase();
+          const path = `${colabId}/vt/${Date.now()}.${ext}`;
+          const rUp  = await fetch(`${SB_URL}/storage/v1/object/colaborador-docs/${path}`, {
+            method: 'POST',
+            headers: { Authorization: SB_HEADERS.Authorization, apikey: SB_KEY, 'Content-Type': foto.type || 'image/jpeg', 'x-upsert': 'true' },
+            body: foto,
+          });
+          if (rUp.ok) {
+            const url = `${SB_URL}/storage/v1/object/public/colaborador-docs/${path}`;
+            await fetch(`${SB_URL}/rest/v1/colaborador_documentos`, {
+              method: 'POST',
+              headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+              body: JSON.stringify({
+                colaborador_id: colabId,
+                nome: 'Cartão de Vale-Transporte',
+                categoria: 'vt',
+                url,
+                tipo_arquivo: 'imagem',
+                data_documento: new Date().toISOString().slice(0, 10),
+                criado_por: USUARIO_NOME || 'RH',
+              }),
+            });
+          }
+        } catch(_) { /* upload falhou silenciosamente — processo já foi criado */ }
+      }
+    }
+
     showToast('Processo criado com sucesso!', 'success');
     resetForm();
     // Recarregar aba andamento
