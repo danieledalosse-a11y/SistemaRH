@@ -495,6 +495,7 @@
           <option value="bonus_indicacao">Bônus de Indicação</option>
           <option value="atestado">Atestado &gt; 3 dias</option>
           <option value="demissao">Demissão</option>
+          <option value="transferencia_cnpj">Transferência de CNPJ</option>
         </select>
       </div>
 
@@ -748,6 +749,7 @@ const TIPO_CONFIG = {
   prorrogacao_experiencia:     { label: 'Experiência — 45 dias',  cor: 'amber',  icon: '📝' },
   avaliacao_final_experiencia: { label: 'Experiência — 90 dias',  cor: 'amber',  icon: '📝' },
   devolucao_uniforme:          { label: 'Devolução de Uniforme',         cor: 'blue',   icon: '👕' },
+  transferencia_cnpj:          { label: 'Transferência de CNPJ',         cor: 'blue',   icon: '🔄' },
 };
 
 const CHECKLISTS = {
@@ -847,6 +849,12 @@ const CHECKLISTS = {
     { item: 'Digitalizar e salvar documento', prazo_dias: 1 },
     { item: 'Enviar ao escritório contábil (eSocial)', prazo_dias: 3 },
     { item: 'Verificar elegibilidade INSS (> 15 dias)', prazo_dias: 3 },
+  ],
+  transferencia_cnpj: [
+    { item: 'Registrar empresa de origem e empresa de destino', prazo_dias: 0 },
+    { item: 'Atualizar empresa_registro e empresa_atuacao no Cadastro', prazo_dias: 1 },
+    { item: 'Confirmar que data_ingresso_grupo está preservada (não sobrescrever)', prazo_dias: 1 },
+    { item: 'Verificar histórico do colaborador — evento registrado', prazo_dias: 1 },
   ],
 };
 
@@ -2141,8 +2149,19 @@ async function _executarConclusao(processoId, justificativa) {
       }
     }
 
-    // VT inclusão/alteração concluída → gravar dados no cadastro do colaborador
+    // Transferência de CNPJ concluída → atualizar empresa no cadastro do colaborador
     const _proc = _PROC_MAP[processoId];
+    if (_proc && _proc.tipo === 'transferencia_cnpj' && _proc.colaborador_id) {
+      const destino = _proc.dados_extras?.empresa_destino;
+      if (destino) {
+        await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${_proc.colaborador_id}`, {
+          method: 'PATCH', headers: SB_HEADERS,
+          body: JSON.stringify({ empresa_registro: destino, empresa_atuacao: destino })
+        });
+      }
+    }
+
+    // VT inclusão/alteração concluída → gravar dados no cadastro do colaborador
     if (_proc && _proc.tipo === 'vt_alteracao' && ['inclusao','alteracao'].includes(_proc.dados_extras?.operacao) && _proc.colaborador_id) {
       const _ex = _proc.dados_extras || {};
       const _vtPatch = {};
@@ -2915,6 +2934,23 @@ function atualizarCamposExtras() {
         <label class="form-label">Data de demissão</label>
         <input class="form-control" type="date" id="xDataDemissao">
       </div>`;
+  } else if (tipo === 'transferencia_cnpj') {
+    html = `
+      <div class="form-group">
+        <label class="form-label">Empresa de origem</label>
+        <input class="form-control" type="text" id="xEmpresaOrigem" placeholder="Ex: 01 - Revest Maringá">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Empresa de destino</label>
+        <input class="form-control" type="text" id="xEmpresaDestino" placeholder="Ex: 02 - Revest Londrina">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data da transferência</label>
+        <input class="form-control" type="date" id="xDataTransferencia">
+      </div>
+      <div class="form-hint" style="margin-top:4px;font-size:12px;color:#667085">
+        ⚠️ A <strong>data de ingresso no grupo</strong> do colaborador não será alterada. Atualize manualmente no Cadastro caso seja necessário.
+      </div>`;
   }
 
   if (html) { el.innerHTML = html; el.style.display = 'block'; }
@@ -3025,6 +3061,12 @@ async function submitNovoProcesso() {
     };
   } else if (tipo === 'demissao') {
     dadosExtras = { data_demissao: document.getElementById('xDataDemissao')?.value };
+  } else if (tipo === 'transferencia_cnpj') {
+    const origem  = document.getElementById('xEmpresaOrigem')?.value?.trim();
+    const destino = document.getElementById('xEmpresaDestino')?.value?.trim();
+    const dtTrf   = document.getElementById('xDataTransferencia')?.value;
+    if (!origem || !destino || !dtTrf) { showToast('Preencha empresa de origem, destino e data da transferência', 'error'); return; }
+    dadosExtras = { empresa_origem: origem, empresa_destino: destino, data_transferencia: dtTrf };
   }
 
   const btn = document.querySelector('#panel-novo .btn-primary');

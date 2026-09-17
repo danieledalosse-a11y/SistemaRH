@@ -663,6 +663,9 @@
           <div class="sf-cell"><div class="sf-lbl">Data de admissão</div><input class="sf-inp" type="date" id="df-admissao" oninput="calcularFimExperiencia()"></div>
           <div class="sf-cell"><div class="sf-lbl">Data de demissão</div><input class="sf-inp" type="date" id="df-demissao"></div>
         </div>
+        <div class="sf-row">
+          <div class="sf-cell"><div class="sf-lbl">Ingresso no Grupo</div><input class="sf-inp" type="date" id="df-ingresso-grupo"><div class="sf-hint" style="font-size:11px;color:#667085;margin-top:3px">Preencher apenas quando diferente da admissão (ex: transferência de CNPJ)</div></div>
+        </div>
         <div class="sf-row full">
           <div class="sf-cell">
             <div class="sf-lbl">Motivo de desligamento</div>
@@ -1625,7 +1628,8 @@ function supabaseToJS(row) {
     _sbId:            row.id,
     codigo:           String(row.matricula || ''),
     nome:             row.nome || '',
-    dataAdmissao:     row.data_admissao || '',
+    dataAdmissao:       row.data_admissao || '',
+    dataIngressoGrupo:  row.data_ingresso_grupo || '',
     dataDemissao,
     motivo:           row.motivo_demissao || '',
     obsDesligamento:  row.obs_desligamento || '',
@@ -2724,7 +2728,7 @@ function novoColaborador() {
       : '') + 'Preencha os dados e salve para cadastrar';
 
   // Limpa todos os inputs de texto/data/number
-  ['df-codigo','df-admissao','df-demissao','df-motivo','df-obsDesligamento','df-nome','df-cargo',
+  ['df-codigo','df-admissao','df-ingresso-grupo','df-demissao','df-motivo','df-obsDesligamento','df-nome','df-cargo',
    'df-setor','df-empresa-atuacao','df-gestor','df-nascimento',
    'df-cpf','df-rg','df-rgOrgao','df-rgData','df-pis','df-cnh',
    'df-cnhCategoria','df-cnhPrimeiraHab','df-cnhEmissao','df-cnhValidade',
@@ -2847,8 +2851,9 @@ function abrirFicha(idx) {
   // Aba Geral
   document.getElementById('df-codigo').value        = c.codigo || '';
   document.getElementById('df-situacao').value      = c.situacao || 'Ativo';
-  document.getElementById('df-admissao').value      = c.dataAdmissao || '';
-  document.getElementById('df-demissao').value      = c.dataDemissao || '';
+  document.getElementById('df-admissao').value        = c.dataAdmissao || '';
+  document.getElementById('df-ingresso-grupo').value  = c.dataIngressoGrupo || '';
+  document.getElementById('df-demissao').value        = c.dataDemissao || '';
   _popularSelectMotivoCard(c.motivo || '');
   document.getElementById('df-obsDesligamento').value = c.obsDesligamento || '';
   document.getElementById('df-nome').value          = c.nome || '';
@@ -3276,6 +3281,7 @@ function salvarFicha() {
   // Geral
   c.situacao          = document.getElementById('df-situacao').value;
   c.dataAdmissao      = document.getElementById('df-admissao').value;
+  c.dataIngressoGrupo = document.getElementById('df-ingresso-grupo').value;
   c.dataDemissao      = document.getElementById('df-demissao').value;
   c.motivo            = document.getElementById('df-motivo').value;
   c.obsDesligamento   = document.getElementById('df-obsDesligamento').value.trim();
@@ -3392,8 +3398,9 @@ function salvarFicha() {
       setor:              c.setor,
       empresa_atuacao:    c.empresaAtuacao || null,
       gestor:             c.gestor || null,
-      data_admissao:      c.dataAdmissao || null,
-      data_demissao:      c.dataDemissao || null,
+      data_admissao:        c.dataAdmissao || null,
+      data_ingresso_grupo:  c.dataIngressoGrupo || null,
+      data_demissao:        c.dataDemissao || null,
       motivo_demissao:    c.motivo || null,
       obs_desligamento:   c.obsDesligamento || null,
       // Dados pessoais

@@ -74,7 +74,7 @@ Carregado em paralelo no `init()`:
 ```js
 const [dados, marcosRows] = await Promise.all([
   sbGet('colaboradores',
-    'select=id,nome,cargo,data_admissao,data_nascimento,data_demissao,' +
+    'select=id,nome,cargo,data_admissao,data_ingresso_grupo,data_nascimento,data_demissao,' +
     'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,' +
     'dependentes_lista&order=nome'),
   sbGet('param_marco_tempo_casa', 'select=anos&ativo=eq.true&order=anos'),
@@ -86,7 +86,7 @@ MARCOS = marcosRows.map(r => r.anos);
 `supabaseToJS(row)` — mapeamento enxuto (sem campos de documentos, banco, VT etc.):
 ```js
 {
-  _sbId, nome, cargo, dataAdmissao, dataNascimento,
+  _sbId, nome, cargo, dataAdmissao, dataIngressoGrupo, dataNascimento,
   empresa, empresaAtuacao, setor, gestor, sexo,
   pcd, aprendiz, proLabore, situacao,
   dependentesLista  // JSONB array: [{nome, parentesco, data_nascimento}]
@@ -170,11 +170,12 @@ const TD = (par) => `style="${F}...border:1px solid ${par?'#EEF2FA':'#F5F8FD'};b
 ### Tempo de Casa por Mês
 
 - **Filtros:** mês, empresa de atuação, Exibir (select `#f-tc-filtro`: `todos` | `marcos`)
-- **Dados:** `dataAdmissao`, filtro `parseInt(iso.split('-')[1]) === mes`
+- **Data de referência:** usa `dataIngressoGrupo` quando preenchida, senão `dataAdmissao` — armazenada internamente como `_refData` no item da lista
+- **Dados:** filtro por mês usa `_refData`; cálculo de anos usa `_refData`; exibição de data no PDF/Excel usa `_refData`
 - **Marcos:** carregados dinamicamente de `param_marco_tempo_casa` na variável global `MARCOS` — **nunca hardcoded**
 - **Regra:** colaboradores com menos de 1 ano completo (`anosEmpresa < 1`) são excluídos
 - **Filtro "Somente marcos":** exibe apenas colaboradores cujo `anosEmpresa` está em `MARCOS`
-- **Ordenação:** dia da admissão ASC, nome ASC (ordem cronológica dentro do mês)
+- **Ordenação:** dia de `_refData` ASC, nome ASC (ordem cronológica dentro do mês)
 - **Colunas:** Nome | Cargo | Data Admissão | Tempo de Casa | Empresa
 - **Marcos destacados:** nome em verde (#1A7F6A); troféu apenas na coluna Tempo de Casa (`5 anos 🏆`) — nome sempre limpo, sem ícone ou anos junto
 - **Helper:** `tcFiltro()` — lê select `#f-tc-filtro` do painel ativo

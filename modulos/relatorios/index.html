@@ -404,7 +404,8 @@ function supabaseToJS(row) {
     _sbId:          row.id,
     nome:           row.nome || '',
     cargo,
-    dataAdmissao:   row.data_admissao || '',
+    dataAdmissao:      row.data_admissao || '',
+    dataIngressoGrupo: row.data_ingresso_grupo || '',
     dataDemissao:   dataDemissao,
     dataNascimento: row.data_nascimento || '',
     empresa:        row.empresa_registro || '',
@@ -442,7 +443,7 @@ async function init() {
   try {
     const [dados, marcosRows] = await Promise.all([
       sbGet('colaboradores',
-        'select=id,nome,cargo,data_admissao,data_nascimento,data_demissao,' +
+        'select=id,nome,cargo,data_admissao,data_ingresso_grupo,data_nascimento,data_demissao,' +
         'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,' +
         'dependentes_lista&order=nome'),
       sbGet('param_marco_tempo_casa', 'select=anos&ativo=eq.true&order=anos'),
@@ -950,23 +951,26 @@ function _dadosTempoCasa() {
   const emp    = empresaFiltro();
   const filtro = tcFiltro();
   // colaboradores ativos que completam aniversário de empresa no mês
+  // usa dataIngressoGrupo quando preenchida, senão dataAdmissao
   let lista = COLABORADORES.filter(c => {
-    if (c.proLabore || c.situacao !== 'Ativo' || !c.dataAdmissao) return false;
+    const ref = c.dataIngressoGrupo || c.dataAdmissao;
+    if (c.proLabore || c.situacao !== 'Ativo' || !ref) return false;
     if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
-    const m = parseInt(c.dataAdmissao.split('-')[1]);
+    const m = parseInt(ref.split('-')[1]);
     return m === mes;
   });
   lista = lista.map(c => {
-    const adm  = new Date(c.dataAdmissao + 'T00:00:00');
+    const ref  = c.dataIngressoGrupo || c.dataAdmissao;
+    const adm  = new Date(ref + 'T00:00:00');
     const anos = new Date().getFullYear() - adm.getFullYear();
-    return { ...c, anosEmpresa: anos, marco: MARCOS.includes(anos) };
+    return { ...c, _refData: ref, anosEmpresa: anos, marco: MARCOS.includes(anos) };
   }).filter(c => c.anosEmpresa >= 1);
   if (!lista.length) { alert('Nenhum colaborador completa aniversário de empresa neste mês.'); return null; }
   if (filtro === 'marcos') lista = lista.filter(c => c.marco);
   if (!lista.length) { alert('Nenhum colaborador atinge um marco de tempo de casa neste mês.'); return null; }
   lista = lista.sort((a,b) => {
-    const diaA = parseInt(a.dataAdmissao.split('-')[2]);
-    const diaB = parseInt(b.dataAdmissao.split('-')[2]);
+    const diaA = parseInt(a._refData.split('-')[2]);
+    const diaB = parseInt(b._refData.split('-')[2]);
     return diaA - diaB || a.nome.localeCompare(b.nome,'pt-BR');
   });
   const chips = [`Mês: ${MESES[mes-1]}`];
@@ -979,11 +983,12 @@ function gerarTempoCasaPDF() {
   const d = _dadosTempoCasa(); if (!d) return;
   const { lista, chips, total, mes, dataHora } = d;
   const linhas = lista.map(c => {
-    const diaAdm = c.dataAdmissao.split('-')[2];
+    const ref = c._refData;
+    const diaAdm = ref.split('-')[2];
     const mkClass = c.marco ? ' class="td-mk"' : ' class="td-c"';
     const anos = c.anosEmpresa;
     const tempoStr = anos + ' ano' + (anos!==1?'s':'') + (c.marco?' 🏆':'');
-    return `<tr><td class="td-nome"${c.marco?' style="color:#1A7F6A"':''}>${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${diaAdm}/${String(mes).padStart(2,'0')}/${c.dataAdmissao.split('-')[0]}</td><td${mkClass}>${tempoStr}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`;
+    return `<tr><td class="td-nome"${c.marco?' style="color:#1A7F6A"':''}>${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${diaAdm}/${String(mes).padStart(2,'0')}/${ref.split('-')[0]}</td><td${mkClass}>${tempoStr}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`;
   }).join('');
   const blocos = `<table><thead><tr><th style="width:35%">Nome</th><th>Cargo</th><th>Data Admissão</th><th>Tempo de Casa</th><th>Empresa</th></tr></thead><tbody>${linhas}</tbody></table>`;
   abrirPDF(htmlRelPDF(`Tempo de Casa — ${MESES[mes-1]}`, chips, total, 'colaborador'+(total>1?'es':''), dataHora, blocos));
@@ -1003,7 +1008,7 @@ function gerarTempoCasaExcel() {
     const nomeStyle = `style="${F}font-size:10pt;${c.marco?'font-weight:bold;color:#1A7F6A;':'font-weight:600;color:#1E2740;'}padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};width:240pt;"`;
     const anos = c.anosEmpresa;
     const tempoStr = anos + ' ano' + (anos!==1?'s':'') + (c.marco?' 🏆':'');
-    rows += `<tr><td ${nomeStyle}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par,c.marco)}>${tempoStr}</td><td ${TD(par)}>${stripNum(c.empresaAtuacao)||''}</td></tr>`;
+    rows += `<tr><td ${nomeStyle}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c._refData)}</td><td ${TD(par,c.marco)}>${tempoStr}</td><td ${TD(par)}>${stripNum(c.empresaAtuacao)||''}</td></tr>`;
   });
   const txt = chips.join(' | ');
   const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
