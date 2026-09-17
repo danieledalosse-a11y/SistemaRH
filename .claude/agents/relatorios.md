@@ -174,9 +174,9 @@ const TD = (par) => `style="${F}...border:1px solid ${par?'#EEF2FA':'#F5F8FD'};b
 - **Marcos:** carregados dinamicamente de `param_marco_tempo_casa` na variável global `MARCOS` — **nunca hardcoded**
 - **Regra:** colaboradores com menos de 1 ano completo (`anosEmpresa < 1`) são excluídos
 - **Filtro "Somente marcos":** exibe apenas colaboradores cujo `anosEmpresa` está em `MARCOS`
-- **Ordenação:** anos DESC, nome ASC
+- **Ordenação:** dia da admissão ASC, nome ASC (ordem cronológica dentro do mês)
 - **Colunas:** Nome | Cargo | Data Admissão | Tempo de Casa | Empresa
-- **Marcos destacados:** nome em verde (#1A7F6A) + `(X anos 🏆)` em negrito
+- **Marcos destacados:** nome em verde (#1A7F6A); troféu apenas na coluna Tempo de Casa (`5 anos 🏆`) — nome sempre limpo, sem ícone ou anos junto
 - **Helper:** `tcFiltro()` — lê select `#f-tc-filtro` do painel ativo
 - **Funções:** `_dadosTempoCasa()`, `gerarTempoCasaPDF()`, `gerarTempoCasaExcel()`
 - **Tabela banco:** `param_marco_tempo_casa` (id, anos, ativo, criado_por) — gerenciada em Parâmetros Gerais → Marcos de Tempo de Casa
