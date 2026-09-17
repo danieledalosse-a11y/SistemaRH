@@ -33,7 +33,7 @@ const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
 `id, tipo, status, colaborador_id, colaborador_nome, dados_extras (JSONB), criado_em`
 
 - `status`: `'aberto'` | `'concluido'` | `'cancelado'`
-- `dados_extras`: campo livre JSONB; usado para `operacao`, `convite_id`, dados de VT (`vt_cartao`, `vt_passes`, `vt_linha`)
+- `dados_extras`: campo livre JSONB; usado para `operacao`, `convite_id`, dados de VT (`vt_cartao`, `vt_passes`, `vt_linha`, `vt_viacao`), `mes_vigencia`
 - `colaborador_id` pode ser `null` quando criado na aprovação de admissão (antes do colaborador existir)
 
 ### `processos_checklist`
@@ -117,9 +117,9 @@ Usa radio buttons (não dropdown) para selecionar a operação:
 ```
 
 A função `toggleCamposVTAlteracao()` exibe/oculta os campos específicos de cada operação:
-- **Inclusão/Alteração**: cartão, quantidade de passes, linha
-- **Alteração**: campos separados (`xVtCartaoAlt`, `xVtPassesAlt`, `xVtLinhaAlt`)
-- **Exclusão**: sem campos adicionais
+- **Inclusão**: cartão, passes, linha, viação, foto do cartão (opcional) — IDs: `xVtCartao`, `xVtPasses`, `xVtLinha`, `xVtViacao`, `xVtFotoCartao`
+- **Alteração**: campos separados — IDs: `xVtCartaoAlt`, `xVtPassesAlt`, `xVtLinhaAlt`, `xVtViacaoAlt`
+- **Exclusão**: apenas motivo (`xVtMotivo`)
 
 ```js
 function toggleCamposVTAlteracao() {
@@ -144,39 +144,94 @@ Inserida na `.processo-row-detalhe` apenas para cards `vt_alteracao`.
 
 `toggleRow(id)` chama `_renderFichaVT(id, fichaWrap)` apenas na primeira abertura do card, controlado por `fichaWrap._loaded`.
 
+### Query do colaborador (dentro de `_renderFichaVT`)
+
+```js
+colaboradores?id=eq.${colabId}&select=nome,setor,matricula,cpf,data_nascimento,empresa_registro,vt_cartao,vt_passes,vt_linha
+```
+
+**Não inclui** `cargo` nem `data_admissao` — intencionalmente removidos da ficha VT.
+
+### Seção "Dados do Colaborador" — campos exibidos
+
+| Campo | Origem | Editável? |
+|---|---|---|
+| Colaborador | `proc.colaborador_nome` | Não |
+| Matrícula | `colab.matricula` | Não |
+| CPF | `colab.cpf` (formatado `000.000.000-00`) | **Sim** — `_salvarCpfVT` |
+| Data de Nascimento | `colab.data_nascimento` | Não |
+| Setor | `colab.setor` sem prefixo numérico (`_stripNum`) | Não |
+| Empresa / Unidade | `colab.empresa_registro` | Não |
+| Mês de Vigência | `dados_extras.mes_vigencia` (default: próximo mês) | **Sim** — `_salvarVigenciaVT` |
+
+### Seção "Dados do Vale Transporte" — campos
+
+| Campo | ID DOM | dados_extras key |
+|---|---|---|
+| Nº Cartão VT | `fichaVT-cartao-${procId}` | `vt_cartao` |
+| Passes / Dia | `fichaVT-passes-${procId}` | `vt_passes` |
+| Linha de Ônibus | `fichaVT-linha-${procId}` | `vt_linha` |
+| Viação | `fichaVT-viacao-${procId}` | `vt_viacao` |
+
+### Seção "Foto do Cartão" (apenas inclusão/alteração)
+
+Upload opcional de imagem do cartão VT. Fluxo em 2 etapas:
+1. Selecionar arquivo → preview imediato com botões de rotação
+2. Confirmar → upload para Storage + registro em `colaborador_documentos`
+
+Estado por processo: `_vtFotoState[procId] = { b64, rotation }`
+
+Após upload bem-sucedido, exibe miniatura + botões **Trocar** (re-abre seletor) e **Excluir** (remove do Storage e do banco com confirmação).
+
+**Auth de Storage:** SEMPRE `Authorization: Bearer ${SB_KEY}` — nunca `SB_HEADERS.Authorization` (que usa o access_token do usuário).
+
 ### Funções principais
 
 #### `_renderFichaVT(procId, wrap)`
-- Async; busca dados do colaborador via `colaboradores?id=eq.${p.colaborador_id}`
-- Renderiza ficha colapsável com seções coloridas:
-  - Cabeçalho: nome, cargo, setor, data de admissão
-  - Dados do VT: cartão (text), passes (number), linha (text)
-  - Botões: "Usar dados do cadastro", "×" limpar, "Imprimir"
-- Campos são `<input>` editáveis; `oninput` dispara debounce de 800ms → `_salvarDadosVT`
-- Exibe badge colorido da operação (verde/vermelho/roxo)
+- Async; busca colaborador e renderiza ficha colapsável com badge colorido por operação
+- Cor: inclusão=verde, exclusão=vermelho, alteração=roxo
 
 #### `_toggleFichaVT(procId)`
-- Alterna visibilidade de `#fichaVT-body-${procId}`
-- Rotaciona ícone chevron
+- Alterna visibilidade de `#fichaVT-body-${procId}` + rotaciona chevron
 
 #### `_salvarDadosVT(procId)`
 - Debounced 800ms
-- Lê valores dos inputs `#vtCartao-${procId}`, `#vtPasses-${procId}`, `#vtLinha-${procId}`
-- PATCH em `processos_rh.dados_extras`:
-  ```js
-  { dados_extras: { ...proc.dados_extras, vt_cartao, vt_passes, vt_linha } }
-  ```
-- Atualiza `_PROC_MAP[procId].dados_extras` com os novos valores
+- Lê `fichaVT-cartao`, `fichaVT-passes`, `fichaVT-linha`, `fichaVT-viacao`
+- PATCH em `processos_rh.dados_extras` com todos os campos VT
+
+#### `_salvarVigenciaVT(procId, valor)`
+- PATCH em `processos_rh.dados_extras.mes_vigencia` (formato `YYYY-MM`)
+- Chamado no `onchange` do `<input type="month">`
+
+#### `_salvarCpfVT(procId, input)`
+- Chamado no `onblur` do campo CPF
+- Valida 11 dígitos; PATCH em `colaboradores.cpf` (sem formatação — só dígitos)
+- Fundo amarelo quando vazio, borda vermelha se inválido
 
 #### `_usarDadosCadastroVT(procId)`
-- GET `colaboradores?id=eq.${colaborador_id}&select=vt_cartao,vt_passes,vt_linha`
-- Preenche inputs com os dados encontrados
-- Chama `_salvarDadosVT(procId)` imediatamente (sem debounce)
+- GET `colaboradores?select=vt_cartao,vt_passes,vt_linha` (viação não está no cadastro)
+- Preenche inputs e chama `_salvarDadosVT` imediatamente
 
-#### `_imprimirFichaVT(procId)`
-- Abre `window.open('')` com HTML estilizado para impressão
-- Inclui: logo Revest, dados do colaborador, dados de VT, linhas para assinatura (RH + Financeiro)
-- `window.print()` + `window.close()` automático
+#### `_imprimirFichaVT(procId)` — async
+- Busca dados frescos do colaborador (query separada, não reutiliza DOM)
+- Lê CPF e mês de vigência dos inputs atuais (para pegar edições não salvas)
+- HTML próprio de impressão: grid 2×2 para dados VT (cartão, passes, linha, viação)
+- Mês de vigência exibido por extenso: `Outubro / 2026`
+- Assinaturas: "Solicitado por (RH)" + "Recebido por (Financeiro)"
+
+#### `_renderSucessoFotoVT(procId, url)`
+- Renderiza miniatura + link + botões Trocar e Excluir após upload
+
+#### `_excluirFotoVT(procId, url)`
+- Confirm → DELETE Storage (`/storage/v1/object/colaborador-docs` com `{ prefixes: [path] }`) + DELETE `colaborador_documentos?url=eq.${url}`
+
+#### Funções de rotação de foto
+- `_rotateImageB64(b64, degrees)` — canvas, retorna Promise\<base64\>
+- `_selecionarFotoVT(procId, input)` — lê FileReader, inicia preview
+- `_rotarFotoVT(procId, delta)` — aplica rotação acumulada, re-renderiza preview
+- `_renderPreviewFotoVT(procId)` — renderiza preview com botões ↺ ↻ + Confirmar + ✕
+- `_vtFotoSeletorHtml(procId)` — HTML do botão seletor inicial (reutilizado após cancelar/excluir)
+- `_confirmarFotoVT(procId)` — converte base64 para Blob via `fetch(state.b64).blob()`, upload JPEG
 
 ### Botão "×" (limpar campos)
 Cada campo de VT tem um botão `×` que zera o input e dispara `_salvarDadosVT`.
@@ -198,6 +253,7 @@ if (
   if (_ex.vt_cartao != null) _vtPatch.vt_cartao = _ex.vt_cartao;
   if (_ex.vt_passes != null) _vtPatch.vt_passes = parseInt(_ex.vt_passes);
   if (_ex.vt_linha  != null) _vtPatch.vt_linha  = _ex.vt_linha;
+  // vt_viacao não tem coluna em colaboradores — fica só em dados_extras
   if (Object.keys(_vtPatch).length) {
     await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${_proc.colaborador_id}`, {
       method: 'PATCH', headers: SB_HEADERS,
@@ -213,6 +269,50 @@ if (
 
 `_PROC_MAP` é um objeto `{ [id]: processoObj }` populado durante o carregamento dos cards.
 Usado por `_executarConclusao`, `_renderFichaVT` e demais funções que precisam do objeto processo pelo id.
+
+## Tipo `transferencia_cnpj`
+
+Processo para registrar transferência de colaborador entre CNPJs do grupo.
+
+### Campos extras (`dados_extras`)
+
+| key | descrição |
+|---|---|
+| `empresa_origem` | preenchida automaticamente do `colaboradores.empresa_registro` ao selecionar o colaborador |
+| `empresa_destino` | selecionada via `<select>` carregado de `param_empresa?ativo=eq.true` (excluindo origem) |
+| `data_transferencia` | data da transferência (`<input type="date">`) |
+
+### Checklist padrão
+
+```js
+transferencia_cnpj: [
+  { item: 'Registrar empresa de origem e empresa de destino', prazo_dias: 0 },
+  { item: 'Atualizar empresa_registro e empresa_atuacao no Cadastro', prazo_dias: 1 },
+  { item: 'Confirmar que data_ingresso_grupo está preservada (não sobrescrever)', prazo_dias: 1 },
+  { item: 'Verificar histórico do colaborador — evento registrado', prazo_dias: 1 },
+]
+```
+
+### Empresa de origem — auto-fill
+
+Na busca de colaborador, a query inclui `empresa_registro`:
+```
+colaboradores?nome=ilike.*q*&ativo=eq.true&select=id,nome,cargo,salario,empresa_registro&limit=10
+```
+
+O valor é armazenado em `<input type="hidden" id="fColabEmpresa">` e usado em `atualizarCamposExtras()` para pré-preencher empresa de origem como campo readonly.
+
+### Conclusão — `_executarConclusao`
+
+Ao concluir, faz PATCH em `colaboradores`:
+```js
+{ empresa_registro: destino, empresa_atuacao: destino }
+```
+**Nunca altera `data_ingresso_grupo`** — esse campo é preenchido manualmente pelo RH no Cadastro e preservado em transferências.
+
+### Relação com `data_ingresso_grupo`
+
+Colaboradores transferidos de CNPJ têm `data_ingresso_grupo` preenchida manualmente (a data em que entraram no grupo, não na empresa atual). Esse campo é usado no relatório Tempo de Casa como referência prioritária sobre `data_admissao`.
 
 ## Workflows automáticos disparados pelo módulo Cadastro
 
