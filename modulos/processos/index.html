@@ -1582,14 +1582,7 @@ async function _renderFichaVT(procId, wrap) {
         <!-- Seção foto do cartão -->
         <div style="padding:14px 16px;">
           <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">📎 Foto do Cartão</div>
-          <div id="fichaVT-foto-area-${procId}">
-            <label style="display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border:1px dashed #d1d5db;border-radius:8px;cursor:pointer;font-size:13px;color:#374151;font-weight:500;background:#f9fafb;transition:background .15s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Selecionar imagem
-              <input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="_uploadFotoCartaoVT(${procId}, this)">
-            </label>
-            <span style="font-size:11px;color:#9ca3af;margin-left:10px;">JPG, PNG ou WEBP — salvo na aba Arquivos do colaborador</span>
-          </div>
+          <div id="fichaVT-foto-area-${procId}">${_vtFotoSeletorHtml(procId)}</div>
         </div>` : ''}
 
       </div><!-- /body -->
@@ -1597,22 +1590,93 @@ async function _renderFichaVT(procId, wrap) {
     </div>`;
 }
 
-async function _uploadFotoCartaoVT(procId, input) {
+function _rotateImageB64(b64, degrees) {
+  if (!b64 || !degrees) return Promise.resolve(b64);
+  const img = new Image();
+  return new Promise(resolve => {
+    img.onload = () => {
+      const rad  = degrees * Math.PI / 180;
+      const swap = degrees === 90 || degrees === 270;
+      const w = swap ? img.height : img.width;
+      const h = swap ? img.width  : img.height;
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.translate(w / 2, h / 2);
+      ctx.rotate(rad);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => resolve(b64);
+    img.src = b64;
+  });
+}
+
+// Estado de rotação por processo
+const _vtFotoState = {}; // { [procId]: { b64, rotation } }
+
+async function _selecionarFotoVT(procId, input) {
   const file = input?.files?.[0];
   if (!file) return;
-  const proc = _PROC_MAP[procId];
-  if (!proc?.colaborador_id) { showToast('Colaborador não identificado.', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = async e => {
+    _vtFotoState[procId] = { b64: e.target.result, rotation: 0 };
+    _renderPreviewFotoVT(procId);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function _rotarFotoVT(procId, delta) {
+  const state = _vtFotoState[procId];
+  if (!state) return;
+  state.rotation = (state.rotation + delta + 360) % 360;
+  state.b64 = await _rotateImageB64(state.b64, (delta + 360) % 360);
+  _renderPreviewFotoVT(procId);
+}
+
+function _renderPreviewFotoVT(procId) {
+  const state = _vtFotoState[procId];
+  const area  = document.getElementById('fichaVT-foto-area-' + procId);
+  if (!area || !state) return;
+  area.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <img src="${state.b64}" style="max-width:260px;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid #d1d5db;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button onclick="_rotarFotoVT(${procId},-90)" style="padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;">↺ Girar esquerda</button>
+        <button onclick="_rotarFotoVT(${procId},90)"  style="padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;">↻ Girar direita</button>
+        <button onclick="_confirmarFotoVT(${procId})" style="padding:6px 16px;border:none;border-radius:6px;background:#166534;color:#fff;cursor:pointer;font-size:13px;font-weight:600;">✓ Confirmar e enviar</button>
+        <button onclick="delete _vtFotoState[${procId}];document.getElementById('fichaVT-foto-area-${procId}').innerHTML=_vtFotoSeletorHtml(${procId})" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#6b7280;cursor:pointer;font-size:13px;">✕</button>
+      </div>
+    </div>`;
+}
+
+function _vtFotoSeletorHtml(procId) {
+  return `<label style="display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border:1px dashed #d1d5db;border-radius:8px;cursor:pointer;font-size:13px;color:#374151;font-weight:500;background:#f9fafb;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    Selecionar imagem
+    <input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="_selecionarFotoVT(${procId}, this)">
+  </label>
+  <span style="font-size:11px;color:#9ca3af;margin-left:10px;">JPG, PNG ou WEBP — salvo na aba Arquivos do colaborador</span>`;
+}
+
+async function _confirmarFotoVT(procId) {
+  const state = _vtFotoState[procId];
+  const proc  = _PROC_MAP[procId];
+  if (!state || !proc?.colaborador_id) return;
 
   const area = document.getElementById('fichaVT-foto-area-' + procId);
   if (area) area.innerHTML = '<span style="font-size:13px;color:#6b7280;">Enviando...</span>';
 
   try {
-    const ext  = file.name.split('.').pop().toLowerCase();
-    const path = `${proc.colaborador_id}/vt/${Date.now()}.${ext}`;
-    const rUp  = await fetch(`${SB_URL}/storage/v1/object/colaborador-docs/${path}`, {
+    // converte base64 para blob
+    const res  = await fetch(state.b64);
+    const blob = await res.blob();
+    const path = `${proc.colaborador_id}/vt/${Date.now()}.jpg`;
+
+    const rUp = await fetch(`${SB_URL}/storage/v1/object/colaborador-docs/${path}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${SB_KEY}`, apikey: SB_KEY, 'Content-Type': file.type || 'image/jpeg', 'x-upsert': 'true' },
-      body: file,
+      headers: { Authorization: `Bearer ${SB_KEY}`, apikey: SB_KEY, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
+      body: blob,
     });
     if (!rUp.ok) throw new Error('Falha no upload');
 
@@ -1632,6 +1696,7 @@ async function _uploadFotoCartaoVT(procId, input) {
     });
     if (!rDb.ok) throw new Error('Falha ao registrar documento');
 
+    delete _vtFotoState[procId];
     if (area) area.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;">
         <img src="${url}" style="width:56px;height:40px;object-fit:cover;border-radius:5px;border:1px solid #86efac;">
@@ -1642,7 +1707,7 @@ async function _uploadFotoCartaoVT(procId, input) {
       </div>`;
     showToast('Foto do cartão salva na aba Arquivos.', 'success');
   } catch(e) {
-    if (area) area.innerHTML = `<span style="font-size:13px;color:#dc2626;">Erro: ${e.message}</span>`;
+    if (area) area.innerHTML = _vtFotoSeletorHtml(procId);
     showToast('Erro ao enviar foto: ' + e.message, 'error');
   }
 }
