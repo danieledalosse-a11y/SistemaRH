@@ -1537,7 +1537,7 @@ let EMPRESAS_PARAM = [];
 
 async function carregarEmpresasParam() {
   try {
-    EMPRESAS_PARAM = await sbGet('param_empresa', 'select=codigo,nome_simplificado,razao_social&ativo=eq.true&order=ordem');
+    EMPRESAS_PARAM = await sbGet('param_empresa', 'select=id,codigo,nome_simplificado,razao_social&ativo=eq.true&order=ordem');
     popularSelectEmpresaAtuacao();
   } catch(e) { console.warn('Empresas não carregadas:', e.message); }
 }
@@ -1550,6 +1550,7 @@ function popularSelectEmpresaAtuacao(valorAtual) {
   EMPRESAS_PARAM.forEach(e => {
     const opt = document.createElement('option');
     opt.value = e.nome_simplificado;
+    opt.dataset.id = e.id;
     opt.textContent = e.nome_simplificado;
     sel.appendChild(opt);
   });
@@ -1708,8 +1709,10 @@ function supabaseToJS(row) {
     fimContrato:          row.data_fim_contrato      || '',
     instituicaoAprendiz:  row.instituicao_aprendiz   || '',
     salarioBase:      sal ? sal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '',
-    empresa:          row.empresa_registro || '',
-    empresaAtuacao:   row.empresa_atuacao || '',
+    empresa:              row.empresa_registro || '',
+    empresaRegistroId:    row.empresa_registro_id || null,
+    empresaAtuacao:       row.empresa_atuacao || '',
+    empresaAtuacaoId:     row.empresa_atuacao_id || null,
     setor:            row.setor || '',
     gestor:           row.gestor || '',
     dependentes:      parseInt(row.dependentes) || 0,
@@ -2853,9 +2856,8 @@ function novoColaborador() {
     const sel = document.createElement('select');
     sel.id = 'df-empresa';
     sel.innerHTML = '<option value="">Selecione a empresa de registro</option>';
-    const empresasDistintas = [...new Set(COLABORADORES.map(c => c.empresa).filter(Boolean))].sort();
-    empresasDistintas.forEach(e => {
-      const o = document.createElement('option'); o.value = e; o.textContent = e; sel.appendChild(o);
+    (EMPRESAS_PARAM.length ? EMPRESAS_PARAM : [...new Set(COLABORADORES.map(c => c.empresa).filter(Boolean))].sort().map(n => ({ id: null, nome_simplificado: n }))).forEach(e => {
+      const o = document.createElement('option'); o.value = e.nome_simplificado; o.dataset.id = e.id ?? ''; o.textContent = e.nome_simplificado; sel.appendChild(o);
     });
     // Pré-seleciona se veio de uma empresa específica
     if (_filtroEmpresa) {
@@ -3401,8 +3403,10 @@ function salvarFicha() {
       nome:            nome,
       cargo:           document.getElementById('df-cargo').value.trim() || null,
       setor:           document.getElementById('df-setor').value.trim() || null,
-      empresa_registro: empresa,
-      empresa_atuacao:      document.getElementById('df-empresa-atuacao').value.trim() || null,
+      empresa_registro:    empresa,
+      empresa_registro_id: (() => { const o = document.querySelector('#df-empresa option:checked'); return o && o.dataset.id ? parseInt(o.dataset.id) : null; })(),
+      empresa_atuacao:     document.getElementById('df-empresa-atuacao').value.trim() || null,
+      empresa_atuacao_id:  (() => { const o = document.querySelector('#df-empresa-atuacao option:checked'); return o && o.dataset.id ? parseInt(o.dataset.id) : null; })(),
       tipo_vinculo:         tipoVincSel || 'clt',
       empresa_terceirizada: document.getElementById('df-empresa-terceirizada').value.trim() || null,
       gestor:               document.getElementById('df-gestor').value.trim() || null,
@@ -3597,6 +3601,8 @@ function salvarFicha() {
       instituicao_aprendiz: c.instituicaoAprendiz || null,
       setor:              c.setor,
       empresa_atuacao:    c.empresaAtuacao || null,
+      empresa_atuacao_id: (() => { const o = document.querySelector('#df-empresa-atuacao option:checked'); return o && o.dataset.id ? parseInt(o.dataset.id) : (c.empresaAtuacaoId || null); })(),
+      empresa_registro_id: c.empresaRegistroId || null,
       gestor:             c.gestor || null,
       data_admissao:        c.dataAdmissao || null,
       data_ingresso_grupo:  c.dataIngressoGrupo || null,
