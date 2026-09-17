@@ -2430,14 +2430,25 @@ async function _executarConclusao(processoId, justificativa) {
       }
     }
 
-    // Transferência de CNPJ concluída → atualizar empresa no cadastro do colaborador
+    // Transferência concluída → atualizar empresa no cadastro do colaborador
     const _proc = _PROC_MAP[processoId];
     if (_proc && _proc.tipo === 'transferencia_cnpj' && _proc.colaborador_id) {
-      const destino = _proc.dados_extras?.empresa_destino;
+      const destino   = _proc.dados_extras?.empresa_destino;
+      const destinoId = _proc.dados_extras?.empresa_destino_id ?? null;
+      // fallback 'unidade' para processos antigos sem tipo_transferencia — preserva empresa_registro
+      const tipoTrf   = _proc.dados_extras?.tipo_transferencia || 'unidade';
       if (destino) {
+        const patch = {
+          empresa_atuacao:    destino,
+          empresa_atuacao_id: destinoId
+        };
+        if (tipoTrf === 'cnpj') {
+          patch.empresa_registro    = destino;
+          patch.empresa_registro_id = destinoId;
+        }
         await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${_proc.colaborador_id}`, {
           method: 'PATCH', headers: SB_HEADERS,
-          body: JSON.stringify({ empresa_registro: destino, empresa_atuacao: destino })
+          body: JSON.stringify(patch)
         });
       }
     }
@@ -3242,6 +3253,18 @@ function atualizarCamposExtras() {
         <input class="form-control" type="text" id="xEmpresaOrigem" value="${empresaOrigem.replace(/"/g,'&quot;')}" readonly style="background:#F9FAFB;color:#667085;cursor:not-allowed;">
       </div>
       <div class="form-group">
+        <label class="form-label">Tipo de movimentação</label>
+        <div style="display:flex;gap:20px;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+            <input type="radio" name="xTipoTransferencia" value="unidade" checked> Transferência de unidade
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+            <input type="radio" name="xTipoTransferencia" value="cnpj"> Alteração de CNPJ/contrato
+          </label>
+        </div>
+        <div class="form-hint" style="margin-top:4px;">Unidade: altera somente onde o colaborador atua. CNPJ: altera também o vínculo contratual.</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Empresa de destino</label>
         <select class="form-control" id="xEmpresaDestino"><option value="">Carregando...</option></select>
       </div>
@@ -3257,11 +3280,11 @@ function atualizarCamposExtras() {
       const sel = document.getElementById('xEmpresaDestino');
       if (!sel) return;
       try {
-        const r = await fetch(`${SB_URL}/rest/v1/param_empresa?ativo=eq.true&order=ordem&select=nome_simplificado`, { headers: SB_HEADERS });
+        const r = await fetch(`${SB_URL}/rest/v1/param_empresa?ativo=eq.true&order=ordem&select=id,nome_simplificado`, { headers: SB_HEADERS });
         const lista = await r.json();
         sel.innerHTML = '<option value="">— selecione —</option>' +
           lista.filter(e => e.nome_simplificado !== empresaOrigem).map(e =>
-            `<option value="${(e.nome_simplificado||'').replace(/"/g,'&quot;')}">${e.nome_simplificado}</option>`
+            `<option value="${(e.nome_simplificado||'').replace(/"/g,'&quot;')}" data-id="${e.id}">${e.nome_simplificado}</option>`
           ).join('');
       } catch(_) { sel.innerHTML = '<option value="">Erro ao carregar</option>'; }
     }, 0);
@@ -3382,8 +3405,11 @@ async function submitNovoProcesso() {
     const origem  = document.getElementById('xEmpresaOrigem')?.value?.trim();
     const destino = document.getElementById('xEmpresaDestino')?.value?.trim();
     const dtTrf   = document.getElementById('xDataTransferencia')?.value;
+    const tipoTrf = document.querySelector('input[name="xTipoTransferencia"]:checked')?.value || 'unidade';
+    const selOpt  = document.querySelector('#xEmpresaDestino option:checked');
+    const destinoId = selOpt ? parseInt(selOpt.dataset.id) || null : null;
     if (!origem || !destino || !dtTrf) { showToast('Preencha empresa de origem, destino e data da transferência', 'error'); return; }
-    dadosExtras = { empresa_origem: origem, empresa_destino: destino, data_transferencia: dtTrf };
+    dadosExtras = { empresa_origem: origem, empresa_destino: destino, empresa_destino_id: destinoId, data_transferencia: dtTrf, tipo_transferencia: tipoTrf };
   }
 
   const btn = document.querySelector('#panel-novo .btn-primary');
