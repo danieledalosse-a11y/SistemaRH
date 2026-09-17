@@ -1573,14 +1573,78 @@ async function _renderFichaVT(procId, wrap) {
         </div>
 
         <!-- Seção VT -->
-        <div style="padding:14px 16px;">
+        <div style="padding:14px 16px;${op !== 'exclusao' ? 'border-bottom:1px solid var(--border);' : ''}">
           <div style="font-size:10px;font-weight:700;color:${opCor};opacity:0.75;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">🚌 Dados do Vale Transporte</div>
           <div style="display:flex;flex-direction:column;gap:8px;">${dadosVT}</div>
         </div>
 
+        ${op !== 'exclusao' ? `
+        <!-- Seção foto do cartão -->
+        <div style="padding:14px 16px;">
+          <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">📎 Foto do Cartão</div>
+          <div id="fichaVT-foto-area-${procId}">
+            <label style="display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border:1px dashed #d1d5db;border-radius:8px;cursor:pointer;font-size:13px;color:#374151;font-weight:500;background:#f9fafb;transition:background .15s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Selecionar imagem
+              <input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="_uploadFotoCartaoVT(${procId}, this)">
+            </label>
+            <span style="font-size:11px;color:#9ca3af;margin-left:10px;">JPG, PNG ou WEBP — salvo na aba Arquivos do colaborador</span>
+          </div>
+        </div>` : ''}
+
       </div><!-- /body -->
 
     </div>`;
+}
+
+async function _uploadFotoCartaoVT(procId, input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const proc = _PROC_MAP[procId];
+  if (!proc?.colaborador_id) { showToast('Colaborador não identificado.', 'error'); return; }
+
+  const area = document.getElementById('fichaVT-foto-area-' + procId);
+  if (area) area.innerHTML = '<span style="font-size:13px;color:#6b7280;">Enviando...</span>';
+
+  try {
+    const ext  = file.name.split('.').pop().toLowerCase();
+    const path = `${proc.colaborador_id}/vt/${Date.now()}.${ext}`;
+    const rUp  = await fetch(`${SB_URL}/storage/v1/object/colaborador-docs/${path}`, {
+      method: 'POST',
+      headers: { Authorization: SB_HEADERS.Authorization, apikey: SB_KEY, 'Content-Type': file.type || 'image/jpeg', 'x-upsert': 'true' },
+      body: file,
+    });
+    if (!rUp.ok) throw new Error('Falha no upload');
+
+    const url = `${SB_URL}/storage/v1/object/public/colaborador-docs/${path}`;
+    const rDb = await fetch(`${SB_URL}/rest/v1/colaborador_documentos`, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        colaborador_id: proc.colaborador_id,
+        nome: 'Cartão de Vale-Transporte',
+        categoria: 'vt',
+        url,
+        tipo_arquivo: 'imagem',
+        data_documento: new Date().toISOString().slice(0, 10),
+        criado_por: USUARIO_NOME || 'RH',
+      }),
+    });
+    if (!rDb.ok) throw new Error('Falha ao registrar documento');
+
+    if (area) area.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;">
+        <img src="${url}" style="width:56px;height:40px;object-fit:cover;border-radius:5px;border:1px solid #86efac;">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#166534;">✓ Foto enviada com sucesso</div>
+          <a href="${url}" target="_blank" style="font-size:11px;color:#15803d;">Ver imagem ↗</a>
+        </div>
+      </div>`;
+    showToast('Foto do cartão salva na aba Arquivos.', 'success');
+  } catch(e) {
+    if (area) area.innerHTML = `<span style="font-size:13px;color:#dc2626;">Erro: ${e.message}</span>`;
+    showToast('Erro ao enviar foto: ' + e.message, 'error');
+  }
 }
 
 async function _salvarDadosVT(procId) {
