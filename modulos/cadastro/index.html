@@ -528,6 +528,24 @@
         <div class="metric-label">PCD</div>
       </div>
     </div>
+    <div class="metric clickable" id="ml-card-promotora" onclick="filtrarLista('promotora')">
+      <div class="metric-icon" style="background:#F0F9FF;">
+        <svg viewBox="0 0 24 24" stroke="#0284C7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+      </div>
+      <div class="metric-right">
+        <div class="metric-val" style="color:#0284C7;" id="m-promotoras">—</div>
+        <div class="metric-label">Promotoras</div>
+      </div>
+    </div>
+    <div class="metric clickable" id="ml-card-pro_labore" onclick="filtrarLista('pro_labore')">
+      <div class="metric-icon" style="background:#FAF5FF;">
+        <svg viewBox="0 0 24 24" stroke="#7C3AED"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+      </div>
+      <div class="metric-right">
+        <div class="metric-val" style="color:#7C3AED;" id="m-prolabore">—</div>
+        <div class="metric-label">Pró-labore</div>
+      </div>
+    </div>
   </div>
 
   <!-- Barra de contexto de empresa -->
@@ -2329,7 +2347,7 @@ function aplicarFiltros() {
   const set   = document.getElementById('filtroSetor').value;
   const sex   = document.getElementById('filtroSexo').value;
   FILTRADOS = COLABORADORES.filter(c => {
-    if (c.tipoVinculo === 'pro_labore') return false;
+    if (c.tipoVinculo === 'pro_labore' && window._filtroVinculo !== 'pro_labore') return false;
     if (busca && !c.nome.toLowerCase().includes(busca) && !c.codigo.includes(busca) && !c.cargo.toLowerCase().includes(busca)) return false;
     if (sit && c.situacao !== sit) return false;
     if (emp && c.empresa.toUpperCase() !== emp.toUpperCase()) return false;
@@ -2377,7 +2395,8 @@ function filtrarLista(tipo) {
   else if (tipo === 'fem')      document.getElementById('filtroSexo').value = 'F';
   else if (tipo === 'aprendiz') window._filtroAprendiz = true;
   else if (tipo === 'pcd')      window._filtroPcd = true;
-  ['ativos','masc','fem','aprendiz','pcd'].forEach(t => {
+  else if (tipo === 'promotora' || tipo === 'pro_labore') window._filtroVinculo = tipo;
+  ['ativos','masc','fem','aprendiz','pcd','promotora','pro_labore'].forEach(t => {
     const el = document.getElementById('ml-card-' + t);
     if (el) el.classList.toggle('active-filter', t === tipo);
   });
@@ -2390,7 +2409,7 @@ function limparFiltroLista() {
   window._filtroVinculo = null;
   ['filtroSetor','filtroSexo'].forEach(id => document.getElementById(id).value = '');
   popularSetores(_filtroEmpresa);
-  ['ativos','masc','fem','aprendiz','pcd'].forEach(t => {
+  ['ativos','masc','fem','aprendiz','pcd','promotora','pro_labore'].forEach(t => {
     const el = document.getElementById('ml-card-' + t);
     if (el) el.classList.remove('active-filter');
   });
