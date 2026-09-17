@@ -264,12 +264,53 @@
       <span class="cat-label-line"></span>
     </div>
     <div class="cards-grid">
-      <div class="rel-card future">
+      <div class="rel-card" id="card-headcount" onclick="abrirDetalhe('headcount')">
         <div class="card-top">
-          <div class="card-name">Próximo Relatório</div>
+          <div class="card-name">Headcount</div>
+          <span class="card-arrow">›</span>
         </div>
-        <div class="card-desc">Área reservada para novos relatórios conforme necessidade do RH.</div>
-        <span class="card-tag tag-soon">⏳ Em breve</span>
+        <div class="card-desc">Quadro atual de colaboradores ativos por empresa e setor.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
+      </div>
+      <div class="rel-card" id="card-admissoes" onclick="abrirDetalhe('admissoes')">
+        <div class="card-top">
+          <div class="card-name">Admissões do Período</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Colaboradores admitidos em um intervalo de datas selecionado.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
+      </div>
+      <div class="rel-card" id="card-desligamentos" onclick="abrirDetalhe('desligamentos')">
+        <div class="card-top">
+          <div class="card-name">Desligamentos do Período</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Colaboradores desligados em um intervalo de datas selecionado.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
+      </div>
+      <div class="rel-card" id="card-turnover" onclick="abrirDetalhe('turnover')">
+        <div class="card-top">
+          <div class="card-name">Turnover</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Taxa de rotatividade calculada a partir de admissões e desligamentos no período.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
+      </div>
+      <div class="rel-card" id="card-experiencia" onclick="abrirDetalhe('experiencia')">
+        <div class="card-top">
+          <div class="card-name">Período de Experiência</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Ativos nos primeiros 90 dias de contrato. Acompanhe integrações em andamento.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
+      </div>
+      <div class="rel-card" id="card-cargos" onclick="abrirDetalhe('cargos')">
+        <div class="card-top">
+          <div class="card-name">Distribuição por Cargo</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Ranking de cargos por quantidade de colaboradores ativos por empresa.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
       </div>
     </div>
   </div><!-- /central -->
@@ -363,6 +404,7 @@ function supabaseToJS(row) {
     nome:           row.nome || '',
     cargo,
     dataAdmissao:   row.data_admissao || '',
+    dataDemissao:   dataDemissao,
     dataNascimento: row.data_nascimento || '',
     empresa:        row.empresa_registro || '',
     empresaAtuacao: row.empresa_atuacao || '',
@@ -559,6 +601,108 @@ const RELATORIOS = {
       </div>`,
     pdf:   () => gerarCotasPDF(),
     excel: () => gerarCotasExcel(),
+  },
+  headcount: {
+    cat: 'RH',
+    title: 'Headcount',
+    desc: 'Quadro de colaboradores ativos agrupados por empresa e setor. Snapshot do quadro na data atual.',
+    note: 'Calculado a partir dos colaboradores sem data_demissao. Exclui pro-labore.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>`,
+    pdf:   () => gerarHeadcountPDF(),
+    excel: () => gerarHeadcountExcel(),
+  },
+  admissoes: {
+    cat: 'RH',
+    title: 'Admissões do Período',
+    desc: 'Colaboradores admitidos no intervalo de datas selecionado, agrupados por empresa e setor.',
+    note: 'Filtra por data_admissao no período. Inclui ativos e inativos admitidos no intervalo.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Data inicial</label>
+        <input type="date" class="filter-input" id="f-dt-ini">
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Data final</label>
+        <input type="date" class="filter-input" id="f-dt-fim">
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>`,
+    pdf:   () => gerarAdmissoesPDF(),
+    excel: () => gerarAdmissoesExcel(),
+  },
+  desligamentos: {
+    cat: 'RH',
+    title: 'Desligamentos do Período',
+    desc: 'Colaboradores desligados no intervalo de datas selecionado, com data e empresa.',
+    note: 'Filtra por data_demissao no período. Exibe colaboradores com desligamento no intervalo.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Data inicial</label>
+        <input type="date" class="filter-input" id="f-dt-ini">
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Data final</label>
+        <input type="date" class="filter-input" id="f-dt-fim">
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>`,
+    pdf:   () => gerarDesligamentosPDF(),
+    excel: () => gerarDesligamentosExcel(),
+  },
+  turnover: {
+    cat: 'RH',
+    title: 'Turnover do Período',
+    desc: 'Taxa de rotatividade calculada como (admissões + desligamentos) ÷ 2 ÷ headcount médio × 100. Inclui lista de admitidos e desligados.',
+    note: 'Headcount médio = (headcount início + headcount fim) ÷ 2. Fórmula padrão de mercado.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Data inicial</label>
+        <input type="date" class="filter-input" id="f-dt-ini">
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Data final</label>
+        <input type="date" class="filter-input" id="f-dt-fim">
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>`,
+    pdf:   () => gerarTurnoverPDF(),
+    excel: () => gerarTurnoverExcel(),
+  },
+  experiencia: {
+    cat: 'RH',
+    title: 'Período de Experiência',
+    desc: 'Colaboradores ativos nos primeiros 90 dias de contrato. Facilita o acompanhamento de integrações em andamento.',
+    note: 'Considera ativos cuja data_admissao esteja nos últimos 90 dias da data atual.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>`,
+    pdf:   () => gerarExperienciaPDF(),
+    excel: () => gerarExperienciaExcel(),
+  },
+  cargos: {
+    cat: 'RH',
+    title: 'Distribuição por Cargo',
+    desc: 'Ranking de cargos por número de colaboradores ativos. Agrupado por empresa, ordenado do mais frequente ao menos frequente.',
+    note: 'Conta colaboradores ativos por cargo dentro de cada empresa. Exclui pro-labore.',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>`,
+    pdf:   () => gerarCargosPDF(),
+    excel: () => gerarCargosExcel(),
   },
 };
 
@@ -1076,6 +1220,421 @@ function gerarCotasExcel() {
 ${rows}
 </table></body></html>`;
   baixarExcel(xls, `Relatorio_${label.replace(/\s/g,'_')}`);
+}
+
+// ─── Helpers de filtro de data ───────────────────────────────────────────────
+function dtIniFiltro() { return (document.getElementById('f-dt-ini')?.value || ''); }
+function dtFimFiltro() { return (document.getElementById('f-dt-fim')?.value || ''); }
+
+// ─── Agrupamento Empresa → Setor ─────────────────────────────────────────────
+function _grupoEmpresaSetor(lista) {
+  const empMap = {};
+  [...lista].sort((a,b) => {
+    const ea = stripNum(a.empresaAtuacao), eb = stripNum(b.empresaAtuacao);
+    if (!ea && eb) return 1; if (ea && !eb) return -1;
+    const ec = ea.localeCompare(eb,'pt-BR'); if (ec!==0) return ec;
+    return stripNum(a.setor||'').localeCompare(stripNum(b.setor||''),'pt-BR') || a.nome.localeCompare(b.nome,'pt-BR');
+  }).forEach(c => {
+    const e = stripNum(c.empresaAtuacao) || '(Sem empresa)';
+    const s = stripNum(c.setor) || '(Sem setor)';
+    if (!empMap[e]) empMap[e] = {};
+    if (!empMap[e][s]) empMap[e][s] = [];
+    empMap[e][s].push(c);
+  });
+  return Object.entries(empMap)
+    .sort(([a],[b]) => { if(a==='(Sem empresa)') return 1; if(b==='(Sem empresa)') return -1; return a.localeCompare(b,'pt-BR'); })
+    .map(([empresa, setMap]) => [empresa, Object.entries(setMap).sort(([a],[b]) => a.localeCompare(b,'pt-BR'))]);
+}
+
+// Estilos Excel reutilizados por todos os relatórios RH
+function _xlsStyles() {
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  return {
+    F,
+    EMP_L: `style="${F}font-size:12pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#FFFFFF;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-left:2px solid #1a2d52;border-right:none;"`,
+    EMP_R: `style="${F}font-size:11pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#5DD6B8;text-align:right;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-right:2px solid #1a2d52;border-left:none;"`,
+    SET_L: `style="${F}font-size:10pt;font-weight:bold;padding:7px 16px 7px 28px;background:#EDF1FA;color:#2C5FA8;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-left:1px solid #C8D8EE;border-right:none;"`,
+    SET_R: `style="${F}font-size:10pt;padding:7px 16px;background:#EDF1FA;color:#7A92B0;text-align:right;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-right:1px solid #C8D8EE;border-left:none;"`,
+    TH_N:  `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;width:240pt;"`,
+    TH2:   `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;"`,
+    BLANK: 'style="padding:5px;border:none;background:#FFFFFF;"',
+    TD:    (par) => `style="${F}font-size:10pt;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#5E718A;"`,
+    NM:    (par) => `style="${F}font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;width:240pt;"`,
+  };
+}
+
+function _xlsWrap(titulo, subtitulo, sheetName, rows, ncols) {
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${sheetName}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>
+<tr><td colspan="${ncols}" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">${titulo} — Revest</td></tr>
+<tr><td colspan="${ncols}" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${subtitulo}</td></tr>
+<tr><td colspan="${ncols}" style="padding:4px;border:none;background:#fff;"></td></tr>
+${rows}
+</table></body></html>`;
+}
+
+// ─── Headcount ────────────────────────────────────────────────────────────────
+function _dadosHeadcount() {
+  const emp = empresaFiltro();
+  const lista = COLABORADORES.filter(c =>
+    !c.proLabore && c.situacao === 'Ativo' &&
+    (!emp || stripNum(c.empresaAtuacao) === emp)
+  );
+  if (!lista.length) { alert('Nenhum colaborador ativo encontrado para o filtro.'); return null; }
+  const grupos = _grupoEmpresaSetor(lista);
+  const chips = ['Situação: Ativos'];
+  if (emp) chips.push('Empresa: ' + emp);
+  return { lista, grupos, chips, total: lista.length, dataHora: agora() };
+}
+
+function gerarHeadcountPDF() {
+  const d = _dadosHeadcount(); if (!d) return;
+  const { grupos, chips, total, dataHora } = d;
+  let blocos = '';
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s+l.length, 0);
+    blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntEmp} colaborador${cntEmp>1?'es':''}</span></div>`;
+    for (const [setor, lista] of setores) {
+      const cnt = lista.length;
+      blocos += `<div class="ss"><span class="ssn">${setor}</span><span class="ssc">${cnt} colaborador${cnt>1?'es':''}</span></div>`;
+      const linhas = lista.map(c =>
+        `<tr><td class="td-nome">${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${c.gestor||'—'}</td></tr>`
+      ).join('');
+      blocos += `<table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
+    }
+  }
+  abrirPDF(htmlRelPDF('Headcount', chips, total, 'colaborador'+(total>1?'es':''), dataHora, blocos));
+}
+
+function gerarHeadcountExcel() {
+  const d = _dadosHeadcount(); if (!d) return;
+  const { grupos, chips, total, dataHora } = d;
+  const { F, EMP_L, EMP_R, SET_L, SET_R, TH_N, TH2, BLANK, TD, NM } = _xlsStyles();
+  let rows = '';
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s+l.length, 0);
+    rows += `<tr><td colspan="4" ${EMP_L}>${empresa}</td><td ${EMP_R}>${cntEmp} colaborador${cntEmp>1?'es':''}</td></tr>`;
+    for (const [setor, lista] of setores) {
+      const cnt = lista.length;
+      rows += `<tr><td colspan="4" ${SET_L}>${setor}</td><td ${SET_R}>${cnt}</td></tr>`;
+      rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>ADMISSÃO</th><th ${TH2}>GESTOR</th><th ${TH2}></th></tr>`;
+      lista.forEach((c, i) => {
+        const par = i%2===1;
+        rows += `<tr><td ${NM(par)}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
+      });
+      rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+    }
+    rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+  }
+  baixarExcel(_xlsWrap('Headcount', chips.join(' | ') + ` · ${total} colaboradores · ${dataHora}`, 'Headcount', rows, 5), 'Headcount');
+}
+
+// ─── Admissões do Período ────────────────────────────────────────────────────
+function _dadosAdmissoes() {
+  const emp = empresaFiltro();
+  const dtIni = dtIniFiltro(), dtFim = dtFimFiltro();
+  if (!dtIni || !dtFim) { alert('Selecione o período (data inicial e final).'); return null; }
+  const lista = COLABORADORES.filter(c =>
+    !c.proLabore && c.dataAdmissao >= dtIni && c.dataAdmissao <= dtFim &&
+    (!emp || stripNum(c.empresaAtuacao) === emp)
+  );
+  if (!lista.length) { alert('Nenhuma admissão encontrada no período selecionado.'); return null; }
+  const grupos = _grupoEmpresaSetor(lista);
+  const chips = [`Período: ${fmtDateBR(dtIni)} a ${fmtDateBR(dtFim)}`];
+  if (emp) chips.push('Empresa: ' + emp);
+  return { lista, grupos, chips, total: lista.length, dataHora: agora() };
+}
+
+function gerarAdmissoesPDF() {
+  const d = _dadosAdmissoes(); if (!d) return;
+  const { grupos, chips, total, dataHora } = d;
+  let blocos = '';
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s+l.length, 0);
+    blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntEmp} admiss${cntEmp>1?'ões':'ão'}</span></div>`;
+    for (const [setor, lista] of setores) {
+      const cnt = lista.length;
+      blocos += `<div class="ss"><span class="ssn">${setor}</span><span class="ssc">${cnt}</span></div>`;
+      const linhas = lista.map(c =>
+        `<tr><td class="td-nome">${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-mk">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${c.gestor||'—'}</td></tr>`
+      ).join('');
+      blocos += `<table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Data Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
+    }
+  }
+  abrirPDF(htmlRelPDF('Admissões do Período', chips, total, 'admiss'+(total>1?'ões':'ão'), dataHora, blocos));
+}
+
+function gerarAdmissoesExcel() {
+  const d = _dadosAdmissoes(); if (!d) return;
+  const { grupos, chips, total, dataHora } = d;
+  const { F, EMP_L, EMP_R, SET_L, SET_R, TH_N, TH2, BLANK, TD, NM } = _xlsStyles();
+  let rows = '';
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s+l.length, 0);
+    rows += `<tr><td colspan="4" ${EMP_L}>${empresa}</td><td ${EMP_R}>${cntEmp}</td></tr>`;
+    for (const [setor, lista] of setores) {
+      rows += `<tr><td colspan="4" ${SET_L}>${setor}</td><td ${SET_R}>${lista.length}</td></tr>`;
+      rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>DATA ADMISSÃO</th><th ${TH2}>GESTOR</th><th ${TH2}></th></tr>`;
+      lista.forEach((c, i) => {
+        const par = i%2===1;
+        rows += `<tr><td ${NM(par)}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
+      });
+      rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+    }
+    rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+  }
+  baixarExcel(_xlsWrap('Admissões do Período', chips.join(' | ') + ` · ${total} admissões · ${dataHora}`, 'Admissões', rows, 5), 'Admissoes_Periodo');
+}
+
+// ─── Desligamentos do Período ────────────────────────────────────────────────
+function _dadosDesligamentos() {
+  const emp = empresaFiltro();
+  const dtIni = dtIniFiltro(), dtFim = dtFimFiltro();
+  if (!dtIni || !dtFim) { alert('Selecione o período (data inicial e final).'); return null; }
+  const lista = COLABORADORES.filter(c =>
+    !c.proLabore && c.dataDemissao &&
+    c.dataDemissao >= dtIni && c.dataDemissao <= dtFim &&
+    (!emp || stripNum(c.empresaAtuacao) === emp)
+  );
+  if (!lista.length) { alert('Nenhum desligamento encontrado no período selecionado.'); return null; }
+  const grupos = _grupoEmpresaSetor(lista);
+  const chips = [`Período: ${fmtDateBR(dtIni)} a ${fmtDateBR(dtFim)}`];
+  if (emp) chips.push('Empresa: ' + emp);
+  return { lista, grupos, chips, total: lista.length, dataHora: agora() };
+}
+
+function gerarDesligamentosPDF() {
+  const d = _dadosDesligamentos(); if (!d) return;
+  const { grupos, chips, total, dataHora } = d;
+  let blocos = '';
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s+l.length, 0);
+    blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntEmp} desligamento${cntEmp>1?'s':''}</span></div>`;
+    for (const [setor, lista] of setores) {
+      const cnt = lista.length;
+      blocos += `<div class="ss"><span class="ssn">${setor}</span><span class="ssc">${cnt}</span></div>`;
+      const linhas = lista.map(c =>
+        `<tr><td class="td-nome">${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-mk">${fmtDateBR(c.dataDemissao)}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td></tr>`
+      ).join('');
+      blocos += `<table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Data Desligamento</th><th>Admissão</th></tr></thead><tbody>${linhas}</tbody></table>`;
+    }
+  }
+  abrirPDF(htmlRelPDF('Desligamentos do Período', chips, total, 'desligamento'+(total>1?'s':''), dataHora, blocos));
+}
+
+function gerarDesligamentosExcel() {
+  const d = _dadosDesligamentos(); if (!d) return;
+  const { grupos, chips, total, dataHora } = d;
+  const { F, EMP_L, EMP_R, SET_L, SET_R, TH_N, TH2, BLANK, TD, NM } = _xlsStyles();
+  let rows = '';
+  for (const [empresa, setores] of grupos) {
+    const cntEmp = setores.reduce((s,[,l]) => s+l.length, 0);
+    rows += `<tr><td colspan="4" ${EMP_L}>${empresa}</td><td ${EMP_R}>${cntEmp}</td></tr>`;
+    for (const [setor, lista] of setores) {
+      rows += `<tr><td colspan="4" ${SET_L}>${setor}</td><td ${SET_R}>${lista.length}</td></tr>`;
+      rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>DATA DESLIGAMENTO</th><th ${TH2}>ADMISSÃO</th><th ${TH2}></th></tr>`;
+      lista.forEach((c, i) => {
+        const par = i%2===1;
+        rows += `<tr><td ${NM(par)}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataDemissao)}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}></td></tr>`;
+      });
+      rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+    }
+    rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+  }
+  baixarExcel(_xlsWrap('Desligamentos do Período', chips.join(' | ') + ` · ${total} desligamentos · ${dataHora}`, 'Desligamentos', rows, 5), 'Desligamentos_Periodo');
+}
+
+// ─── Turnover ────────────────────────────────────────────────────────────────
+function _dadosTurnover() {
+  const emp = empresaFiltro();
+  const dtIni = dtIniFiltro(), dtFim = dtFimFiltro();
+  if (!dtIni || !dtFim) { alert('Selecione o período (data inicial e final).'); return null; }
+  const base = COLABORADORES.filter(c => !c.proLabore && (!emp || stripNum(c.empresaAtuacao) === emp));
+  const listAdm = base.filter(c => c.dataAdmissao >= dtIni && c.dataAdmissao <= dtFim);
+  const listDes = base.filter(c => c.dataDemissao && c.dataDemissao >= dtIni && c.dataDemissao <= dtFim);
+  const hcIni = base.filter(c => c.dataAdmissao < dtIni && (!c.dataDemissao || c.dataDemissao >= dtIni)).length;
+  const hcFim = base.filter(c => c.dataAdmissao <= dtFim && (!c.dataDemissao || c.dataDemissao > dtFim)).length;
+  const hcMed = Math.round((hcIni + hcFim) / 2 * 10) / 10;
+  const taxa = hcMed > 0 ? Math.round((listAdm.length + listDes.length) / 2 / hcMed * 100 * 10) / 10 : 0;
+  const chips = [`Período: ${fmtDateBR(dtIni)} a ${fmtDateBR(dtFim)}`];
+  if (emp) chips.push('Empresa: ' + emp);
+  return { listAdm, listDes, hcIni, hcFim, hcMed, taxa, chips, dtIni, dtFim, dataHora: agora() };
+}
+
+function gerarTurnoverPDF() {
+  const d = _dadosTurnover(); if (!d) return;
+  const { listAdm, listDes, hcIni, hcFim, hcMed, taxa, chips, dataHora } = d;
+  const taxaStr = taxa.toFixed(1).replace('.',',') + '%';
+  let blocos = `<div class="sh"><span class="sn">Resumo</span></div>
+    <table><thead><tr><th style="width:55%">Indicador</th><th>Valor</th></tr></thead><tbody>
+    <tr><td class="td-nome">Headcount (início do período)</td><td class="td-c">${hcIni}</td></tr>
+    <tr><td class="td-nome">Headcount (fim do período)</td><td class="td-c">${hcFim}</td></tr>
+    <tr><td class="td-nome">Headcount médio</td><td class="td-c">${hcMed}</td></tr>
+    <tr><td class="td-nome">Admissões no período</td><td class="td-c">${listAdm.length}</td></tr>
+    <tr><td class="td-nome">Desligamentos no período</td><td class="td-c">${listDes.length}</td></tr>
+    <tr><td class="td-nome" style="font-weight:700">Taxa de Turnover</td><td class="td-mk" style="font-size:15px;font-weight:700">${taxaStr}</td></tr>
+    </tbody></table>`;
+  if (listAdm.length) {
+    const linhas = [...listAdm].sort((a,b) => a.dataAdmissao.localeCompare(b.dataAdmissao) || a.nome.localeCompare(b.nome,'pt-BR')).map(c =>
+      `<tr><td class="td-nome">${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-mk">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`
+    ).join('');
+    blocos += `<div class="sh"><span class="sn">Admissões (${listAdm.length})</span></div>
+      <table><thead><tr><th style="width:36%">Nome</th><th>Cargo</th><th>Data Admissão</th><th>Empresa</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  }
+  if (listDes.length) {
+    const linhas = [...listDes].sort((a,b) => a.dataDemissao.localeCompare(b.dataDemissao) || a.nome.localeCompare(b.nome,'pt-BR')).map(c =>
+      `<tr><td class="td-nome">${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-mk">${fmtDateBR(c.dataDemissao)}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`
+    ).join('');
+    blocos += `<div class="sh"><span class="sn">Desligamentos (${listDes.length})</span></div>
+      <table><thead><tr><th style="width:36%">Nome</th><th>Cargo</th><th>Data Desligamento</th><th>Empresa</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  }
+  abrirPDF(htmlRelPDF('Turnover do Período', chips, taxaStr, 'de turnover', dataHora, blocos));
+}
+
+function gerarTurnoverExcel() {
+  const d = _dadosTurnover(); if (!d) return;
+  const { listAdm, listDes, hcIni, hcFim, hcMed, taxa, chips, dataHora } = d;
+  const taxaStr = taxa.toFixed(1).replace('.',',') + '%';
+  const { F, EMP_L, TH_N, TH2, BLANK, TD, NM } = _xlsStyles();
+  const TH_SUMM = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;width:300pt;"`;
+  const GH = `style="${F}font-size:12pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#FFFFFF;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-left:2px solid #1a2d52;border-right:2px solid #1a2d52;"`;
+  const VL = `style="${F}font-size:10pt;padding:7px 12px;border:1px solid #DDE5F0;background:#FFFFFF;color:#1E2740;"`;
+  const VL_MK = `style="${F}font-size:14pt;font-weight:bold;padding:7px 12px;border:1px solid #DDE5F0;background:#FFFFFF;color:#1A7F6A;"`;
+  let rows = `<tr><td colspan="4" ${GH}>Resumo</td></tr>`;
+  rows += `<tr><th ${TH_SUMM}>INDICADOR</th><th ${TH2}>VALOR</th><td ${BLANK}></td><td ${BLANK}></td></tr>`;
+  [
+    ['Headcount (início)', hcIni], ['Headcount (fim)', hcFim], ['Headcount médio', hcMed],
+    ['Admissões no período', listAdm.length], ['Desligamentos no período', listDes.length],
+  ].forEach(([ind, val], i) => {
+    rows += `<tr><td style="${F}font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid ${i%2?'#EEF2FA':'#F5F8FD'};background:${i%2?'#F5F8FD':'#FFFFFF'};color:#1E2740;width:300pt;">${ind}</td><td ${VL}>${val}</td><td ${BLANK}></td><td ${BLANK}></td></tr>`;
+  });
+  rows += `<tr><td style="${F}font-size:10pt;font-weight:700;padding:7px 12px;border:1px solid #DDE5F0;background:#EDF1FA;color:#1E2740;width:300pt;">Taxa de Turnover</td><td ${VL_MK}>${taxaStr}</td><td ${BLANK}></td><td ${BLANK}></td></tr>`;
+  rows += `<tr><td colspan="4" ${BLANK}></td></tr>`;
+  if (listAdm.length) {
+    rows += `<tr><td colspan="4" ${GH}>Admissões (${listAdm.length})</td></tr>`;
+    rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>DATA ADMISSÃO</th><th ${TH2}>EMPRESA</th></tr>`;
+    [...listAdm].sort((a,b) => a.dataAdmissao.localeCompare(b.dataAdmissao)||a.nome.localeCompare(b.nome,'pt-BR')).forEach((c,i) => {
+      const par = i%2===1;
+      rows += `<tr><td ${NM(par)}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${stripNum(c.empresaAtuacao)||''}</td></tr>`;
+    });
+    rows += `<tr><td colspan="4" ${BLANK}></td></tr>`;
+  }
+  if (listDes.length) {
+    rows += `<tr><td colspan="4" ${GH}>Desligamentos (${listDes.length})</td></tr>`;
+    rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>DATA DESLIGAMENTO</th><th ${TH2}>EMPRESA</th></tr>`;
+    [...listDes].sort((a,b) => a.dataDemissao.localeCompare(b.dataDemissao)||a.nome.localeCompare(b.nome,'pt-BR')).forEach((c,i) => {
+      const par = i%2===1;
+      rows += `<tr><td ${NM(par)}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataDemissao)}</td><td ${TD(par)}>${stripNum(c.empresaAtuacao)||''}</td></tr>`;
+    });
+  }
+  baixarExcel(_xlsWrap('Turnover do Período', chips.join(' | ') + ` · ${taxaStr} · ${dataHora}`, 'Turnover', rows, 4), 'Turnover_Periodo');
+}
+
+// ─── Período de Experiência ───────────────────────────────────────────────────
+function _dadosExperiencia() {
+  const emp = empresaFiltro();
+  const hoje = new Date();
+  const limiteIso = new Date(hoje.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const lista = COLABORADORES.filter(c =>
+    !c.proLabore && c.situacao === 'Ativo' && c.dataAdmissao >= limiteIso &&
+    (!emp || stripNum(c.empresaAtuacao) === emp)
+  ).map(c => {
+    const admDate = new Date(c.dataAdmissao + 'T00:00:00');
+    const dias = Math.floor((hoje - admDate) / (1000 * 60 * 60 * 24));
+    return { ...c, diasEmpresa: dias, diasRestantes: 90 - dias };
+  }).sort((a, b) => a.diasEmpresa - b.diasEmpresa || a.nome.localeCompare(b.nome, 'pt-BR'));
+  if (!lista.length) { alert('Nenhum colaborador em período de experiência.'); return null; }
+  const chips = ['Situação: Ativos', 'Admitidos nos últimos 90 dias'];
+  if (emp) chips.push('Empresa: ' + emp);
+  return { lista, chips, total: lista.length, dataHora: agora() };
+}
+
+function gerarExperienciaPDF() {
+  const d = _dadosExperiencia(); if (!d) return;
+  const { lista, chips, total, dataHora } = d;
+  const linhas = lista.map(c => {
+    const restStyle = c.diasRestantes <= 10 ? ' style="color:#B42318;font-weight:700"' : '';
+    return `<tr><td class="td-nome">${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${c.diasEmpresa} dia${c.diasEmpresa!==1?'s':''}</td><td class="td-c"${restStyle}>${c.diasRestantes} dia${c.diasRestantes!==1?'s':''}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`;
+  }).join('');
+  const blocos = `<table><thead><tr><th style="width:30%">Nome</th><th>Cargo</th><th>Admissão</th><th>No cargo</th><th>Restam</th><th>Empresa</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  abrirPDF(htmlRelPDF('Período de Experiência', chips, total, 'colaborador'+(total>1?'es':''), dataHora, blocos));
+}
+
+function gerarExperienciaExcel() {
+  const d = _dadosExperiencia(); if (!d) return;
+  const { lista, chips, total, dataHora } = d;
+  const { F, TH_N, TH2, BLANK, TD, NM } = _xlsStyles();
+  const TH_NARROW = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;"`;
+  let rows = `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH_NARROW}>ADMISSÃO</th><th ${TH_NARROW}>DIAS NO CARGO</th><th ${TH_NARROW}>DIAS RESTANTES</th><th ${TH2}>EMPRESA</th></tr>`;
+  lista.forEach((c, i) => {
+    const par = i%2===1;
+    const alerta = c.diasRestantes <= 10 ? `color:#B42318;font-weight:bold;` : '';
+    const tdRest = `style="${F}font-size:10pt;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};${alerta}"`;
+    rows += `<tr><td ${NM(par)}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${c.diasEmpresa}</td><td ${tdRest}>${c.diasRestantes}</td><td ${TD(par)}>${stripNum(c.empresaAtuacao)||''}</td></tr>`;
+  });
+  baixarExcel(_xlsWrap('Período de Experiência', chips.join(' | ') + ` · ${total} colaboradores · ${dataHora}`, 'Experiência', rows, 6), 'Periodo_Experiencia');
+}
+
+// ─── Distribuição por Cargo ───────────────────────────────────────────────────
+function _dadosCargos() {
+  const emp = empresaFiltro();
+  const lista = COLABORADORES.filter(c =>
+    !c.proLabore && c.situacao === 'Ativo' &&
+    (!emp || stripNum(c.empresaAtuacao) === emp)
+  );
+  if (!lista.length) { alert('Nenhum colaborador ativo encontrado para o filtro.'); return null; }
+  const empMap = {};
+  lista.forEach(c => {
+    const e = stripNum(c.empresaAtuacao) || '(Sem empresa)';
+    const cargo = c.cargo || '(Sem cargo)';
+    if (!empMap[e]) empMap[e] = {};
+    empMap[e][cargo] = (empMap[e][cargo] || 0) + 1;
+  });
+  const grupos = Object.entries(empMap)
+    .sort(([a],[b]) => { if(a==='(Sem empresa)') return 1; if(b==='(Sem empresa)') return -1; return a.localeCompare(b,'pt-BR'); })
+    .map(([empresa, cargoMap]) => [empresa, Object.entries(cargoMap).sort(([,ca],[,cb]) => cb - ca)]);
+  const chips = ['Situação: Ativos'];
+  if (emp) chips.push('Empresa: ' + emp);
+  return { grupos, chips, total: lista.length, dataHora: agora() };
+}
+
+function gerarCargosPDF() {
+  const d = _dadosCargos(); if (!d) return;
+  const { grupos, chips, total, dataHora } = d;
+  let blocos = '';
+  for (const [empresa, cargos] of grupos) {
+    const cntEmp = cargos.reduce((s,[,n]) => s+n, 0);
+    blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntEmp} colaborador${cntEmp>1?'es':''}</span></div>`;
+    const linhas = cargos.map(([cargo, cnt], i) =>
+      `<tr><td class="td-c" style="padding-left:8px;color:#5E718A">${i+1}º</td><td class="td-nome">${cargo}</td><td class="td-mk" style="font-size:15px;font-weight:700">${cnt}</td><td class="td-c">${(cnt/cntEmp*100).toFixed(1).replace('.',',')}%</td></tr>`
+    ).join('');
+    blocos += `<table><thead><tr><th style="width:6%">#</th><th style="width:54%">Cargo</th><th>Qtd.</th><th>%</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  }
+  abrirPDF(htmlRelPDF('Distribuição por Cargo', chips, total, 'colaborador'+(total>1?'es':''), dataHora, blocos));
+}
+
+function gerarCargosExcel() {
+  const d = _dadosCargos(); if (!d) return;
+  const { grupos, chips, total, dataHora } = d;
+  const { F, EMP_L, EMP_R, TH_N, TH2, BLANK, TD } = _xlsStyles();
+  let rows = '';
+  for (const [empresa, cargos] of grupos) {
+    const cntEmp = cargos.reduce((s,[,n]) => s+n, 0);
+    rows += `<tr><td colspan="3" ${EMP_L}>${empresa}</td><td ${EMP_R}>${cntEmp} colaborador${cntEmp>1?'es':''}</td></tr>`;
+    rows += `<tr><th style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;width:30pt;">#</th><th ${TH_N}>CARGO</th><th ${TH2}>QTD.</th><th ${TH2}>%</th></tr>`;
+    cargos.forEach(([cargo, cnt], i) => {
+      const par = i%2===1;
+      const pct = (cnt/cntEmp*100).toFixed(1).replace('.',',') + '%';
+      const nmStyle = `style="${F}font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;width:240pt;"`;
+      const rankStyle = `style="${F}font-size:10pt;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#5E718A;text-align:center;width:30pt;"`;
+      const mkStyle = `style="${F}font-size:11pt;font-weight:700;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1A7F6A;"`;
+      rows += `<tr><td ${rankStyle}>${i+1}</td><td ${nmStyle}>${cargo}</td><td ${mkStyle}>${cnt}</td><td ${TD(par)}>${pct}</td></tr>`;
+    });
+    rows += `<tr><td colspan="4" ${BLANK}></td></tr>`;
+  }
+  baixarExcel(_xlsWrap('Distribuição por Cargo', chips.join(' | ') + ` · ${total} colaboradores · ${dataHora}`, 'Por Cargo', rows, 4), 'Distribuicao_Cargos');
 }
 
 // ─── Start ───────────────────────────────────────────────────────────────────
