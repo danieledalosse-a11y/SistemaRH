@@ -1659,6 +1659,51 @@ function _vtFotoSeletorHtml(procId) {
   <span style="font-size:11px;color:#9ca3af;margin-left:10px;">JPG, PNG ou WEBP — salvo na aba Arquivos do colaborador</span>`;
 }
 
+function _renderSucessoFotoVT(procId, url) {
+  const area = document.getElementById('fichaVT-foto-area-' + procId);
+  if (!area) return;
+  const urlEsc = url.replace(/'/g, "\\'");
+  area.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;flex-wrap:wrap;">
+      <img src="${url}" style="width:56px;height:40px;object-fit:cover;border-radius:5px;border:1px solid #86efac;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:#166534;">✓ Foto enviada com sucesso</div>
+        <a href="${url}" target="_blank" style="font-size:11px;color:#15803d;">Ver imagem ↗</a>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button onclick="document.getElementById('fichaVT-foto-area-${procId}').innerHTML=_vtFotoSeletorHtml(${procId})" style="padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;color:#374151;">🔄 Trocar</button>
+        <button onclick="_excluirFotoVT(${procId},'${urlEsc}')" style="padding:5px 10px;border:1px solid #fca5a5;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;color:#dc2626;">🗑 Excluir</button>
+      </div>
+    </div>`;
+}
+
+async function _excluirFotoVT(procId, url) {
+  if (!confirm('Excluir a foto do cartão? Esta ação não pode ser desfeita.')) return;
+  const area = document.getElementById('fichaVT-foto-area-' + procId);
+  if (area) area.innerHTML = '<span style="font-size:13px;color:#6b7280;">Excluindo...</span>';
+  try {
+    // extrai path relativo ao bucket: tudo após /public/colaborador-docs/
+    const marker = '/public/colaborador-docs/';
+    const path   = url.includes(marker) ? url.split(marker)[1] : null;
+    if (path) {
+      await fetch(`${SB_URL}/storage/v1/object/colaborador-docs`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${SB_KEY}`, apikey: SB_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefixes: [path] }),
+      });
+    }
+    await fetch(`${SB_URL}/rest/v1/colaborador_documentos?url=eq.${encodeURIComponent(url)}`, {
+      method: 'DELETE',
+      headers: SB_HEADERS,
+    });
+    if (area) area.innerHTML = _vtFotoSeletorHtml(procId);
+    showToast('Foto excluída.', 'success');
+  } catch(e) {
+    if (area) area.innerHTML = _vtFotoSeletorHtml(procId);
+    showToast('Erro ao excluir: ' + e.message, 'error');
+  }
+}
+
 async function _confirmarFotoVT(procId) {
   const state = _vtFotoState[procId];
   const proc  = _PROC_MAP[procId];
@@ -1697,14 +1742,7 @@ async function _confirmarFotoVT(procId) {
     if (!rDb.ok) throw new Error('Falha ao registrar documento');
 
     delete _vtFotoState[procId];
-    if (area) area.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;">
-        <img src="${url}" style="width:56px;height:40px;object-fit:cover;border-radius:5px;border:1px solid #86efac;">
-        <div>
-          <div style="font-size:13px;font-weight:600;color:#166534;">✓ Foto enviada com sucesso</div>
-          <a href="${url}" target="_blank" style="font-size:11px;color:#15803d;">Ver imagem ↗</a>
-        </div>
-      </div>`;
+    _renderSucessoFotoVT(procId, url);
     showToast('Foto do cartão salva na aba Arquivos.', 'success');
   } catch(e) {
     if (area) area.innerHTML = _vtFotoSeletorHtml(procId);
