@@ -1420,7 +1420,7 @@ function popularSelectContrato(valorAtual) {
 
 async function carregarTiposVinculo() {
   try {
-    TIPOS_VINCULO = await sbGet('param_tipo_vinculo', 'select=codigo,descricao&ativo=eq.true&order=ordem');
+    TIPOS_VINCULO = await sbGet('param_tipo_vinculo', 'select=codigo,descricao,tipo_ficha&ativo=eq.true&order=ordem');
     popularSelectVinculo();
   } catch(e) { console.warn('Tipos de vínculo não carregados:', e.message); }
 }
@@ -2799,6 +2799,7 @@ function novoColaborador() {
   .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const tvEl = document.getElementById('df-tipo-vinculo');
   if (tvEl) tvEl.value = 'clt';
+  _aplicarModoFicha('clt');
 
   // Checkboxes
   ['df-pcd','df-inss','df-primeiroEmprego','df-comissionado'].forEach(id => {
@@ -2936,6 +2937,7 @@ function abrirFicha(idx) {
   document.getElementById('df-cor').value           = c.corRaca || '';
   document.getElementById('df-escolaridade').value  = c.escolaridade || '';
   popularSelectVinculo(c.tipoVinculo || 'clt');
+  _aplicarModoFicha(c.tipoVinculo || 'clt');
   document.getElementById('df-empresa-terceirizada').value = c.empresaTerceirizada || '';
   _toggleEmpresaTerceirizada();
   document.getElementById('df-pcd').checked         = c.pcd || false;
@@ -3210,6 +3212,49 @@ function _toggleEmpresaTerceirizada() {
   const v = document.getElementById('df-tipo-vinculo')?.value;
   const row = document.getElementById('df-row-empresa-terceirizada');
   if (row) row.style.display = v === 'promotora' ? '' : 'none';
+  _aplicarModoFicha(v);
+}
+
+function _aplicarModoFicha(tipoVinculo) {
+  const t = (TIPOS_VINCULO || []).find(x => x.codigo === tipoVinculo);
+  const resumida = t?.tipo_ficha === 'resumida';
+
+  // Aba Geral — blocos CLT-específicos
+  const blocoContrato = document.getElementById('df-contrato')?.closest('.sf-row.full');
+  if (blocoContrato) blocoContrato.style.display = resumida ? 'none' : '';
+  const blocoExp = document.getElementById('bloco-experiencia');
+  if (blocoExp) blocoExp.style.display = resumida ? 'none' : '';
+  const blocoPrazo = document.getElementById('bloco-prazo-determinado');
+  if (blocoPrazo) blocoPrazo.style.display = resumida ? 'none' : '';
+
+  // Sinalizações — "Primeiro emprego" (chip CLT)
+  const chipPrimeiro = document.getElementById('df-primeiroEmprego')?.closest('label');
+  if (chipPrimeiro) chipPrimeiro.style.display = resumida ? 'none' : '';
+
+  // Aba Documentos — seção de documentos de trabalho (CTPS)
+  const secDocTrabalho = [...document.querySelectorAll('#tab-documentos .drawer-section')]
+    .find(s => s.querySelector('.drawer-section-title')?.textContent?.includes('trabalho'));
+  if (secDocTrabalho) secDocTrabalho.style.display = resumida ? 'none' : '';
+  const fieldPis = document.getElementById('df-pis')?.closest('.field');
+  if (fieldPis) fieldPis.style.display = resumida ? 'none' : '';
+
+  // Aba Remuneração — CBO, Jornada, Tipo de admissão
+  const fieldCbo = document.getElementById('df-cbo')?.closest('.field');
+  if (fieldCbo) fieldCbo.style.display = resumida ? 'none' : '';
+  const fieldJornada = document.getElementById('df-jornada')?.closest('.field');
+  if (fieldJornada) fieldJornada.style.display = resumida ? 'none' : '';
+  const fieldTipoAdm = document.getElementById('df-tipoAdmissao')?.closest('.field');
+  if (fieldTipoAdm) fieldTipoAdm.style.display = resumida ? 'none' : '';
+  // Seção Rescisão
+  const secRescisao = document.getElementById('df-causaRescisao')?.closest('.drawer-section');
+  if (secRescisao) secRescisao.style.display = resumida ? 'none' : '';
+  // Histórico salarial
+  const secHistSal = document.getElementById('salarioList')?.closest('.drawer-section');
+  if (secHistSal) secHistSal.style.display = resumida ? 'none' : '';
+
+  // Aba Benefícios — dados bancários
+  const secBanco = document.getElementById('df-banco')?.closest('.drawer-section');
+  if (secBanco) secBanco.style.display = resumida ? 'none' : '';
 }
 
 function fecharFicha() {

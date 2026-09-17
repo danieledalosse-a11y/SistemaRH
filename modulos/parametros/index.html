@@ -696,8 +696,27 @@ const CATS = {
     ],
     headers: ['Ordem','Código','Descrição','Situação',''],
   },
+  tipo_vinculo: {
+    label: 'Tipo de Vínculo', section: 'Contrato', sectionOrder: 2, order: 2,
+    icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    desc: 'Tipos de vínculo dos colaboradores. Define se o cadastro utilizará a ficha completa (CLT) ou resumida (Promotora, Pró-labore e similares).',
+    table: 'param_tipo_vinculo',
+    cols:  ['codigo','descricao','tipo_ficha'],
+    fields: [
+      { key: 'codigo',     label: 'Código',        type: 'text',   placeholder: 'Ex: clt',  width: 1, required: true },
+      { key: 'descricao',  label: 'Descrição',     type: 'text',   placeholder: 'Ex: CLT',  width: 3, required: true },
+      { key: 'tipo_ficha', label: 'Tipo de Ficha', type: 'select', width: 2,
+        options: [
+          { value: 'completa', label: 'Ficha Completa' },
+          { value: 'resumida', label: 'Ficha Resumida' },
+        ],
+      },
+      { key: 'ordem',      label: 'Ordem',         type: 'number', placeholder: '1', width: 1 },
+    ],
+    headers: ['Ordem','Código','Descrição','Tipo de Ficha','Situação',''],
+  },
   instituicao_aprendiz: {
-    label: 'Inst. Jovem Aprendiz', section: 'Contrato', sectionOrder: 2, order: 2,
+    label: 'Inst. Jovem Aprendiz', section: 'Contrato', sectionOrder: 2, order: 3,
     icon: '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
     desc:  'Instituições parceiras do programa Jovem Aprendiz. Inclua, edite ou inative conforme contratos vigentes em cada unidade.',
     table: 'param_instituicao_aprendiz',
@@ -710,7 +729,7 @@ const CATS = {
     headers: ['Ordem','Código','Nome','Situação',''],
   },
   escolaridade: {
-    label: 'Grau de Formação', section: 'Contrato', sectionOrder: 2, order: 3,
+    label: 'Grau de Formação', section: 'Contrato', sectionOrder: 2, order: 4,
     icon: '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
     desc:  'Níveis de escolaridade disponíveis para cadastro de colaboradores.',
     table: 'param_escolaridade',
@@ -1273,6 +1292,14 @@ function renderTabela(rows) {
     } else {
       html += `<td class="col-codigo">${row.codigo || '—'}</td>`;
       html += `<td>${row.descricao || '—'}</td>`;
+      if (currentCat === 'tipo_vinculo') {
+        const tf = row.tipo_ficha || 'completa';
+        if (tf === 'resumida') {
+          html += `<td><span class="badge" style="background:var(--amber-bg);color:var(--amber);border:1px solid #FDE68A;">Resumida</span></td>`;
+        } else {
+          html += `<td><span class="badge" style="background:var(--green-bg);color:var(--green);border:1px solid #A9DFC4;">Completa</span></td>`;
+        }
+      }
       if (currentCat === 'tipo_experiencia') {
         html += `<td>${row.dias_total != null ? row.dias_total + ' dias' : '—'}</td>`;
       }
@@ -1380,6 +1407,13 @@ function abrirModal(row) {
       html += `<div class="field"><label>${f.label}</label>
         <select id="field_${f.key}" style="font-size:13px;">${opts}</select>
         <small style="color:var(--text-sec);font-size:11px;">Fonte: MTE — mtecbo.gov.br</small>
+      </div>`;
+    } else if (f.type === 'select' && f.options) {
+      const opts = f.options.map(o =>
+        `<option value="${o.value}"${val==o.value?' selected':''}>${o.label}</option>`).join('');
+      html += `<div class="field">
+        <label>${f.label}</label>
+        <select id="field_${f.key}" style="width:100%">${opts}</select>
       </div>`;
     } else {
       const stepAttr = f.step ? ` step="${f.step}"` : '';
