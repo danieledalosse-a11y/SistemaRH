@@ -1479,9 +1479,10 @@ async function _renderFichaVT(procId, wrap) {
   const opBg    = op === 'exclusao' ? '#fee2e2' : op === 'alteracao' ? '#ede9fe' : '#dcfce7';
   const opBord  = op === 'exclusao' ? '#fca5a5' : op === 'alteracao' ? '#c4b5fd' : '#86efac';
 
-  const cartao  = extras.vt_cartao || null;
-  const passes  = extras.vt_passes || null;
-  const linha   = extras.vt_linha  || null;
+  const cartao  = extras.vt_cartao  || null;
+  const passes  = extras.vt_passes  || null;
+  const linha   = extras.vt_linha   || null;
+  const viacao  = extras.vt_viacao  || null;
   const motivo  = extras.motivo ? extras.motivo.replace(/_/g,' ') : null;
   const hoje    = new Date().toLocaleDateString('pt-BR');
 
@@ -1537,11 +1538,20 @@ async function _renderFichaVT(procId, wrap) {
           </div>
         </div>
       </div>
-      <div style="border:1px solid ${opBord};border-radius:6px;padding:10px 12px;background:${opBg};">
-        <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Linha de Ônibus / Itinerário</div>
-        <div style="display:flex;align-items:center;gap:4px;">
-          <input id="fichaVT-linha-${procId}" type="text" value="${linha||''}" placeholder="Ex: Mandaguaçu / Maringá" style="${_inputStyle}flex:1;" oninput="_salvarDadosVT(${procId})">
-          <button onclick="document.getElementById('fichaVT-linha-${procId}').value='';_salvarDadosVT(${procId})" title="Limpar" style="flex-shrink:0;width:22px;height:22px;border:none;background:none;color:#9ca3af;cursor:pointer;font-size:14px;line-height:1;padding:0;">×</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="border:1px solid ${opBord};border-radius:6px;padding:10px 12px;background:${opBg};">
+          <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Linha de Ônibus / Itinerário</div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input id="fichaVT-linha-${procId}" type="text" value="${linha||''}" placeholder="Ex: Mandaguaçu / Maringá" style="${_inputStyle}flex:1;" oninput="_salvarDadosVT(${procId})">
+            <button onclick="document.getElementById('fichaVT-linha-${procId}').value='';_salvarDadosVT(${procId})" title="Limpar" style="flex-shrink:0;width:22px;height:22px;border:none;background:none;color:#9ca3af;cursor:pointer;font-size:14px;line-height:1;padding:0;">×</button>
+          </div>
+        </div>
+        <div style="border:1px solid ${opBord};border-radius:6px;padding:10px 12px;background:${opBg};">
+          <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Viação</div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input id="fichaVT-viacao-${procId}" type="text" value="${viacao||''}" placeholder="Ex: Viação Garcia" style="${_inputStyle}flex:1;" oninput="_salvarDadosVT(${procId})">
+            <button onclick="document.getElementById('fichaVT-viacao-${procId}').value='';_salvarDadosVT(${procId})" title="Limpar" style="flex-shrink:0;width:22px;height:22px;border:none;background:none;color:#9ca3af;cursor:pointer;font-size:14px;line-height:1;padding:0;">×</button>
+          </div>
         </div>
       </div>`
     : `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 12px;">
@@ -1811,12 +1821,13 @@ async function _salvarVigenciaVT(procId, valor) {
 }
 
 async function _salvarDadosVT(procId) {
-  const cartao = document.getElementById('fichaVT-cartao-' + procId)?.value?.trim() || null;
-  const passes = document.getElementById('fichaVT-passes-' + procId)?.value || null;
-  const linha  = document.getElementById('fichaVT-linha-'  + procId)?.value?.trim() || null;
+  const cartao = document.getElementById('fichaVT-cartao-'  + procId)?.value?.trim() || null;
+  const passes = document.getElementById('fichaVT-passes-'  + procId)?.value || null;
+  const linha  = document.getElementById('fichaVT-linha-'   + procId)?.value?.trim() || null;
+  const viacao = document.getElementById('fichaVT-viacao-'  + procId)?.value?.trim() || null;
   const proc   = _PROC_MAP[procId];
   if (!proc) return;
-  const extras = { ...(proc.dados_extras || {}), vt_cartao: cartao, vt_passes: passes ? parseInt(passes) : null, vt_linha: linha };
+  const extras = { ...(proc.dados_extras || {}), vt_cartao: cartao, vt_passes: passes ? parseInt(passes) : null, vt_linha: linha, vt_viacao: viacao };
   proc.dados_extras = extras;
   clearTimeout(_salvarDadosVT._t);
   _salvarDadosVT._t = setTimeout(async () => {
@@ -2010,9 +2021,10 @@ async function _imprimirFichaVT(procId) {
     </div>`;
 
   const dadosVTHtml = op !== 'exclusao' ? (() => {
-    const cartao = extras.vt_cartao || '—';
-    const passes = extras.vt_passes || '—';
-    const linha  = extras.vt_linha  || '—';
+    const cartao = extras.vt_cartao  || '—';
+    const passes = extras.vt_passes  || '—';
+    const linha  = extras.vt_linha   || '—';
+    const viacao = extras.vt_viacao  || '—';
     return `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div style="background:${opBg};border:1px solid ${opBord};border-radius:6px;padding:10px 14px;">
@@ -2023,11 +2035,14 @@ async function _imprimirFichaVT(procId) {
           <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Passes / Dia</div>
           <div style="font-size:15px;font-weight:700;color:${opCor};">${passes}</div>
         </div>
-      </div>
-      <div style="background:${opBg};border:1px solid ${opBord};border-radius:6px;padding:10px 14px;">
-        <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Linha de Ônibus / Itinerário</div>
-        <div style="font-size:14px;font-weight:700;color:${opCor};">${linha}</div>
-      </div>`;
+        <div style="background:${opBg};border:1px solid ${opBord};border-radius:6px;padding:10px 14px;">
+          <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Linha de Ônibus / Itinerário</div>
+          <div style="font-size:14px;font-weight:700;color:${opCor};">${linha}</div>
+        </div>
+        <div style="background:${opBg};border:1px solid ${opBord};border-radius:6px;padding:10px 14px;">
+          <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Viação</div>
+          <div style="font-size:14px;font-weight:700;color:${opCor};">${viacao}</div>
+        </div>`;
   })() : `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 14px;">
     <div style="font-size:10px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Motivo da Exclusão</div>
     <div style="font-size:14px;font-weight:600;color:#991b1b;">${(extras.motivo||'').replace(/_/g,' ')||'—'}</div>
@@ -3121,9 +3136,15 @@ function atualizarCamposExtras() {
             <input class="form-control" type="number" id="xVtPasses" min="1" max="10" placeholder="2">
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Linha de Ônibus</label>
-          <input class="form-control" type="text" id="xVtLinha" placeholder="Ex: Mandaguaçu / Maringá">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Linha de Ônibus</label>
+            <input class="form-control" type="text" id="xVtLinha" placeholder="Ex: Mandaguaçu / Maringá">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Viação</label>
+            <input class="form-control" type="text" id="xVtViacao" placeholder="Ex: Viação Garcia">
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Foto do cartão <span style="font-weight:400;color:#667085">(opcional)</span></label>
@@ -3154,9 +3175,15 @@ function atualizarCamposExtras() {
             <input class="form-control" type="number" id="xVtPassesAlt" min="1" max="10" placeholder="2">
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Linha de Ônibus</label>
-          <input class="form-control" type="text" id="xVtLinhaAlt" placeholder="Ex: Mandaguaçu / Maringá">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Linha de Ônibus</label>
+            <input class="form-control" type="text" id="xVtLinhaAlt" placeholder="Ex: Mandaguaçu / Maringá">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Viação</label>
+            <input class="form-control" type="text" id="xVtViacaoAlt" placeholder="Ex: Viação Garcia">
+          </div>
         </div>
       </div>`;
   } else if (tipo === 'vt_avulso') {
@@ -3322,6 +3349,7 @@ async function submitNovoProcesso() {
       dadosExtras.vt_cartao = cartao;
       dadosExtras.vt_passes = parseInt(passes);
       dadosExtras.vt_linha  = document.getElementById('xVtLinha')?.value?.trim() || null;
+      dadosExtras.vt_viacao = document.getElementById('xVtViacao')?.value?.trim() || null;
     } else if (op === 'exclusao') {
       dadosExtras.motivo = document.getElementById('xVtMotivo')?.value || 'nao_utiliza';
     } else if (op === 'alteracao') {
@@ -3331,6 +3359,7 @@ async function submitNovoProcesso() {
       dadosExtras.vt_cartao = cartao;
       dadosExtras.vt_passes = parseInt(passes);
       dadosExtras.vt_linha  = document.getElementById('xVtLinhaAlt')?.value?.trim() || null;
+      dadosExtras.vt_viacao = document.getElementById('xVtViacaoAlt')?.value?.trim() || null;
     }
   } else if (tipo === 'vt_avulso') {
     dadosExtras = {
