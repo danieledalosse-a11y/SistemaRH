@@ -1578,7 +1578,14 @@ async function _renderFichaVT(procId, wrap) {
           <div id="fichaVT-content-${procId}" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;">
             ${_field('Colaborador', proc.colaborador_nome)}
             ${_field('Matrícula', colab.matricula)}
-            ${_field('CPF', _fmtCPF(colab.cpf))}
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">CPF</div>
+              <input id="fichaVT-cpf-${procId}" type="text" value="${colab.cpf||''}" placeholder="000.000.000-00"
+                style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px;font-weight:600;color:var(--text);background:${colab.cpf?'transparent':'#fefce8'};font-family:inherit;outline:none;width:100%;"
+                onfocus="this.style.borderColor='#6366f1';this.style.background='#fff'"
+                onblur="_salvarCpfVT(${procId}, this)"
+                oninput="this.value=this.value.replace(/\D/g,'').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3}\.\d{3})(\d)/,'$1.$2').replace(/(\d{3}\.\d{3}\.\d{3})(\d{1,2}).*/,'$1-$2')">
+            </div>
             ${_field('Data de Nascimento', colab.data_nascimento ? new Date(colab.data_nascimento+'T12:00:00').toLocaleDateString('pt-BR') : null)}
             ${_field('Setor', _stripNum(colab.setor))}
             ${_field('Empresa / Unidade', colab.empresa_registro)}
@@ -1766,6 +1773,29 @@ async function _confirmarFotoVT(procId) {
   } catch(e) {
     if (area) area.innerHTML = _vtFotoSeletorHtml(procId);
     showToast('Erro ao enviar foto: ' + e.message, 'error');
+  }
+}
+
+async function _salvarCpfVT(procId, input) {
+  const cpf = input.value.replace(/\D/g, '');
+  if (cpf && cpf.length !== 11) {
+    input.style.borderColor = '#dc2626';
+    input.style.background  = '#fef2f2';
+    showToast('CPF inválido — deve ter 11 dígitos.', 'error');
+    return;
+  }
+  const proc = _PROC_MAP[procId];
+  if (!proc?.colaborador_id) return;
+  input.style.borderColor = '#d1d5db';
+  input.style.background  = cpf ? 'transparent' : '#fefce8';
+  try {
+    await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${proc.colaborador_id}`, {
+      method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ cpf: cpf || null }),
+    });
+    if (cpf) showToast('CPF salvo no cadastro do colaborador.', 'success');
+  } catch(e) {
+    showToast('Erro ao salvar CPF: ' + e.message, 'error');
   }
 }
 
@@ -1971,6 +2001,7 @@ async function _imprimirFichaVT(procId) {
   const _fmtMes   = ym  => { if (!ym) return '—'; const [y,m]=ym.split('-'); const nomes=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']; return `${nomes[parseInt(m)-1]} / ${y}`; };
 
   const vigencia = document.getElementById('fichaVT-vigencia-' + procId)?.value || extras.mes_vigencia || '';
+  const cpfImpressao = document.getElementById('fichaVT-cpf-' + procId)?.value || _fmtCPF(colab.cpf);
 
   const _pf = (label, value) => `
     <div>
@@ -2024,7 +2055,7 @@ async function _imprimirFichaVT(procId) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 28px;">
       ${_pf('Colaborador', proc.colaborador_nome)}
       ${_pf('Matrícula', colab.matricula)}
-      ${_pf('CPF', _fmtCPF(colab.cpf))}
+      ${_pf('CPF', cpfImpressao)}
       ${_pf('Data de Nascimento', _fmtDate(colab.data_nascimento))}
       ${_pf('Setor', _stripNum(colab.setor))}
       ${_pf('Empresa / Unidade', colab.empresa_registro)}
