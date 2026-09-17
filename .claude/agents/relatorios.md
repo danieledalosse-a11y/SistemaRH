@@ -64,17 +64,23 @@ Para adicionar um novo relatório: acrescentar entrada no objeto `RELATORIOS`, c
 ```js
 let COLABORADORES = [];  // todos os colaboradores carregados do Supabase
 let EMPRESAS      = [];  // lista de empresas distintas (empresa_atuacao sem prefixo numérico)
+let MARCOS        = [];  // anos de marco carregados de param_marco_tempo_casa (ex: [1,5,10,15,20])
 let _relAtivo     = null; // id do relatório com painel aberto
 ```
 
 ## Carregamento de dados
 
-Query mínima — só os campos usados pelos relatórios:
+Carregado em paralelo no `init()`:
 ```js
-sbGet('colaboradores',
-  'select=id,nome,cargo,data_admissao,data_nascimento,data_demissao,' +
-  'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,' +
-  'dependentes_lista&order=nome')
+const [dados, marcosRows] = await Promise.all([
+  sbGet('colaboradores',
+    'select=id,nome,cargo,data_admissao,data_nascimento,data_demissao,' +
+    'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,' +
+    'dependentes_lista&order=nome'),
+  sbGet('param_marco_tempo_casa', 'select=anos&ativo=eq.true&order=anos'),
+]);
+COLABORADORES = dados.map(supabaseToJS);
+MARCOS = marcosRows.map(r => r.anos);
 ```
 
 `supabaseToJS(row)` — mapeamento enxuto (sem campos de documentos, banco, VT etc.):
@@ -155,19 +161,26 @@ const TD = (par) => `style="${F}...border:1px solid ${par?'#EEF2FA':'#F5F8FD'};b
 
 - **Filtros:** mês, empresa de atuação
 - **Dados:** `dataNascimento`, filtro `parseInt(iso.split('-')[1]) === mes`
-- **Agrupamento:** por `c.gestor` (alfabético, "(Sem gestor)" no final)
-- **Ordenação dentro do grupo:** dia do mês (ASC), nome (ASC)
-- **Colunas:** Nome | Cargo | Aniversário (DD/MM) | Idade | Empresa
+- **Layout:** tabela cronológica plana (sem agrupamento por gestor) — colunas: Data | Dia da semana | Colaborador | Setor | Gestor
+- **Ordenação:** dia do mês ASC, nome ASC
+- **PDF:** template HTML customizado (não usa `htmlRelPDF`) — nomes em teal (#1A7F6A)
+- **Helper:** `DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']` + `diaSemana(mes, dia)`
 - **Funções:** `_dadosAniversarios()`, `gerarAniversariosPDF()`, `gerarAniversariosExcel()`
 
 ### Tempo de Casa por Mês
 
-- **Filtros:** mês, empresa de atuação
+- **Filtros:** mês, empresa de atuação, Exibir (select `#f-tc-filtro`: `todos` | `marcos`)
 - **Dados:** `dataAdmissao`, filtro `parseInt(iso.split('-')[1]) === mes`
-- **Marcos:** [1, 5, 10, 15, 20] anos — destacados visualmente (verde + 🏆)
+- **Marcos:** carregados dinamicamente de `param_marco_tempo_casa` na variável global `MARCOS` — **nunca hardcoded**
+- **Regra:** colaboradores com menos de 1 ano completo (`anosEmpresa < 1`) são excluídos
+- **Filtro "Somente marcos":** exibe apenas colaboradores cujo `anosEmpresa` está em `MARCOS`
 - **Ordenação:** anos DESC, nome ASC
 - **Colunas:** Nome | Cargo | Data Admissão | Tempo de Casa | Empresa
+- **Marcos destacados:** nome em verde (#1A7F6A) + `(X anos 🏆)` em negrito
+- **Helper:** `tcFiltro()` — lê select `#f-tc-filtro` do painel ativo
 - **Funções:** `_dadosTempoCasa()`, `gerarTempoCasaPDF()`, `gerarTempoCasaExcel()`
+- **Tabela banco:** `param_marco_tempo_casa` (id, anos, ativo, criado_por) — gerenciada em Parâmetros Gerais → Marcos de Tempo de Casa
+- **RLS:** policy `anon_all` para roles `anon` e `authenticated`
 
 ### Dependentes
 
