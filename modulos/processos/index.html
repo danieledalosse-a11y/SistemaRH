@@ -509,6 +509,7 @@
         <input type="hidden" id="fColabNome">
         <input type="hidden" id="fColabSalario">
         <input type="hidden" id="fColabCargo">
+        <input type="hidden" id="fColabEmpresa">
       </div>
 
       <div id="camposExtras"></div>
@@ -2741,11 +2742,12 @@ async function buscarColaborador(q) {
   document.getElementById('fColabNome').value = '';
   document.getElementById('fColabSalario').value = '';
   document.getElementById('fColabCargo').value = '';
+  document.getElementById('fColabEmpresa').value = '';
   if (q.length < 2) { document.getElementById('dropdownColab').style.display = 'none'; return; }
   _buscaTimer = setTimeout(async () => {
     try {
       const r = await fetch(
-        `${SB_URL}/rest/v1/colaboradores?nome=ilike.*${encodeURIComponent(q)}*&ativo=eq.true&select=id,nome,cargo,salario&limit=10`,
+        `${SB_URL}/rest/v1/colaboradores?nome=ilike.*${encodeURIComponent(q)}*&ativo=eq.true&select=id,nome,cargo,salario,empresa_registro&limit=10`,
         { headers: SB_HEADERS }
       );
       const lista = await r.json();
@@ -2762,7 +2764,7 @@ function mostrarDropdown(lista) {
     return;
   }
   dd.innerHTML = lista.map(c =>
-    `<div class="search-dropdown-item" onclick="selecionarColab(${c.id},'${(c.nome||'').replace(/'/g,"\\'")}',${c.salario||0},'${(c.cargo||'').replace(/'/g,"\\'")}')">
+    `<div class="search-dropdown-item" onclick="selecionarColab(${c.id},'${(c.nome||'').replace(/'/g,"\\'")}',${c.salario||0},'${(c.cargo||'').replace(/'/g,"\\'")}','${(c.empresa_registro||'').replace(/'/g,"\\'")}')">
       <div class="item-nome">${c.nome}</div>
       <div class="item-cargo">${c.cargo || '—'}</div>
     </div>`
@@ -2770,12 +2772,13 @@ function mostrarDropdown(lista) {
   dd.style.display = 'block';
 }
 
-function selecionarColab(id, nome, salario, cargo) {
+function selecionarColab(id, nome, salario, cargo, empresa) {
   document.getElementById('fBuscaColab').value = nome;
   document.getElementById('fColabId').value = id;
   document.getElementById('fColabNome').value = nome;
   document.getElementById('fColabSalario').value = salario;
   document.getElementById('fColabCargo').value = cargo;
+  document.getElementById('fColabEmpresa').value = empresa || '';
   document.getElementById('dropdownColab').style.display = 'none';
   atualizarCamposExtras();
 }
@@ -2935,14 +2938,15 @@ function atualizarCamposExtras() {
         <input class="form-control" type="date" id="xDataDemissao">
       </div>`;
   } else if (tipo === 'transferencia_cnpj') {
+    const empresaOrigem = document.getElementById('fColabEmpresa').value || '';
     html = `
       <div class="form-group">
         <label class="form-label">Empresa de origem</label>
-        <input class="form-control" type="text" id="xEmpresaOrigem" placeholder="Ex: 01 - Revest Maringá">
+        <input class="form-control" type="text" id="xEmpresaOrigem" value="${empresaOrigem.replace(/"/g,'&quot;')}" readonly style="background:#F9FAFB;color:#667085;cursor:not-allowed;">
       </div>
       <div class="form-group">
         <label class="form-label">Empresa de destino</label>
-        <input class="form-control" type="text" id="xEmpresaDestino" placeholder="Ex: 02 - Revest Londrina">
+        <select class="form-control" id="xEmpresaDestino"><option value="">Carregando...</option></select>
       </div>
       <div class="form-group">
         <label class="form-label">Data da transferência</label>
@@ -2951,6 +2955,19 @@ function atualizarCamposExtras() {
       <div class="form-hint" style="margin-top:4px;font-size:12px;color:#667085">
         ⚠️ A <strong>data de ingresso no grupo</strong> do colaborador não será alterada. Atualize manualmente no Cadastro caso seja necessário.
       </div>`;
+    // carrega param_empresa e popula o select de destino
+    setTimeout(async () => {
+      const sel = document.getElementById('xEmpresaDestino');
+      if (!sel) return;
+      try {
+        const r = await fetch(`${SB_URL}/rest/v1/param_empresa?ativo=eq.true&order=ordem&select=nome_simplificado`, { headers: SB_HEADERS });
+        const lista = await r.json();
+        sel.innerHTML = '<option value="">— selecione —</option>' +
+          lista.filter(e => e.nome_simplificado !== empresaOrigem).map(e =>
+            `<option value="${(e.nome_simplificado||'').replace(/"/g,'&quot;')}">${e.nome_simplificado}</option>`
+          ).join('');
+      } catch(_) { sel.innerHTML = '<option value="">Erro ao carregar</option>'; }
+    }, 0);
   }
 
   if (html) { el.innerHTML = html; el.style.display = 'block'; }
@@ -3092,6 +3109,7 @@ function resetForm() {
   document.getElementById('fColabNome').value = '';
   document.getElementById('fColabSalario').value = '';
   document.getElementById('fColabCargo').value = '';
+  document.getElementById('fColabEmpresa').value = '';
   document.getElementById('camposExtras').innerHTML = '';
   document.getElementById('camposExtras').style.display = 'none';
 }
