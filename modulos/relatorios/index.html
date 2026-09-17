@@ -416,6 +416,8 @@ function supabaseToJS(row) {
     pcd:            !!row.pcd,
     aprendiz:       isAprendiz(cargo),
     proLabore:      !!row.pro_labore,
+    tipoVinculo:    row.tipo_vinculo || 'clt',
+    empresaTerceirizada: row.empresa_terceirizada || '',
     situacao:       ativo ? 'Ativo' : 'Inativo',
     dependentesLista: row.dependentes_lista || [],
   };
@@ -444,8 +446,8 @@ async function init() {
     const [dados, marcosRows] = await Promise.all([
       sbGet('colaboradores',
         'select=id,nome,cargo,data_admissao,data_ingresso_grupo,data_nascimento,data_demissao,' +
-        'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,' +
-        'dependentes_lista&order=nome'),
+        'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,tipo_vinculo,' +
+        'empresa_terceirizada,dependentes_lista&order=nome'),
       sbGet('param_marco_tempo_casa', 'select=anos&ativo=eq.true&order=anos'),
     ]);
     COLABORADORES = dados.map(supabaseToJS);
@@ -486,6 +488,14 @@ const RELATORIOS = {
       <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" checked onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" checked onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarAniversariosPDF(),
     excel: () => gerarAniversariosExcel(),
@@ -510,6 +520,14 @@ const RELATORIOS = {
           <option value="todos">Todos os colaboradores</option>
           <option value="marcos">Somente marcos</option>
         </select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" checked onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarTempoCasaPDF(),
     excel: () => gerarTempoCasaExcel(),
@@ -531,6 +549,14 @@ const RELATORIOS = {
           <option value="Ativo" selected>Ativos</option>
           <option value="Inativo">Inativos</option>
         </select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" checked onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarDependentesPDF(),
     excel: () => gerarDependentesExcel(),
@@ -560,6 +586,14 @@ const RELATORIOS = {
           <option value="M">Masculino</option>
           <option value="F">Feminino</option>
         </select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarCadastroPDF(),
     excel: () => gerarCadastroExcel(),
@@ -580,6 +614,14 @@ const RELATORIOS = {
       <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarCadastroPDF({ sexoForce: document.getElementById('f-sexo')?.value }),
     excel: () => gerarCadastroExcel({ sexoForce: document.getElementById('f-sexo')?.value }),
@@ -601,6 +643,14 @@ const RELATORIOS = {
       <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarCotasPDF(),
     excel: () => gerarCotasExcel(),
@@ -609,11 +659,19 @@ const RELATORIOS = {
     cat: 'RH',
     title: 'Headcount',
     desc: 'Quadro de colaboradores ativos agrupados por empresa e setor. Snapshot do quadro na data atual.',
-    note: 'Calculado a partir dos colaboradores sem data_demissao. Exclui pro-labore.',
+    note: 'Filtro de vínculo configurável no painel.',
     renderFiltros: () => `
       <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarHeadcountPDF(),
     excel: () => gerarHeadcountExcel(),
@@ -635,6 +693,14 @@ const RELATORIOS = {
       <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarAdmissoesPDF(),
     excel: () => gerarAdmissoesExcel(),
@@ -656,6 +722,14 @@ const RELATORIOS = {
       <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarDesligamentosPDF(),
     excel: () => gerarDesligamentosExcel(),
@@ -677,6 +751,14 @@ const RELATORIOS = {
       <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarTurnoverPDF(),
     excel: () => gerarTurnoverExcel(),
@@ -690,6 +772,14 @@ const RELATORIOS = {
       <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarExperienciaPDF(),
     excel: () => gerarExperienciaExcel(),
@@ -698,11 +788,19 @@ const RELATORIOS = {
     cat: 'RH',
     title: 'Distribuição por Cargo',
     desc: 'Ranking de cargos por número de colaboradores ativos. Agrupado por empresa, ordenado do mais frequente ao menos frequente.',
-    note: 'Conta colaboradores ativos por cargo dentro de cada empresa. Exclui pro-labore.',
+    note: 'Filtro de vínculo configurável no painel.',
     renderFiltros: () => `
       <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row" style="margin-top:8px;">
+        <div class="filter-label">Tipo de vínculo</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked onchange="renderDetalhe(_relAtivo)"> CLT</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" onchange="renderDetalhe(_relAtivo)"> Promotora</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
+        </div>
       </div>`,
     pdf:   () => gerarCargosPDF(),
     excel: () => gerarCargosExcel(),
@@ -771,6 +869,17 @@ function opsMes() {
 function mesAtual()   { return parseInt(document.getElementById('f-mes')?.value || new Date().getMonth()+1); }
 function empresaFiltro() { return (document.getElementById('f-empresa')?.value || '').trim(); }
 function situacaoFiltro(){ return (document.getElementById('f-situacao')?.value || ''); }
+
+function vinculos() {
+  const sel = document.querySelectorAll('.f-vinculo:checked');
+  if (!sel.length) return ['clt','promotora','pro_labore'];
+  return Array.from(sel).map(el => el.value);
+}
+
+// Re-popula o select de empresa sem re-renderizar o painel (preserva estado dos checkboxes)
+function renderDetalhe(id) {
+  popularFiltroEmpresas();
+}
 
 function agora() {
   const d = new Date();
@@ -849,7 +958,7 @@ function _dadosAniversarios() {
   const mes = mesAtual();
   const emp = empresaFiltro();
   let lista = COLABORADORES.filter(c =>
-    !c.proLabore &&
+    vinculos().includes(c.tipoVinculo) &&
     c.situacao === 'Ativo' &&
     c.dataNascimento &&
     parseInt(c.dataNascimento.split('-')[1]) === mes &&
@@ -954,7 +1063,7 @@ function _dadosTempoCasa() {
   // usa dataIngressoGrupo quando preenchida, senão dataAdmissao
   let lista = COLABORADORES.filter(c => {
     const ref = c.dataIngressoGrupo || c.dataAdmissao;
-    if (c.proLabore || c.situacao !== 'Ativo' || !ref) return false;
+    if (!vinculos().includes(c.tipoVinculo) || c.situacao !== 'Ativo' || !ref) return false;
     if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
     const m = parseInt(ref.split('-')[1]);
     return m === mes;
@@ -1027,7 +1136,7 @@ function _dadosDependentes() {
   const emp = empresaFiltro();
   const sit = situacaoFiltro();
   let lista = COLABORADORES.filter(c => {
-    if (c.proLabore) return false;
+    if (!vinculos().includes(c.tipoVinculo)) return false;
     if (sit && c.situacao !== sit) return false;
     if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
     return c.dependentesLista && c.dependentesLista.length > 0;
@@ -1098,7 +1207,7 @@ function _dadosCadastro(opts = {}) {
   const emp = opts.empresa   ?? empresaFiltro();
   const sex = opts.sexo      ?? (document.getElementById('f-sexo')?.value || '');
   let lista = COLABORADORES.filter(c => {
-    if (c.proLabore) return false;
+    if (!vinculos().includes(c.tipoVinculo)) return false;
     if (sit && c.situacao !== sit) return false;
     if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
     if (sex === 'M' && !(c.sexo === 'M')) return false;
@@ -1207,7 +1316,7 @@ function _dadosCotas() {
   const tipo = document.getElementById('f-tipo')?.value || 'pcd';
   const emp  = empresaFiltro();
   let lista = COLABORADORES.filter(c => {
-    if (c.proLabore || c.situacao !== 'Ativo') return false;
+    if (!vinculos().includes(c.tipoVinculo) || c.situacao !== 'Ativo') return false;
     if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
     if (tipo === 'pcd')      return c.pcd;
     if (tipo === 'aprendiz') return c.aprendiz;
@@ -1315,7 +1424,7 @@ ${rows}
 function _dadosHeadcount() {
   const emp = empresaFiltro();
   const lista = COLABORADORES.filter(c =>
-    !c.proLabore && c.situacao === 'Ativo' &&
+    vinculos().includes(c.tipoVinculo) && c.situacao === 'Ativo' &&
     (!emp || stripNum(c.empresaAtuacao) === emp)
   );
   if (!lista.length) { alert('Nenhum colaborador ativo encontrado para o filtro.'); return null; }
@@ -1373,7 +1482,7 @@ function _dadosAdmissoes() {
   const dtIni = dtIniFiltro(), dtFim = dtFimFiltro();
   if (!dtIni || !dtFim) { alert('Selecione o período (data inicial e final).'); return null; }
   const lista = COLABORADORES.filter(c =>
-    !c.proLabore && c.dataAdmissao >= dtIni && c.dataAdmissao <= dtFim &&
+    vinculos().includes(c.tipoVinculo) && c.dataAdmissao >= dtIni && c.dataAdmissao <= dtFim &&
     (!emp || stripNum(c.empresaAtuacao) === emp)
   );
   if (!lista.length) { alert('Nenhuma admissão encontrada no período selecionado.'); return null; }
@@ -1430,7 +1539,7 @@ function _dadosDesligamentos() {
   const dtIni = dtIniFiltro(), dtFim = dtFimFiltro();
   if (!dtIni || !dtFim) { alert('Selecione o período (data inicial e final).'); return null; }
   const lista = COLABORADORES.filter(c =>
-    !c.proLabore && c.dataDemissao &&
+    vinculos().includes(c.tipoVinculo) && c.dataDemissao &&
     c.dataDemissao >= dtIni && c.dataDemissao <= dtFim &&
     (!emp || stripNum(c.empresaAtuacao) === emp)
   );
@@ -1487,7 +1596,7 @@ function _dadosTurnover() {
   const emp = empresaFiltro();
   const dtIni = dtIniFiltro(), dtFim = dtFimFiltro();
   if (!dtIni || !dtFim) { alert('Selecione o período (data inicial e final).'); return null; }
-  const base = COLABORADORES.filter(c => !c.proLabore && (!emp || stripNum(c.empresaAtuacao) === emp));
+  const base = COLABORADORES.filter(c => vinculos().includes(c.tipoVinculo) && (!emp || stripNum(c.empresaAtuacao) === emp));
   const listAdm = base.filter(c => c.dataAdmissao >= dtIni && c.dataAdmissao <= dtFim);
   const listDes = base.filter(c => c.dataDemissao && c.dataDemissao >= dtIni && c.dataDemissao <= dtFim);
   const hcIni = base.filter(c => c.dataAdmissao < dtIni && (!c.dataDemissao || c.dataDemissao >= dtIni)).length;
@@ -1574,7 +1683,7 @@ function _dadosExperiencia() {
   const hoje = new Date();
   const limiteIso = new Date(hoje.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const lista = COLABORADORES.filter(c =>
-    !c.proLabore && c.situacao === 'Ativo' && c.dataAdmissao >= limiteIso &&
+    vinculos().includes(c.tipoVinculo) && c.situacao === 'Ativo' && c.dataAdmissao >= limiteIso &&
     (!emp || stripNum(c.empresaAtuacao) === emp)
   ).map(c => {
     const admDate = new Date(c.dataAdmissao + 'T00:00:00');
@@ -1617,7 +1726,7 @@ function gerarExperienciaExcel() {
 function _dadosCargos() {
   const emp = empresaFiltro();
   const lista = COLABORADORES.filter(c =>
-    !c.proLabore && c.situacao === 'Ativo' &&
+    vinculos().includes(c.tipoVinculo) && c.situacao === 'Ativo' &&
     (!emp || stripNum(c.empresaAtuacao) === emp)
   );
   if (!lista.length) { alert('Nenhum colaborador ativo encontrado para o filtro.'); return null; }
