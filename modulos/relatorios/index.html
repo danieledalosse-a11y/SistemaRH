@@ -382,6 +382,7 @@ function logout() {
 // ─── Dados ───────────────────────────────────────────────────────────────────
 let COLABORADORES = [];
 let EMPRESAS      = [];
+let MARCOS        = [];
 
 function parseSexo(v) {
   if (!v) return '';
@@ -439,11 +440,15 @@ function stripNum(s) { return (s || '').replace(/^\d+\s*[-–]\s*/, ''); }
 // ─── Init ────────────────────────────────────────────────────────────────────
 async function init() {
   try {
-    const dados = await sbGet('colaboradores',
-      'select=id,nome,cargo,data_admissao,data_nascimento,data_demissao,' +
-      'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,' +
-      'dependentes_lista&order=nome');
+    const [dados, marcosRows] = await Promise.all([
+      sbGet('colaboradores',
+        'select=id,nome,cargo,data_admissao,data_nascimento,data_demissao,' +
+        'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,' +
+        'dependentes_lista&order=nome'),
+      sbGet('param_marco_tempo_casa', 'select=anos&ativo=eq.true&order=anos'),
+    ]);
     COLABORADORES = dados.map(supabaseToJS);
+    MARCOS = marcosRows.map(r => r.anos);
     EMPRESAS = [...new Set(COLABORADORES.map(c => stripNum(c.empresaAtuacao)).filter(Boolean))].sort();
     popularFiltroEmpresas();
     document.getElementById('loadingOverlay').style.display = 'none';
@@ -499,14 +504,11 @@ const RELATORIOS = {
         <select class="filter-select emp-filter" id="f-empresa"></select>
       </div>
       <div class="filter-row">
-        <label class="filter-label">Marcos destacados</label>
-        <div class="marcos-row">
-          <span class="marco-chip">1 ano</span>
-          <span class="marco-chip">5 anos</span>
-          <span class="marco-chip">10 anos</span>
-          <span class="marco-chip">15 anos</span>
-          <span class="marco-chip">20 anos</span>
-        </div>
+        <label class="filter-label">Exibir</label>
+        <select class="filter-select" id="f-tc-filtro">
+          <option value="todos">Todos os colaboradores</option>
+          <option value="marcos">Somente marcos</option>
+        </select>
       </div>`,
     pdf:   () => gerarTempoCasaPDF(),
     excel: () => gerarTempoCasaExcel(),
@@ -941,11 +943,12 @@ ${rows}
 }
 
 // ─── Tempo de Casa por Mês ───────────────────────────────────────────────────
-const MARCOS = [1, 5, 10, 15, 20];
+function tcFiltro() { return (document.getElementById('f-tc-filtro')?.value || 'todos'); }
 
 function _dadosTempoCasa() {
-  const mes = mesAtual();
-  const emp = empresaFiltro();
+  const mes    = mesAtual();
+  const emp    = empresaFiltro();
+  const filtro = tcFiltro();
   // colaboradores ativos que completam aniversário de empresa no mês
   let lista = COLABORADORES.filter(c => {
     if (c.proLabore || c.situacao !== 'Ativo' || !c.dataAdmissao) return false;
@@ -958,9 +961,13 @@ function _dadosTempoCasa() {
     const adm  = new Date(c.dataAdmissao + 'T00:00:00');
     const anos = new Date().getFullYear() - adm.getFullYear();
     return { ...c, anosEmpresa: anos, marco: MARCOS.includes(anos) };
-  }).sort((a,b) => b.anosEmpresa - a.anosEmpresa || a.nome.localeCompare(b.nome,'pt-BR'));
+  });
+  if (filtro === 'marcos') lista = lista.filter(c => c.marco);
+  if (!lista.length) { alert('Nenhum colaborador atinge um marco de tempo de casa neste mês.'); return null; }
+  lista = lista.sort((a,b) => b.anosEmpresa - a.anosEmpresa || a.nome.localeCompare(b.nome,'pt-BR'));
   const chips = [`Mês: ${MESES[mes-1]}`];
   if (emp) chips.push('Empresa: ' + emp);
+  if (filtro === 'marcos') chips.push('Somente marcos');
   return { lista, chips, total: lista.length, mes, dataHora: agora() };
 }
 
