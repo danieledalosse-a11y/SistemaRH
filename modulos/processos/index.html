@@ -1467,7 +1467,7 @@ async function _renderFichaVT(procId, wrap) {
   let colab = {};
   if (colabId) {
     try {
-      const r = await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${colabId}&select=nome,cargo,setor,matricula,data_admissao,empresa_registro,vt_cartao,vt_passes,vt_linha`, { headers: SB_HEADERS });
+      const r = await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${colabId}&select=nome,setor,matricula,cpf,data_nascimento,empresa_registro,vt_cartao,vt_passes,vt_linha`, { headers: SB_HEADERS });
       const [row] = await r.json();
       if (row) colab = row;
     } catch(_) {}
@@ -1484,6 +1484,19 @@ async function _renderFichaVT(procId, wrap) {
   const linha   = extras.vt_linha  || null;
   const motivo  = extras.motivo ? extras.motivo.replace(/_/g,' ') : null;
   const hoje    = new Date().toLocaleDateString('pt-BR');
+
+  // Mês de vigência default = próximo mês
+  const _proximoMes = () => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  };
+  const mesVigencia = extras.mes_vigencia || _proximoMes();
+
+  // Formata CPF
+  const _fmtCPF = cpf => cpf ? cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : null;
+  // Remove prefixo numérico do setor "148 - Ecommerce" → "Ecommerce"
+  const _stripNum = s => s ? s.replace(/^\d+\s*[-–]\s*/, '') : s;
 
   // Dados do cadastro para o botão "Usar dados do cadastro"
   const cadastroCartao = colab.vt_cartao || null;
@@ -1565,10 +1578,16 @@ async function _renderFichaVT(procId, wrap) {
           <div id="fichaVT-content-${procId}" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;">
             ${_field('Colaborador', proc.colaborador_nome)}
             ${_field('Matrícula', colab.matricula)}
-            ${_field('Cargo', colab.cargo)}
-            ${_field('Setor', colab.setor)}
+            ${_field('CPF', _fmtCPF(colab.cpf))}
+            ${_field('Data de Nascimento', colab.data_nascimento ? new Date(colab.data_nascimento+'T12:00:00').toLocaleDateString('pt-BR') : null)}
+            ${_field('Setor', _stripNum(colab.setor))}
             ${_field('Empresa / Unidade', colab.empresa_registro)}
-            ${_field('Data de Admissão', colab.data_admissao ? new Date(colab.data_admissao+'T12:00:00').toLocaleDateString('pt-BR') : null)}
+            <div style="grid-column:1/-1;">
+              <div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Mês de Vigência</div>
+              <input type="month" id="fichaVT-vigencia-${procId}" value="${mesVigencia}"
+                style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;font-weight:600;color:#374151;background:#f9fafb;font-family:inherit;outline:none;"
+                onchange="_salvarVigenciaVT(${procId}, this.value)">
+            </div>
           </div>
         </div>
 
@@ -1750,6 +1769,17 @@ async function _confirmarFotoVT(procId) {
   }
 }
 
+async function _salvarVigenciaVT(procId, valor) {
+  const proc = _PROC_MAP[procId];
+  if (!proc) return;
+  const extras = { ...(proc.dados_extras || {}), mes_vigencia: valor };
+  await fetch(`${SB_URL}/rest/v1/processos?id=eq.${procId}`, {
+    method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ dados_extras: extras }),
+  });
+  proc.dados_extras = extras;
+}
+
 async function _salvarDadosVT(procId) {
   const cartao = document.getElementById('fichaVT-cartao-' + procId)?.value?.trim() || null;
   const passes = document.getElementById('fichaVT-passes-' + procId)?.value || null;
@@ -1914,18 +1944,63 @@ function _copiarBonus(procId) {
   });
 }
 
-function _imprimirFichaVT(procId) {
+async function _imprimirFichaVT(procId) {
   const proc = _PROC_MAP[procId];
   if (!proc) return;
-  const extras = proc.dados_extras || {};
-  const content = document.getElementById('fichaVT-content-' + procId);
+  const extras  = proc.dados_extras || {};
   const op      = extras.operacao || 'inclusao';
   const opLabel = op === 'exclusao' ? 'Exclusão de VT' : op === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT';
   const opCor   = op === 'exclusao' ? '#991b1b' : op === 'alteracao' ? '#5b21b6' : '#166534';
   const opBg    = op === 'exclusao' ? '#fee2e2' : op === 'alteracao' ? '#ede9fe' : '#dcfce7';
   const opBord  = op === 'exclusao' ? '#fca5a5' : op === 'alteracao' ? '#c4b5fd' : '#86efac';
   const hoje    = new Date().toLocaleDateString('pt-BR');
-  const fichaEl = document.querySelector(`#fichaVT-${procId} > div`);
+
+  // Busca dados frescos do colaborador para impressão
+  let colab = {};
+  if (proc.colaborador_id) {
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${proc.colaborador_id}&select=nome,setor,matricula,cpf,data_nascimento,empresa_registro`, { headers: SB_HEADERS });
+      const [row] = await r.json();
+      if (row) colab = row;
+    } catch(_) {}
+  }
+
+  const _fmtCPF   = cpf => cpf ? cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '—';
+  const _stripNum = s   => s ? s.replace(/^\d+\s*[-–]\s*/, '') : '—';
+  const _fmtDate  = iso => iso ? new Date(iso+'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  const _fmtMes   = ym  => { if (!ym) return '—'; const [y,m]=ym.split('-'); const nomes=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']; return `${nomes[parseInt(m)-1]} / ${y}`; };
+
+  const vigencia = document.getElementById('fichaVT-vigencia-' + procId)?.value || extras.mes_vigencia || '';
+
+  const _pf = (label, value) => `
+    <div>
+      <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px;">${label}</div>
+      <div style="font-size:13px;font-weight:600;color:#111;">${value||'—'}</div>
+    </div>`;
+
+  const dadosVTHtml = op !== 'exclusao' ? (() => {
+    const cartao = extras.vt_cartao || '—';
+    const passes = extras.vt_passes || '—';
+    const linha  = extras.vt_linha  || '—';
+    return `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div style="background:${opBg};border:1px solid ${opBord};border-radius:6px;padding:10px 14px;">
+          <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Nº Cartão VT</div>
+          <div style="font-size:15px;font-weight:700;color:${opCor};">${cartao}</div>
+        </div>
+        <div style="background:${opBg};border:1px solid ${opBord};border-radius:6px;padding:10px 14px;">
+          <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Passes / Dia</div>
+          <div style="font-size:15px;font-weight:700;color:${opCor};">${passes}</div>
+        </div>
+      </div>
+      <div style="background:${opBg};border:1px solid ${opBord};border-radius:6px;padding:10px 14px;">
+        <div style="font-size:10px;font-weight:700;color:${opCor};text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Linha de Ônibus / Itinerário</div>
+        <div style="font-size:14px;font-weight:700;color:${opCor};">${linha}</div>
+      </div>`;
+  })() : `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 14px;">
+    <div style="font-size:10px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Motivo da Exclusão</div>
+    <div style="font-size:14px;font-weight:600;color:#991b1b;">${(extras.motivo||'').replace(/_/g,' ')||'—'}</div>
+  </div>`;
 
   const w = window.open('', '_blank', 'width=720,height=700');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -1933,43 +2008,35 @@ function _imprimirFichaVT(procId) {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; padding: 36px; color: #111; background: #fff; }
-    .header { background:${opBg}; border:1px solid ${opBord}; border-radius:10px 10px 0 0; padding:16px 20px; display:flex; align-items:center; gap:12px; margin-bottom:0; }
-    .header-icon { font-size:24px; }
-    .header-title { font-size:15px; font-weight:700; color:${opCor}; }
-    .header-sub { font-size:11px; color:${opCor}; opacity:.8; margin-top:2px; }
-    .section { border:1px solid ${opBord}; border-top:none; padding:16px 20px; }
-    .section:last-of-type { border-radius:0 0 10px 10px; }
-    .section-label { font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.08em; margin-bottom:12px; }
-    .section-label.vt { color:${opCor}; opacity:.75; }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 28px; }
-    .field-label { font-size:10px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.07em; margin-bottom:3px; }
-    .field-value { font-size:13px; font-weight:600; color:#111; }
-    .field-empty .field-label { color:#bbb; }
-    .field-empty .field-value { color:#bbb; font-weight:400; }
-    .vt-card { background:${opBg}; border:1px solid ${opBord}; border-radius:6px; padding:10px 14px; }
-    .vt-card .field-label { color:${opCor}; }
-    .vt-card .field-value { font-size:15px; font-weight:700; color:${opCor}; }
-    .vt-empty { border:1px solid #e5e7eb; border-radius:6px; padding:10px 14px; }
-    .vt-empty .field-label { color:#bbb; }
-    .vt-empty .field-value { color:#bbb; font-weight:400; }
     .sep { border:none; border-top:1px solid #e5e7eb; margin:20px 0; }
     .assinatura { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:36px; }
     .assinatura-box { border-top:1px solid #aaa; padding-top:6px; font-size:11px; color:#555; }
   </style></head><body>
-  <div class="header">
-    <div class="header-icon">🚌</div>
+  <div style="background:${opBg};border:1px solid ${opBord};border-radius:10px 10px 0 0;padding:16px 20px;display:flex;align-items:center;gap:12px;">
+    <div style="font-size:24px;">🚌</div>
     <div>
-      <div class="header-title">Ficha de Encaminhamento — ${opLabel}</div>
-      <div class="header-sub">Revest do Brasil Acabamentos Ltda · RH → Financeiro · ${hoje}</div>
+      <div style="font-size:15px;font-weight:700;color:${opCor};">Ficha de Encaminhamento — ${opLabel}</div>
+      <div style="font-size:11px;color:${opCor};opacity:.8;margin-top:2px;">Revest do Brasil Acabamentos Ltda · RH → Financeiro · ${hoje}</div>
     </div>
   </div>
-  <div class="section">
-    <div class="section-label">👤 Dados do Colaborador</div>
-    <div class="grid">${content ? content.innerHTML : ''}</div>
+  <div style="border:1px solid ${opBord};border-top:none;padding:16px 20px;">
+    <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">👤 Dados do Colaborador</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 28px;">
+      ${_pf('Colaborador', proc.colaborador_nome)}
+      ${_pf('Matrícula', colab.matricula)}
+      ${_pf('CPF', _fmtCPF(colab.cpf))}
+      ${_pf('Data de Nascimento', _fmtDate(colab.data_nascimento))}
+      ${_pf('Setor', _stripNum(colab.setor))}
+      ${_pf('Empresa / Unidade', colab.empresa_registro)}
+      <div style="grid-column:1/-1;">
+        <div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px;">Mês de Vigência</div>
+        <div style="font-size:13px;font-weight:700;color:#1d4ed8;">${_fmtMes(vigencia)}</div>
+      </div>
+    </div>
   </div>
-  <div class="section">
-    <div class="section-label vt">🚌 Dados do Vale Transporte</div>
-    ${fichaEl ? fichaEl.querySelector('[style*="flex-direction:column"]')?.innerHTML || '' : ''}
+  <div style="border:1px solid ${opBord};border-top:none;border-radius:0 0 10px 10px;padding:16px 20px;">
+    <div style="font-size:10px;font-weight:700;color:${opCor};opacity:.75;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">🚌 Dados do Vale Transporte</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">${dadosVTHtml}</div>
   </div>
   <hr class="sep">
   <div class="assinatura">
