@@ -2353,6 +2353,8 @@ function supabaseParaModelo(feriasRows, colaborRows) {
     if (!mat) return;
     const nome  = colabDados.nome  || `Matrícula ${mat}`;
     const cargo = colabDados.cargo || '';
+    const tipoVinculo = (colabDados.tipo_vinculo || 'clt').toLowerCase();
+    if (tipoVinculo !== 'clt') return; // exclui pro_labore e promotora
     if (cargo.toLowerCase().includes('sócio') || cargo.toLowerCase().includes('socio')) return;
     const __key = mat + '|' + nome;
 
@@ -2465,7 +2467,7 @@ async function carregarDoSupabase() {
   try {
     const [feriasRows, colaborRows, histRows] = await Promise.all([
       sbGet('ferias', 'select=*&order=matricula_colaborador,ano'),
-      sbGet('colaboradores', 'select=id,matricula,nome,cargo,setor,gestor,empresa_registro,empresa_registro_nome,empresa_atuacao,empresa_atuacao_nome,data_demissao,foto_url'),
+      sbGet('colaboradores', 'select=id,matricula,nome,cargo,setor,gestor,empresa_registro,empresa_registro_nome,empresa_atuacao,empresa_atuacao_nome,data_demissao,foto_url,tipo_vinculo'),
       sbGet('ferias_historico', 'select=*&order=criado_em.desc&limit=500').catch(() => []),
     ]);
     FERIAS_HISTORICO = histRows || [];
@@ -7708,10 +7710,14 @@ async function _carregarEquipeGestor(apelido) {
   setGestorMsg('Carregando equipe...');
   GESTOR_APELIDO = apelido || null;
   const colabQuery = apelido
-    ? `gestor=eq.${encodeURIComponent(apelido)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url&order=nome`
-    : `ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url&order=nome`;
+    ? `gestor=eq.${encodeURIComponent(apelido)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo&order=nome`
+    : `ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo&order=nome`;
   GESTOR_COLABS = (await sbGet('colaboradores', colabQuery))
-    .filter(c => !(c.cargo||'').toLowerCase().includes('sócio') && !(c.cargo||'').toLowerCase().includes('socio'));
+    .filter(c => {
+      const tv = (c.tipo_vinculo || 'clt').toLowerCase();
+      if (tv !== 'clt') return false; // exclui pro_labore e promotora
+      return !(c.cargo||'').toLowerCase().includes('sócio') && !(c.cargo||'').toLowerCase().includes('socio');
+    });
   if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado');
   const ids = GESTOR_COLABS.map(c => c.id).join(',');
   setGestorMsg('Buscando férias da equipe...');
