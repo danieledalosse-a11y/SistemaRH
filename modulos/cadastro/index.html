@@ -780,6 +780,23 @@
             <select class="sf-inp" id="df-gestor"><option value="">Selecione o gestor</option></select>
           </div>
         </div>
+        <div class="sf-row">
+          <div class="sf-cell">
+            <div class="sf-lbl">Tipo de Vínculo</div>
+            <select class="sf-inp" id="df-tipo-vinculo" onchange="_toggleEmpresaTerceirizada()">
+              <option value="clt">CLT</option>
+              <option value="promotora">Promotora</option>
+              <option value="pro_labore">Pró-labore</option>
+            </select>
+          </div>
+        </div>
+        <div class="sf-row" id="df-row-empresa-terceirizada" style="display:none;">
+          <div class="sf-cell">
+            <div class="sf-lbl">Empresa Terceirizada</div>
+            <input class="sf-inp" type="text" id="df-empresa-terceirizada" placeholder="Ex: Indústria Garcia">
+            <div class="sf-hint" style="font-size:11px;color:#667085;margin-top:3px">Empresa de origem da promotora (diferente da unidade onde atua)</div>
+          </div>
+        </div>
       </div>
 
       <!-- ③ Dados pessoais -->
@@ -1647,6 +1664,8 @@ function supabaseToJS(row) {
     gestor:           row.gestor || '',
     dependentes:      parseInt(row.dependentes) || 0,
     proLabore:            !!row.pro_labore,
+    tipoVinculo:          row.tipo_vinculo || 'clt',
+    empresaTerceirizada:  row.empresa_terceirizada || '',
     efetivacaoPendente:   !!row.efetivacao_pendente,
     cadastroConferidoEm:  row.cadastro_conferido_em || null,
     cadastroConferidoPor: row.cadastro_conferido_por || null,
@@ -1790,7 +1809,7 @@ function renderTelaEmpresas() {
   document.getElementById('telaEmpresas').style.display = 'block';
   document.getElementById('telaLista').style.display    = 'none';
 
-  const ativos = COLABORADORES.filter(c => !c.proLabore && c.situacao === 'Ativo');
+  const ativos = COLABORADORES.filter(c => c.tipoVinculo === 'clt' && c.situacao === 'Ativo');
 
   // Agrupa por nome_simplificado (empresa_registro normalizado)
   const porNome = {};
@@ -1902,7 +1921,7 @@ async function verificarExperienciaWorkflows() {
     const perfil = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}'); } catch(_) { return {}; } })();
 
     for (const c of COLABORADORES) {
-      if (!c.em_experiencia || c.data_demissao || !c.data_admissao || c.proLabore) continue;
+      if (!c.em_experiencia || c.data_demissao || !c.data_admissao || c.tipoVinculo === 'pro_labore') continue;
 
       const adm = new Date(c.data_admissao + 'T00:00:00');
 
@@ -2067,7 +2086,7 @@ async function carregarDoSupabase() {
     popularFiltros();
     atualizarMetricas();
     renderTelaEmpresas();
-    const ativos = COLABORADORES.filter(c => !c.proLabore && c.situacao === 'Ativo').length;
+    const ativos = COLABORADORES.filter(c => c.tipoVinculo === 'clt' && c.situacao === 'Ativo').length;
     document.getElementById('statusConexao').textContent = `${ativos} colaboradores ativos`;
     atualizarNotificacoes();
 
@@ -2166,7 +2185,7 @@ function isAprendiz(cargo) {
 function atualizarMetricasLista() {
   const metDiv = document.getElementById('metricasLista');
   if (!metDiv) return;
-  let base = COLABORADORES.filter(c => !c.proLabore);
+  let base = COLABORADORES.filter(c => c.tipoVinculo === 'clt');
   if (_filtroEmpresa) base = base.filter(c => c.empresa && c.empresa.toUpperCase() === _filtroEmpresa.toUpperCase());
   const ativos   = base.filter(c => c.situacao === 'Ativo');
   document.getElementById('ml-ativos').textContent   = ativos.length;
@@ -2178,7 +2197,7 @@ function atualizarMetricasLista() {
 }
 
 function atualizarMetricas() {
-  const sem_pl  = COLABORADORES.filter(c => !c.proLabore);
+  const sem_pl  = COLABORADORES.filter(c => c.tipoVinculo === 'clt');
   const ativos  = sem_pl.filter(c => c.situacao === 'Ativo');
   const masc    = ativos.filter(c => c.sexo === 'M').length;
   const fem     = ativos.filter(c => c.sexo === 'F').length;
@@ -2244,7 +2263,7 @@ function aplicarFiltros() {
   const set   = document.getElementById('filtroSetor').value;
   const sex   = document.getElementById('filtroSexo').value;
   FILTRADOS = COLABORADORES.filter(c => {
-    if (c.proLabore) return false;
+    if (c.tipoVinculo === 'pro_labore') return false;
     if (busca && !c.nome.toLowerCase().includes(busca) && !c.codigo.includes(busca) && !c.cargo.toLowerCase().includes(busca)) return false;
     if (sit && c.situacao !== sit) return false;
     if (emp && c.empresa.toUpperCase() !== emp.toUpperCase()) return false;
@@ -2510,7 +2529,7 @@ function gerarRelatorioKPI(tipo, formato) {
   // monta lista filtrada direto de COLABORADORES (ignora filtros da tabela)
   const labels = { ativos:'Colaboradores Ativos', masc:'Masculino', fem:'Feminino', aprendiz:'Jovem Aprendiz', pcd:'PCD' };
   const lista = COLABORADORES.filter(c => {
-    if (c.proLabore) return false;
+    if (c.tipoVinculo === 'pro_labore') return false;
     if (tipo === 'masc')    return c.situacao === 'ativo' && (c.sexo === 'M' || c.sexo === 'Masc');
     if (tipo === 'fem')     return c.situacao === 'ativo' && (c.sexo === 'F' || c.sexo === 'Fem');
     if (tipo === 'aprendiz') return c.situacao === 'ativo' && c.aprendiz;
@@ -2882,6 +2901,9 @@ function abrirFicha(idx) {
   carregarEstadosNat().then(() => preencherNaturalidade(c.natEstado || '', c.naturalidade || ''));
   document.getElementById('df-cor').value           = c.corRaca || '';
   document.getElementById('df-escolaridade').value  = c.escolaridade || '';
+  document.getElementById('df-tipo-vinculo').value = c.tipoVinculo || 'clt';
+  document.getElementById('df-empresa-terceirizada').value = c.empresaTerceirizada || '';
+  _toggleEmpresaTerceirizada();
   document.getElementById('df-pcd').checked         = c.pcd || false;
   document.getElementById('df-inss').checked        = c.afastadoINSS || false;
   document.getElementById('df-primeiroEmprego').checked = c.primeiroEmprego || false;
@@ -3150,6 +3172,12 @@ async function confirmarEfetivacaoCadastro() {
   mostrarToast('Efetivação concluída! Cadastro completo.');
 }
 
+function _toggleEmpresaTerceirizada() {
+  const v = document.getElementById('df-tipo-vinculo')?.value;
+  const row = document.getElementById('df-row-empresa-terceirizada');
+  if (row) row.style.display = v === 'promotora' ? '' : 'none';
+}
+
 function fecharFicha() {
   document.getElementById('drawerOverlay').classList.remove('open');
   document.getElementById('efetivacaoBanner').style.display    = 'none';
@@ -3305,6 +3333,8 @@ function salvarFicha() {
   c.naturalidade      = up(document.getElementById('df-naturalidade').value);
   c.corRaca           = document.getElementById('df-cor').value;
   c.escolaridade      = document.getElementById('df-escolaridade').value;
+  c.tipoVinculo       = document.getElementById('df-tipo-vinculo').value || 'clt';
+  c.empresaTerceirizada = document.getElementById('df-empresa-terceirizada').value || '';
   c.pcd               = document.getElementById('df-pcd').checked;
   c.afastadoINSS      = document.getElementById('df-inss').checked;
   c.primeiroEmprego   = document.getElementById('df-primeiroEmprego').checked;
@@ -3481,6 +3511,9 @@ function salvarFicha() {
       hobby:              c.hobby || null,
       // Dependentes
       dependentes_lista:  c.dependentesLista?.length ? c.dependentesLista : null,
+      tipo_vinculo:       c.tipoVinculo || 'clt',
+      empresa_terceirizada: c.empresaTerceirizada || null,
+      pro_labore:         c.tipoVinculo === 'pro_labore',
       ativo:              c.situacao === 'Ativo',
       historico:          c.historico?.length ? c.historico : null,
     };
@@ -4357,8 +4390,8 @@ function logout() {
 // ── Notificações ────────────────────────────────────────────────────────────
 
 function atualizarNotificacoes() {
-  const efetivando   = COLABORADORES.filter(c => !c.proLabore && c.efetivacaoPendente);
-  const naoConferido = COLABORADORES.filter(c => !c.proLabore && !c.efetivacaoPendente && !c.cadastroConferidoEm && c.situacao === 'Ativo');
+  const efetivando   = COLABORADORES.filter(c => c.tipoVinculo === 'clt' && c.efetivacaoPendente);
+  const naoConferido = COLABORADORES.filter(c => c.tipoVinculo === 'clt' && !c.efetivacaoPendente && !c.cadastroConferidoEm && c.situacao === 'Ativo');
   const total = efetivando.length + naoConferido.length;
   const badge = document.getElementById('notifBadge');
   if (!badge) return;
@@ -4368,8 +4401,8 @@ function atualizarNotificacoes() {
 }
 
 function renderPainelNotificacoes() {
-  const efetivando   = COLABORADORES.filter(c => !c.proLabore && c.efetivacaoPendente);
-  const naoConferido = COLABORADORES.filter(c => !c.proLabore && !c.efetivacaoPendente && !c.cadastroConferidoEm && c.situacao === 'Ativo');
+  const efetivando   = COLABORADORES.filter(c => c.tipoVinculo === 'clt' && c.efetivacaoPendente);
+  const naoConferido = COLABORADORES.filter(c => c.tipoVinculo === 'clt' && !c.efetivacaoPendente && !c.cadastroConferidoEm && c.situacao === 'Ativo');
   const total = efetivando.length + naoConferido.length;
   const LIMIT = 8;
 
