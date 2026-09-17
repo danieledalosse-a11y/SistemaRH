@@ -793,9 +793,6 @@
           <div class="sf-cell">
             <div class="sf-lbl">Tipo de Vínculo</div>
             <select class="sf-inp" id="df-tipo-vinculo" onchange="_toggleEmpresaTerceirizada()">
-              <option value="clt">CLT</option>
-              <option value="promotora">Promotora</option>
-              <option value="pro_labore">Pró-labore</option>
             </select>
           </div>
         </div>
@@ -1396,6 +1393,7 @@ function popularSelectCargo(valorAtual) {
 
 // ─── Tipo de Contrato (select de param_tipo_contrato) ────────────────────────
 let TIPOS_CONTRATO = [];
+let TIPOS_VINCULO = [];
 
 async function carregarTiposContrato() {
   try {
@@ -1416,6 +1414,29 @@ function popularSelectContrato(valorAtual) {
     sel.appendChild(opt);
   });
   sel.value = prev;
+}
+
+// ─── Tipo de Vínculo (select de param_tipo_vinculo) ──────────────────────────
+
+async function carregarTiposVinculo() {
+  try {
+    TIPOS_VINCULO = await sbGet('param_tipo_vinculo', 'select=codigo,descricao&ativo=eq.true&order=ordem');
+    popularSelectVinculo();
+  } catch(e) { console.warn('Tipos de vínculo não carregados:', e.message); }
+}
+
+function popularSelectVinculo(valorAtual) {
+  const sel = document.getElementById('df-tipo-vinculo');
+  if (!sel) return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '';
+  (TIPOS_VINCULO || []).forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.codigo;
+    o.textContent = t.descricao;
+    sel.appendChild(o);
+  });
+  if (prev) sel.value = prev;
 }
 
 // ─── Instituições Jovem Aprendiz (param_instituicao_aprendiz) ────────────────
@@ -2081,6 +2102,7 @@ async function carregarDoSupabase() {
       carregarGestores(),
       carregarCargos(),
       carregarTiposContrato(),
+      carregarTiposVinculo(),
       carregarInstituicoesAprendiz(),
       carregarEmpresasParam(),
       carregarJornadas(),
@@ -2775,6 +2797,8 @@ function novoColaborador() {
    'df-estadoCivil','df-possuiFilhos','df-jornada','df-tipoAdmissao',
    'df-causaRescisao','df-aviso','df-vt','df-tipoConta']
   .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const tvEl = document.getElementById('df-tipo-vinculo');
+  if (tvEl) tvEl.value = 'clt';
 
   // Checkboxes
   ['df-pcd','df-inss','df-primeiroEmprego','df-comissionado'].forEach(id => {
@@ -2911,7 +2935,7 @@ function abrirFicha(idx) {
   carregarEstadosNat().then(() => preencherNaturalidade(c.natEstado || '', c.naturalidade || ''));
   document.getElementById('df-cor').value           = c.corRaca || '';
   document.getElementById('df-escolaridade').value  = c.escolaridade || '';
-  document.getElementById('df-tipo-vinculo').value = c.tipoVinculo || 'clt';
+  popularSelectVinculo(c.tipoVinculo || 'clt');
   document.getElementById('df-empresa-terceirizada').value = c.empresaTerceirizada || '';
   _toggleEmpresaTerceirizada();
   document.getElementById('df-pcd').checked         = c.pcd || false;
