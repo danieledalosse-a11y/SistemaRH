@@ -79,19 +79,28 @@ let _ajusteTamanho    = null;  // tamanho (para uso futuro)
 
 Quando o erro não bate em nenhum código, retorna: `"Erro ao salvar. Verifique os campos e tente novamente."`
 
-## Exclusão de entrada (`excluirEntrada`) — 2026-09-16
+## Exclusão de entrada com motivo (`excluirEntrada`) — 2026-09-16
 
 Botão 🗑️ ao lado do ✏️ na lista de movimentações (aba Movimentações > Posição). Aparece apenas para linhas do tipo `'entrada'` com `id` preenchido.
 
+Ao clicar, abre o `modalExcluirEntrada` (modal próprio, NÃO usa `confirm()`). O campo "Motivo da exclusão" é obrigatório — sem ele o botão de confirmar exibe erro e não prossegue.
+
+O motivo é salvo em `snapshot_antes.motivo_exclusao` no registro do `unif_log`.
+
 ```js
-async function excluirEntrada(id) {
-  if (!confirm('Excluir esta entrada permanentemente? Esta ação não pode ser desfeita.')) return;
+// Abre modal — NÃO excluir diretamente
+function excluirEntrada(id) { ... }
+
+// Chamado pelo botão "Confirmar exclusão" no modal
+async function confirmarExcluirEntrada() {
+  const motivo = document.getElementById('excluirEntradaMotivo').value.trim();
+  if (!motivo) { toast('Informe o motivo.', 'erro'); return; }
   await sbDelete('unif_entradas', `id=eq.${id}`);
-  await carregarEstoque();
+  await _logUnif('entrada_excluida', 'unif_entradas', id, { ...snapshot, motivo_exclusao: motivo }, null);
 }
 ```
 
-Captura snapshot de `ENTRADAS` antes de excluir e registra em `unif_log` via `_logUnif`.
+`fecharModalExcluir()` fecha e limpa `_excluirEntradaId`.
 
 ## Modal "Editar entrada" — arrastável (2026-09-16)
 
@@ -109,7 +118,7 @@ O modal é arrastável pelo cabeçalho (`cursor:move`). Implementado com IIFE qu
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `id` | bigserial PK | auto |
-| `acao` | text NOT NULL | `'entrada_editada'` / `'entrada_excluida'` / `'estoque_ajustado'` |
+| `acao` | text NOT NULL | ver tabela de ações abaixo |
 | `tabela` | text | `'unif_entradas'` / `'unif_estoque'` |
 | `registro_id` | text | id do registro afetado |
 | `snapshot_antes` | jsonb | estado antes da alteração |
@@ -118,6 +127,26 @@ O modal é arrastável pelo cabeçalho (`cursor:move`). Implementado com IIFE qu
 | `criado_em` | timestamptz | `DEFAULT NOW()` |
 
 RLS habilitado com policy `anon_all` (leitura e escrita liberadas).
+
+### Valores válidos para `acao`
+
+| `acao` | Área | Disparado em |
+|---|---|---|
+| `entrada_excluida` | Estoque | `confirmarExcluirEntrada` — motivo em `snapshot_antes.motivo_exclusao` |
+| `entrada_editada` | Estoque | `salvarEditEntrada` |
+| `estoque_ajustado` | Estoque | `confirmarAjusteEstoque` |
+| `entrega_registrada` | Entregas | `salvarEntrega` |
+| `devolucao_registrada` | Entregas | `salvarDevolucao` (modal devolução) e `salvarEntrega` quando motivo = `demissao` |
+| `movimentacao_estornada` | Entregas | `executarEstorno` |
+| `item_criado` | Catálogo | `salvarItem` (novo) |
+| `item_editado` | Catálogo | `salvarItem` (edição) |
+| `item_excluido` | Catálogo | `confirmarExcluirItem` |
+| `almoxarifado_criado` | Configurações | `salvarAlmox` (novo) |
+| `almoxarifado_editado` | Configurações | `salvarAlmox` (edição) |
+| `fornecedor_criado` | Configurações | `salvarFornecedor` (novo) |
+| `fornecedor_editado` | Configurações | `salvarFornecedor` (edição) |
+
+Ao adicionar novas ações, seguir o padrão `<objeto>_<verbo_passado>` (ex: `kit_excluido`).
 
 ### Helper `_logUnif(acao, tabelaRef, registroId, antes, depois)`
 
@@ -132,15 +161,56 @@ async function _logUnif(acao, tabelaRef, registroId, antes, depois) {
 }
 ```
 
-### Onde é chamado
+### Onde é chamado — cobertura completa (2026-09-16)
 
+**Regra:** sempre capturar o snapshot **antes** do `sbPatch`/`sbDelete`, nunca depois.
+
+#### Estoque
 | Função | `acao` | `antes` | `depois` |
 |---|---|---|---|
-| `excluirEntrada` | `'entrada_excluida'` | snapshot de `ENTRADAS` | `null` |
+| `confirmarExcluirEntrada` | `'entrada_excluida'` | snapshot de `ENTRADAS` + `motivo_exclusao` | `null` |
 | `salvarEditEntrada` | `'entrada_editada'` | snapshot de `ENTRADAS` | objeto com novos dados |
 | `confirmarAjusteEstoque` | `'estoque_ajustado'` | `{ quantidade: qtdAnterior }` | `{ quantidade: novaQtd, obs }` |
 
-**Regra:** sempre capturar o snapshot **antes** do `sbPatch`/`sbDelete`, nunca depois.
+#### Entregas / Devoluções
+| Função | `acao` | `tabela` | `registro_id` |
+|---|---|---|---|
+| `salvarEntrega` | `'entrega_registrada'` | `'unif_movimentacoes'` | `_colabAtual.id` |
+| `salvarDevolucao` | `'devolucao_registrada'` | `'unif_movimentacoes'` | `_colabAtual.id` |
+| `executarEstorno` | `'movimentacao_estornada'` | `'unif_movimentacoes'` | `movId` |
+
+#### Catálogo
+| Função | `acao` | `antes` | `depois` |
+|---|---|---|---|
+| `salvarItem` (novo) | `'item_criado'` | `null` | payload |
+| `salvarItem` (edição) | `'item_editado'` | snapshot de `ITENS` | payload |
+| `confirmarExcluirItem` | `'item_excluido'` | snapshot de `ITENS` | `null` |
+
+#### Configurações
+| Função | `acao` | `antes` | `depois` |
+|---|---|---|---|
+| `salvarAlmox` (novo) | `'almoxarifado_criado'` | `null` | payload |
+| `salvarAlmox` (edição) | `'almoxarifado_editado'` | snapshot de `ALMOXARIFADOS` | payload |
+| `salvarFornecedor` (novo) | `'fornecedor_criado'` | `null` | payload |
+| `salvarFornecedor` (edição) | `'fornecedor_editado'` | snapshot de `FORNECEDORES` | payload |
+
+## Aba Auditoria — `renderAuditoria()` — 2026-09-16
+
+Quarta aba do Estoque (ao lado de Posição / Movimentações / Alertas). Botão: `estab-auditoria`, seção: `essec-auditoria`.
+
+Busca `unif_log` ordenado por `criado_em DESC` (máx 200 registros). Filtro agrupado por área via `filtroAuditoriaAcao` (grupos: Estoque / Entregas+Devoluções / Catálogo / Configurações).
+
+Colunas: Data/Hora · Usuário · Ação (badge colorido) · Registro (tabela + id) · Antes (JSON truncado) · Depois (JSON truncado).
+
+Cores dos badges por categoria:
+- **Vermelho** (`#FEF3F2 / #B42318`): exclusões e estornos
+- **Azul** (`#EFF8FF / #1849A9`): edições
+- **Verde** (`#F0FDF4 / #027A48`): criações, entregas, ajustes
+- **Roxo** (`#FDF4FF / #6941C6`): devoluções
+
+Quando `snapshot_antes.motivo_exclusao` existe, exibe abaixo do badge: "Motivo: …"
+
+Chamada via `setEstoqueSubTab('auditoria')` → `renderAuditoria()`.
 
 ## Tipos de movimentação (`tipo` em `unif_movimentacoes`)
 
