@@ -754,6 +754,11 @@ function fecharDetalhe() {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+function diaSemana(mes, dia) {
+  return DIAS_SEMANA[new Date(new Date().getFullYear(), mes - 1, parseInt(dia)).getDay()];
+}
 
 function opsMes() {
   const cur = new Date().getMonth();
@@ -853,72 +858,86 @@ function _dadosAniversarios() {
     const db = parseInt(b.dataNascimento.split('-')[2]);
     return da - db || a.nome.localeCompare(b.nome, 'pt-BR');
   });
-  // agrupa por gestor
-  const gestMap = {};
-  lista.forEach(c => {
-    const g = c.gestor || '(Sem gestor)';
-    if (!gestMap[g]) gestMap[g] = [];
-    gestMap[g].push(c);
-  });
-  const grupos = Object.entries(gestMap).sort(([a],[b]) => {
-    if (a==='(Sem gestor)') return 1; if (b==='(Sem gestor)') return -1;
-    return a.localeCompare(b,'pt-BR');
-  });
   const chips = [`Mês: ${MESES[mes-1]}`];
   if (emp) chips.push('Empresa: ' + emp);
-  return { lista, grupos, chips, total: lista.length, mes, dataHora: agora() };
+  return { lista, chips, total: lista.length, mes, dataHora: agora() };
 }
 
 function gerarAniversariosPDF() {
   const d = _dadosAniversarios(); if (!d) return;
-  const { grupos, chips, total, mes, dataHora } = d;
-  let blocos = '';
-  for (const [gestor, lista] of grupos) {
-    blocos += `<div class="sh"><span class="sn">${gestor}</span><span class="sc">${lista.length} aniversariante${lista.length>1?'s':''}</span></div>`;
-    const linhas = lista.map(c => {
-      const dia = c.dataNascimento.split('-')[2];
-      const ano = c.dataNascimento.split('-')[0];
-      const idade = idadeAnos(c.dataNascimento);
-      return `<tr><td class="td-nome">${c.nome}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${dia}/${String(mes).padStart(2,'0')}</td><td class="td-c">${idade != null ? idade + ' anos' : '—'}</td><td class="td-c">${stripNum(c.empresaAtuacao)||'—'}</td></tr>`;
-    }).join('');
-    blocos += `<table><thead><tr><th style="width:35%">Nome</th><th>Cargo</th><th>Aniversário</th><th>Idade</th><th>Empresa</th></tr></thead><tbody>${linhas}</tbody></table>`;
-  }
-  abrirPDF(htmlRelPDF(`Aniversários de ${MESES[mes-1]}`, chips, total, 'aniversariante' + (total>1?'s':''), dataHora, blocos));
+  const { lista, chips, total, mes, dataHora } = d;
+  const mesStr = String(mes).padStart(2, '0');
+  const ano = new Date().getFullYear();
+  const linhas = lista.map((c, i) => {
+    const dia = c.dataNascimento.split('-')[2];
+    const ds = diaSemana(mes, dia);
+    const bgRow = i % 2 === 1 ? 'background:#F5F8FD' : '';
+    return `<tr style="${bgRow}">
+      <td style="padding:10px 14px 10px 14px;font-size:13px;font-weight:700;color:#2C3E6B;white-space:nowrap">${dia}/${mesStr}</td>
+      <td style="padding:10px 8px;font-size:12px;color:#5E718A">${ds}</td>
+      <td style="padding:10px 8px;font-size:13px;font-weight:600;color:#1A7F6A">${c.nome}</td>
+      <td style="padding:10px 8px;font-size:12px;color:#5E718A">${stripNum(c.setor)||'—'}</td>
+      <td style="padding:10px 8px;font-size:12px;color:#5E718A">${c.gestor||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const titulo = `Aniversariantes de ${MESES[mes-1]}/${ano}`;
+  const chipsHtml = chips.map(c => `<span class="chip">${c}</span>`).join('');
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${titulo} — Revest</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Inter',sans-serif;font-size:13px;color:#1E2740;background:#EEF2F9;padding:32px 20px}
+.w{max-width:900px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(44,62,107,.10)}
+.hd{background:#2C3E6B;padding:26px 36px 22px}
+.he{font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:5px}
+.ht{font-size:20px;font-weight:700;color:#fff;margin-bottom:10px}
+.hf{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:20px;padding:3px 10px;font-size:11px;color:rgba(255,255,255,.8);font-weight:500}
+.sub{padding:16px 36px;background:#EDF1FA;border-bottom:2px solid #3B72B0;font-size:13px;font-weight:700;color:#2C3E6B}
+table{width:100%;border-collapse:collapse}
+thead th{padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#5E718A;text-align:left;background:#F0F4FB;border-bottom:2px solid #DDE5F0}
+tbody tr{border-bottom:1px solid #ECF0F8}
+.ft{border-top:1px solid #DDE5F0;padding:14px 36px;font-size:11px;color:#5E718A;background:#FAFBFE}
+.ord{padding:12px 36px 16px;font-size:11px;color:#5E718A;background:#fff}
+@media print{body{background:#fff;padding:0}.w{box-shadow:none;border-radius:0}}
+</style></head><body><div class="w">
+<div class="hd"><div class="he">Revest do Brasil Acabamentos Ltda</div><div class="ht">${titulo}</div><div class="hf">${chipsHtml}<span class="chip">${total} aniversariante${total>1?'s':''}</span></div></div>
+<div class="sub">${total} aniversariante${total>1?'s':''}</div>
+<table><thead><tr><th style="width:80px">Data</th><th style="width:50px">Dia</th><th>Colaborador</th><th>Setor</th><th>Gestor</th></tr></thead>
+<tbody>${linhas}</tbody></table>
+<div class="ord"><strong>Ordenação:</strong> sempre pela data do aniversário, do primeiro ao último dia do mês.</div>
+<div class="ft">Sistema RH · Revest · ${dataHora}</div>
+</div></body></html>`;
+  abrirPDF(html);
 }
 
 function gerarAniversariosExcel() {
   const d = _dadosAniversarios(); if (!d) return;
-  const { grupos, chips, total, mes, dataHora } = d;
+  const { lista, chips, total, mes, dataHora } = d;
   const F = 'font-family:Calibri,Arial,sans-serif;';
-  const EMP_L = `style="${F}font-size:12pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#FFFFFF;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-left:2px solid #1a2d52;border-right:none;"`;
-  const EMP_R = `style="${F}font-size:11pt;padding:10px 16px;background:#2C3E6B;color:#5DD6B8;text-align:right;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-right:2px solid #1a2d52;border-left:none;"`;
+  const mesStr = String(mes).padStart(2, '0');
+  const ano = new Date().getFullYear();
   const TH = (w) => `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;${w?'width:'+w+';':''}white-space:nowrap;"`;
-  const TD = (par) => `style="${F}font-size:10pt;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;"`;
-  const BLANK = 'style="padding:5px;border:none;background:#FFFFFF;"';
-  let rows = '';
-  for (const [gestor, lista] of grupos) {
-    rows += `<tr><td colspan="4" ${EMP_L}>${gestor}</td><td ${EMP_R}>${lista.length} aniversariante${lista.length>1?'s':''}</td></tr>`;
-    rows += `<tr><th ${TH('240pt')}>NOME</th><th ${TH()}>CARGO</th><th ${TH()}>ANIVERSÁRIO</th><th ${TH()}>IDADE</th><th ${TH()}>EMPRESA</th></tr>`;
-    lista.forEach((c, i) => {
-      const par = i%2===1;
-      const dia = c.dataNascimento.split('-')[2];
-      const idade = idadeAnos(c.dataNascimento);
-      const nomeStyle = `style="${F}font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;width:240pt;"`;
-      rows += `<tr><td ${nomeStyle}>${c.nome}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${dia}/${String(mes).padStart(2,'0')}</td><td ${TD(par)}>${idade!=null?idade+' anos':''}</td><td ${TD(par)}>${stripNum(c.empresaAtuacao)||''}</td></tr>`;
-    });
-    rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
-  }
+  const TD = (par) => `style="${F}font-size:10pt;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#5E718A;"`;
+  let rows = `<tr><th ${TH('60pt')}>DATA</th><th ${TH('50pt')}>DIA</th><th ${TH('220pt')}>COLABORADOR</th><th ${TH()}>SETOR</th><th ${TH()}>GESTOR</th></tr>`;
+  lista.forEach((c, i) => {
+    const par = i%2===1;
+    const dia = c.dataNascimento.split('-')[2];
+    const ds = diaSemana(mes, dia);
+    const nomeStyle = `style="${F}font-size:10pt;font-weight:600;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1A7F6A;width:220pt;"`;
+    rows += `<tr><td ${TD(par)}>${dia}/${mesStr}</td><td ${TD(par)}>${ds}</td><td ${nomeStyle}>${c.nome}</td><td ${TD(par)}>${stripNum(c.setor)||''}</td><td ${TD(par)}>${c.gestor||''}</td></tr>`;
+  });
   const txt = chips.join(' | ');
   const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Aniversários</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
 <body><table>
-<tr><td colspan="5" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">Aniversários de ${MESES[mes-1]} — Revest</td></tr>
-<tr><td colspan="5" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${txt} · ${total} registros · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="5" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">Aniversariantes de ${MESES[mes-1]}/${ano} — Revest</td></tr>
+<tr><td colspan="5" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${txt} · ${total} aniversariante${total>1?'s':''} · Gerado em ${dataHora}</td></tr>
 <tr><td colspan="5" style="padding:4px;border:none;background:#fff;"></td></tr>
 ${rows}
 <tr><td colspan="4" style="background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:8px 12px;border:1px solid #DDE5F0;">Total</td><td style="background:#EDF1FA;color:#1A7F6A;${F}font-size:10pt;font-weight:bold;padding:8px 12px;text-align:right;border:1px solid #DDE5F0;">${total} aniversariante${total>1?'s':''}</td></tr>
 </table></body></html>`;
-  baixarExcel(xls, `Aniversarios_${MESES[mes-1]}`);
+  baixarExcel(xls, `Aniversarios_${MESES[mes-1]}_${ano}`);
 }
 
 // ─── Tempo de Casa por Mês ───────────────────────────────────────────────────
