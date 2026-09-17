@@ -212,6 +212,7 @@
   .sf-cell { padding:10px 16px; border-right:1px solid var(--border); min-width:0; }
   .sf-cell:last-child, .sf-row.full .sf-cell { border-right:none; }
   .sf-lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-ter); font-weight:500; margin-bottom:4px; }
+  .sf-lbl.obrigatorio::after { content:' *'; color:var(--red,#dc2626); font-size:11px; font-weight:700; }
   .sf-inp { border:1px solid var(--border); border-radius:6px; background:var(--surface); font-size:13px; color:var(--text); width:100%; font-family:inherit; padding:6px 9px; line-height:1.4; transition:border-color .15s; }
   .sf-inp:focus { outline:none; border-color:#667085; box-shadow:0 0 0 3px rgba(16,24,40,.06); }
   .sf-inp[readonly] { background:var(--bg); color:var(--text-sec); cursor:default; }
@@ -654,7 +655,7 @@
           <span class="sec-head-t">Identificação</span>
         </div>
         <div class="sf-row full">
-          <div class="sf-cell"><div class="sf-lbl">Nome completo</div><input class="sf-inp" type="text" id="df-nome"></div>
+          <div class="sf-cell"><div class="sf-lbl obrigatorio">Nome completo</div><input class="sf-inp" type="text" id="df-nome"></div>
         </div>
         <div class="sf-row">
           <div class="sf-cell"><div class="sf-lbl">Data de nascimento</div><input class="sf-inp" type="date" id="df-nascimento"></div>
@@ -701,13 +702,13 @@
           <span class="sec-head-t">Registro e contrato</span>
         </div>
         <div class="sf-row">
-          <div class="sf-cell"><div class="sf-lbl">Matrícula</div><input class="sf-inp" type="text" id="df-codigo" readonly></div>
+          <div class="sf-cell"><div class="sf-lbl obrigatorio" id="lbl-matricula">Matrícula</div><input class="sf-inp" type="text" id="df-codigo" readonly></div>
           <div class="sf-cell"><div class="sf-lbl">Situação</div>
             <select class="sf-inp" id="df-situacao"><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select>
           </div>
         </div>
         <div class="sf-row">
-          <div class="sf-cell"><div class="sf-lbl">Data de admissão</div><input class="sf-inp" type="date" id="df-admissao" oninput="calcularFimExperiencia()"></div>
+          <div class="sf-cell"><div class="sf-lbl obrigatorio">Data de admissão</div><input class="sf-inp" type="date" id="df-admissao" oninput="calcularFimExperiencia()"></div>
           <div class="sf-cell"><div class="sf-lbl">Ingresso no Grupo</div><input class="sf-inp" type="date" id="df-ingresso-grupo"><div class="sf-hint" style="font-size:11px;color:#667085;margin-top:3px">Preencher apenas quando diferente da admissão (ex: transferência de CNPJ)</div></div>
         </div>
         <div class="sf-row full">
@@ -784,7 +785,7 @@
         </div>
 
         <div class="sf-row" style="border-top:.5px solid var(--border);">
-          <div class="sf-cell"><div class="sf-lbl">Empresa (registro)</div><input class="sf-inp" type="text" id="df-empresa" readonly></div>
+          <div class="sf-cell"><div class="sf-lbl obrigatorio">Empresa (registro)</div><input class="sf-inp" type="text" id="df-empresa" readonly></div>
           <div class="sf-cell"><div class="sf-lbl">Empresa (atuação)</div>
             <select class="sf-inp" id="df-empresa-atuacao"><option value="">Selecione a empresa</option></select>
           </div>
@@ -3264,6 +3265,13 @@ function _aplicarModoFicha(tipoVinculo) {
   if (resumida && tabBtnBenef?.classList.contains('active')) {
     const btnGeral = document.querySelector('.drawer-tab[onclick*="geral"]');
     if (btnGeral) btnGeral.click();
+  }
+
+  // Label Matrícula — obrigatório só para CLT
+  const lblMatricula = document.getElementById('lbl-matricula');
+  if (lblMatricula) {
+    if (tipoVinculo === 'clt') lblMatricula.classList.add('obrigatorio');
+    else lblMatricula.classList.remove('obrigatorio');
   }
 
   // Aba Geral — seção Sinalizações inteira
