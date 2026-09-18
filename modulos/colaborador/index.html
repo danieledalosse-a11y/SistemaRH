@@ -243,7 +243,20 @@ function getAuthHeaders() {
   const token = sess.access_token || SB_KEY;
   return { apikey: SB_KEY, Authorization: `Bearer ${token}` };
 }
-async function sbGet(path) { const r = await fetch(SB_URL+path,{headers:getAuthHeaders()}); return r.ok ? r.json() : []; }
+async function sbGet(path) {
+  const r = await fetch(SB_URL+path, { headers: getAuthHeaders() });
+  if (r.ok) return r.json();
+  const txt = await r.text().catch(() => '');
+  if (r.status === 401 || txt.includes('JWT expired') || txt.includes('PGRST303')) {
+    // token expirado — redireciona para login para reautenticar
+    localStorage.removeItem('sb_session');
+    localStorage.removeItem('sb_perfil');
+    window.location.href = '../../login.html';
+    return [];
+  }
+  console.warn('sbGet falhou', r.status, path, txt);
+  return [];
+}
 
 /* ── Auth ── */
 function getSession() {
@@ -349,7 +362,11 @@ async function init() {
     ? `id=eq.${encodeURIComponent(paramId)}`
     : `matricula=eq.${encodeURIComponent(paramMatricula)}`;
   const colabs = await sbGet(`/rest/v1/colaboradores?${filtro}&limit=1`);
-  if (!colabs || !colabs.length) { mostrarErro('Colaborador não encontrado.'); return; }
+  if (!colabs || !colabs.length) {
+    console.error('Query colaboradores retornou vazio:', filtro);
+    mostrarErro(`Colaborador não encontrado.<br><small style="color:var(--text-ter)">Filtro: ${filtro}</small>`);
+    return;
+  }
   _colab = colabs[0];
 
   // Passo 2 — buscar dados relacionados com as chaves corretas de cada tabela
