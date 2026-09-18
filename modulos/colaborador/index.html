@@ -276,26 +276,11 @@ async function sbGet(path) {
   return [];
 }
 
-/* ── Auth — mesmo padrão do Cadastro ── */
+/* ── Auth ── */
 function logout() {
   localStorage.removeItem('sb_session');
   localStorage.removeItem('sb_perfil');
   window.location.href = '../../login.html';
-}
-function initAuth() {
-  const sess = localStorage.getItem('sb_session');
-  const perf = localStorage.getItem('sb_perfil');
-  if (!sess) { window.location.href = '../../login.html'; return; }
-  try {
-    const s = JSON.parse(sess);
-    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
-    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' };
-    const p = perf ? JSON.parse(perf) : {};
-    const nome = (p.nome || s.email || '').split(' ')[0] || '—';
-    const ini  = (p.nome || s.email || '').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
-    document.getElementById('userName').textContent   = nome;
-    document.getElementById('userAvatar').textContent = ini || '?';
-  } catch { localStorage.clear(); window.location.href = '../../login.html'; }
 }
 
 /* ── URL params ── */
@@ -363,8 +348,6 @@ function tempoStr(dataAdm) {
 
 /* ── Init ── */
 async function init() {
-  initAuth();
-
   const paramId        = getParam('id');
   const paramMatricula = getParam('matricula');
   if (!paramId && !paramMatricula) { mostrarErro('Colaborador não informado.'); return; }
@@ -704,6 +687,23 @@ function mostrarErro(msg) {
       <p><a href="../../index.html" style="color:var(--blue)">Voltar ao início</a></p>
     </div>`;
 }
+
+// Auth — IIFE idêntica ao Cadastro: se falhar, para aqui e redireciona
+(function() {
+  const sess = localStorage.getItem('sb_session');
+  const perf = localStorage.getItem('sb_perfil');
+  if (!sess) { window.location.href = '../../login.html'; return; }
+  try {
+    const s = JSON.parse(sess);
+    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' };
+    const p = perf ? JSON.parse(perf) : {};
+    const nome = (p.nome || s.email || '').split(' ')[0];
+    document.getElementById('userName').textContent   = nome || '—';
+    const ini = (p.nome || s.email || '').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+    document.getElementById('userAvatar').textContent = ini || '?';
+  } catch(_) { localStorage.clear(); window.location.href = '../../login.html'; }
+})();
 
 init();
 </script>
