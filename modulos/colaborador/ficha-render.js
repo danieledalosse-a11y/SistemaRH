@@ -23,9 +23,9 @@ const _MI_ICO = {
   gestor: `<svg viewBox="0 0 24 24" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
 };
 
-function _miItem(ico, label, val) {
+function _miItem(ico, label, val, color) {
   return `<div class="hero-meta-item">
-    <div class="hero-mi-ico">${ico}</div>
+    <div class="hero-mi-ico${color?' '+color:''}">${ico}</div>
     <div class="hero-mi-txt">
       <span class="hero-mi-label">${label}</span>
       <span class="hero-mi-val">${val}</span>
@@ -72,32 +72,32 @@ function renderHero() {
   document.getElementById('heroLoc').innerHTML =
     locItems.join('<span class="hero-loc-sep">·</span>');
 
-  /* ── Meta: 2 linhas limpas com divisórias internas ── */
+  /* ── Meta: linha primária + linha secundária com hierarquia clara ── */
   const vinculoVal = c.tipo_vinculo ? (_VINCULO_LABEL[c.tipo_vinculo] || c.tipo_vinculo) : null;
 
-  // Linha 1 — identidade e tempo
+  // Linha 1 — identificação e tempo (primária, como na referência)
   const row1 = [];
   if (c.matricula)
-    row1.push(_miItem(_MI_ICO.mat, 'Matrícula', c.matricula));
+    row1.push(_miItem(_MI_ICO.mat,   'Matrícula',       c.matricula,                         'c-blue'));
   if (vinculoVal)
-    row1.push(_miItem(_MI_ICO.vinc, 'Vínculo', vinculoVal));
+    row1.push(_miItem(_MI_ICO.vinc,  'Vínculo',         vinculoVal,                           ''));
   if (c.data_admissao)
-    row1.push(_miItem(_MI_ICO.adm, 'Admissão', fd(c.data_admissao)));
+    row1.push(_miItem(_MI_ICO.adm,   'Admissão',        fd(c.data_admissao),                  'c-blue'));
   if (c.data_admissao)
-    row1.push(_miItem(_MI_ICO.tempo, 'Tempo de casa', tempoStr(c.data_admissao)));
+    row1.push(_miItem(_MI_ICO.tempo, 'Tempo de casa',   tempoStr(c.data_admissao),            'c-purple'));
   if (c.data_ingresso_grupo)
-    row1.push(_miItem(_MI_ICO.grupo, 'Ingresso no Grupo', fd(c.data_ingresso_grupo)));
+    row1.push(_miItem(_MI_ICO.grupo, 'Ingresso no Grupo', fd(c.data_ingresso_grupo),          'c-purple'));
 
-  // Linha 2 — vínculos de empresa e gestão (só se houver dado)
+  // Linha 2 — contexto organizacional (secundária, visivelmente menor)
   const row2 = [];
   if (c.empresa_registro_nome || c.empresa_registro)
-    row2.push(_miItem(_MI_ICO.emp, 'Empresa de registro', c.empresa_registro_nome || c.empresa_registro));
+    row2.push(_miItem(_MI_ICO.emp,    'Empresa de registro', c.empresa_registro_nome || c.empresa_registro, 'c-green'));
   if (c.gestor)
-    row2.push(_miItem(_MI_ICO.gestor, 'Gestor', c.gestor));
+    row2.push(_miItem(_MI_ICO.gestor, 'Gestor',              c.gestor,                                       ''));
 
   let metaHtml = '';
   if (row1.length) metaHtml += `<div class="hero-meta-row">${row1.join('')}</div>`;
-  if (row2.length) metaHtml += `<div class="hero-meta-row">${row2.join('')}</div>`;
+  if (row2.length) metaHtml += `<div class="hero-meta-row hero-meta-row-sec">${row2.join('')}</div>`;
   document.getElementById('heroMeta').innerHTML = metaHtml;
 }
 
