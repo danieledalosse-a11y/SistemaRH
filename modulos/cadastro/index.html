@@ -1326,16 +1326,22 @@ async function _sbRefreshSession() {
 
 async function sbPatch(tabela, filtro, dados) {
   const url = `${SB_URL}/rest/v1/${tabela}?${filtro}`;
-  let r = await fetch(url, { method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(dados) });
+  const headers = { ...SB_HEADERS, 'Prefer': 'return=representation' };
+  let r = await fetch(url, { method: 'PATCH', headers, body: JSON.stringify(dados) });
   if (!r.ok) {
     const txt = await r.text();
     const isExpired = txt.includes('JWT expired') || txt.includes('PGRST303');
     if (isExpired && await _sbRefreshSession()) {
-      r = await fetch(url, { method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(dados) });
+      r = await fetch(url, { method: 'PATCH', headers: { ...SB_HEADERS, 'Prefer': 'return=representation' }, body: JSON.stringify(dados) });
       if (!r.ok) throw new Error(await r.text());
     } else {
       throw new Error(txt);
     }
+  }
+  // Verifica se alguma linha foi realmente atualizada (RLS pode retornar 200 com 0 linhas)
+  const linhas = await r.json().catch(() => []);
+  if (!Array.isArray(linhas) || linhas.length === 0) {
+    throw new Error('Nenhuma linha atualizada. Verifique as permissões do seu usuário.');
   }
 }
 
