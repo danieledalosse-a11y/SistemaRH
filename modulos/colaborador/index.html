@@ -243,12 +243,32 @@ function getAuthHeaders() {
   const token = sess.access_token || SB_KEY;
   return { apikey: SB_KEY, Authorization: `Bearer ${token}` };
 }
+async function _sbRefreshSession() {
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    if (!sess.refresh_token) return false;
+    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: sess.refresh_token }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    if (!data.access_token) return false;
+    const newSess = { ...sess, access_token: data.access_token, refresh_token: data.refresh_token || sess.refresh_token, expires_at: Date.now() + (data.expires_in || 3600) * 1000 };
+    localStorage.setItem('sb_session', JSON.stringify(newSess));
+    return true;
+  } catch { return false; }
+}
 async function sbGet(path) {
-  const r = await fetch(SB_URL+path, { headers: getAuthHeaders() });
+  let r = await fetch(SB_URL+path, { headers: getAuthHeaders() });
   if (r.ok) return r.json();
   const txt = await r.text().catch(() => '');
   if (r.status === 401 || txt.includes('JWT expired') || txt.includes('PGRST303')) {
-    // token expirado — redireciona para login para reautenticar
+    if (await _sbRefreshSession()) {
+      r = await fetch(SB_URL+path, { headers: getAuthHeaders() });
+      if (r.ok) return r.json();
+    }
     localStorage.removeItem('sb_session');
     localStorage.removeItem('sb_perfil');
     window.location.href = '../../login.html';
