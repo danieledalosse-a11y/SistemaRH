@@ -1,3 +1,12 @@
+/* ── Capitalização de nomes (banco guarda em caps) ── */
+function _titleCase(str) {
+  if (!str) return str;
+  const min = new Set(['de','da','do','dos','das','e','em','na','no']);
+  return str.toLowerCase().split(' ').map((w,i) =>
+    (!i || !min.has(w)) ? w.charAt(0).toUpperCase()+w.slice(1) : w
+  ).join(' ');
+}
+
 /* ── Tabs ── */
 function showTab(id, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -46,10 +55,10 @@ function renderHero() {
   }
 
   /* ── Topbar ── */
-  document.getElementById('topbarNome').textContent = c.nome || 'Ficha';
+  document.getElementById('topbarNome').textContent = _titleCase(c.nome) || 'Ficha';
 
   /* ── Nome ── */
-  document.getElementById('heroNome').textContent = c.nome || '—';
+  document.getElementById('heroNome').textContent = _titleCase(c.nome) || '—';
 
   /* ── Badge de status ── */
   const ativo = !c.data_demissao;
@@ -72,38 +81,26 @@ function renderHero() {
   document.getElementById('heroLoc').innerHTML =
     locItems.join('<span class="hero-loc-sep">·</span>');
 
-  /* ── Meta: linha primária + linha secundária com hierarquia clara ── */
+  /* ── Meta: 4 métricas em 1 linha — mesma composição da referência ── */
   const vinculoVal = c.tipo_vinculo ? (_VINCULO_LABEL[c.tipo_vinculo] || c.tipo_vinculo) : null;
-
-  // Linha 1 — identificação e tempo (primária, como na referência)
-  const row1 = [];
+  const metaItems = [];
   if (c.matricula)
-    row1.push(_miItem(_MI_ICO.mat,   'Matrícula',       c.matricula,                         'c-blue'));
+    metaItems.push(_miItem(_MI_ICO.mat,   'Matrícula',     c.matricula,             'c-blue'));
   if (vinculoVal)
-    row1.push(_miItem(_MI_ICO.vinc,  'Vínculo',         vinculoVal,                           ''));
+    metaItems.push(_miItem(_MI_ICO.vinc,  'Vínculo',       vinculoVal,              ''));
   if (c.data_admissao)
-    row1.push(_miItem(_MI_ICO.adm,   'Admissão',        fd(c.data_admissao),                  'c-blue'));
+    metaItems.push(_miItem(_MI_ICO.adm,   'Admissão',      fd(c.data_admissao),     'c-blue'));
   if (c.data_admissao)
-    row1.push(_miItem(_MI_ICO.tempo, 'Tempo de casa',   tempoStr(c.data_admissao),            'c-purple'));
-  if (c.data_ingresso_grupo)
-    row1.push(_miItem(_MI_ICO.grupo, 'Ingresso no Grupo', fd(c.data_ingresso_grupo),          'c-purple'));
+    metaItems.push(_miItem(_MI_ICO.tempo, 'Tempo de casa', tempoStr(c.data_admissao), 'c-purple'));
 
-  // Linha 2 — contexto organizacional (secundária, visivelmente menor)
-  const row2 = [];
-  if (c.empresa_registro_nome || c.empresa_registro)
-    row2.push(_miItem(_MI_ICO.emp,    'Empresa de registro', c.empresa_registro_nome || c.empresa_registro, 'c-green'));
-  if (c.gestor)
-    row2.push(_miItem(_MI_ICO.gestor, 'Gestor',              c.gestor,                                       ''));
-
-  let metaHtml = '';
-  if (row1.length) metaHtml += `<div class="hero-meta-row">${row1.join('')}</div>`;
-  if (row2.length) metaHtml += `<div class="hero-meta-row hero-meta-row-sec">${row2.join('')}</div>`;
-  document.getElementById('heroMeta').innerHTML = metaHtml;
+  document.getElementById('heroMeta').innerHTML =
+    metaItems.length ? `<div class="hero-meta-row">${metaItems.join('')}</div>` : '';
 }
 
 /* ── Resumo ── */
 function renderResumo() {
   const c = _colab;
+  const vinculoLabel = c.tipo_vinculo ? (_VINCULO_LABEL[c.tipo_vinculo] || c.tipo_vinculo) : null;
 
   // saldo total de férias pendente
   const HOJE = new Date().toISOString().slice(0,10);
@@ -165,10 +162,15 @@ function renderResumo() {
       ${infoRow('Matrícula', c.matricula)}
       ${infoRow('Cargo', c.cargo)}
       ${infoRow('Setor', c.setor)}
+      ${infoRow('Empresa de registro', c.empresa_registro_nome || c.empresa_registro)}
+      ${infoRow('Unidade de atuação', c.empresa_atuacao_nome || c.empresa_atuacao)}
+      ${infoRow('Tipo de vínculo', vinculoLabel)}
+      ${infoRow('Gestor', c.gestor)}
+      ${infoRow('Admissão', fd(c.data_admissao))}
+      ${infoRow('Ingresso no Grupo', fd(c.data_ingresso_grupo))}
       ${infoRow('Tipo de contrato', c.tipo_contrato)}
       ${infoRow('Regime de horas', c.regime_horas)}
-      ${infoRow('Data de admissão', fd(c.data_admissao))}
-      ${c.data_demissao ? infoRow('Data de demissão', fd(c.data_demissao)) : ''}
+      ${c.data_demissao ? infoRow('Desligamento', fd(c.data_demissao)) : ''}
     </div>`;
 }
 
