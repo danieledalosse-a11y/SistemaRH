@@ -483,6 +483,15 @@
 
   <!-- KPIs da empresa selecionada -->
   <div class="metrics" id="metricasLista" style="display:none;margin-bottom:16px;">
+    <div class="metric clickable" id="ml-card-empresas" onclick="voltarParaEmpresas()" title="Voltar à seleção de empresas" style="border-color:var(--blue);background:var(--blue-bg);">
+      <div class="metric-icon" style="background:var(--blue-bg);">
+        <svg viewBox="0 0 24 24" stroke="var(--blue)" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+      </div>
+      <div class="metric-right">
+        <div class="metric-val" style="color:var(--blue);" id="ml-empresas">—</div>
+        <div class="metric-label" style="color:var(--blue);font-weight:600;">Empresas</div>
+      </div>
+    </div>
     <div class="metric clickable" id="ml-card-ativos" onclick="filtrarLista('ativos')">
       <div class="metric-icon" style="background:var(--green-bg);">
         <svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -2286,6 +2295,8 @@ function atualizarMetricas() {
   document.getElementById('m-pcd').textContent       = pcd;
   const elEmp = document.getElementById('m-empresas');
   if (elEmp) elEmp.textContent = empresas;
+  const elEmpLista = document.getElementById('ml-empresas');
+  if (elEmpLista) elEmpLista.textContent = empresas;
 
   const promotoras = COLABORADORES.filter(c => c.tipoVinculo === 'promotora' && c.situacao === 'Ativo').length;
   const prolabore  = COLABORADORES.filter(c => c.tipoVinculo === 'pro_labore' && c.situacao === 'Ativo').length;
@@ -2359,6 +2370,11 @@ function aplicarFiltros() {
   });
   PAGE = 1;
   renderTabela();
+  // Sincroniza active-filter nos cards de telaLista com base no _filtroVinculo atual
+  ['promotora','pro_labore'].forEach(t => {
+    const el = document.getElementById('ml-card-' + t);
+    if (el) el.classList.toggle('active-filter', t === window._filtroVinculo);
+  });
 }
 
 function filtrarGlobal(tipo) {
@@ -2374,6 +2390,11 @@ function filtrarGlobal(tipo) {
   else if (tipo === 'aprendiz') window._filtroAprendiz = true;
   else if (tipo === 'pcd')      window._filtroPcd = true;
   else if (tipo === 'promotora' || tipo === 'pro_labore') window._filtroVinculo = tipo;
+  // Sincroniza active-filter nos cards da telaLista
+  ['ativos','masc','fem','aprendiz','pcd','promotora','pro_labore'].forEach(t => {
+    const el = document.getElementById('ml-card-' + t);
+    if (el) el.classList.toggle('active-filter', t === tipo);
+  });
   aplicarFiltros();
 }
 
