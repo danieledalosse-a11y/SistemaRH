@@ -72,26 +72,33 @@ function renderHero() {
   document.getElementById('heroLoc').innerHTML =
     locItems.join('<span class="hero-loc-sep">·</span>');
 
-  /* ── Meta row ── */
+  /* ── Meta: 2 linhas limpas com divisórias internas ── */
   const vinculoVal = c.tipo_vinculo ? (_VINCULO_LABEL[c.tipo_vinculo] || c.tipo_vinculo) : null;
 
-  const meta = [];
+  // Linha 1 — identidade e tempo
+  const row1 = [];
   if (c.matricula)
-    meta.push(_miItem(_MI_ICO.mat, 'Matrícula', c.matricula));
+    row1.push(_miItem(_MI_ICO.mat, 'Matrícula', c.matricula));
   if (vinculoVal)
-    meta.push(_miItem(_MI_ICO.vinc, 'Vínculo', vinculoVal));
+    row1.push(_miItem(_MI_ICO.vinc, 'Vínculo', vinculoVal));
   if (c.data_admissao)
-    meta.push(_miItem(_MI_ICO.adm, 'Admissão', fd(c.data_admissao)));
+    row1.push(_miItem(_MI_ICO.adm, 'Admissão', fd(c.data_admissao)));
   if (c.data_admissao)
-    meta.push(_miItem(_MI_ICO.tempo, 'Tempo de casa', tempoStr(c.data_admissao)));
+    row1.push(_miItem(_MI_ICO.tempo, 'Tempo de casa', tempoStr(c.data_admissao)));
   if (c.data_ingresso_grupo)
-    meta.push(_miItem(_MI_ICO.grupo, 'Ingresso no Grupo', fd(c.data_ingresso_grupo)));
-  if (c.empresa_registro_nome || c.empresa_registro)
-    meta.push(_miItem(_MI_ICO.emp, 'Empresa de registro', c.empresa_registro_nome || c.empresa_registro));
-  if (c.gestor)
-    meta.push(_miItem(_MI_ICO.gestor, 'Gestor', c.gestor));
+    row1.push(_miItem(_MI_ICO.grupo, 'Ingresso no Grupo', fd(c.data_ingresso_grupo)));
 
-  document.getElementById('heroMeta').innerHTML = meta.join('');
+  // Linha 2 — vínculos de empresa e gestão (só se houver dado)
+  const row2 = [];
+  if (c.empresa_registro_nome || c.empresa_registro)
+    row2.push(_miItem(_MI_ICO.emp, 'Empresa de registro', c.empresa_registro_nome || c.empresa_registro));
+  if (c.gestor)
+    row2.push(_miItem(_MI_ICO.gestor, 'Gestor', c.gestor));
+
+  let metaHtml = '';
+  if (row1.length) metaHtml += `<div class="hero-meta-row">${row1.join('')}</div>`;
+  if (row2.length) metaHtml += `<div class="hero-meta-row">${row2.join('')}</div>`;
+  document.getElementById('heroMeta').innerHTML = metaHtml;
 }
 
 /* ── Resumo ── */
