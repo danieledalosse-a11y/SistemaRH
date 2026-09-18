@@ -235,14 +235,11 @@
 <div id="toast"></div>
 
 <script>
-/* ── Supabase ── */
+/* ── Supabase — mesmo padrão do Cadastro ── */
 const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1anRieHdzc2lvZmlpYWxuYmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNjMxMzUsImV4cCI6MjA2MDkzOTEzNX0.KdWamfJDm3i0mPJN59-OKqFCzR4h4GVgxJCwvknH7SA';
-function getAuthHeaders() {
-  const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
-  const token = sess.access_token || SB_KEY;
-  return { apikey: SB_KEY, Authorization: `Bearer ${token}` };
-}
+const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
+let SB_HEADERS = {};
+
 async function _sbRefreshSession() {
   try {
     const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
@@ -257,20 +254,18 @@ async function _sbRefreshSession() {
     if (!data.access_token) return false;
     const newSess = { ...sess, access_token: data.access_token, refresh_token: data.refresh_token || sess.refresh_token, expires_at: Date.now() + (data.expires_in || 3600) * 1000 };
     localStorage.setItem('sb_session', JSON.stringify(newSess));
+    SB_HEADERS = { ...SB_HEADERS, Authorization: `Bearer ${data.access_token}` };
     return true;
   } catch { return false; }
 }
+
 async function sbGet(path) {
-  console.log('[ficha] sbGet:', path.split('?')[0]);
-  let r = await fetch(SB_URL+path, { headers: getAuthHeaders() });
-  console.log('[ficha] sbGet status:', r.status, r.ok ? 'OK' : 'FALHOU');
+  let r = await fetch(SB_URL + path, { headers: SB_HEADERS });
   if (r.ok) return r.json();
   const txt = await r.text().catch(() => '');
-  console.log('[ficha] sbGet erro body:', txt.slice(0, 200));
   if (r.status === 401 || txt.includes('JWT expired') || txt.includes('PGRST303')) {
-    console.log('[ficha] token expirado, tentando refresh...');
     if (await _sbRefreshSession()) {
-      r = await fetch(SB_URL+path, { headers: getAuthHeaders() });
+      r = await fetch(SB_URL + path, { headers: SB_HEADERS });
       if (r.ok) return r.json();
     }
     localStorage.removeItem('sb_session');
@@ -278,32 +273,29 @@ async function sbGet(path) {
     window.location.href = '../../login.html';
     return [];
   }
-  console.warn('sbGet falhou', r.status, path, txt);
   return [];
 }
 
-/* ── Auth ── */
-function getSession() {
-  try {
-    const sess = JSON.parse(localStorage.getItem('sb_session')||'null');
-    const perf = JSON.parse(localStorage.getItem('sb_perfil')||'null');
-    if (!sess) return null;
-    if (sess.expires_at < Date.now()) { localStorage.clear(); return null; }
-    return { ...sess, ...(perf||{}) };
-  } catch { return null; }
-}
+/* ── Auth — mesmo padrão do Cadastro ── */
 function logout() {
   localStorage.removeItem('sb_session');
   localStorage.removeItem('sb_perfil');
   window.location.href = '../../login.html';
 }
 function initAuth() {
-  const s = getSession();
-  if (!s) { window.location.href = '../../login.html'; return; }
-  const nome = s.nome || s.email || '—';
-  const ini  = nome.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
-  document.getElementById('userAvatar').textContent = ini || '?';
-  document.getElementById('userName').textContent   = nome.split(' ')[0] || '—';
+  const sess = localStorage.getItem('sb_session');
+  const perf = localStorage.getItem('sb_perfil');
+  if (!sess) { window.location.href = '../../login.html'; return; }
+  try {
+    const s = JSON.parse(sess);
+    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' };
+    const p = perf ? JSON.parse(perf) : {};
+    const nome = (p.nome || s.email || '').split(' ')[0] || '—';
+    const ini  = (p.nome || s.email || '').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+    document.getElementById('userName').textContent   = nome;
+    document.getElementById('userAvatar').textContent = ini || '?';
+  } catch { localStorage.clear(); window.location.href = '../../login.html'; }
 }
 
 /* ── URL params ── */
@@ -371,17 +363,7 @@ function tempoStr(dataAdm) {
 
 /* ── Init ── */
 async function init() {
-  const rawSess = localStorage.getItem('sb_session');
-  console.log('[ficha] sb_session existe:', !!rawSess);
-  if (rawSess) {
-    try {
-      const s = JSON.parse(rawSess);
-      console.log('[ficha] expires_at:', s.expires_at, '| Date.now():', Date.now(), '| expirado:', s.expires_at < Date.now());
-      console.log('[ficha] tem access_token:', !!s.access_token, '| tem refresh_token:', !!s.refresh_token);
-    } catch(e) { console.log('[ficha] erro ao parsear sessão:', e); }
-  }
   initAuth();
-  if (!getSession()) return;
 
   const paramId        = getParam('id');
   const paramMatricula = getParam('matricula');
@@ -396,8 +378,7 @@ async function init() {
     : `matricula=eq.${encodeURIComponent(paramMatricula)}`;
   const colabs = await sbGet(`/rest/v1/colaboradores?${filtro}&limit=1`);
   if (!colabs || !colabs.length) {
-    console.error('Query colaboradores retornou vazio:', filtro);
-    mostrarErro(`Colaborador não encontrado.<br><small style="color:var(--text-ter)">Filtro: ${filtro}</small>`);
+    mostrarErro('Colaborador não encontrado.');
     return;
   }
   _colab = colabs[0];
