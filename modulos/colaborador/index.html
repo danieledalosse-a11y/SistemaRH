@@ -275,6 +275,30 @@ function getParam(k) { return new URLSearchParams(window.location.search).get(k)
 /* ── Dados ── */
 let _colab = null, _ferias = [], _avaliacoes = [], _ciclos = [], _pdi = [], _historico = [];
 
+/* ── Helpers ferias ── */
+function addDays(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function buildLancamentos(pa) {
+  const lancs = [];
+  if (pa.periodo1_inicio && pa.dias1) {
+    const d = Number(pa.dias1);
+    lancs.push({ inicio: pa.periodo1_inicio, fim: addDays(pa.periodo1_inicio, d - 1), dias: d, status: pa.status1 || null });
+  }
+  if (pa.periodo2_inicio && pa.dias2) {
+    const d = Number(pa.dias2);
+    lancs.push({ inicio: pa.periodo2_inicio, fim: addDays(pa.periodo2_inicio, d - 1), dias: d, status: pa.status2 || null });
+  }
+  (pa.realizacoes || []).forEach(r => {
+    const ini = r.inicio || r.saida;
+    if (ini && Number(r.dias) > 0)
+      lancs.push({ inicio: ini, fim: r.fim || r.retorno || ini, dias: Number(r.dias), status: (r.status || 'gozado').toLowerCase() });
+  });
+  return lancs;
+}
+
 /* ── Tabs ── */
 function showTab(id, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -312,27 +336,34 @@ function tempoStr(dataAdm) {
 async function init() {
   initAuth();
   if (!getSession()) return;
-  const matricula = getParam('matricula');
-  if (!matricula) { mostrarErro('Nenhuma matrícula informada.'); return; }
 
-  // definir botão Voltar (referer ou home)
+  const paramId        = getParam('id');
+  const paramMatricula = getParam('matricula');
+  if (!paramId && !paramMatricula) { mostrarErro('Colaborador não informado.'); return; }
+
   const ref = document.referrer;
-  const voltarHref = ref && ref.includes('SistemaRH') ? ref : '../../index.html';
-  document.getElementById('btnVoltar').href = voltarHref;
+  document.getElementById('btnVoltar').href = ref && ref.includes('SistemaRH') ? ref : '../../index.html';
 
-  // carregar dados em paralelo
-  const [colabs, ferias, avaliacoes, ciclos, pdi, hist] = await Promise.all([
-    sbGet(`/rest/v1/colaboradores?matricula=eq.${encodeURIComponent(matricula)}&limit=1`),
-    sbGet(`/rest/v1/ferias?matricula_colaborador=eq.${encodeURIComponent(matricula)}&order=ano.desc`),
-    sbGet(`/rest/v1/dev_avaliacoes?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=*`),
+  // Passo 1 — identificar o colaborador
+  const filtro = paramId
+    ? `id=eq.${encodeURIComponent(paramId)}`
+    : `matricula=eq.${encodeURIComponent(paramMatricula)}`;
+  const colabs = await sbGet(`/rest/v1/colaboradores?${filtro}&limit=1`);
+  if (!colabs || !colabs.length) { mostrarErro('Colaborador não encontrado.'); return; }
+  _colab = colabs[0];
+
+  // Passo 2 — buscar dados relacionados com as chaves corretas de cada tabela
+  const colabId  = _colab.id;
+  const matricula = _colab.matricula;
+
+  const [ferias, avaliacoes, ciclos, pdi, hist] = await Promise.all([
+    sbGet(`/rest/v1/ferias?colaborador_id=eq.${colabId}&order=ano.desc`),
+    matricula ? sbGet(`/rest/v1/dev_avaliacoes?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=*`) : Promise.resolve([]),
     sbGet('/rest/v1/dev_ciclos?order=created_at.desc'),
-    sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=*`),
-    sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&order=data.desc&limit=100`),
+    matricula ? sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=*`) : Promise.resolve([]),
+    matricula ? sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&order=data.desc&limit=100`) : Promise.resolve([]),
   ]);
 
-  if (!colabs || !colabs.length) { mostrarErro('Colaborador não encontrado.'); return; }
-
-  _colab       = colabs[0];
   _ferias      = ferias || [];
   _avaliacoes  = avaliacoes || [];
   _ciclos      = ciclos || [];
@@ -383,7 +414,7 @@ function renderResumo() {
   _ferias.forEach(pa => {
     const totalDias = pa.total_dias || 30;
     let usado = 0;
-    const lancs = pa.lancamentos || [];
+    const lancs = buildLancamentos(pa);
     lancs.forEach(l => { if (l.dias) usado += Number(l.dias); });
     const saldo = totalDias - usado - (pa.dias_antecipados||0) - (pa.abono_pecuniario||0);
     if (saldo > 0 && pa.status !== 'cancelado') saldoPendente += saldo;
@@ -459,7 +490,7 @@ function renderFerias() {
   const HOJE = new Date().toISOString().slice(0,10);
   el.innerHTML = _ferias.map(pa => {
     const totalDias = pa.total_dias || 30;
-    const lancs = pa.lancamentos || [];
+    const lancs = buildLancamentos(pa);
     let usado = 0;
     lancs.forEach(l => { if (l.dias) usado += Number(l.dias); });
     const saldo = totalDias - usado - (pa.dias_antecipados||0) - (pa.abono_pecuniario||0);
