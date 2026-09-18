@@ -81,7 +81,7 @@ function renderHero() {
   document.getElementById('heroLoc').innerHTML =
     locItems.join('<span class="hero-loc-sep">·</span>');
 
-  /* ── Meta: 4 métricas em 1 linha — mesma composição da referência ── */
+  /* ── Meta: 4 métricas em 1 linha ── */
   const vinculoVal = c.tipo_vinculo ? (_VINCULO_LABEL[c.tipo_vinculo] || c.tipo_vinculo) : null;
   const metaItems = [];
   if (c.matricula)
@@ -95,6 +95,86 @@ function renderHero() {
 
   document.getElementById('heroMeta').innerHTML =
     metaItems.length ? `<div class="hero-meta-row">${metaItems.join('')}</div>` : '';
+
+  /* ── Botões — links para Cadastro e Processos ── */
+  const sbId = c.id;
+  const baseUrl = '../../modulos/'; // relativo à ficha, que fica em modulos/colaborador/
+  document.getElementById('btnEditarCadastro').href = `../cadastro/index.html?id=${sbId}`;
+  document.getElementById('acoesAbrir').href        = `../cadastro/index.html?id=${sbId}`;
+  document.getElementById('acoesProcessos').href    = `../processos/index.html?colaborador_id=${sbId}`;
+
+  /* ── Alertas e lembretes ── */
+  document.getElementById('heroAlertas').innerHTML = _buildAlertas();
+}
+
+/* ── Toggle do dropdown Ações ── */
+function _toggleAcoes(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('heroAcoesMenu');
+  menu.classList.toggle('open');
+}
+document.addEventListener('click', () => {
+  document.getElementById('heroAcoesMenu')?.classList.remove('open');
+});
+
+/* ── Painel Alertas e lembretes ── */
+function _buildAlertas() {
+  const c    = _colab;
+  const HOJE = new Date(); HOJE.setHours(0,0,0,0);
+  const alertas = [];
+
+  /* Processos abertos */
+  if (_processosAbertos.length) {
+    const n = _processosAbertos.length;
+    alertas.push({ cor:'amber', txt: `${n} processo${n>1?'s':''} aberto${n>1?'s':''} em andamento` });
+  }
+
+  /* Em período de experiência */
+  if (c.em_experiencia) {
+    alertas.push({ cor:'amber', txt:'Em período de experiência' });
+  }
+
+  /* Férias vencendo: fim do período concessivo < 60 dias */
+  _ferias.forEach(pa => {
+    if (!pa.pa_fim || pa.status === 'cancelado') return;
+    const fim = new Date(pa.pa_fim + 'T00:00:00'); fim.setHours(0,0,0,0);
+    const diasFim = Math.ceil((fim - HOJE) / 86400000);
+    const totalDias = pa.total_dias || 30;
+    let usado = 0;
+    buildLancamentos(pa).forEach(l => { if (l.dias) usado += Number(l.dias); });
+    const saldo = totalDias - usado - (pa.dias_antecipados||0) - (pa.abono_pecuniario||0);
+    if (saldo > 0 && diasFim >= 0 && diasFim < 60)
+      alertas.push({ cor:'warn', txt:`Férias vencendo em ${diasFim} dia${diasFim!==1?'s':''} — ${saldo} dias de saldo` });
+  });
+
+  /* Próximas férias agendadas: início futuro ≤ 90 dias */
+  _ferias.forEach(pa => {
+    buildLancamentos(pa).forEach(l => {
+      if (!l.inicio) return;
+      const ini = new Date(l.inicio + 'T00:00:00'); ini.setHours(0,0,0,0);
+      const d = Math.ceil((ini - HOJE) / 86400000);
+      if (d > 0 && d <= 90)
+        alertas.push({ cor:'info', txt:`Férias agendadas em ${d} dia${d!==1?'s':''} — ${fd(l.inicio)}` });
+    });
+  });
+
+  /* Aniversário ≤ 30 dias */
+  if (c.data_nascimento) {
+    const nasc = new Date(c.data_nascimento + 'T00:00:00');
+    const aniv = new Date(HOJE.getFullYear(), nasc.getMonth(), nasc.getDate());
+    if (aniv < HOJE) aniv.setFullYear(aniv.getFullYear() + 1);
+    const d = Math.ceil((aniv - HOJE) / 86400000);
+    if (d <= 30)
+      alertas.push({ cor:'info', txt: d === 0 ? 'Aniversário hoje!' : `Aniversário em ${d} dia${d!==1?'s':''}` });
+  }
+
+  if (!alertas.length)
+    alertas.push({ cor:'ok', txt:'Tudo em dia' });
+
+  return `<div class="hero-alertas-title">Alertas e lembretes</div>` +
+    alertas.map(a =>
+      `<div class="hero-alerta-item"><div class="hero-alerta-dot ${a.cor}"></div><span>${a.txt}</span></div>`
+    ).join('');
 }
 
 /* ── Resumo ── */

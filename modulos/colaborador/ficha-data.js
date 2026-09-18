@@ -50,7 +50,7 @@ function logout() {
 function getParam(k) { return new URLSearchParams(window.location.search).get(k); }
 
 /* ── Dados ── */
-let _colab = null, _ferias = [], _avaliacoes = [], _ciclos = [], _pdi = [], _historico = [];
+let _colab = null, _ferias = [], _avaliacoes = [], _ciclos = [], _pdi = [], _historico = [], _processosAbertos = [];
 
 /* ── Helpers ferias ── */
 function addDays(dateStr, days) {
@@ -122,19 +122,21 @@ async function init() {
   const colabId  = _colab.id;
   const matricula = _colab.matricula;
 
-  const [ferias, avaliacoes, ciclos, pdi, hist] = await Promise.all([
+  const [ferias, avaliacoes, ciclos, pdi, hist, processos] = await Promise.all([
     sbGet(`/rest/v1/ferias?colaborador_id=eq.${colabId}&order=ano.desc`),
     matricula ? sbGet(`/rest/v1/dev_avaliacoes?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=*`) : Promise.resolve([]),
     sbGet('/rest/v1/dev_ciclos?order=created_at.desc'),
     matricula ? sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=*`) : Promise.resolve([]),
     matricula ? sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&order=data.desc&limit=100`) : Promise.resolve([]),
+    sbGet(`/rest/v1/processos_rh?colaborador_id=eq.${colabId}&status=eq.aberto&select=id,tipo,criado_em&limit=10`),
   ]);
 
-  _ferias      = ferias || [];
-  _avaliacoes  = avaliacoes || [];
-  _ciclos      = ciclos || [];
-  _pdi         = pdi || [];
-  _historico   = hist || [];
+  _ferias           = ferias || [];
+  _avaliacoes       = avaliacoes || [];
+  _ciclos           = ciclos || [];
+  _pdi              = pdi || [];
+  _historico        = hist || [];
+  _processosAbertos = processos || [];
 
   renderHero();
   renderResumo();

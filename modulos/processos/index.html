@@ -987,6 +987,10 @@ async function init() {
     if (!r.ok) throw new Error('Erro ao carregar processos');
     const processos = await r.json();
     renderProcessos(processos);
+    if (_filtroColabId) {
+      _filtrarAndamento();
+      history.replaceState({}, '', window.location.pathname);
+    }
   } catch(e) {
     document.getElementById('andamentoConteudo').innerHTML =
       `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erro ao carregar</div><div class="empty-state-desc">${e.message}</div></div>`;
@@ -1098,6 +1102,7 @@ async function verificarBonusIndicacao() {
 }
 
 let filtroAtivo = 'todos';
+let _filtroColabId = new URLSearchParams(window.location.search).get('colaborador_id') || null;
 
 function filtrarTipo(tipo) {
   filtroAtivo = tipo;
@@ -1149,9 +1154,10 @@ function _renderChips(processos) {
 
 function _filtrarAndamento() {
   const q = (document.getElementById('buscaAndamento')?.value || '').toLowerCase().trim();
-  if (q) {
-    // busca textual ignora filtro de chip — mostra tudo que bate
-    const filtrados = _TODOS_PROCESSOS.filter(p =>
+  if (q || _filtroColabId) {
+    let filtrados = _TODOS_PROCESSOS;
+    if (_filtroColabId) filtrados = filtrados.filter(p => String(p.colaborador_id) === _filtroColabId);
+    if (q) filtrados = filtrados.filter(p =>
       (p.colaborador_nome || '').toLowerCase().includes(q) ||
       (TIPO_CONFIG[p.tipo]?.label || p.tipo || '').toLowerCase().includes(q)
     );
