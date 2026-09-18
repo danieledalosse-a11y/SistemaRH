@@ -261,10 +261,14 @@ async function _sbRefreshSession() {
   } catch { return false; }
 }
 async function sbGet(path) {
+  console.log('[ficha] sbGet:', path.split('?')[0]);
   let r = await fetch(SB_URL+path, { headers: getAuthHeaders() });
+  console.log('[ficha] sbGet status:', r.status, r.ok ? 'OK' : 'FALHOU');
   if (r.ok) return r.json();
   const txt = await r.text().catch(() => '');
+  console.log('[ficha] sbGet erro body:', txt.slice(0, 200));
   if (r.status === 401 || txt.includes('JWT expired') || txt.includes('PGRST303')) {
+    console.log('[ficha] token expirado, tentando refresh...');
     if (await _sbRefreshSession()) {
       r = await fetch(SB_URL+path, { headers: getAuthHeaders() });
       if (r.ok) return r.json();
@@ -367,6 +371,15 @@ function tempoStr(dataAdm) {
 
 /* ── Init ── */
 async function init() {
+  const rawSess = localStorage.getItem('sb_session');
+  console.log('[ficha] sb_session existe:', !!rawSess);
+  if (rawSess) {
+    try {
+      const s = JSON.parse(rawSess);
+      console.log('[ficha] expires_at:', s.expires_at, '| Date.now():', Date.now(), '| expirado:', s.expires_at < Date.now());
+      console.log('[ficha] tem access_token:', !!s.access_token, '| tem refresh_token:', !!s.refresh_token);
+    } catch(e) { console.log('[ficha] erro ao parsear sessão:', e); }
+  }
   initAuth();
   if (!getSession()) return;
 
