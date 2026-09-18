@@ -12,82 +12,84 @@ function showTab(id, btn) {
 /* ── Hero ── */
 const _VINCULO_LABEL = { clt: 'CLT', promotora: 'Promotora', pro_labore: 'Pró-labore' };
 
-function _metaItem(icon, label, val) {
+/* SVG ícones para métricas — stroke, sem fill */
+const _MI_ICO = {
+  mat:    `<svg viewBox="0 0 24 24" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="7" y1="4" x2="7" y2="9"/><line x1="17" y1="4" x2="17" y2="9"/></svg>`,
+  vinc:   `<svg viewBox="0 0 24 24" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>`,
+  adm:    `<svg viewBox="0 0 24 24" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  tempo:  `<svg viewBox="0 0 24 24" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>`,
+  grupo:  `<svg viewBox="0 0 24 24" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  emp:    `<svg viewBox="0 0 24 24" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  gestor: `<svg viewBox="0 0 24 24" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+};
+
+function _miItem(ico, label, val) {
   return `<div class="hero-meta-item">
-    <div class="hero-meta-icon">${icon}<span class="hero-meta-label">${label}</span></div>
-    <span class="hero-meta-val">${val}</span>
+    <div class="hero-mi-ico">${ico}</div>
+    <div class="hero-mi-txt">
+      <span class="hero-mi-label">${label}</span>
+      <span class="hero-mi-val">${val}</span>
+    </div>
   </div>`;
 }
 
 function renderHero() {
   const c = _colab;
 
-  // Foto / iniciais
+  /* ── Foto / iniciais ── */
   const ini = (c.nome||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   const ph  = document.getElementById('heroPhoto');
   if (c.foto_url) {
-    ph.innerHTML = `<img src="${c.foto_url}" style="width:80px;height:80px;border-radius:50%;object-fit:cover" alt="${c.nome}">`;
+    ph.innerHTML = `<img src="${c.foto_url}" alt="${c.nome}">`;
   } else {
     ph.textContent = ini;
   }
 
-  // Topbar e nome
+  /* ── Topbar ── */
   document.getElementById('topbarNome').textContent = c.nome || 'Ficha';
-  document.getElementById('heroNome').textContent   = c.nome || '—';
 
-  // Badge de status
+  /* ── Nome ── */
+  document.getElementById('heroNome').textContent = c.nome || '—';
+
+  /* ── Badge de status ── */
   const ativo = !c.data_demissao;
   document.getElementById('heroStatusBadge').innerHTML =
-    `<span class="chip ${ativo?'chip-green':'chip-red'}">${ativo?'Ativo':'Inativo'}</span>`;
+    `<span class="hero-status-badge ${ativo?'ativo':'inativo'}">${ativo?'Ativo':'Inativo'}</span>`;
 
-  // Cargo
+  /* ── Cargo ── */
   document.getElementById('heroCargo').textContent = c.cargo || '';
 
-  // Localização: Setor · Unidade (empresa atuação)
-  const locParts = [
-    c.setor,
-    c.empresa_atuacao_nome || c.empresa_atuacao || null,
-  ].filter(Boolean);
-  document.getElementById('heroLoc').innerHTML = locParts.map((p, i) =>
-    i === 0
-      ? `<span>${p}</span>`
-      : `<span class="hero-loc-dot"></span><span>${p}</span>`
-  ).join('');
+  /* ── Localização: Setor · Unidade ── */
+  const ICO_ORG = `<svg viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>`;
+  const ICO_PIN = `<svg viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
 
-  // Meta row — ícones SVG inline
-  const ICO = {
-    mat:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h0M2 9.5h20"/></svg>`,
-    vinc:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>`,
-    adm:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
-    tempo:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
-    grupo:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
-    gestor: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-    emp:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
-  };
+  const locItems = [];
+  if (c.setor)
+    locItems.push(`<span class="hero-loc-item">${ICO_ORG}<span>${c.setor}</span></span>`);
+  const unidade = c.empresa_atuacao_nome || c.empresa_atuacao;
+  if (unidade)
+    locItems.push(`<span class="hero-loc-item">${ICO_PIN}<span>${unidade}</span></span>`);
+  document.getElementById('heroLoc').innerHTML =
+    locItems.join('<span class="hero-loc-sep">·</span>');
+
+  /* ── Meta row ── */
+  const vinculoVal = c.tipo_vinculo ? (_VINCULO_LABEL[c.tipo_vinculo] || c.tipo_vinculo) : null;
 
   const meta = [];
-
   if (c.matricula)
-    meta.push(_metaItem(ICO.mat, 'Matrícula', c.matricula));
-
-  const vinculoVal = c.tipo_vinculo ? (_VINCULO_LABEL[c.tipo_vinculo] || c.tipo_vinculo) : null;
+    meta.push(_miItem(_MI_ICO.mat, 'Matrícula', c.matricula));
   if (vinculoVal)
-    meta.push(_metaItem(ICO.vinc, 'Vínculo', vinculoVal));
-
+    meta.push(_miItem(_MI_ICO.vinc, 'Vínculo', vinculoVal));
   if (c.data_admissao)
-    meta.push(_metaItem(ICO.adm, 'Admissão', fd(c.data_admissao)));
-
+    meta.push(_miItem(_MI_ICO.adm, 'Admissão', fd(c.data_admissao)));
   if (c.data_admissao)
-    meta.push(_metaItem(ICO.tempo, 'Tempo de casa', tempoStr(c.data_admissao)));
-
+    meta.push(_miItem(_MI_ICO.tempo, 'Tempo de casa', tempoStr(c.data_admissao)));
   if (c.data_ingresso_grupo)
-    meta.push(_metaItem(ICO.grupo, 'Ingresso no Grupo', fd(c.data_ingresso_grupo)));
-
+    meta.push(_miItem(_MI_ICO.grupo, 'Ingresso no Grupo', fd(c.data_ingresso_grupo)));
   if (c.empresa_registro_nome || c.empresa_registro)
-    meta.push(_metaItem(ICO.emp, 'Empresa de registro', c.empresa_registro_nome || c.empresa_registro));
-
+    meta.push(_miItem(_MI_ICO.emp, 'Empresa de registro', c.empresa_registro_nome || c.empresa_registro));
   if (c.gestor)
-    meta.push(_metaItem(ICO.gestor, 'Gestor', c.gestor));
+    meta.push(_miItem(_MI_ICO.gestor, 'Gestor', c.gestor));
 
   document.getElementById('heroMeta').innerHTML = meta.join('');
 }
