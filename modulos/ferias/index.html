@@ -7743,6 +7743,22 @@ function gestorPeriodoAtivo(colaborador_id) {
   return null; // todos concluídos — não exibir na lista
 }
 
+// Retorna o PA vigente por data, independente do saldo — usado para exibição de "PA Vigente" e Vencimento no drawer
+function gestorPeriodoVigente(colaborador_id) {
+  const hoje = new Date().toISOString().slice(0,10);
+  const periodos = GESTOR_PERIODOS.filter(p => p.colaborador_id === colaborador_id)
+    .slice().sort((a, b) => (b.pa_fim||'').localeCompare(a.pa_fim||''));
+  // PA cujo período de vigência inclui hoje (pa_inicio <= hoje <= data_fim_gozo ou pa_fim)
+  const vigente = periodos.find(p => {
+    const inicio = p.pa_inicio || '';
+    const fim    = p.data_fim_gozo || p.pa_fim || '';
+    return inicio <= hoje && (!fim || fim >= hoje);
+  });
+  if (vigente) return vigente;
+  // Fallback: PA mais recente que já iniciou (para colaboradores com PA vencido e saldo zero)
+  return periodos.find(p => (p.pa_inicio || '') <= hoje) || null;
+}
+
 function gestorDpd(periodo) {
   if (!periodo?.data_fim_gozo) return 9999;
   const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -9638,11 +9654,13 @@ function gestorAbrirSolicitacoes(colabId) {
   _gsolColabId = String(colabId);
   const c = GESTOR_COLABS.find(c => String(c.id) === _gsolColabId);
   if (!c) return;
-  const pa    = gestorPeriodoAtivo(c.id);
-  const saldo = pa ? gestorSaldoPeriodo(pa) : 0;
-  const total = pa ? (Number(pa.dias_direito) || 30) : 30;
-  const venc  = pa?.data_fim_gozo ? gestorFmtData(pa.data_fim_gozo) : '—';
-  const paAno = pa?.pa_fim ? pa.pa_fim.slice(0,4) : '—';
+  const pa    = gestorPeriodoAtivo(c.id);    // PA com saldo disponível (para botão Solicitar)
+  const paVig = gestorPeriodoVigente(c.id);  // PA vigente por data (para exibição PA Vigente/Vencimento)
+  const _paBase = pa || paVig;               // base para cálculo de saldo quando saldo=0
+  const saldo = _paBase ? gestorSaldoPeriodo(_paBase) : 0;
+  const total = _paBase ? (Number(_paBase.dias_direito) || 30) : 30;
+  const venc  = paVig?.data_fim_gozo ? gestorFmtData(paVig.data_fim_gozo) : '—';
+  const paAno = paVig?.pa_fim ? paVig.pa_fim.slice(0,4) : (paVig?.pa_inicio ? paVig.pa_inicio.slice(0,4) : '—');
 
   const _ini = nome => nome.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
   const _cor = nome => { let h=0; for(let i=0;i<nome.length;i++) h=(h*31+nome.charCodeAt(i))&0xFFFFFF; const COLS=['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C']; return COLS[Math.abs(h)%COLS.length]; };
