@@ -428,6 +428,15 @@
             <label>Módulos com acesso</label>
             <div id="pModulosGrid" class="modulos-grid" style="margin-top:8px"></div>
           </div>
+          <div class="field">
+            <label class="modulo-check" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500">
+              <input type="checkbox" id="pRequerColab" style="width:16px;height:16px;cursor:pointer">
+              Requer colaborador vinculado
+            </label>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;padding-left:24px">
+              Quando ativado, não será possível criar usuários com este perfil sem vincular um colaborador.
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button id="perfilBtnToggle" class="btn" onclick="togglePerfilAtivo()" style="display:none">Inativar</button>
@@ -1793,6 +1802,9 @@ function renderPerfis() {
     const badge = p.ativo
       ? '<span class="badge badge-ativo">Ativo</span>'
       : '<span class="badge badge-inativo">Inativo</span>';
+    const requerColabBadge = p.requer_colaborador
+      ? '<span class="badge" style="background:var(--blue-bg,#EFF6FF);color:var(--blue,#1D4ED8);border:1px solid #BFDBFE;font-size:11px">Requer colaborador</span>'
+      : '';
     return `<div class="perfil-card" onclick="abrirPerfilModal(${p.id})">
       <div class="perfil-card-header">
         <div class="perfil-card-nome">${p.nome}</div>
@@ -1800,6 +1812,7 @@ function renderPerfis() {
       </div>
       ${p.descricao ? `<div class="perfil-card-desc">${p.descricao}</div>` : ''}
       <div class="perfil-card-modulos">${chips || '<span style="font-size:12px;color:var(--text-muted)">Sem módulos</span>'}</div>
+      ${requerColabBadge ? `<div style="margin-top:8px">${requerColabBadge}</div>` : ''}
     </div>`;
   }).join('')}</div>`;
 }
@@ -1813,6 +1826,7 @@ function abrirPerfilModal(id) {
     : '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">Novo</span>';
   document.getElementById('pNome').value = p?.nome || '';
   document.getElementById('pDesc').value = p?.descricao || '';
+  document.getElementById('pRequerColab').checked = !!(p?.requer_colaborador);
   const mods = p ? (Array.isArray(p.modulos) ? p.modulos : JSON.parse(p.modulos || '[]')) : [];
   document.getElementById('pModulosGrid').innerHTML = MODULOS_SISTEMA.map(m =>
     `<label class="modulo-check">
@@ -1955,7 +1969,7 @@ async function salvarPerfil() {
   if (!nome) { showToast('Nome é obrigatório.', 'error'); return; }
   const modulos = [...document.querySelectorAll('#pModulosGrid input:checked')].map(c => c.value);
   const descricao = document.getElementById('pDesc').value.trim();
-  const body = { nome, descricao: descricao || null, modulos };
+  const body = { nome, descricao: descricao || null, modulos, requer_colaborador: document.getElementById('pRequerColab').checked };
   try {
     if (editingPerfilId) {
       await sbPatch('perfis', editingPerfilId, body);
@@ -2086,7 +2100,7 @@ function renderModulosGrid(acessoAtual) {
 function _perfilIsColab() {
   const perfilId = parseInt(document.getElementById('uPerfil').value) || null;
   const perfil = allPerfis.find(p => p.id === perfilId);
-  return perfil && perfil.nome.toLowerCase().includes('colaborador');
+  return !!(perfil?.requer_colaborador);
 }
 
 function perfilChanged() {
