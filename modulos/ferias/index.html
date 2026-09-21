@@ -1877,6 +1877,10 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           Timeline
         </button>
+        <button class="pvtab" id="gtab-dashboard" onclick="setGestorTab('dashboard')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Dashboard
+        </button>
       </div>
 
     <!-- ── Aba Painel ── -->
@@ -1967,6 +1971,15 @@
           </div>
         </div>
         <div id="gestorGanttContent"></div>
+      </div>
+    </div>
+
+    <!-- ── Aba Dashboard ── -->
+    <div id="gsub-dashboard" style="display:none;">
+      <div style="padding:0;overflow:hidden;border-top:1px solid var(--border);">
+        <div style="padding:20px 20px 24px;" id="gdashContent">
+          <div style="font-size:13px;color:var(--text-ter);text-align:center;padding:20px;">Carregando...</div>
+        </div>
       </div>
     </div>
 
@@ -2152,6 +2165,9 @@ let _dashCalMonth  = new Date().getMonth();
 let _dashCalData   = null; // { excluir, ativos } — populado por renderAnalytics()
 let _dashCalLocked = null; // dateStr travado por clique
 let _dashAnoYears    = new Set([new Date().getFullYear()]); // anos ativos no gráfico comparativo
+// Estado do dashboard do Gestor (independente do dashboard RH/Diretoria)
+let _gdashCalYear  = new Date().getFullYear();
+let _gdashCalMonth = new Date().getMonth();
 let _dashAnoAllYears = []; // todos os anos detectados nos dados
 let _dashAnoLocked   = null; // índice do mês travado por clique
 const HOJE  = new Date().toISOString().slice(0, 10);
@@ -8133,29 +8149,39 @@ function filtrarGestorAlerta(tipo) {
 }
 
 function _applyGestorTabPerms() {
-  // Mapeia abas do gestor para as chaves de permissão do módulo ferias
-  // Painel (lista da equipe) → chave 'lista'; Timeline → 'timeline'; Dashboard (futuro) → 'dashboard'
-  const canPainel   = podeAba('ferias', 'lista');
-  const canTimeline = podeAba('ferias', 'timeline');
-  const tabPainel   = document.getElementById('gtab-painel');
-  const tabTimeline = document.getElementById('gtab-timeline');
-  if (tabPainel)   tabPainel.style.display   = canPainel   ? '' : 'none';
-  if (tabTimeline) tabTimeline.style.display = canTimeline ? '' : 'none';
+  // Mapeia abas do gestor para as chaves de permissão do módulo ferias:
+  // Painel (lista da equipe) → 'lista'; Timeline → 'timeline'; Dashboard → 'dashboard-gestor'
+  const canPainel    = podeAba('ferias', 'lista');
+  const canTimeline  = podeAba('ferias', 'timeline');
+  const canDashboard = podeAba('ferias', 'dashboard-gestor');
+  const tabPainel    = document.getElementById('gtab-painel');
+  const tabTimeline  = document.getElementById('gtab-timeline');
+  const tabDash      = document.getElementById('gtab-dashboard');
+  if (tabPainel)   tabPainel.style.display   = canPainel    ? '' : 'none';
+  if (tabTimeline) tabTimeline.style.display = canTimeline  ? '' : 'none';
+  if (tabDash)     tabDash.style.display     = canDashboard ? '' : 'none';
   // Se a aba ativa foi ocultada, troca para a primeira disponível
   const activeTab = document.querySelector('#gestorContent .pvtab.active');
   const activeId  = activeTab?.id;
-  if (activeId === 'gtab-painel' && !canPainel && canTimeline) {
-    setGestorTab('timeline');
-  } else if (activeId === 'gtab-timeline' && !canTimeline && canPainel) {
-    setGestorTab('painel');
+  const tabs = [
+    { id: 'gtab-painel',    can: canPainel,    key: 'painel' },
+    { id: 'gtab-timeline',  can: canTimeline,  key: 'timeline' },
+    { id: 'gtab-dashboard', can: canDashboard, key: 'dashboard' },
+  ];
+  const currentCan = tabs.find(t => t.id === activeId)?.can;
+  if (!currentCan) {
+    const first = tabs.find(t => t.can);
+    if (first) setGestorTab(first.key);
   }
 }
 
 function setGestorTab(tab) {
-  ['painel','timeline'].forEach(t => {
-    document.getElementById('gsub-' + t).style.display = t === tab ? '' : 'none';
+  ['painel','timeline','dashboard'].forEach(t => {
+    const sub = document.getElementById('gsub-' + t);
+    if (sub) sub.style.display = t === tab ? '' : 'none';
     document.getElementById('gtab-' + t)?.classList.toggle('active', t === tab);
   });
+  if (tab === 'dashboard') renderAnalyticsGestor();
   const isTimeline = tab === 'timeline';
   const alertsEl = document.getElementById('gestorAlerts');
   const atividadeEl = document.getElementById('gestorAtividade');
@@ -8317,6 +8343,210 @@ function renderGestorGantt() {
     <thead><tr>${thDias}</tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+}
+
+// ─── Dashboard do Gestor ─────────────────────────────────────────────────────
+
+// Monta estrutura compatível com _computeDashAnoData a partir dos dados do gestor
+function _buildGestorAtivosForDash() {
+  const excluir = new Set(['recusado','cancelado','descartado']);
+  return GESTOR_COLABS.map(c => ({
+    __key: String(c.id),
+    setor: c.setor || '',
+    registros: [{
+      status: 'aprovado',
+      lancamentos: GESTOR_LANCAMENTOS.filter(l =>
+        String(l.colaborador_id) === String(c.id) && !excluir.has((l.status||'').toLowerCase())
+      ),
+    }],
+  }));
+}
+
+function renderAnalyticsGestor() {
+  const wrap = document.getElementById('gdashContent');
+  if (!wrap) return;
+  if (!GESTOR_COLABS.length) {
+    wrap.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text-ter);font-size:13px;">Carregue a equipe para visualizar o Dashboard.</div>`;
+    return;
+  }
+
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                    'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const ano = new Date().getFullYear();
+
+  wrap.innerHTML = `
+    <!-- Gráfico de barras mensais -->
+    <div class="an-card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <span style="font-size:13px;font-weight:600;color:var(--text)">Distribuição de férias ao longo do ano — ${ano}</span>
+      </div>
+      <div id="gdashAnoWrap"></div>
+    </div>
+
+    <!-- Calendário + Próximos períodos -->
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+      <div class="an-card" style="flex:0 0 calc(50% - 8px);min-width:280px;overflow:hidden">
+        <div class="an-cal-card-hdr">
+          <span class="an-cal-card-hdr-title">Calendário da equipe</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="an-cal-nav-btn" onclick="gdashCalNav(-1)">&#8249;</button>
+            <span class="an-cal-nav-label" id="gdashCalNavLabel">—</span>
+            <button class="an-cal-nav-btn" onclick="gdashCalNav(1)">&#8250;</button>
+          </div>
+        </div>
+        <div style="padding:14px 18px 16px"><div id="gdashCalWrap"></div></div>
+      </div>
+      <div class="an-card" style="flex:0 0 calc(50% - 8px);min-width:280px;overflow:hidden">
+        <div style="padding:14px 18px 6px;font-size:13px;font-weight:600;color:var(--text)">Próximos períodos</div>
+        <div style="padding:0 18px 16px" id="gdashProximosWrap"></div>
+      </div>
+    </div>`;
+
+  _renderGdashAno();
+  _renderGdashCal();
+  _renderGdashProximos();
+}
+
+function _renderGdashAno() {
+  const wrap = document.getElementById('gdashAnoWrap');
+  if (!wrap) return;
+  const ano    = new Date().getFullYear();
+  const ativos = _buildGestorAtivosForDash();
+  const excluir = new Set(['recusado','cancelado','descartado']);
+  const dados  = _computeDashAnoData(ano, excluir, ativos);
+  const MESES  = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const mesAtual = new Date().getMonth();
+  const maxVal = Math.max(...dados.map(d => d.total), 1);
+  const COR = '#1849A9';
+
+  const barsHtml = dados.map((d, i) => {
+    const h  = Math.max(Math.round(d.total / maxVal * 120), d.total > 0 ? 4 : 1);
+    const isCur = i === mesAtual;
+    const countHtml = d.total > 0
+      ? `<div style="font-size:11px;font-weight:700;color:${COR};text-align:center;margin-bottom:4px">${d.total}</div>`
+      : `<div style="font-size:11px;color:transparent;margin-bottom:4px">0</div>`;
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0">
+      ${countHtml}
+      <div style="width:100%;display:flex;justify-content:center">
+        <div style="width:70%;max-width:28px;height:${h}px;background:${COR};opacity:${isCur?'1':'0.72'};border-radius:4px 4px 0 0"></div>
+      </div>
+      <div style="font-size:10px;font-weight:${isCur?700:500};color:${isCur?'#1849A9':'var(--text-sec)'};margin-top:4px;text-align:center">${MESES[i]}</div>
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = `<div style="display:flex;align-items:flex-end;gap:0;height:160px;padding:0 4px">${barsHtml}</div>`;
+}
+
+function _renderGdashCal() {
+  const wrap = document.getElementById('gdashCalWrap');
+  if (!wrap) return;
+  const y = _gdashCalYear, m = _gdashCalMonth;
+  const DOW = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                    'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const primeiroDia = new Date(y, m, 1);
+  const totalDias   = new Date(y, m + 1, 0).getDate();
+  const inicioGrid  = (primeiroDia.getDay() + 6) % 7;
+  const excluir = new Set(['recusado','cancelado','descartado']);
+
+  const counts = [];
+  for (let d = 1; d <= totalDias; d++) {
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    let n = 0;
+    const setoresDoDia = [];
+    GESTOR_COLABS.forEach(c => {
+      const ausente = GESTOR_LANCAMENTOS.some(l =>
+        String(l.colaborador_id) === String(c.id) &&
+        !excluir.has((l.status||'').toLowerCase()) &&
+        l.inicio <= ds && l.fim >= ds
+      );
+      if (ausente) {
+        n++;
+        const s = normSetor(c.setor) || c.setor || 'Outros';
+        if (!setoresDoDia.includes(s)) setoresDoDia.push(s);
+      }
+    });
+    counts.push({ d, ds, n, setoresDoDia });
+  }
+
+  const dowHtml = DOW.map(l => `<div class="an-cal-dow-lbl">${l}</div>`).join('');
+  let gridHtml  = '';
+  for (let i = 0; i < inicioGrid; i++) gridHtml += '<div class="an-cal-cell empty"></div>';
+  counts.forEach(({ d, ds, n, setoresDoDia }) => {
+    const isHoje = ds === HOJE;
+    const dotsHtml = setoresDoDia.length > 0 ? `<div class="an-cal-dots">${
+      setoresDoDia.slice(0,4).map(s => {
+        const cor = corDoSetor(s);
+        return `<div class="an-cal-dot" style="background:${cor.borda}" title="${s}"></div>`;
+      }).join('') +
+      (setoresDoDia.length > 4 ? `<span class="an-cal-dot-extra">+${setoresDoDia.length - 4}</span>` : '')
+    }</div>` : '';
+    let cellBg = 'transparent', numColor = '';
+    if      (n >= 8) { cellBg = '#DBEAFE'; numColor = '#1e40af'; }
+    else if (n >= 5) { cellBg = '#EFF6FF'; numColor = '#1e40af'; }
+    else if (n >= 2) { cellBg = '#F5FAFF'; numColor = '#1e40af'; }
+    else if (n >= 1) { cellBg = '#FAFCFF'; numColor = '#1e40af'; }
+    const numStyle = numColor ? ` style="color:${numColor}"` : '';
+    gridHtml += `<div class="an-cal-cell${isHoje?' today':''}" style="background:${cellBg}">
+      <div class="an-cal-day-num"${numStyle}>${d}</div>
+      ${dotsHtml}
+    </div>`;
+  });
+
+  const lbl = document.getElementById('gdashCalNavLabel');
+  if (lbl) lbl.textContent = `${MESES_PT[m]} ${y}`;
+  wrap.innerHTML = `<div class="an-cal-dow">${dowHtml}</div><div class="an-cal-grid">${gridHtml}</div>`;
+}
+
+function gdashCalNav(dir) {
+  _gdashCalMonth += dir;
+  if (_gdashCalMonth < 0)  { _gdashCalMonth = 11; _gdashCalYear--; }
+  if (_gdashCalMonth > 11) { _gdashCalMonth = 0;  _gdashCalYear++; }
+  _renderGdashCal();
+}
+
+function _renderGdashProximos() {
+  const wrap = document.getElementById('gdashProximosWrap');
+  if (!wrap) return;
+  const excluir = new Set(['recusado','cancelado','descartado','gozado']);
+  const proximos = GESTOR_LANCAMENTOS
+    .filter(l => l.fim >= HOJE && !excluir.has((l.status||'').toLowerCase()) && !l._isRealizacao)
+    .sort((a, b) => a.inicio.localeCompare(b.inicio))
+    .slice(0, 10);
+
+  if (!proximos.length) {
+    wrap.innerHTML = `<div style="font-size:12px;color:var(--text-ter);padding:8px 0">Nenhum período agendado.</div>`;
+    return;
+  }
+
+  const MESES_ABREV = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const fmt = ds => {
+    const [y, m, d] = ds.split('-');
+    return `${parseInt(d)} ${MESES_ABREV[parseInt(m)-1]}`;
+  };
+
+  wrap.innerHTML = proximos.map(l => {
+    const colab = GESTOR_COLABS.find(c => String(c.id) === String(l.colaborador_id));
+    const nome  = colab?.nome || '—';
+    const partes = nome.trim().split(/\s+/);
+    const ini   = (partes[0]||'')[0]||'';
+    const ult   = partes.length > 1 ? (partes[partes.length-1][0]||'') : '';
+    const initials = (ini + ult).toUpperCase();
+    const cor   = avColor(nome);
+    const avatar = colab?.foto_url
+      ? `<img src="${colab.foto_url}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0" alt="">`
+      : `<div style="width:28px;height:28px;border-radius:50%;background:${cor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${initials}</div>`;
+    const statusColor = (l.status||'') === 'solicitado' ? '#D97706' : '#1849A9';
+    const statusBg    = (l.status||'') === 'solicitado' ? '#FEF3C7' : '#DBEAFE';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      ${avatar}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nome}</div>
+        <div style="font-size:11px;color:var(--text-sec)">${fmt(l.inicio)} → ${fmt(l.fim)} · ${l.dias} dias</div>
+      </div>
+      <div style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:${statusBg};color:${statusColor};white-space:nowrap;flex-shrink:0">${l.status||'aprovado'}</div>
+    </div>`;
+  }).join('');
 }
 
 function gestorExportarPDF() {
