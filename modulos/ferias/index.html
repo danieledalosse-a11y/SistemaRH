@@ -2352,7 +2352,6 @@ function supabaseParaModelo(feriasRows, colaborRows) {
     const cargo = colabDados.cargo || '';
     const tipoVinculo = (colabDados.tipo_vinculo || 'clt').toLowerCase();
     if (tipoVinculo !== 'clt') return; // exclui pro_labore e promotora
-    if (cargo.toLowerCase().includes('sócio') || cargo.toLowerCase().includes('socio')) return;
     const __key = mat + '|' + nome;
 
     const lancamentos = [];
@@ -2558,112 +2557,6 @@ function enriquecerComCadastro() {
   }
 }
 
-function parseWorkbook(rows) {
-  TODOS_REGISTROS = [];
-  const map = new Map();
-
-  rows.forEach(r => {
-    const nome = (r.NomeColaborador || '').trim();
-    if (!nome) return;
-    const cargo = (r.Cargo || '').toLowerCase();
-    if (cargo.includes('pro-labore') || cargo.includes('pro labore')) return;
-
-    const regRaw = String(r.Registro || '').trim();
-    const reg = String(parseInt(regRaw, 10) || '') || regRaw;
-    const __key = reg + '|' + nome;
-
-    // converte data do xlsx — lida com múltiplos formatos que o SheetJS pode retornar
-    const toStr = v => {
-      if (!v) return null;
-      if (v instanceof Date) {
-        const y = v.getFullYear(), m = String(v.getMonth()+1).padStart(2,'0'), d = String(v.getDate()).padStart(2,'0');
-        return `${y}-${m}-${d}`;
-      }
-      if (typeof v === 'string') {
-        // YYYY-MM-DD
-        if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
-        // DD/MM/YYYY (com ano 4 dígitos)
-        const m4 = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (m4) return `${m4[3]}-${m4[1].padStart(2,'0')}-${m4[2].padStart(2,'0')}`;
-        // M/D/YY (formato americano com ano 2 dígitos — o que o Excel está retornando)
-        const m2 = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
-        if (m2) return `20${m2[3]}-${m2[1].padStart(2,'0')}-${m2[2].padStart(2,'0')}`;
-      }
-      return null;
-    };
-
-    // monta lancamentos a partir dos períodos planos
-    const lancamentos = [];
-    const d1i = toStr(r.Periodo1Inicio), d1f = toStr(r.Periodo1Fim);
-    const dias1 = r.Dias1 !== undefined && r.Dias1 !== null && r.Dias1 !== '' ? Number(r.Dias1) : null;
-    if (d1i && dias1 > 0) {
-      lancamentos.push({
-        inicio: d1i,
-        fim: d1f || addDays(d1i, dias1 - 1),
-        dias: dias1,
-        diasUsadosReal: null,
-        motivo: r.MotivoPeriodo1 || null,
-        nota: r.NotaPeriodo1 || null,
-        diasTrabalhar: null,
-        _proximoPA: false,
-      });
-    }
-    const d2i = toStr(r.Periodo2Inicio), d2f = toStr(r.Periodo2Fim);
-    const dias2 = r.Dias2 !== undefined && r.Dias2 !== null && r.Dias2 !== '' ? Number(r.Dias2) : null;
-    if (d2i && dias2 > 0) {
-      const dt2 = r.DiasTrabalharDuranteBloco2 ? Number(r.DiasTrabalharDuranteBloco2) : null;
-      lancamentos.push({
-        inicio: d2i,
-        fim: d2f || addDays(d2i, dias2 - 1),
-        dias: dias2,
-        diasUsadosReal: null,
-        motivo: r.MotivoPeriodo2 || null,
-        nota: r.NotaPeriodo2 || null,
-        diasTrabalhar: dt2,
-        _proximoPA: false,
-      });
-    }
-
-    const diasAntecipadosProximo = Number(r.DiasAntecipadosProximoPeriodo || 0);
-    const diasUsados = lancamentos.reduce((s, l) => s + (l.diasUsadosReal ?? l.dias), 0);
-    const totalDias  = Math.max(diasUsados + Math.max(0, Number(r.Dias1||0) + Number(r.Dias2||0) - diasUsados), 30);
-    // simpler: derive totalDias
-    const td = (dias1 || 0) + (dias2 || 0);
-    const totalDiasFinal = td > 0 ? Math.max(td, 30) : 30;
-
-    const registro = {
-      ano: Number(r.Ano) || ANO_REF,
-      paInicio: toStr(r.PeriodoAquisitivoInicio),
-      paFim:    toStr(r.PeriodoAquisitivoFim),
-      totalDias: totalDiasFinal,
-      status: r.Status || 'Aprovado',
-      alertaINSS: r.AlertaAfastamentoINSS || null,
-      lancamentos,
-      diasAntecipados: diasAntecipadosProximo,
-      _novoLanc: null,
-      _motivoRejeicao: null,
-    };
-
-    TODOS_REGISTROS.push({ __key, reg, nome, cargo: r.Cargo || '', setor: r.Setor || '', unidade: r.Unidade || '', registro });
-
-    if (!map.has(__key)) {
-      map.set(__key, {
-        __key, registro: reg, nome,
-        cargo: r.Cargo || '', setor: r.Setor || '', unidade: r.Unidade || '',
-        registros: [],
-      });
-    }
-    const colab = map.get(__key);
-    colab.registros.push(registro);
-    // atualiza campos com dados mais recentes
-    colab.cargo   = r.Cargo   || colab.cargo;
-    colab.setor   = normSetor(r.Setor   || colab.setor);
-    colab.unidade = r.Unidade || colab.unidade;
-  });
-
-  COLABORADORES = [...map.values()];
-  COLABORADORES.forEach(c => c.registros.sort((a, b) => a.ano - b.ano));
-}
 
 // ─── Helpers de modelo ───────────────────────────────────────────────────────
 function getRegistroAtual(colab) {
@@ -7712,8 +7605,7 @@ async function _carregarEquipeGestor(apelido) {
   GESTOR_COLABS = (await sbGet('colaboradores', colabQuery))
     .filter(c => {
       const tv = (c.tipo_vinculo || 'clt').toLowerCase();
-      if (tv !== 'clt') return false; // exclui pro_labore e promotora
-      return !(c.cargo||'').toLowerCase().includes('sócio') && !(c.cargo||'').toLowerCase().includes('socio');
+      return tv === 'clt'; // exclui pro_labore e promotora
     });
   if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado');
   const ids = GESTOR_COLABS.map(c => c.id).join(',');
