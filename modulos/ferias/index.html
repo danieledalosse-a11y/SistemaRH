@@ -7760,18 +7760,23 @@ async function initGestor(fromToggle = false) {
   try {
     const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     GESTOR_NOME_USUARIO = p.nome || '';
+    const perfil         = p.perfil || 'rh';
     const colaborador_id = p.colaborador_id;
 
-    if (!colaborador_id) {
-      // Usuário RH — carrega todos os colaboradores diretamente
+    if (perfil === 'gestor') {
+      // Gestor puro — colaborador_id é obrigatório; nunca cai no fluxo de RH
+      if (!colaborador_id) {
+        setGestorMsg('Erro de configuração: este usuário não tem colaborador vinculado. Contate o RH.');
+        return;
+      }
+      setGestorMsg('Identificando gestor...');
+      const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=apelido,nome&limit=1`);
+      if (!pgRows.length) throw new Error('Gestor não encontrado em param_gestor. Contate o RH.');
+      await _carregarEquipeGestor(pgRows[0].apelido || pgRows[0].nome);
+    } else {
+      // RH, admin ou outro perfil autorizado — acessa visão gestor sem restrição de equipe
       await _carregarEquipeGestor(null);
-      return;
     }
-
-    setGestorMsg('Identificando gestor...');
-    const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=apelido,nome&limit=1`);
-    if (!pgRows.length) throw new Error('Gestor não encontrado em param_gestor');
-    await _carregarEquipeGestor(pgRows[0].apelido || pgRows[0].nome);
   } catch(e) {
     setGestorMsg('Erro: ' + (e.message || e));
   }
