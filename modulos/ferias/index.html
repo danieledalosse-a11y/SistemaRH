@@ -7612,12 +7612,25 @@ function processGestorFerias(rows) {
   return { periodos, lancamentos };
 }
 
-async function _carregarEquipeGestor(apelido) {
+async function _carregarEquipeGestor(gestor_id) {
   setGestorMsg('Carregando equipe...');
-  GESTOR_APELIDO = apelido || null;
-  const colabQuery = apelido
-    ? `gestor=eq.${encodeURIComponent(apelido)}&ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo&order=nome`
-    : `ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo&order=nome`;
+  let colabQuery;
+  if (gestor_id) {
+    // Fluxo parametrizado: gestor_id → param_gestor_setor → param_setor → colaboradores.setor
+    setGestorMsg('Identificando setores da equipe...');
+    const setorLinks = await sbGet('param_gestor_setor', `gestor_id=eq.${gestor_id}&ativo=eq.true&select=setor_id`);
+    if (!setorLinks.length) throw new Error('Nenhum setor configurado para este gestor. Contate o RH.');
+    const setorIds = setorLinks.map(r => r.setor_id).join(',');
+    const setorRows = await sbGet('param_setor', `id=in.(${setorIds})&select=descricao`);
+    if (!setorRows.length) throw new Error('Setores não encontrados. Contate o RH.');
+    const descricoes = setorRows.map(r => `"${r.descricao}"`).join(',');
+    colabQuery = `setor=in.(${descricoes})&data_demissao=is.null&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo&order=nome`;
+  } else {
+    // RH/admin: sem restrição de equipe
+    GESTOR_APELIDO = null;
+    colabQuery = `ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo&order=nome`;
+  }
+  setGestorMsg('Carregando equipe...');
   GESTOR_COLABS = (await sbGet('colaboradores', colabQuery))
     .filter(c => {
       const tv = (c.tipo_vinculo || 'clt').toLowerCase();
@@ -7676,9 +7689,10 @@ async function initGestor(fromToggle = false) {
         return;
       }
       setGestorMsg('Identificando gestor...');
-      const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=apelido,nome&limit=1`);
+      const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=id,nome&limit=1`);
       if (!pgRows.length) throw new Error('Gestor não encontrado em param_gestor. Contate o RH.');
-      await _carregarEquipeGestor(pgRows[0].apelido || pgRows[0].nome);
+      GESTOR_APELIDO = pgRows[0].nome || '';
+      await _carregarEquipeGestor(pgRows[0].id);
     } else {
       // RH, admin ou outro perfil autorizado — acessa visão gestor sem restrição de equipe
       await _carregarEquipeGestor(null);
@@ -7690,12 +7704,13 @@ async function initGestor(fromToggle = false) {
 
 async function rhVerEquipeGestor() {
   const sel = document.getElementById('selectGestorRH');
-  const apelido = sel?.value;
-  if (!apelido) { toast('Selecione um gestor.', 'aviso'); return; }
+  const gestor_id = sel?.value ? Number(sel.value) : null;
+  if (!gestor_id) { toast('Selecione um gestor.', 'aviso'); return; }
   document.getElementById('gestorLoadingMsg').textContent = 'Carregando equipe...';
   try {
-    await _carregarEquipeGestor(apelido);
-    // mostra botão "Trocar gestor" após carregar
+    const pgRow = await sbGet('param_gestor', `id=eq.${gestor_id}&select=nome&limit=1`);
+    GESTOR_APELIDO = pgRow[0]?.nome || '';
+    await _carregarEquipeGestor(gestor_id);
     const btn = document.getElementById('btnTrocarGestor');
     if (btn) btn.style.display = 'block';
   } catch(e) {
