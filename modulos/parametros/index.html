@@ -2104,15 +2104,9 @@ function abrirUserModal(id) {
   document.getElementById('uEmail').value  = user?.email  || '';
   const senhaInput = document.getElementById('uSenha');
   const senhaHint  = document.getElementById('uSenhaHint');
-  if (user) {
-    senhaInput.value = user.senha_acesso || '';
-    senhaInput.type = 'password';
-    senhaHint.textContent = user.senha_acesso ? 'Senha salva — edite para alterar' : 'Senha ainda não cadastrada';
-  } else {
-    senhaInput.value = '';
-    senhaInput.type = 'password';
-    senhaHint.textContent = 'Defina a senha de acesso';
-  }
+  senhaInput.value = '';
+  senhaInput.type = 'password';
+  senhaHint.textContent = user ? 'Deixe em branco para manter a senha atual' : 'Defina a senha de acesso';
   // Estado do autocomplete de colaborador
   const busca = document.getElementById('uColaboradorBusca');
   const sel   = document.getElementById('uColaboradorSelecionado');
@@ -2322,13 +2316,14 @@ async function salvarUser() {
 
   if (!nome)  { showToast('Informe o nome de exibição.', 'error');   document.getElementById('uNomeExibicao').focus(); return; }
   if (!email) { showToast('Informe o e-mail de acesso.', 'error');   document.getElementById('uEmail').focus(); return; }
-  if (!senha) { showToast('Informe a senha de acesso.', 'error');    document.getElementById('uSenha').focus(); return; }
+  // senha obrigatória só na criação; na edição pode ficar em branco (mantém a senha atual no Auth)
+  if (!editingUserId && !senha) { showToast('Defina a senha de acesso.', 'error'); document.getElementById('uSenha').focus(); return; }
   if (_perfilIsColab() && !colaboradorId) { showToast('Vincule um colaborador para este perfil.', 'error'); document.getElementById('uColaboradorBusca').focus(); return; }
 
   // email salvo como cache em usuarios_perfil — a view v_usuarios_perfil sempre prioriza auth.users
+  // senha_acesso removida da tabela (migration 061) — senha fica apenas no Supabase Auth
   const body = { nome, perfil, acesso_modulos: acesso,
     email: email || null,
-    senha_acesso: senha || null,
     ...(perfilId ? { perfil_id: perfilId } : {}),
     ...(colaboradorId ? { colaborador_id: colaboradorId } : {})
   };
@@ -2343,10 +2338,13 @@ async function salvarUser() {
       if (!userAtual?.user_id) throw new Error('Usuário sem vínculo com conta de acesso. Recrie o usuário.');
 
       showToast('Atualizando credenciais...', 'info');
+      // só inclui password se o admin preencheu o campo (em branco = mantém senha atual)
+      const authPayload = { user_id: userAtual.user_id, email, nome, modo: 'update' };
+      if (senha) authPayload.password = senha;
       const authRes = await fetch(EDGE_FN, {
         method: 'POST',
         headers: EDGE_HEADERS,
-        body: JSON.stringify({ user_id: userAtual.user_id, email, password: senha, nome, modo: 'update' })
+        body: JSON.stringify(authPayload)
       });
       const authData = await authRes.json();
       if (!authRes.ok || authData.error) throw new Error(authData.error || 'Falha ao atualizar credenciais');

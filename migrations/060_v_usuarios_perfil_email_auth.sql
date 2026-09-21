@@ -14,7 +14,7 @@ SELECT
   up.ativo,
   up.cargo,
   up.acesso_modulos,
-  up.senha_acesso,
+  -- senha_acesso removida (migration 061): senha fica exclusivamente no Supabase Auth
   up.criado_por,
   up.alterado_por,
   up.created_at,
