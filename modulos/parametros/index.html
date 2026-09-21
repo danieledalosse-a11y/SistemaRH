@@ -971,6 +971,15 @@ async function sbGet(table, qs) {
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
+async function sbRpc(fn, params) {
+  const r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: SB_HEADERS,
+    body: JSON.stringify(params || {})
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
 async function sbPost(table, body) {
   const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: 'POST', headers: SB_HEADERS, body: JSON.stringify(body) });
   if (!r.ok) throw new Error(await r.text());
@@ -1983,8 +1992,9 @@ async function carregarUsers() {
   document.getElementById('usersGrid').innerHTML = '<div class="loading">Carregando usuários...</div>';
   try {
     if (!allPerfis.length) allPerfis = await sbGet('perfis', 'select=*&ativo=eq.true&order=nome');
-    // v_usuarios_perfil: view que une usuarios_perfil + auth.users — email sempre vem do Auth
-    allUsers = await sbGet('v_usuarios_perfil', 'select=*&order=nome');
+    // fn_get_usuarios_perfil: função SECURITY DEFINER — somente admin recebe dados,
+    // e-mail sempre vem do Supabase Auth via join com auth.users
+    allUsers = await sbRpc('fn_get_usuarios_perfil');
     renderUsers(allUsers);
   } catch(e) {
     document.getElementById('usersGrid').innerHTML = `<div class="empty"><p style="color:var(--red)">Erro ao carregar: ${e.message}</p></div>`;
