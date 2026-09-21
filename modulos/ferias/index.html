@@ -7630,6 +7630,7 @@ async function _carregarEquipeGestor(apelido) {
   }
   document.getElementById('gestorLoading').style.display = 'none';
   document.getElementById('gestorContent').style.display = 'block';
+  _applyGestorTabPerms();
   const hoje = new Date();
   _gestorMesBase = hoje.getFullYear() * 12 + hoje.getMonth();
   _gestorGanttAno = hoje.getFullYear(); _gestorGanttMes = hoje.getMonth();
@@ -8129,6 +8130,25 @@ function renderGestorAlerts(colabsBase) {
 function filtrarGestorAlerta(tipo) {
   _gestorAlertaAtivo = _gestorAlertaAtivo === tipo ? null : tipo;
   renderGestorAtencao();
+}
+
+function _applyGestorTabPerms() {
+  // Mapeia abas do gestor para as chaves de permissão do módulo ferias
+  // Painel (lista da equipe) → chave 'lista'; Timeline → 'timeline'; Dashboard (futuro) → 'dashboard'
+  const canPainel   = podeAba('ferias', 'lista');
+  const canTimeline = podeAba('ferias', 'timeline');
+  const tabPainel   = document.getElementById('gtab-painel');
+  const tabTimeline = document.getElementById('gtab-timeline');
+  if (tabPainel)   tabPainel.style.display   = canPainel   ? '' : 'none';
+  if (tabTimeline) tabTimeline.style.display = canTimeline ? '' : 'none';
+  // Se a aba ativa foi ocultada, troca para a primeira disponível
+  const activeTab = document.querySelector('#gestorContent .pvtab.active');
+  const activeId  = activeTab?.id;
+  if (activeId === 'gtab-painel' && !canPainel && canTimeline) {
+    setGestorTab('timeline');
+  } else if (activeId === 'gtab-timeline' && !canTimeline && canPainel) {
+    setGestorTab('painel');
+  }
 }
 
 function setGestorTab(tab) {
