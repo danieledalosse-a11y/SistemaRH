@@ -6,6 +6,7 @@
 <title>Admissão Online — Sistema RH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="../../permissoes.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 if (typeof pdfjsLib !== 'undefined') {
@@ -223,14 +224,7 @@ if (typeof pdfjsLib !== 'undefined') {
 
 <!-- Auth check -->
 <script>
-(function() {
-  const sess = localStorage.getItem('sb_session');
-  if (!sess) { window.location.href = '../../login.html'; return; }
-  try {
-    const s = JSON.parse(sess);
-    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
-  } catch(_) { window.location.href = '../../login.html'; }
-})();
+guardModulo('admissao');
 </script>
 
 <div class="topbar">
@@ -526,14 +520,10 @@ const _docRotations = {}; // key: `${fichaId}_${docKey}` → degrees (0|90|180|2
 
 // ─── Auth ────────────────────────────────────────────────
 (function() {
-  const sess = localStorage.getItem('sb_session');
-  const perf = localStorage.getItem('sb_perfil');
-  if (!sess) { window.location.href = '../../login.html'; return; }
   try {
-    const s = JSON.parse(sess);
-    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    const s = JSON.parse(localStorage.getItem('sb_session') || '{}');
     SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
-    const p = perf ? JSON.parse(perf) : {};
+    const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     const nome = p.nome || s.email || '';
     const iniciais = nome.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
     document.getElementById('userAvatar').textContent = iniciais;

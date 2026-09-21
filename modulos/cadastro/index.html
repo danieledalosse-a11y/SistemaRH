@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cadastro de Colaboradores — Sistema RH</title>
 <!-- SheetJS removido — dados vêm do Supabase -->
+<script src="../../permissoes.js"></script>
 <style>
   :root {
     --bg: #F0F2F5;
@@ -4580,15 +4581,12 @@ function _erroApi(e) {
 }
 
 // Auth
+guardModulo('cadastro');
 (function() {
-  const sess = localStorage.getItem('sb_session');
-  const perf = localStorage.getItem('sb_perfil');
-  if (!sess) { window.location.href = '../../login.html'; return; }
   try {
-    const s = JSON.parse(sess);
-    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    const s = JSON.parse(localStorage.getItem('sb_session') || '{}');
     SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' };
-    const p = perf ? JSON.parse(perf) : {};
+    const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     const nome = (p.nome || s.email || '').split(' ')[0];
     document.getElementById('userNomeTopbar').textContent = nome;
   } catch(_) { window.location.href = '../../login.html'; }
