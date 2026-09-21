@@ -17,6 +17,7 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\desenvolvimento\index.html`
 2. **Nunca usar a chave secreta do Supabase no browser** — chave publicável apenas no index.html.
 3. **Sempre apresentar proposta antes de implementar** — aguardar aprovação da usuária.
 4. **Nunca abreviar valores monetários** (`R$ 12.500,00`, não `12,5k`).
+5. **`guardModulo('desenvolvimento')` obrigatório** — chamado na primeira linha de `initAuth()`; ver [[permissoes]].
 
 ## Tabelas Supabase (módulo desenvolvimento)
 

@@ -19,6 +19,7 @@ Arquivo principal:
 2. **NUNCA usar a chave secreta do Supabase no browser** — apenas `SB_KEY` (publishable).
 3. **Sempre apresentar proposta antes de implementar** — aguardar aprovação da usuária.
 4. **Nunca abreviar valores** (`R$ 12.500,00`, não `12,5k`).
+5. **`guardModulo('processos')` obrigatório** — primeira linha do bloco de auth; ver [[permissoes]].
 
 ## Credenciais
 

@@ -18,6 +18,7 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\ferias\index.html` (~3.200 
 3. **Sempre apresentar proposta antes de implementar** — aguardar aprovação da usuária.
 4. **Nunca abreviar valores** (`R$ 12.500,00`, não `12,5k`).
 5. **Estilos de risco sempre inline no span** — a classe `.badge-status-r` tem background fixo que sobrepõe; os três níveis usam `style=` direto no elemento.
+6. **`guardModulo('ferias')` obrigatório** — primeira linha do bloco de auth; ver [[permissoes]].
 
 ## Fluxo de trabalho padrão
 

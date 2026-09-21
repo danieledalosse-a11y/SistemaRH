@@ -18,6 +18,7 @@ Arquivos principais:
 1. **Nunca separar CSS ou JS em arquivos externos** — tudo inline no index.html.
 2. **Nunca usar a chave secreta do Supabase no browser** — chave publicável apenas no index.html.
 3. **Sempre apresentar proposta antes de implementar** — aguardar aprovação.
+4. **`guardModulo('uniformes')` obrigatório** — primeira linha do bloco de auth; ver [[permissoes]].
 
 ## Tabelas Supabase (módulo uniformes)
 

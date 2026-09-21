@@ -22,6 +22,7 @@ Três arquivos principais:
 3. **Sempre apresentar proposta antes de implementar** — aguardar aprovação da usuária.
 4. **Nunca abreviar valores** (`R$ 12.500,00`, não `12,5k`).
 5. **Todo texto salvo vai em maiúsculas** — `up = s => s ? s.toUpperCase() : s` antes de enviar para Supabase.
+6. **`guardModulo('admissao')` obrigatório** — apenas no painel RH (`modulos/admissao/index.html`); o formulário público (`admissao-online.html`) não usa guard; ver [[permissoes]].
 
 ## Credenciais (browser — publishable key apenas)
 

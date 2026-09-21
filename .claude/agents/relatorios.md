@@ -19,6 +19,29 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\relatorios\index.html`
 4. **Painel lateral, não inline** — filtros e botões PDF/Excel ficam no painel lateral (`.detail-panel`), nunca diretamente nos cards da central.
 5. **Auditoria**: toda nova tela deve registrar eventos no `colaboradores.historico` quando aplicável.
 
+## Controle de acesso (implementado 2026-09-21)
+
+O módulo carrega `permissoes.js` e chama `guardModulo('relatorios')` como primeira instrução do bloco de auth:
+
+```html
+<!-- no <head> -->
+<script src="../../permissoes.js"></script>
+```
+
+```js
+// início do bloco de auth
+guardModulo('relatorios');
+(function() {
+  try {
+    const s = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, ... };
+    ...
+  } catch(_) { window.location.href = '../../login.html'; }
+})();
+```
+
+Usuário sem `relatorios` em `acesso_modulos` é redirecionado para home. Ver [[permissoes]] para arquitetura completa.
+
 ## Estrutura do módulo
 
 ### Layout
