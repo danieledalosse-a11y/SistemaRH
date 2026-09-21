@@ -227,7 +227,8 @@ const TD = (par) => `style="${F}...border:1px solid ${par?'#EEF2FA':'#F5F8FD'};b
 ### Por Gênero
 
 - Chama `gerarCadastroPDF({ sexoForce: valor })` / `gerarCadastroExcel({ sexoForce: valor })`
-- Filtro de sexo pré-configurado a partir do select `#f-sexo` no painel
+- Filtros no painel: Situação (`#f-situacao`, padrão Ativo), Gênero (`#f-sexo`), Empresa (`#f-empresa`), Tipo de vínculo
+- **`#f-situacao` é obrigatório** — sem ele `situacaoFiltro()` retorna `''` e demitidos entram no relatório (bug corrigido em `ecae498`)
 
 ### PCD e Jovem Aprendiz
 
