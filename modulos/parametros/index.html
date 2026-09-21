@@ -568,7 +568,7 @@
         <div class="field" id="uSenhaWrap">
           <label>Senha de acesso <span style="color:#D92D20;">*</span></label>
           <div style="position:relative">
-            <input type="password" id="uSenha" placeholder="Revest@2026" autocomplete="new-password" style="padding-right:38px;width:100%;box-sizing:border-box">
+            <input type="password" id="uSenha" placeholder="••••••••" autocomplete="new-password" style="padding-right:38px;width:100%;box-sizing:border-box">
             <button type="button" onclick="toggleSenhaVis()" title="Mostrar/ocultar" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-sec);padding:0;line-height:1" id="btnToggleSenha">👁</button>
           </div>
           <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="uSenhaHint"></div>
@@ -580,21 +580,7 @@
         <div class="modulos-grid" id="modulosGrid"></div>
       </div>
 
-      <!-- Instruções para nova conta -->
-      <div id="userNewInstructions" style="display:none;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:4px;">
-        <div style="font-size:12px;font-weight:700;color:var(--text-sec);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Próximo passo — Criar conta de acesso</div>
-        <div style="font-size:13px;color:var(--text-sec);line-height:1.6;">
-          O registro foi salvo. Para que o usuário consiga fazer login, crie a conta de autenticação no Supabase:<br>
-          <b>Authentication → Users → Add user</b> com o e-mail informado e senha padrão <code style="background:#e2e8f0;padding:1px 6px;border-radius:4px;font-size:12px">Revest@2026</code>.
-        </div>
-        <div style="margin-top:10px">
-          <div style="font-size:11.5px;font-weight:700;color:var(--text-sec);margin-bottom:4px;">Ou use o script Python local:</div>
-          <div style="position:relative">
-            <div class="sql-box" id="userPyScript"></div>
-            <button class="sql-copy-btn" onclick="copiarPyScript()">Copiar</button>
-          </div>
-        </div>
-      </div>
+      <!-- userNewInstructions removido — criação de conta é automática via criar-usuario-auth -->
     </div>
 
     <div class="modal-footer">
@@ -2123,9 +2109,9 @@ function abrirUserModal(id) {
     senhaInput.type = 'password';
     senhaHint.textContent = user.senha_acesso ? 'Senha salva — edite para alterar' : 'Senha ainda não cadastrada';
   } else {
-    senhaInput.value = 'Revest@2026';
+    senhaInput.value = '';
     senhaInput.type = 'password';
-    senhaHint.textContent = 'Sugestão de senha padrão';
+    senhaHint.textContent = 'Defina a senha de acesso';
   }
   // Estado do autocomplete de colaborador
   const busca = document.getElementById('uColaboradorBusca');
@@ -2154,7 +2140,7 @@ function abrirUserModal(id) {
     btnToggle.style.display = 'none';
   }
 
-  document.getElementById('userNewInstructions').style.display = 'none';
+
   document.getElementById('userBtnSalvar').style.display = '';
   renderModulosGrid(user?.acesso_modulos || null);
   document.getElementById('userOverlay').classList.add('open');
@@ -2347,41 +2333,44 @@ async function salvarUser() {
     ...(colaboradorId ? { colaborador_id: colaboradorId } : {})
   };
 
+  const EDGE_FN = `${SB_URL}/functions/v1/criar-usuario-auth`;
+  const EDGE_HEADERS = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SB_KEY}` };
+
   try {
     if (editingUserId) {
+      // 1. Atualizar credenciais no Auth (e-mail e/ou senha)
+      const userAtual = allUsers.find(u => u.id === editingUserId);
+      if (!userAtual?.user_id) throw new Error('Usuário sem vínculo com conta de acesso. Recrie o usuário.');
+
+      showToast('Atualizando credenciais...', 'info');
+      const authRes = await fetch(EDGE_FN, {
+        method: 'POST',
+        headers: EDGE_HEADERS,
+        body: JSON.stringify({ user_id: userAtual.user_id, email, password: senha, nome, modo: 'update' })
+      });
+      const authData = await authRes.json();
+      if (!authRes.ok || authData.error) throw new Error(authData.error || 'Falha ao atualizar credenciais');
+
+      // 2. Atualizar perfil na tabela
       await sbPatch('usuarios_perfil', editingUserId, body);
-      // Se mudou a senha, atualizar no auth via edge function
-      if (senha && email) {
-        try {
-          await fetch(`${SB_URL}/functions/v1/swift-processor`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SB_KEY}` },
-            body: JSON.stringify({ email, password: senha, nome, modo: 'update' })
-          });
-        } catch(_) {}
-      }
+
       showToast('Usuário atualizado!', 'success');
       fecharUserModal();
       carregarUsers();
     } else {
-      if (!email) { showToast('Informe o e-mail de acesso.', 'error'); return; }
-      if (!senha) { showToast('Informe a senha de acesso.', 'error'); return; }
-
-      const novo = { ...body, ativo: true };
-      delete novo.alterado_por; delete novo.updated_at; delete novo.criado_por;
-
-      // 1. Criar conta de auth via Edge Function
+      // 1. Criar conta no Auth via Edge Function
       showToast('Criando conta de acesso...', 'info');
-      const authRes = await fetch(`${SB_URL}/functions/v1/swift-processor`, {
+      const authRes = await fetch(EDGE_FN, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SB_KEY}` },
+        headers: EDGE_HEADERS,
         body: JSON.stringify({ email, password: senha, nome })
       });
       const authData = await authRes.json();
       if (!authRes.ok || authData.error) throw new Error(authData.error || 'Falha ao criar conta de acesso');
 
       // 2. Salvar perfil com user_id vinculado
-      novo.user_id = authData.user_id;
+      const novo = { ...body, ativo: true, user_id: authData.user_id };
+      delete novo.alterado_por; delete novo.updated_at; delete novo.criado_por;
       await sbPost('usuarios_perfil', novo);
 
       showToast('Usuário criado e conta de acesso configurada!', 'success');
@@ -2389,7 +2378,7 @@ async function salvarUser() {
       carregarUsers();
     }
   } catch(e) {
-    showToast('Erro: ' + e.message, 'error');
+    showToast('Erro: ' + (e as Error).message, 'error');
   }
 }
 
@@ -2421,10 +2410,6 @@ async function toggleUserAtivoModal() {
 }
 
 
-function copiarPyScript() {
-  const txt = document.getElementById('userPyScript').textContent;
-  navigator.clipboard.writeText(txt).then(() => showToast('Script copiado!', 'success'));
-}
 
 // Auth
 (function() {
