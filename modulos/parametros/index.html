@@ -469,16 +469,7 @@
       <div class="page-header">
         <div class="page-title">Usuários</div>
       </div>
-      <div id="sqlBanner" style="display:none;background:var(--amber-bg);border:1px solid #fcd34d;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
-        <div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:6px;">Execute o SQL abaixo no Supabase Dashboard para habilitar campos de e-mail, cargo e acesso por módulo</div>
-        <div style="position:relative">
-          <div class="sql-box">ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS email TEXT;
-ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS cargo TEXT;
-ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAULT '[]';</div>
-          <button class="sql-copy-btn" onclick="copiarSql()" style="position:absolute;top:10px;right:10px;">Copiar</button>
-        </div>
-        <div style="font-size:12px;color:var(--amber);margin-top:8px;">Acesse <b>supabase.com → projeto → SQL Editor</b>, cole e clique em Run. Depois recarregue esta página.</div>
-      </div>
+      <!-- sqlBanner removido — view v_usuarios_perfil (migration 060) garante email sempre do Auth -->
       <div class="users-toolbar">
         <div class="search-box" style="min-width:280px;">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;stroke:var(--text-ter)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -2002,27 +1993,12 @@ async function togglePerfilAtivo() {
 // ─── USUÁRIOS ────────────────────────────────────────────────────────────────
 let allUsers = [];
 let editingUserId = null;
-let _temColunaExtra = null; // null = não testado ainda
-
-async function testarColunaExtra() {
-  if (_temColunaExtra !== null) return _temColunaExtra;
-  try {
-    const r = await sbGet('usuarios_perfil', 'select=email&limit=1');
-    _temColunaExtra = true;
-  } catch(_) {
-    _temColunaExtra = false;
-  }
-  return _temColunaExtra;
-}
-
 async function carregarUsers() {
   document.getElementById('usersGrid').innerHTML = '<div class="loading">Carregando usuários...</div>';
-  const temExtra = await testarColunaExtra();
-  document.getElementById('sqlBanner').style.display = temExtra ? 'none' : '';
   try {
     if (!allPerfis.length) allPerfis = await sbGet('perfis', 'select=*&ativo=eq.true&order=nome');
-    const cols = temExtra ? 'select=*' : 'select=id,user_id,nome,perfil,ativo,created_at';
-    allUsers = await sbGet('usuarios_perfil', cols + '&order=nome');
+    // v_usuarios_perfil: view que une usuarios_perfil + auth.users — email sempre vem do Auth
+    allUsers = await sbGet('v_usuarios_perfil', 'select=*&order=nome');
     renderUsers(allUsers);
   } catch(e) {
     document.getElementById('usersGrid').innerHTML = `<div class="empty"><p style="color:var(--red)">Erro ao carregar: ${e.message}</p></div>`;
@@ -2363,14 +2339,13 @@ async function salvarUser() {
   if (!senha) { showToast('Informe a senha de acesso.', 'error');    document.getElementById('uSenha').focus(); return; }
   if (_perfilIsColab() && !colaboradorId) { showToast('Vincule um colaborador para este perfil.', 'error'); document.getElementById('uColaboradorBusca').focus(); return; }
 
-  const temExtra = await testarColunaExtra();
-  const bodyBase = { nome, perfil, acesso_modulos: acesso,
+  // email salvo como cache em usuarios_perfil — a view v_usuarios_perfil sempre prioriza auth.users
+  const body = { nome, perfil, acesso_modulos: acesso,
     email: email || null,
     senha_acesso: senha || null,
     ...(perfilId ? { perfil_id: perfilId } : {}),
     ...(colaboradorId ? { colaborador_id: colaboradorId } : {})
   };
-  const body = temExtra ? bodyBase : { nome, perfil };
 
   try {
     if (editingUserId) {
@@ -2445,10 +2420,6 @@ async function toggleUserAtivoModal() {
   }
 }
 
-function copiarSql() {
-  const sql = `ALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS email TEXT;\nALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS cargo TEXT;\nALTER TABLE usuarios_perfil ADD COLUMN IF NOT EXISTS acesso_modulos JSONB DEFAULT '[]';`;
-  navigator.clipboard.writeText(sql).then(() => showToast('SQL copiado!', 'success'));
-}
 
 function copiarPyScript() {
   const txt = document.getElementById('userPyScript').textContent;
