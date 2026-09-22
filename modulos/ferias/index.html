@@ -11322,21 +11322,50 @@ function _renderDirChart(colabs) {
 }
 
 function dirMostrarAba(aba) {
-  document.getElementById('dirTabDash')?.classList.toggle('active', aba === 'dashboard');
-  document.getElementById('dirTabTimeline')?.classList.toggle('active', aba === 'timeline');
-  document.getElementById('dirDashboard').style.display = aba === 'dashboard' ? 'block' : 'none';
-  let ph = document.getElementById('dirTimelinePlaceholder');
-  if (aba === 'timeline') {
-    if (!ph) {
-      ph = document.createElement('div');
-      ph.id = 'dirTimelinePlaceholder';
-      ph.style.cssText = 'padding:48px 24px;text-align:center;color:var(--text-sec);font-size:13px;';
-      ph.innerHTML = '<p>A Timeline detalhada está disponível na visão completa do módulo.</p>';
-      document.getElementById('dirDashboard').insertAdjacentElement('afterend', ph);
+  const isDash = aba === 'dashboard';
+  document.getElementById('dirTabDash')?.classList.toggle('active', isDash);
+  document.getElementById('dirTabTimeline')?.classList.toggle('active', !isDash);
+  document.getElementById('dirDashboard').style.display = isDash ? '' : 'none';
+
+  // KPIs e banda de base: ocultos na aba Timeline
+  const kpiRow = document.getElementById('dirKpiAgN')?.closest('.dir-kpi-row');
+  const baseBand = document.getElementById('dirBaseBand')?.closest('.dir-base-band');
+  if (kpiRow)   kpiRow.style.display   = isDash ? '' : 'none';
+  if (baseBand) baseBand.style.display = isDash ? '' : 'none';
+
+  const subTl = document.getElementById('sub-timeline');
+  if (!isDash) {
+    // Guarda o pai original na primeira vez
+    if (subTl && !subTl._dirOrigParent) {
+      subTl._dirOrigParent = subTl.parentElement;
+      subTl._dirOrigNext   = subTl.nextElementSibling;
     }
-    ph.style.display = 'block';
-  } else if (ph) {
-    ph.style.display = 'none';
+    // Cria wrapper dentro da dir-page e move sub-timeline para lá
+    const dirPage = document.querySelector('#sec-diretoria .dir-page');
+    let tlWrap = document.getElementById('dirTimelineWrap');
+    if (!tlWrap) {
+      tlWrap = document.createElement('div');
+      tlWrap.id = 'dirTimelineWrap';
+      dirPage.appendChild(tlWrap);
+    }
+    if (subTl) {
+      tlWrap.style.display = '';
+      if (!tlWrap.contains(subTl)) tlWrap.appendChild(subTl);
+      subTl.style.display = '';
+      renderTimeline();
+    }
+  } else {
+    // Devolve sub-timeline ao lugar original
+    const tlWrap = document.getElementById('dirTimelineWrap');
+    if (tlWrap) tlWrap.style.display = 'none';
+    if (subTl) {
+      const orig = subTl._dirOrigParent;
+      const next = subTl._dirOrigNext;
+      if (orig && !orig.contains(subTl)) {
+        orig.insertBefore(subTl, next || null);
+      }
+      subTl.style.display = 'none';
+    }
   }
 }
 
