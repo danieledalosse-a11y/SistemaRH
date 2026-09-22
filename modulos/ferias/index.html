@@ -7172,12 +7172,15 @@ function renderTimeline() {
 
   if (cntEl) cntEl.textContent = filtrados.length;
 
-  if (!filtrados.length) {
-    content.innerHTML = `<div class="gantt-empty">Nenhum colaborador com férias em ${MESES[mes]} ${ano}</div>`;
-    return;
-  }
+  _ganttRenderContent(content, filtrados, diasNoMes, mesInicio, mesFim, mes, ano);
+}
 
-  // helpers de avatar (mesmos do renderListaAnual)
+function _ganttRenderContent(targetEl, filtrados, diasNoMes, mesInicio, mesFim, mes, ano) {
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const WD    = ['D','S','T','Q','Q','S','S'];
+  const hoje  = HOJE;
+  const mesStr = String(mes+1).padStart(2,'0');
+
   const AV_COLORS  = ['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C','#1D4ED8'];
   const BAR_BG     = ['#DBEAFE','#CFFAFE','#EDE9FE','#FEF3C7','#DCFCE7','#FCE7F3','#FFEDD5','#EFF6FF'];
   const BAR_TEXT   = ['#1E40AF','#0E7490','#5B21B6','#92400E','#15803D','#9D174D','#9A3412','#1D4ED8'];
@@ -7187,15 +7190,18 @@ function renderTimeline() {
   const barText = name => BAR_TEXT[avIdx(name)];
   const avInit  = name => name.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');
 
-  // pré-calcula dia-da-semana e se é fim de semana para cada dia
+  if (!filtrados.length) {
+    targetEl.innerHTML = `<div class="gantt-empty">Nenhum colaborador com férias em ${MESES[mes]} ${ano}</div>`;
+    return;
+  }
+
   const diasInfo = [];
   for (let d = 1; d <= diasNoMes; d++) {
     const ds  = `${ano}-${mesStr}-${String(d).padStart(2,'0')}`;
-    const dow = new Date(ds + 'T12:00:00').getDay(); // 0=dom,6=sab
-    diasInfo.push({ d, ds, dow, weekend: dow===0, isHoje: ds===hoje }); // só domingo é sombreado
+    const dow = new Date(ds + 'T12:00:00').getDay();
+    diasInfo.push({ d, ds, dow, weekend: dow===0, isHoje: ds===hoje });
   }
 
-  // thead
   let thDias = `<th class="gantt-name-col" style="padding-left:16px;font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.6px;">Colaborador</th>`;
   diasInfo.forEach(({ d, ds, dow, weekend, isHoje }) => {
     const cls = [isHoje ? 'gantt-th-today' : '', weekend ? 'gantt-th-weekend' : ''].filter(Boolean).join(' ');
@@ -7205,15 +7211,11 @@ function renderTimeline() {
     thDias += `<th class="${cls}" title="${ds}">${num}<span class="gantt-th-wd">${WD[dow]}</span></th>`;
   });
 
-  // tbody
   let rows = '';
   filtrados.forEach(c => {
-    const cls     = empClass(c);
     const cor     = avColor(c.nome);
     const ini     = avInit(c.nome);
     const subtext = [c.cargo, normSetor(c.setor)||c.unidade].filter(Boolean).join(' · ');
-
-    // reúne todos os lançamentos com flag aprovado/pendente
     const todosLancs = [];
     c.registros.forEach(reg => {
       reg.lancamentos.forEach(l => todosLancs.push({...l, aprovado: true}));
@@ -7229,61 +7231,38 @@ function renderTimeline() {
         </div>
       </div></td>`;
 
-    const W_CELL = 28; // px por coluna — deve bater exatamente com CSS width:28px
-
+    const W_CELL = 28;
     diasInfo.forEach(({ ds, weekend, isHoje }) => {
       const cellCls = ['gantt-cell', weekend?'gantt-cell-weekend':'', isHoje?'gantt-cell-today':''].filter(Boolean).join(' ');
       let barHtml = isHoje ? `<div class="gantt-today-marker"></div>` : '';
-
       todosLancs.forEach(l => {
-        if (l.fim < ds || l.inicio > ds) return; // não toca este dia
-
-        // desenha a barra apenas na célula do dia inicial visível no mês
+        if (l.fim < ds || l.inicio > ds) return;
         const drawDay = l.inicio >= mesInicio ? l.inicio : mesInicio;
         if (ds !== drawDay) return;
-
         const contLeft  = l.inicio < mesInicio;
         const contRight = l.fim > mesFim;
         const endDs     = contRight ? mesFim : l.fim;
         const diaInicio = parseInt(drawDay.slice(-2));
-        const maxCols   = diasNoMes - diaInicio + 1; // colunas disponíveis até o fim do mês
+        const maxCols   = diasNoMes - diaInicio + 1;
         const colsCalc  = Math.max(1, Math.round((new Date(endDs+'T12:00:00') - new Date(drawDay+'T12:00:00')) / 86400000) + 1);
         const colsTotal = Math.min(colsCalc, maxCols);
-        const statusCls = l.aprovado ? '' : 'pendente';
-
-        // label: datas completas se ≥ 9 cols, só dias se ≥ 4, vazio se menor
-        // barras que vêm do mês anterior: usa colsTotal visíveis + restante original para threshold
         const colsOriginais = Math.max(1, Math.round((new Date(l.fim+'T12:00:00') - new Date(l.inicio+'T12:00:00')) / 86400000) + 1);
         const fmtShort = d => { const [,m,dia] = d.split('-'); return `${dia}/${m}`; };
         let label = '';
         if (colsOriginais >= 9) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
         else if (colsOriginais >= 4) label = `${l.dias}d`;
-
         const bg  = barBg(c.nome);
         const txt = barText(c.nome);
-        const barCls = ['gantt-bar', statusCls, contLeft?'bar-cont-left':'', contRight?'bar-cont-right':''].filter(Boolean).join(' ');
-        const bgStyle = l.aprovado
-          ? `background:${bg};`
-          : `background:transparent;border-color:${txt};`;
-        barHtml += `<div class="${barCls}"
-          style="left:0;width:${colsTotal * W_CELL}px;${bgStyle}${contLeft?'overflow:visible;':''}"
-          title="${c.nome.split(' ')[0]}: ${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d${l.aprovado?'':' (pendente aprovação)'}">
-          <span class="gantt-bar-label" style="color:${txt};${contLeft?'overflow:visible;text-overflow:clip;':''}">${label}</span>
-        </div>`;
+        const barCls = ['gantt-bar', l.aprovado?'':'pendente', contLeft?'bar-cont-left':'', contRight?'bar-cont-right':''].filter(Boolean).join(' ');
+        const bgStyle = l.aprovado ? `background:${bg};` : `background:transparent;border-color:${txt};`;
+        barHtml += `<div class="${barCls}" style="left:0;width:${colsTotal * W_CELL}px;${bgStyle}${contLeft?'overflow:visible;':''}" title="${c.nome.split(' ')[0]}: ${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d${l.aprovado?'':' (pendente aprovação)'}"><span class="gantt-bar-label" style="color:${txt};${contLeft?'overflow:visible;text-overflow:clip;':''}">${label}</span></div>`;
       });
-
       rows += `<td class="${cellCls}">${barHtml}</td>`;
     });
-
     rows += `</tr>`;
   });
 
-  content.innerHTML = `<div class="gantt-scroll">
-    <table class="gantt-table" style="width:${250 + diasNoMes * 28}px">
-      <thead><tr>${thDias}</tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
+  targetEl.innerHTML = `<div class="gantt-scroll"><table class="gantt-table" style="width:${250 + diasNoMes * 28}px"><thead><tr>${thDias}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 // ─── Modal de Relatório ───────────────────────────────────────────────────────
@@ -11327,46 +11306,53 @@ function dirMostrarAba(aba) {
   document.getElementById('dirTabTimeline')?.classList.toggle('active', !isDash);
   document.getElementById('dirDashboard').style.display = isDash ? '' : 'none';
 
-  // KPIs e banda de base: ocultos na aba Timeline
-  const kpiRow = document.getElementById('dirKpiAgN')?.closest('.dir-kpi-row');
+  const kpiRow  = document.getElementById('dirKpiAgN')?.closest('.dir-kpi-row');
   const baseBand = document.getElementById('dirBaseBand')?.closest('.dir-base-band');
   if (kpiRow)   kpiRow.style.display   = isDash ? '' : 'none';
   if (baseBand) baseBand.style.display = isDash ? '' : 'none';
 
-  const subTl = document.getElementById('sub-timeline');
-  if (!isDash) {
-    // Guarda o pai original na primeira vez
-    if (subTl && !subTl._dirOrigParent) {
-      subTl._dirOrigParent = subTl.parentElement;
-      subTl._dirOrigNext   = subTl.nextElementSibling;
-    }
-    // Cria wrapper dentro da dir-page e move sub-timeline para lá
-    const dirPage = document.querySelector('#sec-diretoria .dir-page');
-    let tlWrap = document.getElementById('dirTimelineWrap');
-    if (!tlWrap) {
-      tlWrap = document.createElement('div');
-      tlWrap.id = 'dirTimelineWrap';
-      dirPage.appendChild(tlWrap);
-    }
-    if (subTl) {
-      tlWrap.style.display = '';
-      if (!tlWrap.contains(subTl)) tlWrap.appendChild(subTl);
-      subTl.style.display = '';
-      renderTimeline();
-    }
-  } else {
-    // Devolve sub-timeline ao lugar original
-    const tlWrap = document.getElementById('dirTimelineWrap');
-    if (tlWrap) tlWrap.style.display = 'none';
-    if (subTl) {
-      const orig = subTl._dirOrigParent;
-      const next = subTl._dirOrigNext;
-      if (orig && !orig.contains(subTl)) {
-        orig.insertBefore(subTl, next || null);
-      }
-      subTl.style.display = 'none';
-    }
-  }
+  const host = document.getElementById('dirTimelineHost');
+  if (host) host.style.display = isDash ? 'none' : '';
+
+  if (!isDash) renderDirTimeline();
+}
+
+let _dirGanttAno = new Date().getFullYear();
+let _dirGanttMes = new Date().getMonth();
+
+function renderDirTimeline() {
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const host  = document.getElementById('dirTimelineHost');
+  const titulo = document.getElementById('dirGanttTitulo');
+  const cntEl  = document.getElementById('dirGanttCnt');
+  const content = document.getElementById('dirGanttContent');
+  if (!host || !content) return;
+
+  const ano = _dirGanttAno, mes = _dirGanttMes;
+  const diasNoMes = new Date(ano, mes+1, 0).getDate();
+  const mesStr    = String(mes+1).padStart(2,'0');
+  const mesInicio = `${ano}-${mesStr}-01`;
+  const mesFim    = `${ano}-${mesStr}-${String(diasNoMes).padStart(2,'0')}`;
+
+  if (titulo) titulo.innerHTML = `${MESES[mes]} <span class="gantt-nav-year">${ano}</span>`;
+
+  const filtrados = _dirFiltrados().filter(c =>
+    c.registros.some(reg => {
+      const lans = [...reg.lancamentos, ...(reg._novoLanc ? [reg._novoLanc] : [])];
+      return lans.some(l => l.inicio <= mesFim && l.fim >= mesInicio);
+    })
+  ).sort((a, b) => a.nome.localeCompare(b.nome));
+
+  if (cntEl) cntEl.textContent = filtrados.length;
+
+  _ganttRenderContent(content, filtrados, diasNoMes, mesInicio, mesFim, mes, ano);
+}
+
+function _dirGanttNav(delta) {
+  _dirGanttMes += delta;
+  if (_dirGanttMes > 11) { _dirGanttMes = 0; _dirGanttAno++; }
+  if (_dirGanttMes < 0)  { _dirGanttMes = 11; _dirGanttAno--; }
+  renderDirTimeline();
 }
 
 function gestorBadgeStyle(status) {
@@ -11493,6 +11479,17 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Timeline da Diretoria — contexto próprio, nunca move #sub-timeline -->
+    <div id="dirTimelineHost" style="display:none;">
+      <div class="gantt-topbar" style="display:flex;align-items:center;gap:8px;padding:0 0 6px 0;">
+        <button class="gantt-nav-btn" onclick="_dirGanttNav(-1)">&#8592;</button>
+        <span id="dirGanttTitulo" class="gantt-nav-month"></span>
+        <button class="gantt-nav-btn" onclick="_dirGanttNav(1)">&#8594;</button>
+        <span style="font-size:12px;color:var(--text-ter);margin-left:4px;"><span id="dirGanttCnt">0</span> colaborador(es)</span>
+      </div>
+      <div id="dirGanttContent"></div>
     </div>
   </div>
 </div>
