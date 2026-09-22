@@ -11085,20 +11085,25 @@ function _dirAnosDisponiveis(colabs) {
 function _dirRenderYearPills(colabs) {
   const container = document.getElementById('dirYearPills');
   if (!container) return;
-  const anosComp = _dirAnosDisponiveis(colabs); // já ordenado crescente, sem o atual
+  const anosComp = _dirAnosDisponiveis(colabs); // ordenado crescente, sem o atual
+  // Todos os anos em ordem cronológica (comparação + atual juntos)
+  const todosOrdenados = [...anosComp, _DIR_ANO_ATUAL].sort((a,b) => a-b);
+  let compIdx = 0; // índice de cor para anos de comparação
   let html = '';
-  // Anos de comparação primeiro (ordem cronológica crescente)
-  anosComp.forEach((a, idx) => {
-    const cor = _DIR_ANO_CORES[idx] || '#aaa';
-    const counts = _dirCountsAno(colabs, a);
-    const sufic = _dirAnoSuficiente(counts);
-    const ativo = _dirAnosAtivos.has(a);
-    const warn = !sufic ? `<span class="dir-ypill-warn">⚠ parcial</span>` : '';
-    html += `<div class="dir-ypill ${ativo?'active':''}" id="dirYpill${a}" onclick="_dirToggleAno(${a},${idx})" title="${sufic?'':'Dados parciais — menos de ${_DIR_MESES_SUFICIENTES} meses com registros'}">
-      <span class="dir-ypill-dot" style="background:${cor}"></span>${a}${warn}</div>`;
+  todosOrdenados.forEach(a => {
+    if (a === _DIR_ANO_ATUAL) {
+      html += `<div class="dir-ypill current"><span class="dir-ypill-dot" style="background:#fff;opacity:.75"></span>${a}</div>`;
+    } else {
+      const idx = anosComp.indexOf(a);
+      const cor = _DIR_ANO_CORES[idx] || '#aaa';
+      const counts = _dirCountsAno(colabs, a);
+      const sufic = _dirAnoSuficiente(counts);
+      const ativo = _dirAnosAtivos.has(a);
+      const warn = !sufic ? `<span class="dir-ypill-warn">⚠ parcial</span>` : '';
+      html += `<div class="dir-ypill ${ativo?'active':''}" id="dirYpill${a}" onclick="_dirToggleAno(${a},${idx})" title="${sufic?'':'Dados parciais — menos de '+_DIR_MESES_SUFICIENTES+' meses com registros'}">
+        <span class="dir-ypill-dot" style="background:${cor}"></span>${a}${warn}</div>`;
+    }
   });
-  // Ano atual por último
-  html += `<div class="dir-ypill current"><span class="dir-ypill-dot" style="background:#fff;opacity:.75"></span>${_DIR_ANO_ATUAL}</div>`;
   container.innerHTML = html;
 }
 
