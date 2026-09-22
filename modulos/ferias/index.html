@@ -1361,6 +1361,15 @@
   .dir-card-title { font-size:13px; font-weight:600; color:var(--text); margin-bottom:2px; }
   .dir-card-sub { font-size:11px; color:var(--text-ter); margin-bottom:16px; }
   .dir-card-note { margin-top:11px; font-size:10.5px; color:var(--text-ter); font-style:italic; border-top:1px solid var(--border); padding-top:9px; }
+  .dir-chart-hdr { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:4px; }
+  .dir-year-pills { display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
+  .dir-ypill { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:20px; font-size:10.5px; font-weight:500; cursor:pointer; border:1.5px solid var(--border); background:var(--surface); color:var(--text-sec); user-select:none; transition:border-color .12s, color .12s, background .12s; }
+  .dir-ypill:hover { border-color:#93aee8; color:var(--blue); }
+  .dir-ypill.active { background:#f0f4ff; border-color:#93aee8; color:var(--blue); }
+  .dir-ypill.current { background:var(--blue); border-color:var(--blue); color:#fff; cursor:default; }
+  .dir-ypill-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .dir-ypill-warn { font-size:9.5px; background:#FFFAEB; border:1px solid #fde68a; color:#92400E; border-radius:3px; padding:1px 4px; margin-left:2px; }
+  .dir-chart-note { font-size:10px; color:var(--text-ter); margin-top:8px; line-height:1.5; }
   .dir-pr-list,.dir-sp-list { display:flex; flex-direction:column; }
   .dir-pr-row,.dir-sp-row { display:flex; align-items:center; gap:9px; padding:8px 0; border-bottom:1px solid var(--border-light,var(--border)); }
   .dir-pr-row:last-child,.dir-sp-row:last-child { border-bottom:none; padding-bottom:0; }
@@ -10917,6 +10926,11 @@ function _dirPopularFiltros() {
   fill('dirFiltroCargo', cargosSet);
   fill('dirFiltroSetor', setoresSet);
   fill('dirFiltroUnidade', unidadesSet);
+  // Remove anos de comparação que não existem mais nos colabs filtrados
+  if (typeof _dirAnosAtivos !== 'undefined') {
+    const disponiveis = new Set(_dirAnosDisponiveis ? _dirAnosDisponiveis(COLABORADORES) : []);
+    [..._dirAnosAtivos].forEach(a => { if (!disponiveis.has(a)) _dirAnosAtivos.delete(a); });
+  }
 }
 
 function _dirFiltrados() {
@@ -11041,12 +11055,18 @@ function renderDiretoria() {
   _renderDirChart(colabs);
 }
 
-function _renderDirChart(colabs) {
-  const canvas = document.getElementById('dirChart');
-  if (!canvas) return;
-  const ano = new Date().getFullYear(), anoStr = String(ano);
+// ─── Comparativo de anos — estado e helpers ──────────────────────────────────
+
+const _DIR_ANO_ATUAL = new Date().getFullYear();
+// Paleta para anos de comparação (até 4 anos além do atual)
+const _DIR_ANO_CORES = ['#6366f1','#10b981','#f59e0b','#ec4899'];
+let _dirAnosAtivos = new Set(); // anos de comparação selecionados (excl. atual)
+let _dirCoLabsCache = [];       // último array de colabs passado ao gráfico
+
+function _dirCountsAno(colabs, ano) {
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
-  const counts = new Array(12).fill(0);
+  const anoStr = String(ano);
+  const counts = new Array(12).fill(null); // null = sem dado (≠ zero colaboradores)
   colabs.forEach(c => {
     const vistos = new Set();
     c.registros.forEach(reg => {
@@ -11055,59 +11075,233 @@ function _renderDirChart(colabs) {
         if (!l.inicio || l.inicio.slice(0,4) !== anoStr) return;
         const mes = parseInt(l.inicio.slice(5,7)) - 1;
         const key = `${c._sbColabId||c.nome}-${mes}`;
-        if (!vistos.has(key)) { vistos.add(key); counts[mes]++; }
+        if (!vistos.has(key)) { vistos.add(key); counts[mes] = (counts[mes]||0) + 1; }
       });
     });
   });
+  return counts;
+}
+
+function _dirAnoSuficiente(counts) {
+  // suficiente = pelo menos 6 meses com ao menos 1 registro
+  return counts.filter(v => v !== null && v > 0).length >= 6;
+}
+
+function _dirAnosDisponiveis(colabs) {
+  // Anos com ao menos 1 lançamento nos dados carregados
+  const anosSet = new Set();
+  colabs.forEach(c => c.registros.forEach(reg => reg.lancamentos.forEach(l => {
+    if (l.inicio) anosSet.add(parseInt(l.inicio.slice(0,4)));
+  })));
+  return [...anosSet].filter(a => a !== _DIR_ANO_ATUAL).sort((a,b) => b-a).slice(0,4);
+}
+
+function _dirRenderYearPills(colabs) {
+  const container = document.getElementById('dirYearPills');
+  if (!container) return;
+  const anosComp = _dirAnosDisponiveis(colabs);
+  let html = `<div class="dir-ypill current"><span class="dir-ypill-dot" style="background:#fff;opacity:.75"></span>${_DIR_ANO_ATUAL}</div>`;
+  anosComp.forEach((a, idx) => {
+    const cor = _DIR_ANO_CORES[idx] || '#aaa';
+    const counts = _dirCountsAno(colabs, a);
+    const sufic = _dirAnoSuficiente(counts);
+    const ativo = _dirAnosAtivos.has(a);
+    const warn = !sufic ? `<span class="dir-ypill-warn">⚠ parcial</span>` : '';
+    html += `<div class="dir-ypill ${ativo?'active':''}" id="dirYpill${a}" onclick="_dirToggleAno(${a},${idx})" title="${sufic?'':'Dados insuficientes — menos de 6 meses com registros'}">
+      <span class="dir-ypill-dot" style="background:${cor}"></span>${a}${warn}</div>`;
+  });
+  container.innerHTML = html;
+}
+
+function _dirToggleAno(ano, idx) {
+  if (_dirAnosAtivos.has(ano)) {
+    _dirAnosAtivos.delete(ano);
+  } else {
+    if (_dirAnosAtivos.size >= 4) return; // máx 4 comparativos + atual = 5 anos
+    _dirAnosAtivos.add(ano);
+  }
+  _dirRenderYearPills(_dirCoLabsCache);
+  _renderDirChart(_dirCoLabsCache);
+}
+
+function _renderDirChart(colabs) {
+  _dirCoLabsCache = colabs;
+  _dirRenderYearPills(colabs);
+
+  const canvas = document.getElementById('dirChart');
+  if (!canvas) return;
+
+  const anoAtual = _DIR_ANO_ATUAL;
+  const anosComp = [..._dirAnosAtivos].sort((a,b) => b-a);
+  const todosAnos = [anoAtual, ...anosComp]; // atual sempre primeiro
+  const comparando = anosComp.length > 0;
+
+  // Calcular counts para todos os anos ativos
+  const countsPorAno = {};
+  todosAnos.forEach(a => { countsPorAno[a] = _dirCountsAno(colabs, a); });
+  const countsAtual = countsPorAno[anoAtual];
+
+  // Verificar dados parciais nos anos de comparação
+  const parciais = anosComp.filter(a => !_dirAnoSuficiente(countsPorAno[a]));
+
+  // Atualizar subtítulo
+  const sub = document.getElementById('dirChartSub');
+  if (sub) sub.textContent = `Colaboradores com férias em cada mês · ${todosAnos.join(', ')}`;
+
+  // Nota de dados parciais
+  const nota = document.getElementById('dirChartNote');
+  if (nota) {
+    if (parciais.length) {
+      nota.style.display = '';
+      nota.innerHTML = `<strong>⚠ ${parciais.join(', ')}:</strong> dados parciais — meses sem registro não são exibidos como zero.`;
+    } else {
+      nota.style.display = 'none';
+    }
+  }
+
   const labels = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const curM = new Date().getMonth();
-  const maxV = Math.max(...counts, 1);
-  const sortedIdx = [...counts].map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v);
-  const topIdx = new Set(sortedIdx.slice(0,2).map(x=>x.i));
-  const avg = counts.reduce((a,b)=>a+b,0)/12;
+
+  // Max global entre todos os anos
+  const allVals = todosAnos.flatMap(a => countsPorAno[a].filter(v => v !== null));
+  const maxV = Math.max(...allVals, 1);
+  const top = maxV + 2;
+
+  // avg e peak — só no modo ano único
+  const avg = countsAtual.reduce((s,v)=>s+(v||0),0) / 12;
+  const maxCur = Math.max(...countsAtual.map(v=>v||0));
+  const peakIdx = countsAtual.findIndex(v => v === maxCur);
+
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.parentElement.clientWidth;
-  const H = 220;
+  const H = comparando ? 240 : 220;
   canvas.width = W*dpr; canvas.height = H*dpr;
   canvas.style.width = W+'px'; canvas.style.height = H+'px';
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
+
   const cs = getComputedStyle(document.documentElement);
-  const accent = cs.getPropertyValue('--blue').trim();
+  const accent   = cs.getPropertyValue('--blue').trim();
   const accentBg = cs.getPropertyValue('--blue-bg').trim();
-  const borderC = cs.getPropertyValue('--border').trim();
-  const mutedC = cs.getPropertyValue('--text-ter').trim();
-  const amberC = cs.getPropertyValue('--amber').trim();
-  const PL=28,PR=8,PT=28,PB=36, cW=W-PL-PR, cH=H-PT-PB, top=maxV+2;
-  const bW=cW/12, gap=bW*0.3;
-  ctx.clearRect(0,0,W,H);
-  [0,Math.round(top/3),Math.round(2*top/3),top].forEach(v => {
-    const y=PT+cH-(v/top)*cH;
-    ctx.beginPath(); ctx.strokeStyle=borderC; ctx.lineWidth=1; ctx.setLineDash([2,4]);
-    ctx.moveTo(PL,y); ctx.lineTo(W-PR,y); ctx.stroke(); ctx.setLineDash([]);
-    if (v>0) { ctx.fillStyle=mutedC; ctx.font='9px Inter,system-ui'; ctx.textAlign='right'; ctx.fillText(v,PL-5,y+3); }
+  const borderC  = cs.getPropertyValue('--border').trim();
+  const mutedC   = cs.getPropertyValue('--text-ter').trim();
+  const amberC   = cs.getPropertyValue('--amber').trim();
+
+  // Layout
+  const PL = 28, PR = 8, PT = comparando ? 12 : 28;
+  const legendH = comparando ? 22 : 0;
+  const PB = 36 + legendH;
+  const cW = W - PL - PR, cH = H - PT - PB;
+
+  const nAnos = todosAnos.length;
+  const bW = cW / 12;          // largura total do grupo de barras por mês
+  const groupGap = bW * 0.22;  // espaço entre grupos
+  const barGap = 1.5;          // espaço entre barras dentro do grupo
+  const bwGroup = bW - groupGap;
+  const bwBar = Math.max(2, (bwGroup - barGap * (nAnos - 1)) / nAnos);
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  [0, Math.round(top/3), Math.round(2*top/3), top].forEach(v => {
+    const y = PT + cH - (v/top)*cH;
+    ctx.beginPath(); ctx.strokeStyle = borderC; ctx.lineWidth = 1; ctx.setLineDash([2,4]);
+    ctx.moveTo(PL, y); ctx.lineTo(W-PR, y); ctx.stroke(); ctx.setLineDash([]);
+    if (v > 0) { ctx.fillStyle = mutedC; ctx.font = '9px Inter,system-ui'; ctx.textAlign = 'right'; ctx.fillText(v, PL-5, y+3); }
   });
-  const avgY = PT+cH-(avg/top)*cH;
-  ctx.beginPath(); ctx.strokeStyle=amberC+'55'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
-  ctx.moveTo(PL,avgY); ctx.lineTo(W-PR,avgY); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle=amberC; ctx.font='9px Inter,system-ui'; ctx.textAlign='right';
-  ctx.fillText('Média',PL-5,avgY-2);
-  counts.forEach((val,i) => {
-    const x=PL+i*bW+gap/2, bw=bW-gap, bh=(val/top)*cH, y=PT+cH-bh;
-    const cur=i===curM, top2=topIdx.has(i)&&!cur, r=Math.min(4,bw/2);
-    ctx.fillStyle = cur ? accent : top2 ? accent+'CC' : accentBg;
-    ctx.beginPath();
-    ctx.moveTo(x+r,y); ctx.lineTo(x+bw-r,y); ctx.arcTo(x+bw,y,x+bw,y+r,r);
-    ctx.lineTo(x+bw,y+bh); ctx.lineTo(x,y+bh); ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
-    ctx.closePath(); ctx.fill();
-    if (val>=4) { ctx.fillStyle=cur?'#fff':accent; ctx.font=`${cur?600:500} 10.5px Inter,system-ui`; ctx.textAlign='center'; ctx.fillText(val,x+bw/2,y+14); }
-    ctx.fillStyle=(cur||top2)?accent:mutedC; ctx.font=`${cur?600:400} 9.5px Inter,system-ui`; ctx.textAlign='center';
-    ctx.fillText(labels[i],x+bw/2,PT+cH+15);
-    if (cur) { ctx.beginPath(); ctx.arc(x+bw/2,PT+cH+26,2.5,0,Math.PI*2); ctx.fillStyle=accent; ctx.fill(); }
-    if (val===maxV && i===sortedIdx[0].i && val>0) { ctx.fillStyle=accent; ctx.font='600 9.5px Inter,system-ui'; ctx.textAlign='center'; ctx.fillText(`▲ Pico: ${val}`,x+bw/2,y-8); }
-  });
-  const sub = document.getElementById('dirChartSub');
-  if (sub) sub.textContent = `Colaboradores com férias em cada mês · ${ano}`;
+
+  // Linha de média e pico — apenas modo único
+  if (!comparando) {
+    const avgY = PT + cH - (avg/top)*cH;
+    ctx.beginPath(); ctx.strokeStyle = amberC+'55'; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
+    ctx.moveTo(PL, avgY); ctx.lineTo(W-PR, avgY); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = amberC; ctx.font = '9px Inter,system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Média', PL-5, avgY-2);
+  }
+
+  // Barras
+  for (let i = 0; i < 12; i++) {
+    const groupX = PL + i*bW + groupGap/2;
+    const isCurM = i === curM;
+
+    todosAnos.forEach((ano, ai) => {
+      const val = countsPorAno[ano][i];
+      if (val === null) return; // sem dado — não desenha barra (≠ zero)
+
+      const x = groupX + ai*(bwBar + barGap);
+      const bh = Math.max(0, (val/top)*cH);
+      const y = PT + cH - bh;
+      const r = Math.min(3, bwBar/2);
+
+      let fillColor;
+      if (ano === anoAtual) {
+        fillColor = isCurM ? accent : accentBg;
+        // destaca pico no modo único
+        if (!comparando && i === peakIdx && val > 0 && !isCurM) fillColor = accent + 'CC';
+      } else {
+        const cidx = anosComp.indexOf(ano);
+        const base = _DIR_ANO_CORES[cidx] || '#aaa';
+        // anos parciais mais transparentes
+        fillColor = _dirAnoSuficiente(countsPorAno[ano]) ? base + 'BB' : base + '55';
+      }
+
+      ctx.fillStyle = fillColor;
+      if (bh > 0) {
+        ctx.beginPath();
+        ctx.moveTo(x+r, y); ctx.lineTo(x+bwBar-r, y);
+        ctx.arcTo(x+bwBar, y, x+bwBar, y+r, r);
+        ctx.lineTo(x+bwBar, y+bh); ctx.lineTo(x, y+bh); ctx.lineTo(x, y+r);
+        ctx.arcTo(x, y, x+r, y, r); ctx.closePath(); ctx.fill();
+      }
+
+      // Valor dentro da barra (só ano atual, modo único)
+      if (!comparando && ano === anoAtual && val >= 4) {
+        ctx.fillStyle = isCurM ? '#fff' : accent;
+        ctx.font = `${isCurM?600:500} 10.5px Inter,system-ui`; ctx.textAlign = 'center';
+        ctx.fillText(val, x+bwBar/2, y+14);
+      }
+    });
+
+    // Label do mês (centro do grupo)
+    const groupCenter = groupX + (nAnos*bwBar + (nAnos-1)*barGap)/2;
+    ctx.fillStyle = isCurM ? accent : mutedC;
+    ctx.font = `${isCurM?600:400} 9.5px Inter,system-ui`; ctx.textAlign = 'center';
+    ctx.fillText(labels[i], groupCenter, PT+cH+15);
+    if (isCurM) {
+      ctx.beginPath(); ctx.arc(groupCenter, PT+cH+26, 2.5, 0, Math.PI*2);
+      ctx.fillStyle = accent; ctx.fill();
+    }
+
+    // Anotação pico (modo único)
+    if (!comparando && i === peakIdx && maxCur > 0) {
+      const val = countsAtual[i] || 0;
+      const bh = (val/top)*cH, y = PT+cH-bh;
+      const x = groupX;
+      ctx.fillStyle = accent; ctx.font = '600 9.5px Inter,system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(`▲ Pico: ${val}`, x + bwGroup/2, y - 8);
+    }
+  }
+
+  // Legenda de anos no modo comparativo
+  if (comparando) {
+    const legY = PT + cH + PB - legendH + 4;
+    let legX = PL;
+    // Atual
+    ctx.fillStyle = accent; ctx.fillRect(legX, legY, 10, 8);
+    ctx.fillStyle = mutedC; ctx.font = '9px Inter,system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(`${anoAtual}`, legX+13, legY+7);
+    legX += 13 + ctx.measureText(`${anoAtual}`).width + 14;
+    // Comparativos
+    anosComp.forEach((a, idx) => {
+      const cor = _DIR_ANO_CORES[idx] || '#aaa';
+      ctx.fillStyle = cor + 'BB';
+      ctx.fillRect(legX, legY, 10, 8);
+      ctx.fillStyle = mutedC; ctx.textAlign = 'left';
+      const label = `${a}${!_dirAnoSuficiente(countsPorAno[a])?' ⚠':''}`;
+      ctx.fillText(label, legX+13, legY+7);
+      legX += 13 + ctx.measureText(label).width + 14;
+    });
+  }
 }
 
 function dirMostrarAba(aba) {
@@ -11229,9 +11423,15 @@ document.addEventListener('DOMContentLoaded', () => {
     <div id="dirDashboard">
       <div class="dir-grid">
         <div class="dir-card">
-          <div class="dir-card-title">Concentra&ccedil;&atilde;o ao Longo do Ano</div>
-          <div class="dir-card-sub" id="dirChartSub">Colaboradores com f&eacute;rias em cada m&ecirc;s</div>
+          <div class="dir-chart-hdr">
+            <div>
+              <div class="dir-card-title">Concentra&ccedil;&atilde;o ao Longo do Ano</div>
+              <div class="dir-card-sub" id="dirChartSub">Colaboradores com f&eacute;rias em cada m&ecirc;s</div>
+            </div>
+            <div class="dir-year-pills" id="dirYearPills"></div>
+          </div>
           <canvas id="dirChart" style="display:block;"></canvas>
+          <div class="dir-chart-note" id="dirChartNote" style="display:none;"></div>
         </div>
         <div class="dir-right">
           <div class="dir-card">
