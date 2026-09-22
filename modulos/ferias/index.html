@@ -1387,6 +1387,7 @@
   .dir-sp-atencao { background:var(--amber-bg); color:var(--amber); }
   .dir-sp-radar   { background:var(--blue-bg);  color:var(--blue); }
   .dir-sp-ok      { background:var(--bg); color:var(--text-ter); border:1px solid var(--border); }
+  .dir-tl-filter-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 0 14px 0; border-bottom:1px solid var(--border); margin-bottom:14px; }
   @media(max-width:768px) { .dir-kpi-row{grid-template-columns:repeat(2,1fr);} .dir-grid{grid-template-columns:1fr;} .dir-header{flex-direction:column;align-items:flex-start;} .dir-page{padding:18px 16px;} }
   @media(max-width:460px) { .dir-kpi-row{grid-template-columns:1fr;} }
   /* Botões de ação da linha do gestor */
@@ -11033,9 +11034,7 @@ function renderDiretoria() {
 
   _renderDirChart(colabs);
 
-  // Se a aba Timeline estiver visível, re-renderiza com os filtros atualizados
-  const tlHost = document.getElementById('dirTimelineHost');
-  if (tlHost && tlHost.style.display !== 'none') renderDirTimeline();
+  // filtros do Dashboard e da Timeline são independentes — não propagar
 }
 
 // ─── Comparativo de anos — estado e helpers ──────────────────────────────────
@@ -11152,10 +11151,14 @@ function _renderDirChart(colabs) {
   const labels = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const curM = new Date().getMonth();
 
-  // Max global entre todos os anos
+  // Max global entre todos os anos — escala proporcional (margem 15%, tick limpo)
   const allVals = todosAnos.flatMap(a => countsPorAno[a].filter(v => v !== null));
   const maxV = Math.max(...allVals, 1);
-  const top = maxV + 2;
+  const rawTop = maxV * 1.15;
+  // arredonda o teto para o próximo múltiplo "limpo" (1, 2, 5, 10, 20...)
+  const mag = Math.pow(10, Math.floor(Math.log10(rawTop)));
+  const nice = [1,2,5,10].map(f => f*mag).find(f => f >= rawTop) || rawTop;
+  const top = nice;
 
   // avg e peak — só no modo ano único
   const avg = countsAtual.reduce((s,v)=>s+(v||0),0) / 12;
@@ -11318,11 +11321,51 @@ function dirMostrarAba(aba) {
   const host = document.getElementById('dirTimelineHost');
   if (host) host.style.display = isDash ? 'none' : '';
 
-  if (!isDash) renderDirTimeline();
+  if (!isDash) {
+    _dirTlPopularFiltros();
+    renderDirTimeline();
+  }
 }
 
 let _dirGanttAno = new Date().getFullYear();
 let _dirGanttMes = new Date().getMonth();
+
+function _dirTlFiltrados() {
+  const cargo   = document.getElementById('dirTlFiltroCargo')?.value   || '';
+  const setor   = document.getElementById('dirTlFiltroSetor')?.value   || '';
+  const unidade = document.getElementById('dirTlFiltroUnidade')?.value || '';
+  return COLABORADORES.filter(c => {
+    if (c.ativo === false) return false;
+    if (cargo   && c.cargo !== cargo) return false;
+    if (setor   && c.setor !== setor) return false;
+    if (unidade) {
+      const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
+      if (un !== unidade) return false;
+    }
+    return true;
+  });
+}
+
+function _dirTlPopularFiltros() {
+  const colabs = COLABORADORES.filter(c => c.ativo !== false);
+  const cargosSet = new Set(), setoresSet = new Set(), unidadesSet = new Set();
+  colabs.forEach(c => {
+    if (c.cargo) cargosSet.add(c.cargo);
+    if (c.setor) setoresSet.add(normSetor(c.setor));
+    const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
+    if (un) unidadesSet.add(un);
+  });
+  const fill = (id, vals) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">Todos</option>` +
+      [...vals].sort().map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
+  };
+  fill('dirTlFiltroCargo', cargosSet);
+  fill('dirTlFiltroSetor', setoresSet);
+  fill('dirTlFiltroUnidade', unidadesSet);
+}
 
 function renderDirTimeline() {
   const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -11340,7 +11383,7 @@ function renderDirTimeline() {
 
   if (titulo) titulo.innerHTML = `${MESES[mes]} <span class="gantt-nav-year">${ano}</span>`;
 
-  const filtrados = _dirFiltrados().filter(c =>
+  const filtrados = _dirTlFiltrados().filter(c =>
     c.registros.some(reg => {
       const lans = [...reg.lancamentos, ...(reg._novoLanc ? [reg._novoLanc] : [])];
       return lans.some(l => l.inicio <= mesFim && l.fim >= mesInicio);
@@ -11487,6 +11530,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <!-- Timeline da Diretoria — contexto próprio, nunca move #sub-timeline -->
     <div id="dirTimelineHost" style="display:none;">
+      <div class="dir-tl-filter-row">
+        <span class="dir-filter-eye">Filtrar por</span>
+        <select class="dir-sel" id="dirTlFiltroCargo" onchange="renderDirTimeline()"><option value="">Todos os cargos</option></select>
+        <select class="dir-sel" id="dirTlFiltroSetor" onchange="renderDirTimeline()"><option value="">Todos os setores</option></select>
+        <select class="dir-sel" id="dirTlFiltroUnidade" onchange="renderDirTimeline()"><option value="">Todas as unidades</option></select>
+      </div>
       <div class="gantt-topbar" style="display:flex;align-items:center;gap:8px;padding:0 0 6px 0;">
         <button class="gantt-nav-btn" onclick="_dirGanttNav(-1)">&#8592;</button>
         <span id="dirGanttTitulo" class="gantt-nav-month"></span>
