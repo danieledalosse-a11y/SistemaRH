@@ -11062,6 +11062,8 @@ const _DIR_ANO_ATUAL = new Date().getFullYear();
 const _DIR_ANO_CORES = ['#6366f1','#10b981','#f59e0b','#ec4899'];
 let _dirAnosAtivos = new Set(); // anos de comparação selecionados (excl. atual)
 let _dirCoLabsCache = [];       // último array de colabs passado ao gráfico
+// Threshold de "histórico parcial" — ajustável antes de tratarmos como regra de negócio
+const _DIR_MESES_SUFICIENTES = 6;
 
 function _dirCountsAno(colabs, ano) {
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
@@ -11083,8 +11085,7 @@ function _dirCountsAno(colabs, ano) {
 }
 
 function _dirAnoSuficiente(counts) {
-  // suficiente = pelo menos 6 meses com ao menos 1 registro
-  return counts.filter(v => v !== null && v > 0).length >= 6;
+  return counts.filter(v => v !== null && v > 0).length >= _DIR_MESES_SUFICIENTES;
 }
 
 function _dirAnosDisponiveis(colabs) {
@@ -11093,7 +11094,8 @@ function _dirAnosDisponiveis(colabs) {
   colabs.forEach(c => c.registros.forEach(reg => reg.lancamentos.forEach(l => {
     if (l.inicio) anosSet.add(parseInt(l.inicio.slice(0,4)));
   })));
-  return [...anosSet].filter(a => a !== _DIR_ANO_ATUAL).sort((a,b) => b-a).slice(0,4);
+  // Ordem cronológica crescente; mostra até 4 anos anteriores ao atual
+  return [...anosSet].filter(a => a !== _DIR_ANO_ATUAL).sort((a,b) => a-b).slice(-4);
 }
 
 function _dirRenderYearPills(colabs) {
@@ -11133,7 +11135,8 @@ function _renderDirChart(colabs) {
 
   const anoAtual = _DIR_ANO_ATUAL;
   const anosComp = [..._dirAnosAtivos].sort((a,b) => b-a);
-  const todosAnos = [anoAtual, ...anosComp]; // atual sempre primeiro
+  // Ordem cronológica crescente; atual ao final (destaque visual à direita)
+  const todosAnos = [...anosComp.sort((a,b)=>a-b), anoAtual];
   const comparando = anosComp.length > 0;
 
   // Calcular counts para todos os anos ativos
@@ -11254,11 +11257,21 @@ function _renderDirChart(colabs) {
         ctx.arcTo(x, y, x+r, y, r); ctx.closePath(); ctx.fill();
       }
 
-      // Valor dentro da barra (só ano atual, modo único)
-      if (!comparando && ano === anoAtual && val >= 4) {
-        ctx.fillStyle = isCurM ? '#fff' : accent;
-        ctx.font = `${isCurM?600:500} 10.5px Inter,system-ui`; ctx.textAlign = 'center';
-        ctx.fillText(val, x+bwBar/2, y+14);
+      // Rótulo de dados — visível em todas as barras
+      if (val > 0 && bh >= 14) {
+        // Barra larga o suficiente para texto interno
+        const isAtual = ano === anoAtual;
+        if (isAtual) {
+          ctx.fillStyle = isCurM ? '#fff' : accent;
+          ctx.font = `${isCurM?600:500} 10px Inter,system-ui`; ctx.textAlign = 'center';
+          ctx.fillText(val, x+bwBar/2, y+13);
+        } else if (bwBar >= 10) {
+          // Anos de comparação: rótulo acima da barra (discreto)
+          const cor = _DIR_ANO_CORES[anosComp.indexOf(ano)] || '#aaa';
+          ctx.fillStyle = cor;
+          ctx.font = '9px Inter,system-ui'; ctx.textAlign = 'center';
+          ctx.fillText(val, x+bwBar/2, y-3);
+        }
       }
     });
 
