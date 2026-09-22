@@ -1767,13 +1767,22 @@ Subtítulo do card: "Colaboradores com PA vigente e saldo aberto".
 
 ### Filtros executivos
 
+**Posição:** `#dirDashFilters` fica na `dir-nav-row`, na mesma linha das abas Dashboard / Timeline. Oculto automaticamente quando a aba Timeline está ativa (controlado em `dirMostrarAba()`).
+
+Cada select tem um botão ✕ via `filter-wrap` + `filter-clear` + `syncFilterClear`:
+
 ```html
-<select id="dirFiltroCargo"   onchange="renderDiretoria()">
-<select id="dirFiltroSetor"   onchange="renderDiretoria()">
-<select id="dirFiltroUnidade" onchange="renderDiretoria()">
+<div class="dir-filters" id="dirDashFilters">
+  <span class="dir-filter-eye">Filtrar por</span>
+  <div class="filter-wrap">
+    <select class="dir-sel" id="dirFiltroCargo" onchange="renderDiretoria();syncFilterClear('dirFiltroCargo','')"><option value="">Cargo</option></select>
+    <button class="filter-clear" id="clr-dirFiltroCargo" onclick="clearFilter('dirFiltroCargo','',()=>{renderDiretoria()})" tabindex="-1" title="Limpar">✕</button>
+  </div>
+  <!-- idem dirFiltroSetor, dirFiltroUnidade -->
+</div>
 ```
 
-Populados por `_dirPopularFiltros()` a partir de `COLABORADORES` ativos.
+`_dirPopularFiltros()` popula com `placeholder` descritivo ("Cargo", "Setor", "Unidade") e chama `syncFilterClear` após popular para sincronizar o estado do botão ✕.
 
 ### setRole() — 3 ramos
 
@@ -1890,29 +1899,45 @@ function dirMostrarAba(aba) {
 
 ### HTML de `#dirTimelineHost`
 
+Filtros fundidos na `gantt-topbar` (única linha), alinhados à direita das setas com `margin-left:auto`. Não há `dir-tl-filter-row` separado.
+
 ```html
 <div id="dirTimelineHost" style="display:none;">
-  <div class="dir-tl-filter-row">
-    <span class="dir-filter-eye">Filtrar por</span>
-    <select class="dir-sel" id="dirTlFiltroCargo"   onchange="renderDirTimeline()"><option value="">Todos os cargos</option></select>
-    <select class="dir-sel" id="dirTlFiltroSetor"   onchange="renderDirTimeline()"><option value="">Todos os setores</option></select>
-    <select class="dir-sel" id="dirTlFiltroUnidade" onchange="renderDirTimeline()"><option value="">Todas as unidades</option></select>
-  </div>
-  <div class="gantt-topbar" style="display:flex;align-items:center;gap:8px;padding:0 0 6px 0;">
+  <div class="gantt-topbar" style="display:flex;align-items:center;gap:8px;padding:0 0 6px 0;flex-wrap:wrap;">
     <button class="gantt-nav-btn" onclick="_dirGanttNav(-1)">&#8592;</button>
     <span id="dirGanttTitulo" class="gantt-nav-month"></span>
     <button class="gantt-nav-btn" onclick="_dirGanttNav(1)">&#8594;</button>
     <span style="font-size:12px;color:var(--text-ter);margin-left:4px;"><span id="dirGanttCnt">0</span> colaborador(es)</span>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span class="dir-filter-eye">Filtrar por</span>
+      <div class="filter-wrap">
+        <select class="dir-sel" id="dirTlFiltroCargo" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroCargo','')"><option value="">Cargo</option></select>
+        <button class="filter-clear" id="clr-dirTlFiltroCargo" onclick="clearFilter('dirTlFiltroCargo','',()=>{renderDirTimeline()})" tabindex="-1">✕</button>
+      </div>
+      <!-- idem dirTlFiltroSetor, dirTlFiltroUnidade -->
+    </div>
   </div>
   <div id="dirGanttContent"></div>
 </div>
 ```
 
-CSS associado:
-```css
-.dir-tl-filter-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-                     padding:10px 0 14px 0; border-bottom:1px solid var(--border); margin-bottom:14px; }
+### Pills de anos — ordem cronológica (`_dirRenderYearPills`)
+
+Todos os anos (comparação + atual) são ordenados juntos em `ascending` antes de renderizar. O ano atual nunca fica preso ao final quando há anos futuros disponíveis:
+
+```js
+const todosOrdenados = [...anosComp, _DIR_ANO_ATUAL].sort((a,b) => a-b);
+todosOrdenados.forEach(a => {
+  if (a === _DIR_ANO_ATUAL) {
+    // pill .current (não clicável, sempre visível)
+  } else {
+    const idx = anosComp.indexOf(a); // índice de cor na paleta _DIR_ANO_CORES
+    // pill clicável com cor e botão ⚠ parcial se necessário
+  }
+});
 ```
+
+**Regra:** nunca hardcode a ordem — o ano atual vive no seu lugar cronológico.
 
 ### Escala dinâmica do gráfico de concentração (`_renderDirChart`)
 
