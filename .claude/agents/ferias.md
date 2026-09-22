@@ -1809,9 +1809,140 @@ function setRole(role) {
 
 ---
 
+## Visão Diretoria — Timeline (implementado 2026-09-22)
+
+### Princípio arquitetural
+
+A Timeline da Diretoria **nunca move o `#sub-timeline`** da visão RH. Há um container dedicado `#dirTimelineHost` dentro de `#sec-diretoria .dir-page`. A lógica de renderização é compartilhada via helper extraído.
+
+### Helper compartilhado `_ganttRenderContent`
+
+Extraído de `renderTimeline()` para ser reutilizável por qualquer container:
+
+```js
+function _ganttRenderContent(targetEl, filtrados, diasNoMes, mesInicio, mesFim, mes, ano)
+```
+
+- Recebe o elemento-alvo como primeiro argumento — escreve `targetEl.innerHTML`
+- Contém toda a lógica de avatar, diasInfo, thead, tbody e barras de Gantt
+- `renderTimeline()` (visão RH) continua funcionando — chama este helper ao final
+- `renderDirTimeline()` (Diretoria) também chama este helper com `#dirGanttContent`
+
+### Filtros independentes por aba
+
+Dashboard e Timeline têm **conjuntos de filtro completamente separados**:
+
+| Aba | IDs dos selects | Função de filtro |
+|---|---|---|
+| Dashboard | `dirFiltroCargo`, `dirFiltroSetor`, `dirFiltroUnidade` | `_dirFiltrados()` |
+| Timeline | `dirTlFiltroCargo`, `dirTlFiltroSetor`, `dirTlFiltroUnidade` | `_dirTlFiltrados()` |
+
+`renderDiretoria()` **não propaga** nem chama `renderDirTimeline()` — as abas são completamente independentes.
+
+`_dirTlPopularFiltros()` — chamada quando a aba Timeline é ativada; popula os selects a partir de `COLABORADORES` ativos.
+
+### Estado de navegação de mês (independente da visão RH)
+
+```js
+let _dirGanttAno = new Date().getFullYear();
+let _dirGanttMes = new Date().getMonth();
+
+function _dirGanttNav(delta) {
+  _dirGanttMes += delta;
+  if (_dirGanttMes > 11) { _dirGanttMes = 0; _dirGanttAno++; }
+  if (_dirGanttMes < 0)  { _dirGanttMes = 11; _dirGanttAno--; }
+  renderDirTimeline();
+}
+```
+
+Completamente separado de `_ganttAno`/`_ganttMes` da visão RH.
+
+### `renderDirTimeline()`
+
+```js
+function renderDirTimeline() {
+  const filtrados = _dirTlFiltrados().filter(c =>
+    c.registros.some(reg => {
+      const lans = [...reg.lancamentos, ...(reg._novoLanc ? [reg._novoLanc] : [])];
+      return lans.some(l => l.inicio <= mesFim && l.fim >= mesInicio);
+    })
+  ).sort((a, b) => a.nome.localeCompare(b.nome));
+  _ganttRenderContent(content, filtrados, diasNoMes, mesInicio, mesFim, mes, ano);
+}
+```
+
+### `dirMostrarAba(aba)` — controle de visibilidade
+
+```js
+function dirMostrarAba(aba) {
+  const isDash = aba === 'dashboard';
+  // toggle active nos botões de aba
+  // #dirDashboard: display '' ou 'none'
+  // KPI row + base band: ocultados na aba Timeline (não fazem parte do contexto executivo de calendário)
+  const host = document.getElementById('dirTimelineHost');
+  if (host) host.style.display = isDash ? 'none' : '';
+  if (!isDash) {
+    _dirTlPopularFiltros();
+    renderDirTimeline();
+  }
+}
+```
+
+### HTML de `#dirTimelineHost`
+
+```html
+<div id="dirTimelineHost" style="display:none;">
+  <div class="dir-tl-filter-row">
+    <span class="dir-filter-eye">Filtrar por</span>
+    <select class="dir-sel" id="dirTlFiltroCargo"   onchange="renderDirTimeline()"><option value="">Todos os cargos</option></select>
+    <select class="dir-sel" id="dirTlFiltroSetor"   onchange="renderDirTimeline()"><option value="">Todos os setores</option></select>
+    <select class="dir-sel" id="dirTlFiltroUnidade" onchange="renderDirTimeline()"><option value="">Todas as unidades</option></select>
+  </div>
+  <div class="gantt-topbar" style="display:flex;align-items:center;gap:8px;padding:0 0 6px 0;">
+    <button class="gantt-nav-btn" onclick="_dirGanttNav(-1)">&#8592;</button>
+    <span id="dirGanttTitulo" class="gantt-nav-month"></span>
+    <button class="gantt-nav-btn" onclick="_dirGanttNav(1)">&#8594;</button>
+    <span style="font-size:12px;color:var(--text-ter);margin-left:4px;"><span id="dirGanttCnt">0</span> colaborador(es)</span>
+  </div>
+  <div id="dirGanttContent"></div>
+</div>
+```
+
+CSS associado:
+```css
+.dir-tl-filter-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+                     padding:10px 0 14px 0; border-bottom:1px solid var(--border); margin-bottom:14px; }
+```
+
+### Escala dinâmica do gráfico de concentração (`_renderDirChart`)
+
+Y-axis calculado proporcionalmente ao pico real, não fixo:
+
+```js
+const allVals = todosAnos.flatMap(a => countsPorAno[a].filter(v => v !== null));
+const maxV    = Math.max(...allVals, 1);
+const rawTop  = maxV * 1.15;                          // 15% de headroom
+const mag     = Math.pow(10, Math.floor(Math.log10(rawTop)));
+const nice    = [1,2,5,10].map(f => f*mag).find(f => f >= rawTop) || rawTop;
+const top     = nice;
+```
+
+Meses com baixa concentração não ficam "achatados" mesmo quando Dezembro tem pico alto.
+
+### Framework conceitual da Diretoria
+
+A Diretoria responde 3 perguntas na ordem:
+1. **Como estamos?** — KPIs: Agendados / Em férias hoje / Sem programação / Risco de dobra
+2. **O que merece atenção?** — Painel Sem Programação + semáforos de urgência
+3. **O que vem pela frente?** — Próximas saídas + Timeline (aba dedicada)
+
+Esse framework deve guiar qualquer decisão de hierarquia visual futura na Diretoria.
+
+---
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
 - Aprovação em lote
 - Eliminar aba "Solicitações" permanentemente (aguardando testes do novo fluxo unificado)
-- Visão Diretoria — aba Timeline: atualmente mostra placeholder; integrar a timeline existente da visão RH
+- Visão Diretoria — validar banda base (47 ativos / 31 com PA / 16 sem PA) como elemento de design permanente ou remover
