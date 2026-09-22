@@ -34,8 +34,8 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\ferias\index.html` (~3.200 
 `id, matricula, nome, cargo, setor, gestor, empresa_registro, empresa_registro_nome, empresa_atuacao, empresa_atuacao_nome, data_demissao, foto_url`
 - `ativo = !data_demissao`
 - Matrículas repetem entre empresas → identificar por matricula + nome
-- `gestor` = apelido do gestor responsável (mesmo valor de `param_gestor.apelido`)
-- O campo `gestor` **deve estar no `select=`** da query `sbGet('colaboradores', ...)` e deve ser atribuído ao objeto do colaborador em `supabaseParaModelo()` — caso contrário filtros por gestor ficam vazios
+- `gestor` = texto legado; **não mais usado para identificar equipe** (ver `_carregarEquipeGestor` abaixo)
+- O campo `gestor` **deve estar no `select=`** da query — ainda é usado pelo filtro secundário `gestorFiltroGestor` dentro da lista carregada
 
 ### `ferias`
 `id, colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status, dias_antecipados, abono_pecuniario` + colunas de lançamentos
@@ -329,9 +329,48 @@ await sbPatch('ferias', `id=eq.${feriasId}`, { ...clearSlot, status: 'Aprovado',
 
 **Por quê:** cancelar o PA inteiro faz o sistema criar nova row com datas erradas (usa `data_admissao` em vez do aniversário correto) no próximo `gestorSolicitarNovoPa`.
 
-## Filtro dropdown de gestores (Visão Gestor)
+## Identificação de equipe do gestor — arquitetura parametrizada (set/2026)
 
-Sempre buscar de `param_gestor` (campo `apelido`, filtro `ativo=eq.true&order=ordem`), **não** de valores distintos da coluna `colaboradores.gestor`. Isso evita duplicatas por variação de capitalização.
+**Regra definitiva:** a equipe de um gestor nunca é definida por comparação de texto livre. O fluxo correto é:
+
+```
+usuarios_perfil.colaborador_id
+  → param_gestor.id (gestor_id)
+  → param_gestor_setor.setor_id (setores responsáveis)
+  → param_setor.descricao (nomes dos setores)
+  → colaboradores.setor IN (descricoes) + data_demissao IS NULL
+```
+
+### `_carregarEquipeGestor(gestor_id)`
+
+- **`gestor_id` fornecido** (gestor puro): percorre a cadeia acima em 3 queries
+- **`gestor_id = null`** (RH/admin): carrega todos os colaboradores ativos sem restrição
+
+```js
+if (gestor_id) {
+  const setorLinks = await sbGet('param_gestor_setor', `gestor_id=eq.${gestor_id}&ativo=eq.true&select=setor_id`);
+  const setorIds = setorLinks.map(r => r.setor_id).join(',');
+  const setorRows = await sbGet('param_setor', `id=in.(${setorIds})&select=descricao`);
+  const descricoes = setorRows.map(r => `"${r.descricao}"`).join(',');
+  colabQuery = `setor=in.(${descricoes})&data_demissao=is.null&select=...`;
+}
+```
+
+### `initGestor()` — fluxo do gestor puro
+
+```js
+const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=id,nome&limit=1`);
+GESTOR_APELIDO = pgRows[0].nome || '';   // nome para display e flag de vista restrita
+await _carregarEquipeGestor(pgRows[0].id);  // passa gestor_id numérico, não texto
+```
+
+### `GESTOR_APELIDO` — papel atual
+
+Variável string. Truthy = gestor puro (filtro `gestorFiltroGestor` fica oculto). Null = RH/admin (filtro visível). Nunca mais é usada para query de colaboradores.
+
+### Filtro dropdown de gestores (`gestorFiltroGestor`)
+
+Filtro **secundário dentro da lista já carregada**. Popula de `param_gestor` (campo `apelido`) para evitar duplicatas por capitalização:
 
 ```js
 // Dentro de renderGestorAtencao (NÃO async) — usar .then(), nunca await
@@ -339,6 +378,16 @@ sbGet('param_gestor', 'select=apelido&ativo=eq.true&order=ordem').then(pgRows =>
   const gestores = pgRows.map(r => r.apelido).filter(Boolean);
   gestores.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; gestorSel.appendChild(o); });
 }).catch(() => { /* fallback: distinct de colaboradores */ });
+```
+
+O filtro compara `c.gestor` (campo legado) contra o apelido selecionado — funciona para triagem visual mas **não é a fonte de verdade da equipe**.
+
+### Armadilha: `colaboradores.setor` precisa estar em sincronia com `param_setor.descricao`
+
+A busca por `setor=in.(descricoes)` é case-sensitive e exata. Em set/2026 foram corrigidos 214 colaboradores que tinham formato antigo "código - nome" (ex: "148 - Matriz Vendas"). O formato correto é apenas o nome curto (ex: "Matriz Vendas"), igual a `param_setor.descricao`. Se um colaborador não aparecer na equipe do gestor, verificar:
+```sql
+SELECT DISTINCT setor FROM colaboradores WHERE data_demissao IS NULL ORDER BY setor;
+SELECT descricao FROM param_setor ORDER BY descricao;
 ```
 
 ## Filtro de ano na Visão RH
@@ -1545,6 +1594,117 @@ Cabeçalho do drill-down: `DETALHAMENTO POR UNIDADE — {setor} ({N} Colaborador
 Cada linha: avatar com iniciais + nome/cargo + badge de prioridade (ALTA PRIORIDADE / ATENÇÃO / NO RADAR) + badge de data "📅 Vence em DD/MM/AAAA". Clique abre `abrirDrawer`.
 
 Badges usam `riscoBadgeHtml(dpd, true, dlim)` — mesma função da aba Lista.
+
+---
+
+## Visão Gestor — `gestorPeriodoVigente` (corrigido 2026-09-21)
+
+Função separada de `gestorPeriodoAtivo` para exibir PA Vigente no drawer mesmo quando saldo = 0.
+
+```js
+function gestorPeriodoVigente(colaborador_id) {
+  const hoje = new Date().toISOString().slice(0,10);
+  const periodos = GESTOR_PERIODOS.filter(p => p.colaborador_id === colaborador_id)
+    .slice().sort((a, b) => (b.pa_fim||'').localeCompare(a.pa_fim||''));
+  const vigente = periodos.find(p => {
+    const inicio = p.pa_inicio || '';
+    const fim    = p.data_fim_gozo || p.pa_fim || '';
+    return inicio <= hoje && (!fim || fim >= hoje);
+  });
+  if (vigente) return vigente;
+  return periodos.find(p => (p.pa_inicio || '') <= hoje) || null;
+}
+```
+
+**Regra de uso no drawer (`gestorAbrirSolicitacoes`):**
+
+```js
+const pa    = gestorPeriodoAtivo(c.id);    // PA com saldo disponível → botão Solicitar
+const paVig = gestorPeriodoVigente(c.id);  // PA vigente por data → exibição PA Vigente/Vencimento
+const _paBase = pa || paVig;               // base para cálculo de saldo quando saldo=0
+const saldo = _paBase ? gestorSaldoPeriodo(_paBase) : 0;
+const total = _paBase ? (Number(_paBase.dias_direito) || 30) : 30;
+const venc  = paVig?.data_fim_gozo ? gestorFmtData(paVig.data_fim_gozo) : '—';
+const paAno = paVig?.pa_fim ? paVig.pa_fim.slice(0,4) : (paVig?.pa_inicio ? paVig.pa_inicio.slice(0,4) : '—');
+```
+
+- **`gestorPeriodoAtivo`** permanece inalterado: retorna PA com saldo > 0 — usado para lógica do botão Solicitar e cálculo de saldo
+- **`gestorPeriodoVigente`**: retorna PA que cobre a data de hoje (pa_inicio ≤ hoje ≤ data_fim_gozo), sem verificar saldo — usado apenas para exibição de "PA Vigente" e "Vencimento" no drawer
+- Motivo: colaboradores com saldo = 0 (ex: férias 100% agendadas) têm PA vigente válido mas `gestorPeriodoAtivo` retorna null → exibia "—" incorretamente
+
+---
+
+## Visão Gestor — abas e permissões (atualizado 2026-09-21)
+
+`setGestorTab(tab)` itera `['painel','timeline','dashboard']` (3 abas — inclui dashboard-gestor).
+
+**Permissões do perfil Gestor (perfil_id=3):**
+
+```json
+{
+  "ferias": {
+    "abas": ["lista", "timeline", "dashboard-gestor"],
+    "acoes": ["visualizar", "inserir", "alterar"]
+  }
+}
+```
+
+Todos os gestores usam o mesmo `perfil_id=3` — permissões idênticas, só a equipe difere (via `param_gestor.apelido` = `colaboradores.gestor`). 5 gestores com login ativo: Oriel, Carlos/Juninho, Rafhael, Prata, Madson.
+
+Migration 059 (`migrations/059_perfis_requer_colaborador.sql`): coluna `requer_colaborador` em `perfis`, trigger que exige `colaborador_id` para perfis Gestor e Colaborador.
+
+---
+
+## Dashboard Gestor — 3 blocos (redesign 2026-09-21)
+
+`renderAnalyticsGestor()` monta 3 blocos com helpers locais:
+
+### Helpers
+
+```js
+_gdashInitials(nome)   // 2 letras: primeira e última palavra
+_gdashAvatar(colab, size)  // img com foto_url ou div colorido com iniciais
+_gdashFmt(ds)          // 'DD mmm' ('15 set') a partir de 'YYYY-MM-DD'
+_gdashDiasAte(ds)      // dias até a data (pode ser negativo)
+```
+
+### Bloco 1 — Situação agora (`_renderGdashSituacao`)
+
+3 cards lado a lado, cada um com borda esquerda colorida:
+
+| Card | Cor borda | Critério |
+|---|---|---|
+| De férias | `#E24B4A` (vermelho) | `l.inicio <= hoje && l.fim >= hoje` |
+| Próximo a sair | `#185FA5` (azul) | `l.inicio > hoje && dias ≤ 60` |
+| Retorna em breve | `#3B7D11` (verde) | lançamentos com fim >= hoje, ordenados por fim |
+
+Cada card exibe nomes, datas e contagem de dias — visível sem hover.
+
+### Bloco 2 — Mapa anual (`_renderGdashMapa`)
+
+Grid colaborador × 12 meses. Cores:
+
+```js
+const CORES = {
+  aprovado:  '#185FA5',   // azul escuro
+  solicitado:'#B5D4F4',  // azul claro
+  gozado:    '#D3D1C7'   // cinza
+};
+```
+
+- Colaboradores com períodos acima do separador; `semPeriodo` abaixo (células com borda tracejada)
+- Legenda: Aprovado / Solicitado / Gozado / Sem programação
+
+### Bloco 3 — Planejamento
+
+Layout `grid-template-columns: 1fr 240px`:
+
+- **`_renderGdashProximos()`** — próximos 60 dias: `l.inicio > hoje && l.inicio <= limiteStr`; contador grande por linha
+- **`_renderGdashSemProg()`** — sem programação: número grande de colaboradores sem lançamento futuro; lista de nomes; caixa âmbar de alerta
+
+### Funções removidas
+
+`_renderGdashAno`, `_renderGdashCal`, `gdashCalNav` — substituídas pelo redesign de 3 blocos.
 
 ---
 

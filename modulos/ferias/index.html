@@ -1439,6 +1439,7 @@
     <div class="role-toggle" id="roleToggle">
       <button class="role-btn active" id="roleBtnRH" onclick="setRole('rh')">RH</button>
       <button class="role-btn" id="roleBtnGestor" onclick="setRole('gestor')">Gestor</button>
+      <button class="role-btn" id="roleBtnDiretoria" onclick="setRole('diretoria')">Diretoria</button>
     </div>
     <span id="userNomeFerias" style="font-size:13px;color:rgba(255,255,255,0.6);"></span>
     <button onclick="logoutFerias()" title="Sair" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.45);padding:4px;display:flex;align-items:center;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.45)'">
@@ -2267,11 +2268,14 @@ guardModulo('ferias');
   } catch(_) { window.location.href = '../../login.html'; }
 })();
 
-let IS_RH = true; // padrão RH; gestor é setado por setRole()
+let IS_RH = true;       // padrão RH; gestor/diretoria são setados por setRole()
+let IS_DIRETORIA = false; // visão executiva: sem ações operacionais
 (function() {
   try {
     const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-    IS_RH = (p.perfil || 'rh') !== 'gestor';
+    const pf = p.perfil || 'rh';
+    IS_RH         = pf !== 'gestor';
+    IS_DIRETORIA  = pf === 'diretoria';
   } catch(_) {}
 })();
 // Helpers de permissão (lidos do sb_permissoes carregado no login via permissoes.js)
@@ -5888,11 +5892,13 @@ function searchGlobalKeydown(e) {
 // ─── Role toggle (RH / Gestor) ───────────────────────────────────────────────
 const _RH_SECS = ['sec-visao-rh','sec-lancar','sec-minha-equipe','sec-historico'];
 function setRole(role) {
-  document.body.classList.toggle('modo-gestor', role === 'gestor');
+  IS_DIRETORIA = (role === 'diretoria');
+  document.body.classList.toggle('modo-gestor', role === 'gestor' || role === 'diretoria');
   document.getElementById('roleBtnRH')?.classList.toggle('active', role === 'rh');
   document.getElementById('roleBtnGestor')?.classList.toggle('active', role === 'gestor');
+  document.getElementById('roleBtnDiretoria')?.classList.toggle('active', role === 'diretoria');
 
-  if (role === 'gestor') {
+  if (role === 'gestor' || role === 'diretoria') {
     // esconde seções RH e abas
     _RH_SECS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
     const modTabs = document.querySelector('.mod-tabs');
@@ -5900,16 +5906,22 @@ function setRole(role) {
     // mostra seção gestor (e carrega se ainda não carregou)
     const sg = document.getElementById('sec-gestor');
     if (sg) { sg.style.display = 'block'; }
+    // Atividade Recente: ocultar na visão Diretoria
+    const atividadeEl = document.getElementById('gestorAtividade');
+    if (atividadeEl) atividadeEl.style.display = IS_DIRETORIA ? 'none' : '';
     if (!window._gestorCarregado && typeof initGestor === 'function') {
       window._gestorCarregado = true;
       initGestor(true);
     } else if (window._gestorCarregado && GESTOR_COLABS.length) {
-      // já carregado: só mostra o botão trocar
+      // já carregado: re-render os alerts (para aplicar IS_DIRETORIA) e troca botão
+      renderGestorAlerts();
+      if (atividadeEl) atividadeEl.style.display = IS_DIRETORIA ? 'none' : '';
       const btn = document.getElementById('btnTrocarGestor');
-      if (btn && IS_RH) btn.style.display = 'block';
+      if (btn && IS_RH) btn.style.display = IS_DIRETORIA ? 'none' : 'block';
     }
   } else {
     // volta para RH
+    IS_DIRETORIA = false;
     _RH_SECS.forEach(id => { const el = document.getElementById(id); if (el && id === 'sec-visao-rh') el.style.display = 'block'; });
     const modTabs = document.querySelector('.mod-tabs');
     if (modTabs) modTabs.style.display = 'flex';
@@ -8131,7 +8143,7 @@ function renderGestorAlerts(colabsBase) {
       <div class="proto-alert-arr"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
     </div>`;
 
-  document.getElementById('gestorAlerts').innerHTML = _cardAprovHtml + _cardAgendadosHtml + `
+  document.getElementById('gestorAlerts').innerHTML = (IS_DIRETORIA ? '' : _cardAprovHtml) + _cardAgendadosHtml + `
     <div class="proto-alert-card red${_gestorAlertaAtivo==='dobra'?' pa-active':''}" onclick="filtrarGestorAlerta('dobra')">
       <div class="proto-alert-icon">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B42318" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -10810,8 +10822,15 @@ function gestorBadgeStyle(status) {
 // ─── Inicialização ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (!IS_RH) {
+    // Perfil gestor: entra direto na visão restrita à equipe
     initGestor();
+  } else if (IS_DIRETORIA) {
+    // Perfil diretoria: visão executiva — mesmo sec-gestor, sem toggle e sem ações operacionais
+    const _rtEl = document.getElementById('roleToggle');
+    if (_rtEl) _rtEl.style.display = 'none';
+    setRole('diretoria');
   } else {
+    // RH / admin: fluxo normal
     if (!podeAba('ferias','lista')) {
       const vtLista = document.getElementById('vt-lista');
       if (vtLista) vtLista.style.display = 'none';
