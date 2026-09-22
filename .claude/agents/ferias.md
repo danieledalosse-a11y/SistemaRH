@@ -1887,9 +1887,12 @@ function dirMostrarAba(aba) {
   const isDash = aba === 'dashboard';
   // toggle active nos botões de aba
   // #dirDashboard: display '' ou 'none'
-  // KPI row + base band: ocultados na aba Timeline (não fazem parte do contexto executivo de calendário)
+  // KPI row + base band: ocultados na aba Timeline
   const host = document.getElementById('dirTimelineHost');
   if (host) host.style.display = isDash ? 'none' : '';
+  // filtros do Dashboard ficam ocultos na aba Timeline
+  const dashFilters = document.getElementById('dirDashFilters');
+  if (dashFilters) dashFilters.style.display = isDash ? '' : 'none';
   if (!isDash) {
     _dirTlPopularFiltros();
     renderDirTimeline();
