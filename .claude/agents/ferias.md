@@ -1708,8 +1708,110 @@ Layout `grid-template-columns: 1fr 240px`:
 
 ---
 
+## Visão Diretoria — Panorama Executivo (implementado 2026-09-22)
+
+### Arquitetura
+
+Perfil `diretoria` recebe uma experiência completamente separada da visão Gestor e da visão RH.
+
+- **Flag:** `IS_DIRETORIA = (sb_perfil.perfil === 'diretoria')`
+- **Seção:** `#sec-diretoria` — independente de `#sec-gestor` e das seções RH; nenhuma das duas é alterada
+- **Dados:** carregados por `carregarDoSupabase()` (mesma chamada da visão RH) — `COLABORADORES[]` com `registros[].lancamentos[]`
+
+### Funções canônicas (nunca duplicar lógica)
+
+```js
+_dirPopularFiltros()    // popula selects #dirFiltroCargo, #dirFiltroSetor, #dirFiltroUnidade
+_dirFiltrados()         // retorna COLABORADORES filtrados pelos 3 selects (ativos apenas)
+_dirSaldoColab(colab)   // soma calcSaldo(r) de todos os registros do colaborador
+_dirUrgSemProg(colab)   // retorna { nivel, dlim } do PA mais urgente sem programação
+renderDiretoria()       // KPIs + Próximas Saídas + Sem Programação + gráfico
+_renderDirChart(colabs) // canvas bar chart: concentração por mês, linha de média, anotação de pico
+dirMostrarAba(aba)      // toggle 'dashboard' / 'timeline'
+```
+
+### Cálculos reutilizados da visão RH (nunca reimplementar)
+
+| Conceito | Função |
+|---|---|
+| Saldo de dias | `calcSaldo(reg)` |
+| Colaborador sem agendamento | `isSemAgendado(colab)` |
+| Colaborador com risco de dobra | `isRiscoDobra(colab)` |
+| Semáforo de nível | `nivelRisco(dpd)` — critico/atencao/noradar/null |
+| Dias até a dobra | `diasParaDobra(reg)` |
+| Data limite da dobra | `dataLimiteDobra(reg)` |
+
+### KPIs (4 cards)
+
+| ID raiz | Cor | Métrica |
+|---|---|---|
+| `dirKpiAg*` | verde | Agendados — lançamento futuro com `fim >= hoje` |
+| `dirKpiHj*` | azul | Em férias hoje — lançamento ativo (`inicio <= hoje <= fim`) |
+| `dirKpiSp*` | âmbar | Sem programação — `isSemAgendado()` |
+| `dirKpiRd*` | vermelho | Risco de dobra — `isRiscoDobra()` |
+
+Cada KPI tem 3 elementos: `*N` (número), `*Ctx` (frase "X de N"), `*Bar` (barra de proporção).
+
+### Painel "Sem Programação"
+
+**Definição:** `isSemAgendado(colab)` — PA vigente com saldo aberto, sem lançamento futuro.
+
+**Semáforo (via `_dirUrgSemProg`):**
+- `critico` (dpd < 60) → badge vermelho `.dir-sp-critico`
+- `atencao` (dpd ≤ 120) → badge âmbar `.dir-sp-atencao`
+- `noradar` (dpd ≤ 180) → badge azul `.dir-sp-radar`
+
+Ordenação: nível de risco ascendente, depois saldo descendente.
+Nota de rodapé: "Pontos para acompanhamento" (nunca "encaminhamento pelo RH").
+Subtítulo do card: "Colaboradores com PA vigente e saldo aberto".
+
+### Filtros executivos
+
+```html
+<select id="dirFiltroCargo"   onchange="renderDiretoria()">
+<select id="dirFiltroSetor"   onchange="renderDiretoria()">
+<select id="dirFiltroUnidade" onchange="renderDiretoria()">
+```
+
+Populados por `_dirPopularFiltros()` a partir de `COLABORADORES` ativos.
+
+### setRole() — 3 ramos
+
+```js
+function setRole(role) {
+  IS_DIRETORIA = (role === 'diretoria');
+  if (role === 'diretoria') {
+    // oculta seções RH + sec-gestor, mostra sec-diretoria
+    // chama carregarDoSupabase() se COLABORADORES vazio, senão renderDiretoria() direto
+  } else if (role === 'gestor') {
+    // oculta sec-diretoria, mostra sec-gestor
+    // initGestor() ou renderGestorAlerts()
+  } else {
+    // IS_DIRETORIA = false; oculta sec-diretoria e sec-gestor; mostra seções RH
+  }
+}
+```
+
+### DOMContentLoaded — ramo IS_DIRETORIA
+
+```js
+} else if (IS_DIRETORIA) {
+  document.getElementById('roleToggle').style.display = 'none';
+  carregarDoSupabase().then(() => {
+    document.getElementById('visaoContent').style.display = 'none';
+    document.querySelector('.mod-tabs').style.display = 'none';
+    document.getElementById('sec-diretoria').style.display = 'block';
+    _dirPopularFiltros();
+    renderDiretoria();
+  });
+}
+```
+
+---
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
 - Aprovação em lote
 - Eliminar aba "Solicitações" permanentemente (aguardando testes do novo fluxo unificado)
+- Visão Diretoria — aba Timeline: atualmente mostra placeholder; integrar a timeline existente da visão RH
