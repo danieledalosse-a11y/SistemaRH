@@ -63,10 +63,7 @@ RETURNS TABLE(
   ativo          boolean,
   cargo          text,
   acesso_modulos jsonb,
-  criado_por     text,
-  alterado_por   text,
-  created_at     timestamptz,
-  updated_at     timestamptz
+  created_at     timestamptz
 )
 SECURITY DEFINER
 SET search_path = public
@@ -82,13 +79,10 @@ LANGUAGE sql STABLE AS $$
     up.ativo,
     up.cargo,
     up.acesso_modulos,
-    up.criado_por,
-    up.alterado_por,
-    up.created_at,
-    up.updated_at
+    up.created_at
   FROM public.usuarios_perfil up
   LEFT JOIN auth.users au ON au.id = up.user_id
-  WHERE public.auth_pode_gerir_usuarios()   -- retorna vazio para não-autorizados
+  WHERE public.auth_pode_gerir_usuarios()
   ORDER BY up.nome;
 $$;
 GRANT EXECUTE ON FUNCTION public.fn_get_usuarios_perfil() TO authenticated;
