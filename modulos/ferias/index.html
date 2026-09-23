@@ -9127,14 +9127,17 @@ function _renderGdashMapa() {
     else semPeriodo.push(colab);
   });
 
-  // Ordena: mês de início mais cedo → alfabético
+  // Ordena: panorâmico → mês de início + alfabético; filtrado → só alfabético
   const _primeiroMes = ({ lans }) => {
     const ms = lans.map(l => parseInt((l.inicio||'').slice(5,7)) - 1).filter(m => !isNaN(m));
     return ms.length ? Math.min(...ms) : 12;
   };
   comPeriodo.sort((a, b) => {
-    const diff = _primeiroMes(a) - _primeiroMes(b);
-    return diff !== 0 ? diff : a.colab.nome.localeCompare(b.colab.nome, 'pt-BR');
+    if (SEL === null) {
+      const diff = _primeiroMes(a) - _primeiroMes(b);
+      if (diff !== 0) return diff;
+    }
+    return a.colab.nome.localeCompare(b.colab.nome, 'pt-BR');
   });
 
   // Cargos disponíveis (filtro)
@@ -9186,12 +9189,13 @@ function _renderGdashMapa() {
     return `<div style="height:${ROW_H};border-radius:3px;background:${bg};${border}"></div>`;
   }).join('');
 
-  // Separador de mês de início (marcador discreto)
+  // Separador de mês de início (marcador discreto — oculto quando filtro de mês ativo)
   let _prevMes = -1;
   const renderRow = (item, idx) => {
+    const showMarker = SEL === null;
     const pm   = _primeiroMes(item);
-    const show = pm !== _prevMes;
-    _prevMes   = pm;
+    const show = showMarker && pm !== _prevMes;
+    if (showMarker) _prevMes = pm;
     const sep  = (show && idx > 0)
       ? `<div style="grid-column:1/-1;height:0.5px;background:var(--border);margin:3px 0 2px"></div>`
       : '';
@@ -9255,8 +9259,6 @@ function _renderGdashMapa() {
     : `${comPeriodo.length} com período programado`;
 
   const toggleLabel = _gdashMapaMostrarTodos ? '▴ ocultar sem programação' : `▾ ${semPeriodo.length} sem programação`;
-
-  _prevMes = -1;
 
   wrap.innerHTML = `
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
