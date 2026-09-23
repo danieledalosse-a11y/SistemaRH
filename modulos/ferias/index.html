@@ -9743,6 +9743,18 @@ function gestorExportarExcel() {
 
   if (!GESTOR_COLABS.length) { toast('Dados da equipe não carregados. Aguarde e tente novamente.', 'aviso'); return; }
 
+  // Carrega SheetJS sob demanda se ainda não estiver disponível
+  const _doExport = () => _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, dataLabel, _saldoCor);
+  if (typeof XLSX !== 'undefined') { _doExport(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js';
+  s.onload = _doExport;
+  s.onerror = () => toast('Falha ao carregar biblioteca de exportação. Verifique a conexão.', 'erro');
+  document.head.appendChild(s);
+}
+
+function _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, dataLabel, _saldoCor) {
+
   const linhas = [];
   GESTOR_COLABS.filter(c => {
     if (cargofs.length && !cargofs.includes(c.cargo)) return false;
@@ -9802,83 +9814,53 @@ function gestorExportarExcel() {
 
   if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
 
-  // Cores de situação para célula Excel (inline, Excel ignora <style>)
-  const _sitXls = (sit) => {
-    const map = {
-      'Crítico':         { bg:'#FEE2E2', text:'#7F1D1D' },
-      'Atenção':         { bg:'#FDE68A', text:'#78350F' },
-      'No radar':        { bg:'#DBEAFE', text:'#1E3A8A' },
-      'Agendado':        { bg:'#ECFDF3', text:'#027A48' },
-      'Concluído':       { bg:'#ECFDF3', text:'#027A48' },
-      'Sem agendamento': { bg:'#FFFAEB', text:'#92400E' },
-      'Período futuro':  { bg:'#EFF6FF', text:'#1849A9' },
-    };
-    return map[sit] || { bg:'#F1F5F9', text:'#475569' };
-  };
+  // ── Monta planilha com SheetJS ──────────────────────────────────────────────
+  const wb = XLSX.utils.book_new();
 
-  const TH  = 'background:#1e3a5f;color:#fff;font-family:Arial,sans-serif;font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;border:1px solid #16304f;text-align:left;';
-  const THC = TH + 'text-align:center;';
-  const TD  = 'font-family:Arial,sans-serif;font-size:10pt;padding:5px 10px;border:1px solid #cbd5e1;vertical-align:middle;';
-  const TDC = TD + 'text-align:center;';
+  // Cabeçalhos (linha 1 = título, linha 2 = subtítulo, linha 3 = headers de coluna)
+  const HEADERS = ['Setor','Nome','Cargo','Ano PA','Período Aquisitivo','Férias Início','Férias Fim','Saldo (d)','Situação'];
+  const aoa = [
+    ['Férias da Equipe', ...Array(8).fill('')],       // linha 1 — título
+    [`${linhas.length} colaborador(es) · Gerado em ${gerado}`, ...Array(8).fill('')], // linha 2
+    HEADERS,                                           // linha 3 — cabeçalhos com AutoFilter
+    ...linhas.map(l => [
+      l.setor || '',
+      l.nome,
+      l.cargo,
+      l.paAno,
+      l.paStr,
+      l.agendIni,
+      l.agendFim,
+      l.saldo,
+      l.situacao,
+    ])
+  ];
 
-  // Paleta de risco para o Excel (fundo da linha + nome)
-  const _riscoXls = (sitKey) => {
-    if (sitKey === 'Crítico')  return { rowBg:'#FFF5F5', nomeCor:'#7F1D1D', nomePeso:'800' };
-    if (sitKey === 'Atenção')  return { rowBg:'#FFFBEB', nomeCor:'#78350F', nomePeso:'700' };
-    if (sitKey === 'No radar') return { rowBg:'#F0F6FF', nomeCor:'#1E3A8A', nomePeso:'600' };
-    return { rowBg:'#fff', nomeCor:'#1a1a2e', nomePeso:'500' };
-  };
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
 
-  // Excel: sem separadores, coluna Setor adicionada entre Cargo e Ano PA
-  let trs = '';
-  linhas.forEach(l => {
-    const risco = _riscoXls(l.sitKey);
-    const sit   = _sitXls(l.sitKey);
-    const corS  = _corSetor(l.setor);
-    const TDR   = TD + `background:${risco.rowBg};`;
-    const TDRC  = TDC + `background:${risco.rowBg};`;
-    trs += `<tr>
-      <td style="${TDR}color:${risco.nomeCor};font-weight:${risco.nomePeso};">${l.nome}</td>
-      <td style="${TDR}">${l.cargo}</td>
-      <td style="${TDR}background:${corS.bg};color:${corS.text};font-weight:700;">${l.setor||'—'}</td>
-      <td style="${TDRC}font-weight:700;">${l.paAno}</td>
-      <td style="${TDR}font-size:9pt;">${l.paStr}</td>
-      <td style="${TDRC}">${l.agendIni}</td>
-      <td style="${TDRC}">${l.agendFim}</td>
-      <td style="${TDRC}font-weight:800;color:${_saldoCor(l.saldo)};">${l.saldo}d</td>
-      <td style="${TDR}color:${sit.text};font-weight:700;">${l.situacao}</td>
-    </tr>`;
-  });
+  // AutoFilter na linha 3 (índice 2), todas as colunas A:I
+  ws['!autofilter'] = { ref: 'A3:I3' };
 
-  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-  <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
-  <x:Name>Férias da Equipe</x:Name>
-  <x:WorksheetOptions>
-    <x:DisplayGridlines/>
-    <x:FreezePanes/>
-    <x:FrozenNoSplit/>
-    <x:SplitHorizontal>3</x:SplitHorizontal>
-    <x:TopRowBottomPane>3</x:TopRowBottomPane>
-    <x:ActivePane>2</x:ActivePane>
-  </x:WorksheetOptions>
-  <x:AutoFilter x:Range="A3:I3"/>
-  </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
-  <body><table border="1" cellpadding="0" cellspacing="0">
-    <tr><td colspan="9" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe</td></tr>
-    <tr><td colspan="9" style="font-family:Arial,sans-serif;font-size:9pt;color:#64748b;padding:4px 10px;border:1px solid #cbd5e1;">${linhas.length} colaborador(es) · Gerado em ${gerado}</td></tr>
-    <tr><td style="${TH}">Nome</td><td style="${TH}">Cargo</td><td style="${TH}">Setor</td><td style="${THC}">Ano PA</td><td style="${TH}">Período Aquisitivo</td><td style="${THC}">Férias Início</td><td style="${THC}">Férias Fim</td><td style="${THC}">Saldo</td><td style="${TH}">Situação</td></tr>
-    ${trs}
-  </table></body></html>`;
+  // Congela as 3 primeiras linhas (sheetViews é a API correta do SheetJS)
+  ws['!sheetViews'] = [{ state: 'frozen', ySplit: 3, topLeftCell: 'A4' }];
 
-  const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Ferias_Equipe_${dataLabel.replace(/\s/g,'_')}.xls`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Larguras de coluna (aproximadas em caracteres)
+  ws['!cols'] = [
+    { wch: 20 }, // Setor
+    { wch: 30 }, // Nome
+    { wch: 22 }, // Cargo
+    { wch: 8  }, // Ano PA
+    { wch: 26 }, // Período Aquisitivo
+    { wch: 14 }, // Férias Início
+    { wch: 14 }, // Férias Fim
+    { wch: 10 }, // Saldo
+    { wch: 30 }, // Situação
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Férias da Equipe');
+
+  const fileName = `Ferias_Equipe_${dataLabel.replace(/\s/g,'_')}.xlsx`;
+  XLSX.writeFile(wb, fileName);
 }
 
 function renderGestorRelatorio() {
