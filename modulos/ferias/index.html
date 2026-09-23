@@ -5465,13 +5465,17 @@ async function rhAprovarSolicitado(feriasId, idx) {
     if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
     if (typeof renderGestorAtencao === 'function') renderGestorAtencao();
   } catch(e) {
-    alert('Erro ao aprovar: ' + e.message);
+    toast('Erro ao aprovar: ' + e.message, 'erro');
     if (btn) { btn.disabled = false; btn.textContent = '✓ Aprovar'; }
   }
 }
 
 async function rhRecusarSolicitado(feriasId, idx) {
-  const motivo = prompt('Motivo da recusa (obrigatório):');
+  // Redireciona para o modal completo que já tem campo de motivo
+  const lista = getPendentes();
+  const i = (idx !== undefined && idx !== null) ? idx : lista.findIndex(p => String(p.reg._sbId) === String(feriasId));
+  if (i >= 0) { abrirModalAprovar(i); toggleMotivoRejeicao(); return; }
+  const motivo = '';
   if (!motivo?.trim()) return;
   try {
     const _agoraRec = new Date().toISOString();
@@ -5684,7 +5688,7 @@ async function aprovarPendente() {
     toast(`✓ Férias aprovadas — ${colab.nome}`);
     renderAll();
   } catch(e) {
-    alert('Erro ao salvar aprovação: ' + e.message);
+    toast('Erro ao salvar aprovação: ' + e.message, 'erro');
   } finally {
     btnAprovar.disabled = false;
     btnAprovar.textContent = '✓ Aprovar';
@@ -5693,7 +5697,7 @@ async function aprovarPendente() {
 
 async function rejeitarPendente() {
   const motivo = document.getElementById('motivoRejeicao').value.trim();
-  if (!motivo) { alert('Informe o motivo da rejeição.'); return; }
+  if (!motivo) { toast('Informe o motivo da rejeição.', 'erro'); return; }
   if (_pendIdx === null) return;
   const pendItem = _pendListCache[_pendIdx];
   const { colab, reg } = pendItem;
@@ -8414,6 +8418,13 @@ function renderGestorAtividade() {
 let _rhAtivAba    = 'recente'; // 'recente' | 'historico'
 let _rhHistOffset = 0;
 
+function _rhAtivAbrirModal(feriasId) {
+  const lista = getPendentes();
+  const idx = lista.findIndex(p => String(p.reg._sbId) === String(feriasId));
+  if (idx < 0) { toast('Solicitação não encontrada nos pendentes.', 'erro'); return; }
+  abrirModalAprovar(idx);
+}
+
 function renderRhAtividade() {
   const el = document.getElementById('rhAtividade');
   if (!el) return;
@@ -8436,13 +8447,16 @@ function renderRhAtividade() {
     const det   = h.detalhe || {};
     const perLine = det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD(det.inicio)} → ${fmtD(det.fim)}${det.dias ? ' · ' + det.dias + 'd' : ''}</div>` : '';
     const tsLine  = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
+    const btnAcao = IS_RH && _rhEhRecente(h)
+      ? `<button onclick="_rhAtivAbrirModal('${h.ferias_id}')" style="flex-shrink:0;padding:5px 12px;border-radius:6px;border:1.5px solid var(--blue,#1570EF);background:transparent;color:var(--blue,#1570EF);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Analisar</button>`
+      : `<span class="gstor-ativ-chip ${cls}">${chip}</span>`;
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${cls}">${svg}</div>
       <div class="gstor-ativ-body">
         <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
         ${perLine}${tsLine}
       </div>
-      <span class="gstor-ativ-chip ${cls}">${chip}</span>
+      ${btnAcao}
     </div>`;
   };
 
