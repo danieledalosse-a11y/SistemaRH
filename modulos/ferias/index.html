@@ -9111,9 +9111,10 @@ function _renderGdashMapa() {
   const ano      = new Date().getFullYear();
   const mesAtual = new Date().getMonth();
   const excluir  = new Set(['recusado','cancelado','descartado']);
-  const MESES    = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const diasMes  = MESES.map((_, mi) => new Date(ano, mi + 1, 0).getDate());
-  const SEL      = _gdashMapaMesSel;
+  const MESES      = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const diasMes    = MESES.map((_, mi) => new Date(ano, mi + 1, 0).getDate());
+  const SEL        = _gdashMapaMesSel;
 
   // Coleta colaboradores com e sem período
   const comPeriodo = [], semPeriodo = [];
@@ -9127,83 +9128,135 @@ function _renderGdashMapa() {
     else semPeriodo.push(colab);
   });
 
-  // Ordena: panorâmico → mês de início + alfabético; filtrado → só alfabético
+  // Cargos disponíveis (filtro — usado em ambos os modos)
+  const cargos = [...new Set(GESTOR_COLABS.map(c => c.cargo).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+  const cargoChipMapa = cargos.length > 1
+    ? `<div style="position:relative;display:inline-block">
+        <button onclick="event.stopPropagation();document.getElementById('gdashCargoMenu').style.display=document.getElementById('gdashCargoMenu').style.display==='block'?'none':'block'"
+          style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;border:1px solid var(--border);background:${_gdashMapaCargo?'var(--blue,#1570EF)':'var(--surface)'};color:${_gdashMapaCargo?'#fff':'var(--text-sec)'};font-size:10px;cursor:pointer;font-family:inherit;white-space:nowrap;">
+          ${_gdashMapaCargo || 'Todos os cargos'} ▾
+        </button>
+        <div id="gdashCargoMenu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:100;min-width:160px;padding:4px 0;">
+          <div onclick="document.getElementById('gdashCargoMenu').style.display='none';_gdashMapaFiltrarCargo('')" style="padding:6px 12px;font-size:11px;cursor:pointer;color:var(--text)">${_gdashMapaCargo?'Todos os cargos':'✓ Todos os cargos'}</div>
+          ${cargos.map(c => `<div onclick="document.getElementById('gdashCargoMenu').style.display='none';_gdashMapaFiltrarCargo('${c.replace(/'/g,"\\'")}');" style="padding:6px 12px;font-size:11px;cursor:pointer;color:var(--text)">${_gdashMapaCargo===c?'✓ ':''} ${c}</div>`).join('')}
+        </div>
+      </div>`
+    : '';
+
+  const _fecharMenuCargo = () => setTimeout(() => {
+    const _close = e => { const m = document.getElementById('gdashCargoMenu'); if (m && !m.parentElement?.contains(e.target)) m.style.display='none'; };
+    document.removeEventListener('click', _close);
+    document.addEventListener('click', _close, { once: true });
+  }, 50);
+
+  // ── MODO DETALHAMENTO MENSAL ───────────────────────────────────────────────
+  if (SEL !== null) {
+    const diasNoMes = diasMes[SEL];
+    const mesStr    = String(SEL + 1).padStart(2, '0');
+    const mesInicio = `${ano}-${mesStr}-01`;
+    const mesFim    = `${ano}-${mesStr}-${String(diasNoMes).padStart(2, '0')}`;
+
+    const colabsAdaptados = GESTOR_COLABS
+      .map(colab => {
+        const lansDoMes = GESTOR_LANCAMENTOS.filter(l =>
+          String(l.colaborador_id) === String(colab.id) &&
+          !excluir.has((l.status||'').toLowerCase()) && !l._isRealizacao &&
+          l.inicio <= mesFim && l.fim >= mesInicio
+        );
+        if (!lansDoMes.length) return null;
+        if (_gdashMapaCargo && colab.cargo !== _gdashMapaCargo) return null;
+        return {
+          nome: colab.nome, cargo: colab.cargo||'', setor: colab.setor||'',
+          unidade: colab.unidade||'', empresaRegistro: '',
+          fotoUrl: colab.foto_url||null, __key: String(colab.id),
+          registros: [{ lancamentos: lansDoMes.map(l => ({ inicio: l.inicio, fim: l.fim, dias: l.dias })), _novoLanc: null }],
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    const mesPrev = SEL > 0  ? SEL - 1 : null;
+    const mesNext = SEL < 11 ? SEL + 1 : null;
+    const btnNav  = (onclick, lbl, dis) =>
+      `<button onclick="${onclick}" ${dis?'disabled':''} style="padding:4px 10px;border:none;background:none;cursor:${dis?'not-allowed':'pointer'};color:${dis?'var(--border-strong)':'var(--text-sec)'};font-family:inherit;border-radius:6px;font-size:14px;line-height:1">${lbl}</button>`;
+
+    wrap.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button onclick="_gdashMapaFiltrarMes(${SEL})" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-sec);font-size:10px;cursor:pointer;font-family:inherit;">← Ver ano todo</button>
+            <span style="font-size:12px;font-weight:600;color:var(--text)">${MESES_FULL[SEL]} ${ano}</span>
+          </div>
+          <div style="font-size:10px;color:var(--text-ter)">${colabsAdaptados.length} colaborador${colabsAdaptados.length!==1?'es':''} com férias em ${MESES_FULL[SEL]}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap">
+          ${cargoChipMapa}
+          <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+            ${btnNav(mesPrev!==null?`_gdashMapaFiltrarMes(${mesPrev})`:'void 0','‹',mesPrev===null)}
+            <span style="font-size:11px;font-weight:600;color:var(--text);padding:0 8px;white-space:nowrap">${MESES[SEL]}</span>
+            ${btnNav(mesNext!==null?`_gdashMapaFiltrarMes(${mesNext})`:'void 0','›',mesNext===null)}
+          </div>
+        </div>
+      </div>
+      <div id="gdashMapaTimeline"></div>`;
+
+    const tl = document.getElementById('gdashMapaTimeline');
+    _ganttRenderContent(tl, colabsAdaptados, diasNoMes, mesInicio, mesFim, SEL, ano);
+    tl.querySelectorAll('.gantt-row').forEach(tr => { tr.removeAttribute('onclick'); tr.style.cursor='default'; });
+
+    _fecharMenuCargo();
+    return;
+  }
+
+  // ── MODO PANORÂMICO (MAPA ANUAL) ──────────────────────────────────────────
+
   const _primeiroMes = ({ lans }) => {
     const ms = lans.map(l => parseInt((l.inicio||'').slice(5,7)) - 1).filter(m => !isNaN(m));
     return ms.length ? Math.min(...ms) : 12;
   };
   comPeriodo.sort((a, b) => {
-    if (SEL === null) {
-      const diff = _primeiroMes(a) - _primeiroMes(b);
-      if (diff !== 0) return diff;
-    }
-    return a.colab.nome.localeCompare(b.colab.nome, 'pt-BR');
+    const diff = _primeiroMes(a) - _primeiroMes(b);
+    return diff !== 0 ? diff : a.colab.nome.localeCompare(b.colab.nome, 'pt-BR');
   });
 
-  // Cargos disponíveis (filtro)
-  const cargos = [...new Set(GESTOR_COLABS.map(c => c.cargo).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
-
-  // Aplica filtros
-  let visiveis = comPeriodo;
-  if (_gdashMapaCargo)
-    visiveis = visiveis.filter(({ colab }) => colab.cargo === _gdashMapaCargo);
-  if (SEL !== null) {
-    const iniSel = `${ano}-${String(SEL+1).padStart(2,'0')}-01`;
-    const fimSel = `${ano}-${String(SEL+1).padStart(2,'0')}-${String(diasMes[SEL]).padStart(2,'0')}`;
-    visiveis = visiveis.filter(({ lans }) =>
-      lans.some(l => l.inicio <= fimSel && l.fim >= iniSel)
-    );
-  }
+  // Aplica filtro de cargo
+  const visiveis = _gdashMapaCargo
+    ? comPeriodo.filter(({ colab }) => colab.cargo === _gdashMapaCargo)
+    : comPeriodo;
 
   const CORES = { aprovado: '#185FA5', solicitado: '#B5D4F4', gozado: '#D3D1C7', default: '#185FA5' };
   const GAP = '2px', ROW_H = '16px';
 
-  // Cabeçalhos dos meses — clicáveis, mês selecionado em destaque
+  // Cabeçalhos dos meses — clicáveis
   const monthLabels = MESES.map((m, i) => {
-    const at  = i === mesAtual && SEL === null;
-    const sel = i === SEL;
-    const cor = sel ? '#1570EF' : (at ? '#185FA5' : 'var(--text-ter)');
-    const fw  = (sel || at) ? 700 : 400;
-    const bg  = sel ? 'rgba(21,112,239,.10)' : 'transparent';
-    const rd  = sel ? '3px 3px 0 0' : '0';
-    return `<div onclick="_gdashMapaFiltrarMes(${i})" title="${SEL===i?'Limpar filtro':'Filtrar '+m}" style="font-size:9px;font-weight:${fw};color:${cor};text-align:center;line-height:18px;cursor:pointer;border-radius:${rd};background:${bg};user-select:none">${m}</div>`;
+    const at  = i === mesAtual;
+    const cor = at ? '#185FA5' : 'var(--text-ter)';
+    const fw  = at ? 700 : 400;
+    return `<div onclick="_gdashMapaFiltrarMes(${i})" title="Ver ${MESES_FULL[i]}" style="font-size:9px;font-weight:${fw};color:${cor};text-align:center;line-height:18px;cursor:pointer;user-select:none;border-radius:3px 3px 0 0;transition:background .1s" onmouseover="this.style.background='rgba(21,112,239,.08)'" onmouseout="this.style.background=''">${m}</div>`;
   }).join('');
 
   const renderCells = (lans, isSemProg) => MESES.map((_, mi) => {
     const iniMes = `${ano}-${String(mi+1).padStart(2,'0')}-01`;
     const fimMes = `${ano}-${String(mi+1).padStart(2,'0')}-${String(diasMes[mi]).padStart(2,'0')}`;
     const at  = mi === mesAtual;
-    const sel = mi === SEL;
-    // Modo filtrado: só renderiza períodos que tocam o mês selecionado
-    const lan = !isSemProg && lans.find(l => {
-      if (SEL !== null) {
-        const iniSel = `${ano}-${String(SEL+1).padStart(2,'0')}-01`;
-        const fimSel = `${ano}-${String(SEL+1).padStart(2,'0')}-${String(diasMes[SEL]).padStart(2,'0')}`;
-        if (!(l.inicio <= fimSel && l.fim >= iniSel)) return false;
-      }
-      return l.inicio <= fimMes && l.fim >= iniMes;
-    });
+    const lan = !isSemProg && lans.find(l => l.inicio <= fimMes && l.fim >= iniMes);
     let bg = 'transparent', border = '';
     if (isSemProg) {
-      border = sel ? `border:1px solid #1570EF55` : at ? `border:0.5px solid var(--border)` : `border:0.5px dashed var(--border)`;
-      bg = sel ? 'rgba(21,112,239,.05)' : 'transparent';
+      border = at ? `border:0.5px solid var(--border)` : `border:0.5px dashed var(--border)`;
     } else if (lan) {
       bg = CORES[(lan.status||'').toLowerCase()] || CORES.default;
-      if (sel) bg = lan ? bg : 'rgba(21,112,239,.10)';
-    } else {
-      if (sel) { bg = 'rgba(21,112,239,.07)'; border = `border:0.5px solid #1570EF44`; }
-      else if (at) { bg = 'var(--bg)'; border = `border:0.5px solid var(--border)`; }
+    } else if (at) {
+      bg = 'var(--bg)'; border = `border:0.5px solid var(--border)`;
     }
     return `<div style="height:${ROW_H};border-radius:3px;background:${bg};${border}"></div>`;
   }).join('');
 
-  // Separador de mês de início (marcador discreto — oculto quando filtro de mês ativo)
+  // Separador de mês de início (marcador discreto)
   let _prevMes = -1;
   const renderRow = (item, idx) => {
-    const showMarker = SEL === null;
     const pm   = _primeiroMes(item);
-    const show = showMarker && pm !== _prevMes;
-    if (showMarker) _prevMes = pm;
+    const show = pm !== _prevMes;
+    _prevMes   = pm;
     const sep  = (show && idx > 0)
       ? `<div style="grid-column:1/-1;height:0.5px;background:var(--border);margin:3px 0 2px"></div>`
       : '';
@@ -9240,46 +9293,17 @@ function _renderGdashMapa() {
     </div>`
   ).join('');
 
-  // Chip de cargo
-  const cargoChip = cargos.length > 1
-    ? `<div style="position:relative;display:inline-block">
-        <button onclick="event.stopPropagation();document.getElementById('gdashCargoMenu').style.display=document.getElementById('gdashCargoMenu').style.display==='block'?'none':'block'"
-          style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;border:1px solid var(--border);background:${_gdashMapaCargo?'var(--blue,#1570EF)':'var(--surface)'};color:${_gdashMapaCargo?'#fff':'var(--text-sec)'};font-size:10px;cursor:pointer;font-family:inherit;white-space:nowrap;">
-          ${_gdashMapaCargo || 'Todos os cargos'} ▾
-        </button>
-        <div id="gdashCargoMenu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:100;min-width:160px;padding:4px 0;">
-          <div onclick="document.getElementById('gdashCargoMenu').style.display='none';_gdashMapaFiltrarCargo('')" style="padding:6px 12px;font-size:11px;cursor:pointer;color:var(--text)">${_gdashMapaCargo?'Todos os cargos':'✓ Todos os cargos'}</div>
-          ${cargos.map(c => `<div onclick="document.getElementById('gdashCargoMenu').style.display='none';_gdashMapaFiltrarCargo('${c.replace(/'/g,"\\'")}');" style="padding:6px 12px;font-size:11px;cursor:pointer;color:var(--text)">${_gdashMapaCargo===c?'✓ ':''} ${c}</div>`).join('')}
-        </div>
-      </div>`
-    : '';
-
-  // Chips de filtros ativos (mês selecionado)
-  const filtroAtivo = SEL !== null
-    ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:#EFF6FF;border:1px solid #1570EF55;color:#1570EF;font-size:10px;font-weight:600;">
-        ${MESES[SEL]}
-        <button onclick="_gdashMapaFiltrarMes(${SEL})" style="background:none;border:none;cursor:pointer;color:#1570EF;padding:0;font-size:11px;line-height:1;font-family:inherit">×</button>
-      </span>`
-    : '';
-
-  const subInfo = SEL !== null
-    ? `${visiveis.length} colaborador${visiveis.length!==1?'es':''} em ${MESES[SEL]}`
-    : `${comPeriodo.length} com período programado`;
-
   const toggleLabel = _gdashMapaMostrarTodos ? '▴ ocultar sem programação' : `▾ ${semPeriodo.length} sem programação`;
 
   wrap.innerHTML = `
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
-      <div style="display:flex;flex-direction:column;gap:4px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:12px;font-weight:600;color:var(--text)">Mapa anual — ${ano}</span>
-          ${filtroAtivo}
-        </div>
-        <div style="font-size:10px;color:var(--text-ter)">${subInfo}</div>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text)">Mapa anual — ${ano}</div>
+        <div style="font-size:10px;color:var(--text-ter);margin-top:2px">${comPeriodo.length} com período programado · clique em um mês para detalhar</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
         ${legenda}
-        ${cargoChip}
+        ${cargoChipMapa}
       </div>
     </div>
     <div style="display:grid;grid-template-columns:28px 120px 1fr;gap:4px;margin-bottom:3px">
@@ -9289,23 +9313,15 @@ function _renderGdashMapa() {
     <div style="display:flex;flex-direction:column;gap:3px">
       ${visiveis.length
         ? visiveis.map((item, idx) => renderRow(item, idx)).join('')
-        : `<div style="font-size:11px;color:var(--text-ter);padding:10px 0">${SEL!==null?`Nenhum colaborador com férias em ${MESES[SEL]}.`:'Nenhum colaborador com período programado.'}</div>`}
+        : `<div style="font-size:11px;color:var(--text-ter);padding:10px 0">Nenhum colaborador com período programado.</div>`}
     </div>
-    ${SEL === null && semPeriodo.length ? `
+    ${semPeriodo.length ? `
     <div style="margin-top:10px;padding-top:8px;border-top:0.5px solid var(--border)">
       <button onclick="_gdashMapaToggle()" style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text-ter);padding:0;font-family:inherit">${toggleLabel}</button>
       ${_gdashMapaMostrarTodos ? `<div style="display:flex;flex-direction:column;gap:3px;margin-top:6px">${semPeriodo.map(renderSemRow).join('')}</div>` : ''}
     </div>` : ''}`;
 
-  // Fecha menu de cargo ao clicar fora
-  setTimeout(() => {
-    const _close = e => {
-      const menu = document.getElementById('gdashCargoMenu');
-      if (menu && !menu.parentElement?.contains(e.target)) { menu.style.display = 'none'; }
-    };
-    document.removeEventListener('click', _close);
-    document.addEventListener('click', _close, { once: true });
-  }, 50);
+  _fecharMenuCargo();
 }
 
 // ── Bloco E: Sem programação por urgência ───────────────────────────────────
