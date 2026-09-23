@@ -2150,6 +2150,36 @@
   </div>
 </div>
 
+<!-- ═══ Modal solicitar cancelamento (Gestor) ═══ -->
+<div class="modal-overlay" id="modalGestorCancel" style="display:none;z-index:1200;" onclick="if(event.target===this)fecharModalGestorCancel()">
+  <div class="modal" style="max-width:420px;width:100%;" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div class="modal-title">Solicitar cancelamento</div>
+      <button onclick="fecharModalGestorCancel()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-sec);padding:0;line-height:1;">✕</button>
+    </div>
+    <div id="mgCancelNome" style="font-size:13px;color:var(--text-sec);margin-bottom:14px;"></div>
+    <!-- Bloco do período -->
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;">
+      <div style="font-size:10px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Período a cancelar</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;" id="mgCancelPeriodoTexto">—</div>
+      <div style="font-size:12px;color:var(--text-sec);margin-top:3px;" id="mgCancelDiasTexto">—</div>
+    </div>
+    <!-- Aviso -->
+    <div style="display:flex;gap:10px;align-items:flex-start;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:12px 14px;margin-bottom:20px;">
+      <span style="font-size:18px;line-height:1.2;flex-shrink:0;">⚠️</span>
+      <div style="font-size:12px;color:#92400E;line-height:1.5;">
+        As férias continuam agendadas até a decisão do RH.<br>
+        <strong>Ao aprovar, o saldo correspondente será devolvido.</strong>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModalGestorCancel()">Voltar</button>
+      <button class="btn" id="mgCancelBtnEnviar" onclick="gestorEnviarCancelamento()"
+        style="background:#D92D20;color:#fff;border:none;font-weight:600;">Solicitar cancelamento</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Modal de lançamento ═══ -->
 <div class="modal-overlay" id="modalLancar" onclick="fecharModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -10473,15 +10503,35 @@ function fecharModalGestorAlt() {
 }
 
 // ─── Solicitar cancelamento (Gestor) ─────────────────────────────────────────
-async function gestorConfirmarCancelamento(colabId, periodoId, lancId) {
+let _gestorCancelCtx = null;
+
+function gestorConfirmarCancelamento(colabId, periodoId, lancId) {
   const lancamento = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
   if (!lancamento) { toast('Lançamento não encontrado.'); return; }
   const slot = lancId.endsWith('-p2') ? 'p2' : 'p1';
-  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
-  const confirmar = confirm(
-    `Solicitar cancelamento das férias de ${_fmtD(lancamento.inicio)} → ${_fmtD(lancamento.fim)} (${lancamento.dias} dias)?\n\nA solicitação será enviada ao RH para aprovação. As férias continuam agendadas até a decisão do RH.`
-  );
-  if (!confirmar) return;
+  const c = (GESTOR_COLABS || []).find(c => String(c.id) === String(colabId));
+  _gestorCancelCtx = { colabId, periodoId, lancId, slot, lancamento };
+  const dias = Number(lancamento.dias) || 0;
+  document.getElementById('mgCancelNome').textContent       = c ? `${c.nome} · ${c.cargo || '—'}` : '';
+  document.getElementById('mgCancelPeriodoTexto').textContent = `${formatDate(lancamento.inicio)} → ${formatDate(lancamento.fim)}`;
+  document.getElementById('mgCancelDiasTexto').textContent  = `${dias} dia${dias !== 1 ? 's' : ''}`;
+  const btn = document.getElementById('mgCancelBtnEnviar');
+  if (btn) { btn.disabled = false; btn.textContent = 'Solicitar cancelamento'; }
+  const _mCan = document.getElementById('modalGestorCancel');
+  document.body.appendChild(_mCan);
+  _mCan.style.display = 'flex';
+}
+
+function fecharModalGestorCancel() {
+  document.getElementById('modalGestorCancel').style.display = 'none';
+  _gestorCancelCtx = null;
+}
+
+async function gestorEnviarCancelamento() {
+  if (!_gestorCancelCtx) return;
+  const { colabId, periodoId, lancId, slot, lancamento } = _gestorCancelCtx;
+  const btn = document.getElementById('mgCancelBtnEnviar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
   const meta = {
     tipo:             'cancelamento',
     slot,
@@ -10508,12 +10558,14 @@ async function gestorConfirmarCancelamento(colabId, periodoId, lancId) {
       per._feriasRow.obs_gestor = JSON.stringify(meta);
     }
     try { await _logAtiv(periodoId, colabId, 'cancelamento_solicitado', GESTOR_NOME_USUARIO, { inicio: meta.inicio, fim: meta.fim, dias: meta.dias, slot }); } catch(_) {}
+    fecharModalGestorCancel();
     toast('✓ Solicitação de cancelamento enviada para o RH.');
     const c = GESTOR_COLABS.find(c => String(c.id) === String(colabId));
     if (c) _renderGsolHistoricoRH(c);
     if (typeof renderGestorAlerts    === 'function') renderGestorAlerts();
     if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
   } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Solicitar cancelamento'; }
     toast('Erro ao enviar: ' + (e.message || e), 'erro');
   }
 }
