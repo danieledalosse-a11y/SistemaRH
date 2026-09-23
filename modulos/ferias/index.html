@@ -8208,37 +8208,51 @@ function gestorLancFuturos30(colabsBase) {
   );
 }
 
-let _gestorAtivAberto   = true;
-let _gestorAtivExpandido = false;
-const _ATIV_LIMITE = 1;
-
-// ─── Atividade Recente — dismiss (localStorage) ──────────────────────────────
 async function _logAtiv(feriasId, colabId, acao, usuario, detalhe) {
   const entry = { ferias_id: Number(feriasId), colaborador_id: Number(colabId), acao, usuario: usuario || null, detalhe: detalhe || null };
   try { await sbPost('ferias_historico', entry); } catch(_) {}
   FERIAS_HISTORICO.unshift({ ...entry, id: Date.now(), criado_em: new Date().toISOString() });
 }
 
-function _ativDismissed(tipo) {
-  try { return new Set(JSON.parse(localStorage.getItem(`ferias_ativ_dismissed_${tipo}`) || '[]')); } catch { return new Set(); }
+// ── Classificação Atividade Recente vs Histórico ─────────────────────────────
+// Retorna true se o evento ainda é "recente" para o perfil dado ('g' = gestor, 'r' = rh)
+function _ehRecente(h, perfil) {
+  const acao = (h.acao || '').toLowerCase();
+  const hoje = new Date().toISOString().slice(0, 10);
+  // Verifica se já existe evento de resposta para o mesmo ferias_id
+  const temResposta = tipo => FERIAS_HISTORICO.some(x =>
+    x.ferias_id === h.ferias_id && x.id !== h.id && (x.acao || '').toLowerCase() === tipo
+  );
+  if (perfil === 'r') {
+    // RH vê o que ainda não decidiu
+    if (acao === 'solicitado')               return !temResposta('aprovado') && !temResposta('rejeitado');
+    if (acao === 'cancelamento_solicitado')  return !temResposta('cancelamento_aprovado') && !temResposta('cancelamento_recusado');
+    if (acao === 'alteracao_solicitada')     return !temResposta('alteracao_aprovada') && !temResposta('alteracao_recusada');
+    return false;
+  }
+  if (perfil === 'g') {
+    // Gestor vê respostas do RH que ainda não se resolveram por conta própria
+    if (acao === 'aprovado' || acao === 'alteracao_aprovada' || acao === 'cancelamento_aprovado') {
+      // Some quando as férias já ocorreram
+      const inicio = (h.detalhe || {}).inicio;
+      return inicio ? inicio > hoje : true;
+    }
+    if (acao === 'rejeitado' || acao === 'alteracao_recusada' || acao === 'cancelamento_recusado') {
+      // Some quando houver novo evento para o mesmo período (Gestor retomou)
+      // ou quando o PA do colaborador venceu
+      const temNovo = FERIAS_HISTORICO.some(x =>
+        x.ferias_id === h.ferias_id && x.id !== h.id && new Date(x.criado_em) > new Date(h.criado_em)
+      );
+      if (temNovo) return false;
+      // Verifica pa_fim do colaborador
+      const colab = (GESTOR_COLABS || []).find(c => String(c.id) === String(h.colaborador_id));
+      const paFim = colab ? gestorPeriodoAtivo(colab.id)?.pa_fim : null;
+      return paFim ? paFim >= hoje : true;
+    }
+    return false;
+  }
+  return false;
 }
-function _ativDismiss(tipo, key) {
-  const s = _ativDismissed(tipo); s.add(key);
-  try { localStorage.setItem(`ferias_ativ_dismissed_${tipo}`, JSON.stringify([...s])); } catch {}
-  if (tipo === 'g') renderGestorAtividade(); else renderRhAtividade();
-}
-function _ativDismissAll(tipo, keys) {
-  const s = _ativDismissed(tipo); keys.forEach(k => s.add(k));
-  try { localStorage.setItem(`ferias_ativ_dismissed_${tipo}`, JSON.stringify([...s])); } catch {}
-  if (tipo === 'g') renderGestorAtividade(); else renderRhAtividade();
-}
-function _ativRestore(tipo, key) {
-  const s = _ativDismissed(tipo); s.delete(key);
-  try { localStorage.setItem(`ferias_ativ_dismissed_${tipo}`, JSON.stringify([...s])); } catch {}
-  if (tipo === 'g') renderGestorAtividade(); else renderRhAtividade();
-}
-let _gestorAtivMostrarArq = false;
-let _rhAtivMostrarArq     = false;
 
 // ── Constantes globais de ação (fonte única de verdade) ──────────────────────
 const ACAO_LABEL = {
@@ -8280,6 +8294,10 @@ function _acaoInfo(acao) {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
+let _gestorAtivAba    = 'recente'; // 'recente' | 'historico'
+let _gestorHistOffset = 0;
+const _HIST_PAGE = 20;
+
 function renderGestorAtividade() {
   const el = document.getElementById('gestorAtividade');
   if (!el) return;
@@ -8287,28 +8305,17 @@ function renderGestorAtividade() {
   const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const fmtDH = d => { if (!d) return ''; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`; };
 
-  const _normGA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _normGA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ͟]/g,'');
   const filtroGestor = _normGA(document.getElementById('gestorFiltroGestor')?.value || '');
   const colabsFiltrados = filtroGestor ? GESTOR_COLABS.filter(c => _normGA(c.gestor) === filtroGestor) : GESTOR_COLABS;
   const idsPermitidos = new Set(colabsFiltrados.map(c => String(c.id)));
-
-  const _cutoff90 = new Date(HOJE); _cutoff90.setDate(_cutoff90.getDate() - 90);
-  const _cutoff90str = _cutoff90.toISOString();
-  const _dismissedG = _ativDismissed('g');
   const colabMap = new Map(GESTOR_COLABS.map(c => [String(c.id), c]));
 
-  const eventos = FERIAS_HISTORICO.filter(h => {
-    if (!idsPermitidos.has(String(h.colaborador_id))) return false;
-    if ((h.criado_em || '') < _cutoff90str) return false;
-    if (_dismissedG.has(String(h.id))) return false;
-    return true;
-  });
+  const todoHistorico = FERIAS_HISTORICO.filter(h => idsPermitidos.has(String(h.colaborador_id)));
+  const recentes  = todoHistorico.filter(h => _ehRecente(h, 'g'));
+  const historico = todoHistorico.filter(h => !_ehRecente(h, 'g'));
 
-  const visiveis = _gestorAtivExpandido ? eventos : eventos.slice(0, _ATIV_LIMITE);
-  const total    = eventos.length;
-  const ocultos  = total - _ATIV_LIMITE;
-
-  const items = visiveis.map(h => {
+  const _itemRow = h => {
     const { cls, chip, svg } = _acaoInfo(h.acao || '');
     const colab = colabMap.get(String(h.colaborador_id));
     const nome  = colab ? colab.nome : '—';
@@ -8316,7 +8323,6 @@ function renderGestorAtividade() {
     const det   = h.detalhe || {};
     const perLine = det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD(det.inicio)} → ${fmtD(det.fim)}${det.dias ? ' · ' + det.dias + 'd' : ''}</div>` : '';
     const tsLine  = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
-    const dismissKey = String(h.id);
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${cls}">${svg}</div>
       <div class="gstor-ativ-body">
@@ -8324,60 +8330,61 @@ function renderGestorAtividade() {
         ${perLine}${tsLine}
       </div>
       <span class="gstor-ativ-chip ${cls}">${chip}</span>
-      <button class="gstor-ativ-dismiss" onclick="event.stopPropagation();_ativDismiss('g','${dismissKey}')" title="Arquivar">×</button>
     </div>`;
-  }).join('');
+  };
 
-  const arquivadosG = FERIAS_HISTORICO.filter(h => {
-    if (!idsPermitidos.has(String(h.colaborador_id))) return false;
-    return _dismissedG.has(String(h.id));
-  });
-  const itemsArqG = arquivadosG.map(h => {
-    const colab = colabMap.get(String(h.colaborador_id));
-    const nome = colab ? colab.nome : '—';
-    const det  = h.detalhe || {};
-    const fmtD2 = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
-    const dismissKey = String(h.id);
-    return `<div class="gstor-ativ-item" style="opacity:.6;">
-      <div class="gstor-ativ-icon arquivado"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2M5 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg></div>
-      <div class="gstor-ativ-body">
-        <div><span class="gstor-ativ-nome">${nome}</span></div>
-        ${det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD2(det.inicio)} → ${fmtD2(det.fim)}</div>` : ''}
-      </div>
-      <button class="gstor-ativ-dismiss" style="opacity:1;color:var(--blue);" onclick="event.stopPropagation();_ativRestore('g','${dismissKey}')" title="Restaurar">↩</button>
+  const abaRecente  = _gestorAtivAba === 'recente';
+  const tabsHtml = `
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0;">
+      <button onclick="_gestorAtivAba='recente';_gestorHistOffset=0;renderGestorAtividade()" style="padding:10px 16px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${abaRecente ? 'var(--blue,#1570EF)' : 'transparent'};color:${abaRecente ? 'var(--blue,#1570EF)' : 'var(--text-sec)'};font-family:inherit;">
+        Atividade recente${recentes.length > 0 ? ` <span style="background:var(--blue,#1570EF);color:#fff;border-radius:10px;font-size:10px;padding:1px 6px;margin-left:4px;">${recentes.length}</span>` : ''}
+      </button>
+      <button onclick="_gestorAtivAba='historico';_gestorHistOffset=0;renderGestorAtividade()" style="padding:10px 16px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${!abaRecente ? 'var(--blue,#1570EF)' : 'transparent'};color:${!abaRecente ? 'var(--blue,#1570EF)' : 'var(--text-sec)'};font-family:inherit;">
+        Histórico
+      </button>
     </div>`;
-  }).join('');
 
-  const allKeysG = eventos.map(h => String(h.id));
-  const arquivarTodosBtn = eventos.length > 0
-    ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_ativDismissAll('g',${JSON.stringify(allKeysG)})">Arquivar todos</button>`
-    : '';
-  const verArqBtnG = arquivadosG.length > 0
-    ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_gestorAtivMostrarArq=!_gestorAtivMostrarArq;renderGestorAtividade()">${_gestorAtivMostrarArq ? 'Ocultar arquivados' : `Ver arquivados (${arquivadosG.length})`}</button>`
-    : '';
-  const verMaisBtn = !_gestorAtivExpandido && ocultos > 0
-    ? `<button class="gstor-ativ-vermais" onclick="_gestorAtivExpandido=true;renderGestorAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
-    : '';
-  const arquivarTodosHdrG = eventos.length > 0
-    ? `<button onclick="event.stopPropagation();abrirModalConfirm({titulo:'Arquivar atividade recente',texto:'Todos os registros de atividade recente serão arquivados. Eles poderão ser consultados em \\'Ver arquivados\\'.',labelOk:'Arquivar todos',corOk:'#344054',cb:()=>_ativDismissAll('g',${JSON.stringify(allKeysG)})})" style="font-size:11px;font-weight:500;color:var(--text-ter);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;font-family:inherit;white-space:nowrap;" title="Arquivar todos">Arquivar todos</button>`
-    : '';
+  let conteudo = '';
+  if (abaRecente) {
+    conteudo = recentes.length > 0
+      ? `<div class="gstor-ativ-list">${recentes.map(_itemRow).join('')}</div>`
+      : `<div style="padding:20px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhuma atividade recente.</div>`;
+  } else {
+    // Histórico: busca por colaborador + paginação
+    const busca = _normGA(document.getElementById('gestorHistBusca')?.value || '');
+    const filtrados = busca
+      ? historico.filter(h => { const c = colabMap.get(String(h.colaborador_id)); return c ? _normGA(c.nome).includes(busca) : false; })
+      : historico;
+    const pagina = filtrados.slice(0, _gestorHistOffset + _HIST_PAGE);
+    const temMais = filtrados.length > pagina.length;
+    conteudo = pagina.length > 0
+      ? `<div style="padding:10px 12px;">
+          <input id="gestorHistBusca" type="text" placeholder="Buscar colaborador…"
+            oninput="renderGestorAtividade()"
+            style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+        </div>
+        <div class="gstor-ativ-list">${pagina.map(_itemRow).join('')}</div>
+        ${temMais ? `<button class="gstor-ativ-vermais" onclick="_gestorHistOffset+=_HIST_PAGE;renderGestorAtividade()">Ver mais ${Math.min(filtrados.length - pagina.length, _HIST_PAGE)} registros</button>` : ''}`
+      : `<div style="padding:10px 12px;">
+          <input id="gestorHistBusca" type="text" placeholder="Buscar colaborador…"
+            oninput="renderGestorAtividade()"
+            style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+        </div>
+        <div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`;
+  }
 
-  el.innerHTML = `<div class="gstor-ativ-wrap">
-    <div class="gstor-ativ-header" onclick="_gestorAtivAberto=!_gestorAtivAberto;renderGestorAtividade()">
-      <span class="gstor-ativ-title">Atividade recente</span>
-      <div style="display:flex;align-items:center;gap:4px;">
-        ${_gestorAtivAberto ? arquivarTodosHdrG : ''}
-        <span class="gstor-ativ-toggle">${_gestorAtivAberto ? '▲ ocultar' : '▼ mostrar'}</span>
-      </div>
-    </div>
-    ${_gestorAtivAberto ? `<div class="gstor-ativ-list">${items || '<div style="padding:14px 16px;font-size:13px;color:var(--text-ter);">Nenhuma atividade recente.</div>'}</div>${verMaisBtn}${verArqBtnG}${_gestorAtivMostrarArq && itemsArqG ? `<div class="gstor-ativ-list" style="border-top:1px dashed var(--border);">${itemsArqG}</div>` : ''}` : ''}
-  </div>`;
+  el.innerHTML = `<div class="gstor-ativ-wrap">${tabsHtml}${conteudo}</div>`;
+
+  // Restaura foco no campo de busca se estava ativo
+  if (!abaRecente) {
+    const inp = document.getElementById('gestorHistBusca');
+    if (inp && document.activeElement !== inp) { /* não forçar foco */ }
+  }
 }
 
 // ─── Atividade recente — Visão RH ────────────────────────────────────────────
-let _rhAtivAberto     = true;
-let _rhAtivExpandido  = false;
-const _RH_ATIV_LIMITE = 1;
+let _rhAtivAba    = 'recente'; // 'recente' | 'historico'
+let _rhHistOffset = 0;
 
 function renderRhAtividade() {
   const el = document.getElementById('rhAtividade');
@@ -8385,26 +8392,15 @@ function renderRhAtividade() {
 
   const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const fmtDH = d => { if (!d) return ''; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`; };
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ͟]/g,'');
 
-  const _cutoff90 = new Date(HOJE); _cutoff90.setDate(_cutoff90.getDate() - 90);
-  const _cutoff90str = _cutoff90.toISOString();
-  const _dismissedRH = _ativDismissed('r');
-
-  // Monta mapa colaborador_id → dados para exibição
   const colabMap = new Map();
   COLABORADORES.forEach(c => colabMap.set(String(c._sbColabId), c));
 
-  const eventos = FERIAS_HISTORICO.filter(h => {
-    if ((h.criado_em || '') < _cutoff90str) return false;
-    if (_dismissedRH.has(String(h.id))) return false;
-    return true;
-  });
+  const recentes  = FERIAS_HISTORICO.filter(h => _ehRecente(h, 'r'));
+  const historico = FERIAS_HISTORICO.filter(h => !_ehRecente(h, 'r'));
 
-  const total    = eventos.length;
-  const visiveis = _rhAtivExpandido ? eventos.slice(0, 15) : eventos.slice(0, _RH_ATIV_LIMITE);
-  const ocultos  = Math.min(total, 15) - _RH_ATIV_LIMITE;
-
-  const items = visiveis.map(h => {
+  const _itemRow = h => {
     const { cls, chip, svg } = _acaoInfo(h.acao || '');
     const colab = colabMap.get(String(h.colaborador_id));
     const nome  = colab ? colab.nome : '—';
@@ -8412,7 +8408,6 @@ function renderRhAtividade() {
     const det   = h.detalhe || {};
     const perLine = det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD(det.inicio)} → ${fmtD(det.fim)}${det.dias ? ' · ' + det.dias + 'd' : ''}</div>` : '';
     const tsLine  = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
-    const dismissKey = String(h.id);
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${cls}">${svg}</div>
       <div class="gstor-ativ-body">
@@ -8420,51 +8415,49 @@ function renderRhAtividade() {
         ${perLine}${tsLine}
       </div>
       <span class="gstor-ativ-chip ${cls}">${chip}</span>
-      <button class="gstor-ativ-dismiss" onclick="event.stopPropagation();_ativDismiss('r','${dismissKey}')" title="Arquivar">×</button>
     </div>`;
-  }).join('');
+  };
 
-  const arquivadosRH = FERIAS_HISTORICO.filter(h => _dismissedRH.has(String(h.id)));
-  const itemsArqRH = arquivadosRH.map(h => {
-    const colab = colabMap.get(String(h.colaborador_id));
-    const nome  = colab ? colab.nome : '—';
-    const det   = h.detalhe || {};
-    const fmtD2 = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
-    const dismissKey = String(h.id);
-    return `<div class="gstor-ativ-item" style="opacity:.6;">
-      <div class="gstor-ativ-icon arquivado"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2M5 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg></div>
-      <div class="gstor-ativ-body">
-        <div><span class="gstor-ativ-nome">${nome}</span></div>
-        ${det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD2(det.inicio)} → ${fmtD2(det.fim)}</div>` : ''}
-      </div>
-      <button class="gstor-ativ-dismiss" style="opacity:1;color:var(--blue);" onclick="event.stopPropagation();_ativRestore('r','${dismissKey}')" title="Restaurar">↩</button>
+  const abaRecente = _rhAtivAba === 'recente';
+  const tabsHtml = `
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0;">
+      <button onclick="_rhAtivAba='recente';_rhHistOffset=0;renderRhAtividade()" style="padding:10px 16px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${abaRecente ? 'var(--blue,#1570EF)' : 'transparent'};color:${abaRecente ? 'var(--blue,#1570EF)' : 'var(--text-sec)'};font-family:inherit;">
+        Atividade recente${recentes.length > 0 ? ` <span style="background:var(--blue,#1570EF);color:#fff;border-radius:10px;font-size:10px;padding:1px 6px;margin-left:4px;">${recentes.length}</span>` : ''}
+      </button>
+      <button onclick="_rhAtivAba='historico';_rhHistOffset=0;renderRhAtividade()" style="padding:10px 16px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${!abaRecente ? 'var(--blue,#1570EF)' : 'transparent'};color:${!abaRecente ? 'var(--blue,#1570EF)' : 'var(--text-sec)'};font-family:inherit;">
+        Histórico
+      </button>
     </div>`;
-  }).join('');
 
-  const allKeysRH = eventos.map(h => String(h.id));
-  const arquivarTodosBtnRH = eventos.length > 0
-    ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_ativDismissAll('r',${JSON.stringify(allKeysRH)})">Arquivar todos</button>`
-    : '';
-  const verArqBtnRH = arquivadosRH.length > 0
-    ? `<button class="gstor-ativ-vermais" style="color:var(--text-ter);border-color:transparent;" onclick="_rhAtivMostrarArq=!_rhAtivMostrarArq;renderRhAtividade()">${_rhAtivMostrarArq ? 'Ocultar arquivados' : `Ver arquivados (${arquivadosRH.length})`}</button>`
-    : '';
-  const verMaisBtn = !_rhAtivExpandido && ocultos > 0
-    ? `<button class="gstor-ativ-vermais" onclick="_rhAtivExpandido=true;renderRhAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
-    : '';
-  const arquivarTodosHdrRH = eventos.length > 0
-    ? `<button onclick="event.stopPropagation();abrirModalConfirm({titulo:'Arquivar atividade recente',texto:'Todos os registros de atividade recente serão arquivados. Eles poderão ser consultados em \\'Ver arquivados\\'.',labelOk:'Arquivar todos',corOk:'#344054',cb:()=>_ativDismissAll('r',${JSON.stringify(allKeysRH)})})" style="font-size:11px;font-weight:500;color:var(--text-ter);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;font-family:inherit;white-space:nowrap;" title="Arquivar todos">Arquivar todos</button>`
-    : '';
+  let conteudo = '';
+  if (abaRecente) {
+    conteudo = recentes.length > 0
+      ? `<div class="gstor-ativ-list">${recentes.map(_itemRow).join('')}</div>`
+      : `<div style="padding:20px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhuma atividade recente.</div>`;
+  } else {
+    const busca = _norm(document.getElementById('rhHistBusca')?.value || '');
+    const filtrados = busca
+      ? historico.filter(h => { const c = colabMap.get(String(h.colaborador_id)); return c ? _norm(c.nome).includes(busca) : false; })
+      : historico;
+    const pagina = filtrados.slice(0, _rhHistOffset + _HIST_PAGE);
+    const temMais = filtrados.length > pagina.length;
+    conteudo = pagina.length > 0
+      ? `<div style="padding:10px 12px;">
+          <input id="rhHistBusca" type="text" placeholder="Buscar colaborador…"
+            oninput="renderRhAtividade()"
+            style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+        </div>
+        <div class="gstor-ativ-list">${pagina.map(_itemRow).join('')}</div>
+        ${temMais ? `<button class="gstor-ativ-vermais" onclick="_rhHistOffset+=_HIST_PAGE;renderRhAtividade()">Ver mais ${Math.min(filtrados.length - pagina.length, _HIST_PAGE)} registros</button>` : ''}`
+      : `<div style="padding:10px 12px;">
+          <input id="rhHistBusca" type="text" placeholder="Buscar colaborador…"
+            oninput="renderRhAtividade()"
+            style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+        </div>
+        <div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`;
+  }
 
-  el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">
-    <div class="gstor-ativ-header" onclick="_rhAtivAberto=!_rhAtivAberto;renderRhAtividade()">
-      <span class="gstor-ativ-title">Atividade recente</span>
-      <div style="display:flex;align-items:center;gap:4px;">
-        ${_rhAtivAberto ? arquivarTodosHdrRH : ''}
-        <span class="gstor-ativ-toggle">${_rhAtivAberto ? '▲ ocultar' : '▼ mostrar'}</span>
-      </div>
-    </div>
-    ${_rhAtivAberto ? `<div class="gstor-ativ-list">${items || '<div style="padding:14px 16px;font-size:13px;color:var(--text-ter);">Nenhuma atividade recente.</div>'}</div>${verMaisBtn}${verArqBtnRH}${_rhAtivMostrarArq && itemsArqRH ? `<div class="gstor-ativ-list" style="border-top:1px dashed var(--border);">${itemsArqRH}</div>` : ''}` : ''}
-  </div>`;
+  el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">${tabsHtml}${conteudo}</div>`;
 }
 
 function renderGestorAlerts(colabsBase) {
