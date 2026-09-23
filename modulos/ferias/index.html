@@ -2118,6 +2118,36 @@
   </div>
 </div>
 
+<!-- ═══ Modal alteração de data (Gestor) ═══ -->
+<div class="modal-overlay" id="modalGestorAlt" style="display:none;" onclick="if(event.target===this)fecharModalGestorAlt()">
+  <div class="modal" style="max-width:420px;width:100%;" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div class="modal-title">Solicitar alteração de data</div>
+      <button onclick="fecharModalGestorAlt()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-sec);padding:0;line-height:1;">✕</button>
+    </div>
+    <div id="mgAltNome" style="font-size:13px;color:var(--text-sec);margin-bottom:16px;"></div>
+    <div class="form-grid" style="margin-bottom:12px;">
+      <div class="field">
+        <label>Data atual de início</label>
+        <input type="text" id="mgAltAtual" readonly style="background:#f5f5f5;">
+      </div>
+      <div class="field">
+        <label>Nova data de início <span style="color:var(--red)">*</span></label>
+        <input type="date" id="mgAltNovoInicio" oninput="gestorAltCalcFim()">
+      </div>
+      <div class="field">
+        <label>Novo retorno previsto</label>
+        <input type="text" id="mgAltNovoFim" readonly style="background:#f5f5f5;">
+      </div>
+    </div>
+    <div id="mgAltErro" style="font-size:12px;color:#B42318;margin-bottom:8px;display:none;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModalGestorAlt()">Cancelar</button>
+      <button class="btn btn-primary" id="mgAltBtnEnviar" onclick="gestorEnviarAlteracao()">Enviar para RH aprovar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Modal de lançamento ═══ -->
 <div class="modal-overlay" id="modalLancar" onclick="fecharModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -2181,7 +2211,7 @@
 <!-- ═══ Modal de aprovação (RH) ═══ -->
 <div class="modal-overlay" id="modalAprovar" onclick="fecharModalAprovar(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-title">Aprovar ou rejeitar</div>
+    <div class="modal-title" id="aprovarTitle">Aprovar ou rejeitar</div>
     <div class="modal-sub" id="aprovarSub">—</div>
     <div id="aprovarInfo" style="background:#f9f9f9;border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
     <div class="field" id="motivoRejeicaoField" style="display:none;">
@@ -2508,6 +2538,15 @@ function supabaseParaModelo(feriasRows, colaborRows) {
       }
     }
 
+    // Parsear metadados de alteração de data quando status = Alteracao_Solicitada
+    let _alteracaoMeta = null;
+    if (f.status === 'Alteracao_Solicitada' && f.obs_gestor) {
+      try {
+        const _parsed = JSON.parse(f.obs_gestor);
+        if (_parsed && _parsed.tipo === 'alteracao') _alteracaoMeta = _parsed;
+      } catch(_) {}
+    }
+
     const registro = {
       _sbId: f.id,
       ano:   Number(f.ano) || ANO_REF,
@@ -2526,6 +2565,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
       _novoLanc: _novoLancFromGestor,
       _motivoRejeicao: null,
       _atualizadoEm: f.atualizado_em || f.criado_em || null,
+      _alteracaoMeta,
     };
 
     TODOS_REGISTROS.push({ __key, reg: mat, nome, cargo, setor: normSetor(colabDados.setor || ''), unidade: '', registro });
@@ -2799,6 +2839,12 @@ function getPendentes() {
   const result = [];
   COLABORADORES.forEach(colab => {
     colab.registros.forEach((reg, ri) => {
+      if (reg.status === 'Alteracao_Solicitada') {
+        if (!reg._alteracaoMeta) return; // sem meta parseada → skip
+        const meta = reg._alteracaoMeta;
+        result.push({ colab, reg, ri, lancamento: { inicio: meta.novo_inicio, fim: meta.novo_fim, dias: meta.dias }, _tipo: 'alteracao', _altMeta: meta });
+        return;
+      }
       if (reg.status !== 'Pendente') return;
       const nl = reg._novoLanc || { inicio: reg.paInicio, fim: reg.paFim, dias: 0, motivo: reg._obsGestor || 'Solicitado pelo gestor' };
       result.push({ colab, reg, ri, lancamento: nl, _tipo: 'legado' });
@@ -3222,8 +3268,22 @@ function renderDrawerAuditoria(colab) {
     el.innerHTML = '<div style="padding:24px 20px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhum evento registrado ainda.<br><span style="font-size:12px;">Os eventos aparecerão aqui após solicitações, aprovações e recusas.</span></div>';
     return;
   }
-  const acaoLabel = { solicitado: 'Solicitação enviada', aprovado: 'Aprovado pelo RH', rejeitado: 'Recusado pelo RH' };
-  const acaoCor   = { solicitado: 'var(--blue)', aprovado: 'var(--green)', rejeitado: '#D92D20' };
+  const acaoLabel = {
+    solicitado:          'Solicitação enviada',
+    aprovado:            'Aprovado pelo RH',
+    rejeitado:           'Recusado pelo RH',
+    alteracao_solicitada:'Alteração solicitada',
+    alteracao_aprovada:  'Alteração aprovada',
+    alteracao_recusada:  'Alteração recusada',
+  };
+  const acaoCor = {
+    solicitado:          'var(--blue)',
+    aprovado:            'var(--green)',
+    rejeitado:           '#D92D20',
+    alteracao_solicitada:'#1570EF',
+    alteracao_aprovada:  '#067647',
+    alteracao_recusada:  '#D92D20',
+  };
   el.innerHTML = `<div style="padding:16px 20px;">
     <div style="display:flex;flex-direction:column;">
       ${hist.map((h, i) => {
@@ -4676,7 +4736,27 @@ function renderPendentes() {
 
   document.getElementById('pendContent').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px;">
-      ${lista.map(({ colab, reg, ri, lancamento, _tipo }, idx) => {
+      ${lista.map(({ colab, reg, ri, lancamento, _tipo, _altMeta }, idx) => {
+        if (_tipo === 'alteracao') {
+          const meta = _altMeta;
+          return `<div class="pendente-item" style="border-left:4px solid #3B82F6;">
+            <div class="pendente-body" style="flex:1;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <div class="pendente-nome">${colab.nome}</div>
+                <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#EFF6FF;color:#1849A9;font-weight:600;">Alteração de data</span>
+              </div>
+              <div class="pendente-info">${colab.cargo || '—'} · ${colab.setor || colab.unidade || '—'}${colab.gestor ? ' · Gestor: ' + colab.gestor : ''}</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+                <span class="badge badge-cinza">${meta.slot === 'p2' ? 'Período 2' : 'Período 1'}</span>
+                <span class="badge badge-cinza">Anterior: ${formatDate(meta.data_anterior_inicio)} → ${formatDate(meta.data_anterior_fim)}</span>
+                <span class="badge badge-azul">Nova: ${formatDate(meta.novo_inicio)} → ${formatDate(meta.novo_fim)}</span>
+              </div>
+            </div>
+            <div class="pendente-actions" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+              <button class="btn btn-outline btn-sm" onclick="abrirModalAprovar(${idx})">Analisar</button>
+            </div>
+          </div>`;
+        }
         const nl   = lancamento;
         const ini  = nl.inicio || nl.data_inicio || '';
         const fim  = nl.fim    || nl.data_fim    || '';
@@ -5369,20 +5449,39 @@ let _pendListCache = [];
 function abrirModalAprovar(idx) {
   _pendListCache = getPendentes();
   _pendIdx = idx;
-  const { colab, reg } = _pendListCache[idx];
-  const nl = reg._novoLanc;
+  const pendItem = _pendListCache[idx];
+  const { colab, reg } = pendItem;
+  const _tipo = pendItem._tipo;
+  const _altMeta = pendItem._altMeta;
 
   document.getElementById('aprovarSub').textContent = `${colab.nome} · ${colab.setor || colab.unidade || '—'}`;
-  document.getElementById('aprovarInfo').innerHTML = `
-    <div style="display:flex;gap:16px;flex-wrap:wrap;">
-      <div><span style="font-size:11px;color:var(--text-sec);">Período de gozo</span><br><strong>${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</strong></div>
-      <div><span style="font-size:11px;color:var(--text-sec);">Dias</span><br><strong>${nl.dias}</strong></div>
-      ${nl.motivo ? `<div><span style="font-size:11px;color:var(--text-sec);">Motivo</span><br><strong>${nl.motivo}</strong></div>` : ''}
-      ${nl.diasTrabalhar ? `<div><span style="font-size:11px;color:var(--text-sec);">Acordo (dias trabalhando)</span><br><strong>${nl.diasTrabalhar}</strong></div>` : ''}
-    </div>`;
   document.getElementById('motivoRejeicaoField').style.display = 'none';
   document.getElementById('motivoRejeicao').value = '';
-  document.getElementById('btnAprovar').textContent = '✓ Aprovar';
+  document.getElementById('btnAprovar').onclick = aprovarPendente;
+  document.getElementById('btnRejeitar').onclick = toggleMotivoRejeicao;
+
+  if (_tipo === 'alteracao') {
+    document.getElementById('aprovarTitle').textContent = 'Analisar alteração de data';
+    const solDt = _altMeta.data_solicitacao ? ' em ' + formatDate(_altMeta.data_solicitacao.slice(0,10)) : '';
+    document.getElementById('aprovarInfo').innerHTML = `
+      <div style="font-size:13px;display:flex;flex-direction:column;gap:8px;">
+        <div>Data anterior: <strong>${formatDate(_altMeta.data_anterior_inicio)} → ${formatDate(_altMeta.data_anterior_fim)}</strong></div>
+        <div>Nova data proposta: <strong>${formatDate(_altMeta.novo_inicio)} → ${formatDate(_altMeta.novo_fim)}</strong></div>
+        <div>Solicitado por: <strong>${_altMeta.solicitante || '—'}</strong>${solDt}</div>
+      </div>`;
+    document.getElementById('btnAprovar').textContent = '✓ Aprovar alteração';
+  } else {
+    document.getElementById('aprovarTitle').textContent = 'Aprovar ou rejeitar';
+    const nl = reg._novoLanc;
+    document.getElementById('aprovarInfo').innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div><span style="font-size:11px;color:var(--text-sec);">Período de gozo</span><br><strong>${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</strong></div>
+        <div><span style="font-size:11px;color:var(--text-sec);">Dias</span><br><strong>${nl.dias}</strong></div>
+        ${nl.motivo ? `<div><span style="font-size:11px;color:var(--text-sec);">Motivo</span><br><strong>${nl.motivo}</strong></div>` : ''}
+        ${nl.diasTrabalhar ? `<div><span style="font-size:11px;color:var(--text-sec);">Acordo (dias trabalhando)</span><br><strong>${nl.diasTrabalhar}</strong></div>` : ''}
+      </div>`;
+    document.getElementById('btnAprovar').textContent = '✓ Aprovar';
+  }
   document.getElementById('modalAprovar').classList.add('open');
 }
 
@@ -5396,11 +5495,64 @@ function toggleMotivoRejeicao() {
 
 async function aprovarPendente() {
   if (_pendIdx === null) return;
-  const { colab, reg } = _pendListCache[_pendIdx];
+  const pendItem = _pendListCache[_pendIdx];
+  const { colab, reg } = pendItem;
+  const _tipo = pendItem._tipo;
   const btnAprovar = document.getElementById('btnAprovar');
   btnAprovar.disabled = true;
   btnAprovar.textContent = 'Salvando...';
   try {
+    if (_tipo === 'alteracao') {
+      const _altMeta = pendItem._altMeta;
+      // Validação de conflito
+      const excluirStatus = new Set(['Pendente','Rejeitado','Cancelado','Descartado','Alteracao_Solicitada']);
+      const outrosLanc = [];
+      colab.registros.forEach(r => {
+        if (excluirStatus.has(r.status)) return;
+        r.lancamentos.forEach((l, li) => {
+          const eOPropio = String(r._sbId) === String(reg._sbId) &&
+            ((_altMeta.slot === 'p1' && li === 0) || (_altMeta.slot === 'p2' && li === 1));
+          if (!eOPropio) outrosLanc.push(l);
+        });
+      });
+      const conflito = outrosLanc.some(l =>
+        l.inicio && l.fim &&
+        _altMeta.novo_inicio <= l.fim && _altMeta.novo_fim >= l.inicio
+      );
+      if (conflito) {
+        toast('Não foi possível aprovar: a nova data entra em conflito com outro período de férias já programado para este colaborador.', 'erro');
+        btnAprovar.disabled = false;
+        btnAprovar.textContent = '✓ Aprovar alteração';
+        return;
+      }
+      const patch = _altMeta.slot === 'p1'
+        ? { periodo1_inicio: _altMeta.novo_inicio, periodo1_fim: _altMeta.novo_fim, status: 'Aprovado', obs_gestor: null }
+        : { periodo2_inicio: _altMeta.novo_inicio, periodo2_fim: _altMeta.novo_fim, status: 'Aprovado', obs_gestor: null };
+      await sbPatch('ferias', `id=eq.${reg._sbId}`, patch);
+      // Atualizar local
+      const slotIdx = _altMeta.slot === 'p2' ? 1 : 0;
+      if (reg.lancamentos[slotIdx]) {
+        reg.lancamentos[slotIdx].inicio = _altMeta.novo_inicio;
+        reg.lancamentos[slotIdx].fim    = _altMeta.novo_fim;
+      }
+      reg._alteracaoMeta = null;
+      reg._obsGestor     = null;
+      reg.status = 'Aprovado';
+      // Log
+      const _perfAprov2 = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+      if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'alteracao_aprovada', _perfAprov2.nome || 'RH', {
+        data_anterior_inicio: _altMeta.data_anterior_inicio,
+        data_anterior_fim:    _altMeta.data_anterior_fim,
+        novo_inicio:          _altMeta.novo_inicio,
+        novo_fim:             _altMeta.novo_fim,
+        aprovado_por:         _perfAprov2.nome || 'RH'
+      });
+      document.getElementById('modalAprovar').classList.remove('open');
+      toast(`✓ Alteração de data aprovada — ${colab.nome}`);
+      renderAll();
+      return;
+    }
+    // Fluxo padrão (nova solicitação)
     if (reg._sbId) {
       const nl = reg._novoLanc;
       const payload = {
@@ -5434,8 +5586,33 @@ async function rejeitarPendente() {
   const motivo = document.getElementById('motivoRejeicao').value.trim();
   if (!motivo) { alert('Informe o motivo da rejeição.'); return; }
   if (_pendIdx === null) return;
-  const { colab, reg } = _pendListCache[_pendIdx];
+  const pendItem = _pendListCache[_pendIdx];
+  const { colab, reg } = pendItem;
+  const _tipo = pendItem._tipo;
   try {
+    if (_tipo === 'alteracao') {
+      const _altMeta = pendItem._altMeta;
+      // Rejeitar alteração: volta para Aprovado com obs_gestor limpo
+      if (reg._sbId) await sbPatch('ferias', `id=eq.${reg._sbId}`, { status: 'Aprovado', obs_gestor: null });
+      reg._alteracaoMeta = null;
+      reg._obsGestor     = null;
+      reg.status = 'Aprovado';
+      // Log
+      const _perfRec2 = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+      if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'alteracao_recusada', _perfRec2.nome || 'RH', {
+        motivo,
+        data_anterior_inicio: _altMeta.data_anterior_inicio,
+        data_anterior_fim:    _altMeta.data_anterior_fim,
+        novo_inicio:          _altMeta.novo_inicio,
+        novo_fim:             _altMeta.novo_fim,
+        recusado_por:         _perfRec2.nome || 'RH'
+      });
+      document.getElementById('modalAprovar').classList.remove('open');
+      toast(`Alteração de data recusada — ${colab.nome}`);
+      renderAll();
+      return;
+    }
+    // Fluxo padrão
     if (reg._sbId) {
       await sbPatch('ferias', `id=eq.${reg._sbId}`, { status: 'Rejeitado' });
     }
@@ -7969,8 +8146,14 @@ function renderGestorAtividade() {
 
   const items = visiveis.map(h => {
     const acao  = h.acao || '';
-    const cls   = acao === 'aprovado' ? 'aprov' : acao === 'rejeitado' ? 'recus' : 'cancel';
-    const chip  = acao === 'aprovado' ? 'Aprovado' : acao === 'rejeitado' ? 'Recusado' : 'Solicitado';
+    const cls   = (acao === 'aprovado' || acao === 'alteracao_aprovada') ? 'aprov'
+                : (acao === 'rejeitado' || acao === 'alteracao_recusada') ? 'recus' : 'cancel';
+    const chip  = acao === 'aprovado' ? 'Aprovado'
+                : acao === 'rejeitado' ? 'Recusado'
+                : acao === 'alteracao_solicitada' ? 'Alt. solicitada'
+                : acao === 'alteracao_aprovada'   ? 'Alt. aprovada'
+                : acao === 'alteracao_recusada'   ? 'Alt. recusada'
+                : 'Solicitado';
     const colab = colabMap.get(String(h.colaborador_id));
     const nome  = colab ? colab.nome : '—';
     const cargo = colab ? [colab.cargo, colab.setor].filter(Boolean).join(' · ') : '';
@@ -8068,8 +8251,14 @@ function renderRhAtividade() {
 
   const items = visiveis.map(h => {
     const acao  = h.acao || '';
-    const cls   = acao === 'aprovado' ? 'aprov' : acao === 'rejeitado' ? 'recus' : 'cancel';
-    const chip  = acao === 'aprovado' ? 'Aprovado' : acao === 'rejeitado' ? 'Recusado' : 'Solicitado';
+    const cls   = (acao === 'aprovado' || acao === 'alteracao_aprovada') ? 'aprov'
+                : (acao === 'rejeitado' || acao === 'alteracao_recusada') ? 'recus' : 'cancel';
+    const chip  = acao === 'aprovado' ? 'Aprovado'
+                : acao === 'rejeitado' ? 'Recusado'
+                : acao === 'alteracao_solicitada' ? 'Alt. solicitada'
+                : acao === 'alteracao_aprovada'   ? 'Alt. aprovada'
+                : acao === 'alteracao_recusada'   ? 'Alt. recusada'
+                : 'Solicitado';
     const colab = colabMap.get(String(h.colaborador_id));
     const nome  = colab ? colab.nome : '—';
     const cargo = colab ? [colab.cargo, colab.setor].filter(Boolean).join(' · ') : '';
@@ -10179,6 +10368,111 @@ function gestorAbrirModal(colabId, periodoId, slotRemarcar, lancRecusado) {
   document.getElementById('modalGestor').style.display = 'flex';
 }
 
+// ─── Modal de alteração de data (Gestor) ────────────────────────────────────
+let _gestorAltCtx = null; // { colabId, periodoId, lancIdx, inicio, fim, dias }
+
+function gestorAbrirModalAlt(colabId, periodoId, lancIdx) {
+  const lancamento = GESTOR_LANCAMENTOS.find(l =>
+    String(l.colaborador_id) === String(colabId) &&
+    String(l.periodo_id) === String(periodoId) &&
+    (lancIdx === 1 ? l.id.endsWith('-p2') : !l.id.endsWith('-p2'))
+  );
+  if (!lancamento) { toast('Lançamento não encontrado.'); return; }
+  const c = GESTOR_COLABS.find(c => String(c.id) === String(colabId));
+  _gestorAltCtx = { colabId, periodoId, lancIdx, inicio: lancamento.inicio, fim: lancamento.fim, dias: lancamento.dias };
+  document.getElementById('mgAltNome').textContent = c ? `${c.nome} · ${c.cargo || '—'}` : '';
+  document.getElementById('mgAltAtual').value      = formatDate(lancamento.inicio);
+  document.getElementById('mgAltNovoInicio').value = '';
+  document.getElementById('mgAltNovoFim').value    = '—';
+  const erroEl = document.getElementById('mgAltErro');
+  erroEl.style.display = 'none';
+  erroEl.textContent   = '';
+  const btn = document.getElementById('mgAltBtnEnviar');
+  btn.disabled    = false;
+  btn.textContent = 'Enviar para RH aprovar';
+  document.getElementById('modalGestorAlt').style.display = 'flex';
+}
+
+function fecharModalGestorAlt() {
+  document.getElementById('modalGestorAlt').style.display = 'none';
+  _gestorAltCtx = null;
+}
+
+function gestorAltCalcFim() {
+  if (!_gestorAltCtx) return;
+  const ini = document.getElementById('mgAltNovoInicio').value;
+  if (!ini || !_gestorAltCtx.dias) {
+    document.getElementById('mgAltNovoFim').value = '—';
+    return;
+  }
+  document.getElementById('mgAltNovoFim').value = formatDate(addDays(ini, _gestorAltCtx.dias - 1));
+}
+
+async function gestorEnviarAlteracao() {
+  if (!_gestorAltCtx) return;
+  const novoInicio = document.getElementById('mgAltNovoInicio').value;
+  const erroEl = document.getElementById('mgAltErro');
+  erroEl.style.display = 'none';
+  if (!novoInicio) {
+    erroEl.textContent = 'Informe a nova data de início.';
+    erroEl.style.display = '';
+    return;
+  }
+  if (novoInicio <= HOJE) {
+    erroEl.textContent = 'A nova data de início deve ser uma data futura.';
+    erroEl.style.display = '';
+    return;
+  }
+  const novoFim = addDays(novoInicio, _gestorAltCtx.dias - 1);
+  const slot    = _gestorAltCtx.lancIdx === 1 ? 'p2' : 'p1';
+  const meta = {
+    tipo: 'alteracao',
+    slot,
+    novo_inicio:          novoInicio,
+    novo_fim:             novoFim,
+    dias:                 _gestorAltCtx.dias,
+    data_anterior_inicio: _gestorAltCtx.inicio,
+    data_anterior_fim:    _gestorAltCtx.fim,
+    solicitante:          GESTOR_NOME_USUARIO || '—',
+    data_solicitacao:     new Date().toISOString()
+  };
+  const btn = document.getElementById('mgAltBtnEnviar');
+  btn.disabled    = true;
+  btn.textContent = 'Enviando...';
+  // Captura o contexto antes de fechar o modal
+  const ctx = { ..._gestorAltCtx };
+  try {
+    await sbPatch('ferias', `id=eq.${ctx.periodoId}`, { status: 'Alteracao_Solicitada', obs_gestor: JSON.stringify(meta) });
+    // Atualiza estado local RH
+    COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
+      if (String(reg._sbId) === String(ctx.periodoId)) {
+        reg.status = 'Alteracao_Solicitada';
+        reg._alteracaoMeta = meta;
+        reg._obsGestor     = JSON.stringify(meta);
+      }
+    }));
+    // Atualiza _feriasRow do Gestor
+    const per = GESTOR_PERIODOS.find(p => String(p.id) === String(ctx.periodoId));
+    if (per?._feriasRow) {
+      per._feriasRow.status     = 'Alteracao_Solicitada';
+      per._feriasRow.obs_gestor = JSON.stringify(meta);
+    }
+    fecharModalGestorAlt();
+    // Log de auditoria
+    try { await _logAtiv(ctx.periodoId, ctx.colabId, 'alteracao_solicitada', GESTOR_NOME_USUARIO, { inicio: novoInicio, fim: novoFim, dias: ctx.dias, slot }); } catch(_) {}
+    toast('✓ Solicitação de alteração enviada para o RH.');
+    const c = GESTOR_COLABS.find(c => String(c.id) === String(ctx.colabId));
+    if (c) _renderGsolHistoricoRH(c);
+    if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
+    if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
+  } catch(e) {
+    erroEl.textContent   = 'Erro ao enviar: ' + (e.message || e);
+    erroEl.style.display = '';
+    btn.disabled    = false;
+    btn.textContent = 'Enviar para RH aprovar';
+  }
+}
+
 function fecharModalGestor() {
   document.getElementById('modalGestor').style.display = 'none';
   const obsEl = document.getElementById('mgObs');
@@ -10461,8 +10755,22 @@ function _renderGsolHistoricoAuditoria() {
     el.innerHTML = '<div style="padding:24px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhum evento registrado ainda.<br><span style="font-size:12px;">Os eventos aparecerão aqui após solicitações e aprovações.</span></div>';
     return;
   }
-  const acaoLabel = { solicitado: 'Solicitação enviada', aprovado: 'Aprovado pelo RH', rejeitado: 'Recusado pelo RH' };
-  const acaoCor   = { solicitado: 'var(--blue)', aprovado: 'var(--green)', rejeitado: '#D92D20' };
+  const acaoLabel = {
+    solicitado:          'Solicitação enviada',
+    aprovado:            'Aprovado pelo RH',
+    rejeitado:           'Recusado pelo RH',
+    alteracao_solicitada:'Alteração solicitada',
+    alteracao_aprovada:  'Alteração aprovada',
+    alteracao_recusada:  'Alteração recusada',
+  };
+  const acaoCor = {
+    solicitado:          'var(--blue)',
+    aprovado:            'var(--green)',
+    rejeitado:           '#D92D20',
+    alteracao_solicitada:'#1570EF',
+    alteracao_aprovada:  '#067647',
+    alteracao_recusada:  '#D92D20',
+  };
   el.innerHTML = `<div style="padding:14px 16px;">
     <div style="display:flex;flex-direction:column;">
       ${hist.map((h, i) => {
@@ -10543,6 +10851,15 @@ function _renderGsolHistoricoRH(c) {
     const mostrarSolicitar = saldo > 0 && isActivePa && !jaSolicitadoPA;
 
     if (!lancamentos.length && !mostrarSolicitar) return '';
+
+    // Parsear meta de alteração de data para este PA
+    let _altMetaGsol = null;
+    if (row.status === 'Alteracao_Solicitada' && row.obs_gestor) {
+      try {
+        const _p = JSON.parse(row.obs_gestor);
+        if (_p && _p.tipo === 'alteracao') _altMetaGsol = _p;
+      } catch(_) {}
+    }
 
     const itens = lancamentos.map((l, li) => {
       const lancIdx = l.id.endsWith('-p2') ? 1 : 0;
@@ -10629,6 +10946,26 @@ function _renderGsolHistoricoRH(c) {
           <div id="${_gsolListaId}" style="display:none;margin-top:4px;">${gozoHtml}</div>
         </div>` : '';
 
+      // Banner de alteração pendente (apenas para o slot que está com alteração)
+      const thisSlot = lancIdx === 1 ? 'p2' : 'p1';
+      const temAltPendente = _altMetaGsol && _altMetaGsol.slot === thisSlot;
+      const bannerAlt = temAltPendente
+        ? `<div style="margin-top:6px;padding:7px 10px;background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:7px;font-size:11px;color:#1849A9;line-height:1.5;">
+            <strong>Alteração aguardando aprovação do RH</strong><br>
+            <span style="color:var(--text-sec);">Data atual: ${_fmtD(_altMetaGsol.data_anterior_inicio)} → ${_fmtD(_altMetaGsol.data_anterior_fim)} &nbsp;·&nbsp; Nova data: ${_fmtD(_altMetaGsol.novo_inicio)} → ${_fmtD(_altMetaGsol.novo_fim)}</span>
+          </div>` : '';
+
+      // Botão "Alterar data" para lançamentos futuros aprovados
+      const stNormLanc = (l.status||'').toLowerCase();
+      const isAprovadoLanc = stNormLanc === 'aprovado' || stNormLanc === 'agendado';
+      const isFuturoLanc = l.inicio > hoje;
+      let btnAltData = '';
+      if (isAprovadoLanc && isFuturoLanc) {
+        btnAltData = _altMetaGsol
+          ? `<button disabled title="Alteração já solicitada — aguardando RH" style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D0D5DD;background:transparent;color:#98A2B3;cursor:not-allowed;font-weight:600;font-family:inherit;">Alterar data</button>`
+          : `<button style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #1570EF;background:transparent;color:#1570EF;cursor:pointer;font-weight:600;font-family:inherit;" onclick="gestorAbrirModalAlt('${c.id}','${per.id}',${lancIdx})">Alterar data</button>`;
+      }
+
       return `<div class="gsol-rh-item">
         <div class="gsol-rh-dot" style="background:${dotColor};"></div>
         <div class="gsol-rh-body">
@@ -10636,7 +10973,7 @@ function _renderGsolHistoricoRH(c) {
           <div class="gsol-rh-chips">
             <span class="gsol-rh-chip">${svgCal} Lançado RH</span>${chipPend}${chipConcl}
           </div>
-          ${nota}${_gozoToggleHtml}${btnSolGozo}${formSolGozo}
+          ${nota}${_gozoToggleHtml}${btnSolGozo}${formSolGozo}${bannerAlt}${btnAltData}
         </div>
       </div>`;
     }).join('');
