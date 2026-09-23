@@ -9815,7 +9815,11 @@ async function _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, 
   if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
 
   // ── Helpers de cor (ARGB sem #) ─────────────────────────────────────────────
-  const argb = hex => 'FF' + hex.replace('#', '').toUpperCase();
+  const argb = hex => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+    return 'FF' + full.toUpperCase();
+  };
 
   const _riscoEx = (sitKey) => {
     if (sitKey === 'Crítico')  return { rowBg:'#FFF5F5', borderCol:'#EF4444', nomeCor:'#7F1D1D', nomeBold:true };
@@ -9919,9 +9923,15 @@ async function _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, 
 
     // Setor (col 1) — cor do setor
     const cS = row.getCell(1);
-    cS.style = { ...cS.style,
+    cS.style = {
       font: { name:'Arial', size:10, bold:true, color:{ argb:argb(corS.text) } },
       fill: { type:'pattern', pattern:'solid', fgColor:{ argb:argb(corS.bg) } },
+      alignment: { vertical:'middle', horizontal:'left', indent:1 },
+      border: {
+        bottom: { style:'thin', color:{ argb:'FFE2E8F0' } },
+        right:  { style:'thin', color:{ argb:'FFE2E8F0' } },
+        ...(risco.borderCol ? { left:{ style:'medium', color:{ argb:argb(risco.borderCol) } } } : {}),
+      },
     };
 
     // Nome (col 2) — cor e peso do risco
