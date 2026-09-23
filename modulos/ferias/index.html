@@ -9743,17 +9743,17 @@ function gestorExportarExcel() {
 
   if (!GESTOR_COLABS.length) { toast('Dados da equipe não carregados. Aguarde e tente novamente.', 'aviso'); return; }
 
-  // Carrega SheetJS sob demanda se ainda não estiver disponível
+  // Carrega ExcelJS sob demanda se ainda não estiver disponível
   const _doExport = () => _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, dataLabel, _saldoCor);
-  if (typeof XLSX !== 'undefined') { _doExport(); return; }
+  if (typeof ExcelJS !== 'undefined') { _doExport(); return; }
   const s = document.createElement('script');
-  s.src = 'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js';
+  s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
   s.onload = _doExport;
   s.onerror = () => toast('Falha ao carregar biblioteca de exportação. Verifique a conexão.', 'erro');
   document.head.appendChild(s);
 }
 
-function _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, dataLabel, _saldoCor) {
+async function _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, dataLabel, _saldoCor) {
 
   const linhas = [];
   GESTOR_COLABS.filter(c => {
@@ -9814,53 +9814,147 @@ function _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, dataLa
 
   if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
 
-  // ── Monta planilha com SheetJS ──────────────────────────────────────────────
-  const wb = XLSX.utils.book_new();
+  // ── Helpers de cor (ARGB sem #) ─────────────────────────────────────────────
+  const argb = hex => 'FF' + hex.replace('#', '').toUpperCase();
 
-  // Cabeçalhos (linha 1 = título, linha 2 = subtítulo, linha 3 = headers de coluna)
-  const HEADERS = ['Setor','Nome','Cargo','Ano PA','Período Aquisitivo','Férias Início','Férias Fim','Saldo (d)','Situação'];
-  const aoa = [
-    ['Férias da Equipe', ...Array(8).fill('')],       // linha 1 — título
-    [`${linhas.length} colaborador(es) · Gerado em ${gerado}`, ...Array(8).fill('')], // linha 2
-    HEADERS,                                           // linha 3 — cabeçalhos com AutoFilter
-    ...linhas.map(l => [
-      l.setor || '',
-      l.nome,
-      l.cargo,
-      l.paAno,
-      l.paStr,
-      l.agendIni,
-      l.agendFim,
-      l.saldo,
-      l.situacao,
-    ])
+  const _riscoEx = (sitKey) => {
+    if (sitKey === 'Crítico')  return { rowBg:'#FFF5F5', borderCol:'#EF4444', nomeCor:'#7F1D1D', nomeBold:true };
+    if (sitKey === 'Atenção')  return { rowBg:'#FFFBEB', borderCol:'#F59E0B', nomeCor:'#78350F', nomeBold:true };
+    if (sitKey === 'No radar') return { rowBg:'#F0F6FF', borderCol:'#93C5FD', nomeCor:'#1E3A8A', nomeBold:false };
+    return { rowBg:'#FFFFFF', borderCol:null, nomeCor:'#1A1A2E', nomeBold:false };
+  };
+
+  const _sitCor = (sitKey) => {
+    const m = { 'Crítico':'#7F1D1D','Atenção':'#78350F','No radar':'#1E3A8A',
+                 'Agendado':'#027A48','Concluído':'#027A48',
+                 'Sem agendamento':'#92400E','Período futuro':'#1849A9' };
+    return m[sitKey] || '#475569';
+  };
+
+  // ── Monta planilha com ExcelJS ───────────────────────────────────────────────
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'SistemaRH Revest';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('Férias da Equipe');
+
+  ws.columns = [
+    { width: 22 }, // A Setor
+    { width: 32 }, // B Nome
+    { width: 24 }, // C Cargo
+    { width: 9  }, // D Ano PA
+    { width: 28 }, // E Período Aquisitivo
+    { width: 15 }, // F Férias Início
+    { width: 15 }, // G Férias Fim
+    { width: 11 }, // H Saldo (d)
+    { width: 32 }, // I Situação
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // ── Linha 1: Título ──
+  ws.addRow(['FÉRIAS DA EQUIPE', '', '', '', '', '', '', '', '']);
+  ws.mergeCells('A1:I1');
+  const r1 = ws.getRow(1);
+  r1.height = 30;
+  r1.getCell(1).value = 'FÉRIAS DA EQUIPE';
+  r1.getCell(1).style = {
+    font: { name:'Arial', size:14, bold:true, color:{ argb:'FFFFFFFF' } },
+    fill: { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1E3A5F' } },
+    alignment: { vertical:'middle', horizontal:'left', indent:1 },
+  };
 
-  // AutoFilter na linha 3 (índice 2), todas as colunas A:I
-  ws['!autofilter'] = { ref: 'A3:I3' };
+  // ── Linha 2: Subtítulo ──
+  ws.addRow([`${linhas.length} colaborador(es) · Gerado em ${gerado}`, '', '', '', '', '', '', '', '']);
+  ws.mergeCells('A2:I2');
+  const r2 = ws.getRow(2);
+  r2.height = 18;
+  r2.getCell(1).style = {
+    font: { name:'Arial', size:9, color:{ argb:'FF64748B' } },
+    fill: { type:'pattern', pattern:'solid', fgColor:{ argb:'FFF8FAFC' } },
+    alignment: { vertical:'middle', horizontal:'left', indent:1 },
+  };
 
-  // Congela as 3 primeiras linhas (sheetViews é a API correta do SheetJS)
-  ws['!sheetViews'] = [{ state: 'frozen', ySplit: 3, topLeftCell: 'A4' }];
+  // ── Linha 3: Cabeçalhos ──
+  const COLS_CENTER = [4, 6, 7, 8]; // Ano PA, Férias Início, Férias Fim, Saldo
+  ws.addRow(['Setor','Nome','Cargo','Ano PA','Período Aquisitivo','Férias Início','Férias Fim','Saldo (d)','Situação']);
+  const r3 = ws.getRow(3);
+  r3.height = 22;
+  r3.eachCell((cell, col) => {
+    cell.style = {
+      font: { name:'Arial', size:10, bold:true, color:{ argb:'FFFFFFFF' } },
+      fill: { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1E3A5F' } },
+      alignment: { vertical:'middle', horizontal: COLS_CENTER.includes(col) ? 'center' : 'left', indent: COLS_CENTER.includes(col) ? 0 : 1 },
+      border: { right:{ style:'thin', color:{ argb:'FF2D5A8E' } } },
+    };
+  });
 
-  // Larguras de coluna (aproximadas em caracteres)
-  ws['!cols'] = [
-    { wch: 20 }, // Setor
-    { wch: 30 }, // Nome
-    { wch: 22 }, // Cargo
-    { wch: 8  }, // Ano PA
-    { wch: 26 }, // Período Aquisitivo
-    { wch: 14 }, // Férias Início
-    { wch: 14 }, // Férias Fim
-    { wch: 10 }, // Saldo
-    { wch: 30 }, // Situação
-  ];
+  // AutoFilter e freeze
+  ws.autoFilter = { from: { row:3, column:1 }, to: { row:3, column:9 } };
+  ws.views = [{ state:'frozen', ySplit:3, xSplit:0, topLeftCell:'A4', activeCell:'A4' }];
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Férias da Equipe');
+  // ── Linhas de dados ──
+  linhas.forEach((l, i) => {
+    const risco = _riscoEx(l.sitKey);
+    const corS  = _corSetor(l.setor);
+    const saldoHex = _saldoCor(l.saldo);
+    const sitHex   = _sitCor(l.sitKey);
+    const zebra    = i % 2 === 0 ? risco.rowBg : (risco.rowBg === '#FFFFFF' ? '#F8FAFC' : risco.rowBg);
 
-  const fileName = `Ferias_Equipe_${dataLabel.replace(/\s/g,'_')}.xlsx`;
-  XLSX.writeFile(wb, fileName);
+    const rowData = [l.setor||'', l.nome, l.cargo, l.paAno, l.paStr, l.agendIni, l.agendFim, l.saldo + 'd', l.situacao];
+    const row = ws.addRow(rowData);
+    row.height = 17;
+
+    row.eachCell({ includeEmpty:true }, (cell, col) => {
+      const isCenter = COLS_CENTER.includes(col);
+      cell.style = {
+        font: { name:'Arial', size:10, color:{ argb:argb('#1A1A2E') } },
+        fill: { type:'pattern', pattern:'solid', fgColor:{ argb:argb(zebra) } },
+        alignment: { vertical:'middle', horizontal: isCenter ? 'center' : 'left', indent: isCenter ? 0 : 1 },
+        border: {
+          bottom: { style:'thin', color:{ argb:'FFE2E8F0' } },
+          right:  { style:'thin', color:{ argb:'FFE2E8F0' } },
+          ...(col === 1 && risco.borderCol ? { left:{ style:'medium', color:{ argb:argb(risco.borderCol) } } } : {}),
+        },
+      };
+    });
+
+    // Setor (col 1) — cor do setor
+    const cS = row.getCell(1);
+    cS.style = { ...cS.style,
+      font: { name:'Arial', size:10, bold:true, color:{ argb:argb(corS.text) } },
+      fill: { type:'pattern', pattern:'solid', fgColor:{ argb:argb(corS.bg) } },
+    };
+
+    // Nome (col 2) — cor e peso do risco
+    const cN = row.getCell(2);
+    cN.style = { ...cN.style,
+      font: { name:'Arial', size:10, bold:risco.nomeBold, color:{ argb:argb(risco.nomeCor) } },
+      fill: { type:'pattern', pattern:'solid', fgColor:{ argb:argb(zebra) } },
+    };
+
+    // Saldo (col 8) — cor por valor
+    const cSaldo = row.getCell(8);
+    cSaldo.style = { ...cSaldo.style,
+      font: { name:'Arial', size:10, bold:true, color:{ argb:argb(saldoHex) } },
+    };
+
+    // Situação (col 9) — cor do status
+    const cSit = row.getCell(9);
+    cSit.style = { ...cSit.style,
+      font: { name:'Arial', size:10, bold:true, color:{ argb:argb(sitHex) } },
+    };
+  });
+
+  // ── Download ─────────────────────────────────────────────────────────────────
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Ferias_Equipe_${dataLabel.replace(/\s/g,'_')}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function renderGestorRelatorio() {
