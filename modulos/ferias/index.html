@@ -10369,17 +10369,14 @@ function gestorAbrirModal(colabId, periodoId, slotRemarcar, lancRecusado) {
 }
 
 // ─── Modal de alteração de data (Gestor) ────────────────────────────────────
-let _gestorAltCtx = null; // { colabId, periodoId, lancIdx, inicio, fim, dias }
+let _gestorAltCtx = null; // { colabId, periodoId, lancId, slot, inicio, fim, dias }
 
-function gestorAbrirModalAlt(colabId, periodoId, lancIdx) {
-  const lancamento = GESTOR_LANCAMENTOS.find(l =>
-    String(l.colaborador_id) === String(colabId) &&
-    String(l.periodo_id) === String(periodoId) &&
-    (lancIdx === 1 ? l.id.endsWith('-p2') : !l.id.endsWith('-p2'))
-  );
-  if (!lancamento) { toast('Lançamento não encontrado.'); return; }
-  const c = GESTOR_COLABS.find(c => String(c.id) === String(colabId));
-  _gestorAltCtx = { colabId, periodoId, lancIdx, inicio: lancamento.inicio, fim: lancamento.fim, dias: lancamento.dias };
+function gestorAbrirModalAlt(colabId, periodoId, lancId) {
+  const lancamento = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
+  if (!lancamento) { toast('Lançamento não encontrado (id: ' + lancId + ')'); return; }
+  const slot = lancId.endsWith('-p2') ? 'p2' : 'p1';
+  const c = (GESTOR_COLABS || []).find(c => String(c.id) === String(colabId));
+  _gestorAltCtx = { colabId, periodoId, lancId, slot, inicio: lancamento.inicio, fim: lancamento.fim, dias: lancamento.dias };
   document.getElementById('mgAltNome').textContent = c ? `${c.nome} · ${c.cargo || '—'}` : '';
   document.getElementById('mgAltAtual').value      = formatDate(lancamento.inicio);
   document.getElementById('mgAltNovoInicio').value = '';
@@ -10426,7 +10423,7 @@ async function gestorEnviarAlteracao() {
     return;
   }
   const novoFim = addDays(novoInicio, _gestorAltCtx.dias - 1);
-  const slot    = _gestorAltCtx.lancIdx === 1 ? 'p2' : 'p1';
+  const slot    = _gestorAltCtx.slot;
   const meta = {
     tipo: 'alteracao',
     slot,
@@ -10965,7 +10962,7 @@ function _renderGsolHistoricoRH(c) {
       if (isAprovadoLanc && isFuturoLanc) {
         btnAltData = _altMetaGsol
           ? `<button disabled title="Alteração já solicitada — aguardando RH" style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D0D5DD;background:transparent;color:#98A2B3;cursor:not-allowed;font-weight:600;font-family:inherit;">Alterar data</button>`
-          : `<button style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #1570EF;background:transparent;color:#1570EF;cursor:pointer;font-weight:600;font-family:inherit;" onclick="gestorAbrirModalAlt('${c.id}','${per.id}',${lancIdx})">Alterar data</button>`;
+          : `<button style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #1570EF;background:transparent;color:#1570EF;cursor:pointer;font-weight:600;font-family:inherit;" onclick="gestorAbrirModalAlt('${c.id}','${per.id}','${l.id}')">Alterar data</button>`;
       }
 
       return `<div class="gsol-rh-item">
