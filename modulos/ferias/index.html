@@ -8899,6 +8899,7 @@ function renderAnalyticsGestor() {
   _gdashMapaMostrarTodos = false;
   _gdashMapaMesSel       = null;
   _gdashMapaCargo        = '';
+  _gdashMapaAno          = new Date().getFullYear();
   _gdashSemProgAbertos   = new Set(['critico','atencao']);
 
   const CARD = inner => `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:12px;">${inner}</div>`;
@@ -9088,6 +9089,16 @@ function _renderGdashProximos() {
 
 let _gdashMapaMesSel = null;
 let _gdashMapaCargo  = '';
+let _gdashMapaAno    = new Date().getFullYear();
+
+function _gdashMapaAnoNav(delta) {
+  const anoAtual = new Date().getFullYear();
+  const novo = _gdashMapaAno + delta;
+  if (novo > anoAtual) return;
+  _gdashMapaAno    = novo;
+  _gdashMapaMesSel = null;
+  _renderGdashMapa();
+}
 
 function _gdashMapaToggle() {
   _gdashMapaMostrarTodos = !_gdashMapaMostrarTodos;
@@ -9108,22 +9119,30 @@ function _renderGdashMapa() {
   const wrap = document.getElementById('gdashMapaWrap');
   if (!wrap) return;
 
-  const ano      = new Date().getFullYear();
-  const mesAtual = new Date().getMonth();
-  const excluir  = new Set(['recusado','cancelado','descartado']);
+  const anoAtual = new Date().getFullYear();
+  const ano      = _gdashMapaAno;
+  const mesAtual = (ano === anoAtual) ? new Date().getMonth() : -1;
+  const incluir  = new Set(['aprovado','gozado']);
   const MESES      = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const diasMes    = MESES.map((_, mi) => new Date(ano, mi + 1, 0).getDate());
   const SEL        = _gdashMapaMesSel;
 
-  // Coleta colaboradores com e sem período
+  // Coleta colaboradores com e sem período (só aprovado + gozado, sem duplicatas)
   const comPeriodo = [], semPeriodo = [];
   GESTOR_COLABS.forEach(colab => {
-    const lans = GESTOR_LANCAMENTOS.filter(l =>
+    const raw = GESTOR_LANCAMENTOS.filter(l =>
       String(l.colaborador_id) === String(colab.id) &&
-      !excluir.has((l.status||'').toLowerCase()) && !l._isRealizacao &&
+      incluir.has((l.status||'').toLowerCase()) && !l._isRealizacao &&
       (l.inicio.startsWith(String(ano)) || l.fim.startsWith(String(ano)))
     );
+    // Deduplicação por (inicio, fim): mantém primeiro encontrado
+    const seen = new Set();
+    const lans = raw.filter(l => {
+      const k = `${l.inicio}|${l.fim}`;
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    });
     if (lans.length) comPeriodo.push({ colab, lans });
     else semPeriodo.push(colab);
   });
@@ -9158,11 +9177,16 @@ function _renderGdashMapa() {
 
     const colabsAdaptados = GESTOR_COLABS
       .map(colab => {
-        const lansDoMes = GESTOR_LANCAMENTOS.filter(l =>
+        const rawDoMes = GESTOR_LANCAMENTOS.filter(l =>
           String(l.colaborador_id) === String(colab.id) &&
-          !excluir.has((l.status||'').toLowerCase()) && !l._isRealizacao &&
+          incluir.has((l.status||'').toLowerCase()) && !l._isRealizacao &&
           l.inicio <= mesFim && l.fim >= mesInicio
         );
+        // Deduplicação por (inicio, fim)
+        const seenM = new Set();
+        const lansDoMes = rawDoMes.filter(l => {
+          const k = `${l.inicio}|${l.fim}`; if (seenM.has(k)) return false; seenM.add(k); return true;
+        });
         if (!lansDoMes.length) return null;
         if (_gdashMapaCargo && colab.cargo !== _gdashMapaCargo) return null;
         return {
@@ -9185,7 +9209,7 @@ function _renderGdashMapa() {
         <div style="display:flex;flex-direction:column;gap:4px">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <button onclick="_gdashMapaFiltrarMes(${SEL})" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-sec);font-size:10px;cursor:pointer;font-family:inherit;">← Ver ano todo</button>
-            <span style="font-size:12px;font-weight:600;color:var(--text)">${MESES_FULL[SEL]} ${ano}</span>
+            <span style="font-size:12px;font-weight:600;color:var(--text)">${MESES_FULL[SEL]} de ${ano}</span>
           </div>
           <div style="font-size:10px;color:var(--text-ter)">${colabsAdaptados.length} colaborador${colabsAdaptados.length!==1?'es':''} com férias em ${MESES_FULL[SEL]}</div>
         </div>
@@ -9224,7 +9248,7 @@ function _renderGdashMapa() {
     ? comPeriodo.filter(({ colab }) => colab.cargo === _gdashMapaCargo)
     : comPeriodo;
 
-  const CORES = { aprovado: '#185FA5', solicitado: '#B5D4F4', gozado: '#D3D1C7', default: '#185FA5' };
+  const COR_MAPA = '#185FA5';
   const GAP = '2px', ROW_H = '16px';
 
   // Cabeçalhos dos meses — clicáveis
@@ -9244,7 +9268,7 @@ function _renderGdashMapa() {
     if (isSemProg) {
       border = at ? `border:0.5px solid var(--border)` : `border:0.5px dashed var(--border)`;
     } else if (lan) {
-      bg = CORES[(lan.status||'').toLowerCase()] || CORES.default;
+      bg = COR_MAPA;
     } else if (at) {
       bg = 'var(--bg)'; border = `border:0.5px solid var(--border)`;
     }
@@ -9283,26 +9307,25 @@ function _renderGdashMapa() {
       <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:${GAP}">${renderCells(null, true)}</div>
     </div>`;
 
-  const legenda = [
-    { cor: CORES.aprovado,   label: 'Aprovado' },
-    { cor: CORES.solicitado, label: 'Solicitado' },
-    { cor: CORES.gozado,     label: 'Gozado' },
-  ].map(({ cor, label }) =>
-    `<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text-sec)">
-      <div style="width:10px;height:7px;border-radius:2px;background:${cor}"></div>${label}
-    </div>`
-  ).join('');
+  const anoNavBtn = (delta, lbl, dis) =>
+    `<button onclick="${dis?'':'_gdashMapaAnoNav('+delta+')'}" ${dis?'disabled':''} style="padding:4px 10px;border:none;background:none;cursor:${dis?'not-allowed':'pointer'};color:${dis?'var(--border-strong)':'var(--text-sec)'};font-family:inherit;border-radius:6px;font-size:14px;line-height:1">${lbl}</button>`;
 
   const toggleLabel = _gdashMapaMostrarTodos ? '▴ ocultar sem programação' : `▾ ${semPeriodo.length} sem programação`;
 
   wrap.innerHTML = `
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
       <div>
-        <div style="font-size:12px;font-weight:600;color:var(--text)">Mapa anual — ${ano}</div>
-        <div style="font-size:10px;color:var(--text-ter);margin-top:2px">${comPeriodo.length} com período programado · clique em um mês para detalhar</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;font-weight:600;color:var(--text)">Mapa anual</span>
+          <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+            ${anoNavBtn(-1,'‹',false)}
+            <span style="font-size:11px;font-weight:600;color:var(--text);padding:0 8px;white-space:nowrap">${ano}</span>
+            ${anoNavBtn(1,'›', ano >= anoAtual)}
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text-ter);margin-top:4px">${comPeriodo.length} com período programado · clique em um mês para detalhar</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
-        ${legenda}
         ${cargoChipMapa}
       </div>
     </div>
