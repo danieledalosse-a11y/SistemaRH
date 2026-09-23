@@ -633,29 +633,95 @@ O `unshift` garante atualização otimista de `FERIAS_HISTORICO` mesmo que o POS
 
 `perfil` = `JSON.parse(localStorage.getItem('sb_perfil') || '{}')`.
 
-### Atividade Recente — arquitetura atual (baseada em `FERIAS_HISTORICO`)
+### Atividade Recente + Histórico — arquitetura atual (baseada em `FERIAS_HISTORICO`)
 
-`renderGestorAtividade()` e `renderRhAtividade()` leem **diretamente de `FERIAS_HISTORICO`** — já ordenado por `criado_em DESC` conforme vem do Supabase.
+Duas abas dentro da seção de atividade: **Atividade Recente** e **Histórico**. Sem localStorage, sem arquivamento manual.
 
-**Filtros:**
-- 90 dias: `h.criado_em >= _cutoff90str` (ISO string comparável diretamente)
-- Arquivados: `!_dismissedG.has(String(h.id))` — dismiss key é o `h.id` numérico como string
+#### Classificação
 
-**Dismiss key:** `String(h.id)` — simples e único. Salvo em localStorage por tipo: `ferias_ativ_dismissed_g` (Gestor) e `ferias_ativ_dismissed_r` (RH).
+A função `_gestorProcessoInfo(h)` recebe o evento mais recente de um processo (`ferias_id`) e retorna `{ estado, cls, ativo, inicio, fim, dias }`.
 
-**Helpers de dismiss/restore:**
-- `_ativDismissed(tipo)` → `Set` dos ids arquivados
-- `_ativDismiss(tipo, key)` → arquiva um item + re-render
-- `_ativDismissAll(tipo, keys)` → arquiva todos visíveis
-- `_ativRestore(tipo, key)` → restaura item arquivado
-- `_gestorAtivMostrarArq` / `_rhAtivMostrarArq` → bool que controla seção de arquivados
+**Regra obrigatória:** `ativo: true` APENAS para os três estados "aguardando decisão do RH":
+
+```js
+// Atividade Recente (ativo: true):
+'solicitado'              → estado: 'Aguardando RH',              cls: 'neutro'
+'alteracao_solicitada'    → estado: 'Alteração aguardando RH',    cls: 'cancel-sol'
+'cancelamento_solicitado' → estado: 'Cancelamento aguardando RH', cls: 'cancel-sol'
+
+// Histórico (ativo: false) — todos os desfechos:
+'aprovado' / 'alteracao_aprovada'  → 'Aprovadas',     cls: 'aprov'
+'rejeitado'                        → 'Recusadas',     cls: 'recus'
+'alteracao_recusada'               → 'Alt. recusada', cls: 'recus'
+'cancelamento_aprovado'            → 'Canceladas',    cls: 'cancel-aprov'
+'cancelamento_recusado'            → 'Canc. recusado',cls: 'aprov'
+```
+
+**Nunca** verificar data (`passou`) ou retomada (`temNovo`, `paVenc`) para decidir `ativo`. A classificação é puramente pelo tipo de ação do último evento.
+
+#### `_gestorAgruparProcessos(idsPermitidos)`
+
+Agrupa `FERIAS_HISTORICO` por `ferias_id`, mantendo apenas o evento mais recente (maior `criado_em`) por processo. Retorna array de eventos — um por processo.
+
+#### `renderGestorAtividade()` — Gestor
+
+- **Atividade Recente:** processos com `ativo: true` (aguardando RH)
+- **Histórico:** processos com `ativo: false` (desfecho concluído)
+- Datas exibidas: `inicio`/`fim`/`dias` do objeto `info` (vindos de `GESTOR_LANCAMENTOS` via `lanc?.inicio` com fallback para `h.detalhe`)
+
+#### `renderRhAtividade()` — RH
+
+Usa `_rhEhRecente(h)` para classificar eventos individuais (não processos agrupados):
+- **Atividade Recente:** evento sem resposta para o mesmo `ferias_id`
+- **Histórico:** evento que já teve resposta
+
+```js
+function _rhEhRecente(h) {
+  const respostas = {
+    solicitado:              ['aprovado', 'rejeitado'],
+    cancelamento_solicitado: ['cancelamento_aprovado', 'cancelamento_recusado'],
+    alteracao_solicitada:    ['alteracao_aprovada', 'alteracao_recusada'],
+  };
+  if (!respostas[h.acao]) return false;
+  return !respostas[h.acao].some(r =>
+    FERIAS_HISTORICO.some(x => x.ferias_id === h.ferias_id && x.acao === r)
+  );
+}
+```
 
 **O que cada item exibe:**
 - Nome e cargo do colaborador
 - Período de férias (`detalhe.inicio → detalhe.fim · dias`)
 - Data/hora exata + nome do usuário (`fmtDH(h.criado_em) · h.usuario`)
-- Chip de status (Solicitado / Aprovado / Recusado)
-- Botão × para arquivar
+- Chip de estado (`info.estado`)
+
+### Card "Pendentes" — inclui `cancelamento_solicitado`
+
+```js
+const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
+  const st = (l.status||'').toLowerCase();
+  if (st === 'solicitado')             return true;
+  if (st === 'pendente_gestor')        return true;
+  if (st === 'cancelamento_solicitado') return true;  // ← obrigatório
+  return st === 'recusado' && l.fim >= hoje;
+});
+```
+
+**Solicitações com `solicitado`/`cancelamento_solicitado`** não têm filtro de data — devem aparecer mesmo com datas no passado.
+
+### Modal de confirmação genérico (`abrirModalConfirm`)
+
+Substituiu `window.confirm()` (bloqueado pelo GitHub Pages).
+
+```js
+abrirModalConfirm({ titulo, texto, labelOk, corOk, cb })
+```
+
+- HTML: `#modalConfirm` com `z-index: 1300`, movido para `document.body` via `setTimeout(0)` para escapar stacking context
+- `_modalConfirmCb` — callback chamado ao confirmar
+- Funções: `_modalConfirmFechar()`, `_modalConfirmExecutar()`
+
+**Regra:** usar `abrirModalConfirm` em toda ação destrutiva irreversível que precisar de confirmação do usuário.
 
 ### Drawer RH — abas "Períodos" e "Histórico"
 
@@ -1968,9 +2034,258 @@ Esse framework deve guiar qualquer decisão de hierarquia visual futura na Diret
 
 ---
 
+## Visão Gestor — "Alterar data" e "Solicitar cancelamento" (2026-09-23)
+
+### Z-index: stacking context do drawer Gestor
+
+O drawer do Gestor usa uma hierarquia própria, **diferente** do `.drawer` da visão RH:
+
+| Elemento | z-index |
+|---|---|
+| `.gsol-overlay` | 1100 |
+| `.gsol-drawer` | 1101 (relativo ao overlay) |
+| modais do Gestor (ex: `#modalGestorAlt`) | **1200** + `document.body.appendChild()` |
+
+**Regra obrigatória:** qualquer modal aberto sobre o gsolDrawer precisa de:
+1. `z-index: 1200` no elemento `.modal-overlay`
+2. `document.body.appendChild(modal)` para mover o modal para o nível do `<body>`, escapando do contexto de empilhamento do overlay
+
+Sem o `appendChild`, o z-index mais alto não adianta — o modal fica preso dentro do stacking context de `1100`.
+
+### `gestorAbrirModalAlt` — parâmetro refatorado
+
+```js
+// Assinatura ATUAL (corrigida):
+gestorAbrirModalAlt(colabId, periodoId, lancId)  // lancId = string, ex: "123-p1" ou "456-p2"
+
+// Assinatura ANTIGA (não usar):
+gestorAbrirModalAlt(colabId, periodoId, lancIdx)  // lancIdx = número 0 ou 1
+```
+
+O botão em `_renderGsolHistoricoRH` deve passar `l.id` (string), não o índice numérico:
+```js
+onclick="gestorAbrirModalAlt('${c.id}','${per.id}','${l.id}')"
+```
+
+### Contexto `_gestorAltCtx` — shape correto
+
+```js
+_gestorAltCtx = {
+  colabId,
+  periodoId,
+  lancId,    // string "123-p1" ou "456-p2"
+  slot,      // 'p1' ou 'p2' — derivado de lancId.endsWith('-p2')
+  inicio,    // data atual do lançamento
+  fim,
+  dias,
+}
+```
+
+**Regra:** `_gestorAltCtx.slot` (não `lancIdx`) é o que `gestorEnviarAlteracao` deve usar para montar o payload.
+
+### Modal "Solicitar alteração de data" — melhorias de UI
+
+O modal `#modalGestorAlt` exibe o **período completo atual** antes do formulário:
+
+```html
+<!-- Bloco "Período atual" — exibido acima dos campos -->
+<div id="mgAltPeriodoAtual" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;">
+  <div style="font-size:10px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Período atual</div>
+  <div style="font-size:14px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;" id="mgAltPeriodoTexto">—</div>
+  <div style="font-size:12px;color:var(--text-sec);margin-top:3px;" id="mgAltDiasTexto">—</div>
+</div>
+```
+
+- `mgAltPeriodoTexto` exibe `"DD/MM/AAAA → DD/MM/AAAA"` (formatDate de inicio e fim)
+- `mgAltDiasTexto` exibe `"X dias"` da duração original
+- `mgAltDuracaoNota` (abaixo do campo "Novo término") exibe `"A duração de X dias é mantida."`
+- O campo "Novo término" é readonly, calculado automaticamente por `gestorAltCalcFim()`
+
+### Fluxo "Solicitar cancelamento" — implementação completa
+
+#### Regra de negócio
+
+O Gestor solicita cancelamento de um lançamento específico (p1 ou p2). O RH aprova ou rejeita. Enquanto pendente, os botões ficam desabilitados e um banner de status é exibido.
+
+#### `gestorConfirmarCancelamento(colabId, periodoId, lancId)`
+
+Nova função — usa `confirm()` nativo (sem modal dedicado — mesma abordagem que "Alterar data" antes da refatoração):
+
+```js
+async function gestorConfirmarCancelamento(colabId, periodoId, lancId) {
+  const lancamento = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
+  if (!lancamento) { toast('Lançamento não encontrado.'); return; }
+  const slot = lancId.endsWith('-p2') ? 'p2' : 'p1';
+  // confirm() exibe datas e aviso de que as férias continuam até o RH decidir
+  const meta = {
+    tipo: 'cancelamento', slot,
+    inicio: lancamento.inicio, fim: lancamento.fim, dias: lancamento.dias,
+    solicitante: GESTOR_NOME_USUARIO || '—',
+    data_solicitacao: new Date().toISOString(),
+  };
+  await sbPatch('ferias', `id=eq.${periodoId}`, { status: 'Cancelamento_Solicitado', obs_gestor: JSON.stringify(meta) });
+  // atualizar COLABORADORES, GESTOR_PERIODOS localmente
+  // _logAtiv 'cancelamento_solicitado'
+}
+```
+
+#### Status e payload no Supabase
+
+```js
+// PATCH em ferias:
+{ status: 'Cancelamento_Solicitado', obs_gestor: JSON.stringify({
+  tipo: 'cancelamento',
+  slot: 'p1' | 'p2',
+  inicio: 'YYYY-MM-DD',
+  fim: 'YYYY-MM-DD',
+  dias: N,
+  solicitante: 'Nome do Gestor',
+  data_solicitacao: 'ISO string',
+}) }
+```
+
+#### `supabaseParaModelo` — parsing de `_cancelamentoMeta`
+
+```js
+let _cancelamentoMeta = null;
+if (f.status === 'Cancelamento_Solicitado' && f.obs_gestor) {
+  try {
+    const _p = JSON.parse(f.obs_gestor);
+    if (_p?.tipo === 'cancelamento') _cancelamentoMeta = _p;
+  } catch(_) {}
+}
+// Incluído no objeto registro:
+_cancelamentoMeta,
+```
+
+#### `getPendentes()` — ramo Cancelamento_Solicitado
+
+```js
+if (reg.status === 'Cancelamento_Solicitado') {
+  if (!reg._cancelamentoMeta) return;
+  const meta = reg._cancelamentoMeta;
+  result.push({ colab, reg, ri,
+    lancamento: { inicio: meta.inicio, fim: meta.fim, dias: meta.dias },
+    _tipo: 'cancelamento', _cancelMeta: meta });
+  return;
+}
+```
+
+#### `abrirModalAprovar` — ramo cancelamento
+
+```js
+} else if (_tipo === 'cancelamento') {
+  const _cancelMeta = pendItem._cancelMeta;
+  document.getElementById('aprovarTitle').textContent = 'Analisar cancelamento de férias';
+  // aprovarInfo: aviso amarelo + período + solicitante + data
+  document.getElementById('btnAprovar').textContent = '✓ Aprovar cancelamento';
+}
+```
+
+#### `aprovarPendente` — lógica com slot parcial (regra crítica)
+
+```js
+if (_tipo === 'cancelamento') {
+  const slotIdx     = _cancelMeta.slot === 'p2' ? 1 : 0;
+  const outroIdx    = slotIdx === 0 ? 1 : 0;
+  // PA permanece Aprovado se o outro slot ainda for válido
+  const outroSlotValido = reg.lancamentos.length > 1 && (reg.lancamentos[outroIdx]?.dias || 0) > 0;
+  const novoStatus  = outroSlotValido ? 'Aprovado' : 'Cancelado';
+  const patch = _cancelMeta.slot === 'p1'
+    ? { status: novoStatus, obs_gestor: null, periodo1_inicio: null, periodo1_fim: null, dias1: 0 }
+    : { status: novoStatus, obs_gestor: null, periodo2_inicio: null, periodo2_fim: null, dias2: 0 };
+  await sbPatch('ferias', `id=eq.${reg._sbId}`, patch);
+  reg.lancamentos.splice(slotIdx, 1);
+  reg.status = novoStatus;
+  // _logAtiv 'cancelamento_aprovado'
+}
+```
+
+**Regra:** o PA só recebe status `'Cancelado'` quando **não restar nenhum slot válido**. Se houver p1 e p2, e apenas p1 for cancelado, o PA continua `'Aprovado'` com apenas p2.
+
+#### `rejeitarPendente` — ramo cancelamento
+
+```js
+if (_tipo === 'cancelamento') {
+  await sbPatch('ferias', `id=eq.${reg._sbId}`, { status: 'Aprovado', obs_gestor: null });
+  reg._cancelamentoMeta = null;
+  reg.status = 'Aprovado';
+  // _logAtiv 'cancelamento_recusado'
+}
+```
+
+### Banners e botões em `_renderGsolHistoricoRH` (2026-09-23)
+
+#### Filtro de saldo (excluir lançamentos cancelados)
+
+```js
+const lancamentos = GESTOR_LANCAMENTOS.filter(l =>
+  String(l.colaborador_id) === String(c.id) &&
+  String(l.periodo_id) === String(per.id) &&
+  l.status !== 'gozado' &&
+  l.status !== 'pendente_gestor' &&
+  (l.status || '').toLowerCase() !== 'cancelado'  // ← obrigatório: cancelados não entram no saldo
+);
+```
+
+#### Lógica de banners e botões por lançamento
+
+```js
+// Meta do status pendente (alteration or cancellation)
+let _altMetaGsol    = null;
+let _cancelMetaGsol = null;
+if (row.obs_gestor && (row.status === 'Alteracao_Solicitada' || row.status === 'Cancelamento_Solicitado')) {
+  try {
+    const _p = JSON.parse(row.obs_gestor);
+    if (_p?.tipo === 'alteracao')    _altMetaGsol    = _p;
+    if (_p?.tipo === 'cancelamento') _cancelMetaGsol = _p;
+  } catch(_) {}
+}
+
+// Por lançamento (onde lancIdx = posição base 1):
+const thisSlot = lancIdx === 1 ? 'p2' : 'p1';
+const temAltPendente    = _altMetaGsol    && _altMetaGsol.slot    === thisSlot;
+const temCancelPendente = _cancelMetaGsol && _cancelMetaGsol.slot === thisSlot;
+const temQualquerPendente = temAltPendente || temCancelPendente;
+
+// Banners visíveis mesmo com pendência:
+const bannerAlt    = temAltPendente    ? '<div style="...amarelo...">Alteração de data aguardando aprovação do RH...</div>' : '';
+const bannerCancel = temCancelPendente ? '<div style="...vermelho...">Cancelamento aguardando aprovação do RH...</div>' : '';
+
+// Botões: desabilitados (não ocultos) quando há pendência
+if (isAprovadoLanc && isFuturoLanc) {
+  const btnAlt = temQualquerPendente
+    ? `<button disabled ...>Alterar data</button>`
+    : `<button onclick="gestorAbrirModalAlt('${c.id}','${per.id}','${l.id}')">Alterar data</button>`;
+  const btnCancel = temQualquerPendente
+    ? `<button disabled ...>Solicitar cancelamento</button>`
+    : `<button onclick="gestorConfirmarCancelamento('${c.id}','${per.id}','${l.id}')">Solicitar cancelamento</button>`;
+  botoesAcao = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">${btnAlt}${btnCancel}</div>`;
+}
+```
+
+**Regra:** botões desabilitados (não ocultos) para dar feedback visual do estado — o Gestor sabe que há algo pendente sem precisar interpretar ausência de botões.
+
+### `acaoLabel` e `acaoCor` — entradas de cancelamento
+
+```js
+// acaoLabel (duas ocorrências no arquivo — replace_all):
+cancelamento_solicitado: 'Cancelamento solicitado',
+cancelamento_aprovado:   'Cancelamento aprovado',
+cancelamento_recusado:   'Cancelamento recusado',
+
+// acaoCor:
+cancelamento_solicitado: '#B45309',  // âmbar
+cancelamento_aprovado:   '#D92D20',  // vermelho
+cancelamento_recusado:   '#067647',  // verde
+```
+
+---
+
 ## Pendências conhecidas
 
 - Módulo WhatsApp (link wa.me por colaborador) — dados já no Supabase, falta UI
 - Aprovação em lote
 - Eliminar aba "Solicitações" permanentemente (aguardando testes do novo fluxo unificado)
 - Visão Diretoria — validar banda base (47 ativos / 31 com PA / 16 sem PA) como elemento de design permanente ou remover
+- Testar fluxo completo de cancelamento (gestor solicita → RH aprova/rejeita) — em aberto desde 2026-09-23
