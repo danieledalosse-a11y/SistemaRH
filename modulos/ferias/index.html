@@ -9616,18 +9616,20 @@ function gestorExportarPDF() {
     return { rowBg:'#fff', border:'transparent', nomeCor:'#1a1a2e', nomePeso:'500' };
   };
 
-  // Agrupa por setor com separador colorido
+  const setoresUnicos = [...new Set(linhas.map(l => l.setor))];
+  const umSetor = setoresUnicos.length === 1;
+  const tituloSetor = umSetor ? ` · ${setoresUnicos[0] || 'SEM SETOR'}` : '';
+
+  // Linhas da tabela PDF — separador de setor só quando há mais de 1 setor
   let trs = '';
   let setorAtual = null;
   linhas.forEach(l => {
-    if (l.setor !== setorAtual) {
+    if (!umSetor && l.setor !== setorAtual) {
       setorAtual = l.setor;
-      const cor = _corSetor(l.setor);
-      trs += `<tr><td colspan="8" style="background:${cor.bg};color:${cor.text};font-size:11px;font-weight:700;letter-spacing:.05em;padding:5px 10px;border-bottom:1px solid rgba(0,0,0,0.1);">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
+      trs += `<tr><td colspan="8" style="background:#f8fafc;color:#64748b;font-size:10px;font-weight:700;letter-spacing:.08em;padding:4px 10px;border-bottom:1px solid #e2e8f0;border-top:1px solid #e2e8f0;">${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
     }
     const risco = _riscoPDF(l.sitKey);
-    const trStyle = `background:${risco.rowBg};border-left:3px solid ${risco.border};`;
-    trs += `<tr style="${trStyle}">
+    trs += `<tr style="background:${risco.rowBg};border-left:3px solid ${risco.border};">
       <td style="padding:5px 10px;color:${risco.nomeCor};font-weight:${risco.nomePeso};">${l.nome}</td>
       <td style="padding:5px 10px;">${l.cargo}</td>
       <td style="text-align:center;font-weight:700;padding:5px 10px;">${l.paAno}</td>
@@ -9639,13 +9641,6 @@ function gestorExportarPDF() {
     </tr>`;
   });
 
-  const setoresUnicos = [...new Map(linhas.map(l => [l.setor, _corSetor(l.setor)])).entries()];
-  const legendaSetores = setoresUnicos.map(([s, c]) =>
-    `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:16px;">
-      <span style="width:10px;height:10px;border-radius:50%;background:${c.bg};border:1px solid rgba(0,0,0,0.15);display:inline-block;"></span>
-      <span>${s}</span>
-    </span>`
-  ).join('');
   const legendaRisco =
     `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;">
       <span style="width:10px;height:10px;border-radius:2px;background:#FFF5F5;border:1.5px solid #EF4444;display:inline-block;"></span>
@@ -9692,7 +9687,7 @@ function gestorExportarPDF() {
   <div class="rel-header">
     <div class="rel-icon">📋</div>
     <div>
-      <div class="rel-mes">Férias da Equipe</div>
+      <div class="rel-mes">FÉRIAS DA EQUIPE${tituloSetor}</div>
       <div class="rel-sub">${linhas.length} colaborador(es) · Gerado em ${gerado}</div>
     </div>
   </div>
@@ -9712,7 +9707,6 @@ function gestorExportarPDF() {
   </table>
   <div class="rel-footer">
     <div class="rel-footer-risco">${legendaRisco}</div>
-    <div style="white-space:nowrap;">${legendaSetores}</div>
   </div>
   </body></html>`;
 
@@ -9835,21 +9829,18 @@ function gestorExportarExcel() {
     return { rowBg:'#fff', nomeCor:'#1a1a2e', nomePeso:'500' };
   };
 
+  // Excel: sem separadores, coluna Setor adicionada entre Cargo e Ano PA
   let trs = '';
-  let setorAtual = null;
   linhas.forEach(l => {
-    if (l.setor !== setorAtual) {
-      setorAtual = l.setor;
-      const cor = _corSetor(l.setor);
-      trs += `<tr><td colspan="8" style="background:${cor.bg};color:${cor.text};font-family:Arial,sans-serif;font-size:10pt;font-weight:700;letter-spacing:.05em;padding:5px 10px;border:1px solid #cbd5e1;">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
-    }
     const risco = _riscoXls(l.sitKey);
     const sit   = _sitXls(l.sitKey);
+    const corS  = _corSetor(l.setor);
     const TDR   = TD + `background:${risco.rowBg};`;
     const TDRC  = TDC + `background:${risco.rowBg};`;
     trs += `<tr>
       <td style="${TDR}color:${risco.nomeCor};font-weight:${risco.nomePeso};">${l.nome}</td>
       <td style="${TDR}">${l.cargo}</td>
+      <td style="${TDR}background:${corS.bg};color:${corS.text};font-weight:700;">${l.setor||'—'}</td>
       <td style="${TDRC}font-weight:700;">${l.paAno}</td>
       <td style="${TDR}font-size:9pt;">${l.paStr}</td>
       <td style="${TDRC}">${l.agendIni}</td>
@@ -9858,11 +9849,6 @@ function gestorExportarExcel() {
       <td style="${TDR}color:${sit.text};font-weight:700;">${l.situacao}</td>
     </tr>`;
   });
-
-  const setoresUnicos = [...new Map(linhas.map(l => [l.setor, _corSetor(l.setor)])).entries()];
-  const legendaRows = setoresUnicos.map(([s, c]) =>
-    `<td style="${TD}background:${c.bg};color:${c.text};font-weight:700;">${s}</td>`
-  ).join('');
 
   const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
   <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
@@ -9875,15 +9861,13 @@ function gestorExportarExcel() {
     <x:TopRowBottomPane>3</x:TopRowBottomPane>
     <x:ActivePane>2</x:ActivePane>
   </x:WorksheetOptions>
-  <x:AutoFilter x:Range="A3:H3"/>
+  <x:AutoFilter x:Range="A3:I3"/>
   </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
   <body><table border="1" cellpadding="0" cellspacing="0">
-    <tr><td colspan="8" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe</td></tr>
-    <tr><td colspan="8" style="font-family:Arial,sans-serif;font-size:9pt;color:#64748b;padding:4px 10px;border:1px solid #cbd5e1;">${linhas.length} colaborador(es) · Gerado em ${gerado}</td></tr>
-    <tr><td style="${TH}">Nome</td><td style="${TH}">Cargo</td><td style="${THC}">Ano PA</td><td style="${TH}">Período Aquisitivo</td><td style="${THC}">Férias Início</td><td style="${THC}">Férias Fim</td><td style="${THC}">Saldo</td><td style="${TH}">Situação</td></tr>
+    <tr><td colspan="9" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe</td></tr>
+    <tr><td colspan="9" style="font-family:Arial,sans-serif;font-size:9pt;color:#64748b;padding:4px 10px;border:1px solid #cbd5e1;">${linhas.length} colaborador(es) · Gerado em ${gerado}</td></tr>
+    <tr><td style="${TH}">Nome</td><td style="${TH}">Cargo</td><td style="${TH}">Setor</td><td style="${THC}">Ano PA</td><td style="${TH}">Período Aquisitivo</td><td style="${THC}">Férias Início</td><td style="${THC}">Férias Fim</td><td style="${THC}">Saldo</td><td style="${TH}">Situação</td></tr>
     ${trs}
-    <tr><td colspan="8" style="${TD}"></td></tr>
-    <tr><td colspan="2" style="${TD}font-weight:700;">Legenda de Setores:</td>${legendaRows}</tr>
   </table></body></html>`;
 
   const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8;' });
