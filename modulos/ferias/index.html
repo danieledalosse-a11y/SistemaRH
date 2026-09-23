@@ -5432,12 +5432,14 @@ async function rhAprovarSolicitado(feriasId, idx) {
     const _agora = new Date().toISOString();
     await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Aprovado', atualizado_em: _agora });
     let _aprovColabId = null;
+    let _aprovLanc    = null;
     COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
       if (String(reg._sbId) === String(feriasId)) {
         _aprovColabId = colab._sbColabId;
         reg.status = 'Aprovado';
         reg._atualizadoEm = _agora;
         if (reg._novoLanc) {
+          _aprovLanc = { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias };
           reg.lancamentos.push({ ...reg._novoLanc });
           reg._novoLanc = null;
         }
@@ -5456,7 +5458,7 @@ async function rhAprovarSolicitado(feriasId, idx) {
       if (syncL) window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(syncL.colaborador_id));
     }
     const _perfAprov = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-    if (_aprovColabId) await _logAtiv(feriasId, _aprovColabId, 'aprovado', _perfAprov.nome || 'RH', { status: 'Aprovado' });
+    if (_aprovColabId) await _logAtiv(feriasId, _aprovColabId, 'aprovado', _perfAprov.nome || 'RH', { status: 'Aprovado', ...(_aprovLanc || {}) });
     toast('✓ Férias aprovadas');
     renderPendentes();
     renderListaAnual();
@@ -5481,10 +5483,12 @@ async function rhRecusarSolicitado(feriasId, idx) {
     const _agoraRec = new Date().toISOString();
     await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Rejeitado', obs_gestor: motivo.trim(), atualizado_em: _agoraRec });
     let _recColabId = null;
+    let _recLanc    = null;
     COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
       if (String(reg._sbId) === String(feriasId)) {
         _recColabId = colab._sbColabId;
         reg.status = 'Rejeitado';
+        if (reg._novoLanc) _recLanc = { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias };
         reg._novoLanc = null;
         reg._motivoRejeicao = motivo.trim();
         reg._atualizadoEm = _agoraRec;
@@ -5504,7 +5508,7 @@ async function rhRecusarSolicitado(feriasId, idx) {
       if (syncL) window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(syncL.colaborador_id));
     }
     const _perfRec = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-    if (_recColabId) await _logAtiv(feriasId, _recColabId, 'rejeitado', _perfRec.nome || 'RH', { status: 'Rejeitado', obs_gestor: motivo.trim() });
+    if (_recColabId) await _logAtiv(feriasId, _recColabId, 'rejeitado', _perfRec.nome || 'RH', { status: 'Rejeitado', obs_gestor: motivo.trim(), ...(_recLanc || {}) });
     toast('Solicitação recusada');
     renderPendentes();
     renderListaAnual();
@@ -8382,32 +8386,73 @@ function renderGestorAtividade() {
       ? `<div class="gstor-ativ-list">${recentes.map(_itemRow).join('')}</div>`
       : `<div style="padding:20px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhuma atividade recente.</div>`;
   } else {
-    // Histórico: busca por colaborador + paginação
+    // Histórico: agrupado por colaborador
     const busca = _normGA(document.getElementById('gestorHistBusca')?.value || '');
-    const filtrados = busca
-      ? historico.filter(h => { const c = colabMap.get(String(h.colaborador_id)); return c ? _normGA(c.nome).includes(busca) : false; })
-      : historico;
-    const pagina = filtrados.slice(0, _gestorHistOffset + _HIST_PAGE);
-    const temMais = filtrados.length > pagina.length;
-    conteudo = pagina.length > 0
-      ? `<div style="padding:10px 12px;">
-          <input id="gestorHistBusca" type="text" placeholder="Buscar colaborador…"
-            oninput="renderGestorAtividade()"
-            style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+
+    // Agrupa processos (já por ferias_id) em grupos por colaborador_id
+    const gruposMap = new Map();
+    historico.forEach(h => {
+      const cid = String(h.colaborador_id);
+      if (!gruposMap.has(cid)) gruposMap.set(cid, { colab: colabMap.get(cid), processos: [] });
+      gruposMap.get(cid).processos.push(h);
+    });
+    let gruposArr = [...gruposMap.values()];
+    if (busca) gruposArr = gruposArr.filter(g => g.colab ? _normGA(g.colab.nome).includes(busca) : false);
+    // Já estão em ordem de mais recente pois historico vem de FERIAS_HISTORICO (criado_em desc)
+
+    const _renderCardGestor = g => {
+      const nome  = g.colab ? g.colab.nome : '—';
+      const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
+
+      // Determina se todos os processos têm o mesmo período
+      const pares = g.processos.map(h => { const i = _gestorProcessoInfo(h); return (i.inicio && i.fim) ? `${i.inicio}|${i.fim}` : null; }).filter(Boolean);
+      const unicos = [...new Set(pares)];
+      const periodoUnico = unicos.length === 1;
+      let headerPer = '';
+      if (periodoUnico) {
+        const [ini, fim] = unicos[0].split('|');
+        headerPer = `<div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${fmtD(ini)} → ${fmtD(fim)}</div>`;
+      }
+
+      const eventoRows = g.processos.map(h => {
+        const info = _gestorProcessoInfo(h);
+        let perInline = '';
+        if (!periodoUnico && info.inicio && info.fim) {
+          perInline = `<span style="font-size:11px;color:var(--text-sec);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap;">📅 ${fmtD(info.inicio)} → ${fmtD(info.fim)}</span>`;
+        }
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
+          <div class="gstor-ativ-icon ${info.cls}" style="width:20px;height:20px;min-width:20px;">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>${perInline}
+          </div>
+        </div>`;
+      }).join('');
+
+      return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
+        <div style="padding:10px 12px;">
+          <span class="gstor-ativ-nome">${nome}</span>
+          ${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}
+          ${headerPer}
         </div>
-        <div class="gstor-ativ-list">${pagina.map(_itemRow).join('')}</div>
-        ${temMais ? `<button class="gstor-ativ-vermais" onclick="_gestorHistOffset+=_HIST_PAGE;renderGestorAtividade()">Ver mais ${Math.min(filtrados.length - pagina.length, _HIST_PAGE)} registros</button>` : ''}`
-      : `<div style="padding:10px 12px;">
-          <input id="gestorHistBusca" type="text" placeholder="Buscar colaborador…"
-            oninput="renderGestorAtividade()"
-            style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
-        </div>
-        <div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`;
+        <div style="padding:0 12px 4px;">${eventoRows}</div>
+      </div>`;
+    };
+
+    const pagina = gruposArr.slice(0, _gestorHistOffset + _HIST_PAGE);
+    const temMais = gruposArr.length > pagina.length;
+    conteudo = `<div style="padding:10px 12px 6px;">
+        <input id="gestorHistBusca" type="text" placeholder="Buscar colaborador…"
+          oninput="renderGestorAtividade()"
+          style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+      </div>` +
+      (pagina.length > 0
+        ? `<div style="padding-top:4px;">${pagina.map(_renderCardGestor).join('')}</div>
+           ${temMais ? `<button class="gstor-ativ-vermais" onclick="_gestorHistOffset+=_HIST_PAGE;renderGestorAtividade()">Ver mais ${Math.min(gruposArr.length - pagina.length, _HIST_PAGE)} colaboradores</button>` : ''}`
+        : `<div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`);
   }
 
   el.innerHTML = `<div class="gstor-ativ-wrap">${tabsHtml}${conteudo}</div>`;
 
-  // Restaura foco no campo de busca se estava ativo
   if (!abaRecente) {
     const inp = document.getElementById('gestorHistBusca');
     if (inp && document.activeElement !== inp) { /* não forçar foco */ }
@@ -8477,26 +8522,78 @@ function renderRhAtividade() {
       ? `<div class="gstor-ativ-list">${recentes.map(_itemRow).join('')}</div>`
       : `<div style="padding:20px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhuma atividade recente.</div>`;
   } else {
+    // Histórico: agrupado por colaborador
     const busca = _norm(document.getElementById('rhHistBusca')?.value || '');
-    const filtrados = busca
-      ? historico.filter(h => { const c = colabMap.get(String(h.colaborador_id)); return c ? _norm(c.nome).includes(busca) : false; })
-      : historico;
-    const pagina = filtrados.slice(0, _rhHistOffset + _HIST_PAGE);
-    const temMais = filtrados.length > pagina.length;
-    conteudo = pagina.length > 0
-      ? `<div style="padding:10px 12px;">
-          <input id="rhHistBusca" type="text" placeholder="Buscar colaborador…"
-            oninput="renderRhAtividade()"
-            style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+
+    // Agrupa entradas brutas por colaborador_id
+    const gruposMap = new Map();
+    historico.forEach(h => {
+      const cid = String(h.colaborador_id);
+      if (!gruposMap.has(cid)) gruposMap.set(cid, { colab: colabMap.get(cid), eventos: [] });
+      gruposMap.get(cid).eventos.push(h);
+    });
+    let gruposArr = [...gruposMap.values()];
+    if (busca) gruposArr = gruposArr.filter(g => g.colab ? _norm(g.colab.nome).includes(busca) : false);
+    // Ordem: grupo cujo evento mais recente é o mais novo primeiro
+    gruposArr.sort((a, b) => (b.eventos[0]?.criado_em || '').localeCompare(a.eventos[0]?.criado_em || ''));
+
+    const _renderCardRH = g => {
+      const nome  = g.colab ? g.colab.nome : '—';
+      const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
+
+      // Detecta períodos distintos dentro dos eventos deste colaborador
+      const pares = g.eventos
+        .map(h => { const d = h.detalhe || {}; return (d.inicio && d.fim) ? `${d.inicio}|${d.fim}` : null; })
+        .filter(Boolean);
+      const unicos = [...new Set(pares)];
+      const periodoUnico = unicos.length === 1;
+      let headerPer = '';
+      if (periodoUnico) {
+        const [ini, fim] = unicos[0].split('|');
+        headerPer = `<div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${fmtD(ini)} → ${fmtD(fim)}</div>`;
+      }
+
+      const eventoRows = g.eventos.map(h => {
+        const { cls, chip, svg } = _acaoInfo(h.acao || '');
+        const det = h.detalhe || {};
+        const ts  = h.criado_em ? `${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}` : '';
+        // Período inline apenas quando há múltiplos períodos distintos
+        let perInline = '';
+        if (!periodoUnico && det.inicio && det.fim) {
+          perInline = `<span style="font-size:11px;color:var(--text-sec);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap;">📅 ${fmtD(det.inicio)} → ${fmtD(det.fim)}</span>`;
+        }
+        return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
+          <div class="gstor-ativ-icon ${cls}" style="width:20px;height:20px;min-width:20px;margin-top:1px;">${svg}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span class="gstor-ativ-chip ${cls}">${chip}</span>${perInline}
+            </div>
+            ${ts ? `<div class="gstor-ativ-ts">${ts}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+
+      return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
+        <div style="padding:10px 12px;">
+          <span class="gstor-ativ-nome">${nome}</span>
+          ${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}
+          ${headerPer}
         </div>
-        <div class="gstor-ativ-list">${pagina.map(_itemRow).join('')}</div>
-        ${temMais ? `<button class="gstor-ativ-vermais" onclick="_rhHistOffset+=_HIST_PAGE;renderRhAtividade()">Ver mais ${Math.min(filtrados.length - pagina.length, _HIST_PAGE)} registros</button>` : ''}`
-      : `<div style="padding:10px 12px;">
-          <input id="rhHistBusca" type="text" placeholder="Buscar colaborador…"
-            oninput="renderRhAtividade()"
-            style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
-        </div>
-        <div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`;
+        <div style="padding:0 12px 4px;">${eventoRows}</div>
+      </div>`;
+    };
+
+    const pagina = gruposArr.slice(0, _rhHistOffset + _HIST_PAGE);
+    const temMais = gruposArr.length > pagina.length;
+    conteudo = `<div style="padding:10px 12px 6px;">
+        <input id="rhHistBusca" type="text" placeholder="Buscar colaborador…"
+          oninput="renderRhAtividade()"
+          style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+      </div>` +
+      (pagina.length > 0
+        ? `<div style="padding-top:4px;">${pagina.map(_renderCardRH).join('')}</div>
+           ${temMais ? `<button class="gstor-ativ-vermais" onclick="_rhHistOffset+=_HIST_PAGE;renderRhAtividade()">Ver mais ${Math.min(gruposArr.length - pagina.length, _HIST_PAGE)} colaboradores</button>` : ''}`
+        : `<div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`);
   }
 
   el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">${tabsHtml}${conteudo}</div>`;
