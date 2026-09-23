@@ -9572,7 +9572,8 @@ function gestorExportarPDF() {
       paAno = fimPrev.slice(0,4);
       paStr = `${_fmtData(iniPrev)} → ${_fmtData(fimPrev)} (prev.)`;
     }
-    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
+    const _stValido = s => ['aprovado','agendado'].includes((s||'').toLowerCase());
+    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && _stValido(l.status) && !l._isRealizacao);
     const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
     const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
     const lRef   = ativo || futuro;
@@ -9656,7 +9657,7 @@ function gestorExportarPDF() {
   <div class="rel-header">
     <div class="rel-icon">📋</div>
     <div>
-      <div class="rel-mes">Férias da Equipe — ${dataLabel.charAt(0).toUpperCase()+dataLabel.slice(1)}</div>
+      <div class="rel-mes">Férias da Equipe</div>
       <div class="rel-sub">${linhas.length} colaborador(es) · Gerado em ${gerado}</div>
     </div>
   </div>
@@ -9738,7 +9739,8 @@ function gestorExportarExcel() {
       paAno = fimPrev.slice(0,4);
       paStr = `${_fmtData(iniPrev)} → ${_fmtData(fimPrev)} (prev.)`;
     }
-    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
+    const _stValidoXls = s => ['aprovado','agendado'].includes((s||'').toLowerCase());
+    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && _stValidoXls(l.status) && !l._isRealizacao);
     const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
     const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
     const lRef   = ativo || futuro;
@@ -9820,7 +9822,7 @@ function gestorExportarExcel() {
   <x:AutoFilter x:Range="A3:H3"/>
   </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
   <body><table border="1" cellpadding="0" cellspacing="0">
-    <tr><td colspan="8" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe — ${dataLabel.charAt(0).toUpperCase()+dataLabel.slice(1)}</td></tr>
+    <tr><td colspan="8" style="${TH}font-size:14pt;letter-spacing:0.02em;">Férias da Equipe</td></tr>
     <tr><td colspan="8" style="font-family:Arial,sans-serif;font-size:9pt;color:#64748b;padding:4px 10px;border:1px solid #cbd5e1;">${linhas.length} colaborador(es) · Gerado em ${gerado}</td></tr>
     <tr><td style="${TH}">Nome</td><td style="${TH}">Cargo</td><td style="${THC}">Ano PA</td><td style="${TH}">Período Aquisitivo</td><td style="${THC}">Férias Início</td><td style="${THC}">Férias Fim</td><td style="${THC}">Saldo</td><td style="${TH}">Situação</td></tr>
     ${trs}
