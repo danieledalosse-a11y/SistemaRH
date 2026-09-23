@@ -8887,6 +8887,7 @@ function _buildGestorAtivosForDash() {
 
 let _gdashMapaMostrarTodos = false;
 let _gdashSemProgAbertos   = new Set(['critico','atencao']);
+// _gdashMapaMesSel e _gdashMapaCargo declarados junto a _renderGdashMapa
 
 function renderAnalyticsGestor() {
   const wrap = document.getElementById('gdashContent');
@@ -8896,6 +8897,8 @@ function renderAnalyticsGestor() {
     return;
   }
   _gdashMapaMostrarTodos = false;
+  _gdashMapaMesSel       = null;
+  _gdashMapaCargo        = '';
   _gdashSemProgAbertos   = new Set(['critico','atencao']);
 
   const CARD = inner => `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:12px;">${inner}</div>`;
@@ -9083,8 +9086,21 @@ function _renderGdashProximos() {
 
 // ── Bloco D: Mapa anual ─────────────────────────────────────────────────────
 
+let _gdashMapaMesSel = null;
+let _gdashMapaCargo  = '';
+
 function _gdashMapaToggle() {
   _gdashMapaMostrarTodos = !_gdashMapaMostrarTodos;
+  _renderGdashMapa();
+}
+
+function _gdashMapaFiltrarMes(mi) {
+  _gdashMapaMesSel = (_gdashMapaMesSel === mi) ? null : mi;
+  _renderGdashMapa();
+}
+
+function _gdashMapaFiltrarCargo(cargo) {
+  _gdashMapaCargo = (_gdashMapaCargo === cargo) ? '' : cargo;
   _renderGdashMapa();
 }
 
@@ -9097,7 +9113,9 @@ function _renderGdashMapa() {
   const excluir  = new Set(['recusado','cancelado','descartado']);
   const MESES    = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const diasMes  = MESES.map((_, mi) => new Date(ano, mi + 1, 0).getDate());
+  const SEL      = _gdashMapaMesSel;
 
+  // Coleta colaboradores com e sem período
   const comPeriodo = [], semPeriodo = [];
   GESTOR_COLABS.forEach(colab => {
     const lans = GESTOR_LANCAMENTOS.filter(l =>
@@ -9109,41 +9127,95 @@ function _renderGdashMapa() {
     else semPeriodo.push(colab);
   });
 
+  // Ordena: mês de início mais cedo → alfabético
+  const _primeiroMes = ({ lans }) => {
+    const ms = lans.map(l => parseInt((l.inicio||'').slice(5,7)) - 1).filter(m => !isNaN(m));
+    return ms.length ? Math.min(...ms) : 12;
+  };
+  comPeriodo.sort((a, b) => {
+    const diff = _primeiroMes(a) - _primeiroMes(b);
+    return diff !== 0 ? diff : a.colab.nome.localeCompare(b.colab.nome, 'pt-BR');
+  });
+
+  // Cargos disponíveis (filtro)
+  const cargos = [...new Set(GESTOR_COLABS.map(c => c.cargo).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+
+  // Aplica filtros
+  let visiveis = comPeriodo;
+  if (_gdashMapaCargo)
+    visiveis = visiveis.filter(({ colab }) => colab.cargo === _gdashMapaCargo);
+  if (SEL !== null) {
+    const iniSel = `${ano}-${String(SEL+1).padStart(2,'0')}-01`;
+    const fimSel = `${ano}-${String(SEL+1).padStart(2,'0')}-${String(diasMes[SEL]).padStart(2,'0')}`;
+    visiveis = visiveis.filter(({ lans }) =>
+      lans.some(l => l.inicio <= fimSel && l.fim >= iniSel)
+    );
+  }
+
   const CORES = { aprovado: '#185FA5', solicitado: '#B5D4F4', gozado: '#D3D1C7', default: '#185FA5' };
   const GAP = '2px', ROW_H = '16px';
 
+  // Cabeçalhos dos meses — clicáveis, mês selecionado em destaque
   const monthLabels = MESES.map((m, i) => {
-    const at = i === mesAtual;
-    return `<div style="font-size:9px;font-weight:${at?700:400};color:${at?'#185FA5':'var(--text-ter)'};text-align:center;line-height:18px">${m}</div>`;
+    const at  = i === mesAtual && SEL === null;
+    const sel = i === SEL;
+    const cor = sel ? '#1570EF' : (at ? '#185FA5' : 'var(--text-ter)');
+    const fw  = (sel || at) ? 700 : 400;
+    const bg  = sel ? 'rgba(21,112,239,.10)' : 'transparent';
+    const rd  = sel ? '3px 3px 0 0' : '0';
+    return `<div onclick="_gdashMapaFiltrarMes(${i})" title="${SEL===i?'Limpar filtro':'Filtrar '+m}" style="font-size:9px;font-weight:${fw};color:${cor};text-align:center;line-height:18px;cursor:pointer;border-radius:${rd};background:${bg};user-select:none">${m}</div>`;
   }).join('');
 
-  const renderCells = lans => MESES.map((_, mi) => {
+  const renderCells = (lans, isSemProg) => MESES.map((_, mi) => {
     const iniMes = `${ano}-${String(mi+1).padStart(2,'0')}-01`;
     const fimMes = `${ano}-${String(mi+1).padStart(2,'0')}-${String(diasMes[mi]).padStart(2,'0')}`;
     const at  = mi === mesAtual;
-    const lan = lans.find(l => l.inicio <= fimMes && l.fim >= iniMes);
-    const bg  = lan ? (CORES[(lan.status||'').toLowerCase()] || CORES.default) : (at ? 'var(--bg)' : 'transparent');
-    return `<div style="height:${ROW_H};border-radius:3px;background:${bg};${at&&!lan?'border:0.5px solid var(--border)':''}"></div>`;
+    const sel = mi === SEL;
+    const lan = !isSemProg && lans.find(l => l.inicio <= fimMes && l.fim >= iniMes);
+    let bg = 'transparent', border = '';
+    if (isSemProg) {
+      border = sel ? `border:1px solid #1570EF55` : at ? `border:0.5px solid var(--border)` : `border:0.5px dashed var(--border)`;
+      bg = sel ? 'rgba(21,112,239,.05)' : 'transparent';
+    } else if (lan) {
+      bg = CORES[(lan.status||'').toLowerCase()] || CORES.default;
+      if (sel) bg = lan ? bg : 'rgba(21,112,239,.10)';
+    } else {
+      if (sel) { bg = 'rgba(21,112,239,.07)'; border = `border:0.5px solid #1570EF44`; }
+      else if (at) { bg = 'var(--bg)'; border = `border:0.5px solid var(--border)`; }
+    }
+    return `<div style="height:${ROW_H};border-radius:3px;background:${bg};${border}"></div>`;
   }).join('');
 
-  const renderRow = ({ colab, lans }) => `
-    <div style="display:grid;grid-template-columns:120px 1fr;gap:6px;align-items:center">
-      <div style="display:flex;align-items:center;gap:6px;min-width:0">
-        ${_gdashAvatar(colab, 18)}
-        <span style="font-size:10px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${colab.nome}">${colab.nome}</span>
+  // Separador de mês de início (marcador discreto)
+  let _prevMes = -1;
+  const renderRow = (item, idx) => {
+    const pm   = _primeiroMes(item);
+    const show = pm !== _prevMes;
+    _prevMes   = pm;
+    const sep  = (show && idx > 0)
+      ? `<div style="grid-column:1/-1;height:0.5px;background:var(--border);margin:3px 0 2px"></div>`
+      : '';
+    const marker = show
+      ? `<div style="font-size:8px;font-weight:700;letter-spacing:.04em;color:var(--text-ter);text-transform:uppercase;white-space:nowrap;align-self:center">${pm < 12 ? MESES[pm] : '—'}</div>`
+      : `<div></div>`;
+    return `${sep}<div style="display:grid;grid-template-columns:28px 120px 1fr;gap:4px;align-items:center">
+      ${marker}
+      <div style="display:flex;align-items:center;gap:5px;min-width:0">
+        ${_gdashAvatar(item.colab, 18)}
+        <span style="font-size:10px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${item.colab.nome}">${item.colab.nome}</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:${GAP}">${renderCells(lans)}</div>
+      <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:${GAP}">${renderCells(item.lans, false)}</div>
     </div>`;
+  };
 
   const renderSemRow = colab => `
-    <div style="display:grid;grid-template-columns:120px 1fr;gap:6px;align-items:center">
-      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+    <div style="display:grid;grid-template-columns:28px 120px 1fr;gap:4px;align-items:center">
+      <div></div>
+      <div style="display:flex;align-items:center;gap:5px;min-width:0">
         ${_gdashAvatar(colab, 18)}
         <span style="font-size:10px;color:var(--text-ter);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${colab.nome}">${colab.nome}</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:${GAP}">
-        ${MESES.map((_, mi) => `<div style="height:${ROW_H};border-radius:3px;${mi===mesAtual?'background:var(--bg);border:0.5px solid var(--border)':'border:0.5px dashed var(--border)'}"></div>`).join('')}
-      </div>
+      <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:${GAP}">${renderCells(null, true)}</div>
     </div>`;
 
   const legenda = [
@@ -9156,28 +9228,74 @@ function _renderGdashMapa() {
     </div>`
   ).join('');
 
+  // Chip de cargo
+  const cargoChip = cargos.length > 1
+    ? `<div style="position:relative;display:inline-block">
+        <button onclick="event.stopPropagation();document.getElementById('gdashCargoMenu').style.display=document.getElementById('gdashCargoMenu').style.display==='block'?'none':'block'"
+          style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;border:1px solid var(--border);background:${_gdashMapaCargo?'var(--blue,#1570EF)':'var(--surface)'};color:${_gdashMapaCargo?'#fff':'var(--text-sec)'};font-size:10px;cursor:pointer;font-family:inherit;white-space:nowrap;">
+          ${_gdashMapaCargo || 'Todos os cargos'} ▾
+        </button>
+        <div id="gdashCargoMenu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:100;min-width:160px;padding:4px 0;">
+          <div onclick="document.getElementById('gdashCargoMenu').style.display='none';_gdashMapaFiltrarCargo('')" style="padding:6px 12px;font-size:11px;cursor:pointer;color:var(--text)">${_gdashMapaCargo?'Todos os cargos':'✓ Todos os cargos'}</div>
+          ${cargos.map(c => `<div onclick="document.getElementById('gdashCargoMenu').style.display='none';_gdashMapaFiltrarCargo('${c.replace(/'/g,"\\'")}');" style="padding:6px 12px;font-size:11px;cursor:pointer;color:var(--text)">${_gdashMapaCargo===c?'✓ ':''} ${c}</div>`).join('')}
+        </div>
+      </div>`
+    : '';
+
+  // Chips de filtros ativos (mês selecionado)
+  const filtroAtivo = SEL !== null
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:#EFF6FF;border:1px solid #1570EF55;color:#1570EF;font-size:10px;font-weight:600;">
+        ${MESES[SEL]}
+        <button onclick="_gdashMapaFiltrarMes(${SEL})" style="background:none;border:none;cursor:pointer;color:#1570EF;padding:0;font-size:11px;line-height:1;font-family:inherit">×</button>
+      </span>`
+    : '';
+
+  const subInfo = SEL !== null
+    ? `${visiveis.length} colaborador${visiveis.length!==1?'es':''} em ${MESES[SEL]}`
+    : `${comPeriodo.length} com período programado`;
+
   const toggleLabel = _gdashMapaMostrarTodos ? '▴ ocultar sem programação' : `▾ ${semPeriodo.length} sem programação`;
 
+  _prevMes = -1;
+
   wrap.innerHTML = `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:8px">
-      <div>
-        <div style="font-size:12px;font-weight:600;color:var(--text)">Mapa anual — ${ano}</div>
-        <div style="font-size:10px;color:var(--text-ter);margin-top:2px">${comPeriodo.length} colaborador${comPeriodo.length!==1?'es':''} com período programado</div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:12px;font-weight:600;color:var(--text)">Mapa anual — ${ano}</span>
+          ${filtroAtivo}
+        </div>
+        <div style="font-size:10px;color:var(--text-ter)">${subInfo}</div>
       </div>
-      <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">${legenda}</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
+        ${legenda}
+        ${cargoChip}
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:120px 1fr;gap:6px;margin-bottom:3px">
-      <div></div>
+    <div style="display:grid;grid-template-columns:28px 120px 1fr;gap:4px;margin-bottom:3px">
+      <div></div><div></div>
       <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:${GAP}">${monthLabels}</div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:4px">
-      ${comPeriodo.length ? comPeriodo.map(renderRow).join('') : `<div style="font-size:11px;color:var(--text-ter);padding:8px 0">Nenhum colaborador com período programado para ${ano}.</div>`}
+    <div style="display:flex;flex-direction:column;gap:3px">
+      ${visiveis.length
+        ? visiveis.map((item, idx) => renderRow(item, idx)).join('')
+        : `<div style="font-size:11px;color:var(--text-ter);padding:10px 0">${SEL!==null?`Nenhum colaborador com férias em ${MESES[SEL]}.`:'Nenhum colaborador com período programado.'}</div>`}
     </div>
-    ${semPeriodo.length ? `
+    ${SEL === null && semPeriodo.length ? `
     <div style="margin-top:10px;padding-top:8px;border-top:0.5px solid var(--border)">
       <button onclick="_gdashMapaToggle()" style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text-ter);padding:0;font-family:inherit">${toggleLabel}</button>
-      ${_gdashMapaMostrarTodos ? `<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">${semPeriodo.map(renderSemRow).join('')}</div>` : ''}
+      ${_gdashMapaMostrarTodos ? `<div style="display:flex;flex-direction:column;gap:3px;margin-top:6px">${semPeriodo.map(renderSemRow).join('')}</div>` : ''}
     </div>` : ''}`;
+
+  // Fecha menu de cargo ao clicar fora
+  setTimeout(() => {
+    const _close = e => {
+      const menu = document.getElementById('gdashCargoMenu');
+      if (menu && !menu.parentElement?.contains(e.target)) { menu.style.display = 'none'; }
+    };
+    document.removeEventListener('click', _close);
+    document.addEventListener('click', _close, { once: true });
+  }, 50);
 }
 
 // ── Bloco E: Sem programação por urgência ───────────────────────────────────
