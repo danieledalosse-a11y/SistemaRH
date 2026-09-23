@@ -2540,12 +2540,14 @@ function supabaseParaModelo(feriasRows, colaborRows) {
       }
     }
 
-    // Parsear metadados de alteração de data quando status = Alteracao_Solicitada
-    let _alteracaoMeta = null;
-    if (f.status === 'Alteracao_Solicitada' && f.obs_gestor) {
+    // Parsear metadados de alteração/cancelamento quando há solicitação pendente
+    let _alteracaoMeta    = null;
+    let _cancelamentoMeta = null;
+    if ((f.status === 'Alteracao_Solicitada' || f.status === 'Cancelamento_Solicitado') && f.obs_gestor) {
       try {
         const _parsed = JSON.parse(f.obs_gestor);
-        if (_parsed && _parsed.tipo === 'alteracao') _alteracaoMeta = _parsed;
+        if (_parsed?.tipo === 'alteracao')    _alteracaoMeta    = _parsed;
+        if (_parsed?.tipo === 'cancelamento') _cancelamentoMeta = _parsed;
       } catch(_) {}
     }
 
@@ -2568,6 +2570,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
       _motivoRejeicao: null,
       _atualizadoEm: f.atualizado_em || f.criado_em || null,
       _alteracaoMeta,
+      _cancelamentoMeta,
     };
 
     TODOS_REGISTROS.push({ __key, reg: mat, nome, cargo, setor: normSetor(colabDados.setor || ''), unidade: '', registro });
@@ -2842,9 +2845,15 @@ function getPendentes() {
   COLABORADORES.forEach(colab => {
     colab.registros.forEach((reg, ri) => {
       if (reg.status === 'Alteracao_Solicitada') {
-        if (!reg._alteracaoMeta) return; // sem meta parseada → skip
+        if (!reg._alteracaoMeta) return;
         const meta = reg._alteracaoMeta;
         result.push({ colab, reg, ri, lancamento: { inicio: meta.novo_inicio, fim: meta.novo_fim, dias: meta.dias }, _tipo: 'alteracao', _altMeta: meta });
+        return;
+      }
+      if (reg.status === 'Cancelamento_Solicitado') {
+        if (!reg._cancelamentoMeta) return;
+        const meta = reg._cancelamentoMeta;
+        result.push({ colab, reg, ri, lancamento: { inicio: meta.inicio, fim: meta.fim, dias: meta.dias }, _tipo: 'cancelamento', _cancelMeta: meta });
         return;
       }
       if (reg.status !== 'Pendente') return;
@@ -3274,17 +3283,23 @@ function renderDrawerAuditoria(colab) {
     solicitado:          'Solicitação enviada',
     aprovado:            'Aprovado pelo RH',
     rejeitado:           'Recusado pelo RH',
-    alteracao_solicitada:'Alteração solicitada',
-    alteracao_aprovada:  'Alteração aprovada',
-    alteracao_recusada:  'Alteração recusada',
+    alteracao_solicitada:    'Alteração solicitada',
+    alteracao_aprovada:      'Alteração aprovada',
+    alteracao_recusada:      'Alteração recusada',
+    cancelamento_solicitado: 'Cancelamento solicitado',
+    cancelamento_aprovado:   'Cancelamento aprovado',
+    cancelamento_recusado:   'Cancelamento recusado',
   };
   const acaoCor = {
-    solicitado:          'var(--blue)',
-    aprovado:            'var(--green)',
-    rejeitado:           '#D92D20',
-    alteracao_solicitada:'#1570EF',
-    alteracao_aprovada:  '#067647',
-    alteracao_recusada:  '#D92D20',
+    solicitado:              'var(--blue)',
+    aprovado:                'var(--green)',
+    rejeitado:               '#D92D20',
+    alteracao_solicitada:    '#1570EF',
+    alteracao_aprovada:      '#067647',
+    alteracao_recusada:      '#D92D20',
+    cancelamento_solicitado: '#B45309',
+    cancelamento_aprovado:   '#D92D20',
+    cancelamento_recusado:   '#067647',
   };
   el.innerHTML = `<div style="padding:16px 20px;">
     <div style="display:flex;flex-direction:column;">
@@ -5472,6 +5487,19 @@ function abrirModalAprovar(idx) {
         <div>Solicitado por: <strong>${_altMeta.solicitante || '—'}</strong>${solDt}</div>
       </div>`;
     document.getElementById('btnAprovar').textContent = '✓ Aprovar alteração';
+  } else if (_tipo === 'cancelamento') {
+    const _cancelMeta = pendItem._cancelMeta;
+    document.getElementById('aprovarTitle').textContent = 'Analisar cancelamento de férias';
+    const solDt = _cancelMeta.data_solicitacao ? ' em ' + formatDate(_cancelMeta.data_solicitacao.slice(0,10)) : '';
+    document.getElementById('aprovarInfo').innerHTML = `
+      <div style="font-size:13px;display:flex;flex-direction:column;gap:8px;">
+        <div style="padding:8px 12px;background:#FEF3C7;border:1px solid #FCD34D;border-radius:7px;color:#92400E;font-size:12px;">
+          ⚠️ Ao aprovar, as férias serão canceladas e o saldo correspondente será devolvido ao colaborador.
+        </div>
+        <div>Período: <strong>${formatDate(_cancelMeta.inicio)} → ${formatDate(_cancelMeta.fim)} · ${_cancelMeta.dias} dias</strong></div>
+        <div>Solicitado por: <strong>${_cancelMeta.solicitante || '—'}</strong>${solDt}</div>
+      </div>`;
+    document.getElementById('btnAprovar').textContent = '✓ Aprovar cancelamento';
   } else {
     document.getElementById('aprovarTitle').textContent = 'Aprovar ou rejeitar';
     const nl = reg._novoLanc;
@@ -5554,6 +5582,30 @@ async function aprovarPendente() {
       renderAll();
       return;
     }
+    if (_tipo === 'cancelamento') {
+      const _cancelMeta = pendItem._cancelMeta;
+      const slotIdx = _cancelMeta.slot === 'p2' ? 1 : 0;
+      // Zera o slot cancelado e marca PA como Cancelado (lançamento não é deletado — histórico preservado)
+      const patch = _cancelMeta.slot === 'p1'
+        ? { status: 'Cancelado', obs_gestor: null, periodo1_inicio: null, periodo1_fim: null, dias1: 0 }
+        : { status: 'Cancelado', obs_gestor: null, periodo2_inicio: null, periodo2_fim: null, dias2: 0 };
+      await sbPatch('ferias', `id=eq.${reg._sbId}`, patch);
+      // Atualizar local
+      reg.lancamentos.splice(slotIdx, 1);
+      reg._cancelamentoMeta = null;
+      reg._obsGestor        = null;
+      reg.status = 'Cancelado';
+      // Log
+      const _perfAprovC = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+      if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'cancelamento_aprovado', _perfAprovC.nome || 'RH', {
+        inicio: _cancelMeta.inicio, fim: _cancelMeta.fim, dias: _cancelMeta.dias,
+        aprovado_por: _perfAprovC.nome || 'RH'
+      });
+      document.getElementById('modalAprovar').classList.remove('open');
+      toast(`✓ Cancelamento aprovado — ${colab.nome}. Saldo devolvido.`);
+      renderAll();
+      return;
+    }
     // Fluxo padrão (nova solicitação)
     if (reg._sbId) {
       const nl = reg._novoLanc;
@@ -5611,6 +5663,21 @@ async function rejeitarPendente() {
       });
       document.getElementById('modalAprovar').classList.remove('open');
       toast(`Alteração de data recusada — ${colab.nome}`);
+      renderAll();
+      return;
+    }
+    if (_tipo === 'cancelamento') {
+      const _cancelMeta = pendItem._cancelMeta;
+      if (reg._sbId) await sbPatch('ferias', `id=eq.${reg._sbId}`, { status: 'Aprovado', obs_gestor: null });
+      reg._cancelamentoMeta = null;
+      reg._obsGestor        = null;
+      reg.status = 'Aprovado';
+      const _perfRecC = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+      if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'cancelamento_recusado', _perfRecC.nome || 'RH', {
+        motivo, inicio: _cancelMeta.inicio, fim: _cancelMeta.fim, recusado_por: _perfRecC.nome || 'RH'
+      });
+      document.getElementById('modalAprovar').classList.remove('open');
+      toast(`Solicitação de cancelamento recusada — ${colab.nome}`);
       renderAll();
       return;
     }
@@ -10402,6 +10469,52 @@ function fecharModalGestorAlt() {
   _gestorAltCtx = null;
 }
 
+// ─── Solicitar cancelamento (Gestor) ─────────────────────────────────────────
+async function gestorConfirmarCancelamento(colabId, periodoId, lancId) {
+  const lancamento = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
+  if (!lancamento) { toast('Lançamento não encontrado.'); return; }
+  const slot = lancId.endsWith('-p2') ? 'p2' : 'p1';
+  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+  const confirmar = confirm(
+    `Solicitar cancelamento das férias de ${_fmtD(lancamento.inicio)} → ${_fmtD(lancamento.fim)} (${lancamento.dias} dias)?\n\nA solicitação será enviada ao RH para aprovação. As férias continuam agendadas até a decisão do RH.`
+  );
+  if (!confirmar) return;
+  const meta = {
+    tipo:             'cancelamento',
+    slot,
+    inicio:           lancamento.inicio,
+    fim:              lancamento.fim,
+    dias:             lancamento.dias,
+    solicitante:      GESTOR_NOME_USUARIO || '—',
+    data_solicitacao: new Date().toISOString(),
+  };
+  try {
+    await sbPatch('ferias', `id=eq.${periodoId}`, { status: 'Cancelamento_Solicitado', obs_gestor: JSON.stringify(meta) });
+    // Atualizar estado local RH
+    COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
+      if (String(reg._sbId) === String(periodoId)) {
+        reg.status = 'Cancelamento_Solicitado';
+        reg._cancelamentoMeta = meta;
+        reg._obsGestor        = JSON.stringify(meta);
+      }
+    }));
+    // Atualizar _feriasRow do Gestor
+    const per = GESTOR_PERIODOS.find(p => String(p.id) === String(periodoId));
+    if (per?._feriasRow) {
+      per._feriasRow.status     = 'Cancelamento_Solicitado';
+      per._feriasRow.obs_gestor = JSON.stringify(meta);
+    }
+    try { await _logAtiv(periodoId, colabId, 'cancelamento_solicitado', GESTOR_NOME_USUARIO, { inicio: meta.inicio, fim: meta.fim, dias: meta.dias, slot }); } catch(_) {}
+    toast('✓ Solicitação de cancelamento enviada para o RH.');
+    const c = GESTOR_COLABS.find(c => String(c.id) === String(colabId));
+    if (c) _renderGsolHistoricoRH(c);
+    if (typeof renderGestorAlerts    === 'function') renderGestorAlerts();
+    if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
+  } catch(e) {
+    toast('Erro ao enviar: ' + (e.message || e), 'erro');
+  }
+}
+
 function gestorAltCalcFim() {
   if (!_gestorAltCtx) return;
   const ini  = document.getElementById('mgAltNovoInicio').value;
@@ -10767,17 +10880,23 @@ function _renderGsolHistoricoAuditoria() {
     solicitado:          'Solicitação enviada',
     aprovado:            'Aprovado pelo RH',
     rejeitado:           'Recusado pelo RH',
-    alteracao_solicitada:'Alteração solicitada',
-    alteracao_aprovada:  'Alteração aprovada',
-    alteracao_recusada:  'Alteração recusada',
+    alteracao_solicitada:    'Alteração solicitada',
+    alteracao_aprovada:      'Alteração aprovada',
+    alteracao_recusada:      'Alteração recusada',
+    cancelamento_solicitado: 'Cancelamento solicitado',
+    cancelamento_aprovado:   'Cancelamento aprovado',
+    cancelamento_recusado:   'Cancelamento recusado',
   };
   const acaoCor = {
-    solicitado:          'var(--blue)',
-    aprovado:            'var(--green)',
-    rejeitado:           '#D92D20',
-    alteracao_solicitada:'#1570EF',
-    alteracao_aprovada:  '#067647',
-    alteracao_recusada:  '#D92D20',
+    solicitado:              'var(--blue)',
+    aprovado:                'var(--green)',
+    rejeitado:               '#D92D20',
+    alteracao_solicitada:    '#1570EF',
+    alteracao_aprovada:      '#067647',
+    alteracao_recusada:      '#D92D20',
+    cancelamento_solicitado: '#B45309',
+    cancelamento_aprovado:   '#D92D20',
+    cancelamento_recusado:   '#067647',
   };
   el.innerHTML = `<div style="padding:14px 16px;">
     <div style="display:flex;flex-direction:column;">
@@ -10841,7 +10960,8 @@ function _renderGsolHistoricoRH(c) {
       String(l.colaborador_id) === String(c.id) &&
       String(l.periodo_id) === String(per.id) &&
       l.status !== 'gozado' &&
-      l.status !== 'pendente_gestor'
+      l.status !== 'pendente_gestor' &&
+      (l.status || '').toLowerCase() !== 'cancelado'
     );
 
     const abono       = Number(row.abono_pecuniario) || 0;
@@ -10860,12 +10980,14 @@ function _renderGsolHistoricoRH(c) {
 
     if (!lancamentos.length && !mostrarSolicitar) return '';
 
-    // Parsear meta de alteração de data para este PA
-    let _altMetaGsol = null;
-    if (row.status === 'Alteracao_Solicitada' && row.obs_gestor) {
+    // Parsear meta de alteração/cancelamento para este PA
+    let _altMetaGsol    = null;
+    let _cancelMetaGsol = null;
+    if (row.obs_gestor && (row.status === 'Alteracao_Solicitada' || row.status === 'Cancelamento_Solicitado')) {
       try {
         const _p = JSON.parse(row.obs_gestor);
-        if (_p && _p.tipo === 'alteracao') _altMetaGsol = _p;
+        if (_p?.tipo === 'alteracao')    _altMetaGsol    = _p;
+        if (_p?.tipo === 'cancelamento') _cancelMetaGsol = _p;
       } catch(_) {}
     }
 
@@ -10954,24 +11076,37 @@ function _renderGsolHistoricoRH(c) {
           <div id="${_gsolListaId}" style="display:none;margin-top:4px;">${gozoHtml}</div>
         </div>` : '';
 
-      // Banner de alteração pendente (apenas para o slot que está com alteração)
+      // Banners e botões de ações pendentes (por slot)
       const thisSlot = lancIdx === 1 ? 'p2' : 'p1';
-      const temAltPendente = _altMetaGsol && _altMetaGsol.slot === thisSlot;
+      const temAltPendente    = _altMetaGsol    && _altMetaGsol.slot    === thisSlot;
+      const temCancelPendente = _cancelMetaGsol && _cancelMetaGsol.slot === thisSlot;
+      const temQualquerPendente = temAltPendente || temCancelPendente;
+
       const bannerAlt = temAltPendente
         ? `<div style="margin-top:6px;padding:7px 10px;background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:7px;font-size:11px;color:#1849A9;line-height:1.5;">
-            <strong>Alteração aguardando aprovação do RH</strong><br>
+            <strong>Alteração de data aguardando aprovação do RH</strong><br>
             <span style="color:var(--text-sec);">Data atual: ${_fmtD(_altMetaGsol.data_anterior_inicio)} → ${_fmtD(_altMetaGsol.data_anterior_fim)} &nbsp;·&nbsp; Nova data: ${_fmtD(_altMetaGsol.novo_inicio)} → ${_fmtD(_altMetaGsol.novo_fim)}</span>
           </div>` : '';
 
-      // Botão "Alterar data" para lançamentos futuros aprovados
+      const bannerCancel = temCancelPendente
+        ? `<div style="margin-top:6px;padding:7px 10px;background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:7px;font-size:11px;color:#92400E;line-height:1.5;">
+            <strong>Cancelamento aguardando aprovação do RH</strong><br>
+            <span style="color:var(--text-sec);">Período: ${_fmtD(_cancelMetaGsol.inicio)} → ${_fmtD(_cancelMetaGsol.fim)} · ${_cancelMetaGsol.dias} dias</span>
+          </div>` : '';
+
+      // Botões de ação para lançamentos futuros aprovados
       const stNormLanc = (l.status||'').toLowerCase();
       const isAprovadoLanc = stNormLanc === 'aprovado' || stNormLanc === 'agendado';
       const isFuturoLanc = l.inicio > hoje;
-      let btnAltData = '';
+      let botoesAcao = '';
       if (isAprovadoLanc && isFuturoLanc) {
-        btnAltData = _altMetaGsol
-          ? `<button disabled title="Alteração já solicitada — aguardando RH" style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D0D5DD;background:transparent;color:#98A2B3;cursor:not-allowed;font-weight:600;font-family:inherit;">Alterar data</button>`
-          : `<button style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #1570EF;background:transparent;color:#1570EF;cursor:pointer;font-weight:600;font-family:inherit;" onclick="gestorAbrirModalAlt('${c.id}','${per.id}','${l.id}')">Alterar data</button>`;
+        const btnAlt = temQualquerPendente
+          ? `<button disabled title="Já há uma solicitação pendente — aguardando RH" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D0D5DD;background:transparent;color:#98A2B3;cursor:not-allowed;font-weight:600;font-family:inherit;">Alterar data</button>`
+          : `<button style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #1570EF;background:transparent;color:#1570EF;cursor:pointer;font-weight:600;font-family:inherit;" onclick="gestorAbrirModalAlt('${c.id}','${per.id}','${l.id}')">Alterar data</button>`;
+        const btnCancel = temQualquerPendente
+          ? `<button disabled title="Já há uma solicitação pendente — aguardando RH" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D0D5DD;background:transparent;color:#98A2B3;cursor:not-allowed;font-weight:600;font-family:inherit;">Solicitar cancelamento</button>`
+          : `<button style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;cursor:pointer;font-weight:600;font-family:inherit;" onclick="gestorConfirmarCancelamento('${c.id}','${per.id}','${l.id}')">Solicitar cancelamento</button>`;
+        botoesAcao = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">${btnAlt}${btnCancel}</div>`;
       }
 
       return `<div class="gsol-rh-item">
@@ -10981,7 +11116,7 @@ function _renderGsolHistoricoRH(c) {
           <div class="gsol-rh-chips">
             <span class="gsol-rh-chip">${svgCal} Lançado RH</span>${chipPend}${chipConcl}
           </div>
-          ${nota}${_gozoToggleHtml}${btnSolGozo}${formSolGozo}${bannerAlt}${btnAltData}
+          ${nota}${_gozoToggleHtml}${btnSolGozo}${formSolGozo}${bannerAlt}${bannerCancel}${botoesAcao}
         </div>
       </div>`;
     }).join('');
