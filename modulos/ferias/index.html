@@ -5584,17 +5584,20 @@ async function aprovarPendente() {
     }
     if (_tipo === 'cancelamento') {
       const _cancelMeta = pendItem._cancelMeta;
-      const slotIdx = _cancelMeta.slot === 'p2' ? 1 : 0;
-      // Zera o slot cancelado e marca PA como Cancelado (lançamento não é deletado — histórico preservado)
+      const slotIdx     = _cancelMeta.slot === 'p2' ? 1 : 0;
+      const outroIdx    = slotIdx === 0 ? 1 : 0;
+      // PA fica Cancelado só se não restar outro slot válido
+      const outroSlotValido = reg.lancamentos.length > 1 && (reg.lancamentos[outroIdx]?.dias || 0) > 0;
+      const novoStatus  = outroSlotValido ? 'Aprovado' : 'Cancelado';
       const patch = _cancelMeta.slot === 'p1'
-        ? { status: 'Cancelado', obs_gestor: null, periodo1_inicio: null, periodo1_fim: null, dias1: 0 }
-        : { status: 'Cancelado', obs_gestor: null, periodo2_inicio: null, periodo2_fim: null, dias2: 0 };
+        ? { status: novoStatus, obs_gestor: null, periodo1_inicio: null, periodo1_fim: null, dias1: 0 }
+        : { status: novoStatus, obs_gestor: null, periodo2_inicio: null, periodo2_fim: null, dias2: 0 };
       await sbPatch('ferias', `id=eq.${reg._sbId}`, patch);
       // Atualizar local
       reg.lancamentos.splice(slotIdx, 1);
       reg._cancelamentoMeta = null;
       reg._obsGestor        = null;
-      reg.status = 'Cancelado';
+      reg.status = novoStatus;
       // Log
       const _perfAprovC = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
       if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'cancelamento_aprovado', _perfAprovC.nome || 'RH', {
