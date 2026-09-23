@@ -2187,6 +2187,21 @@
   </div>
 </div>
 
+<!-- ═══ Modal de confirmação genérico ═══ -->
+<div class="modal-overlay" id="modalConfirm" style="display:none;z-index:1300;" onclick="if(event.target===this)_modalConfirmFechar()">
+  <div class="modal" style="max-width:380px;width:100%;" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div class="modal-title" id="modalConfirmTitulo">Confirmar</div>
+      <button onclick="_modalConfirmFechar()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-sec);padding:0;line-height:1;">✕</button>
+    </div>
+    <div id="modalConfirmTexto" style="font-size:14px;color:var(--text-sec);line-height:1.55;margin-bottom:20px;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="_modalConfirmFechar()">Cancelar</button>
+      <button class="btn" id="modalConfirmBtnOk" onclick="_modalConfirmExecutar()" style="background:#D92D20;color:#fff;border:none;font-weight:600;">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Modal de lançamento ═══ -->
 <div class="modal-overlay" id="modalLancar" onclick="fecharModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -8344,7 +8359,7 @@ function renderGestorAtividade() {
     ? `<button class="gstor-ativ-vermais" onclick="_gestorAtivExpandido=true;renderGestorAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
     : '';
   const arquivarTodosHdrG = eventos.length > 0
-    ? `<button onclick="event.stopPropagation();if(confirm('Arquivar todos os registros de atividade recente?'))_ativDismissAll('g',${JSON.stringify(allKeysG)})" style="font-size:11px;font-weight:500;color:var(--text-ter);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;font-family:inherit;white-space:nowrap;" title="Arquivar todos">Arquivar todos</button>`
+    ? `<button onclick="event.stopPropagation();abrirModalConfirm({titulo:'Arquivar atividade recente',texto:'Todos os registros de atividade recente serão arquivados. Eles poderão ser consultados em \\'Ver arquivados\\'.',labelOk:'Arquivar todos',corOk:'#344054',cb:()=>_ativDismissAll('g',${JSON.stringify(allKeysG)})})" style="font-size:11px;font-weight:500;color:var(--text-ter);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;font-family:inherit;white-space:nowrap;" title="Arquivar todos">Arquivar todos</button>`
     : '';
 
   el.innerHTML = `<div class="gstor-ativ-wrap">
@@ -8437,7 +8452,7 @@ function renderRhAtividade() {
     ? `<button class="gstor-ativ-vermais" onclick="_rhAtivExpandido=true;renderRhAtividade()">Ver mais ${ocultos} registro${ocultos > 1 ? 's' : ''} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
     : '';
   const arquivarTodosHdrRH = eventos.length > 0
-    ? `<button onclick="event.stopPropagation();if(confirm('Arquivar todos os registros de atividade recente?'))_ativDismissAll('r',${JSON.stringify(allKeysRH)})" style="font-size:11px;font-weight:500;color:var(--text-ter);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;font-family:inherit;white-space:nowrap;" title="Arquivar todos">Arquivar todos</button>`
+    ? `<button onclick="event.stopPropagation();abrirModalConfirm({titulo:'Arquivar atividade recente',texto:'Todos os registros de atividade recente serão arquivados. Eles poderão ser consultados em \\'Ver arquivados\\'.',labelOk:'Arquivar todos',corOk:'#344054',cb:()=>_ativDismissAll('r',${JSON.stringify(allKeysRH)})})" style="font-size:11px;font-weight:500;color:var(--text-ter);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;font-family:inherit;white-space:nowrap;" title="Arquivar todos">Arquivar todos</button>`
     : '';
 
   el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">
@@ -8490,6 +8505,7 @@ function renderGestorAlerts(colabsBase) {
     const st = (l.status||'').toLowerCase();
     if (st === 'solicitado') return true;
     if (st === 'pendente_gestor') return true;
+    if (st === 'cancelamento_solicitado') return true;
     return st === 'recusado' && l.fim >= hoje;
   });
   const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
@@ -10554,6 +10570,29 @@ function gestorConfirmarCancelamento(colabId, periodoId, lancId) {
 function fecharModalGestorCancel() {
   document.getElementById('modalGestorCancel').style.display = 'none';
   _gestorCancelCtx = null;
+}
+
+// ─── Modal de confirmação genérico ───────────────────────────────────────────
+let _modalConfirmCb = null;
+function abrirModalConfirm({ titulo, texto, labelOk, corOk, cb }) {
+  _modalConfirmCb = cb || null;
+  document.getElementById('modalConfirmTitulo').textContent = titulo || 'Confirmar';
+  document.getElementById('modalConfirmTexto').textContent  = texto  || '';
+  const btn = document.getElementById('modalConfirmBtnOk');
+  btn.textContent = labelOk || 'Confirmar';
+  btn.style.background = corOk || '#D92D20';
+  const el = document.getElementById('modalConfirm');
+  document.body.appendChild(el);
+  el.style.display = 'flex';
+}
+function _modalConfirmFechar() {
+  document.getElementById('modalConfirm').style.display = 'none';
+  _modalConfirmCb = null;
+}
+function _modalConfirmExecutar() {
+  const cb = _modalConfirmCb;
+  _modalConfirmFechar();
+  if (cb) cb();
 }
 
 async function gestorEnviarCancelamento() {
