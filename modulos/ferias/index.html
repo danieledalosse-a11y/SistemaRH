@@ -8229,56 +8229,34 @@ function _gestorAgruparProcessos(idsPermitidos) {
 }
 
 // Gestor: retorna { estado, cls, ativo, inicio, fim, dias } para o processo
+// ativo: true APENAS para processos aguardando decisão do RH
 function _gestorProcessoInfo(h) {
   const acao = (h.acao || '').toLowerCase();
-  const hoje = new Date().toISOString().slice(0, 10);
   // Datas vigentes: GESTOR_LANCAMENTOS é a fonte de verdade (cobre alterações aprovadas)
   const lanc  = (GESTOR_LANCAMENTOS || []).find(l => String(l.id) === String(h.ferias_id));
   const inicio = lanc?.inicio || (h.detalhe || {}).inicio;
   const fim    = lanc?.fim    || (h.detalhe || {}).fim;
   const dias   = lanc?.dias   || (h.detalhe || {}).dias;
-  const passou = fim ? fim < hoje : false;
 
+  // Atividade Recente: apenas o que está aguardando resposta do RH
   if (acao === 'solicitado')
-    return { estado: 'Aguardando RH', cls: 'neutro', ativo: true, inicio, fim, dias };
-
-  if (acao === 'aprovado' || acao === 'alteracao_aprovada')
-    return passou
-      ? { estado: 'Concluídas', cls: 'aprov', ativo: false, inicio, fim, dias }
-      : { estado: 'Aprovadas',  cls: 'aprov', ativo: true,  inicio, fim, dias };
-
-  if (acao === 'alteracao_recusada')
-    return passou
-      ? { estado: 'Concluídas',              cls: 'aprov', ativo: false, inicio, fim, dias }
-      : { estado: 'Aprovadas · alt. recusada', cls: 'aprov', ativo: true,  inicio, fim, dias };
-
-  if (acao === 'cancelamento_recusado')
-    return passou
-      ? { estado: 'Concluídas',               cls: 'aprov', ativo: false, inicio, fim, dias }
-      : { estado: 'Aprovadas · canc. recusado', cls: 'aprov', ativo: true,  inicio, fim, dias };
-
-  if (acao === 'rejeitado') {
-    const temNovo = FERIAS_HISTORICO.some(x =>
-      String(x.colaborador_id) === String(h.colaborador_id) &&
-      (x.acao || '').toLowerCase() === 'solicitado' &&
-      (x.criado_em || '') > (h.criado_em || '')
-    );
-    const colab  = (GESTOR_COLABS || []).find(c => String(c.id) === String(h.colaborador_id));
-    const paFim  = colab ? gestorPeriodoAtivo(colab.id)?.pa_fim : null;
-    const paVenc = paFim ? paFim < hoje : false;
-    return (temNovo || paVenc)
-      ? { estado: 'Encerrado', cls: 'recus', ativo: false, inicio, fim, dias }
-      : { estado: 'Recusadas', cls: 'recus', ativo: true,  inicio, fim, dias };
-  }
-
+    return { estado: 'Aguardando RH',             cls: 'neutro',     ativo: true,  inicio, fim, dias };
   if (acao === 'alteracao_solicitada')
-    return { estado: 'Alteração aguardando RH',    cls: 'cancel-sol',  ativo: true,  inicio, fim, dias };
-
+    return { estado: 'Alteração aguardando RH',   cls: 'cancel-sol', ativo: true,  inicio, fim, dias };
   if (acao === 'cancelamento_solicitado')
-    return { estado: 'Cancelamento aguardando RH', cls: 'cancel-sol',  ativo: true,  inicio, fim, dias };
+    return { estado: 'Cancelamento aguardando RH',cls: 'cancel-sol', ativo: true,  inicio, fim, dias };
 
+  // Histórico: todos os desfechos
+  if (acao === 'aprovado' || acao === 'alteracao_aprovada')
+    return { estado: 'Aprovadas',            cls: 'aprov',       ativo: false, inicio, fim, dias };
+  if (acao === 'rejeitado')
+    return { estado: 'Recusadas',            cls: 'recus',       ativo: false, inicio, fim, dias };
+  if (acao === 'alteracao_recusada')
+    return { estado: 'Alt. recusada',        cls: 'recus',       ativo: false, inicio, fim, dias };
   if (acao === 'cancelamento_aprovado')
-    return { estado: 'Canceladas', cls: 'cancel-aprov', ativo: false, inicio, fim, dias };
+    return { estado: 'Canceladas',           cls: 'cancel-aprov',ativo: false, inicio, fim, dias };
+  if (acao === 'cancelamento_recusado')
+    return { estado: 'Canc. recusado',       cls: 'aprov',       ativo: false, inicio, fim, dias };
 
   return { estado: acao, cls: 'neutro', ativo: false, inicio, fim, dias };
 }
