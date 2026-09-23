@@ -9174,7 +9174,15 @@ function _renderGdashMapa() {
     const fimMes = `${ano}-${String(mi+1).padStart(2,'0')}-${String(diasMes[mi]).padStart(2,'0')}`;
     const at  = mi === mesAtual;
     const sel = mi === SEL;
-    const lan = !isSemProg && lans.find(l => l.inicio <= fimMes && l.fim >= iniMes);
+    // Modo filtrado: só renderiza períodos que tocam o mês selecionado
+    const lan = !isSemProg && lans.find(l => {
+      if (SEL !== null) {
+        const iniSel = `${ano}-${String(SEL+1).padStart(2,'0')}-01`;
+        const fimSel = `${ano}-${String(SEL+1).padStart(2,'0')}-${String(diasMes[SEL]).padStart(2,'0')}`;
+        if (!(l.inicio <= fimSel && l.fim >= iniSel)) return false;
+      }
+      return l.inicio <= fimMes && l.fim >= iniMes;
+    });
     let bg = 'transparent', border = '';
     if (isSemProg) {
       border = sel ? `border:1px solid #1570EF55` : at ? `border:0.5px solid var(--border)` : `border:0.5px dashed var(--border)`;
