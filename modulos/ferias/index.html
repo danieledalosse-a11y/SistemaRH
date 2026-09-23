@@ -9037,10 +9037,6 @@ function _renderGdashProximos() {
     .filter(l => l.inicio > hoje && l.inicio <= lim30 && !excluir.has((l.status||'').toLowerCase()) && !l._isRealizacao)
     .sort((a, b) => a.inicio.localeCompare(b.inicio)).slice(0, 6);
 
-  const retornam = GESTOR_LANCAMENTOS
-    .filter(l => l.inicio <= hoje && l.fim >= hoje && l.fim <= lim7r && !excluir.has((l.status||'').toLowerCase()) && !l._isRealizacao)
-    .sort((a, b) => a.fim.localeCompare(b.fim)).slice(0, 6);
-
   const SEP = `<div style="height:0.5px;background:var(--border)"></div>`;
 
   const saidaRow = l => {
@@ -9050,22 +9046,10 @@ function _renderGdashProximos() {
     return `<div style="display:flex;align-items:center;gap:9px;padding:7px 0">
       ${_gdashAvatar(colab, 26)}
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${colab?.nome||'—'}</div>
+        <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${colab?.nome||'—'}</div>
         <div style="font-size:11px;color:var(--text-sec);margin-top:1px">${_gdashFmt(l.inicio)} → ${_gdashFmt(l.fim)} · ${l.dias}d${isSol?' · <em>Aguarda aprovação</em>':''}</div>
       </div>
-      <div style="font-size:11px;font-weight:600;color:var(--text-sec);flex-shrink:0">${diasAte}d</div>
-    </div>`;
-  };
-
-  const retornoRow = l => {
-    const colab = GESTOR_COLABS.find(c => String(c.id) === String(l.colaborador_id));
-    const diasAteRet = _gdashDiasAte(l.fim) + 1;
-    return `<div style="display:flex;align-items:center;gap:9px;padding:7px 0">
-      ${_gdashAvatar(colab, 26)}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${colab?.nome||'—'}</div>
-        <div style="font-size:11px;color:var(--text-sec);margin-top:1px">Retorna ${_gdashFmt(l.fim)}${diasAteRet<=1?' · amanhã':` · ${diasAteRet}d`}</div>
-      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--text-sec);flex-shrink:0">${diasAte}d</div>
     </div>`;
   };
 
@@ -9073,15 +9057,9 @@ function _renderGdashProximos() {
   const vazio = msg => `<div style="font-size:11px;color:var(--text-ter);font-style:italic;padding:8px 0">${msg}</div>`;
 
   wrap.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
-      <div style="padding-right:20px;border-right:0.5px solid var(--border)">
-        ${colTitle('Saem nos próximos 30 dias')}
-        ${saem.length ? saem.map(saidaRow).join(SEP) : vazio('Nenhuma saída nos próximos 30 dias.')}
-      </div>
-      <div style="padding-left:20px">
-        ${colTitle('Retornam esta semana')}
-        ${retornam.length ? retornam.map(retornoRow).join(SEP) : vazio('Nenhum retorno previsto esta semana.')}
-      </div>
+    <div>
+      ${colTitle('Saem nos próximos 30 dias')}
+      ${saem.length ? saem.map(saidaRow).join(SEP) : vazio('Nenhuma saída nos próximos 30 dias.')}
     </div>`;
 }
 
