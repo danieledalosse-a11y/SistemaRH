@@ -9608,6 +9608,14 @@ function gestorExportarPDF() {
 
   if (!linhas.length) { toast('Nenhum colaborador para exportar com os filtros ativos.', 'aviso'); return; }
 
+  // Paleta de risco para o PDF (linha inteira + nome)
+  const _riscoPDF = (sitKey) => {
+    if (sitKey === 'Crítico')  return { rowBg:'#FFF5F5', border:'#EF4444', nomeCor:'#7F1D1D', nomePeso:'800' };
+    if (sitKey === 'Atenção')  return { rowBg:'#FFFBEB', border:'#F59E0B', nomeCor:'#78350F', nomePeso:'700' };
+    if (sitKey === 'No radar') return { rowBg:'#F0F6FF', border:'#93C5FD', nomeCor:'#1E3A8A', nomePeso:'600' };
+    return { rowBg:'#fff', border:'transparent', nomeCor:'#1a1a2e', nomePeso:'500' };
+  };
+
   // Agrupa por setor com separador colorido
   let trs = '';
   let setorAtual = null;
@@ -9617,10 +9625,10 @@ function gestorExportarPDF() {
       const cor = _corSetor(l.setor);
       trs += `<tr><td colspan="8" style="background:${cor.bg};color:${cor.text};font-size:11px;font-weight:700;letter-spacing:.05em;padding:5px 10px;border-bottom:1px solid rgba(0,0,0,0.1);">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
     }
-    const cor = _corSetor(l.setor);
-    const cs = `background:${cor.bg};color:${cor.text};`;
-    trs += `<tr>
-      <td style="${cs}padding:5px 10px;">${l.nome}</td>
+    const risco = _riscoPDF(l.sitKey);
+    const trStyle = `background:${risco.rowBg};border-left:3px solid ${risco.border};`;
+    trs += `<tr style="${trStyle}">
+      <td style="padding:5px 10px;color:${risco.nomeCor};font-weight:${risco.nomePeso};">${l.nome}</td>
       <td style="padding:5px 10px;">${l.cargo}</td>
       <td style="text-align:center;font-weight:700;padding:5px 10px;">${l.paAno}</td>
       <td style="padding:5px 10px;font-size:11px;">${l.paStr}</td>
@@ -9632,12 +9640,25 @@ function gestorExportarPDF() {
   });
 
   const setoresUnicos = [...new Map(linhas.map(l => [l.setor, _corSetor(l.setor)])).entries()];
-  const legenda = setoresUnicos.map(([s, c]) =>
+  const legendaSetores = setoresUnicos.map(([s, c]) =>
     `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:16px;">
       <span style="width:10px;height:10px;border-radius:50%;background:${c.bg};border:1px solid rgba(0,0,0,0.15);display:inline-block;"></span>
       <span>${s}</span>
     </span>`
   ).join('');
+  const legendaRisco =
+    `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;">
+      <span style="width:10px;height:10px;border-radius:2px;background:#FFF5F5;border:1.5px solid #EF4444;display:inline-block;"></span>
+      <span style="color:#7F1D1D;font-weight:700;">Crítico</span> — gozo vence em breve
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;">
+      <span style="width:10px;height:10px;border-radius:2px;background:#FFFBEB;border:1.5px solid #F59E0B;display:inline-block;"></span>
+      <span style="color:#78350F;font-weight:700;">Atenção</span> — prazo se aproximando
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:5px;">
+      <span style="width:10px;height:10px;border-radius:2px;background:#F0F6FF;border:1.5px solid #93C5FD;display:inline-block;"></span>
+      <span style="color:#1E3A8A;font-weight:700;">No radar</span> — monitorar
+    </span>`;
 
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
   <title>Férias da Equipe</title>
@@ -9663,7 +9684,8 @@ function gestorExportarPDF() {
     colgroup col:nth-child(6) { width: 10%; }
     colgroup col:nth-child(7) { width: 6%; }
     colgroup col:nth-child(8) { width: 16%; }
-    .rel-footer { position: fixed; bottom: 8mm; left: 12mm; right: 12mm; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; }
+    .rel-footer { position: fixed; bottom: 8mm; left: 12mm; right: 12mm; display: flex; align-items: flex-start; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; gap: 12px; }
+    .rel-footer-risco { display: flex; flex-wrap: wrap; gap: 10px; }
     @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
   </style>
   </head><body>
@@ -9689,8 +9711,8 @@ function gestorExportarPDF() {
     <tbody>${trs}</tbody>
   </table>
   <div class="rel-footer">
-    <div>${legenda}</div>
-    <div>FÉRIAS DA EQUIPE &nbsp;|&nbsp; 1 de 1</div>
+    <div class="rel-footer-risco">${legendaRisco}</div>
+    <div style="white-space:nowrap;">${legendaSetores}</div>
   </div>
   </body></html>`;
 
@@ -9805,6 +9827,14 @@ function gestorExportarExcel() {
   const TD  = 'font-family:Arial,sans-serif;font-size:10pt;padding:5px 10px;border:1px solid #cbd5e1;vertical-align:middle;';
   const TDC = TD + 'text-align:center;';
 
+  // Paleta de risco para o Excel (fundo da linha + nome)
+  const _riscoXls = (sitKey) => {
+    if (sitKey === 'Crítico')  return { rowBg:'#FFF5F5', nomeCor:'#7F1D1D', nomePeso:'800' };
+    if (sitKey === 'Atenção')  return { rowBg:'#FFFBEB', nomeCor:'#78350F', nomePeso:'700' };
+    if (sitKey === 'No radar') return { rowBg:'#F0F6FF', nomeCor:'#1E3A8A', nomePeso:'600' };
+    return { rowBg:'#fff', nomeCor:'#1a1a2e', nomePeso:'500' };
+  };
+
   let trs = '';
   let setorAtual = null;
   linhas.forEach(l => {
@@ -9813,17 +9843,19 @@ function gestorExportarExcel() {
       const cor = _corSetor(l.setor);
       trs += `<tr><td colspan="8" style="background:${cor.bg};color:${cor.text};font-family:Arial,sans-serif;font-size:10pt;font-weight:700;letter-spacing:.05em;padding:5px 10px;border:1px solid #cbd5e1;">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
     }
-    const corSetor = _corSetor(l.setor);
-    const sit = _sitXls(l.sitKey);
+    const risco = _riscoXls(l.sitKey);
+    const sit   = _sitXls(l.sitKey);
+    const TDR   = TD + `background:${risco.rowBg};`;
+    const TDRC  = TDC + `background:${risco.rowBg};`;
     trs += `<tr>
-      <td style="${TD}background:${sit.bg};color:${sit.text};font-weight:700;">${l.nome}</td>
-      <td style="${TD}">${l.cargo}</td>
-      <td style="${TDC}font-weight:700;">${l.paAno}</td>
-      <td style="${TD}background:${corSetor.bg};color:${corSetor.text};font-size:9pt;">${l.paStr}</td>
-      <td style="${TDC}">${l.agendIni}</td>
-      <td style="${TDC}">${l.agendFim}</td>
-      <td style="${TDC}font-weight:800;background:${sit.bg};color:${_saldoCor(l.saldo)};">${l.saldo}d</td>
-      <td style="${TD}background:${sit.bg};color:${sit.text};font-weight:700;">${l.situacao}</td>
+      <td style="${TDR}color:${risco.nomeCor};font-weight:${risco.nomePeso};">${l.nome}</td>
+      <td style="${TDR}">${l.cargo}</td>
+      <td style="${TDRC}font-weight:700;">${l.paAno}</td>
+      <td style="${TDR}font-size:9pt;">${l.paStr}</td>
+      <td style="${TDRC}">${l.agendIni}</td>
+      <td style="${TDRC}">${l.agendFim}</td>
+      <td style="${TDRC}font-weight:800;color:${_saldoCor(l.saldo)};">${l.saldo}d</td>
+      <td style="${TDR}color:${sit.text};font-weight:700;">${l.situacao}</td>
     </tr>`;
   });
 
