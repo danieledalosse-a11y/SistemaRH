@@ -8215,43 +8215,86 @@ async function _logAtiv(feriasId, colabId, acao, usuario, detalhe) {
 }
 
 // ── Classificação Atividade Recente vs Histórico ─────────────────────────────
-// Retorna true se o evento ainda é "recente" para o perfil dado ('g' = gestor, 'r' = rh)
-function _ehRecente(h, perfil) {
+
+// Gestor: agrupa FERIAS_HISTORICO por ferias_id, retorna último evento de cada processo
+function _gestorAgruparProcessos(idsPermitidos) {
+  const byId = new Map();
+  FERIAS_HISTORICO.forEach(h => {
+    if (!idsPermitidos.has(String(h.colaborador_id))) return;
+    const key = String(h.ferias_id);
+    const existing = byId.get(key);
+    if (!existing || (h.criado_em || '') > (existing.criado_em || '')) byId.set(key, h);
+  });
+  return [...byId.values()];
+}
+
+// Gestor: retorna { estado, cls, ativo, inicio, fim, dias } para o processo
+function _gestorProcessoInfo(h) {
   const acao = (h.acao || '').toLowerCase();
   const hoje = new Date().toISOString().slice(0, 10);
-  // Verifica se já existe evento de resposta para o mesmo ferias_id
-  const temResposta = tipo => FERIAS_HISTORICO.some(x =>
-    x.ferias_id === h.ferias_id && x.id !== h.id && (x.acao || '').toLowerCase() === tipo
+  // Datas vigentes: GESTOR_LANCAMENTOS é a fonte de verdade (cobre alterações aprovadas)
+  const lanc  = (GESTOR_LANCAMENTOS || []).find(l => String(l.id) === String(h.ferias_id));
+  const inicio = lanc?.inicio || (h.detalhe || {}).inicio;
+  const fim    = lanc?.fim    || (h.detalhe || {}).fim;
+  const dias   = lanc?.dias   || (h.detalhe || {}).dias;
+  const passou = fim ? fim < hoje : false;
+
+  if (acao === 'solicitado')
+    return { estado: 'Aguardando RH', cls: 'neutro', ativo: true, inicio, fim, dias };
+
+  if (acao === 'aprovado' || acao === 'alteracao_aprovada')
+    return passou
+      ? { estado: 'Concluídas', cls: 'aprov', ativo: false, inicio, fim, dias }
+      : { estado: 'Aprovadas',  cls: 'aprov', ativo: true,  inicio, fim, dias };
+
+  if (acao === 'alteracao_recusada')
+    return passou
+      ? { estado: 'Concluídas',              cls: 'aprov', ativo: false, inicio, fim, dias }
+      : { estado: 'Aprovadas · alt. recusada', cls: 'aprov', ativo: true,  inicio, fim, dias };
+
+  if (acao === 'cancelamento_recusado')
+    return passou
+      ? { estado: 'Concluídas',               cls: 'aprov', ativo: false, inicio, fim, dias }
+      : { estado: 'Aprovadas · canc. recusado', cls: 'aprov', ativo: true,  inicio, fim, dias };
+
+  if (acao === 'rejeitado') {
+    const temNovo = FERIAS_HISTORICO.some(x =>
+      String(x.colaborador_id) === String(h.colaborador_id) &&
+      (x.acao || '').toLowerCase() === 'solicitado' &&
+      (x.criado_em || '') > (h.criado_em || '')
+    );
+    const colab  = (GESTOR_COLABS || []).find(c => String(c.id) === String(h.colaborador_id));
+    const paFim  = colab ? gestorPeriodoAtivo(colab.id)?.pa_fim : null;
+    const paVenc = paFim ? paFim < hoje : false;
+    return (temNovo || paVenc)
+      ? { estado: 'Encerrado', cls: 'recus', ativo: false, inicio, fim, dias }
+      : { estado: 'Recusadas', cls: 'recus', ativo: true,  inicio, fim, dias };
+  }
+
+  if (acao === 'alteracao_solicitada')
+    return { estado: 'Alteração aguardando RH',    cls: 'cancel-sol',  ativo: true,  inicio, fim, dias };
+
+  if (acao === 'cancelamento_solicitado')
+    return { estado: 'Cancelamento aguardando RH', cls: 'cancel-sol',  ativo: true,  inicio, fim, dias };
+
+  if (acao === 'cancelamento_aprovado')
+    return { estado: 'Canceladas', cls: 'cancel-aprov', ativo: false, inicio, fim, dias };
+
+  return { estado: acao, cls: 'neutro', ativo: false, inicio, fim, dias };
+}
+
+// RH: evento ainda está pendente de decisão?
+function _rhEhRecente(h) {
+  const acao = (h.acao || '').toLowerCase();
+  const respostas = {
+    solicitado:              ['aprovado',              'rejeitado'],
+    cancelamento_solicitado: ['cancelamento_aprovado', 'cancelamento_recusado'],
+    alteracao_solicitada:    ['alteracao_aprovada',    'alteracao_recusada'],
+  };
+  if (!respostas[acao]) return false;
+  return !respostas[acao].some(r =>
+    FERIAS_HISTORICO.some(x => x.ferias_id === h.ferias_id && (x.acao || '').toLowerCase() === r)
   );
-  if (perfil === 'r') {
-    // RH vê o que ainda não decidiu
-    if (acao === 'solicitado')               return !temResposta('aprovado') && !temResposta('rejeitado');
-    if (acao === 'cancelamento_solicitado')  return !temResposta('cancelamento_aprovado') && !temResposta('cancelamento_recusado');
-    if (acao === 'alteracao_solicitada')     return !temResposta('alteracao_aprovada') && !temResposta('alteracao_recusada');
-    return false;
-  }
-  if (perfil === 'g') {
-    // Gestor vê respostas do RH que ainda não se resolveram por conta própria
-    if (acao === 'aprovado' || acao === 'alteracao_aprovada' || acao === 'cancelamento_aprovado') {
-      // Some quando as férias já ocorreram
-      const inicio = (h.detalhe || {}).inicio;
-      return inicio ? inicio > hoje : true;
-    }
-    if (acao === 'rejeitado' || acao === 'alteracao_recusada' || acao === 'cancelamento_recusado') {
-      // Some quando houver novo evento para o mesmo período (Gestor retomou)
-      // ou quando o PA do colaborador venceu
-      const temNovo = FERIAS_HISTORICO.some(x =>
-        x.ferias_id === h.ferias_id && x.id !== h.id && new Date(x.criado_em) > new Date(h.criado_em)
-      );
-      if (temNovo) return false;
-      // Verifica pa_fim do colaborador
-      const colab = (GESTOR_COLABS || []).find(c => String(c.id) === String(h.colaborador_id));
-      const paFim = colab ? gestorPeriodoAtivo(colab.id)?.pa_fim : null;
-      return paFim ? paFim >= hoje : true;
-    }
-    return false;
-  }
-  return false;
 }
 
 // ── Constantes globais de ação (fonte única de verdade) ──────────────────────
@@ -8311,25 +8354,32 @@ function renderGestorAtividade() {
   const idsPermitidos = new Set(colabsFiltrados.map(c => String(c.id)));
   const colabMap = new Map(GESTOR_COLABS.map(c => [String(c.id), c]));
 
-  const todoHistorico = FERIAS_HISTORICO.filter(h => idsPermitidos.has(String(h.colaborador_id)));
-  const recentes  = todoHistorico.filter(h => _ehRecente(h, 'g'));
-  const historico = todoHistorico.filter(h => !_ehRecente(h, 'g'));
+  // Processos agrupados por ferias_id (um item por período)
+  const processos = _gestorAgruparProcessos(idsPermitidos);
+  const ativos    = processos.filter(h => _gestorProcessoInfo(h).ativo);
+  const historico = processos.filter(h => !_gestorProcessoInfo(h).ativo);
+  // Ordena ativos: aguardando primeiro, depois aprovados
+  ativos.sort((a, b) => {
+    const ord = p => { const i = _gestorProcessoInfo(p); return i.cls === 'neutro' || i.cls === 'cancel-sol' ? 0 : 1; };
+    return ord(a) - ord(b) || (b.criado_em || '').localeCompare(a.criado_em || '');
+  });
+  const recentes = ativos; // alias semântico para o template
 
   const _itemRow = h => {
-    const { cls, chip, svg } = _acaoInfo(h.acao || '');
+    const info  = _gestorProcessoInfo(h);
     const colab = colabMap.get(String(h.colaborador_id));
     const nome  = colab ? colab.nome : '—';
     const cargo = colab ? [colab.cargo, colab.setor].filter(Boolean).join(' · ') : '';
-    const det   = h.detalhe || {};
-    const perLine = det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD(det.inicio)} → ${fmtD(det.fim)}${det.dias ? ' · ' + det.dias + 'd' : ''}</div>` : '';
-    const tsLine  = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
+    const perLine = info.inicio && info.fim
+      ? `<div class="gstor-ativ-per">${fmtD(info.inicio)} → ${fmtD(info.fim)}${info.dias ? ' · ' + info.dias + 'd' : ''}</div>`
+      : '';
     return `<div class="gstor-ativ-item">
-      <div class="gstor-ativ-icon ${cls}">${svg}</div>
+      <div class="gstor-ativ-icon ${info.cls}">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
       <div class="gstor-ativ-body">
         <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
-        ${perLine}${tsLine}
+        ${perLine}
       </div>
-      <span class="gstor-ativ-chip ${cls}">${chip}</span>
+      <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>
     </div>`;
   };
 
@@ -8397,8 +8447,8 @@ function renderRhAtividade() {
   const colabMap = new Map();
   COLABORADORES.forEach(c => colabMap.set(String(c._sbColabId), c));
 
-  const recentes  = FERIAS_HISTORICO.filter(h => _ehRecente(h, 'r'));
-  const historico = FERIAS_HISTORICO.filter(h => !_ehRecente(h, 'r'));
+  const recentes  = FERIAS_HISTORICO.filter(h => _rhEhRecente(h));
+  const historico = FERIAS_HISTORICO.filter(h => !_rhEhRecente(h));
 
   const _itemRow = h => {
     const { cls, chip, svg } = _acaoInfo(h.acao || '');
