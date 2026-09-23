@@ -9553,7 +9553,19 @@ function gestorExportarPDF() {
     if (gestorf && _normG(c.gestor) !== _normG(gestorf)) return false;
     return true;
   }).sort((a,b) => (a.setor||'').localeCompare(b.setor||'','pt-BR') || a.nome.localeCompare(b.nome,'pt-BR')).forEach(c => {
-    const pa = gestorPeriodoAtivo(c.id);
+    // Lógica de PA exclusiva do relatório — não altera gestorPeriodoAtivo
+    // Prioridade: PA com gozo aprovado/agendado ainda pendente (fim >= hoje)
+    // Se múltiplos PAs com gozo pendente, escolhe o com início mais iminente (determinístico)
+    const _stRel = s => ['aprovado','agendado'].includes((s||'').toLowerCase());
+    const todosPA = GESTOR_PERIODOS.filter(p => p.colaborador_id === c.id)
+      .sort((a,b) => (a.pa_fim||'').localeCompare(b.pa_fim||''));
+    const paComGozo = todosPA.map(p => {
+      const prox = GESTOR_LANCAMENTOS.filter(l =>
+        String(l.periodo_id) === String(p.id) && _stRel(l.status) && !l._isRealizacao && l.fim >= hoje
+      ).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
+      return prox ? { pa: p, proxInicio: prox.inicio } : null;
+    }).filter(Boolean).sort((a,b) => a.proxInicio.localeCompare(b.proxInicio) || (a.pa.pa_fim||'').localeCompare(b.pa.pa_fim||''))[0]?.pa || null;
+    const pa = paComGozo || gestorPeriodoAtivo(c.id);
     const temPeriodos = GESTOR_PERIODOS.some(p => p.colaborador_id === c.id);
     const semPA = !pa && !temPeriodos && !!c.data_admissao;
     if (!pa && !semPA) return;
@@ -9572,8 +9584,9 @@ function gestorExportarPDF() {
       paAno = fimPrev.slice(0,4);
       paStr = `${_fmtData(iniPrev)} → ${_fmtData(fimPrev)} (prev.)`;
     }
-    const _stValido = s => ['aprovado','agendado'].includes((s||'').toLowerCase());
-    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && _stValido(l.status) && !l._isRealizacao);
+    const lancs = GESTOR_LANCAMENTOS.filter(l =>
+      l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id) && _stRel(l.status) && !l._isRealizacao
+    );
     const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
     const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
     const lRef   = ativo || futuro;
@@ -9720,7 +9733,17 @@ function gestorExportarExcel() {
     if (gestorf && _normG(c.gestor) !== _normG(gestorf)) return false;
     return true;
   }).sort((a,b) => (a.setor||'').localeCompare(b.setor||'','pt-BR') || a.nome.localeCompare(b.nome,'pt-BR')).forEach(c => {
-    const pa = gestorPeriodoAtivo(c.id);
+    // Lógica de PA exclusiva do relatório — não altera gestorPeriodoAtivo
+    const _stRelXls = s => ['aprovado','agendado'].includes((s||'').toLowerCase());
+    const todosPAXls = GESTOR_PERIODOS.filter(p => p.colaborador_id === c.id)
+      .sort((a,b) => (a.pa_fim||'').localeCompare(b.pa_fim||''));
+    const paComGozoXls = todosPAXls.map(p => {
+      const prox = GESTOR_LANCAMENTOS.filter(l =>
+        String(l.periodo_id) === String(p.id) && _stRelXls(l.status) && !l._isRealizacao && l.fim >= hoje
+      ).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
+      return prox ? { pa: p, proxInicio: prox.inicio } : null;
+    }).filter(Boolean).sort((a,b) => a.proxInicio.localeCompare(b.proxInicio) || (a.pa.pa_fim||'').localeCompare(b.pa.pa_fim||''))[0]?.pa || null;
+    const pa = paComGozoXls || gestorPeriodoAtivo(c.id);
     const temPeriodos = GESTOR_PERIODOS.some(p => p.colaborador_id === c.id);
     const semPA = !pa && !temPeriodos && !!c.data_admissao;
     if (!pa && !semPA) return;
@@ -9739,8 +9762,9 @@ function gestorExportarExcel() {
       paAno = fimPrev.slice(0,4);
       paStr = `${_fmtData(iniPrev)} → ${_fmtData(fimPrev)} (prev.)`;
     }
-    const _stValidoXls = s => ['aprovado','agendado'].includes((s||'').toLowerCase());
-    const lancs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && _stValidoXls(l.status) && !l._isRealizacao);
+    const lancs = GESTOR_LANCAMENTOS.filter(l =>
+      l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id) && _stRelXls(l.status) && !l._isRealizacao
+    );
     const ativo  = lancs.find(l => l.inicio <= hoje && l.fim >= hoje);
     const futuro = lancs.filter(l => l.inicio > hoje).sort((a,b) => a.inicio.localeCompare(b.inicio))[0];
     const lRef   = ativo || futuro;
