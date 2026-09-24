@@ -8053,7 +8053,7 @@ async function _carregarEquipeGestor(gestor_id, cfg = {}) {
   // Escopo adicional de gestão de férias (param_escopo_ferias)
   let _escopoColabs = [];
   if (gestor_id) {
-    const escopos = await sbGet('param_escopo_ferias', `gestor_id=eq.${gestor_id}&ativo=eq.true&select=tipo,valor`).catch(() => []);
+    const escopos = await sbGet('param_escopo_ferias', `gestor_id=eq.${gestor_id}&ativo=eq.true&select=tipo,valor,gestor_ref_id`).catch(() => []);
     if (escopos.length) {
       const _colSelect = 'select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo,empresa_atuacao';
       for (const esc of escopos) {
@@ -8065,6 +8065,16 @@ async function _carregarEquipeGestor(gestor_id, cfg = {}) {
           extra = extra.filter(c => (c.empresa_atuacao || '').replace(/^\d+\s*[-–]\s*/, '').trim() === esc.valor);
         } else if (esc.tipo === 'setor' && esc.valor) {
           extra = await sbGet('colaboradores', `setor=ilike.*${encodeURIComponent(esc.valor)}&data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
+        } else if (esc.tipo === 'gestor' && esc.gestor_ref_id) {
+          const refLinks = await sbGet('param_gestor_setor', `gestor_id=eq.${esc.gestor_ref_id}&ativo=eq.true&select=setor_id`).catch(() => []);
+          if (refLinks.length) {
+            const refSetorIds = refLinks.map(r => r.setor_id).join(',');
+            const refSetores = await sbGet('param_setor', `id=in.(${refSetorIds})&select=descricao`).catch(() => []);
+            if (refSetores.length) {
+              const refDesc = refSetores.map(r => encodeURIComponent(r.descricao)).join(',');
+              extra = await sbGet('colaboradores', `setor=in.(${refDesc})&data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
+            }
+          }
         }
         _escopoColabs.push(...extra.filter(c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt'));
       }

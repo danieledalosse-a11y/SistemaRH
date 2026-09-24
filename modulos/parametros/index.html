@@ -1315,10 +1315,13 @@ function renderTabela(rows) {
       html += `<td style="font-size:12px;color:var(--text-sec)">${row.cnpj || '—'}</td>`;
       html += `<td style="font-size:12px;font-weight:600">${row.nome_simplificado || '—'}</td>`;
     } else if (currentCat === 'escopo_ferias') {
-      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os colaboradores CLT' };
+      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor' };
+      const _valorDisplay = row.tipo === 'gestor'
+        ? (gestoresMap[row.gestor_ref_id] || '—')
+        : (row.valor || (row.tipo === 'todos' ? '(sem restrição)' : '—'));
       html += `<td style="font-weight:600">${gestoresMap[row.gestor_id] || '—'}</td>`;
       html += `<td>${_TIPO_L[row.tipo] || row.tipo || '—'}</td>`;
-      html += `<td style="color:var(--text-sec)">${row.valor || (row.tipo === 'todos' ? '(sem restrição)' : '—')}</td>`;
+      html += `<td style="color:var(--text-sec)">${_valorDisplay}</td>`;
     } else if (currentCat === 'marco_tempo_casa') {
       html += `<td style="font-weight:700;font-variant-numeric:tabular-nums">${row.anos != null ? row.anos + (row.anos === 1 ? ' ano' : ' anos') : '—'}</td>`;
     } else if (currentCat === 'tipo_vinculo') {
@@ -1442,6 +1445,7 @@ function abrirModal(row) {
       </div>`;
     } else if (f.type === 'select' && f.source === 'escopo_tipo') {
       const _TIPO_OPTS = [
+        { v: 'gestor',          l: 'Equipe de gestor' },
         { v: 'empresa_atuacao', l: 'Empresa de atuação' },
         { v: 'setor',           l: 'Setor' },
         { v: 'todos',           l: 'Todos os colaboradores CLT ativos' },
@@ -1490,7 +1494,11 @@ function abrirModal(row) {
   // Escopo férias: inicializa dropdown condicional de valor
   if (currentCat === 'escopo_ferias') {
     const tipoEl = document.getElementById('field_tipo');
-    _escopoPopularValor(tipoEl ? tipoEl.value : '', row ? (row.valor || '') : '');
+    const tipoVal = tipoEl ? tipoEl.value : '';
+    const valorAtual = tipoVal === 'gestor'
+      ? String(row?.gestor_ref_id || '')
+      : (row?.valor || '');
+    _escopoPopularValor(tipoVal, valorAtual);
   }
 
   // Campo de busca de colaborador substitui o campo Nome para gestores
@@ -1549,7 +1557,15 @@ function _escopoPopularValor(tipo, valorAtual) {
   }
   wrap.style.display = '';
   let opts = '<option value="">Selecionar...</option>';
-  if (tipo === 'empresa_atuacao') {
+  if (tipo === 'gestor') {
+    if (label) label.textContent = 'Gestor incluído';
+    const gestorAtualId = String(document.getElementById('field_gestor_id')?.value || '');
+    opts += Object.entries(gestoresMap)
+      .filter(([id]) => String(id) !== gestorAtualId)
+      .sort(([, a], [, b]) => a.localeCompare(b, 'pt-BR'))
+      .map(([id, nome]) => `<option value="${id}"${valorAtual === String(id) ? ' selected' : ''}>${nome}</option>`)
+      .join('');
+  } else if (tipo === 'empresa_atuacao') {
     if (label) label.textContent = 'Empresa de atuação';
     opts += empresasAtuacaoList.map(e =>
       `<option value="${e}"${valorAtual === e ? ' selected' : ''}>${e}</option>`
@@ -1611,13 +1627,22 @@ async function salvar() {
     body.cbo_codigo = null;
   }
 
-  // escopo_ferias: gestor_id é integer; valor é null quando tipo = 'todos'
+  // escopo_ferias: gestor_id e gestor_ref_id são inteiros; mapeamento por tipo
   if (currentCat === 'escopo_ferias') {
     body.gestor_id = body.gestor_id ? parseInt(body.gestor_id) : null;
-    if (body.tipo === 'todos') body.valor = null;
+    if (body.tipo === 'gestor') {
+      body.gestor_ref_id = body.valor ? parseInt(body.valor) : null;
+      body.valor = null;
+    } else if (body.tipo === 'todos') {
+      body.valor = null;
+      body.gestor_ref_id = null;
+    } else {
+      body.gestor_ref_id = null;
+    }
     if (!body.gestor_id) { showToast('Selecione um gestor.', 'error'); return; }
     if (!body.tipo) { showToast('Selecione o tipo de escopo.', 'error'); return; }
-    if (body.tipo !== 'todos' && !body.valor) { showToast('Selecione o valor do escopo.', 'error'); return; }
+    if (body.tipo === 'gestor' && !body.gestor_ref_id) { showToast('Selecione o gestor incluído.', 'error'); return; }
+    if (body.tipo !== 'todos' && body.tipo !== 'gestor' && !body.valor) { showToast('Selecione o valor do escopo.', 'error'); return; }
   }
 
   // bonus_indicacao: valor é float; vigencia_fim vazio → null
