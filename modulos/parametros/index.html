@@ -852,7 +852,7 @@ const CATS = {
     headers: ['Valor', 'Vigência — Início', 'Vigência — Fim', 'Situação', ''],
   },
   escopo_ferias: {
-    label: 'Escopo de Gestão — Férias', section: 'Férias', sectionOrder: 2, order: 1,
+    label: 'Escopo de Gestão — Férias', section: 'Férias', sectionOrder: 2, order: 1, noAuditCols: true,
     icon: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/>',
     desc: 'Escopo adicional de colaboradores visíveis no módulo Férias para um gestor específico. O gestor continua vendo sua equipe normal (via Gestores por Setor) e, adicionalmente, os colaboradores abrangidos por este escopo.',
     table: 'param_escopo_ferias',
@@ -1653,12 +1653,12 @@ async function salvar() {
 
   const _perf = localStorage.getItem('sb_perfil');
   const _nome = _perf ? (JSON.parse(_perf).nome || '') : '';
+  const _noAudit = CATS[currentCat].noAuditCols;
   if (editingId) {
-    body.alterado_por = _nome;
-    body.updated_at = new Date().toISOString();
+    if (!_noAudit) { body.alterado_por = _nome; body.updated_at = new Date().toISOString(); }
   } else {
     if (!CATS[currentCat].noAtivo) body.ativo = true;
-    body.criado_por = _nome;
+    if (!_noAudit) body.criado_por = _nome;
   }
 
   const missingReq = cat.fields.filter(f => f.required && !body[f.key]);
@@ -1691,7 +1691,8 @@ async function toggleAtivo(id, atual) {
   const cat = CATS[currentCat];
   const _nome = nomeUsuario();
   try {
-    await sbPatch(cat.table, id, { ativo: !atual, alterado_por: _nome, updated_at: new Date().toISOString() });
+    const _patch = cat.noAuditCols ? { ativo: !atual } : { ativo: !atual, alterado_por: _nome, updated_at: new Date().toISOString() };
+    await sbPatch(cat.table, id, _patch);
     await registrarAudit(atual ? 'inativado' : 'reativado', id, null);
     showToast(atual ? 'Registro inativado.' : 'Registro reativado!', 'success');
     carregar();
