@@ -9128,7 +9128,7 @@ function renderAnalyticsGestor() {
   }
   _gdashMapaMostrarTodos = false;
   _gdashMapaMesSel       = null;
-  _gdashMapaCargo        = '';
+  _gdashMapaCargosSet    = new Set();
   _gdashMapaAno          = new Date().getFullYear();
   _gdashSemProgAbertos   = new Set(['critico','atencao']);
 
@@ -9295,10 +9295,14 @@ function _renderGdashProximos(cfg = {}) {
 
 // ── Bloco D: Mapa anual ─────────────────────────────────────────────────────
 
-let _gdashMapaMesSel  = null;
-let _gdashMapaCargo   = '';
-let _gdashMapaAno     = new Date().getFullYear();
-let _gdashMapaWrapId  = 'gdashMapaWrap'; // atualizado por _renderGdashMapa(cfg)
+let _gdashMapaMesSel    = null;
+let _gdashMapaCargosSet = new Set(); // Gestor: cargo multi-select
+let _gdashMapaAno       = new Date().getFullYear();
+let _gdashMapaWrapId    = 'gdashMapaWrap';
+// Diretoria: filtros multi-select independentes (AND lógico entre si)
+let _dirMapaCargos   = new Set();
+let _dirMapaSetores  = new Set();
+let _dirMapaGestores = new Set();
 
 function _gdashMapaAnoNav(delta) {
   const anoAtual = new Date().getFullYear();
@@ -9319,15 +9323,47 @@ function _gdashMapaFiltrarMes(mi) {
   _renderGdashMapa();
 }
 
+// Gestor: toggle cargo (multi-select)
 function _gdashMapaFiltrarCargo(cargo) {
-  _gdashMapaCargo = (_gdashMapaCargo === cargo) ? '' : cargo;
+  if (_gdashMapaCargosSet.has(cargo)) _gdashMapaCargosSet.delete(cargo);
+  else _gdashMapaCargosSet.add(cargo);
   _renderGdashMapa();
+}
+function _gdashMapaLimparFiltros() {
+  _gdashMapaCargosSet = new Set();
+  _renderGdashMapa();
+}
+
+// Diretoria: toggle por tipo ('cargo' | 'setor' | 'gestor')
+function _dirMapaToggle(tipo, valor) {
+  const m = tipo === 'cargo' ? _dirMapaCargos : tipo === 'setor' ? _dirMapaSetores : _dirMapaGestores;
+  if (m.has(valor)) m.delete(valor); else m.add(valor);
+  _renderGdashMapa();
+}
+function _dirMapaLimpar() {
+  _dirMapaCargos   = new Set();
+  _dirMapaSetores  = new Set();
+  _dirMapaGestores = new Set();
+  _renderGdashMapa();
+}
+
+// Fecha todos os dropdowns do mapa ao clicar fora
+function _fecharMenusMapa(e) {
+  document.querySelectorAll('.mapa-fm').forEach(m => {
+    if (!m.closest('[data-mapa-fm-wrap]')?.contains(e.target)) m.style.display = 'none';
+  });
+}
+if (typeof window !== 'undefined') {
+  document.addEventListener('click', _fecharMenusMapa);
 }
 
 function _renderGdashMapa(cfg = {}) {
   if (cfg.wrapId) _gdashMapaWrapId = cfg.wrapId;
   const wrap = document.getElementById(_gdashMapaWrapId);
   if (!wrap) return;
+
+  const isDiretoria = _gdashMapaWrapId !== 'gdashMapaWrap';
+  const pfx = isDiretoria ? 'dm' : 'gm';
 
   const anoAtual = new Date().getFullYear();
   const ano      = _gdashMapaAno;
@@ -9338,7 +9374,17 @@ function _renderGdashMapa(cfg = {}) {
   const diasMes    = MESES.map((_, mi) => new Date(ano, mi + 1, 0).getDate());
   const SEL        = _gdashMapaMesSel;
 
-  // Coleta colaboradores com e sem período (só aprovado + gozado, sem duplicatas)
+  // ── Conjuntos de filtros ativos (por contexto) ────────────────────────────
+  const fCargos   = isDiretoria ? _dirMapaCargos   : _gdashMapaCargosSet;
+  const fSetores  = isDiretoria ? _dirMapaSetores  : new Set();
+  const fGestores = isDiretoria ? _dirMapaGestores : new Set();
+
+  const _passaFiltros = colab =>
+    (fCargos.size   === 0 || fCargos.has(colab.cargo))   &&
+    (fSetores.size  === 0 || fSetores.has(colab.setor))  &&
+    (fGestores.size === 0 || fGestores.has(colab.gestor));
+
+  // ── Coleta colaboradores ──────────────────────────────────────────────────
   const comPeriodo = [], semPeriodo = [];
   GESTOR_COLABS.forEach(colab => {
     const raw = GESTOR_LANCAMENTOS.filter(l =>
@@ -9346,37 +9392,68 @@ function _renderGdashMapa(cfg = {}) {
       incluir.has((l.status||'').toLowerCase()) && !l._isRealizacao &&
       (l.inicio.startsWith(String(ano)) || l.fim.startsWith(String(ano)))
     );
-    // Deduplicação por (inicio, fim): mantém primeiro encontrado
     const seen = new Set();
-    const lans = raw.filter(l => {
-      const k = `${l.inicio}|${l.fim}`;
-      if (seen.has(k)) return false;
-      seen.add(k); return true;
-    });
+    const lans = raw.filter(l => { const k=`${l.inicio}|${l.fim}`; if(seen.has(k))return false; seen.add(k);return true; });
     if (lans.length) comPeriodo.push({ colab, lans });
     else semPeriodo.push(colab);
   });
 
-  // Cargos disponíveis (filtro — usado em ambos os modos)
-  const cargos = [...new Set(GESTOR_COLABS.map(c => c.cargo).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
-  const cargoChipMapa = cargos.length > 1
-    ? `<div style="position:relative;display:inline-block">
-        <button onclick="event.stopPropagation();document.getElementById('gdashCargoMenu').style.display=document.getElementById('gdashCargoMenu').style.display==='block'?'none':'block'"
-          style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;border:1px solid var(--border);background:${_gdashMapaCargo?'var(--blue,#1570EF)':'var(--surface)'};color:${_gdashMapaCargo?'#fff':'var(--text-sec)'};font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap;">
-          ${_gdashMapaCargo || 'Todos os cargos'} ▾
-        </button>
-        <div id="gdashCargoMenu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:100;min-width:160px;padding:4px 0;">
-          <div onclick="document.getElementById('gdashCargoMenu').style.display='none';_gdashMapaFiltrarCargo('')" style="padding:6px 12px;font-size:11px;cursor:pointer;color:var(--text)">${_gdashMapaCargo?'Todos os cargos':'✓ Todos os cargos'}</div>
-          ${cargos.map(c => `<div onclick="document.getElementById('gdashCargoMenu').style.display='none';_gdashMapaFiltrarCargo('${c.replace(/'/g,"\\'")}');" style="padding:6px 12px;font-size:11px;cursor:pointer;color:var(--text)">${_gdashMapaCargo===c?'✓ ':''} ${c}</div>`).join('')}
-        </div>
-      </div>`
-    : '';
+  // ── Valores únicos para os dropdowns ─────────────────────────────────────
+  const unicos = arr => [...new Set(arr.filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+  const todoCargos   = unicos(GESTOR_COLABS.map(c => c.cargo));
+  const todoSetores  = isDiretoria ? unicos(GESTOR_COLABS.map(c => c.setor))  : [];
+  const todoGestores = isDiretoria ? unicos(GESTOR_COLABS.map(c => c.gestor)) : [];
 
-  const _fecharMenuCargo = () => setTimeout(() => {
-    const _close = e => { const m = document.getElementById('gdashCargoMenu'); if (m && !m.parentElement?.contains(e.target)) m.style.display='none'; };
-    document.removeEventListener('click', _close);
-    document.addEventListener('click', _close, { once: true });
-  }, 50);
+  // ── UI: botão de filtro com dropdown de checkboxes ────────────────────────
+  const jv = v => JSON.stringify(String(v));
+  const filtroBtn = (menuId, label, valores, ativoSet, onclickTpl) => {
+    if (!valores.length) return '';
+    const n = ativoSet.size, ativo = n > 0;
+    const items = valores.map(v => {
+      const sel = ativoSet.has(v);
+      const onclick = onclickTpl.replace('{v}', jv(v));
+      return `<div onclick="${onclick};event.stopPropagation()" data-mapa-fm-item style="display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+        <div style="width:14px;height:14px;border-radius:3px;border:1.5px solid ${sel?'#1570EF':'var(--border-strong)'};background:${sel?'#1570EF':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          ${sel?'<svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6 8 1" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':''}
+        </div>
+        ${v}
+      </div>`;
+    }).join('');
+    return `<div style="position:relative;display:inline-block" data-mapa-fm-wrap>
+      <button onclick="event.stopPropagation();(function(){var m=document.getElementById(${jv(menuId)});document.querySelectorAll('.mapa-fm').forEach(function(x){if(x.id!==${jv(menuId)})x.style.display='none'});m.style.display=m.style.display==='block'?'none':'block'})()"
+        style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;border:1.5px solid ${ativo?'#1570EF':'var(--border)'};background:${ativo?'#EFF6FF':'var(--surface)'};color:${ativo?'#1570EF':'var(--text-sec)'};font-size:11px;font-weight:${ativo?600:400};cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s">
+        ${label}${ativo?` <span style="background:#1570EF;color:#fff;border-radius:10px;font-size:10px;padding:0 5px;font-weight:700;line-height:1.6">${n}</span>`:''}
+        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" style="opacity:.5;flex-shrink:0"><path d="M1 1l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </button>
+      <div id="${menuId}" class="mapa-fm" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;min-width:180px;max-width:260px;padding:4px 0;max-height:260px;overflow-y:auto">
+        ${items}
+      </div>
+    </div>`;
+  };
+
+  // ── Chips de seleções ativas ──────────────────────────────────────────────
+  const temFiltro = fCargos.size > 0 || fSetores.size > 0 || fGestores.size > 0;
+  const buildChips = () => {
+    if (!temFiltro) return '';
+    const chip = (v, onclick) => `<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 4px 2px 8px;border-radius:12px;background:#EFF6FF;border:1px solid #BFDBFE;font-size:11px;color:#1570EF;font-weight:500">${v}<button onclick="${onclick}" style="background:none;border:none;cursor:pointer;padding:1px 3px;color:#93C5FD;font-size:13px;line-height:1;font-family:inherit">×</button></span>`;
+    const chips = [];
+    if (isDiretoria) {
+      [...fCargos].forEach(v   => chips.push(chip(v, `_dirMapaToggle('cargo',${jv(v)})`)));
+      [...fSetores].forEach(v  => chips.push(chip(v, `_dirMapaToggle('setor',${jv(v)})`)));
+      [...fGestores].forEach(v => chips.push(chip(v, `_dirMapaToggle('gestor',${jv(v)})`)));
+    } else {
+      [...fCargos].forEach(v => chips.push(chip(v, `_gdashMapaFiltrarCargo(${jv(v)})`)));
+    }
+    const limpar = isDiretoria ? '_dirMapaLimpar()' : '_gdashMapaLimparFiltros()';
+    return `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px">${chips.join('')}<button onclick="${limpar}" style="font-size:11px;color:var(--text-ter);background:none;border:none;cursor:pointer;padding:2px 6px;font-family:inherit;border-radius:6px" onmouseover="this.style.color='var(--text-sec)'" onmouseout="this.style.color='var(--text-ter)'">Limpar tudo</button></div>`;
+  };
+
+  // ── Barra de filtros ──────────────────────────────────────────────────────
+  const btnCargo = filtroBtn(`${pfx}CargoMenu`, 'Cargo', todoCargos, fCargos,
+    isDiretoria ? "_dirMapaToggle('cargo',{v})" : '_gdashMapaFiltrarCargo({v})');
+  const btnSetor   = isDiretoria ? filtroBtn(`${pfx}SetorMenu`,  'Setor',  todoSetores,  fSetores,  "_dirMapaToggle('setor',{v})")  : '';
+  const btnGestor  = isDiretoria ? filtroBtn(`${pfx}GestorMenu`, 'Gestor', todoGestores, fGestores, "_dirMapaToggle('gestor',{v})") : '';
+  const filtroBarra = `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${btnGestor}${btnSetor}${btnCargo}</div>`;
 
   // ── MODO DETALHAMENTO MENSAL ───────────────────────────────────────────────
   if (SEL !== null) {
@@ -9387,18 +9464,15 @@ function _renderGdashMapa(cfg = {}) {
 
     const colabsAdaptados = GESTOR_COLABS
       .map(colab => {
+        if (!_passaFiltros(colab)) return null;
         const rawDoMes = GESTOR_LANCAMENTOS.filter(l =>
           String(l.colaborador_id) === String(colab.id) &&
           incluir.has((l.status||'').toLowerCase()) && !l._isRealizacao &&
           l.inicio <= mesFim && l.fim >= mesInicio
         );
-        // Deduplicação por (inicio, fim)
         const seenM = new Set();
-        const lansDoMes = rawDoMes.filter(l => {
-          const k = `${l.inicio}|${l.fim}`; if (seenM.has(k)) return false; seenM.add(k); return true;
-        });
+        const lansDoMes = rawDoMes.filter(l => { const k=`${l.inicio}|${l.fim}`; if(seenM.has(k))return false; seenM.add(k);return true; });
         if (!lansDoMes.length) return null;
-        if (_gdashMapaCargo && colab.cargo !== _gdashMapaCargo) return null;
         return {
           nome: colab.nome, cargo: colab.cargo||'', setor: colab.setor||'',
           unidade: colab.unidade||'', empresaRegistro: '',
@@ -9415,7 +9489,7 @@ function _renderGdashMapa(cfg = {}) {
       `<button onclick="${onclick}" ${dis?'disabled':''} style="padding:4px 10px;border:none;background:none;cursor:${dis?'not-allowed':'pointer'};color:${dis?'var(--border-strong)':'var(--text-sec)'};font-family:inherit;border-radius:6px;font-size:14px;line-height:1">${lbl}</button>`;
 
     wrap.innerHTML = `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap">
         <div style="display:flex;flex-direction:column;gap:4px">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <button onclick="_gdashMapaFiltrarMes(${SEL})" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-sec);font-size:11px;cursor:pointer;font-family:inherit;">← Ver ano todo</button>
@@ -9423,22 +9497,23 @@ function _renderGdashMapa(cfg = {}) {
           </div>
           <div style="font-size:11px;color:var(--text-ter)">${colabsAdaptados.length} colaborador${colabsAdaptados.length!==1?'es':''} com férias em ${MESES_FULL[SEL]}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap">
-          ${cargoChipMapa}
-          <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
-            ${btnNav(mesPrev!==null?`_gdashMapaFiltrarMes(${mesPrev})`:'void 0','‹',mesPrev===null)}
-            <span style="font-size:11px;font-weight:600;color:var(--text);padding:0 8px;white-space:nowrap">${MESES[SEL]}</span>
-            ${btnNav(mesNext!==null?`_gdashMapaFiltrarMes(${mesNext})`:'void 0','›',mesNext===null)}
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${filtroBarra}
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+              ${btnNav(mesPrev!==null?`_gdashMapaFiltrarMes(${mesPrev})`:'void 0','‹',mesPrev===null)}
+              <span style="font-size:11px;font-weight:600;color:var(--text);padding:0 8px;white-space:nowrap">${MESES[SEL]}</span>
+              ${btnNav(mesNext!==null?`_gdashMapaFiltrarMes(${mesNext})`:'void 0','›',mesNext===null)}
+            </div>
           </div>
+          ${buildChips()}
         </div>
       </div>
-      <div id="gdashMapaTimeline"></div>`;
+      <div id="${pfx}MapaTimeline"></div>`;
 
-    const tl = document.getElementById('gdashMapaTimeline');
+    const tl = document.getElementById(`${pfx}MapaTimeline`);
     _ganttRenderContent(tl, colabsAdaptados, diasNoMes, mesInicio, mesFim, SEL, ano);
     tl.querySelectorAll('.gantt-row').forEach(tr => { tr.removeAttribute('onclick'); tr.style.cursor='default'; });
-
-    _fecharMenuCargo();
     return;
   }
 
@@ -9453,15 +9528,12 @@ function _renderGdashMapa(cfg = {}) {
     return diff !== 0 ? diff : a.colab.nome.localeCompare(b.colab.nome, 'pt-BR');
   });
 
-  // Aplica filtro de cargo
-  const visiveis = _gdashMapaCargo
-    ? comPeriodo.filter(({ colab }) => colab.cargo === _gdashMapaCargo)
-    : comPeriodo;
+  // Aplica filtros combinados
+  const visiveis = comPeriodo.filter(({ colab }) => _passaFiltros(colab));
 
   const COR_MAPA = '#185FA5';
   const GAP = '2px', ROW_H = '16px';
 
-  // Cabeçalhos dos meses — clicáveis
   const monthLabels = MESES.map((m, i) => {
     const at  = i === mesAtual;
     const cor = at ? '#185FA5' : 'var(--text-ter)';
@@ -9485,7 +9557,6 @@ function _renderGdashMapa(cfg = {}) {
     return `<div style="height:${ROW_H};border-radius:3px;background:${bg};${border}"></div>`;
   }).join('');
 
-  // Separador de mês de início (marcador discreto)
   let _prevMes = -1;
   const renderRow = (item, idx) => {
     const pm   = _primeiroMes(item);
@@ -9523,7 +9594,7 @@ function _renderGdashMapa(cfg = {}) {
   const toggleLabel = _gdashMapaMostrarTodos ? '▴ ocultar sem programação' : `▾ ${semPeriodo.length} sem programação`;
 
   wrap.innerHTML = `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap">
       <div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:12px;font-weight:600;color:var(--text)">Mapa anual</span>
@@ -9533,10 +9604,11 @@ function _renderGdashMapa(cfg = {}) {
             ${anoNavBtn(1,'›', ano >= anoAtual)}
           </div>
         </div>
-        <div style="font-size:11px;color:var(--text-ter);margin-top:4px">${comPeriodo.length} com período programado · clique em um mês para detalhar</div>
+        <div style="font-size:11px;color:var(--text-ter);margin-top:4px">${visiveis.length} com período programado${temFiltro?' (filtrado)':''} · clique em um mês para detalhar</div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
-        ${cargoChipMapa}
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        ${filtroBarra}
+        ${buildChips()}
       </div>
     </div>
     <div style="display:grid;grid-template-columns:28px 120px 1fr;gap:4px;margin-bottom:3px">
@@ -9546,15 +9618,13 @@ function _renderGdashMapa(cfg = {}) {
     <div style="display:flex;flex-direction:column;gap:3px">
       ${visiveis.length
         ? visiveis.map((item, idx) => renderRow(item, idx)).join('')
-        : `<div style="font-size:11px;color:var(--text-ter);padding:10px 0">Nenhum colaborador com período programado.</div>`}
+        : `<div style="font-size:11px;color:var(--text-ter);padding:10px 0">Nenhum colaborador encontrado para os filtros selecionados.</div>`}
     </div>
     ${semPeriodo.length ? `
     <div style="margin-top:10px;padding-top:8px;border-top:0.5px solid var(--border)">
       <button onclick="_gdashMapaToggle()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text-ter);padding:0;font-family:inherit">${toggleLabel}</button>
       ${_gdashMapaMostrarTodos ? `<div style="display:flex;flex-direction:column;gap:3px;margin-top:6px">${semPeriodo.map(renderSemRow).join('')}</div>` : ''}
     </div>` : ''}`;
-
-  _fecharMenuCargo();
 }
 
 // ── Bloco E: Sem programação por urgência ───────────────────────────────────
