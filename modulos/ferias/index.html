@@ -1668,7 +1668,7 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           Timeline
         </button>
-        <button class="pvtab rh-only" id="vt-analytics" onclick="setVisTab('analytics')">
+        <button class="pvtab" id="vt-analytics" onclick="setVisTab('dashboard')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           Dashboard
         </button>
@@ -1769,8 +1769,8 @@
         </div>
       </div><!-- /sub-timeline -->
 
-      <!-- ── PAINEL: Analytics (rh-only) ── -->
-      <div id="sub-analytics" class="rh-only" style="display:none;">
+      <!-- ── PAINEL: Dashboard Analytics ── -->
+      <div id="sub-dashboard" style="display:none;">
         <div style="padding:32px 24px;" id="analyticsContent">
           <div style="font-size:13px;color:var(--text-ter);text-align:center;padding:20px;">Em construção — dashboards e KPIs gerenciais em breve.</div>
         </div>
@@ -4370,7 +4370,7 @@ let _visTab = 'lista-anual';
 
 function setVisTab(nome) {
   _visTab = nome;
-  ['lista-anual','calendario','timeline','analytics'].forEach(t => {
+  ['lista-anual','calendario','timeline','dashboard'].forEach(t => {
     const el = document.getElementById('sub-' + t);
     if (el) el.style.display = t === nome ? '' : 'none';
   });
@@ -4378,11 +4378,11 @@ function setVisTab(nome) {
   document.getElementById('vt-lista')?.classList.toggle('active', nome === 'lista-anual');
   document.getElementById('vt-cal')?.classList.toggle('active', nome === 'calendario');
   document.getElementById('vt-timeline')?.classList.toggle('active', nome === 'timeline');
-  document.getElementById('vt-analytics')?.classList.toggle('active', nome === 'analytics');
+  document.getElementById('vt-analytics')?.classList.toggle('active', nome === 'dashboard');
   if (nome === 'lista-anual') renderListaAnual();
   if (nome === 'calendario')  { renderMesSeletor(); renderCalendario(); }
   if (nome === 'timeline')    renderTimeline();
-  if (nome === 'analytics')   renderAnalytics();
+  if (nome === 'dashboard')   renderAnalytics();
 }
 
 function setSubTab(nome, btn) {
@@ -6288,7 +6288,7 @@ function setRole(role) {
   document.getElementById('roleBtnDiretoria')?.classList.toggle('active', role === 'diretoria');
 
   if (role === 'diretoria') {
-    // [RESTAURADO] Diretoria usa a visão Analytics (renderAnalytics) — sec-diretoria preservado mas não acionado
+    // Diretoria: mesma visão RH — abas controladas por podeAba, sem regras específicas de perfil
     const sg = document.getElementById('sec-gestor');
     if (sg) sg.style.display = 'none';
     const sd = document.getElementById('sec-diretoria');
@@ -6296,14 +6296,15 @@ function setRole(role) {
     document.getElementById('sec-visao-rh').style.display = 'block';
     const modTabs = document.querySelector('.mod-tabs');
     if (modTabs) modTabs.style.display = 'flex';
+    const _navTabPermitido = () => {
+      if (podeAba('ferias','dashboard'))  setVisTab('dashboard');
+      else if (podeAba('ferias','lista')) setVisTab('lista-anual');
+      else                                setVisTab('timeline');
+    };
     if (COLABORADORES.length) {
-      setVisTab('analytics');
-      renderAnalytics();
+      _navTabPermitido();
     } else {
-      carregarDoSupabase().then(() => {
-        setVisTab('analytics');
-        renderAnalytics();
-      });
+      carregarDoSupabase().then(_navTabPermitido);
     }
   } else if (role === 'gestor') {
     _RH_SECS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
@@ -12474,22 +12475,25 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!IS_RH) {
     // Perfil gestor: entra direto na visão restrita à equipe
     initGestor();
-  } else if (IS_DIRETORIA) {
-    // [RESTAURADO] Perfil diretoria: reutiliza visão Analytics — sec-diretoria preservado mas não acionado
-    const _rtEl = document.getElementById('roleToggle');
-    if (_rtEl) _rtEl.style.display = 'none';
-    carregarDoSupabase().then(() => {
-      setVisTab('analytics');
-      renderAnalytics();
-    });
   } else {
-    // RH / admin: fluxo normal
+    // RH / Diretoria: mesma lógica — abas visíveis conforme podeAba parametrizado
+    if (IS_DIRETORIA) {
+      const _rtEl = document.getElementById('roleToggle');
+      if (_rtEl) _rtEl.style.display = 'none';
+    }
     if (!podeAba('ferias','lista')) {
       const vtLista = document.getElementById('vt-lista');
       if (vtLista) vtLista.style.display = 'none';
     }
+    if (!podeAba('ferias','dashboard')) {
+      const vtDash = document.getElementById('vt-analytics');
+      if (vtDash) vtDash.style.display = 'none';
+    }
     carregarDoSupabase().then(() => {
-      if (!podeAba('ferias','lista')) setVisTab('timeline');
+      // navega para o primeiro tab que o perfil tem acesso
+      if (podeAba('ferias','dashboard'))   setVisTab('dashboard');
+      else if (podeAba('ferias','lista'))  setVisTab('lista-anual');
+      else                                 setVisTab('timeline');
     });
   }
 });
