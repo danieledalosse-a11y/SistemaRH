@@ -1004,30 +1004,17 @@ function _dadosGenero() {
   const dimId = document.getElementById('f-agrupar-por')?.value || '';
   if (!dimId) return null; // sem agrupamento: delegar para gerarCadastroPDF/Excel
 
-  const sit  = situacaoFiltro() || 'Ativo';
-  const emp  = empresaFiltro();
-  const vins = vinculos();
-  const sex  = document.getElementById('f-sexo')?.value || '';
-
-  let lista = COLABORADORES.filter(c => {
-    if (vins.length && !vins.includes(c.tipoVinculo)) return false;
-    if (sit && c.situacao !== sit) return false;
-    if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
-    if (sex && c.sexo !== sex) return false;
-    return true;
-  });
-
-  if (!lista.length) { alert('Nenhum dado para o filtro selecionado.'); return null; }
+  // Delega o filtro inteiro para _dadosCadastro — garante consistência total
+  const base = _dadosCadastro();
+  if (!base) return null; // alert já emitido por _dadosCadastro
 
   const dim = DIMENSOES_AGRUPAMENTO.find(d => d.id === dimId);
   if (!dim) return null;
 
-  const chips = [];
-  if (sit) chips.push(sit === 'Ativo' ? 'Ativos' : 'Inativos');
-  if (emp) chips.push('Empresa: ' + emp); else chips.push('Todas as empresas');
-  if (sex === 'M') chips.push('Masculino'); else if (sex === 'F') chips.push('Feminino');
-  chips.push('Agrupado por: ' + dim.label);
-
+  // Extrai lista plana dos grupos já filtrados por _dadosCadastro
+  const lista = base.grupos.flatMap(([, setores]) => setores.flatMap(([, colabs]) => colabs));
+  const sex = document.getElementById('f-sexo')?.value || '';
+  const chips = [...base.chips, 'Agrupado por: ' + dim.label];
   const isNivel2 = _DIMS_NIVEL2.has(dimId);
 
   if (isNivel2) {
