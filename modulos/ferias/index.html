@@ -2834,6 +2834,14 @@ function isRiscoDobra(colab) {
   });
 }
 
+function _temFuturoAtivo(colab) {
+  const _excl = new Set(['Cancelado', 'Descartado', 'Rejeitado']);
+  return colab.registros.some(r =>
+    !_excl.has(r.status) &&
+    r.lancamentos.some(l => l.inicio && l.inicio >= HOJE)
+  );
+}
+
 function isSemAgendado(colab) {
   // Cond 1: qualquer PA vencido com saldo > 0 e sem nenhum lançamento
   // Cond 2: PA mais recente com saldo > 0 sem férias futuras programadas
@@ -2841,7 +2849,8 @@ function isSemAgendado(colab) {
   if (!abertos.length) return false;
   if (abertos.some(r => r.paFim && r.paFim < HOJE && r.lancamentos.length === 0)) return true;
   const maisRecente = abertos.slice().sort((a, b) => (b.paFim||'').localeCompare(a.paFim||''))[0];
-  return !maisRecente.lancamentos.some(l => l.fim && l.fim >= HOJE);
+  if (maisRecente.lancamentos.some(l => l.fim && l.fim >= HOJE)) return false;
+  return !_temFuturoAtivo(colab);
 }
 
 function proximoPA(reg) {
@@ -5005,7 +5014,7 @@ function renderListaAnual() {
   }
 
 
-  const paBadge = reg => {
+  const paBadge = (reg, colab) => {
     // Pendente de aprovação pelo RH — prioridade máxima
     if (reg.status === 'Pendente') return `<span class="badge-status-v" style="background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;"><span class="la-dot" style="background:#F79009;"></span>Aguardando aprovação</span>`;
     const saldo = calcSaldo(reg);
@@ -5019,8 +5028,8 @@ function renderListaAnual() {
       if (nivel === 'atencao') return `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção · ${dobraLabel}</span>`;
       return `<span class="badge-status-r" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;"><span class="la-dot" style="background:#3B82F6;"></span>No radar · ${dobraLabel}</span>`;
     }
-    if (saldo <= 0)              return `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
-    if (!reg.lancamentos.length) return `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
+    if (saldo <= 0)                    return `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
+    if (!_temFuturoAtivo(colab))       return `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
     return `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`;
   };
 
@@ -5191,7 +5200,7 @@ function renderListaAnual() {
             <div style="height:3px;border-radius:2px;background:${saldo<=0?'var(--green)':saldo<=5?'var(--red)':'var(--blue)'};width:${pct}%;"></div>
           </div>
         </div>
-        <div class="proto-td">${paBadge(reg)}</div>
+        <div class="proto-td">${paBadge(reg, c)}</div>
       </div>`;
     }
   });
