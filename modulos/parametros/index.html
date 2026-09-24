@@ -851,6 +851,21 @@ const CATS = {
     ],
     headers: ['Valor', 'Vigência — Início', 'Vigência — Fim', 'Situação', ''],
   },
+  escopo_ferias: {
+    label: 'Escopo de Gestão — Férias', section: 'Férias', sectionOrder: 2, order: 1,
+    icon: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/>',
+    desc: 'Escopo adicional de colaboradores visíveis no módulo Férias para um gestor específico. O gestor continua vendo sua equipe normal (via Gestores por Setor) e, adicionalmente, os colaboradores abrangidos por este escopo.',
+    table: 'param_escopo_ferias',
+    noOrdem: true,
+    orderBy: 'criado_em.desc',
+    cols: ['gestor_id', 'tipo', 'valor'],
+    fields: [
+      { key: 'gestor_id', label: 'Gestor',         type: 'select', source: 'gestores',    width: 3, required: true },
+      { key: 'tipo',      label: 'Tipo de escopo', type: 'select', source: 'escopo_tipo', width: 2, required: true },
+      { key: 'valor',     label: 'Valor',           type: 'select', source: 'escopo_valor', width: 3 },
+    ],
+    headers: ['Gestor', 'Tipo de escopo', 'Valor', 'Situação', ''],
+  },
 };
 
 let currentCat = null;
@@ -861,6 +876,7 @@ let gestoresMap = {};
 let setoresMap  = {};
 let cbosMap     = {};   // id → "codigo — titulo"
 let cbosRaw     = [];   // [{id, codigo, titulo, grupo}] para select agrupado
+let empresasAtuacaoList = []; // distinct stripNum(empresa_atuacao) dos colaboradores ativos
 
 async function carregarEmpresas() {
   try {
@@ -887,6 +903,20 @@ async function carregarSetores() {
     rows.forEach(r => { setoresMap[r.id] = r.descricao.replace(/^\d+\s*-\s*/, ''); });
     return rows;
   } catch(_) { return []; }
+}
+
+async function carregarEmpresasAtuacao() {
+  try {
+    const rows = await sbGet('colaboradores', 'select=empresa_atuacao&data_demissao=is.null');
+    const seen = new Set();
+    empresasAtuacaoList = [];
+    rows.forEach(r => {
+      if (!r.empresa_atuacao) return;
+      const n = r.empresa_atuacao.replace(/^\d+\s*[-–]\s*/, '').trim();
+      if (n && !seen.has(n)) { seen.add(n); empresasAtuacaoList.push(n); }
+    });
+    empresasAtuacaoList.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  } catch(_) {}
 }
 
 async function carregarCbos() {
@@ -1159,6 +1189,8 @@ async function carregar() {
   try {
     if (currentCat === 'gestor_setor') {
       await Promise.all([carregarGestores(), carregarSetores()]);
+    } else if (currentCat === 'escopo_ferias') {
+      await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao()]);
     } else if (currentCat === 'cargo') {
       await carregarCbos();
     }
@@ -1282,6 +1314,11 @@ function renderTabela(rows) {
       html += `<td>${row.razao_social || '—'}</td>`;
       html += `<td style="font-size:12px;color:var(--text-sec)">${row.cnpj || '—'}</td>`;
       html += `<td style="font-size:12px;font-weight:600">${row.nome_simplificado || '—'}</td>`;
+    } else if (currentCat === 'escopo_ferias') {
+      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os colaboradores CLT' };
+      html += `<td style="font-weight:600">${gestoresMap[row.gestor_id] || '—'}</td>`;
+      html += `<td>${_TIPO_L[row.tipo] || row.tipo || '—'}</td>`;
+      html += `<td style="color:var(--text-sec)">${row.valor || (row.tipo === 'todos' ? '(sem restrição)' : '—')}</td>`;
     } else if (currentCat === 'marco_tempo_casa') {
       html += `<td style="font-weight:700;font-variant-numeric:tabular-nums">${row.anos != null ? row.anos + (row.anos === 1 ? ' ano' : ' anos') : '—'}</td>`;
     } else if (currentCat === 'tipo_vinculo') {
@@ -1403,6 +1440,21 @@ function abrirModal(row) {
         <select id="field_${f.key}" style="font-size:13px;">${opts}</select>
         <small style="color:var(--text-sec);font-size:11px;">Fonte: MTE — mtecbo.gov.br</small>
       </div>`;
+    } else if (f.type === 'select' && f.source === 'escopo_tipo') {
+      const _TIPO_OPTS = [
+        { v: 'empresa_atuacao', l: 'Empresa de atuação' },
+        { v: 'setor',           l: 'Setor' },
+        { v: 'todos',           l: 'Todos os colaboradores CLT ativos' },
+      ];
+      const opts = _TIPO_OPTS.map(o => `<option value="${o.v}"${val===o.v?' selected':''}>${o.l}</option>`).join('');
+      html += `<div class="field"><label>${f.label} *</label>
+        <select id="field_${f.key}" onchange="_escopoTipoChange(this.value)"><option value="">Selecionar...</option>${opts}</select>
+      </div>`;
+    } else if (f.type === 'select' && f.source === 'escopo_valor') {
+      // Conteúdo populado via _escopoPopularValor() após render
+      html += `<div class="field" id="fieldWrap_valor"><label id="fieldLabel_valor">Valor</label>
+        <select id="field_${f.key}"><option value="">Selecionar...</option></select>
+      </div>`;
     } else if (f.type === 'select' && f.options) {
       const opts = f.options.map(o =>
         `<option value="${o.value}"${val==o.value?' selected':''}>${o.label}</option>`).join('');
@@ -1434,6 +1486,12 @@ function abrirModal(row) {
   }
 
   document.getElementById('modalFields').innerHTML = html;
+
+  // Escopo férias: inicializa dropdown condicional de valor
+  if (currentCat === 'escopo_ferias') {
+    const tipoEl = document.getElementById('field_tipo');
+    _escopoPopularValor(tipoEl ? tipoEl.value : '', row ? (row.valor || '') : '');
+  }
 
   // Campo de busca de colaborador substitui o campo Nome para gestores
   if (currentCat === 'gestor') {
@@ -1473,6 +1531,37 @@ function abrirModal(row) {
 function editarItem(id) {
   const row = allRows.find(r => String(r.id) === String(id));
   if (row) abrirModal(row);
+}
+
+function _escopoTipoChange(tipo) {
+  _escopoPopularValor(tipo, '');
+}
+
+function _escopoPopularValor(tipo, valorAtual) {
+  const wrap  = document.getElementById('fieldWrap_valor');
+  const sel   = document.getElementById('field_valor');
+  const label = document.getElementById('fieldLabel_valor');
+  if (!wrap || !sel) return;
+  if (tipo === 'todos' || !tipo) {
+    wrap.style.display = 'none';
+    sel.innerHTML = '';
+    return;
+  }
+  wrap.style.display = '';
+  let opts = '<option value="">Selecionar...</option>';
+  if (tipo === 'empresa_atuacao') {
+    if (label) label.textContent = 'Empresa de atuação';
+    opts += empresasAtuacaoList.map(e =>
+      `<option value="${e}"${valorAtual === e ? ' selected' : ''}>${e}</option>`
+    ).join('');
+  } else if (tipo === 'setor') {
+    if (label) label.textContent = 'Setor';
+    const nomes = [...new Set(Object.values(setoresMap))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    opts += nomes.map(s =>
+      `<option value="${s}"${valorAtual === s ? ' selected' : ''}>${s}</option>`
+    ).join('');
+  }
+  sel.innerHTML = opts;
 }
 
 async function fecharModal(forcar = false) {
@@ -1520,6 +1609,15 @@ async function salvar() {
     if (cboRow) body.cbo_codigo = cboRow.codigo;
   } else if (currentCat === 'cargo' && !body.cbo_id) {
     body.cbo_codigo = null;
+  }
+
+  // escopo_ferias: gestor_id é integer; valor é null quando tipo = 'todos'
+  if (currentCat === 'escopo_ferias') {
+    body.gestor_id = body.gestor_id ? parseInt(body.gestor_id) : null;
+    if (body.tipo === 'todos') body.valor = null;
+    if (!body.gestor_id) { showToast('Selecione um gestor.', 'error'); return; }
+    if (!body.tipo) { showToast('Selecione o tipo de escopo.', 'error'); return; }
+    if (body.tipo !== 'todos' && !body.valor) { showToast('Selecione o valor do escopo.', 'error'); return; }
   }
 
   // bonus_indicacao: valor é float; vigencia_fim vazio → null

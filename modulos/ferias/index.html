@@ -8047,11 +8047,34 @@ async function _carregarEquipeGestor(gestor_id, cfg = {}) {
     colabQuery = `ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo&order=nome`;
   }
   setGestorMsg('Carregando equipe...');
-  GESTOR_COLABS = (await sbGet('colaboradores', colabQuery))
-    .filter(c => {
-      const tv = (c.tipo_vinculo || 'clt').toLowerCase();
-      return tv === 'clt'; // exclui pro_labore e promotora
-    });
+  const _baseColabs = (await sbGet('colaboradores', colabQuery))
+    .filter(c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt');
+
+  // Escopo adicional de gestão de férias (param_escopo_ferias)
+  let _escopoColabs = [];
+  if (gestor_id) {
+    const escopos = await sbGet('param_escopo_ferias', `gestor_id=eq.${gestor_id}&ativo=eq.true&select=tipo,valor`).catch(() => []);
+    if (escopos.length) {
+      const _colSelect = 'select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo,empresa_atuacao';
+      for (const esc of escopos) {
+        let extra = [];
+        if (esc.tipo === 'todos') {
+          extra = await sbGet('colaboradores', `data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
+        } else if (esc.tipo === 'empresa_atuacao' && esc.valor) {
+          extra = await sbGet('colaboradores', `data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
+          extra = extra.filter(c => (c.empresa_atuacao || '').replace(/^\d+\s*[-–]\s*/, '').trim() === esc.valor);
+        } else if (esc.tipo === 'setor' && esc.valor) {
+          extra = await sbGet('colaboradores', `setor=ilike.*${encodeURIComponent(esc.valor)}&data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
+        }
+        _escopoColabs.push(...extra.filter(c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt'));
+      }
+    }
+  }
+
+  // Union: equipe base + escopo adicional (dedup por id)
+  const _idsBase = new Set(_baseColabs.map(c => c.id));
+  const _union   = [..._baseColabs, ..._escopoColabs.filter(c => !_idsBase.has(c.id))];
+  GESTOR_COLABS = _union;
   if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado');
   const ids = GESTOR_COLABS.map(c => c.id).join(',');
   setGestorMsg('Buscando férias da equipe...');
