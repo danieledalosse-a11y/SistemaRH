@@ -8030,53 +8030,55 @@ function processGestorFerias(rows) {
 
 async function _carregarEquipeGestor(gestor_id, cfg = {}) {
   if (!cfg.skipGestorUI) setGestorMsg('Carregando equipe...');
-  let colabQuery;
+  const _colSelect = 'select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo,empresa_atuacao';
+  const _isCLT = c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt';
+  // normalização idêntica aos filtros do módulo: sem acento, lowercase
+  const _norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+
+  let _baseColabs;
   if (gestor_id) {
-    // Fluxo parametrizado: gestor_id → param_gestor_setor → param_setor → colaboradores.setor
-    setGestorMsg('Identificando setores da equipe...');
-    const setorLinks = await sbGet('param_gestor_setor', `gestor_id=eq.${gestor_id}&ativo=eq.true&select=setor_id`);
-    if (!setorLinks.length) throw new Error('Nenhum setor configurado para este gestor. Contate o RH.');
-    const setorIds = setorLinks.map(r => r.setor_id).join(',');
-    const setorRows = await sbGet('param_setor', `id=in.(${setorIds})&select=descricao`);
-    if (!setorRows.length) throw new Error('Setores não encontrados. Contate o RH.');
-    const descricoes = setorRows.map(r => `"${r.descricao}"`).join(',');
-    colabQuery = `setor=in.(${descricoes})&data_demissao=is.null&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo&order=nome`;
+    // Equipe própria: colaboradores.gestor = GESTOR_APELIDO (fonte de verdade universal)
+    setGestorMsg('Carregando equipe...');
+    const apelido = encodeURIComponent(GESTOR_APELIDO);
+    _baseColabs = (await sbGet('colaboradores', `gestor=ilike.${apelido}&data_demissao=is.null&${_colSelect}&order=nome`))
+      .filter(_isCLT);
   } else {
     // RH/admin: sem restrição de equipe
     GESTOR_APELIDO = null;
-    colabQuery = `ativo=eq.true&select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo&order=nome`;
+    _baseColabs = (await sbGet('colaboradores', `ativo=eq.true&${_colSelect}&order=nome`))
+      .filter(_isCLT);
   }
-  setGestorMsg('Carregando equipe...');
-  const _baseColabs = (await sbGet('colaboradores', colabQuery))
-    .filter(c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt');
 
   // Escopo adicional de gestão de férias (param_escopo_ferias)
   let _escopoColabs = [];
   if (gestor_id) {
     const escopos = await sbGet('param_escopo_ferias', `gestor_id=eq.${gestor_id}&ativo=eq.true&select=tipo,valor,gestor_ref_id`).catch(() => []);
     if (escopos.length) {
-      const _colSelect = 'select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo,empresa_atuacao';
+      // Pré-carrega nomes dos gestores referenciados em lote
+      const refIds = [...new Set(escopos.filter(e => e.tipo === 'gestor' && e.gestor_ref_id).map(e => e.gestor_ref_id))];
+      let refNomeMap = {};
+      if (refIds.length) {
+        const refRows = await sbGet('param_gestor', `id=in.(${refIds.join(',')})&select=id,nome`).catch(() => []);
+        refNomeMap = Object.fromEntries(refRows.map(r => [r.id, r.nome]));
+      }
+
       for (const esc of escopos) {
         let extra = [];
         if (esc.tipo === 'todos') {
           extra = await sbGet('colaboradores', `data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
         } else if (esc.tipo === 'empresa_atuacao' && esc.valor) {
-          extra = await sbGet('colaboradores', `data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
-          extra = extra.filter(c => (c.empresa_atuacao || '').replace(/^\d+\s*[-–]\s*/, '').trim() === esc.valor);
+          const all = await sbGet('colaboradores', `data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
+          extra = all.filter(c => _norm((c.empresa_atuacao || '').replace(/^\d+\s*[-–]\s*/, '')) === _norm(esc.valor));
         } else if (esc.tipo === 'setor' && esc.valor) {
           extra = await sbGet('colaboradores', `setor=ilike.*${encodeURIComponent(esc.valor)}&data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
         } else if (esc.tipo === 'gestor' && esc.gestor_ref_id) {
-          const refLinks = await sbGet('param_gestor_setor', `gestor_id=eq.${esc.gestor_ref_id}&ativo=eq.true&select=setor_id`).catch(() => []);
-          if (refLinks.length) {
-            const refSetorIds = refLinks.map(r => r.setor_id).join(',');
-            const refSetores = await sbGet('param_setor', `id=in.(${refSetorIds})&select=descricao`).catch(() => []);
-            if (refSetores.length) {
-              const refDesc = refSetores.map(r => encodeURIComponent(r.descricao)).join(',');
-              extra = await sbGet('colaboradores', `setor=in.(${refDesc})&data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
-            }
+          // Equipe do gestor referenciado: colaboradores.gestor = nome do gestor (mesma lógica da equipe própria)
+          const refNome = refNomeMap[esc.gestor_ref_id];
+          if (refNome) {
+            extra = await sbGet('colaboradores', `gestor=ilike.${encodeURIComponent(refNome)}&data_demissao=is.null&${_colSelect}&order=nome`).catch(() => []);
           }
         }
-        _escopoColabs.push(...extra.filter(c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt'));
+        _escopoColabs.push(...extra.filter(_isCLT));
       }
     }
   }
