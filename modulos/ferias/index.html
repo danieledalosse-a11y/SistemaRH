@@ -8058,8 +8058,8 @@ async function _carregarEquipeGestor(gestor_id, cfg = {}) {
       const refIds = [...new Set(escopos.filter(e => e.tipo === 'gestor' && e.gestor_ref_id).map(e => e.gestor_ref_id))];
       let refNomeMap = {};
       if (refIds.length) {
-        const refRows = await sbGet('param_gestor', `id=in.(${refIds.join(',')})&select=id,nome`).catch(() => []);
-        refNomeMap = Object.fromEntries(refRows.map(r => [r.id, r.nome]));
+        const refRows = await sbGet('param_gestor', `id=in.(${refIds.join(',')})&select=id,nome,apelido`).catch(() => []);
+        refNomeMap = Object.fromEntries(refRows.map(r => [r.id, r.apelido || r.nome]));
       }
 
       for (const esc of escopos) {
@@ -8141,9 +8141,9 @@ async function initGestor(fromToggle = false) {
         return;
       }
       setGestorMsg('Identificando gestor...');
-      const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=id,nome&limit=1`);
+      const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=id,nome,apelido&limit=1`);
       if (!pgRows.length) throw new Error('Gestor não encontrado em param_gestor. Contate o RH.');
-      GESTOR_APELIDO = pgRows[0].nome || '';
+      GESTOR_APELIDO = pgRows[0].apelido || pgRows[0].nome || '';
       await _carregarEquipeGestor(pgRows[0].id);
     } else {
       // RH, admin ou outro perfil autorizado — acessa visão gestor sem restrição de equipe
@@ -8160,8 +8160,8 @@ async function rhVerEquipeGestor() {
   if (!gestor_id) { toast('Selecione um gestor.', 'aviso'); return; }
   document.getElementById('gestorLoadingMsg').textContent = 'Carregando equipe...';
   try {
-    const pgRow = await sbGet('param_gestor', `id=eq.${gestor_id}&select=nome&limit=1`);
-    GESTOR_APELIDO = pgRow[0]?.nome || '';
+    const pgRow = await sbGet('param_gestor', `id=eq.${gestor_id}&select=nome,apelido&limit=1`);
+    GESTOR_APELIDO = pgRow[0]?.apelido || pgRow[0]?.nome || '';
     await _carregarEquipeGestor(gestor_id);
     const btn = document.getElementById('btnTrocarGestor');
     if (btn) btn.style.display = 'block';
