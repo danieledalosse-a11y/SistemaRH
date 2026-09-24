@@ -997,6 +997,9 @@ ${blocos}
 }
 
 // ─── Por Gênero ──────────────────────────────────────────────────────────────
+// Dimensões de dois níveis (empresa principal → setor)
+const _DIMS_NIVEL2 = new Set(['empresaAtuacao', 'empresa']);
+
 function _dadosGenero() {
   const dimId = document.getElementById('f-agrupar-por')?.value || '';
   if (!dimId) return null; // sem agrupamento: delegar para gerarCadastroPDF/Excel
@@ -1019,6 +1022,40 @@ function _dadosGenero() {
   const dim = DIMENSOES_AGRUPAMENTO.find(d => d.id === dimId);
   if (!dim) return null;
 
+  const chips = [];
+  if (sit) chips.push(sit === 'Ativo' ? 'Ativos' : 'Inativos');
+  if (emp) chips.push('Empresa: ' + emp); else chips.push('Todas as empresas');
+  if (sex === 'M') chips.push('Masculino'); else if (sex === 'F') chips.push('Feminino');
+  chips.push('Agrupado por: ' + dim.label);
+
+  const isNivel2 = _DIMS_NIVEL2.has(dimId);
+
+  if (isNivel2) {
+    // Dois níveis: grupo principal (empresa) → subgrupo (setor) → colabs
+    const chaveEmp = dimId === 'empresa'
+      ? c => stripNum(c.empresa) || '(Sem empresa)'
+      : c => stripNum(c.empresaAtuacao) || '(Sem empresa)';
+    const empMap = {};
+    [...lista].sort((a, b) => {
+      const ea = chaveEmp(a), eb = chaveEmp(b);
+      if (ea === '(Sem empresa)' && eb !== '(Sem empresa)') return 1;
+      if (ea !== '(Sem empresa)' && eb === '(Sem empresa)') return -1;
+      const ec = ea.localeCompare(eb, 'pt-BR'); if (ec !== 0) return ec;
+      return stripNum(a.setor||'').localeCompare(stripNum(b.setor||''), 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR');
+    }).forEach(c => {
+      const e = chaveEmp(c);
+      const s = stripNum(c.setor) || '(Sem setor)';
+      if (!empMap[e]) empMap[e] = {};
+      if (!empMap[e][s]) empMap[e][s] = [];
+      empMap[e][s].push(c);
+    });
+    const grupos = Object.entries(empMap)
+      .sort(([a],[b]) => { if(a==='(Sem empresa)') return 1; if(b==='(Sem empresa)') return -1; return a.localeCompare(b,'pt-BR'); })
+      .map(([empresa, setMap]) => [empresa, Object.entries(setMap).sort(([a],[b]) => a.localeCompare(b,'pt-BR'))]);
+    return { grupos, chips, total: lista.length, dimLabel: dim.label, sex, dataHora: agora(), isNivel2: true };
+  }
+
+  // Um nível: grupo (dimensão) → colabs
   const map = {};
   const ordem = [];
   for (const c of lista) {
@@ -1027,37 +1064,45 @@ function _dadosGenero() {
     map[chave].push(c);
   }
   ordem.sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  // Ordenar colaboradores dentro de cada grupo por nome
   for (const chave of ordem) map[chave].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-
   const grupos = ordem.map(chave => ({ label: chave, colabs: map[chave] }));
-  const dimLabel = dim.label;
 
-  const chips = [];
-  if (sit) chips.push(sit === 'Ativo' ? 'Ativos' : 'Inativos');
-  if (emp) chips.push('Empresa: ' + emp); else chips.push('Todas as empresas');
-  if (sex === 'M') chips.push('Masculino'); else if (sex === 'F') chips.push('Feminino');
-  chips.push('Agrupado por: ' + dimLabel);
-
-  return { grupos, chips, total: lista.length, dimLabel, sex, dataHora: agora() };
+  return { grupos, chips, total: lista.length, dimLabel: dim.label, sex, dataHora: agora(), isNivel2: false };
 }
 
 function gerarGeneroPDF() {
   const d = _dadosGenero();
   if (!d) { gerarCadastroPDF(); return; }
 
-  const { grupos, chips, total, dimLabel, sex, dataHora } = d;
-  const label = total === 1 ? 'colaborador' : sex === 'F' ? 'colaboradoras' : 'colaboradores';
+  const { grupos, chips, total, sex, dataHora, isNivel2 } = d;
+  const cntStr = (n) => n === 1 ? '1 colaborador' : n + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
+  const label = cntStr(total).replace(/^\d+ /, '');
   let blocos = '';
-  for (const g of grupos) {
-    const cnt = g.colabs.length;
-    const cntLabel = cnt === 1 ? '1 colaborador' : cnt + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
-    const linhas = g.colabs.map(c =>
-      `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${c.gestor||'—'}</td></tr>`
-    ).join('');
-    blocos += `<div class="sh"><span class="sn">${g.label}</span><span class="sc">${cntLabel}</span></div>`;
-    blocos += `<table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
+
+  if (isNivel2) {
+    // Dois níveis: empresa → setor (idêntico a gerarCadastroPDF)
+    for (const [empresa, setores] of grupos) {
+      const cntEmp = setores.reduce((s,[,l]) => s + l.length, 0);
+      blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntStr(cntEmp)}</span></div>`;
+      for (const [setor, lista] of setores) {
+        const linhas = lista.map(c =>
+          `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${c.gestor||'—'}</td></tr>`
+        ).join('');
+        blocos += `<div class="ss"><span class="ssn">${setor}</span><span class="ssc">${cntStr(lista.length)}</span></div>
+          <table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
+      }
+    }
+  } else {
+    // Um nível: cabeçalho de grupo (estilo .sh) + tabela
+    for (const g of grupos) {
+      const linhas = g.colabs.map(c =>
+        `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${c.gestor||'—'}</td></tr>`
+      ).join('');
+      blocos += `<div class="sh"><span class="sn">${g.label}</span><span class="sc">${cntStr(g.colabs.length)}</span></div>`;
+      blocos += `<table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
+    }
   }
+
   abrirPDF(htmlRelPDF('Relatório — Por Gênero', chips, total, label, dataHora, blocos));
 }
 
@@ -1065,29 +1110,51 @@ function gerarGeneroExcel() {
   const d = _dadosGenero();
   if (!d) { gerarCadastroExcel(); return; }
 
-  const { grupos, chips, total, dimLabel, sex, dataHora } = d;
-  const label = total === 1 ? 'colaborador' : sex === 'F' ? 'colaboradoras' : 'colaboradores';
+  const { grupos, chips, total, sex, dataHora, isNivel2 } = d;
+  const cntStr = (n) => n === 1 ? '1 colaborador' : n + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
+  const label = cntStr(total).replace(/^\d+ /, '');
   const F = 'font-family:Calibri,Arial,sans-serif;';
   const EMP_L = `style="${F}font-size:12pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#FFFFFF;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-left:2px solid #1a2d52;border-right:none;"`;
   const EMP_R = `style="${F}font-size:11pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#5DD6B8;text-align:right;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-right:2px solid #1a2d52;border-left:none;"`;
+  const SET_L = `style="${F}font-size:10pt;font-weight:bold;padding:7px 16px 7px 28px;background:#EDF1FA;color:#2C5FA8;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-left:1px solid #C8D8EE;border-right:none;"`;
+  const SET_R = `style="${F}font-size:10pt;padding:7px 16px;background:#EDF1FA;color:#7A92B0;text-align:right;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-right:1px solid #C8D8EE;border-left:none;"`;
   const TH_N  = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;width:260pt;"`;
   const TH2   = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;"`;
   const BLANK = 'style="padding:5px;border:none;background:#FFFFFF;"';
   const TD = (par) => `style="${F}font-size:10pt;color:#5E718A;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};"`;
+  const nomeStyle = (par) => `style="${F}font-size:10pt;font-weight:600;padding:8px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;width:260pt;"`;
+
   let rows = '';
-  for (const g of grupos) {
-    const cnt = g.colabs.length;
-    const cntLabel = cnt === 1 ? '1 colaborador' : cnt + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
-    rows += `<tr><td colspan="4" ${EMP_L}>${g.label}</td><td ${EMP_R}>${cntLabel}</td></tr>`;
-    rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>ADMISSÃO</th><th ${TH2}>GESTOR</th><th ${TH2}></th></tr>`;
-    g.colabs.forEach((c, i) => {
-      const par = i % 2 === 1;
-      const bg  = par ? '#F5F8FD' : '#FFFFFF';
-      const nomeStyle = `style="${F}font-size:10pt;font-weight:600;padding:8px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${bg};color:#1E2740;width:260pt;"`;
-      rows += `<tr><td ${nomeStyle}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
-    });
-    rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+
+  if (isNivel2) {
+    // Dois níveis: empresa (navy) → setor (azul claro) → colabs (idêntico a gerarCadastroExcel)
+    for (const [empresa, setores] of grupos) {
+      const cntEmp = setores.reduce((s,[,l]) => s + l.length, 0);
+      rows += `<tr><td colspan="4" ${EMP_L}>${empresa}</td><td ${EMP_R}>${cntStr(cntEmp)}</td></tr>`;
+      for (const [setor, lista] of setores) {
+        rows += `<tr><td colspan="4" ${SET_L}>${setor}</td><td ${SET_R}>${cntStr(lista.length)}</td></tr>`;
+        rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>ADMISSÃO</th><th ${TH2}>GESTOR</th><th ${TH2}></th></tr>`;
+        lista.forEach((c, i) => {
+          const par = i % 2 === 1;
+          rows += `<tr><td ${nomeStyle(par)}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
+        });
+        rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+      }
+      rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+    }
+  } else {
+    // Um nível: cabeçalho de grupo (navy, sem setor) → colabs
+    for (const g of grupos) {
+      rows += `<tr><td colspan="4" ${EMP_L}>${g.label}</td><td ${EMP_R}>${cntStr(g.colabs.length)}</td></tr>`;
+      rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>ADMISSÃO</th><th ${TH2}>GESTOR</th><th ${TH2}></th></tr>`;
+      g.colabs.forEach((c, i) => {
+        const par = i % 2 === 1;
+        rows += `<tr><td ${nomeStyle(par)}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
+      });
+      rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
+    }
   }
+
   const filtrosTexto = chips.join(' | ');
   const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Por Gênero</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
