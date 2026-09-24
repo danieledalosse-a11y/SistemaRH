@@ -600,8 +600,8 @@ const RELATORIOS = {
   genero: {
     cat: 'Colaboradores',
     title: 'Por Gênero',
-    desc: 'Colaboradores segmentados por gênero, com agrupamento dinâmico por empresa, setor, cargo ou gestor.',
-    note: 'Implementação própria — não depende de _dadosCadastro. Agrupamento configurável via DIMENSOES_AGRUPAMENTO.',
+    desc: 'Colaboradores segmentados por gênero. Mesma estrutura do relatório por Empresa/Setor, pré-filtrado.',
+    note: 'Reutiliza a mesma função de geração de PDF/Excel — pré-configura o filtro de sexo.',
     renderFiltros: () => `
       <div class="filter-row">
         <label class="filter-label">Situação</label>
@@ -612,23 +612,15 @@ const RELATORIOS = {
         </select>
       </div>
       <div class="filter-row">
-        <label class="filter-label">Empresa de atuação</label>
-        <select class="filter-select emp-filter" id="f-empresa"></select>
-      </div>
-      <div class="filter-row">
         <label class="filter-label">Gênero</label>
         <select class="filter-select" id="f-sexo">
-          <option value="">Todos</option>
           <option value="M">Masculino</option>
           <option value="F">Feminino</option>
         </select>
       </div>
       <div class="filter-row">
-        <label class="filter-label">Agrupar por</label>
-        <select class="filter-select" id="f-agrupar-por">
-          <option value="">Nenhum</option>
-          ${DIMENSOES_AGRUPAMENTO.map(d => `<option value="${d.id}">${d.label}</option>`).join('')}
-        </select>
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-empresa"></select>
       </div>
       <div class="filter-row" style="margin-top:8px;">
         <div class="filter-label">Tipo de vínculo</div>
@@ -638,8 +630,8 @@ const RELATORIOS = {
           <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
         </div>
       </div>`,
-    pdf:   () => gerarGeneroPDF(),
-    excel: () => gerarGeneroExcel(),
+    pdf:   () => gerarCadastroPDF({ sexoForce: document.getElementById('f-sexo')?.value }),
+    excel: () => gerarCadastroExcel({ sexoForce: document.getElementById('f-sexo')?.value }),
   },
   cotas: {
     cat: 'Colaboradores',
@@ -901,34 +893,6 @@ function agora() {
   return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
 }
 
-// ─── Dimensões de agrupamento (Por Gênero) ───────────────────────────────────
-const DIMENSOES_AGRUPAMENTO = [
-  { id: 'empresaAtuacao', label: 'Empresa de atuação',  fn: c => stripNum(c.empresaAtuacao) || '(Sem empresa)' },
-  { id: 'empresa',        label: 'Empresa de registro', fn: c => stripNum(c.empresa)        || '(Sem empresa)' },
-  { id: 'setor',          label: 'Setor',               fn: c => stripNum(c.setor)          || '(Sem setor)'   },
-  { id: 'cargo',          label: 'Cargo / Função',      fn: c => c.cargo                    || '(Sem cargo)'   },
-  { id: 'gestor',         label: 'Gestor',              fn: c => c.gestor                   || '(Sem gestor)'  },
-];
-
-function _agruparPorDimensao(lista, dimId) {
-  if (!dimId) {
-    const h = lista.filter(c => c.sexo === 'M').length;
-    const f = lista.filter(c => c.sexo === 'F').length;
-    return [{ label: '', homens: h, mulheres: f, total: lista.length }];
-  }
-  const dim = DIMENSOES_AGRUPAMENTO.find(d => d.id === dimId);
-  if (!dim) return [];
-  const map = {};
-  for (const c of lista) {
-    const chave = dim.fn(c);
-    if (!map[chave]) map[chave] = { label: chave, homens: 0, mulheres: 0, total: 0 };
-    if (c.sexo === 'M') map[chave].homens++;
-    else if (c.sexo === 'F') map[chave].mulheres++;
-    map[chave].total++;
-  }
-  return Object.values(map).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-}
-
 // Filtra colaboradores pelo filtro de empresa do painel
 function filtrarBase(lista) {
   const emp = empresaFiltro();
@@ -994,165 +958,6 @@ tbody td:not(:first-child){padding-left:12px}
 ${blocos}
 <div class="ft"><div class="fi">Sistema RH · Revest · ${dataHora}</div><div class="ft2">Total: ${total} ${label}</div></div>
 </div></body></html>`;
-}
-
-// ─── Por Gênero ──────────────────────────────────────────────────────────────
-// Dimensões de dois níveis (empresa principal → setor)
-const _DIMS_NIVEL2 = new Set(['empresaAtuacao', 'empresa']);
-
-function _dadosGenero() {
-  const dimId = document.getElementById('f-agrupar-por')?.value || '';
-  if (!dimId) return null; // sem agrupamento: delegar para gerarCadastroPDF/Excel
-
-  // Delega o filtro inteiro para _dadosCadastro — garante consistência total
-  const base = _dadosCadastro();
-  if (!base) return null; // alert já emitido por _dadosCadastro
-
-  const dim = DIMENSOES_AGRUPAMENTO.find(d => d.id === dimId);
-  if (!dim) return null;
-
-  // Extrai lista plana dos grupos já filtrados por _dadosCadastro
-  const lista = base.grupos.flatMap(([, setores]) => setores.flatMap(([, colabs]) => colabs));
-  const sex = document.getElementById('f-sexo')?.value || '';
-  const chips = [...base.chips, 'Agrupado por: ' + dim.label];
-  const isNivel2 = _DIMS_NIVEL2.has(dimId);
-
-  if (isNivel2) {
-    // Dois níveis: grupo principal (empresa) → subgrupo (setor) → colabs
-    const chaveEmp = dimId === 'empresa'
-      ? c => stripNum(c.empresa) || '(Sem empresa)'
-      : c => stripNum(c.empresaAtuacao) || '(Sem empresa)';
-    const empMap = {};
-    [...lista].sort((a, b) => {
-      const ea = chaveEmp(a), eb = chaveEmp(b);
-      if (ea === '(Sem empresa)' && eb !== '(Sem empresa)') return 1;
-      if (ea !== '(Sem empresa)' && eb === '(Sem empresa)') return -1;
-      const ec = ea.localeCompare(eb, 'pt-BR'); if (ec !== 0) return ec;
-      return stripNum(a.setor||'').localeCompare(stripNum(b.setor||''), 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR');
-    }).forEach(c => {
-      const e = chaveEmp(c);
-      const s = stripNum(c.setor) || '(Sem setor)';
-      if (!empMap[e]) empMap[e] = {};
-      if (!empMap[e][s]) empMap[e][s] = [];
-      empMap[e][s].push(c);
-    });
-    const grupos = Object.entries(empMap)
-      .sort(([a],[b]) => { if(a==='(Sem empresa)') return 1; if(b==='(Sem empresa)') return -1; return a.localeCompare(b,'pt-BR'); })
-      .map(([empresa, setMap]) => [empresa, Object.entries(setMap).sort(([a],[b]) => a.localeCompare(b,'pt-BR'))]);
-    return { grupos, chips, total: lista.length, dimLabel: dim.label, sex, dataHora: agora(), isNivel2: true };
-  }
-
-  // Um nível: grupo (dimensão) → colabs
-  const map = {};
-  const ordem = [];
-  for (const c of lista) {
-    const chave = dim.fn(c) || '(Sem valor)';
-    if (!map[chave]) { map[chave] = []; ordem.push(chave); }
-    map[chave].push(c);
-  }
-  ordem.sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  for (const chave of ordem) map[chave].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  const grupos = ordem.map(chave => ({ label: chave, colabs: map[chave] }));
-
-  return { grupos, chips, total: lista.length, dimLabel: dim.label, sex, dataHora: agora(), isNivel2: false };
-}
-
-function gerarGeneroPDF() {
-  const d = _dadosGenero();
-  if (!d) { gerarCadastroPDF(); return; }
-
-  const { grupos, chips, total, sex, dataHora, isNivel2 } = d;
-  const cntStr = (n) => n === 1 ? '1 colaborador' : n + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
-  const label = cntStr(total).replace(/^\d+ /, '');
-  let blocos = '';
-
-  if (isNivel2) {
-    // Dois níveis: empresa → setor (idêntico a gerarCadastroPDF)
-    for (const [empresa, setores] of grupos) {
-      const cntEmp = setores.reduce((s,[,l]) => s + l.length, 0);
-      blocos += `<div class="sh"><span class="sn">${empresa}</span><span class="sc">${cntStr(cntEmp)}</span></div>`;
-      for (const [setor, lista] of setores) {
-        const linhas = lista.map(c =>
-          `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${c.gestor||'—'}</td></tr>`
-        ).join('');
-        blocos += `<div class="ss"><span class="ssn">${setor}</span><span class="ssc">${cntStr(lista.length)}</span></div>
-          <table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
-      }
-    }
-  } else {
-    // Um nível: cabeçalho de grupo (estilo .sh) + tabela
-    for (const g of grupos) {
-      const linhas = g.colabs.map(c =>
-        `<tr><td class="td-nome">${c.nome||'—'}</td><td class="td-c">${c.cargo||'—'}</td><td class="td-c">${fmtDateBR(c.dataAdmissao)}</td><td class="td-c">${c.gestor||'—'}</td></tr>`
-      ).join('');
-      blocos += `<div class="sh"><span class="sn">${g.label}</span><span class="sc">${cntStr(g.colabs.length)}</span></div>`;
-      blocos += `<table><thead><tr><th style="width:38%">Nome</th><th>Cargo</th><th>Admissão</th><th>Gestor</th></tr></thead><tbody>${linhas}</tbody></table>`;
-    }
-  }
-
-  abrirPDF(htmlRelPDF('Relatório — Por Gênero', chips, total, label, dataHora, blocos));
-}
-
-function gerarGeneroExcel() {
-  const d = _dadosGenero();
-  if (!d) { gerarCadastroExcel(); return; }
-
-  const { grupos, chips, total, sex, dataHora, isNivel2 } = d;
-  const cntStr = (n) => n === 1 ? '1 colaborador' : n + ' ' + (sex === 'F' ? 'colaboradoras' : 'colaboradores');
-  const label = cntStr(total).replace(/^\d+ /, '');
-  const F = 'font-family:Calibri,Arial,sans-serif;';
-  const EMP_L = `style="${F}font-size:12pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#FFFFFF;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-left:2px solid #1a2d52;border-right:none;"`;
-  const EMP_R = `style="${F}font-size:11pt;font-weight:bold;padding:10px 16px;background:#2C3E6B;color:#5DD6B8;text-align:right;border-top:2px solid #1a2d52;border-bottom:2px solid #1a2d52;border-right:2px solid #1a2d52;border-left:none;"`;
-  const SET_L = `style="${F}font-size:10pt;font-weight:bold;padding:7px 16px 7px 28px;background:#EDF1FA;color:#2C5FA8;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-left:1px solid #C8D8EE;border-right:none;"`;
-  const SET_R = `style="${F}font-size:10pt;padding:7px 16px;background:#EDF1FA;color:#7A92B0;text-align:right;border-top:1px solid #C8D8EE;border-bottom:1px solid #C8D8EE;border-right:1px solid #C8D8EE;border-left:none;"`;
-  const TH_N  = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;width:260pt;"`;
-  const TH2   = `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;"`;
-  const BLANK = 'style="padding:5px;border:none;background:#FFFFFF;"';
-  const TD = (par) => `style="${F}font-size:10pt;color:#5E718A;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};"`;
-  const nomeStyle = (par) => `style="${F}font-size:10pt;font-weight:600;padding:8px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};color:#1E2740;width:260pt;"`;
-
-  let rows = '';
-
-  if (isNivel2) {
-    // Dois níveis: empresa (navy) → setor (azul claro) → colabs (idêntico a gerarCadastroExcel)
-    for (const [empresa, setores] of grupos) {
-      const cntEmp = setores.reduce((s,[,l]) => s + l.length, 0);
-      rows += `<tr><td colspan="4" ${EMP_L}>${empresa}</td><td ${EMP_R}>${cntStr(cntEmp)}</td></tr>`;
-      for (const [setor, lista] of setores) {
-        rows += `<tr><td colspan="4" ${SET_L}>${setor}</td><td ${SET_R}>${cntStr(lista.length)}</td></tr>`;
-        rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>ADMISSÃO</th><th ${TH2}>GESTOR</th><th ${TH2}></th></tr>`;
-        lista.forEach((c, i) => {
-          const par = i % 2 === 1;
-          rows += `<tr><td ${nomeStyle(par)}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
-        });
-        rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
-      }
-      rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
-    }
-  } else {
-    // Um nível: cabeçalho de grupo (navy, sem setor) → colabs
-    for (const g of grupos) {
-      rows += `<tr><td colspan="4" ${EMP_L}>${g.label}</td><td ${EMP_R}>${cntStr(g.colabs.length)}</td></tr>`;
-      rows += `<tr><th ${TH_N}>NOME</th><th ${TH2}>CARGO</th><th ${TH2}>ADMISSÃO</th><th ${TH2}>GESTOR</th><th ${TH2}></th></tr>`;
-      g.colabs.forEach((c, i) => {
-        const par = i % 2 === 1;
-        rows += `<tr><td ${nomeStyle(par)}>${c.nome||''}</td><td ${TD(par)}>${c.cargo||''}</td><td ${TD(par)}>${fmtDateBR(c.dataAdmissao)}</td><td ${TD(par)}>${c.gestor||''}</td><td ${TD(par)}></td></tr>`;
-      });
-      rows += `<tr><td colspan="5" ${BLANK}></td></tr>`;
-    }
-  }
-
-  const filtrosTexto = chips.join(' | ');
-  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Por Gênero</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
-<body><table>
-<tr><td colspan="5" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">Relatório Por Gênero — Revest</td></tr>
-<tr><td colspan="5" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${filtrosTexto} · ${total} registros · Gerado em ${dataHora}</td></tr>
-<tr><td colspan="5" style="padding:4px;border:none;background:#fff;"></td></tr>
-${rows}
-<tr><td colspan="3" style="background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:8px 12px;border:1px solid #DDE5F0;">Total geral</td><td colspan="2" style="background:#EDF1FA;color:#1A7F6A;${F}font-size:10pt;font-weight:bold;padding:8px 12px;text-align:right;border:1px solid #DDE5F0;">${total} ${label}</td></tr>
-</table></body></html>`;
-  baixarExcel(xls, ('Relatorio_Por_Genero_' + chips.join('_')).replace(/[^a-zA-Z0-9À-ÿ_\- ]/g,'').replace(/\s+/g,'_'));
 }
 
 // ─── Aniversários do Mês ─────────────────────────────────────────────────────
