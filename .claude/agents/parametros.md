@@ -189,3 +189,63 @@ await sbPatch(cat.table, id, _patch);
 ```
 
 **Regra:** usar `noAuditCols: true` em toda nova categoria cujo `CREATE TABLE` não inclua `alterado_por`, `updated_at` e `criado_por`. Tabelas padrão do sistema (criadas antes de set/2026) têm essas colunas e não precisam da flag.
+
+## Categoria `escopo_ferias` — Escopo de Gestão de Férias
+
+Cadastro de escopos adicionais que expandem a equipe visível de um gestor no módulo Férias.
+
+### Entrada no CATS
+
+```js
+escopo_ferias: {
+  table:       'param_escopo_ferias',
+  noAuditCols: true,   // tabela não tem alterado_por/updated_at/criado_por
+  noAtivo:     false,
+  // campos: gestor_id, tipo, valor, gestor_ref_id
+}
+```
+
+### `_escopoPopularValor(tipo, valorAtual)` — dropdown dinâmico
+
+Função chamada ao mudar o campo `tipo` no formulário de escopo. Popula o `<select id="field_valor">` com as opções corretas para cada tipo:
+
+| `tipo` | Label | Opções do select |
+|---|---|---|
+| `'empresa_atuacao'` | "Empresa de atuação" | Distinct de `colaboradores.empresa_atuacao` (stripNum) |
+| `'setor'` | "Setor" | Distinct de `colaboradores.setor` (stripNum) |
+| `'todos'` | — | Campo oculto (sem select) |
+| `'gestor'` | "Gestor incluído" | Todos os gestores de `gestoresMap`, excluindo o gestor atual (`field_gestor_id`) |
+
+**Lógica para tipo `'gestor'`:**
+```js
+} else if (tipo === 'gestor') {
+  if (label) label.textContent = 'Gestor incluído';
+  const gestorAtualId = String(document.getElementById('field_gestor_id')?.value || '');
+  opts += Object.entries(gestoresMap)
+    .filter(([id]) => String(id) !== gestorAtualId)   // não mostra o próprio gestor
+    .sort(([, a], [, b]) => a.localeCompare(b, 'pt-BR'))
+    .map(([id, nome]) => `<option value="${id}"${valorAtual === String(id) ? ' selected' : ''}>${nome}</option>`)
+    .join('');
+}
+```
+
+**Crítico:** para tipo `'gestor'`, o `<select id="field_valor">` recebe o `id` numérico do gestor referenciado, que é salvo na coluna `gestor_ref_id` (não em `valor`). O save deve mapear o valor selecionado para o campo correto.
+
+### Campos no formulário
+
+- `gestor_id` — FK para `param_gestor` (qual gestor tem esse escopo)
+- `tipo` — select: empresa_atuacao / setor / todos / gestor
+- `valor` — texto (empresa ou setor); NULL quando tipo = 'todos' ou 'gestor'
+- `gestor_ref_id` — integer FK para `param_gestor`; preenchido quando tipo = 'gestor'; NULL nos demais
+
+### Exclusão de escopos
+
+Escopos devem ser **excluídos fisicamente** (DELETE), não apenas inativados. Um escopo que não faz mais sentido (ex: gestor Juninho não precisa mais ver equipe do Jander) deve sair da tabela — não há histórico a preservar.
+
+### Migrations relacionadas
+
+| Nº | Arquivo | Conteúdo |
+|---|---|---|
+| 062 | `migrations/062_param_escopo_ferias.sql` | Cria tabela com tipos empresa_atuacao/setor/todos |
+| 063 | `migrations/063_escopo_ferias_gestor_ref.sql` | Adiciona `gestor_ref_id` FK + tipo `'gestor'` |
+| 064 | `migrations/064_escopo_ferias_unique.sql` | Índices únicos parciais por tipo |

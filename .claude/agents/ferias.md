@@ -34,8 +34,8 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\ferias\index.html` (~3.200 
 `id, matricula, nome, cargo, setor, gestor, empresa_registro, empresa_registro_nome, empresa_atuacao, empresa_atuacao_nome, data_demissao, foto_url`
 - `ativo = !data_demissao`
 - Matrículas repetem entre empresas → identificar por matricula + nome
-- `gestor` = texto legado; **não mais usado para identificar equipe** (ver `_carregarEquipeGestor` abaixo)
-- O campo `gestor` **deve estar no `select=`** da query — ainda é usado pelo filtro secundário `gestorFiltroGestor` dentro da lista carregada
+- `gestor` = **fonte de verdade da equipe no módulo Férias** — valor igual a `param_gestor.apelido || param_gestor.nome`. `_carregarEquipeGestor` filtra por `gestor ilike GESTOR_APELIDO`.
+- O campo `gestor` **deve estar no `select=`** da query — também usado pelo filtro secundário `gestorFiltroGestor` dentro da lista carregada
 
 ### `ferias`
 `id, colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status, dias_antecipados, abono_pecuniario` + colunas de lançamentos
@@ -360,44 +360,61 @@ await sbPatch('ferias', `id=eq.${feriasId}`, { ...clearSlot, status: 'Aprovado',
 
 **Por quê:** cancelar o PA inteiro faz o sistema criar nova row com datas erradas (usa `data_admissao` em vez do aniversário correto) no próximo `gestorSolicitarNovoPa`.
 
-## Identificação de equipe do gestor — arquitetura parametrizada (set/2026)
+## Identificação de equipe do gestor — arquitetura (set/2026)
 
-**Regra definitiva:** a equipe de um gestor nunca é definida por comparação de texto livre. O fluxo correto é:
+**Regra definitiva:** a equipe de um gestor é determinada pelo campo `colaboradores.gestor`, que armazena exatamente `param_gestor.apelido || param_gestor.nome`. A query usa `ilike` para match case-insensitive sem wildcards.
 
 ```
 usuarios_perfil.colaborador_id
-  → param_gestor.id (gestor_id)
-  → param_gestor_setor.setor_id (setores responsáveis)
-  → param_setor.descricao (nomes dos setores)
-  → colaboradores.setor IN (descricoes) + data_demissao IS NULL
+  → param_gestor.id + param_gestor.apelido (= GESTOR_APELIDO)
+  → colaboradores.gestor ilike GESTOR_APELIDO + data_demissao IS NULL
 ```
+
+**`param_gestor_setor` NÃO é removida** — continua usada em Parâmetros Gerais para outras finalidades, mas **não é mais usada em `_carregarEquipeGestor`** no módulo Férias.
 
 ### `_carregarEquipeGestor(gestor_id)`
 
-- **`gestor_id` fornecido** (gestor puro): percorre a cadeia acima em 3 queries
-- **`gestor_id = null`** (RH/admin): carrega todos os colaboradores ativos sem restrição
-
 ```js
-if (gestor_id) {
-  const setorLinks = await sbGet('param_gestor_setor', `gestor_id=eq.${gestor_id}&ativo=eq.true&select=setor_id`);
-  const setorIds = setorLinks.map(r => r.setor_id).join(',');
-  const setorRows = await sbGet('param_setor', `id=in.(${setorIds})&select=descricao`);
-  const descricoes = setorRows.map(r => `"${r.descricao}"`).join(',');
-  colabQuery = `setor=in.(${descricoes})&data_demissao=is.null&select=...`;
+async function _carregarEquipeGestor(gestor_id, cfg = {}) {
+  const _colSelect = 'select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo,empresa_atuacao';
+  const _isCLT = c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt';
+  let _baseColabs;
+  if (gestor_id) {
+    const apelido = encodeURIComponent(GESTOR_APELIDO);
+    _baseColabs = (await sbGet('colaboradores', `gestor=ilike.${apelido}&data_demissao=is.null&${_colSelect}&order=nome`))
+      .filter(_isCLT);
+  } else {
+    GESTOR_APELIDO = null;
+    _baseColabs = (await sbGet('colaboradores', `ativo=eq.true&${_colSelect}&order=nome`)).filter(_isCLT);
+  }
+  // Escopo adicional de param_escopo_ferias (ver seção abaixo)
 }
 ```
+
+**Equipe base:** colaboradores CLT onde `colaboradores.gestor ilike GESTOR_APELIDO` + `data_demissao IS NULL`.
+
+**Escopo adicional:** após a equipe base, carrega `param_escopo_ferias` para o `gestor_id` e expande com colaboradores de outros gestores, setores ou empresas (ver seção `param_escopo_ferias`).
 
 ### `initGestor()` — fluxo do gestor puro
 
 ```js
-const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=id,nome&limit=1`);
-GESTOR_APELIDO = pgRows[0].nome || '';   // nome para display e flag de vista restrita
-await _carregarEquipeGestor(pgRows[0].id);  // passa gestor_id numérico, não texto
+// Lê apelido || nome — é exatamente o valor armazenado em colaboradores.gestor
+const pgRows = await sbGet('param_gestor', `colaborador_id=eq.${colaborador_id}&select=id,nome,apelido&limit=1`);
+GESTOR_APELIDO = pgRows[0].apelido || pgRows[0].nome || '';
+await _carregarEquipeGestor(pgRows[0].id);
+```
+
+Quando o RH seleciona um gestor no dropdown, o mesmo padrão é aplicado:
+```js
+const pgRow = await sbGet('param_gestor', `id=eq.${gestor_id}&select=nome,apelido&limit=1`);
+GESTOR_APELIDO = pgRow[0]?.apelido || pgRow[0]?.nome || '';
 ```
 
 ### `GESTOR_APELIDO` — papel atual
 
-Variável string. Truthy = gestor puro (filtro `gestorFiltroGestor` fica oculto). Null = RH/admin (filtro visível). Nunca mais é usada para query de colaboradores.
+Variável string. Armazena `param_gestor.apelido || param_gestor.nome` — exatamente o valor em `colaboradores.gestor`. Usos:
+- **Query de equipe:** `colaboradores.gestor ilike GESTOR_APELIDO` (fonte de verdade da equipe)
+- **Flag de vista restrita:** Truthy = gestor puro (filtro `gestorFiltroGestor` fica oculto). Null = RH/admin (filtro visível)
 
 ### Filtro dropdown de gestores (`gestorFiltroGestor`)
 
@@ -411,15 +428,67 @@ sbGet('param_gestor', 'select=apelido&ativo=eq.true&order=ordem').then(pgRows =>
 }).catch(() => { /* fallback: distinct de colaboradores */ });
 ```
 
-O filtro compara `c.gestor` (campo legado) contra o apelido selecionado — funciona para triagem visual mas **não é a fonte de verdade da equipe**.
+O filtro compara `c.gestor` contra o apelido selecionado — filtro visual auxiliar, a fonte de verdade da equipe é `colaboradores.gestor`.
 
-### Armadilha: `colaboradores.setor` precisa estar em sincronia com `param_setor.descricao`
+## `param_escopo_ferias` — escopo adicional de gestão
 
-A busca por `setor=in.(descricoes)` é case-sensitive e exata. Em set/2026 foram corrigidos 214 colaboradores que tinham formato antigo "código - nome" (ex: "148 - Matriz Vendas"). O formato correto é apenas o nome curto (ex: "Matriz Vendas"), igual a `param_setor.descricao`. Se um colaborador não aparecer na equipe do gestor, verificar:
+Tabela que expande a equipe visível de um gestor além da sua equipe direta (`colaboradores.gestor`). Cada linha adiciona um grupo de colaboradores ao escopo de um gestor no módulo Férias.
+
+### Estrutura da tabela
+
 ```sql
-SELECT DISTINCT setor FROM colaboradores WHERE data_demissao IS NULL ORDER BY setor;
-SELECT descricao FROM param_setor ORDER BY descricao;
+CREATE TABLE param_escopo_ferias (
+  id           uuid    PRIMARY KEY DEFAULT gen_random_uuid(),
+  gestor_id    integer NOT NULL REFERENCES param_gestor(id) ON DELETE CASCADE,
+  tipo         text    NOT NULL CHECK (tipo IN ('empresa_atuacao', 'setor', 'todos', 'gestor')),
+  valor        text,             -- nome da empresa ou setor (NULL quando tipo = 'todos' ou 'gestor')
+  gestor_ref_id integer REFERENCES param_gestor(id) ON DELETE RESTRICT, -- FK quando tipo = 'gestor'
+  ativo        boolean NOT NULL DEFAULT true,
+  criado_em    timestamptz NOT NULL DEFAULT now(),
+  criado_por   text
+);
 ```
+
+### Tipos de escopo
+
+| `tipo` | `valor` | `gestor_ref_id` | Colaboradores adicionados |
+|---|---|---|---|
+| `'empresa_atuacao'` | nome da empresa | NULL | Todos os CLT da empresa |
+| `'setor'` | nome do setor | NULL | Todos os CLT do setor |
+| `'todos'` | NULL | NULL | Todos os CLT ativos |
+| `'gestor'` | NULL | id do gestor | Equipe direta do gestor referenciado |
+
+### Migrations aplicadas
+
+| Migration | Conteúdo |
+|---|---|
+| 062 | Cria a tabela com tipos `empresa_atuacao`, `setor`, `todos` |
+| 063 | Adiciona coluna `gestor_ref_id` FK + adiciona `'gestor'` ao CHECK de `tipo` |
+| 064 | Índices únicos parciais: evita duplicatas por tipo por gestor |
+
+### Indexes únicos (migration 064)
+
+```sql
+-- tipo 'gestor': unique por (gestor_id, gestor_ref_id)
+CREATE UNIQUE INDEX uq_escopo_ferias_gestor_ref ON param_escopo_ferias (gestor_id, gestor_ref_id)
+  WHERE tipo = 'gestor' AND ativo = true;
+-- tipo 'empresa_atuacao' ou 'setor': unique por (gestor_id, tipo, valor)
+CREATE UNIQUE INDEX uq_escopo_ferias_valor ON param_escopo_ferias (gestor_id, tipo, valor)
+  WHERE tipo IN ('empresa_atuacao', 'setor') AND ativo = true;
+-- tipo 'todos': unique por gestor_id (só pode ter um)
+CREATE UNIQUE INDEX uq_escopo_ferias_todos ON param_escopo_ferias (gestor_id)
+  WHERE tipo = 'todos' AND ativo = true;
+```
+
+### Comportamento em `_carregarEquipeGestor`
+
+Após carregar `_baseColabs`, carrega os escopos ativos do gestor e expande com colaboradores extras:
+- `tipo = 'gestor'`: busca `param_gestor.apelido||nome` do `gestor_ref_id`, depois `colaboradores.gestor ilike refNome`
+- `tipo = 'empresa_atuacao'`: `colaboradores.empresa_atuacao ilike valor`
+- `tipo = 'setor'`: `colaboradores.setor ilike valor`
+- `tipo = 'todos'`: todos os CLT ativos
+
+Colaboradores duplicados (já na equipe base) são deduplados por `id`.
 
 ## Filtro de ano na Visão RH
 
