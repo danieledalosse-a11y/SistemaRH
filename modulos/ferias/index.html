@@ -5261,7 +5261,13 @@ function renderMinhaEquipe() {
   }
 
   document.getElementById('equipeBody').innerHTML = lista.map(c => {
-    const reg = getRegistroAtual(c);
+    // Mesma prioridade de renderListaAnual: PA com lançamento futuro > saldo > mais recente
+    const _excR = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+    const _vRegs = [...c.registros.filter(r => !_excR.has(r.status))]
+      .sort((a,b) => (a.paInicio||'').localeCompare(b.paInicio||''));
+    const _cfR = _vRegs.filter(r => r.lancamentos.some(l => l.inicio && l.inicio >= HOJE));
+    const _csR = _vRegs.filter(r => calcSaldo(r) > 0);
+    const reg  = _cfR.length > 0 ? _cfR[0] : _csR.length > 0 ? _csR[0] : _vRegs[_vRegs.length-1] || getRegistroAtual(c);
     if (!reg) return '';
     const saldo = calcSaldo(reg);
     const deFeriasHoje = deFeriasNoPeriodo(c, anoMes);
