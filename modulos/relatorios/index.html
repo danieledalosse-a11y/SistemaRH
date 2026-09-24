@@ -600,8 +600,8 @@ const RELATORIOS = {
   genero: {
     cat: 'Colaboradores',
     title: 'Por Gênero',
-    desc: 'Colaboradores segmentados por gênero. Mesma estrutura do relatório por Empresa/Setor, pré-filtrado.',
-    note: 'Reutiliza a mesma função de geração de PDF/Excel — pré-configura o filtro de sexo.',
+    desc: 'Colaboradores segmentados por gênero, com agrupamento dinâmico por empresa, setor, cargo ou gestor.',
+    note: 'Implementação própria — não depende de _dadosCadastro. Agrupamento configurável via DIMENSOES_AGRUPAMENTO.',
     renderFiltros: () => `
       <div class="filter-row">
         <label class="filter-label">Situação</label>
@@ -612,15 +612,15 @@ const RELATORIOS = {
         </select>
       </div>
       <div class="filter-row">
-        <label class="filter-label">Gênero</label>
-        <select class="filter-select" id="f-sexo">
-          <option value="M">Masculino</option>
-          <option value="F">Feminino</option>
-        </select>
-      </div>
-      <div class="filter-row">
         <label class="filter-label">Empresa de atuação</label>
         <select class="filter-select emp-filter" id="f-empresa"></select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Agrupar por</label>
+        <select class="filter-select" id="f-agrupar-por">
+          <option value="">Nenhum</option>
+          ${DIMENSOES_AGRUPAMENTO.map(d => `<option value="${d.id}">${d.label}</option>`).join('')}
+        </select>
       </div>
       <div class="filter-row" style="margin-top:8px;">
         <div class="filter-label">Tipo de vínculo</div>
@@ -630,8 +630,8 @@ const RELATORIOS = {
           <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" onchange="renderDetalhe(_relAtivo)"> Pró-labore</label>
         </div>
       </div>`,
-    pdf:   () => gerarCadastroPDF({ sexoForce: document.getElementById('f-sexo')?.value }),
-    excel: () => gerarCadastroExcel({ sexoForce: document.getElementById('f-sexo')?.value }),
+    pdf:   () => gerarGeneroPDF(),
+    excel: () => gerarGeneroExcel(),
   },
   cotas: {
     cat: 'Colaboradores',
@@ -893,6 +893,34 @@ function agora() {
   return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
 }
 
+// ─── Dimensões de agrupamento (Por Gênero) ───────────────────────────────────
+const DIMENSOES_AGRUPAMENTO = [
+  { id: 'empresaAtuacao', label: 'Empresa de atuação',  fn: c => stripNum(c.empresaAtuacao) || '(Sem empresa)' },
+  { id: 'empresa',        label: 'Empresa de registro', fn: c => stripNum(c.empresa)        || '(Sem empresa)' },
+  { id: 'setor',          label: 'Setor',               fn: c => stripNum(c.setor)          || '(Sem setor)'   },
+  { id: 'cargo',          label: 'Cargo / Função',      fn: c => c.cargo                    || '(Sem cargo)'   },
+  { id: 'gestor',         label: 'Gestor',              fn: c => c.gestor                   || '(Sem gestor)'  },
+];
+
+function _agruparPorDimensao(lista, dimId) {
+  if (!dimId) {
+    const h = lista.filter(c => c.sexo === 'M').length;
+    const f = lista.filter(c => c.sexo === 'F').length;
+    return [{ label: '', homens: h, mulheres: f, total: lista.length }];
+  }
+  const dim = DIMENSOES_AGRUPAMENTO.find(d => d.id === dimId);
+  if (!dim) return [];
+  const map = {};
+  for (const c of lista) {
+    const chave = dim.fn(c);
+    if (!map[chave]) map[chave] = { label: chave, homens: 0, mulheres: 0, total: 0 };
+    if (c.sexo === 'M') map[chave].homens++;
+    else if (c.sexo === 'F') map[chave].mulheres++;
+    map[chave].total++;
+  }
+  return Object.values(map).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+}
+
 // Filtra colaboradores pelo filtro de empresa do painel
 function filtrarBase(lista) {
   const emp = empresaFiltro();
@@ -958,6 +986,118 @@ tbody td:not(:first-child){padding-left:12px}
 ${blocos}
 <div class="ft"><div class="fi">Sistema RH · Revest · ${dataHora}</div><div class="ft2">Total: ${total} ${label}</div></div>
 </div></body></html>`;
+}
+
+// ─── Por Gênero ──────────────────────────────────────────────────────────────
+function _dadosGenero() {
+  const sit   = situacaoFiltro() || 'Ativo';
+  const emp   = empresaFiltro();
+  const vins  = vinculos();
+  const dimId = document.getElementById('f-agrupar-por')?.value || '';
+
+  let lista = COLABORADORES.filter(c => {
+    if (vins.length && !vins.includes(c.tipoVinculo)) return false;
+    if (sit && c.situacao !== sit) return false;
+    if (emp && stripNum(c.empresaAtuacao) !== emp) return false;
+    return true;
+  });
+
+  if (!lista.length) { alert('Nenhum dado para o filtro selecionado.'); return null; }
+
+  const grupos   = _agruparPorDimensao(lista, dimId);
+  const dimObj   = DIMENSOES_AGRUPAMENTO.find(d => d.id === dimId);
+  const dimLabel = dimObj?.label || '';
+
+  const totalH = grupos.reduce((s, g) => s + g.homens, 0);
+  const totalF = grupos.reduce((s, g) => s + g.mulheres, 0);
+  const total  = lista.length;
+
+  const chips = [];
+  if (sit) chips.push(sit === 'Ativo' ? 'Ativos' : 'Inativos');
+  if (emp) chips.push('Empresa: ' + emp); else chips.push('Todas as empresas');
+  if (dimLabel) chips.push('Agrupado por: ' + dimLabel);
+
+  return { grupos, chips, total, totalH, totalF, dimId, dimLabel, dataHora: agora() };
+}
+
+function gerarGeneroPDF() {
+  const d = _dadosGenero(); if (!d) return;
+  const { grupos, chips, total, totalH, totalF, dimId, dimLabel, dataHora } = d;
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  let blocos;
+  if (!dimId) {
+    // Sem agrupamento: tabela única com 3 colunas
+    blocos = `<table><thead><tr>
+      <th style="width:33%">HOMENS</th><th style="width:33%">MULHERES</th><th>TOTAL</th>
+    </tr></thead><tbody><tr>
+      <td class="td-nome">${totalH}</td>
+      <td class="td-nome">${totalF}</td>
+      <td class="td-nome">${total}</td>
+    </tr></tbody></table>`;
+  } else {
+    const linhas = grupos.map((g, i) => {
+      const par = i % 2 === 1;
+      const bgRow = par ? 'background:#F5F8FD' : '';
+      return `<tr style="${bgRow}">
+        <td class="td-nome">${g.label}</td>
+        <td class="td-c">${g.homens}</td>
+        <td class="td-c">${g.mulheres}</td>
+        <td class="td-c" style="font-weight:700;color:#1A7F6A">${g.total}</td>
+      </tr>`;
+    }).join('');
+    blocos = `<table><thead><tr>
+      <th style="width:45%">${dimLabel.toUpperCase()}</th>
+      <th>HOMENS</th><th>MULHERES</th><th>TOTAL</th>
+    </tr></thead><tbody>${linhas}
+    <tr style="background:#EDF1FA;font-weight:700">
+      <td class="td-nome">Total geral</td>
+      <td class="td-nome" style="color:#2C3E6B">${totalH}</td>
+      <td class="td-nome" style="color:#2C3E6B">${totalF}</td>
+      <td class="td-nome" style="color:#1A7F6A">${total}</td>
+    </tr></tbody></table>`;
+  }
+  abrirPDF(htmlRelPDF('Relatório — Por Gênero', chips, total, 'colaborador' + (total > 1 ? 'es' : ''), dataHora, blocos));
+}
+
+function gerarGeneroExcel() {
+  const d = _dadosGenero(); if (!d) return;
+  const { grupos, chips, total, totalH, totalF, dimId, dimLabel, dataHora } = d;
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  const TH = (w) => `style="${F}font-size:9pt;font-weight:bold;padding:7px 12px;background:#F0F4FB;color:#5E718A;text-align:left;border:1px solid #DDE5F0;border-bottom:2px solid #C8D8EE;white-space:nowrap;${w?'width:'+w+';':''}"`;
+  const TD = (par) => `style="${F}font-size:10pt;color:#5E718A;padding:7px 12px;border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;background:${par?'#F5F8FD':'#FFFFFF'};"`;
+  const TD_TOT = `style="${F}font-size:10pt;font-weight:bold;color:#1A7F6A;padding:7px 12px;background:#EDF1FA;border:1px solid #DDE5F0;"`;
+  const TD_TOTLBL = `style="${F}font-size:10pt;font-weight:bold;color:#2C3E6B;padding:7px 12px;background:#EDF1FA;border:1px solid #DDE5F0;"`;
+  let rows;
+  if (!dimId) {
+    rows = `<tr><th ${TH()}>HOMENS</th><th ${TH()}>MULHERES</th><th ${TH()}>TOTAL</th></tr>
+<tr><td style="${F}font-size:11pt;font-weight:bold;padding:8px 12px;color:#2C3E6B;background:#FFFFFF;border:1px solid #DDE5F0;">${totalH}</td>
+<td style="${F}font-size:11pt;font-weight:bold;padding:8px 12px;color:#2C3E6B;background:#FFFFFF;border:1px solid #DDE5F0;">${totalF}</td>
+<td style="${F}font-size:11pt;font-weight:bold;padding:8px 12px;color:#1A7F6A;background:#FFFFFF;border:1px solid #DDE5F0;">${total}</td></tr>`;
+  } else {
+    const colN = 4;
+    rows = `<tr><th ${TH('220pt')}>${dimLabel.toUpperCase()}</th><th ${TH()}>HOMENS</th><th ${TH()}>MULHERES</th><th ${TH()}>TOTAL</th></tr>`;
+    grupos.forEach((g, i) => {
+      const par = i % 2 === 1;
+      rows += `<tr>
+        <td style="${F}font-size:10pt;font-weight:600;padding:8px 12px;color:#1E2740;background:${par?'#F5F8FD':'#FFFFFF'};border:1px solid ${par?'#EEF2FA':'#F5F8FD'};border-bottom:1px solid #E4EAF5;">${g.label}</td>
+        <td ${TD(par)}>${g.homens}</td>
+        <td ${TD(par)}>${g.mulheres}</td>
+        <td ${TD(par)}>${g.total}</td>
+      </tr>`;
+    });
+    rows += `<tr><td ${TD_TOTLBL}>Total geral</td><td ${TD_TOT}>${totalH}</td><td ${TD_TOT}>${totalF}</td><td ${TD_TOT}>${total}</td></tr>`;
+  }
+  const filtrosTexto = chips.join(' | ');
+  const colSpan = dimId ? 4 : 3;
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Por Gênero</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>
+<tr><td colspan="${colSpan}" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:12px;border:none;">Relatório Por Gênero — Revest</td></tr>
+<tr><td colspan="${colSpan}" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:6px 12px;border:none;">${filtrosTexto} · ${total} registros · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="${colSpan}" style="padding:4px;border:none;background:#fff;"></td></tr>
+${rows}
+</table></body></html>`;
+  baixarExcel(xls, ('Relatorio_Por_Genero_' + chips.join('_')).replace(/[^a-zA-Z0-9À-ÿ_\- ]/g,'').replace(/\s+/g,'_'));
 }
 
 // ─── Aniversários do Mês ─────────────────────────────────────────────────────
