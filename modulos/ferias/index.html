@@ -5028,7 +5028,11 @@ function renderListaAnual() {
       if (nivel === 'atencao') return `<span class="badge-status-r" style="background:#FFFAEB;color:#B54708;border:1.5px solid #FDE68A;font-weight:600;"><span class="la-dot" style="background:#F79009;"></span>Atenção · ${dobraLabel}</span>`;
       return `<span class="badge-status-r" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;"><span class="la-dot" style="background:#3B82F6;"></span>No radar · ${dobraLabel}</span>`;
     }
-    if (saldo <= 0)                    return `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
+    if (saldo <= 0) {
+      if (reg.lancamentos.some(l => l.inicio && l.inicio >= HOJE))
+        return `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`;
+      return `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
+    }
     if (!_temFuturoAtivo(colab))       return `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
     return `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`;
   };
@@ -5070,9 +5074,17 @@ function renderListaAnual() {
   let html = '';
 
   sortedItems.forEach(({ c, pasDoAno }) => {
-    // PA mais relevante: com saldo (mais antigo, regra CLT) ou sem saldo (mais recente)
-    const _comSaldo = pasDoAno.filter(r => calcSaldo(r) > 0);
-    const reg = _comSaldo.length > 0 ? _comSaldo[0] : pasDoAno[pasDoAno.length - 1];
+    // PA mais relevante:
+    // 0. PA mais antigo com lançamento futuro ativo (ex.: PA 2026 com gozo em jan/2027)
+    // 1. PA mais antigo com saldo > 0 (regra CLT)
+    // 2. Fallback: PA mais recente
+    // pasDoAno já exclui Cancelado/Descartado/Rejeitado/Pendente, portanto
+    // _comFuturo só contém PAs válidos com lançamentos ativos.
+    const _comFuturo = pasDoAno.filter(r => r.lancamentos.some(l => l.inicio && l.inicio >= HOJE));
+    const _comSaldo  = pasDoAno.filter(r => calcSaldo(r) > 0);
+    const reg = _comFuturo.length > 0 ? _comFuturo[0]
+              : _comSaldo.length  > 0 ? _comSaldo[0]
+              : pasDoAno[pasDoAno.length - 1];
     const saldo = calcSaldo(reg);
     const total = reg.totalDias || 30;
     const pct   = total > 0 ? Math.min(100, Math.round((total - saldo) / total * 100)) : 0;
