@@ -156,11 +156,39 @@ Classes CSS:
 
 | Badge | Cor | Significado |
 |---|---|---|
-| Concluído | verde (`#027A48`, bg `#ECFDF3`) | Férias gozadas |
-| Agendado | **azul** (`#1849A9`, bg `#EFF6FF`) | Período futuro lançado |
-| Sem agendamento | âmbar | PA vigente sem lançamento |
+| Concluído | verde (`#027A48`, bg `#ECFDF3`) | Saldo zerado E todos os lançamentos no passado |
+| Agendado | **azul** (`#1849A9`, bg `#EFF6FF`) | Período futuro lançado (saldo > 0 ou saldo = 0 com futuro) |
+| Sem agendamento | âmbar | PA com saldo sem nenhum lançamento futuro ativo |
 
 **Regra crítica:** Agendado é azul (não verde) para diferenciar de Concluído.
+
+### Prioridade do `paBadge` (visão RH lista)
+
+```js
+1. Pendente de aprovação RH → "Aguardando aprovação" (prioridade máxima)
+2. Risco de dobra (saldo > 0 + dpd ≤ 180) → badge de risco (Crítico/Atenção/No radar)
+3. saldo <= 0 + reg.lancamentos.some(l => l.inicio >= HOJE) → "Agendado"
+   // (saldo zerado mas com lançamentos futuros — ainda não gozados)
+4. saldo <= 0 sem lançamento futuro → "Concluído"
+5. !_temFuturoAtivo(colab) → "Sem agendamento"
+6. fallthrough → "Agendado"
+```
+
+**Regra 3 — Alessandro case:** quando todos os dias do PA estão programados para o futuro, o saldo é 0 mas as férias não foram gozadas. Checar `reg.lancamentos` (não cross-PA) porque `saldo <= 0` significa que o `reg` é o próprio PA responsável pelos dias.
+
+### `_temFuturoAtivo(colab)` — helper cross-PA
+
+```js
+function _temFuturoAtivo(colab) {
+  const _excl = new Set(['Cancelado', 'Descartado', 'Rejeitado']);
+  return colab.registros.some(r =>
+    !_excl.has(r.status) &&
+    r.lancamentos.some(l => l.inicio && l.inicio >= HOJE)
+  );
+}
+```
+
+Varre **todos os PAs** do colaborador (não apenas `reg`). Usado em `isSemAgendado` e `paBadge` (condição 5) para detectar agendamentos futuros em PAs que não são o PA de referência da linha.
 
 ## Filtro "Em férias hoje"
 
@@ -195,10 +223,11 @@ Usa `!lRef` (não `!lancs.length`) para determinar "Sem agendamento". `lRef = at
 **Coluna Agendamentos — `lRef` sem fallback para passado (corrigido 2026-09-11):**
 Tanto na visão RH quanto no Gestor, `lRef = ativo || futuro` — **sem `|| passado`**. Lançamentos já concluídos (`fim < hoje`) não devem aparecer na coluna Agendamentos mesmo que pertençam ao PA vigente com saldo pendente. A coluna exibe `—` nesses casos. O fallback `|| passado` existia em ambas as funções de render e foi removido das duas.
 
-**Exportação gestor — 8 colunas (PDF e Excel):**
-Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo | Situação
+**Exportação gestor — PDF (8 colunas) e Excel (9 colunas):**
+- **PDF:** Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo | Situação
+- **Excel:** **Setor** | Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo | Situação
 
-- Separador de setor usa `colspan="8"` — atualizar se adicionar/remover colunas
+- Separador de setor no PDF usa `colspan="8"` — atualizar se adicionar/remover colunas do PDF
 - Período Aquisitivo para `semPA` (sem PA no banco): exibir datas calculadas `_fmtData(data_admissao) → _fmtData(addDays(data_admissao, 364)) (prev.)`. Nunca mostrar apenas "Previsto".
 - Ano PA para `semPA`: `fimPrev.slice(0,4)` (ano em que o PA termina). **Nunca** `fimPrev.year - 1`.
 - Férias Início/Fim: campos `agendIni` e `agendFim` no objeto `linhas` — `_fmtData(lRef.inicio)` e `_fmtData(lRef.fim)`, ou `'—'` quando sem lançamento.
@@ -212,7 +241,9 @@ Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Sa
 | No radar | `#DBEAFE` | `#1E3A8A` |
 
 - **Excel — cor por situação nas colunas Nome e Saldo:** fundo `sit.bg` e texto `sit.text` (da `_sitXls`) aplicados ao Nome (bold) e ao Saldo. Coluna Período Aquisitivo mantém cor do setor (`_corSetor`) para identificar o grupo visual.
-- **Excel — AutoFilter + Freeze:** `<x:AutoFilter x:Range="A3:H3"/>` ativa setas de filtro nas 8 colunas. Freeze nas 3 primeiras linhas via `<x:SplitHorizontal>3</x:SplitHorizontal>` + `<x:TopRowBottomPane>3</x:TopRowBottomPane>`. Ajustar range se mudar número de colunas.
+- **Excel — AutoFilter + Freeze:** gerado via **ExcelJS 4.4.0** (lazy-load de `cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js`). AutoFilter: `ws.autoFilter = { from:{row:3,column:1}, to:{row:3,column:9} }`. Freeze: `ws.views = [{state:'frozen', ySplit:3, topLeftCell:'A4'}]`. Gera `.xlsx` real (não HTML disfarçado).
+- **Excel — helper `argb(hex)`:** converte cor hex para formato ARGB do ExcelJS. **Obrigatório expandir shorthand:** `#000` → `FF000000`, `#fff` → `FFFFFFFF`. Fórmula: `const h = hex.replace('#',''); const full = h.length===3 ? h.split('').map(c=>c+c).join('') : h; return 'FF'+full.toUpperCase()`. Sem essa expansão, `#000` vira `FF000` (5 chars, inválido) e o ExcelJS ignora a cor.
+- **Excel — identidade visual igual ao PDF:** cabeçalho `#1E3A5F` branco bold; cores de risco por linha (rowBg + borda esquerda `style:'medium'` na col A); nome com cor+peso do risco; setor com cor do `_corSetor`; saldo colorido por valor; situação bold colorida por status.
 
 ### Campo `nota` em GESTOR_LANCAMENTOS (crítico — corrigido 2026-08-25)
 
@@ -406,14 +437,24 @@ Isso cobre lançamentos que cruzam a virada do ano (ex: 22/12/2025 → 04/01/202
 ## Seleção de PA na coluna "PA Vigente" da lista
 
 ```js
-// Em renderListaAnual, linha ~4223
-const _comSaldo = pasDoAno.filter(r => calcSaldo(r) > 0);
-const reg = _comSaldo.length > 0
-  ? _comSaldo[0]                      // mais antigo com saldo (regra CLT)
-  : pasDoAno[pasDoAno.length - 1];    // mais recente (todos concluídos)
+// Em renderListaAnual e renderMinhaEquipe (set/2026 — regra unificada)
+// pasDoAno já está ordenado por paInicio ASC; pasDoAno exclui Pendente/Rejeitado/Cancelado/Descartado
+const _comFuturo = pasDoAno.filter(r => r.lancamentos.some(l => l.inicio && l.inicio >= HOJE));
+const _comSaldo  = pasDoAno.filter(r => calcSaldo(r) > 0);
+const reg = _comFuturo.length > 0 ? _comFuturo[0]   // PA mais antigo com lançamento futuro ativo
+          : _comSaldo.length  > 0 ? _comSaldo[0]    // PA mais antigo com saldo (regra CLT)
+          : pasDoAno[pasDoAno.length - 1];           // fallback: mais recente (todos concluídos)
 ```
 
-**Por quê:** `pasDoAno` é ordenado por `paInicio` ascendente. Sem esta lógica, colaboradores com todos os PAs concluídos exibem o PA mais antigo (ex: 2019) em vez do mais recente.
+**Prioridade 0 (`_comFuturo`):** quando existe um PA com lançamento futuro (ex: PA 2026 com gozo em jan/2027), esse PA é a referência inteira da linha — PA exibido, coluna Agendamentos, saldo e badge, todos do mesmo PA. Evita a incoerência de mostrar PA 2027 (com saldo) enquanto o agendamento real está no PA 2026.
+
+**Prioridade 1 (`_comSaldo`):** regra CLT original — se nenhum PA tem lançamento futuro, pega o mais antigo com saldo.
+
+**Fallback:** todos os PAs concluídos → mostra o mais recente (não o mais antigo de 2019).
+
+**`_comFuturo` é seguro:** `pasDoAno` já exclui PAs com status Cancelado/Descartado/Rejeitado/Pendente, portanto lançamentos de PAs inválidos não são incluídos.
+
+**Aplicado em:** `renderListaAnual` (visão RH) e `renderMinhaEquipe` (visão Gestor) — ambas usam a mesma lógica desde set/2026.
 
 ## Criação automática de PAs — `autocriarPasFaltantes()`
 
@@ -1230,42 +1271,66 @@ O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre 
 ### Exportação do Gestor
 
 **Botão Exportar** — dropdown com duas opções:
-- "Visualizar PDF" → `gestorExportarPDF()` — abre nova aba com relatório visual
-- "Exportar Excel" → `gestorExportarExcel()` — baixa `.xls` com inline styles
+- "Visualizar PDF" → `gestorExportarPDF()` — abre nova aba com relatório visual (A4 landscape)
+- "Exportar Excel" → `gestorExportarExcel()` → `_gestorExportarExcelXlsx()` (async) — baixa `.xlsx` via ExcelJS
 - `toggleGestorExportMenu()` controla abertura/fechamento (fecha ao clicar fora via `document.addEventListener`)
 
-**8 colunas (PDF e Excel):** Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo | Situação
+**PDF (8 colunas):** Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo | Situação
+**Excel (9 colunas):** Setor | Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo (d) | Situação
 
-- **Setor removido** das colunas — separador colorido entre grupos já identifica a área
-- **Ano PA:** usa `pa.ano` (campo do banco, fonte correta) — ex.: `2025` ou `2027`. **Não usar `pa.pa_inicio.slice(0,4)`**: colaboradores com aniversário no 2º semestre têm `pa_inicio` no ano anterior ao PA real (PA 2027 inicia em set/2026 → slice retornaria "2026", errado).
-  - Fallback: `pa.pa_inicio?.slice(0,4)` só se `pa.ano` for nulo
-  - `semPA`: usa `fimPrev.slice(0,4)` (ano em que o PA termina). **Nunca** `fimPrev.year - 1`
-- **Período Aquisitivo:** datas completas `DD/MM/AAAA → DD/MM/AAAA`
-- **Férias Início / Férias Fim:** duas colunas — `_fmtData(lRef.inicio)` e `_fmtData(lRef.fim)`, ou `'—'` quando sem lançamento
-- **Saldo:** cor semântica — azul (`#1570EF`) >5d, âmbar (`#F59E0B`) ≤5d, verde (`#10B981`) zerado — helper `_saldoCor(saldo)`
-- **Situação — diferença intencional entre PDF e Excel:**
-  - **PDF:** badge pill colorido com borda arredondada — helper `_sitBadge(sitKey, situacao)` — visual mais rico
-  - **Excel:** célula com fundo colorido — helper `_sitXls(sitKey)` — Excel ignora HTML de badge
-- **Situação com data da dobra:** níveis de risco exibem `"Nível · Dobra em DD/MM/AAAA"` (campo `situacao`). Campo `sitKey` = só o nível para lookup de cor
-- Separador de setor: `colspan="8"`, fundo da cor do setor
-- **Filtros respeitados:** cargo e gestor ativos. **Busca (`gestorBusca`) é ignorada** — é filtro de navegação na tela, não deve restringir exportação
-- **Guards de segurança:** se `GESTOR_COLABS.length === 0` → toast aviso + return. Se `linhas.length === 0` → toast aviso + return (nunca gerar arquivo vazio)
-- **Download (Excel):** obrigatório `document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)` — sem appendChild o click falha silenciosamente em alguns browsers
-- **`_normG` deve ser definida localmente** em cada função (`gestorExportarPDF` e `gestorExportarExcel`) — não é global. Usar para comparação do filtro de gestor: `_normG(c.gestor) === _normG(gestorf)`
-- **Excel — AutoFilter + Freeze:** `<x:AutoFilter x:Range="A3:H3"/>` + freeze 3 linhas (`SplitHorizontal=3`, `TopRowBottomPane=3`). Atualizar range se mudar colunas.
+### PDF — regras visuais
 
-**Cores de situação** (usadas em `_sitBadge` e `_sitXls`):
+- **Título:** `"FÉRIAS DA EQUIPE"` quando múltiplos setores; `"FÉRIAS DA EQUIPE · [SETOR]"` quando apenas 1 setor nas linhas exportadas (usar `[...new Set(linhas.map(l => l.setor))].length`)
+- **Separador de setor** (apenas quando múltiplos setores): fundo `#f8fafc`, texto `#64748b`, `font-size:10px`, sem a cor do setor — separadores são discretos, não coloridos
+- **Hierarquia de risco por linha** — helper `_riscoPDF(sitKey)`:
 
-| Situação | bg | text |
-|---|---|---|
-| Crítico | `#FEE2E2` | `#7F1D1D` |
-| Atenção | `#FDE68A` | `#78350F` |
-| No radar | `#DBEAFE` | `#1E3A8A` |
-| Agendado / Concluído | `#ECFDF3` | `#027A48` |
-| Sem agendamento | `#FFFAEB` | `#92400E` |
-| Período futuro | `#EFF6FF` | `#1849A9` |
+| Nível | rowBg | border-left | nomeCor | nomePeso |
+|---|---|---|---|---|
+| Crítico | `#FFF5F5` | `3px solid #EF4444` | `#7F1D1D` | `800` |
+| Atenção | `#FFFBEB` | `3px solid #F59E0B` | `#78350F` | `700` |
+| No radar | `#F0F6FF` | `3px solid #93C5FD` | `#1E3A8A` | `600` |
+| — | `#fff` | `transparent` | `#1a1a2e` | `500` |
 
-**`gestorExportarExcel()`** — estilos 100% inline (Excel ignora `<style>`); separador `colspan="8"`.
+- **Situação:** badge pill colorido via `_sitBadge(sitKey, situacao)` — `<span>` com background/color/border-radius inline
+- **Saldo:** cor semântica via `_saldoCor(saldo)` — verde ≤0d, âmbar ≤5d, azul >5d
+- **Footer fixo** (`position:fixed;bottom:8mm`): legenda de risco com quadradinhos coloridos (Crítico / Atenção / No radar)
+- **Cabeçalho** (`#1e3a5f`, texto branco, bold uppercase): `table-layout:fixed` com `colgroup` percentual; 8 colunas; `border-radius:6px` na tabela
+- **Filtros respeitados:** cargo e gestor ativos. Busca (`gestorBusca`) **ignorada** — filtro de navegação, não exportação
+
+### Excel — regras visuais
+
+- **Setor (col A):** colorido com `bg`+`text` do `_corSetor` — identifica o grupo visualmente e é filtrável
+- **Hierarquia de risco** — helper `_riscoEx(sitKey)`: mesmas cores do PDF (`rowBg`, `borderCol`, `nomeCor`, `nomeBold`); borda esquerda `style:'medium'` na col A via ExcelJS
+- **Nome (col B):** cor e bold do risco (`risco.nomeCor`, `risco.nomeBold`)
+- **Saldo (col H):** texto colorido via `_saldoCor(saldo)` + sufixo `d` (string, não número)
+- **Situação (col I):** texto bold colorido via `_sitCor(sitKey)`
+- **Zebra sutil:** linhas sem risco alternam branco / `#F8FAFC`
+- **Cabeçalho (linha 3):** `#1E3A5F` branco bold, AutoFilter `A3:I3`, freeze 3 linhas
+- **Linha 1:** título "FÉRIAS DA EQUIPE" fundo `#1E3A5F`, altura 30
+- **Linha 2:** subtítulo contagem + data gerado, fundo `#F8FAFC`, texto `#64748B`
+- **ExcelJS lazy-load:** `cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js` — carregado apenas na primeira exportação
+- **`argb(hex)`:** expande shorthand antes de prefixar `FF` — `#000` → `FF000000`, `#fff` → `FFFFFFFF`. Sem expansão, ExcelJS ignora a cor
+
+### Campos comuns (PDF e Excel)
+
+- **Ano PA:** usa `pa.ano` (fonte correta). Fallback `pa.pa_inicio?.slice(0,4)` só se nulo. `semPA`: `fimPrev.slice(0,4)`
+- **Período Aquisitivo:** `DD/MM/AAAA → DD/MM/AAAA`. `semPA`: `... (prev.)`
+- **Férias Início/Fim:** `_fmtData(lRef.inicio)` / `_fmtData(lRef.fim)`, ou `'—'`
+- **Situação com dobra:** `"Crítico · Dobra em DD/MM/AAAA"` — campo `situacao`. `sitKey` = só o nível, para lookup de cor
+- **PA do relatório:** lógica isolada em `_stRel` / `_stRelXls` (não altera `gestorPeriodoAtivo`). Prioriza PA com gozo pendente (`paComGozo`); fallback para `gestorPeriodoAtivo`
+- **Guards:** `GESTOR_COLABS.length === 0` → toast + return; `linhas.length === 0` → toast + return
+- **`_normG`** definida localmente em cada função de exportação — não é global
+
+**Cores de situação** (`_sitBadge` no PDF / `_sitCor` no Excel):
+
+| Situação | text (PDF badge bg / Excel text) |
+|---|---|
+| Crítico | `#7F1D1D` (bg `#FEE2E2`) |
+| Atenção | `#78350F` (bg `#FDE68A`) |
+| No radar | `#1E3A8A` (bg `#DBEAFE`) |
+| Agendado / Concluído | `#027A48` (bg `#ECFDF3`) |
+| Sem agendamento | `#92400E` (bg `#FFFAEB`) |
+| Período futuro | `#1849A9` (bg `#EFF6FF`) |
 
 **Nunca usar `gestorExportarCSV`** para o botão principal — função pode existir mas não é chamada pela UI.
 
@@ -2289,3 +2354,123 @@ cancelamento_recusado:   '#067647',  // verde
 - Eliminar aba "Solicitações" permanentemente (aguardando testes do novo fluxo unificado)
 - Visão Diretoria — validar banda base (47 ativos / 31 com PA / 16 sem PA) como elemento de design permanente ou remover
 - Testar fluxo completo de cancelamento (gestor solicita → RH aprova/rejeita) — em aberto desde 2026-09-23
+
+---
+
+## Dashboard Gestor — arquitetura (set/2026)
+
+Aba `Dashboard` na visão Gestor. Container: `#gdashContent`, renderizado por `renderAnalyticsGestor()`.
+
+**Regras da aba Dashboard:**
+- Visão somente leitura — sem botões de ação
+- Não criar novas regras de negócio — usar apenas funções canônicas existentes
+- "Premium" = informação certa na ordem certa, não mais elementos
+
+### Estado global
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `_gdashMapaMostrarTodos` | `false` | Toggle "sem programação" no Mapa |
+| `_gdashMapaMesSel` | `null` | Mês selecionado no Mapa (0-11) |
+| `_gdashMapaCargo` | `''` | Filtro de cargo no Mapa |
+| `_gdashMapaAno` | `new Date().getFullYear()` | Ano exibido no Mapa |
+| `_gdashSemProgAbertos` | `Set(['critico','atencao'])` | Acordeões abertos no Bloco E |
+
+`renderAnalyticsGestor()` reseta todos os estados acima ao ser chamado.
+
+### Cinco blocos de renderização
+
+**Bloco A — `_renderGdashResumo()`**: resumo executivo inline (emFerias, saem30, retornam7, criticosSemAg)
+
+**Bloco B — `_renderGdashAtencao()`**: card borda vermelha, max 5 itens críticos sem agendamento
+
+**Bloco C — `_renderGdashProximos()`**: "Saem nos próximos 30 dias" em largura total. Mostra até 6 itens com avatar, nome, datas e "Faltam X dias". **Sem bloco "Retornam esta semana"** — essa informação já consta no Bloco A.
+
+**Bloco D — `_renderGdashMapa()`**: Mapa Anual com drill-down mensal (ver seção abaixo)
+
+**Bloco E — `_renderGdashSemProg()`**: acordeão por nível de risco (critico/atencao abertos por padrão), colaboradores sem programação
+
+### Bloco C — definição canônica
+
+- Uma única coluna "Saem nos próximos 30 dias" em largura total
+- Label de countdown: `"Faltam X dias"` (nunca `"Xd"` ou `"Xd."` — não é intuitivo)
+- Máximo 6 itens com avatar, nome, datas formatadas e countdown
+
+### Bloco D — Mapa Anual (modo duplo)
+
+**Filtro de status:** somente `aprovado` e `gozado` (`incluir = new Set(['aprovado','gozado'])`). `solicitado` não aparece no mapa. Cor única `#185FA5` para todos os períodos.
+
+**Deduplicação:** por `(inicio, fim)` — evita duplicidade visual se período transitou de status.
+
+**Navegação de ano:** `_gdashMapaAnoNav(delta)` — incrementa/decrementa `_gdashMapaAno`. Não permite avançar além do ano atual. Ao mudar de ano, reseta `_gdashMapaMesSel = null`.
+
+```js
+function _gdashMapaAnoNav(delta) {
+  const anoAtual = new Date().getFullYear();
+  const novo = _gdashMapaAno + delta;
+  if (novo > anoAtual) return;
+  _gdashMapaAno    = novo;
+  _gdashMapaMesSel = null;
+  _renderGdashMapa();
+}
+```
+
+**Modo panorâmico (SEL === null):** grade Jan→Dez, cabeçalhos clicáveis, marcadores de mês de início, filtro de cargo. Mês atual destacado só quando exibindo o ano corrente (`mesAtual = (ano === anoAtual) ? new Date().getMonth() : -1`).
+
+**Modo detalhamento mensal (SEL !== null):** ao clicar num mês, exibe visão dia-a-dia via `_ganttRenderContent` usando adapter que mapeia dados GESTOR → formato RH:
+
+```js
+// Adapter: GESTOR_COLABS/GESTOR_LANCAMENTOS → formato _ganttRenderContent
+return {
+  nome: colab.nome, cargo: colab.cargo||'', setor: colab.setor||'',
+  unidade: colab.unidade||'', empresaRegistro: '',
+  fotoUrl: colab.foto_url||null,   // snake_case → camelCase
+  __key: String(colab.id),
+  registros: [{
+    lancamentos: lansDoMes.map(l => ({ inicio: l.inicio, fim: l.fim, dias: l.dias })),
+    _novoLanc: null
+  }],
+};
+```
+
+Após chamar `_ganttRenderContent`, remover onclick das linhas (contexto read-only):
+```js
+tl.querySelectorAll('.gantt-row').forEach(tr => {
+  tr.removeAttribute('onclick');
+  tr.style.cursor = 'default';
+});
+```
+
+Navegação no modo mensal: botão "← Ver ano todo" + botões prev/next mês.
+
+### RH Atividade — botão "Analisar" em pendentes
+
+`_rhAtivAbrirModal(feriasId)` — helper que localiza o item nos pendentes via `getPendentes()` e abre `abrirModalAprovar(idx)`.
+
+Em `_itemRow` de `renderRhAtividade`: se `IS_RH && _rhEhRecente(h)`, exibe botão "Analisar" em vez de chip passivo.
+
+`rhRecusarSolicitado` — não usa `prompt()` (bloqueado no GitHub Pages). Rota para `abrirModalAprovar(i)` + `toggleMotivoRejeicao()`.
+
+---
+
+## Padrão visual global — legibilidade (set/2026)
+
+Aplicado em **todos os módulos** (não apenas Férias).
+
+### Tokens CSS
+
+| Token | Valor | Contraste s/ branco |
+|---|---|---|
+| `--text` | `#101828` | 19.2:1 |
+| `--text-sec` | `#4B5565` | 6.1:1 |
+| `--text-ter` | `#6C7589` | 4.6:1 (passa WCAG AA) |
+
+### Escala mínima de fonte
+
+- **12px+**: dados operacionais (nome, data, número, status)
+- **11px**: mínimo absoluto para qualquer texto informativo/auxiliar
+- **< 11px**: apenas elementos decorativos/estruturais (ícones, chevrons ▾▴, indicadores visuais sem leitura)
+
+**Regra:** nenhum texto que precise ser lido pode estar em 8px, 9px ou 10px. Hierarquia visual mantida pela combinação de tamanho + peso + cor, nunca sacrificando legibilidade.
+
+**Escopo:** tokens definidos no `:root` de `modulos/ferias/index.html`; os valores `#4B5565` e `#6C7589` foram propagados para todos os outros módulos (`modulos/cadastro/`, `modulos/admissao/`, etc.) e o font-size mínimo de 11px foi aplicado via replace global.
