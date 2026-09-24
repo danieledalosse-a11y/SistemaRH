@@ -6288,22 +6288,21 @@ function setRole(role) {
   document.getElementById('roleBtnDiretoria')?.classList.toggle('active', role === 'diretoria');
 
   if (role === 'diretoria') {
-    _RH_SECS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
-    const modTabs = document.querySelector('.mod-tabs');
-    if (modTabs) modTabs.style.display = 'none';
+    // [RESTAURADO] Diretoria usa a visão Analytics (renderAnalytics) — sec-diretoria preservado mas não acionado
     const sg = document.getElementById('sec-gestor');
     if (sg) sg.style.display = 'none';
     const sd = document.getElementById('sec-diretoria');
-    if (sd) sd.style.display = 'block';
+    if (sd) sd.style.display = 'none';
+    document.getElementById('sec-visao-rh').style.display = 'block';
+    const modTabs = document.querySelector('.mod-tabs');
+    if (modTabs) modTabs.style.display = 'flex';
     if (COLABORADORES.length) {
-      _dirPopularFiltros();
-      renderDiretoria();
+      setVisTab('analytics');
+      renderAnalytics();
     } else {
       carregarDoSupabase().then(() => {
-        const vc = document.getElementById('visaoContent');
-        if (vc) vc.style.display = 'none';
-        _dirPopularFiltros();
-        renderDiretoria();
+        setVisTab('analytics');
+        renderAnalytics();
       });
     }
   } else if (role === 'gestor') {
@@ -12476,18 +12475,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Perfil gestor: entra direto na visão restrita à equipe
     initGestor();
   } else if (IS_DIRETORIA) {
-    // Perfil diretoria: carrega dados e exibe dashboard executivo
+    // [RESTAURADO] Perfil diretoria: reutiliza visão Analytics — sec-diretoria preservado mas não acionado
     const _rtEl = document.getElementById('roleToggle');
     if (_rtEl) _rtEl.style.display = 'none';
     carregarDoSupabase().then(() => {
-      const vc = document.getElementById('visaoContent');
-      if (vc) vc.style.display = 'none';
-      const modTabs = document.querySelector('.mod-tabs');
-      if (modTabs) modTabs.style.display = 'none';
-      const sd = document.getElementById('sec-diretoria');
-      if (sd) sd.style.display = 'block';
-      _dirPopularFiltros();
-      renderDiretoria();
+      setVisTab('analytics');
+      renderAnalytics();
     });
   } else {
     // RH / admin: fluxo normal
