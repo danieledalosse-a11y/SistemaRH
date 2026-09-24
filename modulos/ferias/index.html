@@ -8994,12 +8994,18 @@ let _gdashSemProgAbertos   = new Set(['critico','atencao']);
 // ─── Diretoria: carregamento e dashboard ────────────────────────────────────
 
 async function _carregarDadosDiretoria() {
+  // Posiciona na aba Dashboard antes do carregamento — evita flash da Lista
+  setVisTab('dashboard');
+  // Oculta Atividade recente/Histórico (específico da Diretoria, não altera RH nem Gestor)
+  const rhAtiv = document.getElementById('rhAtividade');
+  if (rhAtiv) rhAtiv.style.display = 'none';
+  document.body.classList.add('modo-gestor');
+
   // Carrega base completa (empresa inteira) sem UI do Gestor, em paralelo com COLABORADORES
   await Promise.all([
     _carregarEquipeGestor(null, { skipGestorUI: true }),
     carregarDoSupabase(),
   ]);
-  document.body.classList.add('modo-gestor'); // oculta elementos rh-only operacionais
   renderDashboardDiretoria();
 }
 
