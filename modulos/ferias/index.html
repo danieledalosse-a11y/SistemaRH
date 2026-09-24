@@ -1664,13 +1664,13 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           Lista
         </button>
-        <button class="pvtab" id="vt-timeline" onclick="setVisTab('timeline')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          Timeline
-        </button>
         <button class="pvtab" id="vt-analytics" onclick="setVisTab('dashboard')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           Dashboard
+        </button>
+        <button class="pvtab" id="vt-timeline" onclick="setVisTab('timeline')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Timeline
         </button>
       </div>
 
@@ -4382,7 +4382,7 @@ function setVisTab(nome) {
   if (nome === 'lista-anual') renderListaAnual();
   if (nome === 'calendario')  { renderMesSeletor(); renderCalendario(); }
   if (nome === 'timeline')    renderTimeline();
-  if (nome === 'dashboard')   renderAnalytics();
+  if (nome === 'dashboard')   IS_DIRETORIA ? renderDashboardDiretoria() : renderAnalytics();
 }
 
 function setSubTab(nome, btn) {
@@ -6296,15 +6296,20 @@ function setRole(role) {
     document.getElementById('sec-visao-rh').style.display = 'block';
     const modTabs = document.querySelector('.mod-tabs');
     if (modTabs) modTabs.style.display = 'flex';
-    const _navTabPermitido = () => {
-      if (podeAba('ferias','dashboard'))  setVisTab('dashboard');
-      else if (podeAba('ferias','lista')) setVisTab('lista-anual');
-      else                                setVisTab('timeline');
-    };
-    if (COLABORADORES.length) {
-      _navTabPermitido();
+    if (podeAba('ferias','dashboard')) {
+      if (GESTOR_COLABS.length && COLABORADORES.length) {
+        setVisTab('dashboard'); // dados já carregados, só renderiza
+      } else {
+        _carregarDadosDiretoria();
+      }
+    } else if (COLABORADORES.length) {
+      if (podeAba('ferias','lista')) setVisTab('lista-anual');
+      else setVisTab('timeline');
     } else {
-      carregarDoSupabase().then(_navTabPermitido);
+      carregarDoSupabase().then(() => {
+        if (podeAba('ferias','lista')) setVisTab('lista-anual');
+        else setVisTab('timeline');
+      });
     }
   } else if (role === 'gestor') {
     _RH_SECS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
@@ -8010,8 +8015,8 @@ function processGestorFerias(rows) {
   return { periodos, lancamentos };
 }
 
-async function _carregarEquipeGestor(gestor_id) {
-  setGestorMsg('Carregando equipe...');
+async function _carregarEquipeGestor(gestor_id, cfg = {}) {
+  if (!cfg.skipGestorUI) setGestorMsg('Carregando equipe...');
   let colabQuery;
   if (gestor_id) {
     // Fluxo parametrizado: gestor_id → param_gestor_setor → param_setor → colaboradores.setor
@@ -8045,25 +8050,26 @@ async function _carregarEquipeGestor(gestor_id) {
   const { periodos, lancamentos } = processGestorFerias(feriasRows);
   GESTOR_PERIODOS    = periodos;
   GESTOR_LANCAMENTOS = lancamentos;
-  // Reseta filtro de gestor para repopular com novos dados
-  ['gestorFiltroGestor'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { const first = el.options[0]; el.innerHTML = ''; el.appendChild(first); }
-  });
-  // Reseta MultiSelect de cargo
-  if (MS_INSTANCES['gestorFiltroCargo2']) {
-    MS_INSTANCES['gestorFiltroCargo2'].selected.clear();
-    MS_INSTANCES['gestorFiltroCargo2']._updateBtn();
+  if (!cfg.skipGestorUI) {
+    // Reseta filtro de gestor para repopular com novos dados
+    ['gestorFiltroGestor'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { const first = el.options[0]; el.innerHTML = ''; el.appendChild(first); }
+    });
+    if (MS_INSTANCES['gestorFiltroCargo2']) {
+      MS_INSTANCES['gestorFiltroCargo2'].selected.clear();
+      MS_INSTANCES['gestorFiltroCargo2']._updateBtn();
+    }
+    document.getElementById('gestorLoading').style.display = 'none';
+    document.getElementById('gestorContent').style.display = 'block';
+    _applyGestorTabPerms();
+    const hoje = new Date();
+    _gestorMesBase = hoje.getFullYear() * 12 + hoje.getMonth();
+    _gestorGanttAno = hoje.getFullYear(); _gestorGanttMes = hoje.getMonth();
+    renderGestorAlerts();
+    renderGestorAtencao();
+    renderGestorGantt();
   }
-  document.getElementById('gestorLoading').style.display = 'none';
-  document.getElementById('gestorContent').style.display = 'block';
-  _applyGestorTabPerms();
-  const hoje = new Date();
-  _gestorMesBase = hoje.getFullYear() * 12 + hoje.getMonth();
-  _gestorGanttAno = hoje.getFullYear(); _gestorGanttMes = hoje.getMonth();
-  renderGestorAlerts();
-  renderGestorAtencao();
-  renderGestorGantt();
 }
 
 async function initGestor(fromToggle = false) {
@@ -8599,40 +8605,35 @@ function renderRhAtividade() {
   el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">${tabsHtml}${conteudo}</div>`;
 }
 
-function renderGestorAlerts(colabsBase) {
-  const base = colabsBase || GESTOR_COLABS;
+// ── Computação compartilhada de métricas do Gestor ──────────────────────────
+// Separada do render para que Diretoria e Gestor usem os mesmos cálculos
+function _computeGestorMetricas(base) {
+  const colabs = base || GESTOR_COLABS;
   const hoje = new Date().toISOString().slice(0,10);
 
-  const riscoDobra = base.filter(c => {
+  const riscoDobra = colabs.filter(c => {
     const p = gestorPeriodoAtivo(c.id);
     if (!p) return false;
-    if (gestorDpd(p) > 180) return false;   // alinhado com nivelRisco da visão RH (≤ 180 dias)
+    if (gestorDpd(p) > 180) return false;
     if (gestorSaldoPeriodo(p) <= 0) return false;
     return !GESTOR_LANCAMENTOS.some(l => l.colaborador_id === c.id && l.fim >= hoje && ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
   });
-
-  const semAgendado = base.filter(c => {
-    // Exclusão imediata: qualquer lançamento aprovado/agendado com fim >= hoje
-    // (mesma condição que gera badge "Agendado" na linha — fonte de verdade única)
+  const semAgendado = colabs.filter(c => {
     if (gestorIsAgendado(c.id)) return false;
     const abertos = GESTOR_PERIODOS.filter(p => p.colaborador_id === c.id && gestorSaldoPeriodo(p) > 0);
     if (!abertos.length) return false;
-    // Cond 1: PA vencido com saldo e sem nenhum lançamento
     if (abertos.some(p => p.data_fim_gozo && p.data_fim_gozo < hoje &&
         !GESTOR_LANCAMENTOS.some(l => String(l.periodo_id) === String(p.id)))) return true;
-    // Cond 2: sem férias futuras aprovadas/agendadas/solicitadas em qualquer PA aberto
     return !GESTOR_LANCAMENTOS.some(l =>
       String(l.colaborador_id) === String(c.id) &&
       (l.fim || '') >= hoje &&
       ['aprovado','agendado','solicitado'].includes((l.status||'').toLowerCase())
     );
   });
-  const emFeriasHoje = base.filter(c => GESTOR_LANCAMENTOS.some(l =>
+  const emFeriasHoje = colabs.filter(c => GESTOR_LANCAMENTOS.some(l =>
     String(l.colaborador_id) === String(c.id) &&
     (l.inicio||'') <= hoje && (l.fim||'') >= hoje
   ));
-
-  // Conta solicitados (independente de data) + recusados com datas futuras/ativas + gozos pendentes de aprovação RH
   const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
     const st = (l.status||'').toLowerCase();
     if (st === 'solicitado') return true;
@@ -8641,10 +8642,14 @@ function renderGestorAlerts(colabsBase) {
     return st === 'recusado' && l.fim >= hoje;
   });
   const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
-  const aguardandoAprov = base.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
+  const aguardandoAprov = colabs.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
+  const agendados = colabs.filter(c => gestorIsAgendado(c.id));
+  return { riscoDobra, semAgendado, emFeriasHoje, agendados, aguardandoAprov };
+}
 
-  // Agendados: usa gestorIsAgendado como fonte de verdade única (= mesma lógica do badge da linha)
-  const agendados = base.filter(c => gestorIsAgendado(c.id));
+function renderGestorAlerts(colabsBase) {
+  const base = colabsBase || GESTOR_COLABS;
+  const { riscoDobra, semAgendado, emFeriasHoje, agendados, aguardandoAprov } = _computeGestorMetricas(base);
 
   window._gestorRiscoDobra   = riscoDobra.map(c => String(c.id));
   window._gestorSemAgendado  = semAgendado.map(c => String(c.id));
@@ -8986,6 +8991,130 @@ let _gdashMapaMostrarTodos = false;
 let _gdashSemProgAbertos   = new Set(['critico','atencao']);
 // _gdashMapaMesSel e _gdashMapaCargo declarados junto a _renderGdashMapa
 
+// ─── Diretoria: carregamento e dashboard ────────────────────────────────────
+
+async function _carregarDadosDiretoria() {
+  // Carrega base completa (empresa inteira) sem UI do Gestor, em paralelo com COLABORADORES
+  await Promise.all([
+    _carregarEquipeGestor(null, { skipGestorUI: true }),
+    carregarDoSupabase(),
+  ]);
+  document.body.classList.add('modo-gestor'); // oculta elementos rh-only operacionais
+  renderDashboardDiretoria();
+}
+
+function renderDashboardDiretoria() {
+  const content = document.getElementById('analyticsContent');
+  if (!content) return;
+  if (!GESTOR_COLABS.length) {
+    content.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text-ter);font-size:13px;">Carregando dados da empresa…</div>`;
+    return;
+  }
+
+  const { riscoDobra, semAgendado, emFeriasHoje, agendados } = _computeGestorMetricas(GESTOR_COLABS);
+  const total = GESTOR_COLABS.length;
+
+  const kpiCard = (label, num, sub, cor) => `
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:18px 20px;flex:1;min-width:0">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-ter);margin-bottom:8px">${label}</div>
+      <div style="font-size:28px;font-weight:800;color:${cor};line-height:1">${num}</div>
+      <div style="font-size:11px;color:var(--text-ter);margin-top:6px">${sub}</div>
+    </div>`;
+
+  content.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:20px;padding:24px 0">
+
+      <!-- Como estamos: linha de resumo executivo -->
+      <div id="dir-resumoWrap"></div>
+
+      <!-- Como estamos: 4 KPIs estratégicos não-clicáveis -->
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        ${kpiCard('Em férias hoje',   emFeriasHoje.length, `de ${total} colaboradores ativos`,           '#0E7490')}
+        ${kpiCard('Risco de dobra',   riscoDobra.length,   'férias a vencer em 180 dias sem agendamento', riscoDobra.length > 0 ? '#DC2626' : '#059669')}
+        ${kpiCard('Sem agendamento',  semAgendado.length,  'com saldo aberto e sem programação futura',   semAgendado.length > 0 ? '#D97706' : '#059669')}
+        ${kpiCard('Agendados',        agendados.length,    `${Math.round(agendados.length/total*100)}% do quadro com férias programadas`, '#1849A9')}
+      </div>
+
+      <!-- Como está o ano: gráfico comparativo (destaque estratégico) -->
+      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:20px">
+        <div style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-ter);margin-bottom:16px">Comparativo de férias por ano</div>
+        <div id="dir-anoWrap"></div>
+      </div>
+
+      <!-- O que merece atenção: críticos sem agendamento -->
+      <div id="dir-atencaoWrap"></div>
+
+      <!-- O que vem pela frente: saídas nos próximos 30 dias -->
+      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:16px 20px">
+        <div style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-ter);margin-bottom:12px">Saídas nos próximos 30 dias</div>
+        <div id="dir-proximosWrap"></div>
+      </div>
+
+      <!-- Sem programação: visão de risco da empresa -->
+      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:16px 20px">
+        <div style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-ter);margin-bottom:12px">Sem programação — por nível de risco</div>
+        <div id="dir-semProgWrap"></div>
+      </div>
+
+    </div>`;
+
+  // Popula blocos reutilizando os componentes do Gestor com modoConsulta
+  _renderGdashResumo();   // resumo executivo → gdashResumoWrap (não existe no layout dir, ver abaixo)
+  _renderGdashAtencao({ wrapId: 'dir-atencaoWrap', modoConsulta: true });
+  _renderGdashProximos({ wrapId: 'dir-proximosWrap' });
+  _renderGdashSemProg({ wrapId: 'dir-semProgWrap', modoConsulta: true });
+
+  // Resumo executivo: reutiliza _renderGdashResumo mas aponta para dir-resumoWrap
+  // _renderGdashResumo usa gdashResumoWrap hardcoded — redireciona via wrapId
+  (function _resumoDir() {
+    const wrap = document.getElementById('dir-resumoWrap');
+    if (!wrap) return;
+    const excluir = new Set(['recusado','cancelado','descartado']);
+    const hoje = HOJE;
+    const lim30 = (() => { const d = new Date(); d.setDate(d.getDate()+30); return d.toISOString().slice(0,10); })();
+    const lim7  = (() => { const d = new Date(); d.setDate(d.getDate()+7);  return d.toISOString().slice(0,10); })();
+    let emFerias30 = 0, saem30 = 0, retornam7 = 0, criticosSemAg = 0;
+    GESTOR_LANCAMENTOS.forEach(l => {
+      if (excluir.has((l.status||'').toLowerCase()) || l._isRealizacao) return;
+      if (l.inicio <= hoje && l.fim >= hoje) {
+        emFerias30++;
+        if (l.fim <= lim7) retornam7++;
+      } else if (l.inicio > hoje && l.inicio <= lim30) saem30++;
+    });
+    GESTOR_COLABS.forEach(c => {
+      const pa = gestorPeriodoAtivo(c.id);
+      if (!pa || gestorIsAgendado(c.id)) return;
+      if (nivelRisco(gestorDpd(pa)) === 'critico') criticosSemAg++;
+    });
+    const partes = [];
+    if (emFerias30 > 0)     partes.push(`<strong>${emFerias30}</strong> em férias hoje`);
+    if (saem30 > 0)         partes.push(`<strong>${saem30}</strong> saem nos próximos 30 dias`);
+    if (retornam7 > 0)      partes.push(`<strong>${retornam7}</strong> retornam esta semana`);
+    if (criticosSemAg > 0)  partes.push(`<strong style="color:#B91C1C">${criticosSemAg}</strong> com risco crítico sem agendamento`);
+    wrap.innerHTML = partes.length
+      ? `<div style="font-size:12px;color:var(--text-sec);line-height:1.8">${partes.join(`<span style="color:var(--border-strong);margin:0 8px">·</span>`)}</div>`
+      : `<div style="font-size:12px;color:var(--text-ter)">Toda a empresa está regular — nenhum item de atenção no momento.</div>`;
+  })();
+
+  // Gráfico anual: reutiliza renderDashAnoChart (usa COLABORADORES, já carregado)
+  _dashCalData = { excluir: new Set(['Pendente','Rejeitado','Cancelado','Descartado']), ativos: COLABORADORES.filter(c => c.ativo !== false) };
+  const origWrap = document.getElementById('dashAnoWrap');
+  if (origWrap) {
+    // temporariamente aponta o render para dir-anoWrap
+    origWrap.id = 'dashAnoWrap_bkp';
+    const dirWrap = document.getElementById('dir-anoWrap');
+    if (dirWrap) dirWrap.id = 'dashAnoWrap';
+    renderDashAnoChart();
+    // restaura IDs
+    document.getElementById('dashAnoWrap').id = 'dir-anoWrap';
+    if (document.getElementById('dashAnoWrap_bkp')) document.getElementById('dashAnoWrap_bkp').id = 'dashAnoWrap';
+  } else {
+    // dashAnoWrap ainda não existe (primeira vez) — cria diretamente
+    const dirWrap = document.getElementById('dir-anoWrap');
+    if (dirWrap) { dirWrap.id = 'dashAnoWrap'; renderDashAnoChart(); dirWrap.id = 'dir-anoWrap'; }
+  }
+}
+
 function renderAnalyticsGestor() {
   const wrap = document.getElementById('gdashContent');
   if (!wrap) return;
@@ -9059,8 +9188,8 @@ function _renderGdashResumo() {
 
 // ── Bloco B: Atenção imediata ───────────────────────────────────────────────
 
-function _renderGdashAtencao() {
-  const wrap = document.getElementById('gdashAtencaoWrap');
+function _renderGdashAtencao(cfg = {}) {
+  const wrap = document.getElementById(cfg.wrapId || 'gdashAtencaoWrap');
   if (!wrap) return;
 
   const grupos = { critico: [], atencao: [], noradar: [] };
@@ -9106,7 +9235,7 @@ function _renderGdashAtencao() {
   if (grupos.atencao.length)     extras.push(`${grupos.atencao.length} em atenção`);
   if (grupos.noradar.length)     extras.push(`${grupos.noradar.length} no radar`);
   const rodape = extras.length
-    ? `<div style="font-size:11px;color:var(--text-ter);padding-top:8px">${extras.join(' · ')} — ver no Painel</div>`
+    ? `<div style="font-size:11px;color:var(--text-ter);padding-top:8px">${extras.join(' · ')}${cfg.modoConsulta ? '' : ' — ver no Painel'}</div>`
     : '';
 
   wrap.innerHTML = `
@@ -9121,8 +9250,8 @@ function _renderGdashAtencao() {
 
 // ── Bloco C: Próximos 30 dias ───────────────────────────────────────────────
 
-function _renderGdashProximos() {
-  const wrap = document.getElementById('gdashProximosWrap');
+function _renderGdashProximos(cfg = {}) {
+  const wrap = document.getElementById(cfg.wrapId || 'gdashProximosWrap');
   if (!wrap) return;
 
   const excluir = new Set(['recusado','cancelado','descartado','gozado']);
@@ -9430,8 +9559,8 @@ function _gdashSemProgToggle(nivel) {
   _renderGdashSemProg();
 }
 
-function _renderGdashSemProg() {
-  const wrap = document.getElementById('gdashSemProgWrap');
+function _renderGdashSemProg(cfg = {}) {
+  const wrap = document.getElementById(cfg.wrapId || 'gdashSemProgWrap');
   if (!wrap) return;
 
   const ano = new Date().getFullYear();
@@ -12480,6 +12609,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (IS_DIRETORIA) {
       const _rtEl = document.getElementById('roleToggle');
       if (_rtEl) _rtEl.style.display = 'none';
+      document.body.classList.add('modo-gestor'); // oculta elementos rh-only operacionais
     }
     if (!podeAba('ferias','lista')) {
       const vtLista = document.getElementById('vt-lista');
@@ -12489,12 +12619,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const vtDash = document.getElementById('vt-analytics');
       if (vtDash) vtDash.style.display = 'none';
     }
-    carregarDoSupabase().then(() => {
-      // navega para o primeiro tab que o perfil tem acesso
-      if (podeAba('ferias','dashboard'))   setVisTab('dashboard');
-      else if (podeAba('ferias','lista'))  setVisTab('lista-anual');
-      else                                 setVisTab('timeline');
-    });
+    if (IS_DIRETORIA && podeAba('ferias','dashboard')) {
+      _carregarDadosDiretoria();
+    } else {
+      carregarDoSupabase().then(() => {
+        // navega para o primeiro tab que o perfil tem acesso
+        if (podeAba('ferias','dashboard'))   setVisTab('dashboard');
+        else if (podeAba('ferias','lista'))  setVisTab('lista-anual');
+        else                                 setVisTab('timeline');
+      });
+    }
   }
 });
 
