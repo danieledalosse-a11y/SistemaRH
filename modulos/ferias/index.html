@@ -689,8 +689,10 @@
   .btn-relatorio { display: flex; align-items: center; gap: 6px; padding: 9px 14px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s; box-shadow: var(--shadow-sm); }
   .btn-relatorio:hover { border-color: #C4C9D4; background: #fafafa; }
   .gestor-only { display: none; }
-  body.modo-gestor .rh-only { display: none !important; }
+  .dir-only    { display: none; }
+  body.modo-gestor .rh-only    { display: none !important; }
   body.modo-gestor .gestor-only { display: flex; }
+  body.modo-gestor .dir-only   { display: flex; }
 
   /* ── Timeline (Gantt) ── */
   .vis-tab#vt-timeline.active { background: #7c3aed; color: #fff; box-shadow: 0 2px 8px rgba(124,58,237,0.25); }
@@ -1668,6 +1670,10 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           Dashboard
         </button>
+        <button class="pvtab dir-only" id="vt-mapa" onclick="setVisTab('mapa')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Mapa Anual
+        </button>
         <button class="pvtab" id="vt-timeline" onclick="setVisTab('timeline')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           Timeline
@@ -1775,6 +1781,11 @@
           <div style="font-size:13px;color:var(--text-ter);text-align:center;padding:20px;">Em construção — dashboards e KPIs gerenciais em breve.</div>
         </div>
       </div><!-- /sub-analytics -->
+
+      <!-- Mapa Anual — visão Diretoria -->
+      <div id="sub-mapa" style="display:none;">
+        <div style="padding:24px 20px" id="dir-mapaWrap"></div>
+      </div>
 
       <!-- Painéis compat (calendário, dobra, etc.) -->
       <div id="sub-calendario" style="display:none;"><div style="padding:0 16px 16px;" id="calInner"><div id="mesSeletor" class="mes-selector" style="padding-top:16px;"></div><div id="calContent"></div></div></div>
@@ -4370,7 +4381,7 @@ let _visTab = 'lista-anual';
 
 function setVisTab(nome) {
   _visTab = nome;
-  ['lista-anual','calendario','timeline','dashboard'].forEach(t => {
+  ['lista-anual','calendario','timeline','dashboard','mapa'].forEach(t => {
     const el = document.getElementById('sub-' + t);
     if (el) el.style.display = t === nome ? '' : 'none';
   });
@@ -4379,10 +4390,12 @@ function setVisTab(nome) {
   document.getElementById('vt-cal')?.classList.toggle('active', nome === 'calendario');
   document.getElementById('vt-timeline')?.classList.toggle('active', nome === 'timeline');
   document.getElementById('vt-analytics')?.classList.toggle('active', nome === 'dashboard');
+  document.getElementById('vt-mapa')?.classList.toggle('active', nome === 'mapa');
   if (nome === 'lista-anual') renderListaAnual();
   if (nome === 'calendario')  { renderMesSeletor(); renderCalendario(); }
   if (nome === 'timeline')    renderTimeline();
   if (nome === 'dashboard')   IS_DIRETORIA ? renderDashboardDiretoria() : renderAnalytics();
+  if (nome === 'mapa')        _renderGdashMapa({ wrapId: 'dir-mapaWrap' });
 }
 
 function setSubTab(nome, btn) {
@@ -9282,9 +9295,10 @@ function _renderGdashProximos(cfg = {}) {
 
 // ── Bloco D: Mapa anual ─────────────────────────────────────────────────────
 
-let _gdashMapaMesSel = null;
-let _gdashMapaCargo  = '';
-let _gdashMapaAno    = new Date().getFullYear();
+let _gdashMapaMesSel  = null;
+let _gdashMapaCargo   = '';
+let _gdashMapaAno     = new Date().getFullYear();
+let _gdashMapaWrapId  = 'gdashMapaWrap'; // atualizado por _renderGdashMapa(cfg)
 
 function _gdashMapaAnoNav(delta) {
   const anoAtual = new Date().getFullYear();
@@ -9310,8 +9324,9 @@ function _gdashMapaFiltrarCargo(cargo) {
   _renderGdashMapa();
 }
 
-function _renderGdashMapa() {
-  const wrap = document.getElementById('gdashMapaWrap');
+function _renderGdashMapa(cfg = {}) {
+  if (cfg.wrapId) _gdashMapaWrapId = cfg.wrapId;
+  const wrap = document.getElementById(_gdashMapaWrapId);
   if (!wrap) return;
 
   const anoAtual = new Date().getFullYear();
