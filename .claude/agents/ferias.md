@@ -633,15 +633,27 @@ Barras são renderizadas célula a célula. Cada barra é desenhada **na célula
 const drawDay = l.inicio >= mesInicio ? l.inicio : mesInicio;
 ```
 
-**Label da barra:** usa `colsOriginais` (duração total, não apenas dias visíveis):
+**Label da barra:** usa `colsOriginais` (duração total, não apenas dias visíveis) — escada de três níveis:
 ```js
 const colsOriginais = Math.max(1, Math.round((new Date(l.fim+'T12:00:00') - new Date(l.inicio+'T12:00:00')) / 86400000) + 1);
 let label = '';
-if (colsOriginais >= 5) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
-// < 5 dias (< 140px): sem label (tooltip via title= ainda mostra tudo)
+if (colsOriginais >= 5) {
+  label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;       // 10/08 → 14/08 · 5d
+} else if (colsOriginais >= 3) {
+  const [,mi,di] = l.inicio.split('-');
+  const [,mf,df] = l.fim.split('-');
+  label = mi === mf
+    ? `${di}-${df}/${mi} · ${l.dias}d`       // 12-14/08 · 3d
+    : `${di}/${mi}-${df}/${mf} · ${l.dias}d`; // 28/08-02/09 · 6d (virada de mês curto)
+}
+// <= 2 dias (56px): sem label — tooltip (title=) preserva as datas no hover
 ```
 
-Threshold único: **5 dias** — mesmo formato para todos os perfis. Barras de 4 dias ou menos ficam sem texto para evitar overflow.
+| Colunas | Largura | Formato | Exemplo |
+|---|---|---|---|
+| ≥ 5 dias | ≥ 140px | `DD/MM → DD/MM · Nd` | `10/08 → 14/08 · 5d` |
+| 3–4 dias | 84–112px | `DD-DD/MM · Nd` | `12-14/08 · 3d` |
+| ≤ 2 dias | ≤ 56px | vazio | — |
 
 **Barras que vêm do mês anterior (`contLeft = true`):** o label pode ser mais largo que a barra visível — usar `overflow:visible` inline para deixar o texto flutuar para a direita:
 ```js
