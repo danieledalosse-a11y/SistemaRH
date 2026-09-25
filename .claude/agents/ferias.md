@@ -115,6 +115,28 @@ A Visão RH tem duas sub-abas (**Lista anual** e **Calendário**) com filtros co
 Instâncias de MultiSelect registradas em `MS_INSTANCES`: `msEmpresaLista`, `msSetorLista`, `msEmpresaCal`, `msSetorCal`.
 `getColabsVisao(contexto)` — lê o conjunto correto conforme o contexto ('lista-anual' ou 'calendario').
 
+## Coluna Agendamentos — `_renderAgendCell` (set/2026)
+
+Helper compartilhado por RH, Gestor e Diretoria. Cada visão calcula `lRef` e `alertaHtml` conforme suas próprias regras e fontes de dados — o helper apenas renderiza a célula de forma consistente.
+
+```js
+function _renderAgendCell(lRef, alertaHtml) {
+  if (!lRef) return `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
+  return `<span style="font-size:11px;white-space:nowrap;">${formatDate(lRef.inicio)} → ${formatDate(lRef.fim)} · ${lRef.dias}d</span>
+          ${alertaHtml || ''}`;
+}
+```
+
+**Padrão visual:** `DD/MM/AAAA → DD/MM/AAAA · Nd` + alerta de dobra quando aplicável. **Sem `+N período`** — demais períodos ficam acessíveis no drawer.
+
+**Uso em cada visão:**
+- RH (`renderListaAnual`): `_renderAgendCell(lRef, alertaDobraHtml)`
+- Gestor (`renderGestorAtencao`): `_renderAgendCell(lRef, alertaDobraGHtml)`
+
+`lRef` tem a mesma estrutura em todas as visões: `{ inicio, fim, dias }` em formato `YYYY-MM-DD`.
+
+**Nunca usar `_fmtD` local** para formatar datas nessa célula — usar sempre `formatDate()` (função global), que é idêntica mas não gera duplicidade.
+
 ## Toggle de navegação (segmented toggle)
 
 ```css
