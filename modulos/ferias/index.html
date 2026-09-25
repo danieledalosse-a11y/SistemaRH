@@ -12445,24 +12445,42 @@ function _dirHtmlSetorRisco(setor) {
     </div>`;
   }
   const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const excluir2 = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
   const items = [];
   colabs.forEach(c => {
     let minDpd = Infinity, minReg = null;
-    c.registros.forEach(reg => { if (excluir.has(reg.status)) return; const dpd = diasParaDobra(reg); if (dpd !== null && dpd < minDpd) { minDpd = dpd; minReg = reg; } });
-    if (minReg) items.push({ c, dpd: minDpd });
+    c.registros.forEach(reg => {
+      if (excluir2.has(reg.status)) return;
+      if (calcSaldo(reg) <= 0) return;
+      const dpd = diasParaDobra(reg);
+      if (dpd === null || dpd > REGRAS_FERIAS.diasAlertaDobra) return;
+      if (reg.lancamentos.some(l => l.fim && l.fim >= HOJE)) return;
+      if (dpd < minDpd) { minDpd = dpd; minReg = reg; }
+    });
+    if (minReg) items.push({ c, dpd: minDpd, reg: minReg });
   });
   items.sort((a,b) => a.dpd - b.dpd);
+  const labels2 = { critico: 'Crítico', atencao: 'Atenção', noradar: 'No Radar' };
   const colors = { critico:{ bg:'#FEF3F2', border:'#F04438', text:'#7F1D1D' }, atencao:{ bg:'#FFFAEB', border:'#F79009', text:'#B54708' }, noradar:{ bg:'#EFF6FF', border:'#2E90FA', text:'#1D4ED8' } };
-  return items.map(({ c, dpd }) => {
+  return items.map(({ c, dpd, reg }) => {
     const nivel = nivelRisco(dpd);
     const cl = colors[nivel];
     const av = c.nome.split(' ').slice(0,2).map(w=>w[0].toUpperCase()).join('');
-    const dlim = dataLimiteDobra(c.registros.find(r => diasParaDobra(r) === dpd));
+    const dlim = dataLimiteDobra(reg);
     const dlimFmt = dlim ? new Date(dlim).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+    const saldo = calcSaldo(reg);
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:${cl.bg};border:1px solid ${cl.border}22;margin-bottom:6px;cursor:pointer;" onclick="fecharDrawer();setTimeout(()=>abrirDrawer('${c.__key}'),180)">
       <div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;">${av}</div>
-      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);">${c.nome}</div><div style="font-size:11px;color:var(--text-sec);">${c.cargo||''}</div></div>
-      <div style="text-align:right;flex-shrink:0;"><div style="font-size:11px;font-weight:700;color:${cl.text};">${dpd < 0 ? 'Venceu em '+dlimFmt : 'Vence em '+dpd+'d'}</div></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.nome}</div>
+        <div style="font-size:11px;color:var(--text-sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.cargo||''}</div>
+        <div style="font-size:11px;color:var(--text-ter);">${c.gestor||''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:11px;font-weight:700;color:${cl.text};">${labels2[nivel]}</div>
+        <div style="font-size:11px;color:${cl.text};margin-top:1px;">Dobra em ${dlimFmt}</div>
+        <div style="font-size:10px;color:var(--text-ter);margin-top:2px;">Saldo: ${saldo}d</div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -12480,7 +12498,14 @@ function _dirRenderSetorTable() {
     setores[s].total++;
     if (isRiscoDobra(c)) {
       setores[s].risco++;
-      c.registros.forEach(reg => { const dpd = diasParaDobra(reg); if (dpd !== null && dpd < setores[s].piorDpd) setores[s].piorDpd = dpd; });
+      c.registros.forEach(reg => {
+        if (excluir.has(reg.status)) return;
+        if (calcSaldo(reg) <= 0) return;
+        const dpd = diasParaDobra(reg);
+        if (dpd === null || dpd > REGRAS_FERIAS.diasAlertaDobra) return;
+        if (reg.lancamentos.some(l => l.fim && l.fim >= hoje)) return;
+        if (dpd < setores[s].piorDpd) setores[s].piorDpd = dpd;
+      });
     }
     if (c.registros.some(r => !excluir.has(r.status) && r.lancamentos.some(l => l.fim && l.fim >= hoje))) setores[s].agendados++;
   });
