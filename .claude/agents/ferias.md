@@ -2077,6 +2077,8 @@ _dirFiltrados()         // retorna COLABORADORES filtrados pelos 3 selects (ativ
 _dirSaldoColab(colab)   // soma calcSaldo(r) de todos os registros — uso interno (não usar no drawer de risco)
 _dirUrgSemProg(colab)   // retorna { nivel, dlim } do PA mais urgente sem programação
 _dirHtmlRiscoDobra()    // HTML do drawer Risco de Dobra — agrupa por nível, 1 card por colaborador
+_dirRenderSetorTable()  // tabela Atenção por Setor — Equipe / Risco / Agendados / Status
+_dirHtmlSetorRisco(s)   // HTML do drawer de setor — colaboradores em risco filtrados por setor
 renderDiretoria()       // KPIs + Próximas Saídas + Sem Programação + gráfico
 _renderDirChart(colabs) // canvas bar chart: concentração por mês, linha de média, anotação de pico
 dirMostrarAba(aba)      // toggle 'dashboard' / 'timeline'
@@ -2149,6 +2151,55 @@ Isso garante que o PA exibido é exatamente o mesmo que fundamenta o risco — n
 | `noradar` | dpd > 120 | `#EFF6FF` | `#2E90FA` | `#1D4ED8` |
 
 **Princípio:** Diretoria = mesma informação do Gestor/RH, apresentação executiva. Nunca criar nova regra de risco — sempre reutilizar `isRiscoDobra()`, `calcSaldo()`, `diasParaDobra()`, `dataLimiteDobra()`, `nivelRisco()`.
+
+---
+
+### Tabela "Atenção por Setor" — `_dirRenderSetorTable()` (corrigido 2026-09-25)
+
+Renderizada em `#dirSetorTable`. Fonte: `_dirFiltrados()` (COLABORADORES ativos filtrados pelos selects).
+
+| Coluna | Fonte | Regra |
+|---|---|---|
+| **Setor** | `c.setor \|\| 'Sem setor'` | — |
+| **Equipe** | contagem de colaboradores do setor em `_dirFiltrados()` | — |
+| **Risco de Dobra** | `isRiscoDobra(c)` | mesma função do RH — nunca reimplementar |
+| **Agendados** | `r.lancamentos.some(l => l.fim >= HOJE)` em qualquer PA não-excluído | — |
+| **Status** | `nivelRisco(piorDpd)` do setor | veja abaixo |
+
+**Cálculo do `piorDpd` (Status do setor):** para cada colaborador em risco do setor, aplica os **mesmos 3 critérios de `isRiscoDobra()`** ao varrer os registros — `saldo > 0`, `dpd ≤ diasAlertaDobra`, sem lançamento futuro — e pega o menor `dpd` entre os PAs elegíveis. `nivelRisco(piorDpd)` determina o badge do setor:
+
+- `critico` (piorDpd < 60) → fundo `#FEE2E2`, texto `#7F1D1D`
+- `atencao` (piorDpd ≤ 120) → fundo `#FDE68A`, texto `#78350F`
+- sem risco → `OK`, fundo `#ECFDF3`, texto `#027A48`
+
+**Ordenação:** setores Crítico primeiro, depois Atenção, depois OK; dentro do mesmo nível, por `risco` decrescente.
+
+**onclick da linha:**
+```js
+onclick="abrirDrawerGenerico('${setor}', _dirHtmlSetorRisco('${setor}'))"
+```
+Usar **aspas simples** em torno do setor — `JSON.stringify` gera aspas duplas que quebram o atributo HTML.
+
+---
+
+### Drawer de setor — `_dirHtmlSetorRisco(setor)` (corrigido 2026-09-25)
+
+Aberto ao clicar em qualquer linha da tabela "Atenção por Setor".
+
+**Seleção do PA:** idêntica a `_dirHtmlRiscoDobra()` — aplica os mesmos 3 critérios de `isRiscoDobra()` para encontrar o `minReg`. Nunca buscar o PA de menor dpd entre todos os registros sem filtro (isso seleciona PAs de anos anteriores).
+
+**Quando o setor não tem risco:** exibe card verde "Setor sem risco de dobra" com contagem de colaboradores e agendados.
+
+**Estrutura do card (por colaborador):**
+```
+[Avatar]  Nome do colaborador          Crítico / Atenção / No Radar
+          Cargo                        Dobra em DD/MM/AAAA
+          Gestor                       Saldo: Xd
+```
+
+- Nível, data e saldo: mesmas funções do drawer do KPI (`nivelRisco`, `dataLimiteDobra(reg)`, `calcSaldo(reg)`)
+- Clique: `fecharDrawer(); setTimeout(() => abrirDrawer(c.__key), 180)`
+- Ordenação: `dpd` ascendente (mais urgente primeiro)
 
 ---
 
