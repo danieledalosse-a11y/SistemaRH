@@ -575,20 +575,73 @@ r = requests.get(f"{SB_URL}/rest/v1/ferias?...", headers=headers)
 rows = r.json()  # verificar isinstance(rows, list) antes de iterar
 ```
 
-## Timeline Gantt — regras de renderização de barra
+## Timeline Gantt — arquitetura centralizada (set/2026)
+
+A Timeline usa **um único renderer** (`_ganttRenderContent`) compartilhado por RH, Gestor e Diretoria. O que varia entre perfis é apenas a fonte dos dados e o escopo de colaboradores visíveis — nunca a regra de cálculo ou desenho.
+
+### `_ganttPrepararLancs(c, fonte)` — regra de gozo efetivo
+
+Prepara os lançamentos a exibir para cada colaborador, aplicando a regra de realizações:
+
+```js
+// fonte = 'rh': lê c.registros[].lancamentos[] e c.registros[].realizacoes[]
+// fonte = 'gestor': lê GESTOR_LANCAMENTOS por c.id, usa flag _isRealizacao
+
+// Regra para cada PA:
+// Se há realizações válidas (não cancelado/descartado/rejeitado) → mostra o gozo efetivo
+// Senão → mostra o lançamento oficial
+
+const _GANTT_EXCL = new Set(['cancelado','descartado','rejeitado']);
+```
+
+Cada entrada retornada tem: `{ inicio, fim, dias, status, aprovado }`.
+- Realizações: `status: 'gozado'`, `aprovado: true`
+- Lançamentos oficiais: `status` original; `aprovado: st !== 'solicitado'`
+
+### `_ganttRenderContent(targetEl, filtrados, diasNoMes, mesInicio, mesFim, mes, ano)`
+
+Recebe objetos colaborador com `c.__ganttLancs` pré-computado (via `_ganttPrepararLancs`). **Não lê `c.registros` nem `GESTOR_LANCAMENTOS` diretamente.**
+
+**Foto:** unificada — `c.fotoUrl || c.foto_url` (cobre RH camelCase e Gestor snake_case).
+
+**onclick:** condicional — só emite `abrirDrawer` quando `c.__key` está presente (RH/Diretoria). Gestor não tem `__key`.
+
+### Wrappers de cada perfil
+
+```js
+// renderTimeline (RH) e renderDirTimeline (Diretoria):
+.map(c => ({ ...c, __ganttLancs: _ganttPrepararLancs(c, 'rh') }))
+.filter(c => c.__ganttLancs.some(l => l.inicio <= mesFim && l.fim >= mesInicio))
+
+// renderGestorGantt:
+.map(c => ({
+  ...c,
+  __ganttLancs: _ganttPrepararLancs(c, 'gestor').filter(l => {
+    if (statusFiltro && (l.status||'').toLowerCase() !== statusFiltro) return false;
+    if (janelaFim && !(l.fim >= hoje && l.inicio <= janelaFim)) return false;
+    return true;
+  }),
+}))
+.filter(c => c.__ganttLancs.some(l => l.inicio <= mesFim && l.fim >= mesInicio))
+// depois: _ganttRenderContent(content, colabs, ...)
+```
+
+### Regras de renderização de barra
 
 Barras são renderizadas célula a célula. Cada barra é desenhada **na célula do `drawDay`** (primeiro dia visível no mês):
 ```js
 const drawDay = l.inicio >= mesInicio ? l.inicio : mesInicio;
 ```
 
-**Label da barra:** usa `colsOriginais` (duração total do lançamento, não apenas dias visíveis) para decidir o threshold:
+**Label da barra:** usa `colsOriginais` (duração total, não apenas dias visíveis):
 ```js
 const colsOriginais = Math.max(1, Math.round((new Date(l.fim+'T12:00:00') - new Date(l.inicio+'T12:00:00')) / 86400000) + 1);
 let label = '';
-if (colsOriginais >= 9) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
-else if (colsOriginais >= 4) label = `${l.dias}d`;
+if (colsOriginais >= 5) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
+// < 5 dias (< 140px): sem label (tooltip via title= ainda mostra tudo)
 ```
+
+Threshold único: **5 dias** — mesmo formato para todos os perfis. Barras de 4 dias ou menos ficam sem texto para evitar overflow.
 
 **Barras que vêm do mês anterior (`contLeft = true`):** o label pode ser mais largo que a barra visível — usar `overflow:visible` inline para deixar o texto flutuar para a direita:
 ```js
@@ -600,14 +653,6 @@ style="color:${txt};${contLeft?'overflow:visible;text-overflow:clip;':''}"
 **Tooltip:** usa `c.nome.split(' ')[0]` (primeiro nome apenas) + datas em DD/MM/YYYY via `formatDate()`:
 ```js
 title="${c.nome.split(' ')[0]}: ${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d..."
-```
-
-**Foto do colaborador:** visão RH usa `c.fotoUrl` (camelCase), visão Gestor usa `c.foto_url` (snake_case):
-```js
-// RH:
-c.fotoUrl ? `<img class="gantt-av" src="${c.fotoUrl}"...>` : `<div class="gantt-av">...</div>`
-// Gestor:
-c.foto_url ? `<img class="gantt-av" src="${c.foto_url}"...>` : `<div class="gantt-av">...</div>`
 ```
 
 ### Largura das barras e alinhamento com colunas (corrigido set/2026)
@@ -631,16 +676,20 @@ c.foto_url ? `<img class="gantt-av" src="${c.foto_url}"...>` : `<div class="gant
 /* contRight: direito já é 0 pelo base; classe mantida por semântica */
 ```
 
-### Realizações não aparecem na Timeline
+### Realizações na Timeline — regra de gozo efetivo (set/2026)
 
-**Regra:** a Timeline mostra apenas períodos registrados/aprovados (`periodo1`, `periodo2`). Realizações (gozo real) são retrospectivas e pertencem ao drawer de detalhes.
+A Timeline exibe o **gozo efetivo** quando existem realizações válidas, ou o lançamento oficial quando não existem. A regra é idêntica para os três perfis via `_ganttPrepararLancs`.
 
-Em `processGestorFerias`, todos os lançamentos gerados a partir de `row.realizacoes` recebem `_isRealizacao: true`. Em `renderGestorGantt`, filtrar ao construir `lancColabs`:
-```js
-const lancColabs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && !l._isRealizacao);
-```
+**Antes (comportamento antigo, substituído):**
+- Visão RH: `todosLancs` vinha de `reg.lancamentos` — nunca mostrava realizações
+- Visão Gestor: `lancColabs` excluía `_isRealizacao: true` — nunca mostrava realizações
 
-A visão RH não tem esse problema — `todosLancs` é construído de `reg.lancamentos` (só `periodo1`/`periodo2`), sem incluir realizações.
+**Atual:**
+- `_isRealizacao: true` sinaliza que a entry em `GESTOR_LANCAMENTOS` veio de `row.realizacoes`
+- `_ganttPrepararLancs` usa esse flag para decidir por PA qual dado mostrar:
+  - Há realizações válidas → mostra-as (barras do gozo real)
+  - Sem realizações → mostra lançamento oficial (`!_isRealizacao`)
+- Realizações com status `cancelado`/`descartado`/`rejeitado` são ignoradas em ambos os casos
 
 ### Visibilidade das abas Painel / Timeline (corrigido set/2026)
 
