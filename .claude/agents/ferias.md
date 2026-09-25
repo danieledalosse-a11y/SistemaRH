@@ -2074,8 +2074,9 @@ Perfil `diretoria` recebe uma experiência completamente separada da visão Gest
 ```js
 _dirPopularFiltros()    // popula selects #dirFiltroCargo, #dirFiltroSetor, #dirFiltroUnidade
 _dirFiltrados()         // retorna COLABORADORES filtrados pelos 3 selects (ativos apenas)
-_dirSaldoColab(colab)   // soma calcSaldo(r) de todos os registros do colaborador
+_dirSaldoColab(colab)   // soma calcSaldo(r) de todos os registros — uso interno (não usar no drawer de risco)
 _dirUrgSemProg(colab)   // retorna { nivel, dlim } do PA mais urgente sem programação
+_dirHtmlRiscoDobra()    // HTML do drawer Risco de Dobra — agrupa por nível, 1 card por colaborador
 renderDiretoria()       // KPIs + Próximas Saídas + Sem Programação + gráfico
 _renderDirChart(colabs) // canvas bar chart: concentração por mês, linha de média, anotação de pico
 dirMostrarAba(aba)      // toggle 'dashboard' / 'timeline'
@@ -2102,6 +2103,54 @@ dirMostrarAba(aba)      // toggle 'dashboard' / 'timeline'
 | `dirKpiRd*` | vermelho | Risco de dobra — `isRiscoDobra()` |
 
 Cada KPI tem 3 elementos: `*N` (número), `*Ctx` (frase "X de N"), `*Bar` (barra de proporção).
+
+### Drawer "Risco de Dobra" — `_dirHtmlRiscoDobra()` (corrigido 2026-09-25)
+
+Aberto ao clicar no KPI vermelho. Exibe os colaboradores retornados por `isRiscoDobra()` agrupados por nível.
+
+**Seleção do PA exibido:** aplica os **mesmos 3 critérios de `isRiscoDobra()`** para identificar o registro relevante — não usa `_dirSaldoColab` nem busca o PA de menor dpd entre todos os registros:
+
+```js
+c.registros.forEach(reg => {
+  if (excluir.has(reg.status)) return;
+  const saldo = calcSaldo(reg);
+  if (saldo <= 0) return;
+  const dpd = diasParaDobra(reg);
+  if (dpd === null || dpd > REGRAS_FERIAS.diasAlertaDobra) return;
+  if (reg.lancamentos.some(l => l.fim && l.fim >= HOJE)) return;
+  if (dpd < minDpd) { minDpd = dpd; minReg = reg; }
+});
+```
+
+Isso garante que o PA exibido é exatamente o mesmo que fundamenta o risco — nunca um PA vencido de anos anteriores.
+
+**Estrutura do card (por colaborador):**
+
+```
+[Avatar]  Nome do colaborador          Crítico / Atenção / No Radar
+          Cargo                        Dobra em DD/MM/AAAA
+          Setor · Gestor               Saldo: Xd
+```
+
+- Nível: `labels[nivel]` — exatamente "Crítico", "Atenção" ou "No Radar"
+- Data: `dataLimiteDobra(reg)` do PA selecionado
+- Saldo: `calcSaldo(reg)` do PA selecionado — **não** `_dirSaldoColab(c)` (que somaria todos os PAs)
+- Cargo: `c.cargo`; Setor · Gestor: `c.setor` + `c.gestor`
+- Clique no card: `fecharDrawer(); setTimeout(() => abrirDrawer(c.__key), 180)`
+
+**Ordenação:** por `dpd` ascendente dentro de cada grupo (mais urgente primeiro).
+
+**Grupos e cores:**
+
+| Grupo | Critério | Fundo | Borda | Texto |
+|---|---|---|---|---|
+| `critico` | dpd < 60 | `#FEF3F2` | `#F04438` | `#7F1D1D` |
+| `atencao` | 60 ≤ dpd ≤ 120 | `#FFFAEB` | `#F79009` | `#B54708` |
+| `noradar` | dpd > 120 | `#EFF6FF` | `#2E90FA` | `#1D4ED8` |
+
+**Princípio:** Diretoria = mesma informação do Gestor/RH, apresentação executiva. Nunca criar nova regra de risco — sempre reutilizar `isRiscoDobra()`, `calcSaldo()`, `diasParaDobra()`, `dataLimiteDobra()`, `nivelRisco()`.
+
+---
 
 ### Painel "Sem Programação"
 
