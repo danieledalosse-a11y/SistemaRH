@@ -2344,6 +2344,7 @@ let _dashCalMonth  = new Date().getMonth();
 let _dashCalData   = null; // { excluir, ativos } — populado por renderAnalytics()
 let _dashCalLocked = null; // dateStr travado por clique
 let _dashAnoYears    = new Set([new Date().getFullYear()]); // anos ativos no gráfico comparativo
+let _dashAnoWrapId   = 'dashAnoWrap'; // container ativo do gráfico (RH='dashAnoWrap', Diretoria='dirAnoWrap')
 // Estado do dashboard do Gestor (independente do dashboard RH/Diretoria)
 let _gdashCalYear  = new Date().getFullYear();
 let _gdashCalMonth = new Date().getMonth();
@@ -4436,7 +4437,7 @@ function setVisTab(nome) {
   if (nome === 'lista-anual') renderListaAnual();
   if (nome === 'calendario')  { renderMesSeletor(); renderCalendario(); }
   if (nome === 'timeline')    renderTimeline();
-  if (nome === 'dashboard')   IS_DIRETORIA ? renderDashboardDiretoria() : renderAnalytics();
+  if (nome === 'dashboard')   renderAnalytics();
   if (nome === 'mapa')        _renderGdashMapa({ wrapId: 'dir-mapaWrap' });
 }
 
@@ -6357,12 +6358,12 @@ function setRole(role) {
   document.getElementById('roleBtnDiretoria')?.classList.toggle('active', role === 'diretoria');
 
   if (role === 'diretoria') {
-    // Diretoria: mesma visão RH — abas controladas por podeAba, sem regras específicas de perfil
+    // Diretoria: visão executiva própria (sec-diretoria) — sem sec-visao-rh
     const sg = document.getElementById('sec-gestor');
     if (sg) sg.style.display = 'none';
+    document.getElementById('sec-visao-rh').style.display = 'none';
     const sd = document.getElementById('sec-diretoria');
-    if (sd) sd.style.display = 'none';
-    document.getElementById('sec-visao-rh').style.display = 'block';
+    if (sd) sd.style.display = 'block';
     const modTabs = document.querySelector('.mod-tabs');
     if (modTabs) modTabs.style.display = 'flex';
     if (podeAba('ferias','dashboard')) {
@@ -6874,6 +6875,7 @@ function renderAnalytics() {
     </div>
 
   </div>`;
+  _dashAnoWrapId = 'dashAnoWrap';
   renderDashAnoChart();
   renderDashCalendar();
 }
@@ -6982,7 +6984,7 @@ function dashPizzaTooltipHide() {
 }
 
 function renderDashAnoChart() {
-  const wrap = document.getElementById('dashAnoWrap');
+  const wrap = document.getElementById(_dashAnoWrapId);
   if (!wrap || !_dashCalData) return;
   const { excluir, ativos } = _dashCalData;
 
@@ -7087,7 +7089,7 @@ function dashAnoToggleYear(y) {
 }
 
 function _dashAnoBuildContent(idx, locked) {
-  const wrap = document.getElementById('dashAnoWrap');
+  const wrap = document.getElementById(_dashAnoWrapId);
   if (!wrap || !wrap._allData) return '';
   const activeYears = wrap._activeYears;
   const allData     = wrap._allData;
@@ -7140,7 +7142,7 @@ function _dashAnoPosicionaTT(tt, idx) {
   tt.style.opacity    = '0';
   tt.classList.add('visible');
   requestAnimationFrame(() => {
-    const barsEl = document.querySelector('#dashAnoWrap .an-ano-bars');
+    const barsEl = document.querySelector('#'+_dashAnoWrapId+' .an-ano-bars');
     const cols   = barsEl ? barsEl.querySelectorAll('.an-ano-col') : [];
     const colEl  = cols[idx];
     if (!colEl || !barsEl) return;
@@ -7175,7 +7177,7 @@ function _dashAnoPosicionaTT(tt, idx) {
 
 function dashAnoHover(idx) {
   if (_dashAnoLocked !== null) return;
-  const wrap = document.getElementById('dashAnoWrap');
+  const wrap = document.getElementById(_dashAnoWrapId);
   if (!wrap || !wrap._allData) return;
   const hasAny = wrap._activeYears.some(y => wrap._allData[y][idx].total > 0);
   let tt = document.getElementById('dashAnoTooltip');
@@ -7198,7 +7200,7 @@ function dashAnoHoverOut() {
 }
 
 function dashAnoClick(idx) {
-  const wrap = document.getElementById('dashAnoWrap');
+  const wrap = document.getElementById(_dashAnoWrapId);
   if (!wrap || !wrap._allData) return;
   const hasAny = wrap._activeYears.some(y => wrap._allData[y][idx].total > 0);
   if (!hasAny) return;
@@ -9059,11 +9061,8 @@ let _gdashSemProgAbertos   = new Set(['critico','atencao']);
 // ─── Diretoria: carregamento e dashboard ────────────────────────────────────
 
 async function _carregarDadosDiretoria() {
-  // Posiciona na aba Dashboard antes do carregamento — evita flash da Lista
-  setVisTab('dashboard');
-  // Oculta Atividade recente/Histórico (específico da Diretoria, não altera RH nem Gestor)
-  const rhAtiv = document.getElementById('rhAtividade');
-  if (rhAtiv) rhAtiv.style.display = 'none';
+  // Posiciona na aba Dashboard da sec-diretoria antes do carregamento
+  dirMostrarAba(true);
   document.body.classList.add('modo-gestor');
 
   // Carrega base completa (empresa inteira) sem UI do Gestor, em paralelo com COLABORADORES
@@ -9071,7 +9070,7 @@ async function _carregarDadosDiretoria() {
     _carregarEquipeGestor(null, { skipGestorUI: true }),
     carregarDoSupabase(),
   ]);
-  renderDashboardDiretoria();
+  renderDiretoria();
 }
 
 function renderDashboardDiretoria() {
@@ -12527,7 +12526,10 @@ function renderDiretoria() {
     }
   }
 
-  _renderDirChart(colabs);
+  // Gráfico — fonte única: renderDashAnoChart() com container dirAnoWrap
+  _dashAnoWrapId = 'dirAnoWrap';
+  _dashCalData = { excluir: new Set(['Pendente','Rejeitado','Cancelado','Descartado']), ativos: COLABORADORES.filter(c => c.ativo !== false) };
+  renderDashAnoChart();
 
   // Pico de Saídas KPI
   const pico = _picoSaidasSetor(colabs, 90);
@@ -12954,6 +12956,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (vtDash) vtDash.style.display = 'none';
     }
     if (IS_DIRETORIA && podeAba('ferias','dashboard')) {
+      // Ativa sec-diretoria na carga inicial (sem passar por setRole)
+      document.getElementById('sec-visao-rh').style.display = 'none';
+      const _sd = document.getElementById('sec-diretoria');
+      if (_sd) _sd.style.display = 'block';
       _carregarDadosDiretoria();
     } else {
       carregarDoSupabase().then(() => {
@@ -13039,17 +13045,9 @@ document.addEventListener('DOMContentLoaded', () => {
     <div id="dirDashboard">
       <!-- Tabela por setor — renderizada por _dirRenderSetorTable() -->
       <div id="dirSetorTable" style="margin-bottom:20px;"></div>
-      <!-- Gráfico de concentração anual — largura total -->
-      <div class="dir-card">
-        <div class="dir-chart-hdr">
-          <div>
-            <div class="dir-card-title">Concentra&ccedil;&atilde;o ao Longo do Ano</div>
-            <div class="dir-card-sub" id="dirChartSub">Colaboradores com f&eacute;rias em cada m&ecirc;s</div>
-          </div>
-          <div class="dir-year-pills" id="dirYearPills"></div>
-        </div>
-        <canvas id="dirChart" style="display:block;"></canvas>
-        <div class="dir-chart-note" id="dirChartNote" style="display:none;"></div>
+      <!-- Gráfico comparativo de férias por ano — usa renderDashAnoChart() (fonte única) -->
+      <div class="dir-card" style="padding:0;">
+        <div id="dirAnoWrap"></div>
       </div>
       <!-- Elementos ocultos mantidos para não quebrar renderDiretoria() -->
       <div style="display:none;">
