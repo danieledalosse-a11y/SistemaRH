@@ -10213,7 +10213,6 @@ function renderGestorRelatorio() {
 function gestorGerarRelatorio() {
   const el = document.getElementById('gestorRelatorioContent');
   if (!el) return;
-  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
   const de         = document.getElementById('relDe')?.value || '';
@@ -10272,7 +10271,7 @@ function gestorGerarRelatorio() {
       <td style="${tdStyle}">${r.colab.nome}</td>
       <td style="${tdSecStyle}">${r.colab.cargo||'—'}</td>
       <td style="${tdSecStyle}">${r.colab.setor||'—'}</td>
-      <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.inicio)} → ${_fmtD(r.fim)}</td>
+      <td style="${tdStyle};font-variant-numeric:tabular-nums;">${formatDate(r.inicio)} → ${formatDate(r.fim)}</td>
       <td style="${tdStyle};text-align:center;">${r.dias}d</td>
       <td style="${tdStyle};">${stBadge(r.status)}</td>
     </tr>`).join('');
@@ -10297,7 +10296,7 @@ function gestorGerarRelatorio() {
       const gRows = grupos[cargo].map(r => `<tr>
         <td style="${tdStyle}">${r.colab.nome}</td>
         <td style="${tdSecStyle}">${r.colab.setor||'—'}</td>
-        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.inicio)} → ${_fmtD(r.fim)}</td>
+        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${formatDate(r.inicio)} → ${formatDate(r.fim)}</td>
         <td style="${tdStyle};text-align:center;">${r.dias}d</td>
         <td style="${tdStyle};">${stBadge(r.status)}</td>
       </tr>`).join('');
@@ -10330,7 +10329,7 @@ function gestorGerarRelatorio() {
         <td style="${tdStyle}">${r.colab.nome}</td>
         <td style="${tdSecStyle}">${r.colab.cargo||'—'}</td>
         <td style="${tdSecStyle}">${r.colab.setor||'—'}</td>
-        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${_fmtD(r.inicio)} → ${_fmtD(r.fim)}</td>
+        <td style="${tdStyle};font-variant-numeric:tabular-nums;">${formatDate(r.inicio)} → ${formatDate(r.fim)}</td>
         <td style="${tdStyle};text-align:center;">${r.dias}d</td>
         <td style="${tdStyle};">${stBadge(r.status)}</td>
       </tr>`).join('');
@@ -10356,9 +10355,8 @@ function gestorGerarRelatorio() {
 function gestorExportarRelatorioCSV() {
   const rows = window._gestorRelRows;
   if (!rows?.length) return;
-  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const header = ['Nome','Cargo','Setor','Início','Fim','Dias','Status'];
-  const linhas = [header, ...rows.map(r => [r.colab.nome, r.colab.cargo||'', r.colab.setor||'', _fmtD(r.inicio), _fmtD(r.fim), r.dias, r.status||''])];
+  const linhas = [header, ...rows.map(r => [r.colab.nome, r.colab.cargo||'', r.colab.setor||'', formatDate(r.inicio), formatDate(r.fim), r.dias, r.status||''])];
   const csv  = linhas.map(l => l.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
@@ -10371,11 +10369,10 @@ function gestorExportarRelatorioCSV() {
 function gestorImprimirRelatorio() {
   const rows = window._gestorRelRows;
   if (!rows?.length) return;
-  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const de  = document.getElementById('relDe')?.value || '';
   const ate = document.getElementById('relAte')?.value || '';
-  const periodo = (de || ate) ? `${_fmtD(de)} a ${_fmtD(ate)}` : 'Todos os períodos';
-  const trs = rows.map(r => `<tr><td>${r.colab.nome}</td><td>${r.colab.cargo||'—'}</td><td>${r.colab.setor||'—'}</td><td>${_fmtD(r.inicio)} → ${_fmtD(r.fim)}</td><td style="text-align:center;">${r.dias}d</td><td>${r.status||'—'}</td></tr>`).join('');
+  const periodo = (de || ate) ? `${formatDate(de)} a ${formatDate(ate)}` : 'Todos os períodos';
+  const trs = rows.map(r => `<tr><td>${r.colab.nome}</td><td>${r.colab.cargo||'—'}</td><td>${r.colab.setor||'—'}</td><td>${formatDate(r.inicio)} → ${formatDate(r.fim)}</td><td style="text-align:center;">${r.dias}d</td><td>${r.status||'—'}</td></tr>`).join('');
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório Férias</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#222;}
   h2{margin:0 0 4px;font-size:15px;}p{margin:0 0 16px;color:#666;font-size:11px;}
@@ -10547,7 +10544,7 @@ function renderGestorAtencao() {
 
   const _ini = nome => nome.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
   const _cor = nome => { let h=0; for(let i=0;i<nome.length;i++) h=(h*31+nome.charCodeAt(i))&0xFFFFFF; const COLS=['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C']; return COLS[Math.abs(h)%COLS.length]; };
-  const _fmtD = d => d ? d.split('-').reverse().join('/') : '—';
+
 
   list.innerHTML = colabs.map(c => {
     // quando filtro "hoje": usa o PA do lançamento em curso, não o próximo PA com saldo
@@ -10737,7 +10734,7 @@ function renderGestorAtencao() {
             <th style="padding:4px 8px;font-weight:600;">Obs</th>
           </tr></thead>
           <tbody>${hlancs.map(l => `<tr style="border-top:1px solid var(--border);">
-            <td style="padding:4px 8px;white-space:nowrap;">${_fmtD(l.inicio)} → ${_fmtD(l.fim)}</td>
+            <td style="padding:4px 8px;white-space:nowrap;">${formatDate(l.inicio)} → ${formatDate(l.fim)}</td>
             <td style="padding:4px 8px;">${l.dias}d</td>
             <td style="padding:4px 8px;">${l.status||'—'}</td>
             <td style="padding:4px 8px;color:var(--text-ter);">${l.motivo||l.obs_gestor||'—'}</td>
@@ -10813,7 +10810,6 @@ function gestorAbrirSolicitacoes(colabId) {
 }
 
 function _renderGsolLista(c) {
-  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const hoje  = new Date().toISOString().slice(0,10);
   const lancs = GESTOR_LANCAMENTOS
     .filter(l => String(l.colaborador_id) === String(c.id))
@@ -10880,7 +10876,7 @@ function _renderGsolLista(c) {
     return `<div class="gsol-item">
       ${icon}
       <div class="gsol-item-body">
-        <div class="gsol-item-periodo">${_fmtD(l.inicio)} → ${_fmtD(l.fim)} · ${l.dias} dias</div>
+        <div class="gsol-item-periodo">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias} dias</div>
         <div style="margin-bottom:4px;">${badgeHtml}${passado && st !== 'solicitado' && st !== 'cancelado' ? `<span style="font-size:11px;color:var(--text-ter);margin-left:6px;">Concluído</span>` : ''}</div>
         ${motivoHtml}
         ${motivoCancelHtml}
@@ -10891,8 +10887,8 @@ function _renderGsolLista(c) {
 
   document.getElementById('gsolLista').innerHTML = pasOrdenados.map(pid => {
     const per = GESTOR_PERIODOS.find(p => String(p.id) === pid);
-    const paInicio = per?.pa_inicio ? _fmtD(per.pa_inicio) : '—';
-    const paFim    = per?.pa_fim    ? _fmtD(per.pa_fim)    : '—';
+    const paInicio = per?.pa_inicio ? formatDate(per.pa_inicio) : '—';
+    const paFim    = per?.pa_fim    ? formatDate(per.pa_fim)    : '—';
     const paAno    = per?.pa_fim    ? per.pa_fim.slice(0,4) : per?.pa_inicio?.slice(0,4) || '—';
     const diasDir  = per ? (Number(per.dias_direito) || 30) : 30;
     const saldoPa  = per ? gestorSaldoPeriodo(per) : 0;
@@ -11710,7 +11706,6 @@ function _renderGsolHistoricoAuditoria() {
 }
 
 function _renderGsolHistoricoRH(c) {
-  const _fmtD = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const hoje  = new Date().toISOString().slice(0,10);
   const periodos = GESTOR_PERIODOS
     .filter(p => String(p.colaborador_id) === String(c.id))
@@ -11741,8 +11736,8 @@ function _renderGsolHistoricoRH(c) {
     const row     = per._feriasRow || {};
     const _firstLancInicio = GESTOR_LANCAMENTOS.find(l => String(l.periodo_id) === String(per.id))?.inicio;
     const paAno   = row.ano || (_firstLancInicio?.slice(0,4)) || (per.pa_fim ? per.pa_fim.slice(0,4) : per.pa_inicio?.slice(0,4) || '—');
-    const paIni   = _fmtD(per.pa_inicio);
-    const paFim   = _fmtD(per.pa_fim);
+    const paIni   = formatDate(per.pa_inicio);
+    const paFim   = formatDate(per.pa_fim);
     const diasDir = Number(per.dias_direito) || 30;
     const lancamentos = GESTOR_LANCAMENTOS.filter(l =>
       String(l.colaborador_id) === String(c.id) &&
@@ -11810,13 +11805,13 @@ function _renderGsolHistoricoRH(c) {
 
       const gozoHtml = [
         ...gozosConfirmados.map(g => {
-          const ini = _fmtD(g.saida || g.inicio);
-          const fim = _fmtD(g.retorno || g.fim);
+          const ini = formatDate(g.saida || g.inicio);
+          const fim = formatDate(g.retorno || g.fim);
           return `<div class="gsol-rh-gozo"><span>${svgChk} Gozo real</span><span style="font-variant-numeric:tabular-nums;">${ini} → ${fim} · ${g.dias}d</span></div>`;
         }),
         ...gozosPendGestor.map(g => {
-          const ini = _fmtD(g.saida || g.inicio);
-          const fim = _fmtD(g.retorno || g.fim);
+          const ini = formatDate(g.saida || g.inicio);
+          const fim = formatDate(g.retorno || g.fim);
           return `<div class="gsol-rh-gozo" style="opacity:0.8;"><span style="color:#B45309;">${svgClk} Aguard. aprovação RH</span><span style="font-variant-numeric:tabular-nums;color:#B45309;">${ini} → ${fim} · ${g.dias}d</span></div>`;
         }),
       ].join('');
@@ -11873,13 +11868,13 @@ function _renderGsolHistoricoRH(c) {
       const bannerAlt = temAltPendente
         ? `<div style="margin-top:6px;padding:7px 10px;background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:7px;font-size:11px;color:#1849A9;line-height:1.5;">
             <strong>Alteração de data aguardando aprovação do RH</strong><br>
-            <span style="color:var(--text-sec);">Data atual: ${_fmtD(_altMetaGsol.data_anterior_inicio)} → ${_fmtD(_altMetaGsol.data_anterior_fim)} &nbsp;·&nbsp; Nova data: ${_fmtD(_altMetaGsol.novo_inicio)} → ${_fmtD(_altMetaGsol.novo_fim)}</span>
+            <span style="color:var(--text-sec);">Data atual: ${formatDate(_altMetaGsol.data_anterior_inicio)} → ${formatDate(_altMetaGsol.data_anterior_fim)} &nbsp;·&nbsp; Nova data: ${formatDate(_altMetaGsol.novo_inicio)} → ${formatDate(_altMetaGsol.novo_fim)}</span>
           </div>` : '';
 
       const bannerCancel = temCancelPendente
         ? `<div style="margin-top:6px;padding:7px 10px;background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:7px;font-size:11px;color:#92400E;line-height:1.5;">
             <strong>Cancelamento aguardando aprovação do RH</strong><br>
-            <span style="color:var(--text-sec);">Período: ${_fmtD(_cancelMetaGsol.inicio)} → ${_fmtD(_cancelMetaGsol.fim)} · ${_cancelMetaGsol.dias} dias</span>
+            <span style="color:var(--text-sec);">Período: ${formatDate(_cancelMetaGsol.inicio)} → ${formatDate(_cancelMetaGsol.fim)} · ${_cancelMetaGsol.dias} dias</span>
           </div>` : '';
 
       // Botões de ação para lançamentos futuros aprovados
@@ -11900,7 +11895,7 @@ function _renderGsolHistoricoRH(c) {
       return `<div class="gsol-rh-item">
         <div class="gsol-rh-dot" style="background:${dotColor};"></div>
         <div class="gsol-rh-body">
-          <div class="gsol-rh-dates">${_fmtD(l.inicio)} → ${_fmtD(l.fim)} · ${l.dias}d</div>
+          <div class="gsol-rh-dates">${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d</div>
           <div class="gsol-rh-chips">
             <span class="gsol-rh-chip">${svgCal} Lançado RH</span>${chipPend}${chipConcl}
           </div>
