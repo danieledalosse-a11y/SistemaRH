@@ -1358,6 +1358,8 @@
   .dk-blue  .dir-kpi-fill { background:var(--blue); }
   .dk-amber .dir-kpi-fill { background:var(--amber); }
   .dk-red   .dir-kpi-fill { background:var(--red); }
+  .dir-kpi-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; flex-shrink:0; background:var(--red-bg); }
+  .dir-kpi-icon svg { width:16px; height:16px; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .dir-nav-row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
   .dir-tabs { display:flex; gap:3px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:3px; }
   .dir-tab { padding:6px 15px; border-radius:5px; font-size:12px; font-weight:500; color:var(--text-sec); cursor:pointer; border:none; background:transparent; font-family:inherit; transition:all .15s; }
@@ -12550,6 +12552,7 @@ function _dirRenderSetorTable() {
 }
 
 function renderDiretoria() {
+  _dirPopularFiltros();
   const colabs = _dirFiltrados();
   const total  = colabs.length;
   const hoje   = HOJE;
@@ -12572,10 +12575,9 @@ function renderDiretoria() {
   const pct = n => total > 0 ? Math.round(n / total * 100) : 0;
   const fmtDia = s => { const [a,m,d] = (s||'').slice(0,10).split('-'); return d && m ? `${d}/${m}` : '—'; };
 
-  // Base band
-  const hojeFmt = new Date().toLocaleDateString('pt-BR', {day:'numeric',month:'long',year:'numeric'});
-  const elBand = document.getElementById('dirBaseBand');
-  if (elBand) elBand.innerHTML = `Base: <b>${total} colaboradores ativos</b> &middot; Posição em ${hojeFmt}`;
+  // Stat de colaboradores ativos no cabeçalho
+  const elStatNum = document.getElementById('dirBaseStatNum');
+  if (elStatNum) elStatNum.textContent = total;
 
   const setKpi = (nId, ctxId, barId, n, ctx, p) => {
     const elN = document.getElementById(nId), elC = document.getElementById(ctxId), elB = document.getElementById(barId);
@@ -13090,14 +13092,17 @@ document.addEventListener('DOMContentLoaded', () => {
   <div class="dir-page">
     <div class="dir-header">
       <div>
-        <div class="dir-eyebrow">Revest do Brasil &middot; Módulo Férias</div>
-        <h2 class="dir-title">Panorama <span>Executivo</span></h2>
+        <h2 class="dir-title">Panorama Executivo</h2>
       </div>
-    </div>
-    <div class="dir-base-band">
-      <div class="dir-band-line"></div>
-      <div class="dir-band-text" id="dirBaseBand">&mdash;</div>
-      <div class="dir-band-line"></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 1px 2px rgba(16,24,40,.05);">
+        <div style="width:38px;height:38px;border-radius:10px;background:var(--green-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div>
+          <div id="dirBaseStatNum" style="font-size:24px;font-weight:700;line-height:1;letter-spacing:-.02em;color:var(--green);">&mdash;</div>
+          <div style="font-size:12px;color:var(--text-sec);margin-top:4px;font-weight:500;">colaboradores ativos</div>
+        </div>
+      </div>
     </div>
     <div class="dir-kpi-row">
       <!-- Agendados e Em Férias Hoje ocultos — KPIs estratégicos focados em risco -->
@@ -13120,12 +13125,14 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="dir-kpi-track"><div class="dir-kpi-fill" id="dirKpiSpBar"></div></div>
       </div>
       <div class="dir-kpi dk-red" style="cursor:pointer;" onclick="abrirDrawerGenerico('Risco de Dobra', _dirHtmlRiscoDobra())">
+        <div class="dir-kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
         <div class="dir-kpi-label">Risco de Dobra</div>
         <div class="dir-kpi-num" id="dirKpiRdN">&mdash;</div>
         <div class="dir-kpi-ctx" id="dirKpiRdCtx">&mdash;</div>
         <div class="dir-kpi-track"><div class="dir-kpi-fill" id="dirKpiRdBar"></div></div>
       </div>
       <div class="dir-kpi" id="dirKpiPicoCard" style="cursor:pointer;border-left:3px solid #D97706;" onclick="_dirAbrirPicoDrawer()">
+        <div class="dir-kpi-icon" style="background:var(--amber-bg);"><svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
         <div class="dir-kpi-label">Pico de Sa&iacute;das</div>
         <div class="dir-kpi-num" id="dirKpiPicoN" style="color:#D97706;">&mdash;</div>
         <div class="dir-kpi-ctx" id="dirKpiPicoCtx">calculando...</div>
@@ -13151,7 +13158,6 @@ document.addEventListener('DOMContentLoaded', () => {
           <button class="filter-clear" id="clr-dirFiltroUnidade" onclick="clearFilter('dirFiltroUnidade','',()=>{renderDiretoria()})" tabindex="-1" title="Limpar">✕</button>
         </div>
       </div>
-      <span class="dir-data-note">Baseado nas f&eacute;rias j&aacute; agendadas no sistema</span>
     </div>
     <div id="dirDashboard">
       <!-- Gráfico comparativo de férias por ano — usa renderDashAnoChart() (fonte única) -->
