@@ -12310,8 +12310,12 @@ function _dirHtmlRiscoDobra() {
     let minDpd = Infinity, minReg = null;
     c.registros.forEach(reg => {
       if (excluir.has(reg.status)) return;
+      const saldo = calcSaldo(reg);
+      if (saldo <= 0) return;
       const dpd = diasParaDobra(reg);
-      if (dpd !== null && dpd < minDpd) { minDpd = dpd; minReg = reg; }
+      if (dpd === null || dpd > REGRAS_FERIAS.diasAlertaDobra) return;
+      if (reg.lancamentos.some(l => l.fim && l.fim >= HOJE)) return;
+      if (dpd < minDpd) { minDpd = dpd; minReg = reg; }
     });
     if (minReg) items.push({ c, dpd: minDpd, reg: minReg });
   });
