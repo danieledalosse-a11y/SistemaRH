@@ -222,13 +222,17 @@ const TD = (par) => `style="${F}...border:1px solid ${par?'#EEF2FA':'#F5F8FD'};b
 - **Colunas:** Nome | Cargo | Admissão | Gestor
 - **Funções:** `_dadosCadastro(opts)`, `gerarCadastroPDF(opts)`, `gerarCadastroExcel(opts)`
 
-**`_dadosCadastro(opts)`** aceita `{ situacao, empresa, sexo }` como override dos selects do DOM — permite que "Por Gênero" chame com `{ sexoForce: 'M' }` sem abrir painel diferente.
+**`_dadosCadastro(opts)`** aceita `{ situacao, empresa, sexo }` como override dos selects do DOM. Quando chamada sem opts (ou com opts sem `sexo`), lê `#f-sexo` do DOM — o painel Por Gênero expõe esse select, então o filtro funciona via DOM.
+
+> **Atenção:** o Por Gênero passa `{ sexoForce: val }` mas `_dadosCadastro` lê `opts.sexo` (não `opts.sexoForce`). O filtro de sexo funciona mesmo assim porque cai no fallback DOM. `sexoForce` é um parâmetro inerte — não remover sem testar.
 
 ### Por Gênero
 
-- Chama `gerarCadastroPDF({ sexoForce: valor })` / `gerarCadastroExcel({ sexoForce: valor })`
-- Filtros no painel: Situação (`#f-situacao`, padrão Ativo), Gênero (`#f-sexo`), Empresa (`#f-empresa`), Tipo de vínculo
-- **`#f-situacao` é obrigatório** — sem ele `situacaoFiltro()` retorna `''` e demitidos entram no relatório (bug corrigido em `ecae498`)
+- Chama `gerarCadastroPDF({ sexoForce: val })` / `gerarCadastroExcel({ sexoForce: val })` onde `val = document.getElementById('f-sexo')?.value`
+- Na prática o sexo é filtrado pelo fallback DOM de `_dadosCadastro` (lê `#f-sexo` do painel ativo)
+- Filtros no painel: Situação (`#f-situacao`, padrão Ativo), Gênero (`#f-sexo`: Masculino/Feminino, sem opção "Todos"), Empresa de atuação (`#f-empresa`), Tipo de vínculo
+- **`#f-situacao` é obrigatório** — sem ele `situacaoFiltro()` retorna `''` e demitidos entram no relatório
+- Sem "Agrupar por" — o relatório é a mesma estrutura Empresa→Setor do Por Empresa/Setor, pré-filtrado por gênero
 
 ### PCD e Jovem Aprendiz
 
