@@ -7519,15 +7519,59 @@ function renderTimeline() {
     if (sbSet && c.setor !== sbSet) return false;
     if (ganttSetorFiltro && normSetor(c.setor) !== ganttSetorFiltro) return false;
     if (ganttGestorFiltro && _normGT(c.gestor) !== _normGT(ganttGestorFiltro)) return false;
-    return c.registros.some(reg => {
-      const lans = [...reg.lancamentos, ...(reg._novoLanc ? [reg._novoLanc] : [])];
-      return lans.some(l => l.inicio <= mesFim && l.fim >= mesInicio);
-    });
-  }).sort((a, b) => a.nome.localeCompare(b.nome));
+    return true;
+  }).map(c => ({ ...c, __ganttLancs: _ganttPrepararLancs(c, 'rh') }))
+    .filter(c => c.__ganttLancs.some(l => l.inicio <= mesFim && l.fim >= mesInicio))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   if (cntEl) cntEl.textContent = filtrados.length;
 
   _ganttRenderContent(content, filtrados, diasNoMes, mesInicio, mesFim, mes, ano);
+}
+
+// Prepara lançamentos para a Timeline aplicando a regra de realizações:
+// Se há realizações válidas → usa o gozo efetivo; senão → usa o lançamento oficial
+const _GANTT_EXCL = new Set(['cancelado','descartado','rejeitado']);
+function _ganttPrepararLancs(c, fonte) {
+  if (fonte === 'gestor') {
+    const all = GESTOR_LANCAMENTOS.filter(l => String(l.colaborador_id) === String(c.id));
+    const periodoIds = [...new Set(all.map(l => String(l.periodo_id)))];
+    const lancs = [];
+    periodoIds.forEach(pid => {
+      const forPa = all.filter(l => String(l.periodo_id) === pid);
+      const real  = forPa.filter(l => l._isRealizacao && !_GANTT_EXCL.has((l.status||'').toLowerCase()));
+      if (real.length > 0) {
+        real.forEach(r => lancs.push({ inicio: r.inicio, fim: r.fim, dias: r.dias, status: 'gozado', aprovado: true }));
+      } else {
+        forPa.filter(l => !l._isRealizacao && !_GANTT_EXCL.has((l.status||'').toLowerCase()))
+          .forEach(l => {
+            const st = (l.status||'').toLowerCase();
+            lancs.push({ inicio: l.inicio, fim: l.fim, dias: l.dias, status: st||'aprovado', aprovado: st !== 'solicitado' });
+          });
+      }
+    });
+    return lancs;
+  }
+  // fonte === 'rh'
+  const lancs = [];
+  (c.registros || []).forEach(reg => {
+    const real = (reg.realizacoes || []).filter(r =>
+      r.saida && Number(r.dias) > 0 && !_GANTT_EXCL.has((r.status||'').toLowerCase())
+    );
+    if (real.length > 0) {
+      real.forEach(r => lancs.push({
+        inicio: r.saida,
+        fim: r.retorno || r.fim || r.saida,
+        dias: Number(r.dias),
+        status: 'gozado',
+        aprovado: true
+      }));
+    } else {
+      (reg.lancamentos || []).forEach(l => lancs.push({ ...l, status: 'aprovado', aprovado: true }));
+      if (reg._novoLanc) lancs.push({ ...reg._novoLanc, status: 'pendente', aprovado: false });
+    }
+  });
+  return lancs;
 }
 
 function _ganttRenderContent(targetEl, filtrados, diasNoMes, mesInicio, mesFim, mes, ano) {
@@ -7571,15 +7615,12 @@ function _ganttRenderContent(targetEl, filtrados, diasNoMes, mesInicio, mesFim, 
     const cor     = avColor(c.nome);
     const ini     = avInit(c.nome);
     const subtext = [c.cargo, normSetor(c.setor)||c.unidade].filter(Boolean).join(' · ');
-    const todosLancs = [];
-    c.registros.forEach(reg => {
-      reg.lancamentos.forEach(l => todosLancs.push({...l, aprovado: true}));
-      if (reg._novoLanc) todosLancs.push({...reg._novoLanc, aprovado: false});
-    });
+    const todosLancs = c.__ganttLancs || [];
+    const _trClick = c.__key ? ` onclick="abrirDrawer('${c.__key.replace(/'/g,"\\'")}')"` : '';
 
-    rows += `<tr class="gantt-row" onclick="abrirDrawer('${c.__key.replace(/'/g,"\\'")}')">
+    rows += `<tr class="gantt-row"${_trClick}>
       <td><div class="gantt-name-cell">
-        ${c.fotoUrl ? `<img class="gantt-av" src="${c.fotoUrl}" style="object-fit:cover;" alt="">` : `<div class="gantt-av" style="background:${cor};">${ini}</div>`}
+        ${(c.fotoUrl||c.foto_url) ? `<img class="gantt-av" src="${c.fotoUrl||c.foto_url}" style="object-fit:cover;" alt="">` : `<div class="gantt-av" style="background:${cor};">${ini}</div>`}
         <div>
           <div class="gantt-name">${c.nome}</div>
           <div class="gantt-name-sub">${subtext || (c.empresaRegistro||c.unidade||'—')}</div>
@@ -8876,12 +8917,10 @@ function gestorGanttProximo() {
 }
 
 function renderGestorGantt() {
+  const MESES  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const titulo  = document.getElementById('gestorGanttTitulo');
   const content = document.getElementById('gestorGanttContent');
   if (!content) return;
-
-  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  const WD    = ['D','S','T','Q','Q','S','S'];
 
   const ano = _gestorGanttAno, mes = _gestorGanttMes;
   const diasNoMes = new Date(ano, mes+1, 0).getDate();
@@ -8893,7 +8932,7 @@ function renderGestorGantt() {
   if (titulo) titulo.innerHTML = `${MESES[mes]} <span class="gantt-nav-year">${ano}</span>`;
 
   // Popula filtro de cargos
-  const cargoSel   = document.getElementById('gestorFiltroCargo');
+  const cargoSel    = document.getElementById('gestorFiltroCargo');
   const cargoFiltro = cargoSel?.value || '';
   if (cargoSel && cargoSel.options.length <= 1) {
     const cargos = [...new Set(GESTOR_COLABS.map(c => c.cargo || '').filter(Boolean))].sort();
@@ -8901,116 +8940,26 @@ function renderGestorGantt() {
   }
 
   const statusFiltro = document.getElementById('gestorFiltroStatus')?.value || '';
-
-
   const janelaFim = _gestorJanelaDias ? (() => { const d = new Date(); d.setDate(d.getDate() + _gestorJanelaDias); return d.toISOString().slice(0,10); })() : null;
 
-  let colabs = cargoFiltro ? GESTOR_COLABS.filter(c => c.cargo === cargoFiltro) : GESTOR_COLABS;
-  colabs = colabs.filter(c =>
-    GESTOR_LANCAMENTOS.some(l => {
-      if (String(l.colaborador_id) !== String(c.id)) return false;
-      if (l.fim < mesInicio || l.inicio > mesFim) return false;
-      if (statusFiltro && (l.status || '').toLowerCase() !== statusFiltro) return false;
-      if (janelaFim && !(l.fim >= hoje && l.inicio <= janelaFim)) return false;
-      return true;
-    })
-  ).sort((a, b) => a.nome.localeCompare(b.nome));
+  const colabs = (cargoFiltro ? GESTOR_COLABS.filter(c => c.cargo === cargoFiltro) : GESTOR_COLABS)
+    .map(c => ({
+      ...c,
+      __ganttLancs: _ganttPrepararLancs(c, 'gestor').filter(l => {
+        if (statusFiltro && (l.status||'').toLowerCase() !== statusFiltro) return false;
+        if (janelaFim && !(l.fim >= hoje && l.inicio <= janelaFim)) return false;
+        return true;
+      }),
+    }))
+    .filter(c => c.__ganttLancs.some(l => l.inicio <= mesFim && l.fim >= mesInicio))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   if (!colabs.length) {
     content.innerHTML = `<div class="gantt-empty" style="padding:32px;text-align:center;color:var(--text-ter);font-size:13px;">Nenhum colaborador com férias em ${MESES[mes]} ${ano}</div>`;
     return;
   }
 
-  const AV_COLORS = ['#1849A9','#0E7490','#6D28D9','#B45309','#15803D','#9D174D','#C2410C','#1D4ED8'];
-  const BAR_BG    = ['#DBEAFE','#CFFAFE','#EDE9FE','#FEF3C7','#DCFCE7','#FCE7F3','#FFEDD5','#EFF6FF'];
-  const BAR_TEXT  = ['#1E40AF','#0E7490','#5B21B6','#92400E','#15803D','#9D174D','#9A3412','#1D4ED8'];
-  const avIdx  = name => { let h=0; for(let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))&0xFFFFFF; return Math.abs(h)%AV_COLORS.length; };
-  const avColor = name => AV_COLORS[avIdx(name)];
-  const barBg   = name => BAR_BG[avIdx(name)];
-  const barText = name => BAR_TEXT[avIdx(name)];
-  const avInit  = name => name.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');
-
-  const diasInfo = [];
-  for (let d = 1; d <= diasNoMes; d++) {
-    const ds  = `${ano}-${mesStr}-${String(d).padStart(2,'0')}`;
-    const dow = new Date(ds + 'T12:00:00').getDay();
-    diasInfo.push({ d, ds, dow, weekend: dow===0, isHoje: ds===hoje });
-  }
-
-  let thDias = `<th class="gantt-name-col" style="padding-left:16px;font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.6px;">Colaborador</th>`;
-  diasInfo.forEach(({ d, ds, dow, weekend, isHoje }) => {
-    const cls = [isHoje ? 'gantt-th-today' : '', weekend ? 'gantt-th-weekend' : ''].filter(Boolean).join(' ');
-    const num = isHoje
-      ? `<span class="gantt-th-today-bubble">${d}</span>`
-      : `<span class="gantt-th-day">${d}</span>`;
-    thDias += `<th class="${cls}" title="${ds}">${num}<span class="gantt-th-wd">${WD[dow]}</span></th>`;
-  });
-
-  const W_CELL = 28;
-  let rows = '';
-  colabs.forEach(c => {
-    const lancColabs = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && !l._isRealizacao);
-    const cor  = avColor(c.nome);
-    const ini  = avInit(c.nome);
-    const sub  = [c.cargo, c.setor].filter(Boolean).join(' · ');
-
-    rows += `<tr class="gantt-row">
-      <td><div class="gantt-name-cell">
-        ${c.foto_url ? `<img class="gantt-av" src="${c.foto_url}" style="object-fit:cover;" alt="">` : `<div class="gantt-av" style="background:${cor};">${ini}</div>`}
-        <div>
-          <div class="gantt-name">${c.nome}</div>
-          <div class="gantt-name-sub">${sub}</div>
-        </div>
-      </div></td>`;
-
-    diasInfo.forEach(({ ds, weekend, isHoje }) => {
-      const cellCls = ['gantt-cell', weekend?'gantt-cell-weekend':'', isHoje?'gantt-cell-today':''].filter(Boolean).join(' ');
-      let barHtml = isHoje ? `<div class="gantt-today-marker"></div>` : '';
-
-      lancColabs.forEach(l => {
-        if (l.fim < ds || l.inicio > ds) return;
-        const drawDay = l.inicio >= mesInicio ? l.inicio : mesInicio;
-        if (ds !== drawDay) return;
-
-        const contLeft  = l.inicio < mesInicio;
-        const contRight = l.fim > mesFim;
-        const endDs     = contRight ? mesFim : l.fim;
-        const diaInicio = parseInt(drawDay.slice(-2));
-        const maxCols   = diasNoMes - diaInicio + 1;
-        const colsCalc  = Math.max(1, Math.round((new Date(endDs+'T12:00:00') - new Date(drawDay+'T12:00:00')) / 86400000) + 1);
-        const colsTotal = Math.min(colsCalc, maxCols);
-
-        const st = (l.status || '').toLowerCase();
-        const isAprov  = st !== 'solicitado';
-        const bg  = barBg(c.nome);
-        const txt = barText(c.nome);
-        const colsOriginais = Math.max(1, Math.round((new Date(l.fim+'T12:00:00') - new Date(l.inicio+'T12:00:00')) / 86400000) + 1);
-        const fmtShort = d => { const [,m,dia] = d.split('-'); return `${dia}/${m}`; };
-        let label = '';
-        if (colsOriginais >= 9) label = `${fmtShort(l.inicio)} → ${fmtShort(l.fim)} · ${l.dias}d`;
-        else if (colsOriginais >= 4) label = `${l.dias}d`;
-
-        const barCls = ['gantt-bar', !isAprov?'pendente':'', contLeft?'bar-cont-left':'', contRight?'bar-cont-right':''].filter(Boolean).join(' ');
-        const bgStyle = isAprov
-          ? `background:${bg};`
-          : `background:transparent;border-color:${txt};`;
-        barHtml += `<div class="${barCls}"
-          style="left:0;width:${colsTotal * W_CELL}px;${bgStyle}${contLeft?'overflow:visible;':''}"
-          title="${c.nome.split(' ')[0]}: ${formatDate(l.inicio)} → ${formatDate(l.fim)} · ${l.dias}d (${l.status||''})">
-          <span class="gantt-bar-label" style="color:${txt};${contLeft?'overflow:visible;text-overflow:clip;':''}">${label}</span>
-        </div>`;
-      });
-
-      rows += `<td class="${cellCls}">${barHtml}</td>`;
-    });
-
-    rows += `</tr>`;
-  });
-
-  content.innerHTML = `<div class="gantt-scroll"><table class="gantt-table" style="width:${250 + diasNoMes * 28}px">
-    <thead><tr>${thDias}</tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`;
+  _ganttRenderContent(content, colabs, diasNoMes, mesInicio, mesFim, mes, ano);
 }
 
 // ─── Dashboard do Gestor ─────────────────────────────────────────────────────
@@ -12707,12 +12656,10 @@ function renderDirTimeline() {
 
   if (titulo) titulo.innerHTML = `${MESES[mes]} <span class="gantt-nav-year">${ano}</span>`;
 
-  const filtrados = _dirTlFiltrados().filter(c =>
-    c.registros.some(reg => {
-      const lans = [...reg.lancamentos, ...(reg._novoLanc ? [reg._novoLanc] : [])];
-      return lans.some(l => l.inicio <= mesFim && l.fim >= mesInicio);
-    })
-  ).sort((a, b) => a.nome.localeCompare(b.nome));
+  const filtrados = _dirTlFiltrados()
+    .map(c => ({ ...c, __ganttLancs: _ganttPrepararLancs(c, 'rh') }))
+    .filter(c => c.__ganttLancs.some(l => l.inicio <= mesFim && l.fim >= mesInicio))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   if (cntEl) cntEl.textContent = filtrados.length;
 
