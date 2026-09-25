@@ -5182,11 +5182,7 @@ function renderListaAnual() {
       const alertaDobraHtml = lancProtegedobra
         ? `<span style="display:inline-block;margin-top:3px;font-size:11px;font-weight:600;color:#B54708;background:#FFFAEB;border:1px solid #FDE68A;border-radius:4px;padding:2px 6px;">⚠ Manter evita dobra</span>`
         : '';
-      const agendHtml = lRef
-        ? `<span style="font-size:11px;white-space:nowrap;">${formatDate(lRef.inicio)} → ${formatDate(lRef.fim)} · ${lRef.dias}d</span>
-           ${reg.lancamentos.length > 1 ? `<span style="display:block;font-size:11px;color:var(--text-ter);margin-top:2px;">+${reg.lancamentos.length - 1} período${reg.lancamentos.length > 2 ? 's' : ''}</span>` : ''}
-           ${alertaDobraHtml}`
-        : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
+      const agendHtml = _renderAgendCell(lRef, alertaDobraHtml);
 
       html += `<div class="proto-table-row" onclick="abrirDrawer('${key}')">
         <div class="proto-colab-cell">
@@ -7530,6 +7526,14 @@ function renderTimeline() {
 }
 
 // Prepara lançamentos para a Timeline aplicando a regra de realizações:
+// Renderiza célula de Agendamentos (compartilhado por RH, Gestor e Diretoria)
+// Cada visão prepara seus próprios dados (lRef, alertaHtml) conforme suas regras
+function _renderAgendCell(lRef, alertaHtml) {
+  if (!lRef) return `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
+  return `<span style="font-size:11px;white-space:nowrap;">${formatDate(lRef.inicio)} → ${formatDate(lRef.fim)} · ${lRef.dias}d</span>
+          ${alertaHtml || ''}`;
+}
+
 // Se há realizações válidas → usa o gozo efetivo; senão → usa o lançamento oficial
 const _GANTT_EXCL = new Set(['cancelado','descartado','rejeitado']);
 function _ganttPrepararLancs(c, fonte) {
@@ -10605,10 +10609,7 @@ function renderGestorAtencao() {
     const alertaDobraGHtml = lancProtegedobraG
       ? `<span style="display:inline-block;margin-top:3px;font-size:11px;font-weight:600;color:#B54708;background:#FFFAEB;border:1px solid #FDE68A;border-radius:4px;padding:2px 6px;">⚠ Manter evita dobra</span>`
       : '';
-    const agendHtml = lRef
-      ? `<span style="font-size:11px;white-space:nowrap;">${_fmtD(lRef.inicio)} → ${_fmtD(lRef.fim)} · ${lRef.dias}d</span>
-         ${alertaDobraGHtml}`
-      : `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
+    const agendHtml = _renderAgendCell(lRef, alertaDobraGHtml);
 
     // Badge situação — mesma lógica da visão RH (paBadge)
     const nivel = nivelRisco(dpd);
