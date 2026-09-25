@@ -1336,7 +1336,7 @@
   .dir-band-line { flex:1; height:1px; background:var(--border); }
   .dir-band-text { font-size:10.5px; color:var(--text-ter); white-space:nowrap; padding:0 4px; }
   .dir-band-text b { font-weight:600; color:var(--text-sec); }
-  .dir-kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .dir-kpi-row { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
   .dir-kpi { background:var(--surface); border-radius:10px; padding:18px 18px 14px; border:1px solid var(--border); box-shadow:0 1px 3px rgba(0,0,0,.05); position:relative; overflow:hidden; }
   .dir-kpi::before { content:''; position:absolute; top:0; left:0; bottom:0; width:3px; }
   .dk-green::before { background:var(--green); }
@@ -1397,8 +1397,7 @@
   .dir-sp-radar   { background:var(--blue-bg);  color:var(--blue); }
   .dir-sp-ok      { background:var(--bg); color:var(--text-ter); border:1px solid var(--border); }
   .dir-tl-filter-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 0 14px 0; border-bottom:1px solid var(--border); margin-bottom:14px; }
-  @media(max-width:768px) { .dir-kpi-row{grid-template-columns:repeat(2,1fr);} .dir-grid{grid-template-columns:1fr;} .dir-header{flex-direction:column;align-items:flex-start;} .dir-page{padding:18px 16px;} }
-  @media(max-width:460px) { .dir-kpi-row{grid-template-columns:1fr;} }
+  @media(max-width:768px) { .dir-kpi-row{grid-template-columns:1fr;} .dir-grid{grid-template-columns:1fr;} .dir-header{flex-direction:column;align-items:flex-start;} .dir-page{padding:18px 16px;} }
   /* Botões de ação da linha do gestor */
   .gstor-btn-prim { font-size:11px;padding:5px 10px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer;white-space:nowrap;font-weight:600;width:100%; }
   .gstor-btn-more { display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-sec);cursor:pointer;transition:all .15s;flex-shrink:0; }
@@ -12349,36 +12348,82 @@ function _dirHtmlRiscoDobra() {
   return html;
 }
 
-function _dirHtmlPicoSaidas() {
+function _dirAbrirPicoDrawer() {
   const pico = _picoSaidasSetor(_dirFiltrados(), 90);
-  if (!pico.count) return '<div style="font-size:13px;color:var(--text-ter);padding:16px 0;">Sem sobreposições nos próximos 90 dias.</div>';
-  const [ano,mes,dia] = pico.data.split('-');
+  if (!pico.count) { abrirDrawerGenerico('Pico de Saídas', '<div style="font-size:13px;color:var(--text-ter);padding:16px 0;">Sem sobreposições nos próximos 90 dias.</div>'); return; }
+  const [ano, mes] = pico.data.split('-');
   const mesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][parseInt(mes)-1];
-  const dateFmt = `${dia}/${mes}/${ano}`;
+  abrirDrawerGenerico(`${pico.setor} · ${mesNome} ${ano}`, _dirHtmlPicoSaidas(pico));
+}
 
+function _dirHtmlPicoSaidas(pico) {
+  if (!pico) pico = _picoSaidasSetor(_dirFiltrados(), 90);
+  if (!pico || !pico.count) return '<div style="font-size:13px;color:var(--text-ter);padding:16px 0;">Sem sobreposições nos próximos 90 dias.</div>';
+
+  const fmtD = d => d ? d.split('-').reverse().join('/') : '—';
+
+  // Colaboradores presentes no dia de pico
   const colabsNoDia = _dirFiltrados().filter(c => {
     if (!c.setor || c.setor !== pico.setor) return false;
     return _ganttPrepararLancs(c, 'rh').some(l => l.inicio && l.fim && l.inicio <= pico.data && l.fim >= pico.data);
   });
 
-  let html = `<div style="padding:12px 14px;border-radius:8px;background:#FFFBEB;border:1px solid #FDE68A;margin-bottom:16px;">
-    <div style="font-size:12px;font-weight:700;color:#B45309;">Pico identificado em ${dateFmt}</div>
-    <div style="font-size:11px;color:#92400E;margin-top:2px;">${pico.count} colaboradores do setor <b>${pico.setor}</b> simultâneos</div>
-  </div>`;
-  colabsNoDia.forEach(c => {
-    const av = c.nome.split(' ').slice(0,2).map(w=>w[0].toUpperCase()).join('');
-    const lAtivo = _ganttPrepararLancs(c, 'rh').find(l => l.inicio <= pico.data && l.fim >= pico.data);
-    const periodo = lAtivo ? `${lAtivo.inicio.split('-').reverse().join('/')} → ${lAtivo.fim.split('-').reverse().join('/')} · ${lAtivo.dias}d` : '—';
-    html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--border-light);margin-bottom:6px;">
-      <div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;">${av}</div>
+  // Lançamentos ativos de cada um no dia de pico
+  const lacsAtivos = colabsNoDia.map(c => _ganttPrepararLancs(c, 'rh').find(l => l.inicio <= pico.data && l.fim >= pico.data) || null);
+
+  // Período de maior sobreposição: max(starts) → min(ends)
+  const validLacs = lacsAtivos.filter(Boolean);
+  const overlapStart = validLacs.length ? validLacs.reduce((a, l) => l.inicio > a ? l.inicio : a, validLacs[0].inicio) : pico.data;
+  const overlapEnd   = validLacs.length ? validLacs.reduce((a, l) => l.fim   < a ? l.fim   : a, validLacs[0].fim)   : pico.data;
+  const overlapDias  = Math.max(1, Math.round((new Date(overlapEnd) - new Date(overlapStart)) / 86400000) + 1);
+
+  // Gestor mais frequente
+  const gestorCounts = {};
+  colabsNoDia.forEach(c => { if (c.gestor) gestorCounts[c.gestor] = (gestorCounts[c.gestor]||0) + 1; });
+  const gestor = Object.entries(gestorCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || null;
+
+  // Janela para as barras: do início mais cedo ao fim mais tarde
+  const allStarts = validLacs.map(l => l.inicio);
+  const allEnds   = validLacs.map(l => l.fim);
+  const winStart  = allStarts.length ? allStarts.reduce((a,b) => a<b?a:b) : pico.data;
+  const winEnd    = allEnds.length   ? allEnds.reduce((a,b)   => a>b?a:b) : pico.data;
+  const winMs     = Math.max(new Date(winEnd) - new Date(winStart), 86400000);
+
+  const BAR_COLORS = ['#F04438','#7B61FF','#2E90FA','#12B76A','#D97706','#EC4899','#06B6D4','#8B5CF6'];
+
+  let colabHtml = colabsNoDia.map((c, i) => {
+    const av  = c.nome.split(' ').slice(0,2).map(w=>w[0].toUpperCase()).join('');
+    const lac = lacsAtivos[i];
+    if (!lac) return '';
+    const periodo  = `${fmtD(lac.inicio)} → ${fmtD(lac.fim)} · ${lac.dias}d`;
+    const pctLeft  = Math.max(0, Math.round((new Date(lac.inicio) - new Date(winStart)) / winMs * 100));
+    const pctWidth = Math.min(100 - pctLeft, Math.round((new Date(lac.fim) - new Date(lac.inicio) + 86400000) / winMs * 100));
+    const color    = BAR_COLORS[i % BAR_COLORS.length];
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light);">
+      <div style="width:34px;height:34px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;">${av}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:13px;font-weight:600;color:var(--text);">${c.nome}</div>
-        <div style="font-size:11px;color:var(--text-sec);">${c.cargo||''}</div>
+        <div style="font-size:11px;color:var(--text-sec);margin-bottom:5px;">${periodo}</div>
+        <div style="position:relative;height:5px;background:var(--border-light);border-radius:99px;overflow:hidden;">
+          <div style="position:absolute;left:${pctLeft}%;width:${pctWidth}%;height:100%;background:${color};border-radius:99px;"></div>
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--text-sec);text-align:right;">${periodo}</div>
     </div>`;
-  });
-  return html;
+  }).join('');
+
+  return `
+    <div style="font-size:12px;color:var(--text-sec);margin-bottom:16px;">${pico.count} colaboradores do mesmo setor com férias sobrepostas</div>
+    <div style="padding:12px 14px;border-radius:8px;background:#FFFBEB;border:1px solid #FDE68A;margin-bottom:20px;">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#B45309;margin-bottom:6px;">Período de maior sobreposição</div>
+      <div style="font-size:15px;font-weight:700;color:#78350F;margin-bottom:4px;">${fmtD(overlapStart)} → ${fmtD(overlapEnd)} · ${overlapDias} dia(s)</div>
+      <div style="font-size:12px;color:#92400E;">${colabsNoDia.length} pessoas simultâneas nesse intervalo${gestor ? ' · Gestor: '+gestor : ''}</div>
+    </div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);margin-bottom:4px;">Colaboradores Envolvidos</div>
+    ${colabHtml}
+    ${gestor ? `<div style="margin-top:16px;padding:12px 14px;border-radius:8px;background:var(--bg);border:1px solid var(--border-light);">
+      <div style="font-size:12px;font-weight:600;color:var(--text);">Gestor responsável: ${gestor}</div>
+      <div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Para cobrar agendamentos distribuídos, acione o gestor diretamente.</div>
+    </div>` : ''}`;
 }
 
 function _dirHtmlSetorRisco(setor) {
@@ -13049,7 +13094,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="dir-kpi-ctx" id="dirKpiRdCtx">&mdash;</div>
         <div class="dir-kpi-track"><div class="dir-kpi-fill" id="dirKpiRdBar"></div></div>
       </div>
-      <div class="dir-kpi" id="dirKpiPicoCard" style="cursor:pointer;border-left:3px solid #D97706;" onclick="abrirDrawerGenerico('Pico de Sa&iacute;das', _dirHtmlPicoSaidas())">
+      <div class="dir-kpi" id="dirKpiPicoCard" style="cursor:pointer;border-left:3px solid #D97706;" onclick="_dirAbrirPicoDrawer()">
         <div class="dir-kpi-label">Pico de Sa&iacute;das</div>
         <div class="dir-kpi-num" id="dirKpiPicoN" style="color:#D97706;">&mdash;</div>
         <div class="dir-kpi-ctx" id="dirKpiPicoCtx">calculando...</div>
