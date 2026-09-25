@@ -9066,20 +9066,24 @@ let _gdashSemProgAbertos   = new Set(['critico','atencao']);
 
 async function _carregarDadosDiretoria() {
   document.body.classList.add('modo-gestor');
-  // Mostra skeleton enquanto dados carregam
+
+  // Mostra seção e skeleton sem destruir o DOM filho de #dirDashboard
   const secDir = document.getElementById('sec-diretoria');
   if (secDir) secDir.style.display = 'block';
-  const skeletonTarget = document.getElementById('dirDashboard');
-  if (skeletonTarget) {
-    skeletonTarget.innerHTML = `<div style="padding:32px 0;display:flex;flex-direction:column;gap:16px;">
-      ${[1,2,3,4].map(()=>`<div style="height:72px;border-radius:10px;background:linear-gradient(90deg,var(--border-light) 25%,var(--bg) 50%,var(--border-light) 75%);background-size:200% 100%;animation:shimmer 1.2s infinite;"></div>`).join('')}
-    </div>`;
-    if (!document.getElementById('_dirShimmerStyle')) {
-      const s = document.createElement('style'); s.id = '_dirShimmerStyle';
-      s.textContent = '@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}';
-      document.head.appendChild(s);
-    }
-    skeletonTarget.style.display = 'block';
+
+  // Skeleton sobreposto via elemento temporário, preservando #dirSetorTable/#dirAnoWrap
+  if (!document.getElementById('_dirShimmerStyle')) {
+    const s = document.createElement('style'); s.id = '_dirShimmerStyle';
+    s.textContent = '@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}';
+    document.head.appendChild(s);
+  }
+  let skEl = document.getElementById('_dirSkeleton');
+  if (!skEl) {
+    skEl = document.createElement('div'); skEl.id = '_dirSkeleton';
+    skEl.style.cssText = 'padding:24px 0;display:flex;flex-direction:column;gap:14px;';
+    skEl.innerHTML = [1,2,3,4].map(()=>`<div style="height:68px;border-radius:10px;background:linear-gradient(90deg,var(--border-light) 25%,var(--bg) 50%,var(--border-light) 75%);background-size:200% 100%;animation:shimmer 1.2s infinite;"></div>`).join('');
+    const dashEl = document.getElementById('dirDashboard');
+    if (dashEl) dashEl.insertBefore(skEl, dashEl.firstChild);
   }
 
   // Carrega base completa (empresa inteira) sem UI do Gestor, em paralelo com COLABORADORES
@@ -9087,7 +9091,11 @@ async function _carregarDadosDiretoria() {
     _carregarEquipeGestor(null, { skipGestorUI: true }),
     carregarDoSupabase(),
   ]);
-  dirMostrarAba(true);
+
+  // Remove skeleton e renderiza
+  const sk = document.getElementById('_dirSkeleton');
+  if (sk) sk.remove();
+  dirMostrarAba('dashboard');
   renderDiretoria();
 }
 
