@@ -19,6 +19,69 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\ferias\index.html` (~3.200 
 4. **Nunca abreviar valores** (`R$ 12.500,00`, não `12,5k`).
 5. **Estilos de risco sempre inline no span** — a classe `.badge-status-r` tem background fixo que sobrepõe; os três níveis usam `style=` direto no elemento.
 6. **`guardModulo('ferias')` obrigatório** — primeira linha do bloco de auth; ver [[permissoes]].
+7. **Componentes compartilhados obrigatórios** — ver seção "Padrão arquitetural" abaixo.
+
+## Padrão arquitetural — componentes compartilhados (set/2026)
+
+**Princípio:** o que muda entre RH, Gestor e Diretoria é **quem pode ver** e **de onde vêm os dados**. O que é apresentado visualmente deve ser **uma única implementação**.
+
+### Regra de ouro
+
+> Antes de escrever qualquer código de renderização, perguntar: isso já existe em outra visão? Se sim, extrair um helper compartilhado em vez de duplicar.
+
+### Como aplicar
+
+```
+1. Cada visão prepara seus próprios dados conforme suas regras, fontes e escopos
+2. O helper/renderer compartilhado recebe esses dados prontos e renderiza
+3. Nunca o helper conhece a origem dos dados (RH vs Gestor vs Diretoria)
+```
+
+**Anti-padrões a evitar:**
+- Copiar/colar um bloco de HTML de uma visão para outra com pequenas diferenças
+- Criar variáveis locais (`_fmtD`, `avColor`, `barBg`) que duplicam funções globais já existentes
+- Aplicar uma regra de negócio visual em uma visão e esquecer de replicar nas outras
+
+### Helpers compartilhados existentes
+
+| Helper | Localização | Usado por |
+|---|---|---|
+| `_ganttPrepararLancs(c, fonte)` | antes de `_ganttRenderContent` | Timeline RH, Gestor, Diretoria |
+| `_ganttRenderContent(...)` | linha ~7580 | `renderTimeline`, `renderGestorGantt`, `renderDirTimeline` |
+| `_renderAgendCell(lRef, alertaHtml)` | antes de `_ganttPrepararLancs` | `renderListaAnual` (RH), `renderGestorAtencao` (Gestor) |
+
+### Padrão de integração — exemplo Timeline
+
+```js
+// 1. Cada visão prepara os dados no seu próprio formato:
+// RH:
+const filtrados = COLABORADORES
+  .map(c => ({ ...c, __ganttLancs: _ganttPrepararLancs(c, 'rh') }))
+  .filter(...);
+
+// Gestor:
+const colabs = GESTOR_COLABS
+  .map(c => ({ ...c, __ganttLancs: _ganttPrepararLancs(c, 'gestor').filter(...) }))
+  .filter(...);
+
+// 2. Ambos chamam o mesmo renderer:
+_ganttRenderContent(content, dados, diasNoMes, mesInicio, mesFim, mes, ano);
+```
+
+### Padrão de integração — exemplo Agendamentos
+
+```js
+// 1. Cada visão calcula lRef e alertaHtml com seus dados:
+// RH:   const agendHtml = _renderAgendCell(lRef, alertaDobraHtml);
+// Gestor: const agendHtml = _renderAgendCell(lRef, alertaDobraGHtml);
+
+// 2. O helper não sabe de onde veio lRef — só renderiza:
+function _renderAgendCell(lRef, alertaHtml) { ... }
+```
+
+### Onde adicionar novos helpers
+
+Todos os helpers compartilhados ficam **agrupados antes de `_ganttPrepararLancs`**, que é o marco divisório entre a lógica específica de visão e a camada de renderização compartilhada.
 
 ## Fluxo de trabalho padrão
 
