@@ -12893,29 +12893,25 @@ let _dirGanttAno = new Date().getFullYear();
 let _dirGanttMes = new Date().getMonth();
 
 function _dirTlFiltrados() {
-  const cargo   = document.getElementById('dirTlFiltroCargo')?.value   || '';
-  const setor   = document.getElementById('dirTlFiltroSetor')?.value   || '';
-  const unidade = document.getElementById('dirTlFiltroUnidade')?.value || '';
+  const cargo  = document.getElementById('dirTlFiltroCargo')?.value  || '';
+  const setor  = document.getElementById('dirTlFiltroSetor')?.value  || '';
+  const gestor = document.getElementById('dirTlFiltroGestor')?.value || '';
   return COLABORADORES.filter(c => {
     if (c.ativo === false) return false;
-    if (cargo   && c.cargo !== cargo) return false;
-    if (setor   && c.setor !== setor) return false;
-    if (unidade) {
-      const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
-      if (un !== unidade) return false;
-    }
+    if (cargo  && c.cargo  !== cargo)  return false;
+    if (setor  && c.setor  !== setor)  return false;
+    if (gestor && (c.gestor || '') !== gestor) return false;
     return true;
   });
 }
 
 function _dirTlPopularFiltros() {
   const colabs = COLABORADORES.filter(c => c.ativo !== false);
-  const cargosSet = new Set(), setoresSet = new Set(), unidadesSet = new Set();
+  const cargosSet = new Set(), setoresSet = new Set(), gestoresSet = new Set();
   colabs.forEach(c => {
-    if (c.cargo) cargosSet.add(c.cargo);
-    if (c.setor) setoresSet.add(normSetor(c.setor));
-    const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
-    if (un) unidadesSet.add(un);
+    if (c.cargo)  cargosSet.add(c.cargo);
+    if (c.setor)  setoresSet.add(normSetor(c.setor));
+    if (c.gestor) gestoresSet.add(c.gestor);
   });
   const fill = (id, vals, placeholder) => {
     const sel = document.getElementById(id);
@@ -12925,9 +12921,9 @@ function _dirTlPopularFiltros() {
       [...vals].sort().map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
     syncFilterClear(id, '');
   };
-  fill('dirTlFiltroCargo',   cargosSet,   'Cargo');
-  fill('dirTlFiltroSetor',   setoresSet,  'Setor');
-  fill('dirTlFiltroUnidade', unidadesSet, 'Unidade');
+  fill('dirTlFiltroCargo',  cargosSet,   'Cargo');
+  fill('dirTlFiltroSetor',  setoresSet,  'Setor');
+  fill('dirTlFiltroGestor', gestoresSet, 'Gestor');
 }
 
 function renderDirTimeline() {
@@ -13113,8 +13109,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="filter-clear" id="clr-dirTlFiltroSetor" onclick="clearFilter('dirTlFiltroSetor','',()=>{renderDirTimeline()})" tabindex="-1" title="Limpar">✕</button>
           </div>
           <div class="filter-wrap">
-            <select class="dir-sel" id="dirTlFiltroUnidade" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroUnidade','')"><option value="">Unidade</option></select>
-            <button class="filter-clear" id="clr-dirTlFiltroUnidade" onclick="clearFilter('dirTlFiltroUnidade','',()=>{renderDirTimeline()})" tabindex="-1" title="Limpar">✕</button>
+            <select class="dir-sel" id="dirTlFiltroGestor" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroGestor','')"><option value="">Gestor</option></select>
+            <button class="filter-clear" id="clr-dirTlFiltroGestor" onclick="clearFilter('dirTlFiltroGestor','',()=>{renderDirTimeline()})" tabindex="-1" title="Limpar">✕</button>
           </div>
         </div>
       </div>
