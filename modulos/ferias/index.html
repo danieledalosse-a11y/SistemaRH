@@ -1352,6 +1352,15 @@
   .dir-kpi-ctx { font-size:11px; color:var(--text-sec); line-height:1.4; }
   .dir-kpi-ctx b { font-weight:600; color:var(--text); }
   .dir-kpi-ctx small { display:block; font-size:11px; color:var(--text-ter); margin-top:2px; }
+  /* Multi-select dropdown Diretoria */
+  .dir-ms-wrap { position:relative; display:inline-flex; align-items:center; }
+  .dir-ms-btn { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:5px 26px 5px 10px; font-size:12px; color:var(--text-sec); cursor:pointer; white-space:nowrap; min-width:80px; text-align:left; position:relative; line-height:1.4; }
+  .dir-ms-btn::after { content:'▾'; position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:10px; color:var(--text-ter); pointer-events:none; }
+  .dir-ms-btn.has-val { color:var(--text); font-weight:500; border-color:var(--primary,#1849A9); }
+  .dir-ms-drop { position:absolute; top:calc(100% + 4px); left:0; z-index:400; background:var(--surface); border:1px solid var(--border-light); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.14); min-width:190px; max-height:240px; overflow-y:auto; padding:4px 0; display:none; }
+  .dir-ms-item { display:flex; align-items:center; gap:8px; padding:7px 12px; cursor:pointer; font-size:13px; color:var(--text); user-select:none; }
+  .dir-ms-item:hover { background:var(--bg); }
+  .dir-ms-item input[type=checkbox] { accent-color:var(--primary,#1849A9); width:14px; height:14px; flex-shrink:0; cursor:pointer; margin:0; }
   .dir-kpi-track { height:2.5px; background:var(--bg); border-radius:2px; margin-top:10px; overflow:hidden; }
   .dir-kpi-fill { height:100%; border-radius:2px; }
   .dk-green .dir-kpi-fill { background:var(--green); }
@@ -12207,27 +12216,75 @@ function gestorFmtData(str) {
 
 // ─── Visão Diretoria ─────────────────────────────────────────────────────────
 
+// ─── Multi-select Diretoria — estado e helpers ──────────────────────────────
+const _dirMs = {
+  dash: { cargo: new Set(), setor: new Set(), gestor: new Set() },
+  tl:   { cargo: new Set(), setor: new Set(), gestor: new Set() }
+};
+const _DIR_MS_LABELS = { cargo: 'Cargo', setor: 'Setor', gestor: 'Gestor' };
+
+function _dirMsOpen(id, e) {
+  if (e) e.stopPropagation();
+  const drop = document.getElementById(id);
+  if (!drop) return;
+  const wasOpen = drop.style.display !== 'none';
+  document.querySelectorAll('.dir-ms-drop').forEach(d => d.style.display = 'none');
+  if (!wasOpen) drop.style.display = '';
+}
+
+function _dirMsUpdateBtn(ctx, field) {
+  const set = _dirMs[ctx][field];
+  const label = _DIR_MS_LABELS[field] || field;
+  const btn = document.getElementById(`ms-btn-${ctx}-${field}`);
+  const clr = document.getElementById(`ms-clr-${ctx}-${field}`);
+  if (btn) {
+    btn.textContent = set.size === 0 ? label : set.size === 1 ? [...set][0] : `${label} (${set.size})`;
+    btn.classList.toggle('has-val', set.size > 0);
+  }
+  if (clr) clr.style.display = set.size ? '' : 'none';
+}
+
+function _dirMsClear(ctx, field, onchange) {
+  _dirMs[ctx][field].clear();
+  const drop = document.getElementById(`ms-drop-${ctx}-${field}`);
+  if (drop) drop.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+  _dirMsUpdateBtn(ctx, field);
+  if (typeof onchange === 'function') onchange();
+}
+
+function _dirMsPopulate(ctx, field, valsSet, onchange) {
+  const drop = document.getElementById(`ms-drop-${ctx}-${field}`);
+  if (!drop) return;
+  const set = _dirMs[ctx][field];
+  set.forEach(v => { if (!valsSet.has(v)) set.delete(v); });
+  drop.innerHTML = [...valsSet].sort((a,b) => a.localeCompare(b,'pt-BR')).map(v =>
+    `<label class="dir-ms-item"><input type="checkbox" value="${v.replace(/"/g,'&quot;')}" ${set.has(v)?'checked':''}><span>${v}</span></label>`
+  ).join('');
+  drop.onchange = e => {
+    if (e.target.type !== 'checkbox') return;
+    e.stopPropagation();
+    const val = e.target.value;
+    if (e.target.checked) set.add(val); else set.delete(val);
+    _dirMsUpdateBtn(ctx, field);
+    if (typeof onchange === 'function') onchange();
+  };
+  _dirMsUpdateBtn(ctx, field);
+}
+
+document.addEventListener('click', () => document.querySelectorAll('.dir-ms-drop').forEach(d => d.style.display = 'none'));
+
 function _dirPopularFiltros() {
-  const cargosSet = new Set(), setoresSet = new Set(), unidadesSet = new Set();
+  const cargosSet = new Set(), setoresSet = new Set(), gestoresSet = new Set();
   COLABORADORES.forEach(c => {
     if (c.ativo === false) return;
-    if (c.cargo) cargosSet.add(c.cargo);
-    if (c.setor) setoresSet.add(c.setor);
-    const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
-    if (un) unidadesSet.add(un);
+    if (c.cargo)  cargosSet.add(c.cargo);
+    if (c.setor)  setoresSet.add(c.setor);
+    if (c.gestor) gestoresSet.add(c.gestor);
   });
-  const fill = (id, vals, placeholder) => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const cur = sel.value;
-    sel.innerHTML = `<option value="">${placeholder}</option>` +
-      [...vals].sort().map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
-    syncFilterClear(id, '');
-  };
-  fill('dirFiltroCargo',   cargosSet,   'Cargo');
-  fill('dirFiltroSetor',   setoresSet,  'Setor');
-  fill('dirFiltroUnidade', unidadesSet, 'Unidade');
-  // Remove anos de comparação que não existem mais nos colabs filtrados
+  _dirMsPopulate('dash', 'cargo',  cargosSet,   renderDiretoria);
+  _dirMsPopulate('dash', 'setor',  setoresSet,  renderDiretoria);
+  _dirMsPopulate('dash', 'gestor', gestoresSet, renderDiretoria);
+  // Limpar anos de comparação obsoletos
   if (typeof _dirAnosAtivos !== 'undefined') {
     const disponiveis = new Set(_dirAnosDisponiveis ? _dirAnosDisponiveis(COLABORADORES) : []);
     [..._dirAnosAtivos].forEach(a => { if (!disponiveis.has(a)) _dirAnosAtivos.delete(a); });
@@ -12235,17 +12292,14 @@ function _dirPopularFiltros() {
 }
 
 function _dirFiltrados() {
-  const cargo   = document.getElementById('dirFiltroCargo')?.value   || '';
-  const setor   = document.getElementById('dirFiltroSetor')?.value   || '';
-  const unidade = document.getElementById('dirFiltroUnidade')?.value || '';
+  const cargo  = _dirMs.dash.cargo;
+  const setor  = _dirMs.dash.setor;
+  const gestor = _dirMs.dash.gestor;
   return COLABORADORES.filter(c => {
     if (c.ativo === false) return false;
-    if (cargo   && c.cargo !== cargo) return false;
-    if (setor   && c.setor !== setor) return false;
-    if (unidade) {
-      const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
-      if (un !== unidade) return false;
-    }
+    if (cargo.size  && !cargo.has(c.cargo))         return false;
+    if (setor.size  && !setor.has(c.setor))         return false;
+    if (gestor.size && !gestor.has(c.gestor || '')) return false;
     return true;
   });
 }
@@ -12633,7 +12687,8 @@ function renderDiretoria() {
   // Tabela por setor
   _dirRenderSetorTable();
 
-  // filtros do Dashboard e da Timeline são independentes — não propagar
+  // Popula filtros multi-select do Dashboard
+  _dirPopularFiltros();
 }
 
 // ─── Comparativo de anos — estado e helpers ──────────────────────────────────
@@ -12938,14 +12993,14 @@ let _dirGanttAno = new Date().getFullYear();
 let _dirGanttMes = new Date().getMonth();
 
 function _dirTlFiltrados() {
-  const cargo  = document.getElementById('dirTlFiltroCargo')?.value  || '';
-  const setor  = document.getElementById('dirTlFiltroSetor')?.value  || '';
-  const gestor = document.getElementById('dirTlFiltroGestor')?.value || '';
+  const cargo  = _dirMs.tl.cargo;
+  const setor  = _dirMs.tl.setor;
+  const gestor = _dirMs.tl.gestor;
   return COLABORADORES.filter(c => {
     if (c.ativo === false) return false;
-    if (cargo  && c.cargo  !== cargo)  return false;
-    if (setor  && c.setor  !== setor)  return false;
-    if (gestor && (c.gestor || '') !== gestor) return false;
+    if (cargo.size  && !cargo.has(c.cargo))         return false;
+    if (setor.size  && !setor.has(c.setor))         return false;
+    if (gestor.size && !gestor.has(c.gestor || '')) return false;
     return true;
   });
 }
@@ -12955,20 +13010,12 @@ function _dirTlPopularFiltros() {
   const cargosSet = new Set(), setoresSet = new Set(), gestoresSet = new Set();
   colabs.forEach(c => {
     if (c.cargo)  cargosSet.add(c.cargo);
-    if (c.setor)  setoresSet.add(normSetor(c.setor));
+    if (c.setor)  setoresSet.add(c.setor);
     if (c.gestor) gestoresSet.add(c.gestor);
   });
-  const fill = (id, vals, placeholder) => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const cur = sel.value;
-    sel.innerHTML = `<option value="">${placeholder}</option>` +
-      [...vals].sort().map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
-    syncFilterClear(id, '');
-  };
-  fill('dirTlFiltroCargo',  cargosSet,   'Cargo');
-  fill('dirTlFiltroSetor',  setoresSet,  'Setor');
-  fill('dirTlFiltroGestor', gestoresSet, 'Gestor');
+  _dirMsPopulate('tl', 'cargo',  cargosSet,   renderDirTimeline);
+  _dirMsPopulate('tl', 'setor',  setoresSet,  renderDirTimeline);
+  _dirMsPopulate('tl', 'gestor', gestoresSet, renderDirTimeline);
 }
 
 function renderDirTimeline() {
@@ -13107,17 +13154,20 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <div class="dir-filters" id="dirDashFilters">
         <span class="dir-filter-eye">Filtrar por</span>
-        <div class="filter-wrap">
-          <select class="dir-sel" id="dirFiltroCargo" onchange="renderDiretoria();syncFilterClear('dirFiltroCargo','')"><option value="">Cargo</option></select>
-          <button class="filter-clear" id="clr-dirFiltroCargo" onclick="clearFilter('dirFiltroCargo','',()=>{renderDiretoria()})" tabindex="-1" title="Limpar">✕</button>
+        <div class="filter-wrap dir-ms-wrap">
+          <button class="dir-ms-btn" id="ms-btn-dash-cargo" onclick="_dirMsOpen('ms-drop-dash-cargo',event)">Cargo</button>
+          <div class="dir-ms-drop" id="ms-drop-dash-cargo"></div>
+          <button class="filter-clear" id="ms-clr-dash-cargo" style="display:none;" onclick="_dirMsClear('dash','cargo',renderDiretoria)" tabindex="-1" title="Limpar">✕</button>
         </div>
-        <div class="filter-wrap">
-          <select class="dir-sel" id="dirFiltroSetor" onchange="renderDiretoria();syncFilterClear('dirFiltroSetor','')"><option value="">Setor</option></select>
-          <button class="filter-clear" id="clr-dirFiltroSetor" onclick="clearFilter('dirFiltroSetor','',()=>{renderDiretoria()})" tabindex="-1" title="Limpar">✕</button>
+        <div class="filter-wrap dir-ms-wrap">
+          <button class="dir-ms-btn" id="ms-btn-dash-setor" onclick="_dirMsOpen('ms-drop-dash-setor',event)">Setor</button>
+          <div class="dir-ms-drop" id="ms-drop-dash-setor"></div>
+          <button class="filter-clear" id="ms-clr-dash-setor" style="display:none;" onclick="_dirMsClear('dash','setor',renderDiretoria)" tabindex="-1" title="Limpar">✕</button>
         </div>
-        <div class="filter-wrap">
-          <select class="dir-sel" id="dirFiltroUnidade" onchange="renderDiretoria();syncFilterClear('dirFiltroUnidade','')"><option value="">Unidade</option></select>
-          <button class="filter-clear" id="clr-dirFiltroUnidade" onclick="clearFilter('dirFiltroUnidade','',()=>{renderDiretoria()})" tabindex="-1" title="Limpar">✕</button>
+        <div class="filter-wrap dir-ms-wrap">
+          <button class="dir-ms-btn" id="ms-btn-dash-gestor" onclick="_dirMsOpen('ms-drop-dash-gestor',event)">Gestor</button>
+          <div class="dir-ms-drop" id="ms-drop-dash-gestor"></div>
+          <button class="filter-clear" id="ms-clr-dash-gestor" style="display:none;" onclick="_dirMsClear('dash','gestor',renderDiretoria)" tabindex="-1" title="Limpar">✕</button>
         </div>
       </div>
       <span class="dir-data-note">Baseado nas f&eacute;rias j&aacute; agendadas no sistema</span>
@@ -13145,17 +13195,20 @@ document.addEventListener('DOMContentLoaded', () => {
         <span style="font-size:12px;color:var(--text-ter);margin-left:4px;"><span id="dirGanttCnt">0</span> colaborador(es)</span>
         <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="dir-filter-eye">Filtrar por</span>
-          <div class="filter-wrap">
-            <select class="dir-sel" id="dirTlFiltroCargo" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroCargo','')"><option value="">Cargo</option></select>
-            <button class="filter-clear" id="clr-dirTlFiltroCargo" onclick="clearFilter('dirTlFiltroCargo','',()=>{renderDirTimeline()})" tabindex="-1" title="Limpar">✕</button>
+          <div class="filter-wrap dir-ms-wrap">
+            <button class="dir-ms-btn" id="ms-btn-tl-cargo" onclick="_dirMsOpen('ms-drop-tl-cargo',event)">Cargo</button>
+            <div class="dir-ms-drop" id="ms-drop-tl-cargo"></div>
+            <button class="filter-clear" id="ms-clr-tl-cargo" style="display:none;" onclick="_dirMsClear('tl','cargo',renderDirTimeline)" tabindex="-1" title="Limpar">✕</button>
           </div>
-          <div class="filter-wrap">
-            <select class="dir-sel" id="dirTlFiltroSetor" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroSetor','')"><option value="">Setor</option></select>
-            <button class="filter-clear" id="clr-dirTlFiltroSetor" onclick="clearFilter('dirTlFiltroSetor','',()=>{renderDirTimeline()})" tabindex="-1" title="Limpar">✕</button>
+          <div class="filter-wrap dir-ms-wrap">
+            <button class="dir-ms-btn" id="ms-btn-tl-setor" onclick="_dirMsOpen('ms-drop-tl-setor',event)">Setor</button>
+            <div class="dir-ms-drop" id="ms-drop-tl-setor"></div>
+            <button class="filter-clear" id="ms-clr-tl-setor" style="display:none;" onclick="_dirMsClear('tl','setor',renderDirTimeline)" tabindex="-1" title="Limpar">✕</button>
           </div>
-          <div class="filter-wrap">
-            <select class="dir-sel" id="dirTlFiltroGestor" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroGestor','')"><option value="">Gestor</option></select>
-            <button class="filter-clear" id="clr-dirTlFiltroGestor" onclick="clearFilter('dirTlFiltroGestor','',()=>{renderDirTimeline()})" tabindex="-1" title="Limpar">✕</button>
+          <div class="filter-wrap dir-ms-wrap">
+            <button class="dir-ms-btn" id="ms-btn-tl-gestor" onclick="_dirMsOpen('ms-drop-tl-gestor',event)">Gestor</button>
+            <div class="dir-ms-drop" id="ms-drop-tl-gestor"></div>
+            <button class="filter-clear" id="ms-clr-tl-gestor" style="display:none;" onclick="_dirMsClear('tl','gestor',renderDirTimeline)" tabindex="-1" title="Limpar">✕</button>
           </div>
         </div>
       </div>
