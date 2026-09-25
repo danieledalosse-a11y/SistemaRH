@@ -2321,7 +2321,7 @@
     <div id="drawerHistorico"></div>
     <div id="drawerAuditoria" style="display:none;"></div>
   </div>
-  <div style="padding:12px 20px;border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;">
+  <div style="padding:12px 20px;border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;" id="drawerFooterPerfil">
     <a id="btnVerFichaFerias" href="#" target="_blank"
        style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;color:var(--blue);background:var(--blue-bg);border:1px solid #C7D7F9;text-decoration:none;transition:all .15s;"
        onmouseover="this.style.background='#E0EAFF'" onmouseout="this.style.background='var(--blue-bg)'">
@@ -2329,6 +2329,9 @@
       Ver ficha completa
     </a>
   </div>
+  <!-- Modo genérico — oculto por padrão, exibido por abrirDrawerGenerico() -->
+  <div id="drawerGenericTitle" style="display:none;padding:16px 20px 8px;font-size:15px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border-light);"></div>
+  <div id="drawerGenericBody" style="display:none;padding:20px;overflow-y:auto;flex:1;"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2350,6 +2353,7 @@ const HOJE  = new Date().toISOString().slice(0, 10);
 
 let FERIAS_HISTORICO = [];
 let _drawerTab = 'periodos';
+let _drawerModoGenerico = false;
 
 const REGRAS_FERIAS = {
   // Prazo de dobra: PAFim + 1 ano + 1 dia
@@ -3144,6 +3148,17 @@ function _abrirDrawerInterno(key) {
 }
 
 function fecharDrawer() {
+  // Se estiver no modo genérico, restaurar o modo perfil antes de fechar
+  if (_drawerModoGenerico) {
+    _drawerModoGenerico = false;
+    const hide = ['drawerGenericTitle','drawerGenericBody'];
+    hide.forEach(id => { const el = document.getElementById(id); if (el) { el.style.display = 'none'; el.innerHTML = id === 'drawerGenericBody' ? '' : el.innerHTML; } });
+    const show = ['feriasAvatarWrap','drawerFooterPerfil'];
+    show.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+    ['drawer-hdr','drawer-tabs','drawer-tabs-line','drawer-body'].forEach(cls => {
+      document.querySelectorAll('#drawer .' + cls).forEach(el => el.style.display = '');
+    });
+  }
   const dr = document.getElementById('drawer');
   dr.classList.remove('open');
   dr.style.left = '';
@@ -3151,6 +3166,24 @@ function fecharDrawer() {
   dr.style.transform = '';
   document.getElementById('drawerOverlay').classList.remove('open');
   _drawerKey = null;
+}
+
+function abrirDrawerGenerico(titulo, html) {
+  _drawerModoGenerico = true;
+  // Ocultar seções de perfil
+  ['drawer-hdr','drawer-tabs','drawer-tabs-line','drawer-body'].forEach(cls => {
+    document.querySelectorAll('#drawer .' + cls).forEach(el => el.style.display = 'none');
+  });
+  const footerEl = document.getElementById('drawerFooterPerfil');
+  if (footerEl) footerEl.style.display = 'none';
+  // Exibir conteúdo genérico
+  const titleEl = document.getElementById('drawerGenericTitle');
+  const bodyEl  = document.getElementById('drawerGenericBody');
+  if (titleEl) { titleEl.textContent = titulo; titleEl.style.display = ''; }
+  if (bodyEl)  { bodyEl.innerHTML = html;       bodyEl.style.display = 'flex'; bodyEl.style.flexDirection = 'column'; }
+  // Abrir drawer
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('open');
 }
 
 // ─── Drag do modal RH ───────────────────────────────────────────────────────
@@ -12210,6 +12243,204 @@ function _dirUrgSemProg(colab) {
   return { nivel: minDpd === Infinity ? null : nivelRisco(minDpd), dlim: dlimUrgente };
 }
 
+function _picoSaidasSetor(colabs, janelaDias) {
+  janelaDias = janelaDias || 90;
+  const dataFim = new Date(HOJE);
+  dataFim.setDate(dataFim.getDate() + janelaDias);
+  const fimStr = dataFim.toISOString().slice(0,10);
+  const setorMap = {};
+  colabs.forEach(c => {
+    if (!c.setor) return;
+    const lancs = _ganttPrepararLancs(c, 'rh');
+    lancs.forEach(l => {
+      if (!l.inicio || !l.fim) return;
+      if (l.fim < HOJE || l.inicio > fimStr) return;
+      const dStart = new Date(Math.max(new Date(l.inicio), new Date(HOJE)));
+      const dEnd   = new Date(Math.min(new Date(l.fim), dataFim));
+      const cur = new Date(dStart);
+      while (cur <= dEnd) {
+        const ds = cur.toISOString().slice(0,10);
+        if (!setorMap[c.setor]) setorMap[c.setor] = {};
+        if (!setorMap[c.setor][ds]) setorMap[c.setor][ds] = new Set();
+        setorMap[c.setor][ds].add(c._sbColabId || c.__key);
+        cur.setDate(cur.getDate() + 1);
+      }
+    });
+  });
+  let bestSetor = null, bestCount = 0, bestDate = null;
+  Object.entries(setorMap).forEach(([setor, dateMap]) => {
+    Object.entries(dateMap).forEach(([ds, ids]) => {
+      if (ids.size > bestCount) { bestCount = ids.size; bestSetor = setor; bestDate = ds; }
+    });
+  });
+  return { setor: bestSetor, count: bestCount, data: bestDate };
+}
+
+function _dirHtmlRiscoDobra() {
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const colabs = _dirFiltrados().filter(c => isRiscoDobra(c));
+  if (!colabs.length) return '<div style="font-size:13px;color:var(--text-ter);padding:16px 0;">Nenhum colaborador com risco de dobra.</div>';
+
+  const items = [];
+  colabs.forEach(c => {
+    let minDpd = Infinity, minReg = null;
+    c.registros.forEach(reg => {
+      if (excluir.has(reg.status)) return;
+      const dpd = diasParaDobra(reg);
+      if (dpd !== null && dpd < minDpd) { minDpd = dpd; minReg = reg; }
+    });
+    if (minReg) items.push({ c, dpd: minDpd, reg: minReg });
+  });
+  items.sort((a,b) => a.dpd - b.dpd);
+
+  const grupos = { critico: items.filter(x => x.dpd <= 60), atencao: items.filter(x => x.dpd > 60 && x.dpd <= 120), noradar: items.filter(x => x.dpd > 120) };
+  const labels = { critico: 'Crítico', atencao: 'Atenção', noradar: 'No Radar' };
+  const colors = { critico: { bg:'#FEF3F2', border:'#F04438', text:'#7F1D1D' }, atencao: { bg:'#FFFAEB', border:'#F79009', text:'#B54708' }, noradar: { bg:'#EFF6FF', border:'#2E90FA', text:'#1D4ED8' } };
+
+  let html = '';
+  ['critico','atencao','noradar'].forEach(nivel => {
+    if (!grupos[nivel].length) return;
+    const cl = colors[nivel];
+    html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${cl.text};margin-bottom:8px;">${labels[nivel]} — ${grupos[nivel].length} colaborador(es)</div>`;
+    grupos[nivel].forEach(({ c, dpd }) => {
+      const av = c.nome.split(' ').slice(0,2).map(w=>w[0].toUpperCase()).join('');
+      const saldo = _dirSaldoColab(c);
+      const dlim = dataLimiteDobra(c.registros.find(r => diasParaDobra(r) === dpd));
+      const dlimFmt = dlim ? new Date(dlim).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:${cl.bg};border:1px solid ${cl.border}22;margin-bottom:6px;cursor:pointer;" onclick="fecharDrawer();setTimeout(()=>abrirDrawer('${c.__key}'),180)">
+        <div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;">${av}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.nome}</div>
+          <div style="font-size:11px;color:var(--text-sec);">${c.setor||''}${c.gestor?' · '+c.gestor:''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:12px;font-weight:700;color:${cl.text};">${dpd}d</div>
+          <div style="font-size:10px;color:var(--text-ter);">Vence ${dlimFmt}</div>
+          <div style="font-size:10px;color:var(--text-ter);">Saldo: ${saldo}d</div>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  return html;
+}
+
+function _dirHtmlPicoSaidas() {
+  const pico = _picoSaidasSetor(_dirFiltrados(), 90);
+  if (!pico.count) return '<div style="font-size:13px;color:var(--text-ter);padding:16px 0;">Sem sobreposições nos próximos 90 dias.</div>';
+  const [ano,mes,dia] = pico.data.split('-');
+  const mesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][parseInt(mes)-1];
+  const dateFmt = `${dia}/${mes}/${ano}`;
+
+  const colabsNoDia = _dirFiltrados().filter(c => {
+    if (!c.setor || c.setor !== pico.setor) return false;
+    return _ganttPrepararLancs(c, 'rh').some(l => l.inicio && l.fim && l.inicio <= pico.data && l.fim >= pico.data);
+  });
+
+  let html = `<div style="padding:12px 14px;border-radius:8px;background:#FFFBEB;border:1px solid #FDE68A;margin-bottom:16px;">
+    <div style="font-size:12px;font-weight:700;color:#B45309;">Pico identificado em ${dateFmt}</div>
+    <div style="font-size:11px;color:#92400E;margin-top:2px;">${pico.count} colaboradores do setor <b>${pico.setor}</b> simultâneos</div>
+  </div>`;
+  colabsNoDia.forEach(c => {
+    const av = c.nome.split(' ').slice(0,2).map(w=>w[0].toUpperCase()).join('');
+    const lAtivo = _ganttPrepararLancs(c, 'rh').find(l => l.inicio <= pico.data && l.fim >= pico.data);
+    const periodo = lAtivo ? `${lAtivo.inicio.split('-').reverse().join('/')} → ${lAtivo.fim.split('-').reverse().join('/')} · ${lAtivo.dias}d` : '—';
+    html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--border-light);margin-bottom:6px;">
+      <div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;">${av}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${c.nome}</div>
+        <div style="font-size:11px;color:var(--text-sec);">${c.cargo||''}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-sec);text-align:right;">${periodo}</div>
+    </div>`;
+  });
+  return html;
+}
+
+function _dirHtmlSetorRisco(setor) {
+  const colabs = _dirFiltrados().filter(c => c.setor === setor && isRiscoDobra(c));
+  if (!colabs.length) return `<div style="font-size:13px;color:var(--text-ter);padding:16px 0;">Nenhum colaborador com risco de dobra em ${setor}.</div>`;
+  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  const items = [];
+  colabs.forEach(c => {
+    let minDpd = Infinity, minReg = null;
+    c.registros.forEach(reg => { if (excluir.has(reg.status)) return; const dpd = diasParaDobra(reg); if (dpd !== null && dpd < minDpd) { minDpd = dpd; minReg = reg; } });
+    if (minReg) items.push({ c, dpd: minDpd });
+  });
+  items.sort((a,b) => a.dpd - b.dpd);
+  const colors = { critico:{ bg:'#FEF3F2', border:'#F04438', text:'#7F1D1D' }, atencao:{ bg:'#FFFAEB', border:'#F79009', text:'#B54708' }, noradar:{ bg:'#EFF6FF', border:'#2E90FA', text:'#1D4ED8' } };
+  return items.map(({ c, dpd }) => {
+    const nivel = dpd <= 60 ? 'critico' : dpd <= 120 ? 'atencao' : 'noradar';
+    const cl = colors[nivel];
+    const av = c.nome.split(' ').slice(0,2).map(w=>w[0].toUpperCase()).join('');
+    const dlim = dataLimiteDobra(c.registros.find(r => diasParaDobra(r) === dpd));
+    const dlimFmt = dlim ? new Date(dlim).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:${cl.bg};border:1px solid ${cl.border}22;margin-bottom:6px;cursor:pointer;" onclick="fecharDrawer();setTimeout(()=>abrirDrawer('${c.__key}'),180)">
+      <div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;">${av}</div>
+      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);">${c.nome}</div><div style="font-size:11px;color:var(--text-sec);">${c.cargo||''}</div></div>
+      <div style="text-align:right;flex-shrink:0;"><div style="font-size:12px;font-weight:700;color:${cl.text};">${dpd}d</div><div style="font-size:10px;color:var(--text-ter);">Vence ${dlimFmt}</div></div>
+    </div>`;
+  }).join('');
+}
+
+function _dirRenderSetorTable() {
+  const el = document.getElementById('dirSetorTable');
+  if (!el) return;
+  const colabs = _dirFiltrados();
+  const setores = {};
+  colabs.forEach(c => {
+    const s = c.setor || 'Sem setor';
+    if (!setores[s]) setores[s] = { total:0, risco:0, piorDpd:Infinity };
+    setores[s].total++;
+    if (isRiscoDobra(c)) {
+      setores[s].risco++;
+      c.registros.forEach(reg => { const dpd = diasParaDobra(reg); if (dpd !== null && dpd < setores[s].piorDpd) setores[s].piorDpd = dpd; });
+    }
+  });
+  const sorted = Object.entries(setores).sort(([,a],[,b]) => {
+    const nivelA = a.risco > 0 ? (a.piorDpd <= 60 ? 0 : 1) : 2;
+    const nivelB = b.risco > 0 ? (b.piorDpd <= 60 ? 0 : 1) : 2;
+    return nivelA - nivelB || b.risco - a.risco;
+  });
+  if (!sorted.length) { el.innerHTML = ''; return; }
+
+  const rows = sorted.map(([setor, d]) => {
+    const pct = d.total > 0 ? Math.round(d.risco / d.total * 100) : 0;
+    let badge = '', nivelLabel = '';
+    if (d.risco > 0) {
+      if (d.piorDpd <= 60)  { badge = 'style="background:#FEE2E2;color:#7F1D1D;"'; nivelLabel = 'Crítico'; }
+      else                   { badge = 'style="background:#FDE68A;color:#78350F;"'; nivelLabel = 'Atenção'; }
+    } else { badge = 'style="background:#ECFDF3;color:#027A48;"'; nivelLabel = 'OK'; }
+    return `<tr style="cursor:${d.risco > 0 ? 'pointer':''}" ${d.risco > 0 ? `onclick="abrirDrawerGenerico('Risco de Dobra — '+${JSON.stringify(setor)}, _dirHtmlSetorRisco(${JSON.stringify(setor)}))"` : ''}>
+      <td style="padding:8px 12px;font-size:13px;font-weight:600;color:var(--text);">${setor}</td>
+      <td style="padding:8px 12px;font-size:13px;color:var(--text-sec);text-align:center;">${d.total}</td>
+      <td style="padding:8px 12px;font-size:13px;font-weight:${d.risco>0?'700':'400'};color:${d.risco>0?'#D92D20':'var(--text-ter)'};text-align:center;">${d.risco > 0 ? d.risco : '—'}</td>
+      <td style="padding:8px 12px;text-align:center;"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;${badge.replace('style="','').slice(0,-1)}">${nivelLabel}</span></td>
+      <td style="padding:8px 12px;">
+        <div style="background:var(--border-light);border-radius:99px;height:5px;"><div style="background:${d.risco>0?'#F04438':'#12B76A'};width:${pct}%;height:5px;border-radius:99px;"></div></div>
+        <div style="font-size:10px;color:var(--text-ter);margin-top:2px;">${pct}% em risco</div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border-light);border-radius:10px;overflow:hidden;margin-bottom:20px;">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:14px;font-weight:700;color:var(--text);">Situação por Setor</div>
+      <div style="font-size:11px;color:var(--text-ter);">Clique no setor para ver detalhes do risco de dobra</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="background:var(--bg);">
+        <th style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-sec);text-align:left;border-bottom:1px solid var(--border-light);">Setor</th>
+        <th style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-sec);text-align:center;border-bottom:1px solid var(--border-light);">Total</th>
+        <th style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-sec);text-align:center;border-bottom:1px solid var(--border-light);">Em Risco</th>
+        <th style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-sec);text-align:center;border-bottom:1px solid var(--border-light);">Nível</th>
+        <th style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-sec);text-align:left;border-bottom:1px solid var(--border-light);">Proporção</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
 function renderDiretoria() {
   const colabs = _dirFiltrados();
   const total  = colabs.length;
@@ -12297,6 +12528,24 @@ function renderDiretoria() {
   }
 
   _renderDirChart(colabs);
+
+  // Pico de Saídas KPI
+  const pico = _picoSaidasSetor(colabs, 90);
+  const picoN   = document.getElementById('dirKpiPicoN');
+  const picoCtx = document.getElementById('dirKpiPicoCtx');
+  if (picoN) picoN.textContent = pico.count > 0 ? pico.count : '—';
+  if (picoCtx) {
+    if (pico.count > 0) {
+      const [pAno,pMes] = pico.data.split('-');
+      const mesNome = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(pMes)-1];
+      picoCtx.textContent = `${pico.setor} · ${mesNome}/${pAno} · maior concentração (90 dias)`;
+    } else {
+      picoCtx.textContent = 'sem sobreposição nos próximos 90 dias';
+    }
+  }
+
+  // Tabela por setor
+  _dirRenderSetorTable();
 
   // filtros do Dashboard e da Timeline são independentes — não propagar
 }
@@ -12734,29 +12983,35 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="dir-band-line"></div>
     </div>
     <div class="dir-kpi-row">
-      <div class="dir-kpi dk-green">
+      <!-- Agendados e Em Férias Hoje ocultos — KPIs estratégicos focados em risco -->
+      <div class="dir-kpi dk-green" hidden>
         <div class="dir-kpi-label">Agendados</div>
         <div class="dir-kpi-num" id="dirKpiAgN">&mdash;</div>
         <div class="dir-kpi-ctx" id="dirKpiAgCtx">&mdash;</div>
         <div class="dir-kpi-track"><div class="dir-kpi-fill" id="dirKpiAgBar"></div></div>
       </div>
-      <div class="dir-kpi dk-blue">
+      <div class="dir-kpi dk-blue" hidden>
         <div class="dir-kpi-label">Em F&eacute;rias Hoje</div>
         <div class="dir-kpi-num" id="dirKpiHjN">&mdash;</div>
         <div class="dir-kpi-ctx" id="dirKpiHjCtx">&mdash;</div>
         <div class="dir-kpi-track"><div class="dir-kpi-fill" id="dirKpiHjBar"></div></div>
       </div>
-      <div class="dir-kpi dk-amber">
+      <div class="dir-kpi dk-amber" hidden>
         <div class="dir-kpi-label">Sem Programa&ccedil;&atilde;o</div>
         <div class="dir-kpi-num" id="dirKpiSpN">&mdash;</div>
         <div class="dir-kpi-ctx" id="dirKpiSpCtx">&mdash;</div>
         <div class="dir-kpi-track"><div class="dir-kpi-fill" id="dirKpiSpBar"></div></div>
       </div>
-      <div class="dir-kpi dk-red">
+      <div class="dir-kpi dk-red" style="cursor:pointer;" onclick="abrirDrawerGenerico('Risco de Dobra', _dirHtmlRiscoDobra())">
         <div class="dir-kpi-label">Risco de Dobra</div>
         <div class="dir-kpi-num" id="dirKpiRdN">&mdash;</div>
         <div class="dir-kpi-ctx" id="dirKpiRdCtx">&mdash;</div>
         <div class="dir-kpi-track"><div class="dir-kpi-fill" id="dirKpiRdBar"></div></div>
+      </div>
+      <div class="dir-kpi" id="dirKpiPicoCard" style="cursor:pointer;border-left:3px solid #D97706;" onclick="abrirDrawerGenerico('Pico de Sa&iacute;das', _dirHtmlPicoSaidas())">
+        <div class="dir-kpi-label">Pico de Sa&iacute;das</div>
+        <div class="dir-kpi-num" id="dirKpiPicoN" style="color:#D97706;">&mdash;</div>
+        <div class="dir-kpi-ctx" id="dirKpiPicoCtx">calculando...</div>
       </div>
     </div>
     <div class="dir-nav-row">
@@ -12782,31 +13037,24 @@ document.addEventListener('DOMContentLoaded', () => {
       <span class="dir-data-note">Baseado nas f&eacute;rias j&aacute; agendadas no sistema</span>
     </div>
     <div id="dirDashboard">
-      <div class="dir-grid">
-        <div class="dir-card">
-          <div class="dir-chart-hdr">
-            <div>
-              <div class="dir-card-title">Concentra&ccedil;&atilde;o ao Longo do Ano</div>
-              <div class="dir-card-sub" id="dirChartSub">Colaboradores com f&eacute;rias em cada m&ecirc;s</div>
-            </div>
-            <div class="dir-year-pills" id="dirYearPills"></div>
+      <!-- Tabela por setor — renderizada por _dirRenderSetorTable() -->
+      <div id="dirSetorTable" style="margin-bottom:20px;"></div>
+      <!-- Gráfico de concentração anual — largura total -->
+      <div class="dir-card">
+        <div class="dir-chart-hdr">
+          <div>
+            <div class="dir-card-title">Concentra&ccedil;&atilde;o ao Longo do Ano</div>
+            <div class="dir-card-sub" id="dirChartSub">Colaboradores com f&eacute;rias em cada m&ecirc;s</div>
           </div>
-          <canvas id="dirChart" style="display:block;"></canvas>
-          <div class="dir-chart-note" id="dirChartNote" style="display:none;"></div>
+          <div class="dir-year-pills" id="dirYearPills"></div>
         </div>
-        <div class="dir-right">
-          <div class="dir-card">
-            <div class="dir-card-title">Pr&oacute;ximas Sa&iacute;das</div>
-            <div class="dir-card-sub">5 colaboradores com in&iacute;cio mais pr&oacute;ximo</div>
-            <div class="dir-pr-list" id="dirProxList"></div>
-          </div>
-          <div class="dir-card">
-            <div class="dir-card-title">Sem Programa&ccedil;&atilde;o</div>
-            <div class="dir-card-sub">Colaboradores com PA vigente e saldo aberto</div>
-            <div class="dir-sp-list" id="dirSpList"></div>
-            <div class="dir-card-note">Pontos para acompanhamento</div>
-          </div>
-        </div>
+        <canvas id="dirChart" style="display:block;"></canvas>
+        <div class="dir-chart-note" id="dirChartNote" style="display:none;"></div>
+      </div>
+      <!-- Elementos ocultos mantidos para não quebrar renderDiretoria() -->
+      <div style="display:none;">
+        <div id="dirProxList"></div>
+        <div id="dirSpList"></div>
       </div>
     </div>
 
