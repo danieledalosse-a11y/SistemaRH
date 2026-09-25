@@ -301,27 +301,32 @@ gestorSaldoPeriodo(pa)
 
 ## Visão Gestor — paEfetivo (padrão crítico)
 
-Quando o filtro `'agendado'` está ativo, o colaborador pode ter `pa = null` (saldo zerado, todos os dias já agendados). Para exibir corretamente o PA e o saldo, usar `paEfetivo`:
+O `paEfetivo` define qual PA é a referência da linha inteira (PA exibido, agendamento, saldo, badge). Regra: **PA com lançamento futuro ativo tem prioridade**; sem ele, usa `gestorPeriodoAtivo`.
 
 ```js
 const _lancRelev = GESTOR_LANCAMENTOS.find(l =>
   String(l.colaborador_id) === String(c.id) &&
   ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()) &&
   (l.fim||'') >= hoje
+  // Cancelado/Descartado/Rejeitado excluídos implicitamente — não estão na lista acima
 );
 const _paRelev = _lancRelev
   ? GESTOR_PERIODOS.find(p => String(p.id) === String(_lancRelev.periodo_id))
   : null;
 
-// No filtro agendado: prioriza o PA do lançamento futuro (não o gestorPeriodoAtivo)
-// Fora do filtro: usa gestorPeriodoAtivo, com fallback para _paRelev
-const paEfetivo = _gestorAlertaAtivo === 'agendado'
-  ? (_paRelev || pa)
-  : (pa || _paRelev);
+// Mesma regra da visão RH (_comFuturo): PA com lançamento futuro ativo tem prioridade
+const paEfetivo = _paRelev || pa;
 ```
 
 Todos os cálculos de exibição (dpd, saldo, total, pct, cores, badge, paAno) usam `paEfetivo`.
 **Botão "Solicitar"** continua usando `pa` (gestorPeriodoAtivo) — é onde novas solicitações são feitas.
+
+**Regra unificada (set/2026):** a lógica é idêntica nas três funções de render:
+- `renderListaAnual` → `_comFuturo` (prioridade 0 no array `pasDoAno`)
+- `renderMinhaEquipe` → `_cfR` (filtro nos registros válidos do colaborador)
+- `renderGestorAtencao` → `_paRelev || pa` (sobre GESTOR_LANCAMENTOS / GESTOR_PERIODOS)
+
+Lançamentos Cancelado/Descartado/Rejeitado **não** influenciam `paEfetivo` em nenhuma das três visões.
 
 ## Visão Gestor — badge de saldo zerado
 
