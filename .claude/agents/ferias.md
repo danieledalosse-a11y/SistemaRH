@@ -2195,11 +2195,11 @@ Dashboard e Timeline têm **conjuntos de filtro completamente separados**:
 | Aba | IDs dos selects | Função de filtro |
 |---|---|---|
 | Dashboard | `dirFiltroCargo`, `dirFiltroSetor`, `dirFiltroUnidade` | `_dirFiltrados()` |
-| Timeline | `dirTlFiltroCargo`, `dirTlFiltroSetor`, `dirTlFiltroUnidade` | `_dirTlFiltrados()` |
+| Timeline | `dirTlFiltroCargo`, `dirTlFiltroSetor`, `dirTlFiltroGestor` | `_dirTlFiltrados()` |
 
 `renderDiretoria()` **não propaga** nem chama `renderDirTimeline()` — as abas são completamente independentes.
 
-`_dirTlPopularFiltros()` — chamada quando a aba Timeline é ativada; popula os selects a partir de `COLABORADORES` ativos.
+`_dirTlPopularFiltros()` — chamada quando a aba Timeline é ativada; popula os selects a partir de `COLABORADORES` ativos. Usa `normSetor()` ao popular o setor.
 
 ### Estado de navegação de mês (independente da visão RH)
 
@@ -2268,7 +2268,7 @@ Filtros fundidos na `gantt-topbar` (única linha), alinhados à direita das seta
         <select class="dir-sel" id="dirTlFiltroCargo" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroCargo','')"><option value="">Cargo</option></select>
         <button class="filter-clear" id="clr-dirTlFiltroCargo" onclick="clearFilter('dirTlFiltroCargo','',()=>{renderDirTimeline()})" tabindex="-1">✕</button>
       </div>
-      <!-- idem dirTlFiltroSetor, dirTlFiltroUnidade -->
+      <!-- idem dirTlFiltroSetor, dirTlFiltroGestor -->
     </div>
   </div>
   <div id="dirGanttContent"></div>
