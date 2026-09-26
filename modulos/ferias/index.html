@@ -12215,21 +12215,20 @@ function gestorFmtData(str) {
 // ─── Visão Diretoria ─────────────────────────────────────────────────────────
 
 function _dirPopularFiltros() {
-  const cargosSet = new Set(), setoresSet = new Set(), unidadesSet = new Set();
+  const cargosSet = new Set(), setoresSet = new Set(), gestoresSet = new Set();
   COLABORADORES.forEach(c => {
     if (c.ativo === false) return;
-    if (c.cargo) cargosSet.add(c.cargo);
-    if (c.setor) setoresSet.add(c.setor);
-    const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
-    if (un) unidadesSet.add(un);
+    if (c.cargo)  cargosSet.add(c.cargo);
+    if (c.setor)  setoresSet.add(c.setor);
+    if (c.gestor) gestoresSet.add(c.gestor);
   });
   const initMS = (id, placeholder, pluralLabel, vals) => {
     if (!MS_INSTANCES[id]) new MultiSelect(id, placeholder, () => renderDiretoria(), pluralLabel);
     MS_INSTANCES[id]?.setOptions([...vals].sort());
   };
-  initMS('dirMsCargo',   'Cargo',   'cargos',   cargosSet);
-  initMS('dirMsSetor',   'Setor',   'setores',  setoresSet);
-  initMS('dirMsUnidade', 'Unidade', 'unidades', unidadesSet);
+  initMS('dirMsCargo',  'Cargo',  'cargos',   cargosSet);
+  initMS('dirMsSetor',  'Setor',  'setores',  setoresSet);
+  initMS('dirMsGestor', 'Gestor', 'gestores', gestoresSet);
   // Remove anos de comparação que não existem mais nos colabs filtrados
   if (typeof _dirAnosAtivos !== 'undefined') {
     const disponiveis = new Set(_dirAnosDisponiveis ? _dirAnosDisponiveis(COLABORADORES) : []);
@@ -12238,17 +12237,14 @@ function _dirPopularFiltros() {
 }
 
 function _dirFiltrados() {
-  const cargos   = MS_INSTANCES['dirMsCargo']?.getValues()   || [];
-  const setores  = MS_INSTANCES['dirMsSetor']?.getValues()   || [];
-  const unidades = MS_INSTANCES['dirMsUnidade']?.getValues() || [];
+  const cargos   = MS_INSTANCES['dirMsCargo']?.getValues()  || [];
+  const setores  = MS_INSTANCES['dirMsSetor']?.getValues()  || [];
+  const gestores = MS_INSTANCES['dirMsGestor']?.getValues() || [];
   return COLABORADORES.filter(c => {
     if (c.ativo === false) return false;
-    if (cargos.length   && !cargos.includes(c.cargo)) return false;
-    if (setores.length  && !setores.includes(c.setor)) return false;
-    if (unidades.length) {
-      const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
-      if (!unidades.includes(un)) return false;
-    }
+    if (cargos.length   && !cargos.includes(c.cargo))          return false;
+    if (setores.length  && !setores.includes(c.setor))         return false;
+    if (gestores.length && !gestores.includes(c.gestor || '')) return false;
     return true;
   });
 }
@@ -13145,7 +13141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <span class="dir-filter-eye">Filtrar por</span>
         <div id="dirMsCargo"></div>
         <div id="dirMsSetor"></div>
-        <div id="dirMsUnidade"></div>
+        <div id="dirMsGestor"></div>
       </div>
     </div>
     <div id="dirDashboard">
