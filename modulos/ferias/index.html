@@ -9568,11 +9568,13 @@ function _renderGdashMapa(cfg = {}) {
         const seenM = new Set();
         const lansDoMes = rawDoMes.filter(l => { const k=`${l.inicio}|${l.fim}`; if(seenM.has(k))return false; seenM.add(k);return true; });
         if (!lansDoMes.length) return null;
+        const ganttLancs = _ganttPrepararLancs(colab, 'gestor')
+          .filter(l => l.inicio <= mesFim && l.fim >= mesInicio);
+        if (!ganttLancs.length) return null;
         return {
-          nome: colab.nome, cargo: colab.cargo||'', setor: colab.setor||'',
-          unidade: colab.unidade||'', empresaRegistro: '',
+          ...colab,
           fotoUrl: colab.foto_url||null, __key: String(colab.id),
-          registros: [{ lancamentos: lansDoMes.map(l => ({ inicio: l.inicio, fim: l.fim, dias: l.dias })), _novoLanc: null }],
+          __ganttLancs: ganttLancs,
         };
       })
       .filter(Boolean)
