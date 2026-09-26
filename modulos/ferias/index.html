@@ -2956,6 +2956,20 @@ function normSetor(s) {
   return r.replace(/\w\S*/g, w => /^[A-Z]{2,4}$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
+// Normalização canônica de Gestor — única fonte de verdade para comparações
+function normGestor(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+// Cache da lista de gestores ativos de param_gestor — evita consultas repetidas
+let _gestoresAtivosCache = null;
+async function getGestoresAtivos() {
+  if (_gestoresAtivosCache) return _gestoresAtivosCache;
+  const rows = await sbGet('param_gestor', 'select=apelido&ativo=eq.true&order=ordem').catch(() => []);
+  _gestoresAtivosCache = rows.map(r => r.apelido).filter(Boolean);
+  return _gestoresAtivosCache;
+}
+
 function popularFiltros() {
   const setores   = [...new Set(COLABORADORES.map(c => c.setor).filter(Boolean))].sort();
   const unidades  = [...new Set(COLABORADORES.map(c => c.unidade).filter(Boolean))].sort();
@@ -7552,14 +7566,13 @@ function renderTimeline() {
   }
   syncFilterClear('ganttFiltroGestor', '');
 
-  const _normGT = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const filtrados = COLABORADORES.filter(c => {
     if (sbAtivo === 'ativo'   && c.ativo === false) return false;
     if (sbAtivo === 'inativo' && c.ativo !== false) return false;
     if (sbEmp && (c.empresaRegistro||c.unidade||'') !== sbEmp) return false;
     if (sbSet && c.setor !== sbSet) return false;
     if (ganttSetorFiltro && normSetor(c.setor) !== ganttSetorFiltro) return false;
-    if (ganttGestorFiltro && _normGT(c.gestor) !== _normGT(ganttGestorFiltro)) return false;
+    if (ganttGestorFiltro && normGestor(c.gestor) !== normGestor(ganttGestorFiltro)) return false;
     return true;
   }).map(c => ({ ...c, __ganttLancs: _ganttPrepararLancs(c, 'rh') }))
     .filter(c => c.__ganttLancs.some(l => l.inicio <= mesFim && l.fim >= mesInicio))
@@ -7749,7 +7762,7 @@ function _getDadosRelatorio() {
     if (c.ativo === false) return;
     if (empVal  && (c.empresaRegistro||c.unidade||'') !== empVal) return;
     if (setVal  && (c.setor||'') !== setVal) return;
-    if (gestVal && (c.gestor||'') !== gestVal) return;
+    if (gestVal && normGestor(c.gestor) !== normGestor(gestVal)) return;
     c.registros.forEach(reg => {
       const lans = reg.lancamentos.filter(l => l.inicio <= mesFim && l.fim >= mesInicio);
       lans.forEach(l => {
@@ -8509,9 +8522,8 @@ function renderGestorAtividade() {
   const fmtD  = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
   const fmtDH = d => { if (!d) return ''; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`; };
 
-  const _normGA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ͟]/g,'');
-  const filtroGestor = _normGA(document.getElementById('gestorFiltroGestor')?.value || '');
-  const colabsFiltrados = filtroGestor ? GESTOR_COLABS.filter(c => _normGA(c.gestor) === filtroGestor) : GESTOR_COLABS;
+  const filtroGestor = normGestor(document.getElementById('gestorFiltroGestor')?.value || '');
+  const colabsFiltrados = filtroGestor ? GESTOR_COLABS.filter(c => normGestor(c.gestor) === filtroGestor) : GESTOR_COLABS;
   const idsPermitidos = new Set(colabsFiltrados.map(c => String(c.id)));
   const colabMap = new Map(GESTOR_COLABS.map(c => [String(c.id), c]));
 
@@ -9811,7 +9823,6 @@ function gestorExportarPDF() {
   const hoje = new Date().toISOString().slice(0,10);
   const cargofs = MS_INSTANCES['gestorFiltroCargo2']?.getValues() || [];
   const gestorf = document.getElementById('gestorFiltroGestor')?.value || '';
-  const _normG  = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const gerado  = new Date().toLocaleDateString('pt-BR');
   const dataLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
@@ -9838,7 +9849,7 @@ function gestorExportarPDF() {
   const linhas = [];
   GESTOR_COLABS.filter(c => {
     if (cargofs.length && !cargofs.includes(c.cargo)) return false;
-    if (gestorf && _normG(c.gestor) !== _normG(gestorf)) return false;
+    if (gestorf && normGestor(c.gestor) !== normGestor(gestorf)) return false;
     return true;
   }).sort((a,b) => (a.setor||'').localeCompare(b.setor||'','pt-BR') || a.nome.localeCompare(b.nome,'pt-BR')).forEach(c => {
     // Lógica de PA exclusiva do relatório — não altera gestorPeriodoAtivo
@@ -10023,7 +10034,6 @@ function gestorExportarExcel() {
   const hoje = new Date().toISOString().slice(0,10);
   const cargofs = MS_INSTANCES['gestorFiltroCargo2']?.getValues() || [];
   const gestorf = document.getElementById('gestorFiltroGestor')?.value || '';
-  const _normG  = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const gerado  = new Date().toLocaleDateString('pt-BR');
   const dataLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
@@ -10032,7 +10042,7 @@ function gestorExportarExcel() {
   if (!GESTOR_COLABS.length) { toast('Dados da equipe não carregados. Aguarde e tente novamente.', 'aviso'); return; }
 
   // Carrega ExcelJS sob demanda se ainda não estiver disponível
-  const _doExport = () => _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, dataLabel, _saldoCor);
+  const _doExport = () => _gestorExportarExcelXlsx(hoje, cargofs, gestorf, gerado, dataLabel, _saldoCor);
   if (typeof ExcelJS !== 'undefined') { _doExport(); return; }
   const s = document.createElement('script');
   s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
@@ -10041,12 +10051,12 @@ function gestorExportarExcel() {
   document.head.appendChild(s);
 }
 
-async function _gestorExportarExcelXlsx(hoje, cargofs, gestorf, _normG, gerado, dataLabel, _saldoCor) {
+async function _gestorExportarExcelXlsx(hoje, cargofs, gestorf, gerado, dataLabel, _saldoCor) {
 
   const linhas = [];
   GESTOR_COLABS.filter(c => {
     if (cargofs.length && !cargofs.includes(c.cargo)) return false;
-    if (gestorf && _normG(c.gestor) !== _normG(gestorf)) return false;
+    if (gestorf && normGestor(c.gestor) !== normGestor(gestorf)) return false;
     return true;
   }).sort((a,b) => (a.setor||'').localeCompare(b.setor||'','pt-BR') || a.nome.localeCompare(b.nome,'pt-BR')).forEach(c => {
     // Lógica de PA exclusiva do relatório — não altera gestorPeriodoAtivo
@@ -10508,8 +10518,7 @@ function renderGestorAtencao() {
   const filtroGestor = document.getElementById('gestorFiltroGestor')?.value || '';
   if (busca) colabs = colabs.filter(c => c.nome.toLowerCase().includes(busca));
   if (filtroCargos.length) colabs = colabs.filter(c => filtroCargos.includes(c.cargo));
-  const _normG = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  if (filtroGestor) colabs = colabs.filter(c => _normG(c.gestor) === _normG(filtroGestor));
+  if (filtroGestor) colabs = colabs.filter(c => normGestor(c.gestor) === normGestor(filtroGestor));
 
   // Atualiza cards e atividade recente com base na lista filtrada
   renderGestorAlerts(colabs);
@@ -12215,12 +12224,11 @@ function gestorFmtData(str) {
 // ─── Visão Diretoria ─────────────────────────────────────────────────────────
 
 function _dirPopularFiltros() {
-  const cargosSet = new Set(), setoresSet = new Set(), gestoresSet = new Set();
+  const cargosSet = new Set(), setoresSet = new Set();
   COLABORADORES.forEach(c => {
     if (c.ativo === false) return;
     if (c.cargo)  cargosSet.add(c.cargo);
     if (c.setor)  setoresSet.add(c.setor);
-    if (c.gestor) gestoresSet.add(c.gestor);
   });
   const initMS = (id, placeholder, pluralLabel, vals) => {
     if (!MS_INSTANCES[id]) new MultiSelect(id, placeholder, () => renderDiretoria(), pluralLabel);
@@ -12228,7 +12236,8 @@ function _dirPopularFiltros() {
   };
   initMS('dirMsCargo',  'Cargo',  'cargos',   cargosSet);
   initMS('dirMsSetor',  'Setor',  'setores',  setoresSet);
-  initMS('dirMsGestor', 'Gestor', 'gestores', gestoresSet);
+  if (!MS_INSTANCES['dirMsGestor']) new MultiSelect('dirMsGestor', 'Gestor', () => renderDiretoria(), 'gestores');
+  getGestoresAtivos().then(gestores => MS_INSTANCES['dirMsGestor']?.setOptions(gestores));
   // Remove anos de comparação que não existem mais nos colabs filtrados
   if (typeof _dirAnosAtivos !== 'undefined') {
     const disponiveis = new Set(_dirAnosDisponiveis ? _dirAnosDisponiveis(COLABORADORES) : []);
@@ -12244,7 +12253,7 @@ function _dirFiltrados() {
     if (c.ativo === false) return false;
     if (cargos.length   && !cargos.includes(c.cargo))          return false;
     if (setores.length  && !setores.includes(c.setor))         return false;
-    if (gestores.length && !gestores.includes(c.gestor || '')) return false;
+    if (gestores.length && !gestores.some(g => normGestor(g) === normGestor(c.gestor || ''))) return false;
     return true;
   });
 }
@@ -12976,18 +12985,17 @@ function _dirTlFiltrados() {
     if (c.ativo === false) return false;
     if (cargos.length   && !cargos.includes(c.cargo))                   return false;
     if (setores.length  && !setores.includes(normSetor(c.setor)))       return false;
-    if (gestores.length && !gestores.includes(c.gestor || ''))          return false;
+    if (gestores.length && !gestores.some(g => normGestor(g) === normGestor(c.gestor || ''))) return false;
     return true;
   });
 }
 
 function _dirTlPopularFiltros() {
   const colabs = COLABORADORES.filter(c => c.ativo !== false);
-  const cargosSet = new Set(), setoresSet = new Set(), gestoresSet = new Set();
+  const cargosSet = new Set(), setoresSet = new Set();
   colabs.forEach(c => {
     if (c.cargo)  cargosSet.add(c.cargo);
     if (c.setor)  setoresSet.add(normSetor(c.setor));
-    if (c.gestor) gestoresSet.add(c.gestor);
   });
   const initMS = (id, placeholder, pluralLabel, vals) => {
     if (!MS_INSTANCES[id]) new MultiSelect(id, placeholder, () => renderDirTimeline(), pluralLabel);
@@ -12995,7 +13003,8 @@ function _dirTlPopularFiltros() {
   };
   initMS('dirTlMsCargo',  'Cargo',  'cargos',   cargosSet);
   initMS('dirTlMsSetor',  'Setor',  'setores',  setoresSet);
-  initMS('dirTlMsGestor', 'Gestor', 'gestores', gestoresSet);
+  if (!MS_INSTANCES['dirTlMsGestor']) new MultiSelect('dirTlMsGestor', 'Gestor', () => renderDirTimeline(), 'gestores');
+  getGestoresAtivos().then(gestores => MS_INSTANCES['dirTlMsGestor']?.setOptions(gestores));
 }
 
 function renderDirTimeline() {
