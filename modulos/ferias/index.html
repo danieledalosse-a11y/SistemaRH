@@ -1361,6 +1361,10 @@
   .dir-kpi-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; flex-shrink:0; background:var(--red-bg); }
   .dir-kpi-icon svg { width:16px; height:16px; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .dir-nav-row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  /* MultiSelect pill-style na Diretoria */
+  .dir-filters .ms-btn { font-size:12px; padding:6px 10px 6px 13px; border-radius:20px; min-width:0; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+  .dir-filters .ms-btn-label { max-width:120px; }
+  .dir-filters .ms-dropdown { min-width:200px; z-index:200; }
   .dir-tabs { display:flex; gap:3px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:3px; }
   .dir-tab { padding:6px 15px; border-radius:5px; font-size:12px; font-weight:500; color:var(--text-sec); cursor:pointer; border:none; background:transparent; font-family:inherit; transition:all .15s; }
   .dir-tab.active { background:var(--blue-bg); color:var(--blue); font-weight:600; }
@@ -5990,10 +5994,11 @@ function _destacarCampo(idOuEl) {
 
 // ─── MultiSelect component ───────────────────────────────────────────────────
 class MultiSelect {
-  constructor(containerId, placeholder, onChange) {
+  constructor(containerId, placeholder, onChange, pluralLabel) {
     this.container   = document.getElementById(containerId);
     this.placeholder = placeholder;
     this.onChange    = onChange;
+    this.pluralLabel = pluralLabel || 'Cargos';
     this.selected    = new Set();
     this.options     = [];
     if (!this.container) return;
@@ -6063,7 +6068,7 @@ class MultiSelect {
       btn.title = [...this.selected][0];
       if (xBtn) xBtn.style.display = '';
     } else {
-      lbl.textContent = `Cargos: ${this.selected.size}`;
+      lbl.textContent = `${this.pluralLabel}: ${this.selected.size}`;
       btn.classList.add('has-selection');
       btn.title = [...this.selected].join(', ');
       if (xBtn) xBtn.style.display = '';
@@ -12218,17 +12223,13 @@ function _dirPopularFiltros() {
     const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
     if (un) unidadesSet.add(un);
   });
-  const fill = (id, vals, placeholder) => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const cur = sel.value;
-    sel.innerHTML = `<option value="">${placeholder}</option>` +
-      [...vals].sort().map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
-    syncFilterClear(id, '');
+  const initMS = (id, placeholder, pluralLabel, vals) => {
+    if (!MS_INSTANCES[id]) new MultiSelect(id, placeholder, () => renderDiretoria(), pluralLabel);
+    MS_INSTANCES[id]?.setOptions([...vals].sort());
   };
-  fill('dirFiltroCargo',   cargosSet,   'Cargo');
-  fill('dirFiltroSetor',   setoresSet,  'Setor');
-  fill('dirFiltroUnidade', unidadesSet, 'Unidade');
+  initMS('dirMsCargo',   'Cargo',   'cargos',   cargosSet);
+  initMS('dirMsSetor',   'Setor',   'setores',  setoresSet);
+  initMS('dirMsUnidade', 'Unidade', 'unidades', unidadesSet);
   // Remove anos de comparação que não existem mais nos colabs filtrados
   if (typeof _dirAnosAtivos !== 'undefined') {
     const disponiveis = new Set(_dirAnosDisponiveis ? _dirAnosDisponiveis(COLABORADORES) : []);
@@ -12237,16 +12238,16 @@ function _dirPopularFiltros() {
 }
 
 function _dirFiltrados() {
-  const cargo   = document.getElementById('dirFiltroCargo')?.value   || '';
-  const setor   = document.getElementById('dirFiltroSetor')?.value   || '';
-  const unidade = document.getElementById('dirFiltroUnidade')?.value || '';
+  const cargos   = MS_INSTANCES['dirMsCargo']?.getValues()   || [];
+  const setores  = MS_INSTANCES['dirMsSetor']?.getValues()   || [];
+  const unidades = MS_INSTANCES['dirMsUnidade']?.getValues() || [];
   return COLABORADORES.filter(c => {
     if (c.ativo === false) return false;
-    if (cargo   && c.cargo !== cargo) return false;
-    if (setor   && c.setor !== setor) return false;
-    if (unidade) {
+    if (cargos.length   && !cargos.includes(c.cargo)) return false;
+    if (setores.length  && !setores.includes(c.setor)) return false;
+    if (unidades.length) {
       const un = c.unidade || c.empresa_registro_nome || c.empresa || '';
-      if (un !== unidade) return false;
+      if (!unidades.includes(un)) return false;
     }
     return true;
   });
@@ -13146,18 +13147,9 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <div class="dir-filters" id="dirDashFilters">
         <span class="dir-filter-eye">Filtrar por</span>
-        <div class="filter-wrap">
-          <select class="dir-sel" id="dirFiltroCargo" onchange="renderDiretoria();syncFilterClear('dirFiltroCargo','')"><option value="">Cargo</option></select>
-          <button class="filter-clear" id="clr-dirFiltroCargo" onclick="clearFilter('dirFiltroCargo','',()=>{renderDiretoria()})" tabindex="-1" title="Limpar">✕</button>
-        </div>
-        <div class="filter-wrap">
-          <select class="dir-sel" id="dirFiltroSetor" onchange="renderDiretoria();syncFilterClear('dirFiltroSetor','')"><option value="">Setor</option></select>
-          <button class="filter-clear" id="clr-dirFiltroSetor" onclick="clearFilter('dirFiltroSetor','',()=>{renderDiretoria()})" tabindex="-1" title="Limpar">✕</button>
-        </div>
-        <div class="filter-wrap">
-          <select class="dir-sel" id="dirFiltroUnidade" onchange="renderDiretoria();syncFilterClear('dirFiltroUnidade','')"><option value="">Unidade</option></select>
-          <button class="filter-clear" id="clr-dirFiltroUnidade" onclick="clearFilter('dirFiltroUnidade','',()=>{renderDiretoria()})" tabindex="-1" title="Limpar">✕</button>
-        </div>
+        <div id="dirMsCargo"></div>
+        <div id="dirMsSetor"></div>
+        <div id="dirMsUnidade"></div>
       </div>
     </div>
     <div id="dirDashboard">
