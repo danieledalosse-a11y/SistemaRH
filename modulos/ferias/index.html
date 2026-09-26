@@ -12973,14 +12973,14 @@ let _dirGanttAno = new Date().getFullYear();
 let _dirGanttMes = new Date().getMonth();
 
 function _dirTlFiltrados() {
-  const cargo  = document.getElementById('dirTlFiltroCargo')?.value  || '';
-  const setor  = document.getElementById('dirTlFiltroSetor')?.value  || '';
-  const gestor = document.getElementById('dirTlFiltroGestor')?.value || '';
+  const cargos   = MS_INSTANCES['dirTlMsCargo']?.getValues()  || [];
+  const setores  = MS_INSTANCES['dirTlMsSetor']?.getValues()  || [];
+  const gestores = MS_INSTANCES['dirTlMsGestor']?.getValues() || [];
   return COLABORADORES.filter(c => {
     if (c.ativo === false) return false;
-    if (cargo  && c.cargo  !== cargo)  return false;
-    if (setor  && c.setor  !== setor)  return false;
-    if (gestor && (c.gestor || '') !== gestor) return false;
+    if (cargos.length   && !cargos.includes(c.cargo))                   return false;
+    if (setores.length  && !setores.includes(normSetor(c.setor)))       return false;
+    if (gestores.length && !gestores.includes(c.gestor || ''))          return false;
     return true;
   });
 }
@@ -12993,17 +12993,13 @@ function _dirTlPopularFiltros() {
     if (c.setor)  setoresSet.add(normSetor(c.setor));
     if (c.gestor) gestoresSet.add(c.gestor);
   });
-  const fill = (id, vals, placeholder) => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const cur = sel.value;
-    sel.innerHTML = `<option value="">${placeholder}</option>` +
-      [...vals].sort().map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
-    syncFilterClear(id, '');
+  const initMS = (id, placeholder, pluralLabel, vals) => {
+    if (!MS_INSTANCES[id]) new MultiSelect(id, placeholder, () => renderDirTimeline(), pluralLabel);
+    MS_INSTANCES[id]?.setOptions([...vals].sort());
   };
-  fill('dirTlFiltroCargo',  cargosSet,   'Cargo');
-  fill('dirTlFiltroSetor',  setoresSet,  'Setor');
-  fill('dirTlFiltroGestor', gestoresSet, 'Gestor');
+  initMS('dirTlMsCargo',  'Cargo',  'cargos',   cargosSet);
+  initMS('dirTlMsSetor',  'Setor',  'setores',  setoresSet);
+  initMS('dirTlMsGestor', 'Gestor', 'gestores', gestoresSet);
 }
 
 function renderDirTimeline() {
@@ -13175,18 +13171,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <span style="font-size:12px;color:var(--text-ter);margin-left:4px;"><span id="dirGanttCnt">0</span> colaborador(es)</span>
         <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="dir-filter-eye">Filtrar por</span>
-          <div class="filter-wrap">
-            <select class="dir-sel" id="dirTlFiltroCargo" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroCargo','')"><option value="">Cargo</option></select>
-            <button class="filter-clear" id="clr-dirTlFiltroCargo" onclick="clearFilter('dirTlFiltroCargo','',()=>{renderDirTimeline()})" tabindex="-1" title="Limpar">✕</button>
-          </div>
-          <div class="filter-wrap">
-            <select class="dir-sel" id="dirTlFiltroSetor" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroSetor','')"><option value="">Setor</option></select>
-            <button class="filter-clear" id="clr-dirTlFiltroSetor" onclick="clearFilter('dirTlFiltroSetor','',()=>{renderDirTimeline()})" tabindex="-1" title="Limpar">✕</button>
-          </div>
-          <div class="filter-wrap">
-            <select class="dir-sel" id="dirTlFiltroGestor" onchange="renderDirTimeline();syncFilterClear('dirTlFiltroGestor','')"><option value="">Gestor</option></select>
-            <button class="filter-clear" id="clr-dirTlFiltroGestor" onclick="clearFilter('dirTlFiltroGestor','',()=>{renderDirTimeline()})" tabindex="-1" title="Limpar">✕</button>
-          </div>
+          <div id="dirTlMsCargo"></div>
+          <div id="dirTlMsSetor"></div>
+          <div id="dirTlMsGestor"></div>
         </div>
       </div>
       <div id="dirGanttContent"></div>
