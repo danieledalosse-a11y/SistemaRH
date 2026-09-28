@@ -4431,6 +4431,10 @@ async function rhAprovarGozoPendente(colabKey, sbId, lancIdx, saida) {
   _gozoExpanded.add(`${sbId}-${lancIdx}`);
   try { renderDrawerHistorico(colab); } catch(_) {}
   try { renderMetricas(); } catch(_) {}
+  const _gozoAprov = nova.find(rx => Number(rx.lancIdx) === Number(lancIdx) && rx.saida === saida);
+  if (colab?._sbColabId) try { await _logAtiv(sbId, colab._sbColabId, 'gozo_aprovado', (JSON.parse(localStorage.getItem('sb_perfil') || '{}')).nome || 'RH', { saida, dias: _gozoAprov?.dias ?? null, lancIdx: Number(lancIdx) }); } catch(_) {}
+  renderRhAtividade();
+  if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
   toast('✓ Gozo aprovado e registrado!');
 }
 
@@ -12230,6 +12234,7 @@ async function grhEnviarSolicitarGozo(perId, lancIdx, colabId, realLancIdx) {
 
     const colab = GESTOR_COLABS.find(cc => String(cc.id) === String(colabId));
     if (colab && typeof _renderGsolHistoricoRH === 'function') _renderGsolHistoricoRH(colab);
+    try { await _logAtiv(feriasId, colabId, 'gozo_solicitado', GESTOR_NOME_USUARIO, { saida, retorno, dias: diasVal, lancIdx: Number(realLancIdx) }); } catch(_) {}
     toast('✓ Solicitação de gozo enviada para o RH aprovar.');
   } catch(e) {
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Enviar para RH'; }
