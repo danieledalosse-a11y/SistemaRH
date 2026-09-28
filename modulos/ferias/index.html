@@ -3219,30 +3219,24 @@ function abrirDrawerGenerico(titulo, html) {
 
     const attachDrag = handle => {
       if (!handle) return;
-      const _id = handle.id || handle.className;
-      console.log('[drag] attachDrag chamado para:', _id);
       handle.style.cursor = 'grab';
       handle.addEventListener('mousedown', e => {
-        console.log('[drag] mousedown em:', _id, '| target:', e.target.tagName, e.target.className);
-        if (e.target.closest('button')) { console.log('[drag] ignorado — clique em botão'); return; }
+        if (e.target.closest('button')) return;
         const rect = modal.getBoundingClientRect();
         _ox = e.clientX - rect.left;
         _oy = e.clientY - rect.top;
         _dragging = true;
-        console.log('[drag] _dragging = true | rect:', Math.round(rect.left), Math.round(rect.top));
         handle.style.cursor = 'grabbing';
         modal.classList.add('dragging');
         modal.style.transform = 'none';
         modal.style.left = rect.left + 'px';
         modal.style.top  = rect.top  + 'px';
-        console.log('[drag] left/top aplicados:', modal.style.left, modal.style.top);
       });
       handle.addEventListener('mouseup', () => { handle.style.cursor = 'grab'; });
     };
 
     const handle = document.querySelector('#drawer .drawer-hdr');
     const handleGenerico = document.getElementById('drawerGenericTitle');
-    console.log('[drag] DOMContentLoaded | drawer-hdr:', !!handle, '| drawerGenericTitle:', !!handleGenerico);
     attachDrag(handle);
     attachDrag(handleGenerico);
 
@@ -3254,21 +3248,17 @@ function abrirDrawerGenerico(titulo, html) {
     });
     observer.observe(modal, { childList: true, subtree: true });
 
-    let _moveCount = 0;
     document.addEventListener('mousemove', e => {
       if (!_dragging) return;
-      _moveCount++;
       const x = Math.max(0, Math.min(e.clientX - _ox, window.innerWidth  - modal.offsetWidth));
       const y = Math.max(0, Math.min(e.clientY - _oy, window.innerHeight - modal.offsetHeight));
       modal.style.left = x + 'px';
       modal.style.top  = y + 'px';
-      if (_moveCount <= 3) console.log('[drag] mousemove #' + _moveCount + ' | left:', modal.style.left, 'top:', modal.style.top);
     });
 
     document.addEventListener('mouseup', () => {
       if (!_dragging) return;
       _dragging = false;
-      _moveCount = 0;
       modal.classList.remove('dragging');
     });
   });
