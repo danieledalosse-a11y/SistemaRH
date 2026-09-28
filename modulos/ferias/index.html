@@ -3214,37 +3214,67 @@ function abrirDrawerGenerico(titulo, html) {
 (function() {
   let _dragging = false, _ox = 0, _oy = 0;
   document.addEventListener('DOMContentLoaded', () => {
-    const handle = document.querySelector('#drawer .drawer-hdr');
     const modal  = document.getElementById('drawer');
-    if (!handle || !modal) return;
+    if (!modal) return;
 
-    handle.addEventListener('mousedown', e => {
-      if (e.target.closest('button')) return;
-      const rect = modal.getBoundingClientRect();
-      _ox = e.clientX - rect.left;
-      _oy = e.clientY - rect.top;
-      _dragging = true;
-      modal.classList.add('dragging');
-      modal.style.transform = 'none';
-      modal.style.left = rect.left + 'px';
-      modal.style.top  = rect.top  + 'px';
+    const attachDrag = handle => {
+      if (!handle) return;
+      const _id = handle.id || handle.className;
+      console.log('[drag] attachDrag chamado para:', _id);
+      handle.style.cursor = 'grab';
+      handle.addEventListener('mousedown', e => {
+        console.log('[drag] mousedown em:', _id, '| target:', e.target.tagName, e.target.className);
+        if (e.target.closest('button')) { console.log('[drag] ignorado — clique em botão'); return; }
+        const rect = modal.getBoundingClientRect();
+        _ox = e.clientX - rect.left;
+        _oy = e.clientY - rect.top;
+        _dragging = true;
+        console.log('[drag] _dragging = true | rect:', Math.round(rect.left), Math.round(rect.top));
+        handle.style.cursor = 'grabbing';
+        modal.classList.add('dragging');
+        modal.style.transform = 'none';
+        modal.style.left = rect.left + 'px';
+        modal.style.top  = rect.top  + 'px';
+        console.log('[drag] left/top aplicados:', modal.style.left, modal.style.top);
+      });
+      handle.addEventListener('mouseup', () => { handle.style.cursor = 'grab'; });
+    };
+
+    const handle = document.querySelector('#drawer .drawer-hdr');
+    const handleGenerico = document.getElementById('drawerGenericTitle');
+    console.log('[drag] DOMContentLoaded | drawer-hdr:', !!handle, '| drawerGenericTitle:', !!handleGenerico);
+    attachDrag(handle);
+    attachDrag(handleGenerico);
+
+    // handle genérico pode ser preenchido depois de abrirDrawerGenerico —
+    // o observer garante que o cursor seja aplicado sempre que o conteúdo mudar
+    const observer = new MutationObserver(() => {
+      const hg = document.getElementById('drawerGenericTitle');
+      if (hg && !hg._dragAttached) { hg._dragAttached = true; attachDrag(hg); }
     });
+    observer.observe(modal, { childList: true, subtree: true });
 
+    let _moveCount = 0;
     document.addEventListener('mousemove', e => {
       if (!_dragging) return;
+      _moveCount++;
       const x = Math.max(0, Math.min(e.clientX - _ox, window.innerWidth  - modal.offsetWidth));
       const y = Math.max(0, Math.min(e.clientY - _oy, window.innerHeight - modal.offsetHeight));
       modal.style.left = x + 'px';
       modal.style.top  = y + 'px';
+      if (_moveCount <= 3) console.log('[drag] mousemove #' + _moveCount + ' | left:', modal.style.left, 'top:', modal.style.top);
     });
 
     document.addEventListener('mouseup', () => {
       if (!_dragging) return;
       _dragging = false;
+      _moveCount = 0;
       modal.classList.remove('dragging');
     });
   });
 })();
+
+
 
 function setDrawerTab(tab, btn) {
   // mantido por compatibilidade (pode ser chamado por código antigo)
@@ -3467,7 +3497,7 @@ function renderDrawerHistorico(colab) {
     </button>
   </div>`;
   const key = colab.__key;
-  const novoPaBtn = (IS_RH && podeAcao('ferias','inserir') && !regParaLancar && regs.some(r => !excluir.has(r.status)))
+  const novoPaBtn = (IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir') && !regParaLancar && regs.some(r => !excluir.has(r.status)))
     ? `<div style="text-align:center;padding:12px 0 4px;"><button id="btnRhNovoPa" onclick="rhCriarNovoPa('${key}')" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Criar próximo período aquisitivo</button></div>`
     : '';
 
@@ -3478,7 +3508,7 @@ function renderDrawerHistorico(colab) {
 
   // Banner: aviso quando o PA ativo está abaixo dos primeiros visíveis
   const paAtivoNaoEhOPrimeiro = regParaLancar && regs.length > 0 && String(regs[0]._sbId) !== String(regParaLancar._sbId);
-  const bannerPaAtivo = (IS_RH && paAtivoNaoEhOPrimeiro) ? `
+  const bannerPaAtivo = (IS_RH && !IS_DIRETORIA && paAtivoNaoEhOPrimeiro) ? `
     <div onclick="document.getElementById('pa-block-${regParaLancar._sbId}')?.scrollIntoView({behavior:'smooth',block:'center'})"
          style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:8px;cursor:pointer;font-size:12px;color:#92400E;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -3519,13 +3549,13 @@ function renderDrawerHistorico(colab) {
       const iconTitle = temGozos ? 'Ver acordos registrados' : 'Registrar acordo de gozo';
       const iconOnclick = temGozos
         ? `toggleGozoLista('${r._sbId}',${lancIdx})`
-        : (!excluirPA && IS_RH) ? `expandirGozoHist('${r._sbId}',${lancIdx})` : '';
+        : (!excluirPA && IS_RH && !IS_DIRETORIA) ? `expandirGozoHist('${r._sbId}',${lancIdx})` : '';
       const svgIconAcordo = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>${temGozos ? '<polyline points="9 16 11 18 15 14"/>' : '<line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>'}</svg>`;
-      const iconoAcordo = (IS_RH || temGozos) ? `<button class="${iconCls}" onclick="${iconOnclick}" title="${iconTitle}">${svgIconAcordo}${acordoBadgeHtml}</button>` : '';
+      const iconoAcordo = ((IS_RH && !IS_DIRETORIA) || temGozos) ? `<button class="${iconCls}" onclick="${iconOnclick}" title="${iconTitle}">${svgIconAcordo}${acordoBadgeHtml}</button>` : '';
 
       // ── seção expansível de gozo (RH: editável; Gestor: somente leitura via gsol-rh-gozo)
       let secaoHtml = '';
-      if (IS_RH && podeAcao('ferias','inserir') && !excluirPA) {
+      if (IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir') && !excluirPA) {
         let progressHtml = '';
         let listaHtml = '';
         if (temGozos) {
@@ -3646,15 +3676,15 @@ function renderDrawerHistorico(colab) {
       // ── botões de ação exclusivos do RH
       const isPendGozoLanc = r._aguardandoGozoIdx === lancIdx;
       const novoIdxClock = isPendGozoLanc ? 'null' : lancIdx;
-      const clockBtnHtml = (!excluirPA && IS_RH && podeAcao('ferias','alterar')) ? `<button class="hist-clock-btn${isPendGozoLanc ? ' ativo' : ''}" onclick="rhToggleAguardandoGozo('${r._sbId}','${novoIdxClock}','${key}')" title="${isPendGozoLanc ? 'Remover marcação de pendente' : 'Marcar como pendente de gozo'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>` : '';
-      const editBtnHtml = (!excluirPA && IS_RH && podeAcao('ferias','alterar')) ? `<button class="hist-edit-btn" onclick="abrirEditLanc('${r._sbId}',${lancIdx})" title="Editar período"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '';
-      const deleteBtnHtml = (IS_RH && podeAcao('ferias','alterar')) ? `<button class="hist-delete-btn" onclick="excluirLancamento('${key}','${r._sbId}',${lancIdx})" title="Excluir lançamento"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : '';
-      const actionBtnsHtml = (IS_RH && podeAcao('ferias','alterar'))
+      const clockBtnHtml = (!excluirPA && IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')) ? `<button class="hist-clock-btn${isPendGozoLanc ? ' ativo' : ''}" onclick="rhToggleAguardandoGozo('${r._sbId}','${novoIdxClock}','${key}')" title="${isPendGozoLanc ? 'Remover marcação de pendente' : 'Marcar como pendente de gozo'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>` : '';
+      const editBtnHtml = (!excluirPA && IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')) ? `<button class="hist-edit-btn" onclick="abrirEditLanc('${r._sbId}',${lancIdx})" title="Editar período"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '';
+      const deleteBtnHtml = (IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')) ? `<button class="hist-delete-btn" onclick="excluirLancamento('${key}','${r._sbId}',${lancIdx})" title="Excluir lançamento"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : '';
+      const actionBtnsHtml = (IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar'))
         ? `<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">${clockBtnHtml}${editBtnHtml}${deleteBtnHtml}</div>`
         : '';
 
       // ── formulário de edição do lançamento (RH apenas)
-      const editFormHtml = (!excluirPA && IS_RH) ? `<div class="hist-edit-form" id="hist-edit-${r._sbId}-${lancIdx}" style="display:none;margin-top:8px;">
+      const editFormHtml = (!excluirPA && IS_RH && !IS_DIRETORIA) ? `<div class="hist-edit-form" id="hist-edit-${r._sbId}-${lancIdx}" style="display:none;margin-top:8px;">
         <div class="real-add-grid" style="padding:0 0 6px;grid-template-columns:repeat(3,1fr);">
           <div class="real-add-field"><label class="real-add-label">Início</label><input class="real-add-input" type="date" id="hedit-ini-${r._sbId}-${lancIdx}" oninput="calcFimEditLanc('${r._sbId}',${lancIdx})"></div>
           <div class="real-add-field"><label class="real-add-label">Dias</label><input class="real-add-input" type="number" id="hedit-dias-${r._sbId}-${lancIdx}" min="1" oninput="calcFimEditLanc('${r._sbId}',${lancIdx})"></div>
@@ -3699,7 +3729,7 @@ function renderDrawerHistorico(colab) {
     if (r._novoLanc && r.status === 'Pendente') {
       const nl = r._novoLanc;
       const quemPediu = r._obsGestor ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">${r._obsGestor}</div>` : '';
-      const acaoBtns = (IS_RH && podeAcao('ferias','alterar')) ? `<div style="display:flex;gap:6px;margin-top:8px;">
+      const acaoBtns = (IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')) ? `<div style="display:flex;gap:6px;margin-top:8px;">
         <button onclick="rhAprovarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprovar</button>
         <button onclick="rhRecusarSolicitado('${r._sbId}',0).then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;">✕ Recusar</button>
       </div>` : '';
@@ -3723,7 +3753,7 @@ function renderDrawerHistorico(colab) {
     const isActivePa = regParaLancar && String(r._sbId) === String(regParaLancar._sbId);
     const lancarBtnHtml = (() => {
       if (!isActivePa || excluirPA) return '';
-      if (IS_RH && podeAcao('ferias','inserir')) return `<button class="drawer-hist-pa-lancar-btn" onclick="toggleInlineLancar('${r._sbId}')">+ Lançar</button>`;
+      if (IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir')) return `<button class="drawer-hist-pa-lancar-btn" onclick="toggleInlineLancar('${r._sbId}')">+ Lançar</button>`;
       if (saldo > 0 && r.paFim >= HOJE) return `<button class="drawer-hist-pa-solicitar-btn" onclick="toggleInlineLancar('${r._sbId}')">Solicitar</button>`;
       return '';
     })();
@@ -4028,7 +4058,7 @@ async function confirmarDrawerLancamento() {
 
   const novoLanc = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
 
-  if (IS_RH && podeAcao('ferias','inserir') && reg._sbId) {
+  if (IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir') && reg._sbId) {
     // RH lança direto como Aprovado — persiste imediatamente
     const lancamentos = [...reg.lancamentos, { inicio: ini, fim, dias }];
     const campo = reg.lancamentos.length === 0
@@ -8679,7 +8709,7 @@ function renderRhAtividade() {
     const det   = h.detalhe || {};
     const perLine = det.inicio && det.fim ? `<div class="gstor-ativ-per">${fmtD(det.inicio)} → ${fmtD(det.fim)}${det.dias ? ' · ' + det.dias + 'd' : ''}</div>` : '';
     const tsLine  = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
-    const btnAcao = IS_RH && _rhEhRecente(h)
+    const btnAcao = IS_RH && !IS_DIRETORIA && _rhEhRecente(h)
       ? `<button onclick="_rhAtivAbrirModal('${h.ferias_id}')" style="flex-shrink:0;padding:5px 12px;border-radius:6px;border:1.5px solid var(--blue,#1570EF);background:transparent;color:var(--blue,#1570EF);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Analisar</button>`
       : `<span class="gstor-ativ-chip ${cls}">${chip}</span>`;
     return `<div class="gstor-ativ-item">

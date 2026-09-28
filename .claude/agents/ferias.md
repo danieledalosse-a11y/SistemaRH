@@ -21,7 +21,7 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\ferias\index.html` (~3.200 
 6. **`guardModulo('ferias')` obrigatório** — primeira linha do bloco de auth; ver [[permissoes]].
 7. **Componentes compartilhados obrigatórios** — ver seção "Padrão arquitetural" abaixo.
 
-## Padrão arquitetural — componentes compartilhados (set/2026)
+## Padrão arquitetural — componentes compartilhados (set/2026 · atualizado set/2026)
 
 **Princípio:** o que muda entre RH, Gestor e Diretoria é **quem pode ver** e **de onde vêm os dados**. O que é apresentado visualmente deve ser **uma única implementação**.
 
@@ -660,6 +660,64 @@ r = requests.get(f"{SB_URL}/rest/v1/ferias?...", headers=headers)
 rows = r.json()  # verificar isinstance(rows, list) antes de iterar
 ```
 
+## Padrão de Gestor — fonte canônica e normalização (set/2026)
+
+### Regra única de Gestor no módulo
+
+> `param_gestor` é a fonte canônica para **listar** gestores. O vínculo colaborador→gestor é `colaboradores.gestor`. A **comparação** sempre usa `normGestor()`.
+
+### Funções globais obrigatórias
+
+```js
+// Normalização canônica — lowercase + remove acentos + trim
+function normGestor(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+// Lista de gestores ativos — cache, lê param_gestor uma vez por sessão
+let _gestoresAtivosCache = null;
+async function getGestoresAtivos() {
+  if (_gestoresAtivosCache) return _gestoresAtivosCache;
+  const rows = await sbGet('param_gestor', 'select=apelido&ativo=eq.true&order=ordem').catch(() => []);
+  _gestoresAtivosCache = rows.map(r => r.apelido).filter(Boolean);
+  return _gestoresAtivosCache;
+}
+```
+
+### Onde cada função é usada
+
+| Contexto | Listar opções | Comparar |
+|---|---|---|
+| RH – Timeline Gantt (linha 7575) | `sbGet param_gestor` direto | `normGestor()` |
+| Exportação mensal RH (linha 7765) | — | `normGestor()` |
+| Gestor – Atividade (linha 8525) | — | `normGestor()` |
+| Gestor – Atenção (linha 10521) | `sbGet param_gestor` direto | `normGestor()` |
+| Export PDF (linha 9852) | — | `normGestor()` |
+| Export Excel (linha 10059) | — | `normGestor()` |
+| Diretoria – Dashboard popular | `getGestoresAtivos()` + `MultiSelect` | `.some(g => normGestor(g) === normGestor(...))` |
+| Diretoria – Dashboard filtrar | — | `.some()` com `normGestor` |
+| Diretoria – Timeline popular | `getGestoresAtivos()` + `MultiSelect` | `.some()` com `normGestor` |
+| Diretoria – Timeline filtrar | — | `.some()` com `normGestor` |
+
+### Anti-padrões a evitar
+
+- `_normG`, `_normGT`, `_normGA` locais para gestor — removidos, usar `normGestor()` global
+- Listar gestores a partir de `c.gestor` (campo text de colaboradores) — gera duplicatas por variação ortográfica; sempre usar `param_gestor`
+- Comparar `c.gestor === gestorFiltro` diretamente (case-sensitive, sem normalização)
+
+### Diretoria — MultiSelect de Gestor (assíncrono)
+
+`getGestoresAtivos()` é assíncrona. O padrão correto (não usar `await` dentro de função síncrona):
+
+```js
+if (!MS_INSTANCES['dirMsGestor']) new MultiSelect('dirMsGestor', 'Gestor', () => renderDiretoria(), 'gestores');
+getGestoresAtivos().then(gestores => MS_INSTANCES['dirMsGestor']?.setOptions(gestores));
+```
+
+Na primeira abertura da aba há ~100ms de delay antes das opções carregarem — comportamento esperado, igual a outros filtros assíncronos do sistema.
+
+---
+
 ## Timeline Gantt — arquitetura centralizada (set/2026)
 
 A Timeline usa **um único renderer** (`_ganttRenderContent`) compartilhado por RH, Gestor e Diretoria. O que varia entre perfis é apenas a fonte dos dados e o escopo de colaboradores visíveis — nunca a regra de cálculo ou desenho.
@@ -710,6 +768,37 @@ Recebe objetos colaborador com `c.__ganttLancs` pré-computado (via `_ganttPrepa
 .filter(c => c.__ganttLancs.some(l => l.inicio <= mesFim && l.fim >= mesInicio))
 // depois: _ganttRenderContent(content, colabs, ...)
 ```
+
+### Mapa mensal do Gestor (Dashboard Gestor — detalhamento de mês)
+
+Quando o usuário clica num mês no mapa anual do Dashboard Gestor, `_gdashMapaFiltrarMes(mi)` seta `_gdashMapaMesSel = mi` e chama `_renderGdashMapa()`, que entra no modo de detalhamento (`SEL !== null`). Esse modo renderiza uma Timeline inline dentro do próprio Dashboard usando o mesmo `_ganttRenderContent`.
+
+**Padrão obrigatório:** `colabsAdaptados` deve ter `__ganttLancs` gerado via `_ganttPrepararLancs(colab, 'gestor')`, não construído manualmente com `registros[]`. `lansDoMes` determina **quem entra** (status `aprovado/gozado`, dentro do mês); `_ganttPrepararLancs` determina **o que renderizar** (incluindo regra de gozo efetivo).
+
+```js
+// Correto (set/2026):
+const ganttLancs = _ganttPrepararLancs(colab, 'gestor')
+  .filter(l => l.inicio <= mesFim && l.fim >= mesInicio);
+if (!ganttLancs.length) return null;
+return { ...colab, fotoUrl: colab.foto_url||null, __key: String(colab.id), __ganttLancs: ganttLancs };
+
+// Anti-padrão (não usar):
+// registros: [{ lancamentos: lansDoMes.map(l => ({inicio, fim, dias})) }]
+// → _ganttRenderContent espera __ganttLancs, não registros[].lancamentos
+```
+
+**`__key`** é setado para que `_ganttRenderContent` emita `onclick="abrirDrawer(...)"` nas linhas — permite abrir o drawer do colaborador diretamente do mapa mensal.
+
+### "Sem programação" no Dashboard Gestor — dois elementos distintos
+
+Existem dois elementos com texto "sem programação" no Dashboard Gestor. **Não confundir:**
+
+| Elemento | Localização no código | Função |
+|---|---|---|
+| `gdashSemProgWrap` + `_renderGdashSemProg()` | Card separado abaixo do mapa anual | Agrupa colaboradores sem programação por urgência (Crítico / Atenção / Sem urgência), expansível por nível |
+| `▾ N sem programação` | Rodapé do mapa anual (`_renderGdashMapa`) | Toggle colapsável que lista colaboradores sem nenhuma barra no mapa do ano corrente; critério visual (não aparece no mapa), diferente do KPI "Sem Agendamento" |
+
+O KPI card "Sem Agendamento" (linha 8891, `filtrarGestorAlerta('sem-agendado')`) conta colaboradores com **saldo aberto e nenhum lançamento futuro** — critério ligeiramente diferente dos dois elementos acima. Os três coexistem intencionalmente.
 
 ### Regras de renderização de barra
 
