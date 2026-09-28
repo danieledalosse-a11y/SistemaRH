@@ -660,6 +660,102 @@ r = requests.get(f"{SB_URL}/rest/v1/ferias?...", headers=headers)
 rows = r.json()  # verificar isinstance(rows, list) antes de iterar
 ```
 
+## Visão Diretoria — regras de acesso e comportamento (set/2026)
+
+### Somente leitura — IS_DIRETORIA
+
+`IS_DIRETORIA = (perfil === 'diretoria')` — setado em `setRole()` e no IIFE de inicialização.
+
+**Regra:** na visão Diretoria, o drawer pode ser aberto para visualizar o histórico completo do colaborador, mas **nenhuma ação operacional deve aparecer ou ser executável**. A guard obrigatória em `renderDrawerHistorico` é `IS_RH && !IS_DIRETORIA && podeAcao(...)`.
+
+Elementos suprimidos por `!IS_DIRETORIA` (set/2026):
+
+| Elemento | Tipo de guard |
+|---|---|
+| Botão "+ Criar próximo PA" (`novoPaBtn`) | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir')` |
+| Banner "PA ativo não é o primeiro" (`bannerPaAtivo`) | `IS_RH && !IS_DIRETORIA && ...` |
+| `onclick` do ícone de acordo (expandirGozo) | `!excluirPA && IS_RH && !IS_DIRETORIA` |
+| Visibilidade do ícone de acordo sem gozos existentes | `(IS_RH && !IS_DIRETORIA) \|\| temGozos` |
+| Seção gozo editável (secaoHtml) | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir')` |
+| Botões clock / edit / delete / container de ações | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')` |
+| Formulário de edição de lançamento (`editFormHtml`) | `!excluirPA && IS_RH && !IS_DIRETORIA` |
+| Botões Aprovar/Recusar do `_novoLanc` pendente | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')` |
+| Botão "+ Lançar" (`lancarBtnHtml`) | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir')` |
+| Execução de `confirmarDrawerLancamento()` | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir')` |
+| Botão "Analisar" na aba Auditoria | `IS_RH && !IS_DIRETORIA && _rhEhRecente(h)` |
+
+**Anti-padrão:** usar apenas `IS_RH && podeAcao(...)` sem `!IS_DIRETORIA` — Diretoria tem `IS_RH = true` (não é gestor) então todas as ações apareceriam.
+
+### Drawer genérico (abrirDrawerGenerico) — modais da Diretoria
+
+Os modais da Diretoria (setor, risco de dobra, pico de saídas) usam `abrirDrawerGenerico(titulo, html)`, que reutiliza o elemento `#drawer` ocultando `.drawer-hdr`, `.drawer-tabs`, `.drawer-body` e exibindo `#drawerGenericTitle` + `#drawerGenericBody`.
+
+Clicar em um colaborador dentro desses modais chama `fecharDrawer(); setTimeout(() => abrirDrawer(key), 180)` — abre o drawer normal do colaborador, que por sua vez respeita as guards de `IS_DIRETORIA` acima.
+
+### Drag do drawer — infraestrutura (set/2026)
+
+O `#drawer` (usado tanto no modo perfil quanto no modo genérico) é arrastável pela tela. A lógica fica num IIFE logo após `abrirDrawerGenerico`:
+
+```js
+(function() {
+  let _dragging = false, _ox = 0, _oy = 0;
+  document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('drawer');
+    if (!modal) return;
+
+    const attachDrag = handle => {
+      if (!handle) return;
+      handle.style.cursor = 'grab';
+      handle.addEventListener('mousedown', e => {
+        if (e.target.closest('button')) return; // não inicia drag em botões
+        const rect = modal.getBoundingClientRect();
+        _ox = e.clientX - rect.left;
+        _oy = e.clientY - rect.top;
+        _dragging = true;
+        handle.style.cursor = 'grabbing';
+        modal.classList.add('dragging');       // transition: none
+        modal.style.transform = 'none';        // cancela translate(-50%,-50%)
+        modal.style.left = rect.left + 'px';
+        modal.style.top  = rect.top  + 'px';
+      });
+      handle.addEventListener('mouseup', () => { handle.style.cursor = 'grab'; });
+    };
+
+    attachDrag(document.querySelector('#drawer .drawer-hdr'));    // modo perfil
+    attachDrag(document.getElementById('drawerGenericTitle'));    // modo genérico (Diretoria)
+
+    // MutationObserver: garante attach no drawerGenericTitle após abrirDrawerGenerico preencher innerHTML
+    const observer = new MutationObserver(() => {
+      const hg = document.getElementById('drawerGenericTitle');
+      if (hg && !hg._dragAttached) { hg._dragAttached = true; attachDrag(hg); }
+    });
+    observer.observe(modal, { childList: true, subtree: true });
+
+    document.addEventListener('mousemove', e => {
+      if (!_dragging) return;
+      const x = Math.max(0, Math.min(e.clientX - _ox, window.innerWidth  - modal.offsetWidth));
+      const y = Math.max(0, Math.min(e.clientY - _oy, window.innerHeight - modal.offsetHeight));
+      modal.style.left = x + 'px';
+      modal.style.top  = y + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      if (!_dragging) return;
+      _dragging = false;
+      modal.classList.remove('dragging');
+    });
+  });
+})();
+```
+
+`fecharDrawer()` reseta `left`, `top` e `transform` — o drawer volta à posição central na próxima abertura.
+
+**Regras:**
+- Nunca reescrever o IIFE; estender apenas via `attachDrag` caso seja necessário novo handle
+- Nunca alterar regras de conteúdo, permissões ou comportamento do drawer ao implementar drag
+- O CSS `.drawer.dragging { transition: none; user-select: none; }` já existe e é obrigatório
+
+---
+
 ## Padrão de Gestor — fonte canônica e normalização (set/2026)
 
 ### Regra única de Gestor no módulo
