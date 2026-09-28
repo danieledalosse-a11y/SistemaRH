@@ -358,13 +358,22 @@ gestorDpd(pa)
 
 // Saldo restante do PA (dias_direito - usados - abono - dias_antecipados)
 // CRÍTICO: deve subtrair dias_antecipados — correto como na visão RH (corrigido 2026-09-11)
+// CRÍTICO: excluir realizações do cálculo — só lançamentos p1/p2 afetam saldo (corrigido 2026-09-28)
 gestorSaldoPeriodo(pa)
 // Implementação correta:
-// const direito    = Number(periodo.dias_direito) || 30;
-// const abono      = Number(periodo._feriasRow?.abono_pecuniario) || 0;
+// const direito     = Number(periodo.dias_direito) || 30;
+// const abono       = Number(periodo._feriasRow?.abono_pecuniario) || 0;
 // const antecipados = Number(periodo._feriasRow?.dias_antecipados) || 0;
-// const usados     = GESTOR_LANCAMENTOS.filter(...).reduce(...);
+// const usados      = GESTOR_LANCAMENTOS
+//   .filter(l => String(l.periodo_id) === String(periodo.id)
+//             && !l._isRealizacao                              // ← obrigatório
+//             && ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()))
+//   .reduce((s, l) => s + (Number(l.dias) || 0), 0);
 // return direito - usados - abono - antecipados;
+//
+// Por quê: processGestorFerias adiciona realizações em GESTOR_LANCAMENTOS com _isRealizacao:true.
+// Somar realizações ao saldo causava saldo negativo — realizações são gozo físico, não dedução
+// de direito. A regra espelha calcSaldo() da visão RH, que nunca lê realizacoes no saldo.
 ```
 
 ## Visão Gestor — filtro KPI ativo
@@ -1076,6 +1085,8 @@ O `unshift` garante atualização otimista de `FERIAS_HISTORICO` mesmo que o POS
 | `gestorEnviarSolicitacao` | `'solicitado'` | `GESTOR_NOME_USUARIO` | `{ inicio, fim, dias, slot }` |
 | `rhAprovarSolicitado` | `'aprovado'` | `perfil.nome \|\| 'RH'` | `{ status: 'Aprovado' }` |
 | `rhRecusarSolicitado` | `'rejeitado'` | `perfil.nome \|\| 'RH'` | `{ status: 'Rejeitado', obs_gestor: motivo }` |
+| `grhEnviarSolicitarGozo` | `'gozo_solicitado'` | `GESTOR_NOME_USUARIO` | `{ saida, retorno, dias, lancIdx }` |
+| `rhAprovarGozoPendente` | `'gozo_aprovado'` | `perfil.nome \|\| 'RH'` | `{ saida, dias, lancIdx }` |
 
 `perfil` = `JSON.parse(localStorage.getItem('sb_perfil') || '{}')`.
 
@@ -1427,6 +1438,8 @@ Entradas `pendente_gestor` são renderizadas **somente** dentro do `gozoHtml` do
 ```js
 rhAprovarGozoPendente(colabKey, sbId, lancIdx, saida)
 // Remove o campo `status` da entry → gozo efetivado
+// Registra 'gozo_aprovado' em ferias_historico via _logAtiv
+// Atualiza Atividades recentes do RH e do Gestor
 
 rhRejeitarGozoPendente(colabKey, sbId, lancIdx, saida)
 // Remove a entry inteira da lista realizacoes
@@ -1440,9 +1453,15 @@ try {
 reg.realizacoes = nova;
 try { renderDrawerHistorico(colab); } catch(_) {}
 try { renderMetricas(); } catch(_) {}
+const _gozoAprov = nova.find(rx => Number(rx.lancIdx) === Number(lancIdx) && rx.saida === saida);
+if (colab?._sbColabId) try { await _logAtiv(sbId, colab._sbColabId, 'gozo_aprovado', perfil.nome || 'RH', { saida, dias: _gozoAprov?.dias ?? null, lancIdx: Number(lancIdx) }); } catch(_) {}
+renderRhAtividade();
+if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
 toast('✓ Gozo aprovado e registrado!');
 ```
-**Por quê:** erros na re-renderização (JS, não Supabase) eram capturados pelo mesmo catch e exibiam "Erro ao salvar" mesmo quando o PATCH havia funcionado.
+**Por quê (separar PATCH de re-render):** erros na re-renderização (JS, não Supabase) eram capturados pelo mesmo catch e exibiam "Erro ao salvar" mesmo quando o PATCH havia funcionado.
+
+**Por quê (`_logAtiv` em `grhEnviarSolicitarGozo` e `rhAprovarGozoPendente`, corrigido 2026-09-28):** o fluxo "Gestor solicita gozo → RH aprova" não registrava eventos em `ferias_historico`, fazendo Atividades recentes e Histórico ficarem vazios. A correção adicionou `_logAtiv('gozo_solicitado')` após o PATCH do Gestor e `_logAtiv('gozo_aprovado')` após a aprovação do RH, reutilizando a mesma infraestrutura dos outros fluxos.
 
 ### Contagem de pendentes
 
