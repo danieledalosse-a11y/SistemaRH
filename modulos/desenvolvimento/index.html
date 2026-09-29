@@ -346,6 +346,15 @@
   .comp-grid-list { display: flex; flex-direction: column; gap: 8px; }
   .comp-em-uso-aviso { font-size: 11px; color: var(--amber); background: var(--amber-bg); border-radius: 6px; padding: 2px 8px; display: inline-block; margin-top: 4px; }
 
+  /* Status dots na biblioteca de competências */
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.disponivel { background: #22c55e; }
+  .status-dot.em-uso     { background: #f59e0b; }
+  .status-dot.inativa    { background: #9ca3af; }
+  .comp-status-row { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-sec); }
+  .comp-status-label { color: var(--text-sec); }
+  .comp-card-top-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 5px; }
+
   /* ── configurações d&p ── */
   .conf-bloco { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
   .conf-bloco-titulo { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
@@ -667,9 +676,11 @@
         <option value="tecnico">Técnica</option>
       </select>
     </div>
-    <div class="form-group" id="compAreaGrp" style="display:none">
-      <label class="form-label">Área</label>
-      <input class="form-input" id="compArea" placeholder="Ex: Logística, Vendas, Atendimento">
+    <div class="form-group" id="compAreaGrp">
+      <label class="form-label">Área de aplicação</label>
+      <select class="form-input" id="compArea">
+        <option value="">Todas as áreas</option>
+      </select>
     </div>
     <div class="form-group">
       <label class="form-label">Descrição</label>
@@ -887,6 +898,7 @@ let _dpVersaoReadonly = false;
 let _dpBlocoAlvoId   = null;
 let _escalaOpcoesTemp = [];
 let _dpCriteriosEmUso = new Set(); // ids em versão publicada
+let _dpSetores        = [];        // setores de param_setor para área de competências
 let _compFiltroTipo   = '';
 let _dpTiposCalculo   = [];
 let _dpTiposAvaliador = [];
@@ -931,7 +943,8 @@ async function init() {
     loadDpEscalas(),
     loadDpTiposCalculo(),
     loadDpTiposAvaliador(),
-    loadDpTabelasConceito()
+    loadDpTabelasConceito(),
+    loadParamSetores()
   ]);
   populateSetorFilter();
   renderColabList();
@@ -1507,7 +1520,7 @@ async function renderCompetencias() {
   const tipoFiltro = _compFiltroTipo;
   const areaFiltro = document.getElementById('compFiltroArea')?.value || '';
 
-  // popular filtro de área
+  // popular filtro de área — coletar todas as áreas únicas de todos os critérios
   const areas = [...new Set(_dpCriterios.filter(c => c.area).map(c => c.area))].sort();
   const sel = document.getElementById('compFiltroArea');
   if (sel) {
@@ -1526,12 +1539,10 @@ async function renderCompetencias() {
     return;
   }
 
-  // agrupar por tipo → área
+  // agrupar por tipo
   const grupos = {};
   lista.forEach(c => {
-    const tipoLabel = c.tipo === 'comportamental' ? 'Comportamentais' : 'Técnicas';
-    const areaLabel = c.area || (c.tipo === 'comportamental' ? '' : 'Geral');
-    const chave = c.tipo === 'comportamental' ? tipoLabel : `Técnicas · ${areaLabel}`;
+    const chave = c.tipo === 'comportamental' ? 'Comportamentais' : 'Técnicas';
     if (!grupos[chave]) grupos[chave] = [];
     grupos[chave].push(c);
   });
@@ -1541,9 +1552,22 @@ async function renderCompetencias() {
     html += `<div class="comp-area-header">${grupo}</div><div class="comp-grid-list">`;
     comps.forEach(c => {
       const emUso = _dpCriteriosEmUso.has(c.id);
+      const isPredefinida = !!c.dev_competencias_id;
+      let statusDot, statusLabel;
+      if (!c.ativo) {
+        statusDot = 'status-dot inativa'; statusLabel = 'Inativa';
+      } else if (emUso) {
+        statusDot = 'status-dot em-uso'; statusLabel = 'Em uso';
+      } else {
+        statusDot = 'status-dot disponivel'; statusLabel = 'Disponível';
+      }
       const tipoTag = c.tipo === 'comportamental'
         ? `<span class="sbadge sbadge-gray" style="font-size:11px">Comportamental</span>`
         : `<span class="sbadge sbadge-blue" style="font-size:11px">Técnica${c.area?' · '+c.area:''}</span>`;
+      const predefinidaTag = isPredefinida
+        ? `<span class="sbadge" style="font-size:10px;background:#f0f0f0;color:#888;border:1px solid #ddd">Predefinida</span>`
+        : '';
+      const statusTag = `<span class="comp-status-row"><span class="${statusDot}"></span><span class="comp-status-label">${statusLabel}</span></span>`;
       const acoesHtml = emUso
         ? `<button class="btn btn-secondary btn-sm" onclick="duplicarCompetencia('${c.id}')">Duplicar</button>
            <button class="btn btn-secondary btn-sm" onclick="toggleCompetencia('${c.id}',${!c.ativo})">${c.ativo?'Desativar':'Ativar'}</button>`
@@ -1552,8 +1576,8 @@ async function renderCompetencias() {
            <button class="btn btn-secondary btn-sm" onclick="toggleCompetencia('${c.id}',${!c.ativo})">${c.ativo?'Desativar':'Ativar'}</button>`;
       html += `<div class="comp-card${c.ativo?'':' inativo'}">
         <div class="comp-card-body">
+          <div class="comp-card-top-row">${tipoTag}${predefinidaTag}${statusTag}</div>
           <div class="comp-card-nome">${c.nome}</div>
-          <div class="comp-card-meta" style="margin-bottom:${c.descricao?'4px':'0'}">${tipoTag}</div>
           ${c.descricao?`<div class="comp-card-desc">${c.descricao}</div>`:''}
           ${emUso?`<div class="comp-em-uso-aviso">Em uso em versão publicada — use Duplicar para adaptar</div>`:''}
         </div>
@@ -1591,9 +1615,8 @@ function abrirModalCompetencia(id, forceDuplicar) {
   document.getElementById('modalCompTitulo').textContent = isDuplicar ? 'Duplicar competência' : (c ? 'Editar competência' : 'Nova competência');
   document.getElementById('compNome').value = isDuplicar ? (c ? c.nome + ' (cópia)' : '') : (c ? c.nome : '');
   document.getElementById('compTipo').value = c ? c.tipo : 'comportamental';
-  document.getElementById('compArea').value = c ? (c.area || '') : '';
   document.getElementById('compDescricao').value = c ? (c.descricao || '') : '';
-  atualizarAreaVisibilidade();
+  popularSelectArea(c ? (c.area || '') : '');
 
   // bloquear edição quando em uso (não deve ocorrer — botão Editar some, mas defesa em profundidade)
   const readonly = emUso;
@@ -1611,16 +1634,26 @@ function fecharModalCompetencia() {
   document.getElementById('modalCompetencia').classList.remove('open');
 }
 
+function popularSelectArea(valorAtual) {
+  const sel = document.getElementById('compArea');
+  if (!sel) return;
+  sel.innerHTML = `<option value="">Todas as áreas</option>` +
+    _dpSetores.map(s => `<option value="${s.nome}" ${s.nome===valorAtual?'selected':''}>${s.nome}</option>`).join('');
+  sel.value = valorAtual || '';
+}
+
 function atualizarAreaVisibilidade() {
   const tipo = document.getElementById('compTipo').value;
-  document.getElementById('compAreaGrp').style.display = tipo === 'tecnico' ? '' : 'none';
+  if (tipo === 'comportamental') {
+    document.getElementById('compArea').value = '';
+  }
 }
 
 async function salvarCompetencia() {
   const nome = (document.getElementById('compNome').value || '').trim();
   if (!nome) { toast('Informe o nome da competência.', true); return; }
   const tipo = document.getElementById('compTipo').value;
-  const area = tipo === 'tecnico' ? (document.getElementById('compArea').value || '').trim() || null : null;
+  const area = (document.getElementById('compArea').value || '').trim() || null;
   const descricao = (document.getElementById('compDescricao').value || '').trim() || null;
   const editId = document.getElementById('compEditId').value;
 
@@ -1649,8 +1682,6 @@ async function duplicarCompetencia(id) {
 async function loadDpCriterios() {
   _dpCriterios = await sbGet('/rest/v1/dp_criterios?order=tipo.asc,nome.asc') || [];
   // detectar critérios em uso em versão publicada (para proteção de edição)
-  const emUso = await sbGet('/rest/v1/dp_versao_criterios?select=criterio_id&versao_id=in.(select id from dp_versoes where em_uso=eq.true)') || [];
-  // fallback: buscar via dp_versoes publicadas
   const versoesPub = await sbGet('/rest/v1/dp_versoes?em_uso=eq.true&select=id') || [];
   if (versoesPub.length) {
     const ids = versoesPub.map(v => v.id).join(',');
@@ -1686,6 +1717,15 @@ async function loadDpTabelasConceito() {
   allFaixas.forEach(f => {
     if (!_dpFaixasConceito[f.tabela_id]) _dpFaixasConceito[f.tabela_id] = [];
     _dpFaixasConceito[f.tabela_id].push(f);
+  });
+}
+
+async function loadParamSetores() {
+  const rows = await sbGet('/rest/v1/param_setor?ativo=eq.true&order=ordem.asc&select=id,descricao') || [];
+  // descricao vem como "148 - Compras" — extrair só o nome após o " - "
+  _dpSetores = rows.map(r => {
+    const partes = (r.descricao || '').split(' - ');
+    return { id: r.id, nome: partes.length > 1 ? partes.slice(1).join(' - ') : r.descricao };
   });
 }
 
