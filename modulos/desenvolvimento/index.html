@@ -712,7 +712,7 @@
 
 <!-- ══ MODAL: COMPETÊNCIA ══ -->
 <div class="modal-overlay" id="modalCompetencia">
-  <div class="modal" style="max-width:560px">
+  <div class="modal" style="max-width:520px">
     <div class="modal-title" id="modalCompTitulo">Nova competência</div>
     <input type="hidden" id="compEditId">
     <div id="compEmUsoAviso" style="display:none;padding:10px 14px;background:var(--amber-bg);color:var(--amber);border-radius:8px;font-size:12px;margin-bottom:12px">
@@ -722,11 +722,11 @@
     <!-- Nome -->
     <div class="form-group">
       <label class="form-label">Nome da competência *</label>
-      <input class="form-input" id="compNome" placeholder="Ex.: Organização, Atendimento ao Cliente, Conhecimento de Produtos">
+      <input class="form-input" id="compNome" placeholder="Ex.: Organização, Atendimento ao Cliente, Pontualidade">
     </div>
 
-    <!-- Tipo + Área em linha -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <!-- Tipo + Área -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Tipo *</label>
         <select class="form-input" id="compTipo" onchange="atualizarAreaVisibilidade()">
@@ -742,8 +742,8 @@
       </div>
     </div>
 
-    <!-- Divisor visual -->
-    <div style="border-top:1px solid var(--border-light);margin:18px 0 14px"></div>
+    <!-- Divisor -->
+    <div style="border-top:1px solid var(--border-light);margin-bottom:16px"></div>
 
     <!-- O que será avaliado -->
     <div class="form-group">
@@ -753,30 +753,11 @@
 
     <!-- Resultado esperado -->
     <div class="form-group">
-      <label class="form-label">Resultado esperado / Referência <span style="font-weight:400;color:var(--text-ter);font-size:11px">opcional</span></label>
-      <textarea class="form-input" id="compReferencia" rows="2" placeholder="O que esperamos encontrar? Ex.: Mantém suas atividades organizadas e cumpre os prazos acordados."></textarea>
-    </div>
-
-    <!-- Meta mensurável -->
-    <div style="border:1px solid var(--border-light);border-radius:10px;padding:14px 16px;margin-bottom:16px">
-      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">Meta mensurável <span style="font-weight:400;color:var(--text-ter);font-size:11px">opcional</span></div>
-      <div style="font-size:12px;color:var(--text-sec);margin-bottom:12px">Essa meta é uma referência conceitual. Cada modelo define como medir na prática.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group" style="margin-bottom:0">
-          <label class="form-label" style="font-size:11px">Valor esperado</label>
-          <input class="form-input" id="compMetaValor" type="number" step="any" placeholder="Ex.: 90">
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label class="form-label" style="font-size:11px">Unidade</label>
-          <select class="form-input" id="compMetaUnidade" onchange="toggleMetaOutro(this.value)">
-            <option value="">— Selecione —</option>
-          </select>
-        </div>
-      </div>
-      <div id="compMetaOutroGrp" style="display:none;margin-top:10px">
-        <label class="form-label" style="font-size:11px">Especifique a unidade</label>
-        <input class="form-input" id="compMetaOutro" placeholder="Ex.: clientes atendidos, peças produzidas">
-      </div>
+      <label class="form-label">
+        Resultado esperado
+        <span style="font-weight:400;color:var(--text-ter);font-size:11px;margin-left:4px">opcional</span>
+      </label>
+      <textarea class="form-input" id="compReferencia" rows="3" placeholder="Descreva de forma objetiva o que esperamos encontrar ou observar. Essa informação servirá como referência para o avaliador."></textarea>
     </div>
 
     <div class="modal-footer">
@@ -992,7 +973,6 @@ let _dpBlocoAlvoId   = null;
 let _escalaOpcoesTemp = [];
 let _dpCriteriosEmUso = new Set(); // ids em versão publicada
 let _dpSetores        = [];        // setores de param_setor para área de competências
-let _dpMetaUnidades   = [];        // dp_meta_unidades — unidades de meta mensurável
 let _bibFiltroTipo    = '';
 let _catFiltroTipo    = '';
 let _dpTiposCalculo   = [];
@@ -1039,8 +1019,7 @@ async function init() {
     loadDpTiposCalculo(),
     loadDpTiposAvaliador(),
     loadDpTabelasConceito(),
-    loadParamSetores(),
-    loadDpMetaUnidades()
+    loadParamSetores()
   ]);
   populateSetorFilter();
   renderColabList();
@@ -1689,9 +1668,6 @@ async function renderBiblioteca() {
            <button class="btn btn-secondary btn-sm" onclick="duplicarCompetencia('${c.id}')">Duplicar</button>
            <button class="btn btn-secondary btn-sm" onclick="toggleCompetencia('${c.id}',${!c.ativo})">${c.ativo?'Desativar':'Ativar'}</button>`;
 
-      const metaHtml = c.meta_valor != null
-        ? `<div style="margin-top:4px;font-size:11px;color:var(--text-sec)">Meta: <strong>${c.meta_valor}${c.meta_unidade?' '+c.meta_unidade:''}</strong></div>`
-        : '';
       const refHtml = c.referencia
         ? `<div class="comp-card-ref">${c.referencia}</div>`
         : '';
@@ -1701,7 +1677,7 @@ async function renderBiblioteca() {
           <div class="comp-card-top-row">${tipoTag}${statusTag}</div>
           <div class="comp-card-nome">${c.nome}</div>
           ${c.descricao?`<div class="comp-card-desc">${c.descricao}</div>`:''}
-          ${refHtml}${metaHtml}
+          ${refHtml}
           ${emUso?`<div class="comp-em-uso-aviso">Em uso em versão publicada — use Duplicar para adaptar</div>`:''}
         </div>
         <div class="comp-card-actions">${acoesHtml}</div>
@@ -1824,22 +1800,14 @@ function abrirModalCompetencia(id, forceDuplicar) {
   document.getElementById('compTipo').value = c ? c.tipo : 'comportamental';
   document.getElementById('compDescricao').value = c ? (c.descricao || '') : '';
   popularSelectArea(c ? (c.area || '') : '');
-  popularSelectMetaUnidade(c ? (c.meta_unidade || '') : '');
   document.getElementById('compReferencia').value = c ? (c.referencia || '') : '';
-  document.getElementById('compMetaValor').value = c ? (c.meta_valor ?? '') : '';
-  if (c && c.meta_unidade === 'outro') {
-    document.getElementById('compMetaOutro').value = c.meta_unidade_outro || '';
-  } else {
-    document.getElementById('compMetaOutro').value = '';
-  }
 
   // bloquear edição quando em uso (não deve ocorrer — botão Editar some, mas defesa em profundidade)
   const readonly = emUso;
-  ['compNome','compArea','compDescricao','compReferencia','compMetaValor','compMetaOutro'].forEach(fId => {
+  ['compNome','compArea','compDescricao','compReferencia'].forEach(fId => {
     const el = document.getElementById(fId); if (el) el.disabled = readonly;
   });
   document.getElementById('compTipo').disabled = readonly;
-  document.getElementById('compMetaUnidade').disabled = readonly;
   document.getElementById('btnSalvarComp').style.display = readonly ? 'none' : '';
   document.getElementById('compEmUsoAviso').style.display = readonly ? '' : 'none';
 
@@ -1858,19 +1826,6 @@ function popularSelectArea(valorAtual) {
   sel.value = valorAtual || '';
 }
 
-function popularSelectMetaUnidade(valorAtual) {
-  const sel = document.getElementById('compMetaUnidade');
-  if (!sel) return;
-  sel.innerHTML = `<option value="">— Selecione —</option>` +
-    _dpMetaUnidades.map(u => `<option value="${u.simbolo}" ${u.simbolo===valorAtual?'selected':''}>${u.label} (${u.simbolo})</option>`).join('');
-  sel.value = valorAtual || '';
-  toggleMetaOutro(valorAtual);
-}
-
-function toggleMetaOutro(simbolo) {
-  const grp = document.getElementById('compMetaOutroGrp');
-  if (grp) grp.style.display = simbolo === 'outro' ? '' : 'none';
-}
 
 function atualizarAreaVisibilidade() {
   const tipo = document.getElementById('compTipo').value;
@@ -1886,21 +1841,14 @@ async function salvarCompetencia() {
   const area = (document.getElementById('compArea').value || '').trim() || null;
   const descricao = (document.getElementById('compDescricao').value || '').trim() || null;
   const referencia = (document.getElementById('compReferencia').value || '').trim() || null;
-  const meta_valor_raw = document.getElementById('compMetaValor').value;
-  const meta_valor = meta_valor_raw !== '' ? parseFloat(meta_valor_raw) : null;
-  let meta_unidade = document.getElementById('compMetaUnidade').value || null;
-  if (meta_unidade === 'outro') {
-    const outro = (document.getElementById('compMetaOutro').value || '').trim();
-    meta_unidade = outro || null;
-  }
   const editId = document.getElementById('compEditId').value;
 
   if (editId) {
-    const ok = await sbPatch(`/rest/v1/dp_criterios?id=eq.${editId}`, { nome, tipo, area, descricao, referencia, meta_valor, meta_unidade });
+    const ok = await sbPatch(`/rest/v1/dp_criterios?id=eq.${editId}`, { nome, tipo, area, descricao, referencia });
     if (!ok) { toast('Erro ao salvar competência.', true); return; }
     toast('Competência atualizada.');
   } else {
-    const ok = await sbPost('/rest/v1/dp_criterios', { nome, tipo, area, descricao, referencia, meta_valor, meta_unidade, ativo: true, na_biblioteca: true });
+    const ok = await sbPost('/rest/v1/dp_criterios', { nome, tipo, area, descricao, referencia, ativo: true, na_biblioteca: true });
     if (!ok || !ok[0]) { toast('Erro ao criar competência: ' + sbErrMsg(), true); return; }
     toast('Competência criada.');
   }
@@ -1959,9 +1907,6 @@ async function loadDpTabelasConceito() {
   });
 }
 
-async function loadDpMetaUnidades() {
-  _dpMetaUnidades = await sbGet('/rest/v1/dp_meta_unidades?ativo=eq.true&order=ordem.asc') || [];
-}
 
 async function loadParamSetores() {
   const rows = await sbGet('/rest/v1/param_setor?ativo=eq.true&order=ordem.asc&select=id,descricao') || [];
@@ -1978,7 +1923,7 @@ async function loadParamSetores() {
 async function renderConfiguracoes() {
   const el = document.getElementById('confBody');
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
-  await Promise.all([loadDpTiposCalculo(), loadDpTiposAvaliador(), loadDpTabelasConceito(), loadDpMetaUnidades()]);
+  await Promise.all([loadDpTiposCalculo(), loadDpTiposAvaliador(), loadDpTabelasConceito()]);
   el.innerHTML = `
     <!-- Bloco: Avaliadores -->
     <div class="conf-bloco">
@@ -2020,16 +1965,6 @@ async function renderConfiguracoes() {
       <table class="conf-table">
         <thead><tr><th>Nome</th><th>Descrição</th><th>Disponível</th></tr></thead>
         <tbody id="confCalculo">${renderTiposCalculo()}</tbody>
-      </table>
-    </div>
-
-    <!-- Bloco: Unidades de Meta -->
-    <div class="conf-bloco">
-      <div class="conf-bloco-titulo">Unidades de Meta</div>
-      <div class="conf-bloco-desc">Unidades disponíveis para metas mensuráveis nas competências da biblioteca.</div>
-      <table class="conf-table">
-        <thead><tr><th>Unidade</th><th>Símbolo</th><th>Ativo</th></tr></thead>
-        <tbody id="confMetaUnidades">${renderMetaUnidades()}</tbody>
       </table>
     </div>
   `;
@@ -2091,15 +2026,6 @@ function renderTiposCalculo() {
     </tr>`).join('');
 }
 
-function renderMetaUnidades() {
-  if (!_dpMetaUnidades.length) return `<tr><td colspan="3" style="color:var(--text-ter);font-size:12px">Nenhuma unidade cadastrada.</td></tr>`;
-  return _dpMetaUnidades.map(u => `
-    <tr>
-      <td>${u.label}</td>
-      <td><code style="font-size:12px;background:var(--border-light);padding:1px 6px;border-radius:4px">${u.simbolo}</code></td>
-      <td style="text-align:center"><input type="checkbox" ${u.ativo?'checked':''} disabled style="accent-color:var(--accent)"></td>
-    </tr>`).join('');
-}
 
 async function salvarAvaliador(id, campo, valor) {
   await sbPatch(`/rest/v1/dp_tipos_avaliador?id=eq.${id}`, { [campo]: valor });
