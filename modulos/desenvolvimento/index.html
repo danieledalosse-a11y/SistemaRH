@@ -575,19 +575,10 @@
 <div class="modal-overlay" id="modalNovoModelo">
   <div class="modal">
     <div class="modal-title">Novo Modelo de Avaliação</div>
-    <div class="modal-sub">Defina o nome e o tipo de avaliador.</div>
+    <div class="modal-sub">Defina o nome do modelo. Uma versão V1 será criada automaticamente.</div>
     <div class="form-group">
       <label class="form-label">Nome *</label>
       <input class="form-input" id="novoModeloNome" placeholder="Ex: Avaliação de Desempenho Operacional">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Tipo de avaliador *</label>
-      <select class="form-input" id="novoModeloTipo">
-        <option value="gestor_direto">Gestor direto</option>
-        <option value="autoavaliacao">Auto-avaliação</option>
-        <option value="rh">RH</option>
-        <option value="especifico">Avaliador específico</option>
-      </select>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="document.getElementById('modalNovoModelo').classList.remove('open')">Cancelar</button>
@@ -1452,7 +1443,7 @@ async function renderModelos() {
             : `<button class="btn btn-secondary btn-sm" onclick="abrirDrawerVersao('${v.id}',false)">Configurar</button>
                <button class="btn btn-primary btn-sm" onclick="publicarVersaoDirecto('${v.id}')">Publicar</button>`;
           return `<div class="versao-row">
-            <span class="versao-label">${v.versao||'v?'}</span>
+            <span class="versao-label">v${v.numero||'?'}</span>
             <span class="versao-meta">${CALC_LABEL[v.tipo_calculo]||v.tipo_calculo||'—'}</span>
             ${statusBadge}
             <div class="versao-actions">${btns}</div>
@@ -1466,7 +1457,7 @@ async function renderModelos() {
       <div class="modelo-card-head">
         <div class="modelo-card-info">
           <div class="modelo-card-nome">${m.nome}</div>
-          <div class="modelo-card-meta">${TIPO_LABEL[m.tipo_avaliador]||m.tipo_avaliador||'—'}</div>
+          <div class="modelo-card-meta">${(versoes.length||0)} versão(ões)</div>
         </div>
         ${atBadge}
       </div>
@@ -1484,15 +1475,17 @@ function abrirModalNovoModelo() {
 async function salvarNovoModelo() {
   const nome = (document.getElementById('novoModeloNome').value||'').trim();
   if (!nome) { toast('Informe o nome do modelo.', true); return; }
-  const tipo_avaliador = document.getElementById('novoModeloTipo').value;
-  const ok = await sbPost('/rest/v1/dp_modelos', { nome, tipo_avaliador, ativo: true });
-  if (ok) {
-    toast('Modelo criado.');
-    document.getElementById('modalNovoModelo').classList.remove('open');
-    renderModelos();
-  } else {
-    toast('Erro ao criar modelo: ' + sbErrMsg(), true);
-  }
+  const modelo = await sbPost('/rest/v1/dp_modelos', { nome, ativo: true });
+  if (!modelo || !modelo[0]) { toast('Erro ao criar modelo: ' + sbErrMsg(), true); return; }
+  // Criar versão V1 automaticamente
+  const versao = await sbPost('/rest/v1/dp_versoes', {
+    modelo_id: modelo[0].id, numero: 1, tipo_calculo: 'media',
+    converte_para_conceito: false
+  });
+  if (!versao) { toast('Modelo criado mas erro ao criar versão: ' + sbErrMsg(), true); }
+  else { toast('Modelo criado.'); }
+  document.getElementById('modalNovoModelo').classList.remove('open');
+  renderModelos();
 }
 
 async function criarVersaoModelo(modeloId) {
@@ -1501,9 +1494,8 @@ async function criarVersaoModelo(modeloId) {
   const existentes = _dpVersoes[modeloId] || [];
   const proxNum = existentes.length + 1;
   const ok = await sbPost('/rest/v1/dp_versoes', {
-    modelo_id: modeloId, versao: `v${proxNum}`, em_uso: false,
-    tipo_calculo: 'media', tipo_avaliador: modelo.tipo_avaliador,
-    nota_maxima: 5, converte_para_conceito: false, faixas_conceito: null
+    modelo_id: modeloId, numero: proxNum,
+    tipo_calculo: 'media', converte_para_conceito: false
   });
   if (ok && ok[0]) {
     toast('Versão criada.');
@@ -1521,9 +1513,9 @@ async function novaVersaoBaseada(versaoId) {
   const existentes = _dpVersoes[base.modelo_id] || [];
   const proxNum = existentes.length + 1;
   const novaRes = await sbPost('/rest/v1/dp_versoes', {
-    modelo_id: base.modelo_id, versao: `v${proxNum}`, em_uso: false,
-    tipo_calculo: base.tipo_calculo, tipo_avaliador: base.tipo_avaliador,
-    nota_maxima: base.nota_maxima, converte_para_conceito: base.converte_para_conceito,
+    modelo_id: base.modelo_id, numero: proxNum,
+    tipo_calculo: base.tipo_calculo,
+    converte_para_conceito: base.converte_para_conceito,
     faixas_conceito: base.faixas_conceito
   });
   if (!novaRes || !novaRes[0]) { toast('Erro ao criar nova versão.', true); return; }
@@ -1730,12 +1722,9 @@ async function salvarConfigVersao() {
   let faixas = null;
   if (converte) { try { faixas = JSON.parse(document.getElementById('dvFaixas').value||'null'); } catch {} }
   await sbPatch(`/rest/v1/dp_versoes?id=eq.${_dpVersaoAtual.id}`, {
-    tipo_calculo: calculo, tipo_avaliador: tipoAv,
-    nota_maxima: notaMax, converte_para_conceito: converte, faixas_conceito: faixas
+    tipo_calculo: calculo, converte_para_conceito: converte, faixas_conceito: faixas
   });
   _dpVersaoAtual.tipo_calculo = calculo;
-  _dpVersaoAtual.tipo_avaliador = tipoAv;
-  _dpVersaoAtual.nota_maxima = notaMax;
   _dpVersaoAtual.converte_para_conceito = converte;
   _dpVersaoAtual.faixas_conceito = faixas;
   renderVersaoCriterios(); // atualiza coluna peso se tipo_calculo mudou
