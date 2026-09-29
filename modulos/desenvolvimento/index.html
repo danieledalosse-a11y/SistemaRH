@@ -583,10 +583,10 @@
     <div class="form-group">
       <label class="form-label">Tipo de avaliador *</label>
       <select class="form-input" id="novoModeloTipo">
-        <option value="auto">Auto-avaliação</option>
         <option value="gestor_direto">Gestor direto</option>
-        <option value="gestor_e_auto">Gestor e Auto</option>
-        <option value="multiplo">Múltiplo</option>
+        <option value="autoavaliacao">Auto-avaliação</option>
+        <option value="rh">RH</option>
+        <option value="especifico">Avaliador específico</option>
       </select>
     </div>
     <div class="modal-footer">
@@ -692,9 +692,11 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
 
 async function sbGet(path)          { const r = await fetch(SB_URL+path,{headers:HDR}); return r.ok ? r.json() : []; }
-async function sbPost(path,body)    { const r = await fetch(SB_URL+path,{method:'POST',  headers:HDR,body:JSON.stringify(body)}); return r.ok ? r.json() : null; }
-async function sbPatch(path,body)   { const r = await fetch(SB_URL+path,{method:'PATCH', headers:HDR,body:JSON.stringify(body)}); return r.ok ? r.json() : null; }
-async function sbDelete(path)       { const r = await fetch(SB_URL+path,{method:'DELETE',headers:{...HDR,Prefer:'return=minimal'}}); return r.ok; }
+async function sbPost(path,body)    { const r = await fetch(SB_URL+path,{method:'POST',  headers:HDR,body:JSON.stringify(body)}); if (r.ok) return r.json(); _sbLastError = await r.json().catch(()=>({message:'HTTP '+r.status})); return null; }
+async function sbPatch(path,body)   { const r = await fetch(SB_URL+path,{method:'PATCH', headers:HDR,body:JSON.stringify(body)}); if (r.ok) return r.json(); _sbLastError = await r.json().catch(()=>({message:'HTTP '+r.status})); return null; }
+async function sbDelete(path)       { const r = await fetch(SB_URL+path,{method:'DELETE',headers:{...HDR,Prefer:'return=minimal'}}); if (!r.ok) _sbLastError = await r.json().catch(()=>({message:'HTTP '+r.status})); return r.ok; }
+let _sbLastError = null;
+function sbErrMsg() { const e = _sbLastError; _sbLastError = null; return e ? (e.message || e.details || e.hint || JSON.stringify(e)) : 'Erro desconhecido'; }
 
 /* ─────────────────────────────────────────────
    AUTH
@@ -1433,7 +1435,7 @@ async function renderModelos() {
     el.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h4"/></svg><p>Nenhum modelo cadastrado. Crie o primeiro modelo de avaliação.</p></div>`;
     return;
   }
-  const TIPO_LABEL = { auto:'Auto-avaliação', gestor_direto:'Gestor direto', gestor_e_auto:'Gestor e Auto', multiplo:'Múltiplo' };
+  const TIPO_LABEL = { gestor_direto:'Gestor direto', autoavaliacao:'Auto-avaliação', rh:'RH', especifico:'Avaliador específico' };
   const CALC_LABEL = { soma:'Soma', media:'Média', media_ponderada:'Média ponderada', percentual_atingimento:'% Atingimento', qualitativo:'Qualitativo' };
   el.innerHTML = _dpModelos.map(m => {
     const versoes = _dpVersoes[m.id] || [];
@@ -1474,7 +1476,7 @@ async function renderModelos() {
 
 function abrirModalNovoModelo() {
   document.getElementById('novoModeloNome').value = '';
-  document.getElementById('novoModeloTipo').value = 'auto';
+  document.getElementById('novoModeloTipo').value = 'gestor_direto';
   document.getElementById('modalNovoModelo').classList.add('open');
 }
 
@@ -1488,7 +1490,7 @@ async function salvarNovoModelo() {
     document.getElementById('modalNovoModelo').classList.remove('open');
     renderModelos();
   } else {
-    toast('Erro ao criar modelo.', true);
+    toast('Erro ao criar modelo: ' + sbErrMsg(), true);
   }
 }
 
@@ -1507,7 +1509,7 @@ async function criarVersaoModelo(modeloId) {
     await renderModelos();
     abrirDrawerVersao(ok[0].id, false);
   } else {
-    toast('Erro ao criar versão.', true);
+    toast('Erro ao criar versão: ' + sbErrMsg(), true);
   }
 }
 
@@ -1679,8 +1681,8 @@ function renderVersaoConfigs() {
   const readonly = _dpVersaoReadonly;
   const CALC_OPTS = ['soma','media','media_ponderada','percentual_atingimento','qualitativo'];
   const CALC_LABEL = { soma:'Soma', media:'Média', media_ponderada:'Média ponderada', percentual_atingimento:'% Atingimento', qualitativo:'Qualitativo' };
-  const TIPO_OPTS  = ['auto','gestor_direto','gestor_e_auto','multiplo'];
-  const TIPO_LABEL = { auto:'Auto-avaliação', gestor_direto:'Gestor direto', gestor_e_auto:'Gestor e Auto', multiplo:'Múltiplo' };
+  const TIPO_OPTS  = ['gestor_direto','autoavaliacao','rh','especifico'];
+  const TIPO_LABEL = { gestor_direto:'Gestor direto', autoavaliacao:'Auto-avaliação', rh:'RH', especifico:'Avaliador específico' };
   el.innerHTML = `
     <div class="form-group">
       <label class="form-label">Tipo de cálculo</label>

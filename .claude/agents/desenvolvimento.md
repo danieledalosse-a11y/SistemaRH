@@ -266,8 +266,8 @@ criado_em TIMESTAMPTZ
 | `dp_tipo_criterio` | `tecnico`, `comportamental`, `resultado`, `outros` |
 | `dp_tipo_resposta` | `binario`, `escala`, `numerico`, `numerico_com_meta`, `conceito`, `texto` |
 | `dp_tipo_calculo` | `soma`, `media`, `media_ponderada`, `percentual_atingimento`, `qualitativo` |
-| `dp_tipo_avaliador` | `gestor_direto`, `auto`, `gestor_e_auto`, `multiplo` |
-| `dp_status_ciclo` | `rascunho`, `aberto`, `fechado` |
+| `dp_tipo_avaliador` | `gestor_direto`, `autoavaliacao`, `rh`, `especifico` |
+| `dp_status_ciclo` | `rascunho`, `aberto`, `em_andamento`, `encerrado`, `cancelado` |
 | `dp_status_avaliacao` | `nao_iniciada`, `em_andamento`, `concluida`, `publicada` |
 | `dp_tipo_regra_financeira` | `percentual_salario`, `valor_fixo`, `por_criterio` |
 | `dp_status_resultado_financeiro` | `calculado`, `ajustado`, `aprovado`, `pago` |
