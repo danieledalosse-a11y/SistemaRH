@@ -315,13 +315,66 @@ Ao concluir, faz PATCH em `colaboradores`:
 
 Colaboradores transferidos de CNPJ têm `data_ingresso_grupo` preenchida manualmente (a data em que entraram no grupo, não na empresa atual). Esse campo é usado no relatório Tempo de Casa como referência prioritária sobre `data_admissao`.
 
+## Automação central — Edge Function `verificar-workflows` (set/2026)
+
+**Fonte única de verdade para todas as automações periódicas.** Roda via `pg_cron` todo dia às 07h (Brasília) / 10h UTC.
+
+### Arquitetura
+
+```
+pg_cron → net.http_post → Edge Function verificar-workflows → Supabase (service_role)
+```
+
+- Edge Function: `supabase/functions/verificar-workflows/index.ts`
+- Job: `verificar-workflows-diario`, schedule `0 10 * * *`, `active = true`
+- A autenticação usa a `service_role_key` embutida diretamente no comando do cron job (armazenada em `cron.job.command`, acessível apenas a superusuários do banco)
+
+### Rotinas da Edge Function
+
+| Função | O que faz |
+|---|---|
+| `verificarBonusIndicacao()` | Cria `bonus_indicacao` para o **indicador** quando indicado ≥ 75 dias; janela até 30 dias após vencer |
+| `verificarExperiencia()` | Cria `prorrogacao_experiencia` (≤ 12 dias para 45 dias) e `avaliacao_final_experiencia` (≤ 12 dias para 90 dias) |
+| `limparExperienciaVencida()` | Atualiza `em_experiencia = false` em colaboradores com período já encerrado |
+
+### `verificarBonusIndicacao()` — regra de negócio
+
+- **Quem recebe o processo:** o **indicador** (quem fez a indicação), não o indicado
+- Condição de entrada: `indicado_por_id IS NOT NULL AND indicacao_bonus_gerado = false AND ativo = true`
+- Gatilho: `hoje >= data_admissao + 75 dias`
+- Janela de segurança: também processa até 30 dias após os 90 dias
+- Verifica que o indicador ainda está `ativo = true` antes de criar
+- Verifica duplicata por `colaborador_id + dados_extras.indicado_id`
+- Valor: buscado em `param_bonus_indicacao` pela data de admissão do indicado
+- Após criar: marca `indicacao_bonus_gerado = true` no indicado
+- `criado_por`: `'Sistema (automático)'`
+
+### Histórico de correção (set/2026)
+
+O job existia e estava `active=true`, mas usava `current_setting('app.service_role_key', true)` que nunca foi configurado no banco → cada execução chamava a Edge Function com header vazio → 401 silencioso → nenhum workflow gerado.
+
+**Correção aplicada (28/09/2026):** job recriado com a `service_role_key` embutida diretamente no `net.http_post`. A Edge Function não foi alterada.
+
+**Se o cron parar no futuro:** verificar no SQL Editor:
+```sql
+SELECT jobname, schedule, active FROM cron.job WHERE jobname = 'verificar-workflows-diario';
+```
+Se não existir ou `active = false`, recriar com `cron.unschedule` + `cron.schedule` com a chave atual (Settings → API → service_role).
+
+### Rotina duplicada no Cadastro — removida (29/09/2026)
+
+`modulos/cadastro/index.html` tinha `verificarBonusIndicacao()` local (commit d409129). Essa versão criava o processo para o **indicado** em vez do indicador (incorreto) e não verificava duplicata. **Removida após validação do cron** — o cron `verificar-workflows-diario` está ativo e confirmado em execução diária (runid 34, 29/09/2026 10h UTC).
+
+---
+
 ## Workflows automáticos disparados pelo módulo Cadastro
 
-Os workflows abaixo são criados automaticamente pelo módulo Cadastro (`modulos/cadastro/index.html`) ao carregar, via funções chamadas em `carregarDoSupabase()`:
+O módulo Cadastro (`modulos/cadastro/index.html`) dispara localmente via `carregarDoSupabase()` apenas:
 
 ```js
-verificarBonusIndicacao();
 verificarExperienciaWorkflows();
+// verificarBonusIndicacao() foi removida em 29/09/2026 (commit d409129)
+// — automação de bônus centralizada no cron verificar-workflows-diario
 ```
 
 ### `verificarExperienciaWorkflows()`
@@ -336,13 +389,6 @@ Varre `COLABORADORES` em busca de colaboradores com `em_experiencia=true` e cria
 - Período do 1º prazo: `periodo_experiencia` (coluna da tabela) ou 45 dias como fallback
 - Período do 2º prazo: `data_fim_experiencia` (coluna) ou `data_admissao + 90d` como fallback
 - Após criar o processo, faz PATCH `prorrogacao_45_gerado=true` / `avaliacao_90_gerado=true` no colaborador
-
-### `verificarBonusIndicacao()`
-
-Cria workflow `bonus_indicacao` quando colaborador indicado completa **≤ 12 dias** antes dos 90 dias de casa:
-
-- Condição de entrada: `indicado_por_id != null && indicacao_bonus_gerado == false && ativo == true`
-- Após criar o processo, faz PATCH `indicacao_bonus_gerado=true`
 
 ### Armadilha crítica — escopo de variáveis
 
