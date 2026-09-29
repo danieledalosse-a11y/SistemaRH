@@ -688,8 +688,8 @@
    CONFIG SUPABASE
 ───────────────────────────────────────────── */
 const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1anRieHdzc2lvZmlpYWxuYmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNjMxMzUsImV4cCI6MjA2MDkzOTEzNX0.KdWamfJDm3i0mPJN59-OKqFCzR4h4GVgxJCwvknH7SA';
-const HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
+const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
+let HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
 
 async function sbGet(path)          { const r = await fetch(SB_URL+path,{headers:HDR}); return r.ok ? r.json() : []; }
 async function sbPost(path,body)    { const r = await fetch(SB_URL+path,{method:'POST',  headers:HDR,body:JSON.stringify(body)}); if (r.ok) return r.json(); _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; return null; }
@@ -721,6 +721,7 @@ function initAuth() {
   guardModulo('desenvolvimento');
   const s = getSession();
   if (!s) { window.location.href = '../../login.html'; return; }
+  HDR = { apikey: SB_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
   _perfil = s.perfil || 'rh';
   const nome = s.nome || s.email || '—';
   const iniciais = nome.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
