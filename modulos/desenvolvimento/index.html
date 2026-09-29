@@ -329,6 +329,19 @@
   .btn-rm-opcao { background: none; border: none; cursor: pointer; color: var(--text-ter); padding: 4px; border-radius: 4px; display: flex; align-items: center; transition: color 0.15s; flex-shrink: 0; }
   .btn-rm-opcao:hover { color: var(--red); }
 
+  /* ── configurações d&p ── */
+  .conf-bloco { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+  .conf-bloco-titulo { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .conf-bloco-desc { font-size: 12px; color: var(--text-sec); margin-bottom: 14px; }
+  .conf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .conf-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text-ter); text-transform: uppercase; letter-spacing: .04em; padding: 0 8px 8px; }
+  .conf-table td { padding: 5px 8px; border-top: 1px solid var(--border-light); vertical-align: middle; }
+  .form-input-sm { padding: 5px 8px; font-size: 12px; }
+  .tabela-conceito-card { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .tabela-conceito-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .faixas-preview { display: flex; flex-wrap: wrap; gap: 6px; }
+  .faixa-chip { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--border-light); }
+
   /* ── responsive ── */
   @media (max-width: 900px) {
     .grid-colab { grid-template-columns: 1.5fr 1fr 1fr; }
@@ -363,6 +376,7 @@
   <button class="mod-tab" onclick="showSec('competencias',this)">Competências</button>
   <button class="mod-tab" onclick="showSec('modelos',this)">Modelos</button>
   <button class="mod-tab" onclick="showSec('escalas',this)">Escalas</button>
+  <button class="mod-tab" onclick="showSec('configuracoes',this)">Configurações D&amp;P</button>
 </div>
 
 <div class="container">
@@ -479,6 +493,17 @@
       </button>
     </div>
     <div id="escalasList"><div class="loader"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- ══ SEC: CONFIGURAÇÕES D&P ══ -->
+  <div id="sec-configuracoes" class="sec">
+    <div class="toolbar">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:600;margin-bottom:2px">Configurações D&amp;P</div>
+        <div style="font-size:13px;color:var(--text-sec)">Parâmetros globais do módulo de Desenvolvimento &amp; Performance.</div>
+      </div>
+    </div>
+    <div id="confBody"><div class="loader"><div class="spinner"></div></div></div>
   </div>
 
 </div><!-- /container -->
@@ -618,6 +643,49 @@
   </div>
 </div>
 
+<!-- ══ MODAL: NOVA TABELA DE CONCEITO ══ -->
+<div class="modal-overlay" id="modalNovaTabela">
+  <div class="modal">
+    <div class="modal-title">Nova Tabela de Conceito</div>
+    <div class="modal-sub">Defina o nome e, opcionalmente, uma descrição. As faixas serão configuradas após a criação.</div>
+    <div class="form-group">
+      <label class="form-label">Nome *</label>
+      <input class="form-input" id="novaTabelaNome" placeholder="Ex: Escala 5 Níveis">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição</label>
+      <input class="form-input" id="novaTabelaDesc" placeholder="Descrição opcional">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('modalNovaTabela').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarNovaTabela()">Criar tabela</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DRAWER: FAIXAS DE CONCEITO ══ -->
+<div class="drawer-overlay" id="drawerFaixasOverlay" onclick="fecharDrawerFaixas()"></div>
+<div class="drawer-versao" id="drawerFaixas">
+  <div class="drawer-head">
+    <div class="drawer-person-info">
+      <div class="drawer-person-name" id="dvFaixasNome">—</div>
+      <div class="drawer-person-sub">Tabela de conceito</div>
+    </div>
+    <button class="drawer-close" onclick="fecharDrawerFaixas()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div style="font-size:12px;color:var(--text-sec);margin-bottom:12px">Defina as faixas de notas e seus respectivos conceitos. As cores são opcionais.</div>
+    <div id="dvFaixasBody"></div>
+    <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="adicionarFaixa()">+ Adicionar faixa</button>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-secondary" onclick="fecharDrawerFaixas()">Cancelar</button>
+    <button class="btn btn-primary" onclick="salvarFaixas()">Salvar faixas</button>
+  </div>
+</div>
+
 <!-- ══ MODAL: SELECIONAR CRITÉRIO ══ -->
 <div class="modal-overlay" id="modalSelecionarCriterio">
   <div class="modal">
@@ -748,6 +816,10 @@ let _dpVersaoBlocos  = [];
 let _dpVersaoReadonly = false;
 let _dpBlocoAlvoId   = null;
 let _escalaOpcoesTemp = [];
+let _dpTiposCalculo   = [];
+let _dpTiposAvaliador = [];
+let _dpTabelasConceito = [];
+let _dpFaixasConceito  = {}; // tabela_id -> [faixas]
 
 /* ─────────────────────────────────────────────
    NAVEGAÇÃO
@@ -757,10 +829,11 @@ function showSec(id, btn) {
   document.querySelectorAll('.mod-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('sec-'+id).classList.add('active');
   btn.classList.add('active');
-  if (id === 'ciclos')        renderCiclos();
-  if (id === 'competencias')  renderCompetencias();
-  if (id === 'modelos')       renderModelos();
-  if (id === 'escalas')       renderEscalas();
+  if (id === 'ciclos')          renderCiclos();
+  if (id === 'competencias')    renderCompetencias();
+  if (id === 'modelos')         renderModelos();
+  if (id === 'escalas')         renderEscalas();
+  if (id === 'configuracoes')   renderConfiguracoes();
 }
 function showDrawerTab(id, btn) {
   document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
@@ -783,7 +856,10 @@ async function init() {
     loadCiclos(),
     loadCompetencias(),
     loadDpCriterios(),
-    loadDpEscalas()
+    loadDpEscalas(),
+    loadDpTiposCalculo(),
+    loadDpTiposAvaliador(),
+    loadDpTabelasConceito()
   ]);
   populateSetorFilter();
   renderColabList();
@@ -1405,6 +1481,253 @@ async function loadDpEscalas() {
   });
 }
 
+async function loadDpTiposCalculo() {
+  _dpTiposCalculo = await sbGet('/rest/v1/dp_tipos_calculo_config?order=ordem.asc') || [];
+}
+
+async function loadDpTiposAvaliador() {
+  _dpTiposAvaliador = await sbGet('/rest/v1/dp_tipos_avaliador?order=ordem.asc') || [];
+}
+
+async function loadDpTabelasConceito() {
+  _dpTabelasConceito = await sbGet('/rest/v1/dp_tabelas_conceito?ativo=eq.true&order=nome.asc') || [];
+  const allFaixas = await sbGet('/rest/v1/dp_faixas_conceito?order=ordem.asc') || [];
+  _dpFaixasConceito = {};
+  allFaixas.forEach(f => {
+    if (!_dpFaixasConceito[f.tabela_id]) _dpFaixasConceito[f.tabela_id] = [];
+    _dpFaixasConceito[f.tabela_id].push(f);
+  });
+}
+
+/* ─────────────────────────────────────────────
+   CONFIGURAÇÕES D&P
+───────────────────────────────────────────── */
+async function renderConfiguracoes() {
+  const el = document.getElementById('confBody');
+  el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
+  await Promise.all([loadDpTiposCalculo(), loadDpTiposAvaliador(), loadDpTabelasConceito()]);
+  el.innerHTML = `
+    <!-- Bloco: Avaliadores -->
+    <div class="conf-bloco">
+      <div class="conf-bloco-titulo">Tipos de Avaliador</div>
+      <div class="conf-bloco-desc">Defina os avaliadores disponíveis no sistema. O tipo escolhido é atribuído ao ciclo, não ao modelo.</div>
+      <table class="conf-table">
+        <thead><tr><th>Nome</th><th>Descrição</th><th>Ativo</th><th></th></tr></thead>
+        <tbody id="confAvaliadores">${renderAvaliadores()}</tbody>
+      </table>
+    </div>
+
+    <!-- Bloco: Escalas de Resposta -->
+    <div class="conf-bloco">
+      <div class="conf-bloco-titulo">Escalas de Resposta</div>
+      <div class="conf-bloco-desc">Escalas usadas nos critérios de avaliação. Gerencie na aba <b>Escalas</b> ou adicione aqui.</div>
+      <table class="conf-table">
+        <thead><tr><th>Nome</th><th>Opções</th><th></th></tr></thead>
+        <tbody id="confEscalas">${renderEscalasConf()}</tbody>
+      </table>
+      <div style="margin-top:10px">
+        <button class="btn btn-secondary btn-sm" onclick="abrirModalEscala(null)">+ Nova escala</button>
+      </div>
+    </div>
+
+    <!-- Bloco: Tabelas de Conceito -->
+    <div class="conf-bloco">
+      <div class="conf-bloco-titulo">Tabelas de Conceito</div>
+      <div class="conf-bloco-desc">Defina as faixas de conversão de nota para conceito. Uma tabela pode ser reutilizada em vários modelos.</div>
+      <div id="confTabelasConceito">${renderTabelasConceito()}</div>
+      <div style="margin-top:12px">
+        <button class="btn btn-secondary btn-sm" onclick="abrirModalNovaTabela()">+ Nova tabela</button>
+      </div>
+    </div>
+
+    <!-- Bloco: Tipos de Cálculo -->
+    <div class="conf-bloco">
+      <div class="conf-bloco-titulo">Tipos de Cálculo</div>
+      <div class="conf-bloco-desc">Controle quais algoritmos aparecem como opção ao configurar versões de modelos.</div>
+      <table class="conf-table">
+        <thead><tr><th>Nome</th><th>Descrição</th><th>Disponível</th></tr></thead>
+        <tbody id="confCalculo">${renderTiposCalculo()}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderAvaliadores() {
+  if (!_dpTiposAvaliador.length) return `<tr><td colspan="4" style="color:var(--text-ter);font-size:12px">Nenhum avaliador cadastrado.</td></tr>`;
+  return _dpTiposAvaliador.map(a => `
+    <tr>
+      <td><input class="form-input form-input-sm" value="${a.label}" onchange="salvarAvaliador('${a.id}','label',this.value)"></td>
+      <td><input class="form-input form-input-sm" value="${a.descricao||''}" placeholder="Descrição opcional" onchange="salvarAvaliador('${a.id}','descricao',this.value)"></td>
+      <td style="text-align:center"><input type="checkbox" ${a.ativo?'checked':''} onchange="salvarAvaliador('${a.id}','ativo',this.checked)" style="accent-color:var(--accent)"></td>
+      <td></td>
+    </tr>`).join('');
+}
+
+function renderEscalasConf() {
+  if (!_dpEscalas.length) return `<tr><td colspan="3" style="color:var(--text-ter);font-size:12px">Nenhuma escala cadastrada.</td></tr>`;
+  return _dpEscalas.map(e => {
+    const opcoes = (_dpEscalaOpcoes[e.id]||[]).map(o => o.rotulo).join(', ');
+    return `<tr>
+      <td>${e.nome}</td>
+      <td style="font-size:12px;color:var(--text-sec)">${opcoes||'—'}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="abrirModalEscala('${e.id}')">Editar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderTabelasConceito() {
+  if (!_dpTabelasConceito.length) return `<div style="font-size:12px;color:var(--text-ter);padding:8px 0">Nenhuma tabela cadastrada.</div>`;
+  return _dpTabelasConceito.map(t => {
+    const faixas = _dpFaixasConceito[t.id] || [];
+    const faixasHtml = faixas.length
+      ? `<div class="faixas-preview">${faixas.map(f => `<span class="faixa-chip" style="${f.cor?`background:${f.cor}20;border-color:${f.cor};color:${f.cor}`:''}">
+          ${f.conceito} (${f.nota_min}–${f.nota_max})
+        </span>`).join('')}</div>`
+      : `<div style="font-size:12px;color:var(--text-ter)">Nenhuma faixa configurada</div>`;
+    return `<div class="tabela-conceito-card">
+      <div class="tabela-conceito-head">
+        <span style="font-weight:600;font-size:13px">${t.nome}</span>
+        ${t.descricao?`<span style="font-size:12px;color:var(--text-sec);margin-left:8px">${t.descricao}</span>`:''}
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="abrirDrawerFaixas('${t.id}')">Editar faixas</button>
+          <button class="btn btn-secondary btn-sm" onclick="excluirTabela('${t.id}')">Excluir</button>
+        </div>
+      </div>
+      ${faixasHtml}
+    </div>`;
+  }).join('');
+}
+
+function renderTiposCalculo() {
+  if (!_dpTiposCalculo.length) return `<tr><td colspan="3" style="color:var(--text-ter);font-size:12px">Nenhum tipo de cálculo encontrado.</td></tr>`;
+  return _dpTiposCalculo.map(t => `
+    <tr>
+      <td style="font-weight:500">${t.label}</td>
+      <td style="font-size:12px;color:var(--text-sec)">${t.descricao||'—'}</td>
+      <td style="text-align:center"><input type="checkbox" ${t.ativo?'checked':''} onchange="salvarTipoCalculo('${t.codigo}','ativo',this.checked)" style="accent-color:var(--accent)"></td>
+    </tr>`).join('');
+}
+
+async function salvarAvaliador(id, campo, valor) {
+  await sbPatch(`/rest/v1/dp_tipos_avaliador?id=eq.${id}`, { [campo]: valor });
+  const idx = _dpTiposAvaliador.findIndex(a => a.id === id);
+  if (idx !== -1) _dpTiposAvaliador[idx][campo] = valor;
+}
+
+async function salvarTipoCalculo(codigo, campo, valor) {
+  await sbPatch(`/rest/v1/dp_tipos_calculo_config?codigo=eq.${codigo}`, { [campo]: valor });
+  const idx = _dpTiposCalculo.findIndex(t => t.codigo === codigo);
+  if (idx !== -1) _dpTiposCalculo[idx][campo] = valor;
+}
+
+/* — Modal nova tabela de conceito — */
+function abrirModalNovaTabela() {
+  document.getElementById('novaTabelaNome').value = '';
+  document.getElementById('novaTabelaDesc').value = '';
+  document.getElementById('modalNovaTabela').classList.add('open');
+}
+
+async function salvarNovaTabela() {
+  const nome = (document.getElementById('novaTabelaNome').value||'').trim();
+  if (!nome) { toast('Informe o nome da tabela.', true); return; }
+  const desc = (document.getElementById('novaTabelaDesc').value||'').trim();
+  const res = await sbPost('/rest/v1/dp_tabelas_conceito', { nome, descricao: desc||null, ativo: true });
+  if (!res || !res[0]) { toast('Erro ao criar tabela: ' + sbErrMsg(), true); return; }
+  document.getElementById('modalNovaTabela').classList.remove('open');
+  await loadDpTabelasConceito();
+  document.getElementById('confTabelasConceito').innerHTML = renderTabelasConceito();
+  toast('Tabela criada.');
+}
+
+async function excluirTabela(id) {
+  if (!confirm('Excluir esta tabela de conceito? Esta ação não pode ser desfeita.')) return;
+  const ok = await sbDelete(`/rest/v1/dp_tabelas_conceito?id=eq.${id}`);
+  if (!ok) { toast('Não foi possível excluir — tabela pode estar em uso por uma versão publicada.', true); return; }
+  await loadDpTabelasConceito();
+  document.getElementById('confTabelasConceito').innerHTML = renderTabelasConceito();
+  toast('Tabela excluída.');
+}
+
+/* — Drawer de faixas — */
+let _faixasDrawerTabelaId = null;
+let _faixasTemp = [];
+
+async function abrirDrawerFaixas(tabelaId) {
+  _faixasDrawerTabelaId = tabelaId;
+  const tabela = _dpTabelasConceito.find(t => t.id === tabelaId);
+  document.getElementById('dvFaixasNome').textContent = tabela ? tabela.nome : '—';
+  _faixasTemp = JSON.parse(JSON.stringify(_dpFaixasConceito[tabelaId] || []));
+  renderFaixasDrawer();
+  document.getElementById('drawerFaixasOverlay').classList.add('open');
+  document.getElementById('drawerFaixas').classList.add('open');
+}
+
+function fecharDrawerFaixas() {
+  document.getElementById('drawerFaixasOverlay').classList.remove('open');
+  document.getElementById('drawerFaixas').classList.remove('open');
+  _faixasDrawerTabelaId = null;
+  _faixasTemp = [];
+}
+
+function renderFaixasDrawer() {
+  const el = document.getElementById('dvFaixasBody');
+  if (!el) return;
+  if (!_faixasTemp.length) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--text-ter);padding:16px 0">Nenhuma faixa. Use o botão abaixo para adicionar.</div>`;
+    return;
+  }
+  el.innerHTML = _faixasTemp.map((f, i) => `
+    <div class="faixa-row" style="display:grid;grid-template-columns:80px 80px 1fr 70px auto;gap:8px;align-items:center;margin-bottom:8px">
+      <div>
+        <label class="form-label" style="font-size:11px">De</label>
+        <input class="form-input form-input-sm" type="number" step="0.1" value="${f.nota_min}" onchange="_faixasTemp[${i}].nota_min=parseFloat(this.value)">
+      </div>
+      <div>
+        <label class="form-label" style="font-size:11px">Até</label>
+        <input class="form-input form-input-sm" type="number" step="0.1" value="${f.nota_max}" onchange="_faixasTemp[${i}].nota_max=parseFloat(this.value)">
+      </div>
+      <div>
+        <label class="form-label" style="font-size:11px">Conceito</label>
+        <input class="form-input form-input-sm" value="${f.conceito}" onchange="_faixasTemp[${i}].conceito=this.value">
+      </div>
+      <div>
+        <label class="form-label" style="font-size:11px">Cor</label>
+        <input type="color" value="${f.cor||'#888888'}" onchange="_faixasTemp[${i}].cor=this.value" style="width:100%;height:32px;border:1px solid var(--border);border-radius:6px;cursor:pointer">
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:18px" onclick="_faixasTemp.splice(${i},1);renderFaixasDrawer()">✕</button>
+    </div>`).join('');
+}
+
+function adicionarFaixa() {
+  const ultima = _faixasTemp[_faixasTemp.length-1];
+  const novaMin = ultima ? ultima.nota_max + 0.1 : 0;
+  _faixasTemp.push({ nota_min: parseFloat(novaMin.toFixed(1)), nota_max: parseFloat((novaMin+1).toFixed(1)), conceito: '', cor: null, ordem: _faixasTemp.length });
+  renderFaixasDrawer();
+}
+
+async function salvarFaixas() {
+  const tabelaId = _faixasDrawerTabelaId;
+  if (!tabelaId) return;
+  // deletar faixas existentes e reinserir
+  await sbDelete(`/rest/v1/dp_faixas_conceito?tabela_id=eq.${tabelaId}`);
+  for (let i = 0; i < _faixasTemp.length; i++) {
+    const f = _faixasTemp[i];
+    if (!f.conceito || f.nota_min == null || f.nota_max == null) continue;
+    await sbPost('/rest/v1/dp_faixas_conceito', {
+      tabela_id: tabelaId,
+      nota_min: f.nota_min,
+      nota_max: f.nota_max,
+      conceito: f.conceito,
+      cor: f.cor || null,
+      ordem: i
+    });
+  }
+  await loadDpTabelasConceito();
+  document.getElementById('confTabelasConceito').innerHTML = renderTabelasConceito();
+  fecharDrawerFaixas();
+  toast('Faixas salvas.');
+}
+
 async function loadDpModelos() {
   const modelos = await sbGet('/rest/v1/dp_modelos?order=criado_em.desc') || [];
   const versoes = await sbGet('/rest/v1/dp_versoes?order=criado_em.asc') || [];
@@ -1427,8 +1750,8 @@ async function renderModelos() {
     el.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h4"/></svg><p>Nenhum modelo cadastrado. Crie o primeiro modelo de avaliação.</p></div>`;
     return;
   }
-  const TIPO_LABEL = { gestor_direto:'Gestor direto', autoavaliacao:'Auto-avaliação', rh:'RH', especifico:'Avaliador específico' };
-  const CALC_LABEL = { soma:'Soma', media:'Média', media_ponderada:'Média ponderada', percentual_atingimento:'% Atingimento', qualitativo:'Qualitativo' };
+  const calcLabelMap = Object.fromEntries(_dpTiposCalculo.map(t => [t.codigo, t.label]));
+  const CALC_LABEL = { soma:'Soma', media:'Média', media_ponderada:'Média ponderada', percentual_atingimento:'% Atingimento', qualitativo:'Qualitativo', ...calcLabelMap };
   el.innerHTML = _dpModelos.map(m => {
     const versoes = _dpVersoes[m.id] || [];
     const versoesHtml = versoes.length
@@ -1671,35 +1994,33 @@ function renderVersaoConfigs() {
   const v = _dpVersaoAtual;
   if (!v) return;
   const readonly = _dpVersaoReadonly;
-  const CALC_OPTS = ['soma','media','media_ponderada','percentual_atingimento','qualitativo'];
-  const CALC_LABEL = { soma:'Soma', media:'Média', media_ponderada:'Média ponderada', percentual_atingimento:'% Atingimento', qualitativo:'Qualitativo' };
-  const TIPO_OPTS  = ['gestor_direto','autoavaliacao','rh','especifico'];
-  const TIPO_LABEL = { gestor_direto:'Gestor direto', autoavaliacao:'Auto-avaliação', rh:'RH', especifico:'Avaliador específico' };
+  const calcOpts = _dpTiposCalculo.length
+    ? _dpTiposCalculo.filter(t => t.ativo).map(t => `<option value="${t.codigo}" ${v.tipo_calculo===t.codigo?'selected':''}>${t.label}</option>`).join('')
+    : `<option value="${v.tipo_calculo}">${v.tipo_calculo}</option>`;
+  const tabelaOpts = _dpTabelasConceito.map(t =>
+    `<option value="${t.id}" ${v.tabela_conceito_id===t.id?'selected':''}>${t.nome}</option>`
+  ).join('');
   el.innerHTML = `
     <div class="form-group">
       <label class="form-label">Tipo de cálculo</label>
       <select class="form-input" id="dvCalculo" ${readonly?'disabled':''} onchange="salvarConfigVersao()">
-        ${CALC_OPTS.map(o=>`<option value="${o}" ${v.tipo_calculo===o?'selected':''}>${CALC_LABEL[o]}</option>`).join('')}
+        ${calcOpts}
       </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Tipo de avaliador</label>
-      <select class="form-input" id="dvTipoAvaliador" ${readonly?'disabled':''} onchange="salvarConfigVersao()">
-        ${TIPO_OPTS.map(o=>`<option value="${o}" ${v.tipo_avaliador===o?'selected':''}>${TIPO_LABEL[o]}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Nota máxima</label>
-      <input class="form-input" type="number" id="dvNotaMax" value="${v.nota_maxima!=null?v.nota_maxima:5}" ${readonly?'disabled':''} onchange="salvarConfigVersao()">
     </div>
     <div class="form-group" style="display:flex;align-items:center;gap:10px">
       <input type="checkbox" id="dvConverteConceiro" ${v.converte_para_conceito?'checked':''} ${readonly?'disabled':''} onchange="salvarConfigVersao();toggleFaixasConceito()" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer">
       <label class="form-label" style="margin:0;cursor:pointer" for="dvConverteConceiro">Converter nota para conceito</label>
     </div>
-    <div id="dvFaixasGrp" ${v.converte_para_conceito?'':'style="display:none"'}>
+    <div id="dvTabelaConceitoGrp" ${v.converte_para_conceito?'':'style="display:none"'}>
       <div class="form-group">
-        <label class="form-label">Faixas conceito (JSON)</label>
-        <textarea class="form-input" id="dvFaixas" rows="4" ${readonly?'disabled':''} onchange="salvarConfigVersao()" placeholder='[{"de":0,"ate":2.9,"conceito":"Insatisfatório"},{"de":3,"ate":5,"conceito":"Satisfatório"}]'>${v.faixas_conceito?JSON.stringify(v.faixas_conceito,null,2):''}</textarea>
+        <label class="form-label">Tabela de conceito</label>
+        ${_dpTabelasConceito.length
+          ? `<select class="form-input" id="dvTabelaConceito" ${readonly?'disabled':''} onchange="salvarConfigVersao()">
+               <option value="">— Selecione —</option>
+               ${tabelaOpts}
+             </select>`
+          : `<div style="font-size:12px;color:var(--text-ter);padding:8px 0">Nenhuma tabela de conceito cadastrada. Acesse <b>Configurações D&amp;P</b> para criar.</div>`
+        }
       </div>
     </div>
     ${readonly?'<div style="padding:10px 14px;background:var(--amber-bg);color:var(--amber);border-radius:8px;font-size:12px;margin-top:16px">Esta versão está publicada e não pode ser editada.</div>':''}
@@ -1708,25 +2029,23 @@ function renderVersaoConfigs() {
 
 function toggleFaixasConceito() {
   const cb = document.getElementById('dvConverteConceiro');
-  const grp = document.getElementById('dvFaixasGrp');
+  const grp = document.getElementById('dvTabelaConceitoGrp');
   if (cb && grp) grp.style.display = cb.checked ? '' : 'none';
 }
 
 async function salvarConfigVersao() {
   if (!_dpVersaoAtual || _dpVersaoReadonly) return;
   const calculo  = document.getElementById('dvCalculo').value;
-  const tipoAv   = document.getElementById('dvTipoAvaliador').value;
-  const notaMax  = parseFloat(document.getElementById('dvNotaMax').value) || 5;
   const converte = document.getElementById('dvConverteConceiro').checked;
-  let faixas = null;
-  if (converte) { try { faixas = JSON.parse(document.getElementById('dvFaixas').value||'null'); } catch {} }
+  const selTabela = document.getElementById('dvTabelaConceito');
+  const tabelaId = (converte && selTabela) ? (selTabela.value || null) : null;
   await sbPatch(`/rest/v1/dp_versoes?id=eq.${_dpVersaoAtual.id}`, {
-    tipo_calculo: calculo, converte_para_conceito: converte, faixas_conceito: faixas
+    tipo_calculo: calculo, converte_para_conceito: converte, tabela_conceito_id: tabelaId
   });
   _dpVersaoAtual.tipo_calculo = calculo;
   _dpVersaoAtual.converte_para_conceito = converte;
-  _dpVersaoAtual.faixas_conceito = faixas;
-  renderVersaoCriterios(); // atualiza coluna peso se tipo_calculo mudou
+  _dpVersaoAtual.tabela_conceito_id = tabelaId;
+  renderVersaoCriterios();
 }
 
 async function setCritField(critId, field, value) {
