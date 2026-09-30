@@ -3100,3 +3100,56 @@ const perLine = (info.inicio && info.fim)
 ```
 
 `var(--red)` = `#B42318` (definido no `:root` do módulo). **Nunca usar `--text-danger`** — essa variável não existe no módulo.
+
+---
+
+## Visual — lista Gestor (Minha Equipe) — padrões visuais (set/2026)
+
+### Grid da tabela
+
+5 colunas: `grid-template-columns: 2.2fr 0.9fr 1.6fr 0.8fr 1.5fr`
+
+Cabeçalho (`#gestorTableHead`) e cada linha (`gstor-row`) usam o mesmo grid. **Nunca voltar para 6 colunas** — a sexta coluna de ação foi fundida com Situação.
+
+### Coluna Situação + Ação (última coluna)
+
+Badge de situação e botão de ação ficam empilhados em `flex-direction:column;gap:6px` na mesma célula. O botão "Solicitar" azul foi removido — a linha toda é clicável e abre o drawer.
+
+**Botões que permanecem** (contextuais, não redundantes com o drawer):
+
+| Estado | Botão | Classe |
+|---|---|---|
+| Sem PA no banco | Solicitar | `gstor-btn-indigo` |
+| Solicitação pendente | ⏳ Aguardando RH | `gstor-btn-amber` |
+| Recusa sem nova solicitação | Ver recusa → | `gstor-btn-red-outline` |
+| Demais casos | *(vazio)* | — |
+
+### Coluna PA Vigente — alinhamento
+
+`align-self: flex-start; padding-top: 2px` — âncora o número ao topo da célula para alinhar visualmente com a primeira linha da data de agendamento. Sem esse alinhamento, o número grande fica centralizado e "flutua" quando a célula vizinha tem duas linhas.
+
+### `_renderAgendCell` — visual atualizado (set/2026)
+
+```js
+function _renderAgendCell(lRef, alertaHtml) {
+  if (!lRef) return `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
+  return `<div style="font-size:12px;font-weight:500;color:#4B5565;white-space:nowrap;line-height:1.3;">${formatDate(lRef.inicio)} → ${formatDate(lRef.fim)}</div>
+          <span style="display:inline-flex;align-items:center;margin-top:4px;padding:2px 7px;background:#EFF6FF;color:#1849A9;border-radius:10px;font-size:11px;font-weight:600;">${lRef.dias}d</span>
+          ${alertaHtml || ''}`;
+}
+```
+
+**Hierarquia visual:**
+- Datas em `#4B5565` (cinza médio legível) com `font-weight:500` — não compete com o pill
+- `Nd` em pill azul `#EFF6FF / #1849A9` — destaque principal da célula
+- Alerta de dobra (`alertaHtml`) renderizado abaixo do pill, sem alteração
+
+**Regra:** nunca igualar a cor da data à cor do pill — se ambos forem azuis, nenhum se destaca. A data é contexto; os dias são o dado operacional.
+
+### KPI "Pendentes de aprovação"
+
+Nome padronizado em ambas as visões (RH e Gestor). No Gestor, o card tem dois estados renderizados em `renderGestorAlerts`:
+- **Âmbar** (`#FFFBEB / #FDE68A`) quando `aguardandoAprov.length > 0`
+- **Verde** (`#ECFDF3 / #A7F3D0`) quando zerado
+
+Ambos os estados exibem o label `"Pendentes de aprovação"` (não apenas `"Pendentes"`).
