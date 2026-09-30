@@ -8469,37 +8469,43 @@ function _gestorAgruparProcessos(idsPermitidos) {
   return [...byId.values()];
 }
 
-// Gestor: retorna { estado, cls, ativo, inicio, fim, dias } para o processo
-// ativo: true APENAS para processos aguardando decisão do RH
+// Gestor: retorna { estado, cls, ativo, inicio, fim, dias, motivo } para o processo
+// ativo: true para eventos aguardando RH ou resolvidos há menos de 14 dias
 function _gestorProcessoInfo(h) {
   const acao = (h.acao || '').toLowerCase();
+  const det  = h.detalhe || {};
   // Datas vigentes: GESTOR_LANCAMENTOS é a fonte de verdade (cobre alterações aprovadas)
   const lanc  = (GESTOR_LANCAMENTOS || []).find(l => String(l.id) === String(h.ferias_id));
-  const inicio = lanc?.inicio || (h.detalhe || {}).inicio;
-  const fim    = lanc?.fim    || (h.detalhe || {}).fim;
-  const dias   = lanc?.dias   || (h.detalhe || {}).dias;
+  const inicio = lanc?.inicio || det.inicio;
+  const fim    = lanc?.fim    || det.fim;
+  const dias   = lanc?.dias   || det.dias;
+  const motivo = det.motivo || det.obs_gestor || null;
 
-  // Atividade Recente: apenas o que está aguardando resposta do RH
+  // Resolvidos recentes: ficam em Atividade Recente por 14 dias para o gestor ver a resposta
+  const diasAtras = h.criado_em ? (Date.now() - new Date(h.criado_em).getTime()) / 86400000 : 999;
+  const recenteResolvido = diasAtras <= 14;
+
+  // Atividade Recente: aguardando resposta do RH
   if (acao === 'solicitado')
-    return { estado: 'Aguardando RH',             cls: 'neutro',     ativo: true,  inicio, fim, dias };
+    return { estado: 'Aguardando RH',             cls: 'neutro',     ativo: true,             inicio, fim, dias, motivo };
   if (acao === 'alteracao_solicitada')
-    return { estado: 'Alteração aguardando RH',   cls: 'cancel-sol', ativo: true,  inicio, fim, dias };
+    return { estado: 'Alteração aguardando RH',   cls: 'cancel-sol', ativo: true,             inicio, fim, dias, motivo };
   if (acao === 'cancelamento_solicitado')
-    return { estado: 'Cancelamento aguardando RH',cls: 'cancel-sol', ativo: true,  inicio, fim, dias };
+    return { estado: 'Cancelamento aguardando RH',cls: 'cancel-sol', ativo: true,             inicio, fim, dias, motivo };
 
-  // Histórico: todos os desfechos
+  // Desfechos: ficam em Atividade Recente por 14 dias, depois vão para Histórico
   if (acao === 'aprovado' || acao === 'alteracao_aprovada')
-    return { estado: 'Aprovadas',            cls: 'aprov',       ativo: false, inicio, fim, dias };
+    return { estado: 'Aprovadas',            cls: 'aprov',       ativo: recenteResolvido, inicio, fim, dias, motivo };
   if (acao === 'rejeitado')
-    return { estado: 'Recusadas',            cls: 'recus',       ativo: false, inicio, fim, dias };
+    return { estado: 'Recusadas',            cls: 'recus',       ativo: recenteResolvido, inicio, fim, dias, motivo };
   if (acao === 'alteracao_recusada')
-    return { estado: 'Alt. recusada',        cls: 'recus',       ativo: false, inicio, fim, dias };
+    return { estado: 'Alt. recusada',        cls: 'recus',       ativo: recenteResolvido, inicio, fim, dias, motivo };
   if (acao === 'cancelamento_aprovado')
-    return { estado: 'Canceladas',           cls: 'cancel-aprov',ativo: false, inicio, fim, dias };
+    return { estado: 'Canceladas',           cls: 'cancel-aprov',ativo: recenteResolvido, inicio, fim, dias, motivo };
   if (acao === 'cancelamento_recusado')
-    return { estado: 'Canc. recusado',       cls: 'aprov',       ativo: false, inicio, fim, dias };
+    return { estado: 'Canc. recusado',       cls: 'aprov',       ativo: recenteResolvido, inicio, fim, dias, motivo };
 
-  return { estado: acao, cls: 'neutro', ativo: false, inicio, fim, dias };
+  return { estado: acao, cls: 'neutro', ativo: false, inicio, fim, dias, motivo };
 }
 
 // RH: evento ainda está pendente de decisão?
@@ -8591,11 +8597,13 @@ function renderGestorAtividade() {
     const perLine = info.inicio && info.fim
       ? `<div class="gstor-ativ-per">${fmtD(info.inicio)} → ${fmtD(info.fim)}${info.dias ? ' · ' + info.dias + 'd' : ''}</div>`
       : '';
+    const motivoLine = info.motivo ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${info.motivo}</div>` : '';
+    const tsLine = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${info.cls}">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
       <div class="gstor-ativ-body">
         <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
-        ${perLine}
+        ${perLine}${motivoLine}${tsLine}
       </div>
       <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>
     </div>`;
@@ -8794,6 +8802,7 @@ function renderRhAtividade() {
         if (!periodoUnico && det.inicio && det.fim) {
           perInline = `<span style="font-size:11px;color:var(--text-sec);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap;">📅 ${fmtD(det.inicio)} → ${fmtD(det.fim)}</span>`;
         }
+        const motivoEvento = det.motivo || det.obs_gestor;
         return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
           <div class="gstor-ativ-icon ${cls}" style="width:20px;height:20px;min-width:20px;margin-top:1px;">${svg}</div>
           <div style="flex:1;min-width:0;">
@@ -8801,6 +8810,7 @@ function renderRhAtividade() {
               <span class="gstor-ativ-chip ${cls}">${chip}</span>${perInline}
             </div>
             ${ts ? `<div class="gstor-ativ-ts">${ts}</div>` : ''}
+            ${motivoEvento ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${motivoEvento}</div>` : ''}
           </div>
         </div>`;
       }).join('');
