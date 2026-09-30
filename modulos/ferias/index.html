@@ -8262,11 +8262,13 @@ async function _carregarEquipeGestor(gestor_id, cfg = {}) {
   if (!GESTOR_COLABS.length) throw new Error('Nenhum colaborador encontrado');
   const ids = GESTOR_COLABS.map(c => c.id).join(',');
   setGestorMsg('Buscando férias da equipe...');
-  const [feriasRows, histRowsG] = await Promise.all([
+  const [feriasRows, histRowsG, configRowsG] = await Promise.all([
     sbGet('ferias', `colaborador_id=in.(${ids})&select=*&order=colaborador_id,ano`),
     sbGet('ferias_historico', `colaborador_id=in.(${ids})&select=*&order=criado_em.desc&limit=500`).catch(() => []),
+    sbGet('param_ferias_config', 'select=dias_resposta_visivel&limit=1').catch(() => []),
   ]);
   FERIAS_HISTORICO = histRowsG || [];
+  if (configRowsG?.[0]) FERIAS_CONFIG = { ...FERIAS_CONFIG, ...configRowsG[0] };
   const { periodos, lancamentos } = processGestorFerias(feriasRows);
   GESTOR_PERIODOS    = periodos;
   GESTOR_LANCAMENTOS = lancamentos;
