@@ -5862,12 +5862,15 @@ async function rejeitarPendente() {
       return;
     }
     // Fluxo padrão
+    const _recLancPad = reg._novoLanc ? { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias } : {};
     if (reg._sbId) {
-      await sbPatch('ferias', `id=eq.${reg._sbId}`, { status: 'Rejeitado' });
+      await sbPatch('ferias', `id=eq.${reg._sbId}`, { status: 'Rejeitado', obs_gestor: motivo });
     }
     reg._novoLanc = null;
     reg.status = 'Rejeitado';
     reg._motivoRejeicao = motivo;
+    const _perfRejPad = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'rejeitado', _perfRejPad.nome || 'RH', { status: 'Rejeitado', obs_gestor: motivo, ..._recLancPad });
     document.getElementById('modalAprovar').classList.remove('open');
     toast(`Lançamento rejeitado — ${colab.nome}`);
     renderAll();
@@ -8430,7 +8433,7 @@ function gestorLancFuturos30(colabsBase) {
 
 async function _logAtiv(feriasId, colabId, acao, usuario, detalhe) {
   const entry = { ferias_id: Number(feriasId), colaborador_id: Number(colabId), acao, usuario: usuario || null, detalhe: detalhe || null };
-  try { await sbPost('ferias_historico', entry); } catch(_) {}
+  try { await sbPost('ferias_historico', entry); } catch(e) { console.warn('[ferias_historico] insert falhou:', e?.message || e); }
   FERIAS_HISTORICO.unshift({ ...entry, id: Date.now(), criado_em: new Date().toISOString() });
 }
 
