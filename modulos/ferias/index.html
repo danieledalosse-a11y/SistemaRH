@@ -8470,7 +8470,7 @@ function _gestorAgruparProcessos(idsPermitidos) {
 }
 
 // Gestor: retorna { estado, cls, ativo, inicio, fim, dias, motivo } para o processo
-// ativo: true para eventos aguardando RH ou resolvidos há menos de 14 dias
+// ativo: true para processos aguardando resposta do RH
 function _gestorProcessoInfo(h) {
   const acao = (h.acao || '').toLowerCase();
   const det  = h.detalhe || {};
@@ -8481,29 +8481,25 @@ function _gestorProcessoInfo(h) {
   const dias   = lanc?.dias   || det.dias;
   const motivo = det.motivo || det.obs_gestor || null;
 
-  // Resolvidos recentes: ficam em Atividade Recente por 14 dias para o gestor ver a resposta
-  const diasAtras = h.criado_em ? (Date.now() - new Date(h.criado_em).getTime()) / 86400000 : 999;
-  const recenteResolvido = diasAtras <= 14;
-
-  // Atividade Recente: aguardando resposta do RH
+  // Atividade Recente: apenas o que está aguardando resposta do RH
   if (acao === 'solicitado')
-    return { estado: 'Aguardando RH',             cls: 'neutro',     ativo: true,             inicio, fim, dias, motivo };
+    return { estado: 'Aguardando RH',             cls: 'neutro',     ativo: true,  inicio, fim, dias, motivo };
   if (acao === 'alteracao_solicitada')
-    return { estado: 'Alteração aguardando RH',   cls: 'cancel-sol', ativo: true,             inicio, fim, dias, motivo };
+    return { estado: 'Alteração aguardando RH',   cls: 'cancel-sol', ativo: true,  inicio, fim, dias, motivo };
   if (acao === 'cancelamento_solicitado')
-    return { estado: 'Cancelamento aguardando RH',cls: 'cancel-sol', ativo: true,             inicio, fim, dias, motivo };
+    return { estado: 'Cancelamento aguardando RH',cls: 'cancel-sol', ativo: true,  inicio, fim, dias, motivo };
 
-  // Desfechos: ficam em Atividade Recente por 14 dias, depois vão para Histórico
+  // Histórico: todos os desfechos
   if (acao === 'aprovado' || acao === 'alteracao_aprovada')
-    return { estado: 'Aprovadas',            cls: 'aprov',       ativo: recenteResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Aprovadas',            cls: 'aprov',       ativo: false, inicio, fim, dias, motivo };
   if (acao === 'rejeitado')
-    return { estado: 'Recusadas',            cls: 'recus',       ativo: recenteResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Recusadas',            cls: 'recus',       ativo: false, inicio, fim, dias, motivo };
   if (acao === 'alteracao_recusada')
-    return { estado: 'Alt. recusada',        cls: 'recus',       ativo: recenteResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Alt. recusada',        cls: 'recus',       ativo: false, inicio, fim, dias, motivo };
   if (acao === 'cancelamento_aprovado')
-    return { estado: 'Canceladas',           cls: 'cancel-aprov',ativo: recenteResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Canceladas',           cls: 'cancel-aprov',ativo: false, inicio, fim, dias, motivo };
   if (acao === 'cancelamento_recusado')
-    return { estado: 'Canc. recusado',       cls: 'aprov',       ativo: recenteResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Canc. recusado',       cls: 'aprov',       ativo: false, inicio, fim, dias, motivo };
 
   return { estado: acao, cls: 'neutro', ativo: false, inicio, fim, dias, motivo };
 }
