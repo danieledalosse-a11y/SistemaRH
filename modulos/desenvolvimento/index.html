@@ -387,6 +387,47 @@
   .faixas-preview { display: flex; flex-wrap: wrap; gap: 6px; }
   .faixa-chip { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--border-light); }
 
+  /* ── wizard ── */
+  .wizard-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.45); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.22s; }
+  .wizard-overlay.open { opacity: 1; pointer-events: all; }
+  .wizard-panel { background: var(--surface); border-radius: 16px; width: 760px; max-width: 96vw; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(16,24,40,0.22); }
+  .wizard-header { padding: 22px 28px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 16px; flex-shrink: 0; }
+  .wizard-titulo { font-size: 17px; font-weight: 700; flex: 1; }
+  .wizard-steps-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .wizard-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background 0.2s; }
+  .wizard-step-dot.ativo { background: var(--accent); }
+  .wizard-step-dot.feito { background: var(--green); }
+  .wizard-body { padding: 28px; overflow-y: auto; flex: 1; }
+  .wizard-footer { padding: 16px 28px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+  .wizard-secao-titulo { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .wizard-secao-sub { font-size: 13px; color: var(--text-sec); margin-bottom: 22px; }
+  .wizard-card-escolha { border: 2px solid var(--border); border-radius: 12px; padding: 20px; cursor: pointer; transition: border-color 0.15s, background 0.15s; display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+  .wizard-card-escolha:hover { border-color: var(--accent); background: var(--bg); }
+  .wizard-card-escolha.selecionado { border-color: var(--accent); background: var(--bg); }
+  .wizard-card-escolha-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .wizard-card-escolha-titulo { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .wizard-card-escolha-desc { font-size: 12px; color: var(--text-sec); }
+  .wizard-crit-lista { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
+  .wizard-crit-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .wizard-crit-item:hover { background: var(--bg); }
+  .wizard-crit-item.selecionado { background: var(--bg); }
+  .wizard-crit-item input[type=checkbox] { flex-shrink: 0; }
+  .wizard-resposta-linha { display: grid; grid-template-columns: 1fr 180px 180px; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border-light); font-size: 13px; }
+  .wizard-resposta-linha:last-child { border-bottom: none; }
+  .wizard-resposta-header { grid-template-columns: 1fr 180px 180px; display: grid; gap: 12px; padding: 6px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-ter); border-bottom: 1px solid var(--border); }
+  .wizard-fin-opcao { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; margin-bottom: 10px; transition: border-color 0.15s; }
+  .wizard-fin-opcao:hover { border-color: var(--accent); }
+  .wizard-fin-opcao.selecionada { border-color: var(--accent); background: var(--bg); }
+  .wizard-fin-opcao input[type=radio] { margin-top: 2px; flex-shrink: 0; }
+  .wizard-fin-editor { background: var(--bg); border-radius: 10px; padding: 16px; margin-top: 12px; }
+  .wizard-faixa-row { display: grid; grid-template-columns: 100px 100px 140px 32px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .wizard-faixa-row input { font-size: 13px; }
+  .wizard-revisao-bloco { background: var(--bg); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .wizard-revisao-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-ter); margin-bottom: 8px; }
+  .wizard-revisao-item { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+  .wizard-revisao-item span:first-child { color: var(--text-sec); }
+  .wizard-revisao-item span:last-child { font-weight: 500; }
+
   /* ── responsive ── */
   @media (max-width: 900px) {
     .grid-colab { grid-template-columns: 1.5fr 1fr 1fr; }
@@ -418,10 +459,9 @@
 <div class="mod-tabs">
   <button class="mod-tab active" onclick="showSec('colaboradores',this)">Colaboradores</button>
   <button class="mod-tab" onclick="showSec('ciclos',this)">Ciclos de Avaliação</button>
-  <button class="mod-tab" onclick="showSec('dpCiclos',this)">Ciclos D&amp;P</button>
-  <button class="mod-tab" onclick="showSec('competencias',this)">Competências</button>
+  <button class="mod-tab" onclick="showSec('avaliacoes',this)">Avaliações</button>
   <button class="mod-tab" onclick="showSec('modelos',this)">Modelos</button>
-  <button class="mod-tab" onclick="showSec('escalas',this)">Escalas</button>
+  <button class="mod-tab" onclick="showSec('competencias',this)">Competências</button>
   <button class="mod-tab" onclick="showSec('configuracoes',this)">Configurações D&amp;P</button>
 </div>
 
@@ -497,19 +537,16 @@
     </div>
   </div>
 
-  <!-- ══ SEC: CICLOS D&P ══ -->
-  <div id="sec-dpCiclos" class="sec">
+  <!-- ══ SEC: AVALIAÇÕES ══ -->
+  <div id="sec-avaliacoes" class="sec">
     <div class="toolbar">
       <div style="flex:1">
-        <div style="font-size:15px;font-weight:600;margin-bottom:2px">Ciclos D&amp;P</div>
-        <div style="font-size:13px;color:var(--text-sec)">Crie e gerencie ciclos de avaliação vinculados ao motor D&amp;P.</div>
+        <div class="sec-title" style="font-size:15px;font-weight:600;margin-bottom:2px">Avaliações</div>
+        <div class="sec-sub" style="font-size:13px;color:var(--text-sec)">Avaliações ativas, em rascunho e encerradas.</div>
       </div>
-      <button class="btn btn-primary" onclick="dpAbrirModalCiclo()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Novo ciclo
-      </button>
+      <button class="btn btn-primary" onclick="wizardAbrir()">+ Nova avaliação</button>
     </div>
-    <div id="dpCiclosList">
+    <div id="avaliacoesList">
       <div class="loader"><div class="spinner"></div></div>
     </div>
   </div>
@@ -1008,6 +1045,26 @@
   </div>
 </div>
 
+<!-- ══ WIZARD: Nova avaliação ══ -->
+<div class="wizard-overlay" id="wizardOverlay" onclick="wizardFecharSeFundo(event)">
+  <div class="wizard-panel" id="wizardPanel">
+    <div class="wizard-header">
+      <div>
+        <div class="wizard-titulo" id="wizardTitulo">Nova avaliação</div>
+        <div class="wizard-steps-row" id="wizardStepsRow"></div>
+      </div>
+      <button class="drawer-close" onclick="wizardFechar()" style="margin-left:auto">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="wizard-body" id="wizardBody"></div>
+    <div class="wizard-footer">
+      <button class="btn btn-secondary" id="wizardBtnVoltar" onclick="wizardVoltar()">Cancelar</button>
+      <button class="btn btn-primary" id="wizardBtnAvancar" onclick="wizardAvancar()">Continuar</button>
+    </div>
+  </div>
+</div>
+
 <!-- toast container -->
 <div id="toast"></div>
 
@@ -1111,9 +1168,8 @@ function showSec(id, btn) {
   if (id === 'ciclos')          renderCiclos();
   if (id === 'competencias')    renderBiblioteca();
   if (id === 'modelos')         renderModelos();
-  if (id === 'escalas')         renderEscalas();
   if (id === 'configuracoes')   renderConfiguracoes();
-  if (id === 'dpCiclos')        dpRenderCiclos();
+  if (id === 'avaliacoes')      dpRenderCiclos();
 }
 function showDrawerTab(id, btn) {
   document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
@@ -2061,7 +2117,7 @@ async function renderConfiguracoes() {
     <!-- Bloco: Escalas de Resposta -->
     <div class="conf-bloco">
       <div class="conf-bloco-titulo">Escalas de Resposta</div>
-      <div class="conf-bloco-desc">Escalas usadas nos critérios de avaliação. Gerencie na aba <b>Escalas</b> ou adicione aqui.</div>
+      <div class="conf-bloco-desc">Escalas usadas nos critérios de avaliação. Adicione e gerencie aqui.</div>
       <table class="conf-table">
         <thead><tr><th>Nome</th><th>Opções</th><th></th></tr></thead>
         <tbody id="confEscalas">${renderEscalasConf()}</tbody>
@@ -2868,7 +2924,7 @@ async function salvarEscala() {
     const ok = await sbPatch(`/rest/v1/dp_escalas?id=eq.${escalaId}`, { nome, descricao });
     if (!ok) { toast('Erro ao salvar escala.', true); return; }
   } else {
-    const ok = await sbPost('/rest/v1/dp_escalas', { nome, descricao, ativo: true });
+    const ok = await sbPost('/rest/v1/dp_escalas', { nome, descricao });
     if (!ok || !ok[0]) { toast('Erro ao criar escala.', true); return; }
     id = ok[0].id;
   }
@@ -2902,7 +2958,7 @@ async function dpLoadCiclos() {
 }
 
 function dpRenderCiclos() {
-  const el = document.getElementById('dpCiclosList');
+  const el = document.getElementById('avaliacoesList');
   if (!el) return;
   if (!_dpCiclos.length) {
     el.innerHTML = `<div class="empty-state"><div class="empty-title">Nenhum ciclo criado</div><div class="empty-sub">Crie o primeiro ciclo D&P para começar.</div></div>`;
@@ -3276,6 +3332,755 @@ function dpRenderInfoCiclo() {
     ${c.status === 'aberto' ? `<div style="margin-top:16px">
       <button class="btn btn-secondary btn-sm" onclick="dpMudarStatus('${c.id}','encerrado')">Encerrar ciclo</button>
     </div>` : ''}`;
+}
+
+/* ─────────────────────────────────────────────
+   WIZARD — Nova avaliação
+───────────────────────────────────────────── */
+
+// ── WIZARD Estado ──
+let _wiz = {
+  mode: null,          // 'novo' | 'modelo'
+  step: 0,
+  steps: [],
+  modeloId: null,
+  versaoId: null,
+  modeloNome: '',
+  modeloDesc: '',
+  critsSel: [],        // [{criterioId, nome, tipo_resposta:'', escalaId:'', peso:1, ordem}]
+  tipoCalculo: 'soma',
+  temFinanceiro: false,
+  tipoFin: null,
+  finDados: {},
+  cicloNome: '',
+  cicloInicio: '',
+  cicloFim: '',
+  avaliadorId: '',
+  elegTipo: 'todos',
+  elegSetor: '',
+  elegCargo: '',
+  elegColabs: new Set(),
+};
+let _wizCriterioCallback = false;
+
+function wizardAbrir() {
+  Object.assign(_wiz, {
+    mode: null, step: 0, steps: [],
+    modeloId: null, versaoId: null, modeloNome: '', modeloDesc: '',
+    critsSel: [], tipoCalculo: 'soma',
+    temFinanceiro: false, tipoFin: null, finDados: {},
+    cicloNome: '', cicloInicio: '', cicloFim: '',
+    avaliadorId: '', elegTipo: 'todos', elegSetor: '', elegCargo: '',
+    elegColabs: new Set(),
+  });
+  document.getElementById('wizardOverlay').classList.add('open');
+  wizardRenderStep();
+}
+
+function wizardFechar() {
+  document.getElementById('wizardOverlay').classList.remove('open');
+}
+
+function wizardFecharSeFundo(e) {
+  if (e.target.id === 'wizardOverlay') wizardFechar();
+}
+
+function wizardSteps() {
+  if (!_wiz.mode) return ['inicio'];
+  if (_wiz.mode === 'modelo') return ['inicio','ciclo','revisao'];
+  return ['inicio','identificacao','criterios','resposta','financeiro','ciclo','revisao'];
+}
+
+function wizardAtualizarSteps() {
+  const steps = wizardSteps();
+  const row = document.getElementById('wizardStepsRow');
+  if (!row) return;
+  row.innerHTML = steps.map((s,i) => {
+    let cls = 'wizard-step-dot';
+    if (i < _wiz.step) cls += ' feito';
+    else if (i === _wiz.step) cls += ' ativo';
+    return `<div class="${cls}" title="${wizardStepLabel(s)}"></div>`;
+  }).join('');
+}
+
+function wizardStepLabel(id) {
+  const labels = {
+    inicio:'Início', identificacao:'Identificação', criterios:'Critérios',
+    resposta:'Resposta e cálculo', financeiro:'Financeiro',
+    ciclo:'Avaliação', revisao:'Revisão',
+  };
+  return labels[id] || id;
+}
+
+async function wizardAvancar() {
+  const steps = wizardSteps();
+  const stepId = steps[_wiz.step];
+  if (!await wizardColetarStep(stepId)) return;
+  if (_wiz.step < steps.length - 1) {
+    _wiz.step++;
+    wizardRenderStep();
+  } else {
+    await wizardPublicar();
+  }
+}
+
+function wizardVoltar() {
+  if (_wiz.step === 0) { wizardFechar(); return; }
+  _wiz.step--;
+  const steps = wizardSteps();
+  if (steps[_wiz.step] === 'inicio') _wiz.mode = null;
+  wizardRenderStep();
+}
+
+function wizardRenderStep() {
+  const steps = wizardSteps();
+  const stepId = steps[_wiz.step];
+  document.getElementById('wizardTitulo').textContent = wizardStepLabel(stepId);
+  const avancarBtn = document.getElementById('wizardBtnAvancar');
+  const voltarBtn  = document.getElementById('wizardBtnVoltar');
+  voltarBtn.textContent  = _wiz.step === 0 ? 'Cancelar' : 'Voltar';
+  avancarBtn.textContent = (_wiz.step === steps.length - 1) ? 'Publicar avaliação' : 'Continuar';
+  wizardAtualizarSteps();
+  const body = document.getElementById('wizardBody');
+  body.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  wizardRenderBody(stepId).then(html => { body.innerHTML = html; wizardPosRender(stepId); });
+}
+
+async function wizardRenderBody(stepId) {
+  switch(stepId) {
+    case 'inicio':        return wizardHtmlInicio();
+    case 'identificacao': return wizardHtmlIdentificacao();
+    case 'criterios':     return await wizardHtmlCriterios();
+    case 'resposta':      return await wizardHtmlResposta();
+    case 'financeiro':    return wizardHtmlFinanceiro();
+    case 'ciclo':         return await wizardHtmlCiclo();
+    case 'revisao':       return await wizardHtmlRevisao();
+    default: return '';
+  }
+}
+
+function wizardHtmlInicio() {
+  const modelos = (_dpModelos || []).filter(m => m.ativo !== false);
+  const temModelos = modelos.length > 0;
+  return `
+    <div class="wizard-secao-titulo">Como deseja começar?</div>
+    <div class="wizard-secao-sub">Escolha se vai usar um modelo de avaliação existente ou criar uma estrutura nova.</div>
+
+    <div class="wizard-card-escolha ${_wiz.mode==='novo'?'selecionado':''}" onclick="wizardSelecionarModo('novo')">
+      <div class="wizard-card-escolha-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      </div>
+      <div>
+        <div class="wizard-card-escolha-titulo">Criar nova avaliação</div>
+        <div class="wizard-card-escolha-desc">Define critérios, forma de resposta, cálculo e resultado financeiro do zero. O modelo criado poderá ser reutilizado no futuro.</div>
+      </div>
+    </div>
+
+    ${temModelos ? `
+    <div class="wizard-card-escolha ${_wiz.mode==='modelo'?'selecionado':''}" onclick="wizardSelecionarModo('modelo')">
+      <div class="wizard-card-escolha-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><polyline points="9 9 12 12 15 9"/></svg>
+      </div>
+      <div>
+        <div class="wizard-card-escolha-titulo">Usar modelo existente</div>
+        <div class="wizard-card-escolha-desc">Aplica um modelo já configurado (critérios, escala e cálculo definidos) em um novo período e grupo de pessoas.</div>
+      </div>
+    </div>
+    ${_wiz.mode==='modelo' ? `
+    <div class="form-group" style="margin-top:14px">
+      <label class="form-label">Selecione o modelo</label>
+      <select class="form-input" id="wizModeloSel" onchange="_wiz.modeloId=this.value">
+        <option value="">— Selecione —</option>
+        ${modelos.map(m=>`<option value="${m.id}" ${_wiz.modeloId===m.id?'selected':''}>${m.nome}</option>`).join('')}
+      </select>
+    </div>` : ''}` : ''}
+  `;
+}
+
+function wizardSelecionarModo(modo) {
+  _wiz.mode = modo;
+  if (modo === 'novo') { _wiz.modeloId = null; _wiz.versaoId = null; }
+  wizardRenderStep();
+}
+
+function wizardHtmlIdentificacao() {
+  return `
+    <div class="wizard-secao-titulo">Sobre a avaliação</div>
+    <div class="wizard-secao-sub">Dê um nome e defina o objetivo desta avaliação. Esses dados descrevem o modelo que poderá ser reutilizado em outros períodos.</div>
+    <div class="form-group">
+      <label class="form-label">Nome do modelo *</label>
+      <input class="form-input" id="wizNome" value="${_wiz.modeloNome}" placeholder="Ex: Gratificação Mensal — CD">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Objetivo (opcional)</label>
+      <textarea class="form-input" id="wizDesc" rows="3" placeholder="Descreva o objetivo desta avaliação...">${_wiz.modeloDesc}</textarea>
+    </div>
+  `;
+}
+
+async function wizardHtmlCriterios() {
+  const crits = (_dpCriterios || []).filter(c => c.na_biblioteca && c.ativo !== false);
+  const porArea = {};
+  crits.forEach(c => {
+    const area = c.area || 'Geral';
+    if (!porArea[area]) porArea[area] = [];
+    porArea[area].push(c);
+  });
+  const selIds = new Set(_wiz.critsSel.map(c => c.criterioId));
+  const areas = Object.keys(porArea).sort();
+  return `
+    <div class="wizard-secao-titulo">O que será avaliado?</div>
+    <div class="wizard-secao-sub">Selecione as competências e critérios desta avaliação. Você pode criar novos critérios se necessário.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <input class="form-input" id="wizCritSearch" placeholder="Buscar critério..." oninput="wizFiltrarCrits()" style="max-width:260px;font-size:13px">
+      <button class="btn btn-secondary btn-sm" onclick="wizAbrirNovoCriterio()">+ Novo critério</button>
+    </div>
+    <div class="wizard-crit-lista" id="wizCritLista">
+      ${areas.map(area => `
+        <div style="padding:4px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-ter);margin-top:4px">${area}</div>
+        ${porArea[area].map(c => `
+          <label class="wizard-crit-item ${selIds.has(c.id)?'selecionado':''}">
+            <input type="checkbox" ${selIds.has(c.id)?'checked':''} onchange="wizToggleCrit('${c.id}','${c.nome.replace(/'/g,"\\'")}',this.checked)">
+            <div style="flex:1">
+              <div style="font-weight:500">${c.nome}</div>
+              ${c.descricao ? `<div style="font-size:12px;color:var(--text-ter)">${c.descricao}</div>` : ''}
+            </div>
+          </label>
+        `).join('')}
+      `).join('')}
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:var(--text-ter)">${selIds.size} selecionado(s)</div>
+  `;
+}
+
+function wizToggleCrit(id, nome, checked) {
+  if (checked) {
+    if (!_wiz.critsSel.find(c => c.criterioId === id)) {
+      _wiz.critsSel.push({ criterioId: id, nome, tipo_resposta: '', escalaId: '', peso: 1, ordem: _wiz.critsSel.length + 1 });
+    }
+  } else {
+    _wiz.critsSel = _wiz.critsSel.filter(c => c.criterioId !== id);
+  }
+  const lista = document.getElementById('wizCritLista');
+  if (lista) {
+    lista.querySelectorAll('.wizard-crit-item').forEach(el => {
+      const cb = el.querySelector('input[type=checkbox]');
+      if (cb) el.classList.toggle('selecionado', cb.checked);
+    });
+  }
+  const count = document.querySelector('#wizardBody [style*="margin-top:10px"]');
+  if (count) count.textContent = `${_wiz.critsSel.length} selecionado(s)`;
+}
+
+function wizFiltrarCrits() {
+  const q = (document.getElementById('wizCritSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('.wizard-crit-item').forEach(el => {
+    el.style.display = !q || el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function wizAbrirNovoCriterio() {
+  _wizCriterioCallback = true;
+  abrirModalCompetencia(null);
+}
+
+async function wizardHtmlResposta() {
+  const escalas = _dpEscalas || [];
+  const tiposCalculo = (_dpTiposCalculo || []).filter(t => t.ativo !== false);
+  const TIPOS = [
+    { value: 'binario',           label: 'Sim / Não' },
+    { value: 'escala',            label: 'Escala (selecionar opções)' },
+    { value: 'numerico',          label: 'Valor numérico livre' },
+    { value: 'numerico_com_meta', label: 'Numérico com meta' },
+    { value: 'conceito',          label: 'Conceito (texto)' },
+    { value: 'texto',             label: 'Resposta livre (texto)' },
+  ];
+  return `
+    <div class="wizard-secao-titulo">Como será respondido e calculado?</div>
+    <div class="wizard-secao-sub">Defina o tipo de resposta para cada critério e como o resultado final será calculado.</div>
+
+    <div class="wizard-resposta-header">
+      <span>Critério</span><span>Tipo de resposta</span><span>Escala</span>
+    </div>
+    ${_wiz.critsSel.map((c, i) => `
+      <div class="wizard-resposta-linha">
+        <span style="font-weight:500">${c.nome}</span>
+        <select class="form-input" style="font-size:13px" onchange="wizSetTipoResp(${i},this.value)">
+          <option value="">— Selecione —</option>
+          ${TIPOS.map(t=>`<option value="${t.value}" ${c.tipo_resposta===t.value?'selected':''}>${t.label}</option>`).join('')}
+        </select>
+        ${c.tipo_resposta === 'escala' ? `
+          <select class="form-input" style="font-size:13px" onchange="wizSetEscala(${i},this.value)">
+            <option value="">— Selecione escala —</option>
+            ${escalas.map(e=>`<option value="${e.id}" ${c.escalaId===e.id?'selected':''}>${e.nome}</option>`).join('')}
+            <option value="__nova">+ Criar nova escala</option>
+          </select>
+        ` : '<span></span>'}
+      </div>
+    `).join('')}
+
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border-light)">
+      <div class="form-group">
+        <label class="form-label">Como o resultado final será calculado?</label>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:8px">
+          ${tiposCalculo.map(t=>`
+            <label style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;${_wiz.tipoCalculo===t.codigo?'border-color:var(--accent);background:var(--bg)':''}">
+              <input type="radio" name="wizTipoCalc" value="${t.codigo}" ${_wiz.tipoCalculo===t.codigo?'checked':''} onchange="_wiz.tipoCalculo=this.value;wizRealcarCalculo()" style="margin-top:2px">
+              <div>
+                <div style="font-weight:600">${t.label}</div>
+                ${t.descricao?`<div style="font-size:11px;color:var(--text-ter)">${t.descricao}</div>`:''}
+              </div>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function wizSetTipoResp(i, val) {
+  _wiz.critsSel[i].tipo_resposta = val;
+  if (val !== 'escala') _wiz.critsSel[i].escalaId = '';
+  wizardRenderBody('resposta').then(html => {
+    document.getElementById('wizardBody').innerHTML = html;
+    wizardPosRender('resposta');
+  });
+}
+
+function wizSetEscala(i, val) {
+  if (val === '__nova') { wizardFechar(); setTimeout(() => abrirModalEscala(null), 100); return; }
+  _wiz.critsSel[i].escalaId = val;
+}
+
+function wizRealcarCalculo() {
+  document.querySelectorAll('[name=wizTipoCalc]').forEach(r => {
+    const lbl = r.closest('label');
+    if (lbl) {
+      lbl.style.borderColor = r.checked ? 'var(--accent)' : 'var(--border)';
+      lbl.style.background  = r.checked ? 'var(--bg)' : '';
+    }
+  });
+}
+
+function wizardHtmlFinanceiro() {
+  const OPTS = [
+    { value: 'nao',                  label: 'Não há resultado financeiro',   desc: 'A avaliação gera apenas um resultado de desempenho, sem conversão em valores.' },
+    { value: 'por_resposta',         label: 'Valor por resposta',            desc: 'Cada opção de resposta tem um valor associado. Ex: SIM = R$ 20,00 / NÃO = R$ 0,00.' },
+    { value: 'por_resultado_faixa',  label: 'Valor por faixa de resultado',  desc: 'O resultado final (nota) determina o valor. Ex: nota 8–10 → R$ 400,00.' },
+    { value: 'percentual_salario',   label: 'Percentual do salário',         desc: 'O resultado define um percentual aplicado sobre o salário do colaborador.' },
+    { value: 'fixo_por_conceito',    label: 'Valor fixo por conceito',       desc: 'Cada conceito de avaliação tem um valor fixo. Ex: Excelente → R$ 500,00.' },
+  ];
+  return `
+    <div class="wizard-secao-titulo">Resultado financeiro</div>
+    <div class="wizard-secao-sub">Defina se esta avaliação gera algum resultado financeiro e de que forma ele é calculado.</div>
+    ${OPTS.map(o => `
+      <div class="wizard-fin-opcao ${(o.value==='nao'&&!_wiz.temFinanceiro)||(o.value!=='nao'&&_wiz.temFinanceiro&&_wiz.tipoFin===o.value)?'selecionada':''}"
+           onclick="wizSelecionarFin('${o.value}')">
+        <input type="radio" name="wizFin" value="${o.value}" ${(o.value==='nao'&&!_wiz.temFinanceiro)||(o.value!=='nao'&&_wiz.temFinanceiro&&_wiz.tipoFin===o.value)?'checked':''}>
+        <div>
+          <div style="font-size:13px;font-weight:600">${o.label}</div>
+          <div style="font-size:12px;color:var(--text-sec)">${o.desc}</div>
+        </div>
+      </div>
+    `).join('')}
+    ${_wiz.temFinanceiro ? wizardHtmlFinEditor() : ''}
+  `;
+}
+
+function wizSelecionarFin(val) {
+  if (val === 'nao') { _wiz.temFinanceiro = false; _wiz.tipoFin = null; }
+  else { _wiz.temFinanceiro = true; _wiz.tipoFin = val; }
+  wizardRenderBody('financeiro').then(html => { document.getElementById('wizardBody').innerHTML = html; });
+}
+
+function wizardHtmlFinEditor() {
+  switch(_wiz.tipoFin) {
+    case 'por_resultado_faixa': return wizardHtmlFinFaixas();
+    case 'por_resposta':        return wizardHtmlFinPorResposta();
+    case 'percentual_salario':  return wizardHtmlFinPercentual();
+    case 'fixo_por_conceito':   return wizardHtmlFinConceito();
+    default: return '';
+  }
+}
+
+function wizardHtmlFinFaixas() {
+  const faixas = _wiz.finDados.faixas || [{ min:'', max:'', valor:'' }];
+  return `
+    <div class="wizard-fin-editor">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text-sec)">Configure as faixas de resultado</div>
+      <div style="display:grid;grid-template-columns:100px 100px 160px 32px;gap:6px;margin-bottom:6px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-ter)">
+        <span>Nota mín</span><span>Nota máx</span><span>Valor (R$)</span><span></span>
+      </div>
+      <div id="wizFaixasList">
+        ${faixas.map((f,i) => wizardHtmlFaixaRow(f,i)).join('')}
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="wizAddFaixa()" style="margin-top:8px">+ Adicionar faixa</button>
+    </div>
+  `;
+}
+
+function wizardHtmlFaixaRow(f, i) {
+  return `<div class="wizard-faixa-row" id="wizFaixaRow_${i}">
+    <input class="form-input" type="number" placeholder="0" value="${f.min}" oninput="if(!_wiz.finDados.faixas)_wiz.finDados.faixas=[];_wiz.finDados.faixas[${i}].min=this.value" style="font-size:13px">
+    <input class="form-input" type="number" placeholder="10" value="${f.max}" oninput="if(!_wiz.finDados.faixas)_wiz.finDados.faixas=[];_wiz.finDados.faixas[${i}].max=this.value" style="font-size:13px">
+    <input class="form-input" type="number" placeholder="0,00" value="${f.valor}" oninput="if(!_wiz.finDados.faixas)_wiz.finDados.faixas=[];_wiz.finDados.faixas[${i}].valor=this.value" style="font-size:13px">
+    <button onclick="wizRemFaixa(${i})" style="background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;padding:0">✕</button>
+  </div>`;
+}
+
+function wizAddFaixa() {
+  if (!_wiz.finDados.faixas) _wiz.finDados.faixas = [];
+  _wiz.finDados.faixas.push({ min:'', max:'', valor:'' });
+  const lista = document.getElementById('wizFaixasList');
+  if (lista) {
+    const div = document.createElement('div');
+    div.innerHTML = wizardHtmlFaixaRow({ min:'', max:'', valor:'' }, _wiz.finDados.faixas.length - 1);
+    lista.appendChild(div.firstChild);
+  }
+}
+
+function wizRemFaixa(i) {
+  if (_wiz.finDados.faixas) _wiz.finDados.faixas.splice(i, 1);
+  const row = document.getElementById(`wizFaixaRow_${i}`);
+  if (row) row.remove();
+}
+
+function wizardHtmlFinPorResposta() {
+  const critsComEscala = _wiz.critsSel.filter(c => c.tipo_resposta === 'escala' && c.escalaId);
+  const critsBinarios  = _wiz.critsSel.filter(c => c.tipo_resposta === 'binario');
+  if (!critsComEscala.length && !critsBinarios.length) {
+    return `<div class="wizard-fin-editor"><div style="font-size:13px;color:var(--text-sec)">Nenhum critério com escala ou Sim/Não configurado. Volte ao passo anterior e configure os critérios.</div></div>`;
+  }
+  const vals = _wiz.finDados.porResposta || {};
+  let html = '<div class="wizard-fin-editor"><div style="font-size:12px;font-weight:700;margin-bottom:12px;color:var(--text-sec)">Valor por opção de resposta</div>';
+  critsBinarios.forEach(c => {
+    const vSim = vals[`${c.criterioId}__sim`] || '';
+    const vNao = vals[`${c.criterioId}__nao`] || '';
+    html += `<div style="margin-bottom:12px"><div style="font-size:13px;font-weight:500;margin-bottom:6px">${c.nome}</div>
+      <div style="display:flex;gap:12px">
+        <label style="font-size:13px">SIM: <input class="form-input" type="number" style="width:100px;font-size:13px" value="${vSim}" oninput="_wiz.finDados.porResposta=_wiz.finDados.porResposta||{};_wiz.finDados.porResposta['${c.criterioId}__sim']=this.value"></label>
+        <label style="font-size:13px">NÃO: <input class="form-input" type="number" style="width:100px;font-size:13px" value="${vNao}" oninput="_wiz.finDados.porResposta=_wiz.finDados.porResposta||{};_wiz.finDados.porResposta['${c.criterioId}__nao']=this.value"></label>
+      </div></div>`;
+  });
+  critsComEscala.forEach(c => {
+    const escala = (_dpEscalas || []).find(e => e.id === c.escalaId);
+    if (!escala) return;
+    html += `<div style="margin-bottom:12px"><div style="font-size:13px;font-weight:500;margin-bottom:6px">${c.nome}</div>`;
+    (escala.opcoes || []).forEach(op => {
+      const v = vals[`${c.criterioId}__${op.id}`] || '';
+      html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;font-size:13px">
+        <span style="min-width:120px">${op.label}:</span>
+        <input class="form-input" type="number" style="width:100px;font-size:13px" value="${v}" oninput="_wiz.finDados.porResposta=_wiz.finDados.porResposta||{};_wiz.finDados.porResposta['${c.criterioId}__${op.id}']=this.value">
+      </div>`;
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function wizardHtmlFinPercentual() {
+  const v = _wiz.finDados.percentual || '';
+  return `
+    <div class="wizard-fin-editor">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text-sec)">Configure o percentual do salário</div>
+      <div class="form-group">
+        <label class="form-label">Percentual aplicado sobre o salário base (%)</label>
+        <input class="form-input" type="number" placeholder="Ex: 10" value="${v}" oninput="_wiz.finDados.percentual=this.value" style="max-width:160px">
+      </div>
+      <div style="font-size:12px;color:var(--text-sec);margin-top:6px">O percentual será aplicado sobre o salário base do colaborador quando o ciclo for encerrado.</div>
+    </div>
+  `;
+}
+
+function wizardHtmlFinConceito() {
+  const conceitos = [
+    { label: 'Excelente' }, { label: 'Bom' }, { label: 'Regular' }, { label: 'Insuficiente' }
+  ];
+  const vals = _wiz.finDados.porConceito || {};
+  return `
+    <div class="wizard-fin-editor">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text-sec)">Valor por conceito</div>
+      ${conceitos.map(c => `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:13px">
+          <span style="min-width:120px;font-weight:500">${c.label}:</span>
+          <input class="form-input" type="number" placeholder="R$" style="width:120px;font-size:13px" value="${vals[c.label]||''}" oninput="_wiz.finDados.porConceito=_wiz.finDados.porConceito||{};_wiz.finDados.porConceito['${c.label}']=this.value">
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function wizardHtmlCiclo() {
+  let nomeModelo = _wiz.modeloNome;
+  if (_wiz.mode === 'modelo' && _wiz.modeloId) {
+    const m = (_dpModelos||[]).find(m => m.id === _wiz.modeloId);
+    if (m) nomeModelo = m.nome;
+  }
+  const avaliadores = (_dpTiposAvaliador || []).filter(a => a.ativo !== false);
+  const setores     = (_dpSetores || []);
+  const hoje = new Date();
+  const mesAtual = hoje.toLocaleString('pt-BR',{month:'long',year:'numeric'});
+  const defaultNome = nomeModelo ? `${nomeModelo} — ${mesAtual}` : '';
+  return `
+    <div class="wizard-secao-titulo">Configurar avaliação</div>
+    <div class="wizard-secao-sub">Defina nome, período, quem avalia e quem será avaliado neste ciclo.</div>
+
+    ${_wiz.mode==='modelo' ? `<div style="background:var(--bg);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:18px">
+      <span style="color:var(--text-ter)">Modelo:</span> <strong>${nomeModelo}</strong>
+    </div>` : ''}
+
+    <div class="form-group">
+      <label class="form-label">Nome desta avaliação *</label>
+      <input class="form-input" id="wizCicloNome" value="${_wiz.cicloNome || defaultNome}" placeholder="${defaultNome}">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="form-group">
+        <label class="form-label">Início do período</label>
+        <input class="form-input" type="date" id="wizCicloInicio" value="${_wiz.cicloInicio}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fim do período</label>
+        <input class="form-input" type="date" id="wizCicloFim" value="${_wiz.cicloFim}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Quem vai avaliar</label>
+      <select class="form-input" id="wizAvaliadorId">
+        <option value="">— Selecione —</option>
+        ${avaliadores.map(a=>`<option value="${a.id}" ${_wiz.avaliadorId===a.id?'selected':''}>${a.label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Quem será avaliado</label>
+      <select class="form-input" id="wizElegTipo" onchange="wizAtualizarEleg()">
+        <option value="todos"           ${_wiz.elegTipo==='todos'?'selected':''}>Todos os colaboradores ativos</option>
+        <option value="por_setor"       ${_wiz.elegTipo==='por_setor'?'selected':''}>Por setor</option>
+        <option value="por_cargo"       ${_wiz.elegTipo==='por_cargo'?'selected':''}>Por cargo</option>
+        <option value="por_colaborador" ${_wiz.elegTipo==='por_colaborador'?'selected':''}>Colaboradores específicos</option>
+      </select>
+    </div>
+    <div id="wizElegDetalhe">
+      ${_wiz.elegTipo==='por_setor' ? `
+        <div class="form-group">
+          <label class="form-label">Setor</label>
+          <select class="form-input" id="wizElegSetor">
+            <option value="">— Selecione —</option>
+            ${setores.map(s=>`<option value="${s.nome}" ${_wiz.elegSetor===s.nome?'selected':''}>${s.nome}</option>`).join('')}
+          </select>
+        </div>` : ''}
+      ${_wiz.elegTipo==='por_cargo' ? `
+        <div class="form-group">
+          <label class="form-label">Cargo</label>
+          <input class="form-input" id="wizElegCargo" value="${_wiz.elegCargo}" placeholder="Nome do cargo">
+        </div>` : ''}
+    </div>
+  `;
+}
+
+function wizAtualizarEleg() {
+  const tipo = document.getElementById('wizElegTipo')?.value;
+  if (tipo) _wiz.elegTipo = tipo;
+  const detalhe = document.getElementById('wizElegDetalhe');
+  if (!detalhe) return;
+  const setores = _dpSetores || [];
+  if (tipo === 'por_setor') {
+    detalhe.innerHTML = `<div class="form-group"><label class="form-label">Setor</label>
+      <select class="form-input" id="wizElegSetor">
+        <option value="">— Selecione —</option>
+        ${setores.map(s=>`<option value="${s.nome}" ${_wiz.elegSetor===s.nome?'selected':''}>${s.nome}</option>`).join('')}
+      </select></div>`;
+  } else if (tipo === 'por_cargo') {
+    detalhe.innerHTML = `<div class="form-group"><label class="form-label">Cargo</label>
+      <input class="form-input" id="wizElegCargo" value="${_wiz.elegCargo}" placeholder="Nome do cargo"></div>`;
+  } else {
+    detalhe.innerHTML = '';
+  }
+}
+
+async function wizardHtmlRevisao() {
+  let nomeModelo = _wiz.modeloNome;
+  if (_wiz.mode === 'modelo' && _wiz.modeloId) {
+    const m = (_dpModelos||[]).find(m => m.id === _wiz.modeloId);
+    if (m) nomeModelo = m.nome;
+  }
+  const avaliador = (_dpTiposAvaliador||[]).find(a => a.id === _wiz.avaliadorId);
+  const ELEG = { todos:'Todos os colaboradores ativos', por_setor:`Setor: ${_wiz.elegSetor}`, por_cargo:`Cargo: ${_wiz.elegCargo}`, por_colaborador:'Colaboradores específicos' };
+  const CALC = { soma:'Soma', media:'Média', media_ponderada:'Média ponderada', percentual_atingimento:'% de atingimento', qualitativo:'Qualitativo' };
+  const FIN  = { por_resposta:'Valor por resposta', por_resultado_faixa:'Valor por faixa', percentual_salario:'Percentual do salário', fixo_por_conceito:'Valor fixo por conceito' };
+
+  return `
+    <div class="wizard-secao-titulo">Revisar e publicar</div>
+    <div class="wizard-secao-sub">Verifique as configurações antes de publicar. Após publicar, o modelo fica fixo e a avaliação estará pronta para uso.</div>
+
+    ${_wiz.mode === 'novo' ? `
+    <div class="wizard-revisao-bloco">
+      <div class="wizard-revisao-titulo">Modelo de avaliação</div>
+      <div class="wizard-revisao-item"><span>Nome</span><span>${_wiz.modeloNome || '—'}</span></div>
+      ${_wiz.modeloDesc ? `<div class="wizard-revisao-item"><span>Objetivo</span><span>${_wiz.modeloDesc}</span></div>` : ''}
+    </div>
+    <div class="wizard-revisao-bloco">
+      <div class="wizard-revisao-titulo">Critérios (${_wiz.critsSel.length})</div>
+      ${_wiz.critsSel.map(c => {
+        const escala = c.escalaId ? (_dpEscalas||[]).find(e=>e.id===c.escalaId) : null;
+        const TIPOS_LABEL = { binario:'Sim/Não', escala:`Escala: ${escala?.nome||'—'}`, numerico:'Numérico', numerico_com_meta:'Numérico com meta', conceito:'Conceito', texto:'Texto livre' };
+        return `<div class="wizard-revisao-item"><span>${c.nome}</span><span>${TIPOS_LABEL[c.tipo_resposta]||c.tipo_resposta||'—'}</span></div>`;
+      }).join('')}
+    </div>
+    <div class="wizard-revisao-bloco">
+      <div class="wizard-revisao-titulo">Cálculo e resultado</div>
+      <div class="wizard-revisao-item"><span>Tipo de cálculo</span><span>${CALC[_wiz.tipoCalculo]||_wiz.tipoCalculo}</span></div>
+      <div class="wizard-revisao-item"><span>Resultado financeiro</span><span>${_wiz.temFinanceiro ? (FIN[_wiz.tipoFin]||_wiz.tipoFin) : 'Não'}</span></div>
+    </div>` : `
+    <div class="wizard-revisao-bloco">
+      <div class="wizard-revisao-titulo">Modelo</div>
+      <div class="wizard-revisao-item"><span>Nome</span><span>${nomeModelo || '—'}</span></div>
+    </div>`}
+
+    <div class="wizard-revisao-bloco">
+      <div class="wizard-revisao-titulo">Avaliação — ${_wiz.cicloNome}</div>
+      <div class="wizard-revisao-item"><span>Período</span><span>${formatDate(_wiz.cicloInicio)} → ${formatDate(_wiz.cicloFim)}</span></div>
+      <div class="wizard-revisao-item"><span>Avaliador</span><span>${avaliador?.label||'—'}</span></div>
+      <div class="wizard-revisao-item"><span>Elegibilidade</span><span>${ELEG[_wiz.elegTipo]||_wiz.elegTipo}</span></div>
+    </div>
+
+    <div style="background:rgba(180,35,24,0.06);border:1px solid rgba(180,35,24,0.2);border-radius:8px;padding:12px;font-size:12px;color:var(--red);margin-top:4px">
+      Após publicar, o modelo fica fixo e não pode ser alterado. A avaliação será criada com status <strong>Rascunho</strong> — você poderá adicionar/remover participantes antes de abri-la oficialmente.
+    </div>
+  `;
+}
+
+async function wizardColetarStep(stepId) {
+  switch(stepId) {
+    case 'inicio':
+      if (!_wiz.mode) { toast('Selecione como deseja começar.', true); return false; }
+      if (_wiz.mode === 'modelo' && !_wiz.modeloId) { toast('Selecione um modelo existente.', true); return false; }
+      return true;
+    case 'identificacao':
+      _wiz.modeloNome = document.getElementById('wizNome')?.value?.trim() || '';
+      _wiz.modeloDesc = document.getElementById('wizDesc')?.value?.trim() || '';
+      if (!_wiz.modeloNome) { toast('Informe o nome do modelo.', true); return false; }
+      return true;
+    case 'criterios':
+      if (!_wiz.critsSel.length) { toast('Selecione ao menos um critério.', true); return false; }
+      return true;
+    case 'resposta': {
+      const semTipo = _wiz.critsSel.filter(c => !c.tipo_resposta);
+      if (semTipo.length) { toast(`Configure o tipo de resposta para: ${semTipo[0].nome}`, true); return false; }
+      const semEscala = _wiz.critsSel.filter(c => c.tipo_resposta === 'escala' && !c.escalaId);
+      if (semEscala.length) { toast(`Selecione a escala para: ${semEscala[0].nome}`, true); return false; }
+      const tipoCalcEl = document.querySelector('[name=wizTipoCalc]:checked');
+      if (tipoCalcEl) _wiz.tipoCalculo = tipoCalcEl.value;
+      return true;
+    }
+    case 'financeiro':
+      return true;
+    case 'ciclo':
+      _wiz.cicloNome   = document.getElementById('wizCicloNome')?.value?.trim() || '';
+      _wiz.cicloInicio = document.getElementById('wizCicloInicio')?.value || '';
+      _wiz.cicloFim    = document.getElementById('wizCicloFim')?.value || '';
+      _wiz.avaliadorId = document.getElementById('wizAvaliadorId')?.value || '';
+      _wiz.elegTipo    = document.getElementById('wizElegTipo')?.value || 'todos';
+      _wiz.elegSetor   = document.getElementById('wizElegSetor')?.value || '';
+      _wiz.elegCargo   = document.getElementById('wizElegCargo')?.value || '';
+      if (!_wiz.cicloNome) { toast('Informe o nome da avaliação.', true); return false; }
+      return true;
+    default:
+      return true;
+  }
+}
+
+async function wizardPublicar() {
+  const btn = document.getElementById('wizardBtnAvancar');
+  btn.disabled = true;
+  btn.textContent = 'Publicando...';
+
+  try {
+    let versaoId = _wiz.versaoId;
+
+    if (_wiz.mode === 'novo') {
+      // 1. Criar modelo
+      const modelo = await sbPost('/rest/v1/dp_modelos', { nome: _wiz.modeloNome, descricao: _wiz.modeloDesc || null, ativo: true });
+      if (!modelo?.[0]) throw new Error('Erro ao criar modelo.');
+      const modeloId = modelo[0].id;
+
+      // 2. Criar versão
+      const versao = await sbPost('/rest/v1/dp_versoes', { modelo_id: modeloId, versao: 'v1', tipo_calculo: _wiz.tipoCalculo, converte_para_conceito: false, em_uso: false });
+      if (!versao?.[0]) throw new Error('Erro ao criar versão.');
+      versaoId = versao[0].id;
+
+      // 3. Criar versao_criterios
+      for (let i = 0; i < _wiz.critsSel.length; i++) {
+        const c = _wiz.critsSel[i];
+        await sbPost('/rest/v1/dp_versao_criterios', {
+          versao_id: versaoId,
+          criterio_id: c.criterioId,
+          tipo_resposta: c.tipo_resposta,
+          escala_id: c.escalaId || null,
+          peso: c.peso || 1,
+          ordem: i + 1,
+          obrigatorio: true,
+          contribui_calculo: true,
+          obs_obrigatoria: false,
+        });
+      }
+
+      // 4. Criar regra financeira se configurado
+      if (_wiz.temFinanceiro && _wiz.tipoFin) {
+        const regra = await sbPost('/rest/v1/dp_regras_financeiras', { versao_id: versaoId, tipo: _wiz.tipoFin, nome: `Regra financeira — ${_wiz.modeloNome}`, ativo: true });
+        if (regra?.[0]) {
+          const regraId = regra[0].id;
+          if (_wiz.tipoFin === 'por_resultado_faixa' && _wiz.finDados.faixas?.length) {
+            for (const f of _wiz.finDados.faixas) {
+              if (f.valor !== '') {
+                await sbPost('/rest/v1/dp_regra_financeira_faixas', { regra_financeira_id: regraId, nota_min: parseFloat(f.min)||0, nota_max: parseFloat(f.max)||0, valor_financeiro: parseFloat(f.valor)||0 });
+              }
+            }
+          } else if (_wiz.tipoFin === 'percentual_salario' && _wiz.finDados.percentual) {
+            await sbPost('/rest/v1/dp_regra_financeira_faixas', { regra_financeira_id: regraId, nota_min: 0, nota_max: 10, percentual_salario: parseFloat(_wiz.finDados.percentual) });
+          }
+        }
+      }
+
+      // 5. Publicar versão (em_uso = true)
+      await sbPatch(`/rest/v1/dp_versoes?id=eq.${versaoId}`, { em_uso: true, publicado_em: new Date().toISOString() });
+    } else {
+      // Modo modelo: buscar versão publicada
+      const versoes = await sbGet(`/rest/v1/dp_versoes?modelo_id=eq.${_wiz.modeloId}&em_uso=eq.true&limit=1`) || [];
+      if (!versoes.length) throw new Error('Modelo sem versão publicada. Acesse a aba Modelos e publique uma versão primeiro.');
+      versaoId = versoes[0].id;
+    }
+
+    // 6. Criar ciclo (status rascunho)
+    const elegIds = _wiz.elegTipo === 'por_setor' ? [_wiz.elegSetor] :
+                    _wiz.elegTipo === 'por_cargo'  ? [_wiz.elegCargo]  : null;
+    const ciclo = await sbPost('/rest/v1/dp_ciclos', {
+      versao_id: versaoId,
+      nome: _wiz.cicloNome,
+      status: 'rascunho',
+      tipo_elegibilidade: _wiz.elegTipo,
+      elegibilidade_ids: elegIds,
+      data_inicio: _wiz.cicloInicio || null,
+      data_fim: _wiz.cicloFim || null,
+    });
+    if (!ciclo?.[0]) throw new Error('Erro ao criar avaliação.');
+
+    toast('Avaliação criada com sucesso!');
+    wizardFechar();
+    await dpLoadCiclos();
+    dpRenderCiclos();
+
+  } catch(e) {
+    toast(e.message || 'Erro ao publicar. Tente novamente.', true);
+    btn.disabled = false;
+    btn.textContent = 'Publicar avaliação';
+  }
+}
+
+function wizardPosRender(stepId) {
+  if (stepId === 'identificacao') {
+    setTimeout(() => document.getElementById('wizNome')?.focus(), 50);
+  }
 }
 
 /* ─────────────────────────────────────────────
