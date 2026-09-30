@@ -2998,3 +2998,105 @@ Aplicado em **todos os módulos** (não apenas Férias).
 **Regra:** nenhum texto que precise ser lido pode estar em 8px, 9px ou 10px. Hierarquia visual mantida pela combinação de tamanho + peso + cor, nunca sacrificando legibilidade.
 
 **Escopo:** tokens definidos no `:root` de `modulos/ferias/index.html`; os valores `#4B5565` e `#6C7589` foram propagados para todos os outros módulos (`modulos/cadastro/`, `modulos/admissao/`, etc.) e o font-size mínimo de 11px foi aplicado via replace global.
+
+---
+
+## Auditoria premium — `colaboradores.historico` JSONB (set/2026)
+
+**Premissa do sistema:** todo módulo deve registrar histórico de movimentações em `colaboradores.historico` (JSONB). No módulo Férias, isso é feito via `_logColabHist`.
+
+### Helper `_logColabHist(colabId, tipo, detalhe, usuario)`
+
+```js
+async function _logColabHist(colabId, tipo, detalhe, usuario) {
+  if (!colabId) return;
+  try {
+    const rows = await sbGet('colaboradores', `id=eq.${colabId}&select=historico`);
+    const hist = Array.isArray(rows[0]?.historico) ? rows[0].historico : [];
+    hist.push({ tipo, detalhe, data: new Date().toISOString(), usuario: usuario || null });
+    await sbPatch('colaboradores', `id=eq.${colabId}`, { historico: hist });
+  } catch(e) { console.warn('[colaboradores.historico] update falhou:', e?.message || e); }
+}
+```
+
+### Pontos de chamada no módulo Férias
+
+| Função | tipo | detalhe |
+|---|---|---|
+| `gestorEnviarSolicitacao` | `'ferias_solicitado'` | `Férias solicitadas: DD/MM → DD/MM (Nd)` |
+| `rhAprovarSolicitado` | `'ferias_aprovado'` | `Férias aprovadas: DD/MM → DD/MM (Nd)` |
+| `rhRecusarSolicitado` | `'ferias_rejeitado'` | `Férias rejeitadas: DD/MM → DD/MM. Motivo: ...` |
+| `gestorSolicitarAlteracao` | `'ferias_alteracao_solicitada'` | `Alteração solicitada: DD/MM → DD/MM (Nd)` |
+| `rhAprovarAlteracao` | `'ferias_alteracao_aprovada'` | `Alteração aprovada: DD/MM → DD/MM (Nd)` |
+| `rhRecusarAlteracao` | `'ferias_alteracao_recusada'` | `Alteração recusada...` |
+| `gestorSolicitarCancelamento` | `'ferias_cancelamento_solicitado'` | `Cancelamento solicitado...` |
+| `rhAprovarCancelamento` | `'ferias_cancelamento_aprovado'` | `Cancelamento aprovado...` |
+| `rhRecusarCancelamento` | `'ferias_cancelamento_recusado'` | `Cancelamento recusado. Motivo: ...` |
+| `grhEnviarSolicitarGozo` | `'ferias_gozo_solicitado'` | `Gozo solicitado: saída DD/MM → retorno DD/MM (Nd)` |
+| `rhAprovarGozoPendente` | `'ferias_gozo_aprovado'` | `Gozo aprovado: saída DD/MM, Nd dias` |
+
+---
+
+## Configuração parametrizada — `param_ferias_config` (migration 072, set/2026)
+
+Tabela singleton de configuração do módulo Férias — ajustável pelo RH via Parâmetros Gerais sem alterar código.
+
+### Estrutura
+
+```sql
+CREATE TABLE param_ferias_config (
+  id                    INTEGER PRIMARY KEY DEFAULT 1,
+  dias_resposta_visivel INTEGER NOT NULL DEFAULT 7,
+  criado_em             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  atualizado_em         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT param_ferias_config_singleton CHECK (id = 1)
+);
+```
+
+RLS: `SELECT` e `UPDATE` públicos (mesmo padrão das outras tabelas `param_*`).
+
+### Global `FERIAS_CONFIG`
+
+```js
+let FERIAS_CONFIG = { dias_resposta_visivel: 7 }; // default; sobrescrito no load
+```
+
+**Carregamento RH** (no `Promise.all` de `carregarDoSupabase`):
+```js
+sbGet('param_ferias_config', 'select=dias_resposta_visivel&limit=1').catch(() => [])
+// após: if (configRows?.[0]) FERIAS_CONFIG = { ...FERIAS_CONFIG, ...configRows[0] };
+```
+
+**Carregamento Gestor** (no `Promise.all` do load do gestor — obrigatório também aqui):
+```js
+sbGet('param_ferias_config', 'select=dias_resposta_visivel&limit=1').catch(() => [])
+// após: if (configRowsG?.[0]) FERIAS_CONFIG = { ...FERIAS_CONFIG, ...configRowsG[0] };
+```
+
+### Uso em `_gestorProcessoInfo`
+
+`dias_resposta_visivel` define por quantos dias um desfecho (aprovado/rejeitado) permanece em **Atividade Recente** do Gestor antes de migrar para **Histórico**:
+
+```js
+const diasAtras = h.criado_em ? (Date.now() - new Date(h.criado_em).getTime()) / 86400000 : 999;
+const ativoResolvido = diasAtras <= (FERIAS_CONFIG.dias_resposta_visivel ?? 7);
+// desfechos: ativo = ativoResolvido (não hardcoded)
+// pendências: ativo = true (sempre na Atividade Recente)
+```
+
+**Configurável em:** Parâmetros Gerais → seção "Configurações de Férias" → campo "Dias visível na Atividade Recente". PATCH em `param_ferias_config?id=eq.1`.
+
+---
+
+## Visual — itens rejeitados na Atividade Recente do Gestor (set/2026)
+
+**Regra:** quando `info.cls === 'recus'`, a linha de período (datas) é renderizada com `color: var(--red)` — sinal semântico padrão de mercado, sem ícone adicional.
+
+```js
+// Em _itemRow de renderGestorAtividade:
+const perLine = (info.inicio && info.fim)
+  ? `<div class="gstor-ativ-per"${info.cls === 'recus' ? ' style="color:var(--red)"' : ''}>${fmtD(info.inicio)} → ${fmtD(info.fim)}${info.dias ? ' · ' + info.dias + 'd' : ''}</div>`
+  : '';
+```
+
+`var(--red)` = `#B42318` (definido no `:root` do módulo). **Nunca usar `--text-danger`** — essa variável não existe no módulo.
