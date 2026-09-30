@@ -3107,7 +3107,8 @@ const perLine = (info.inicio && info.fim)
 
 ### Grid da tabela
 
-5 colunas: `grid-template-columns: 2.2fr 0.9fr 1.6fr 0.8fr 1.5fr`
+5 colunas: `grid-template-columns: 2.2fr 1.7fr 1.0fr 0.9fr 0.9fr`
+(COLABORADOR | PA VIGENTE | AGENDAMENTOS | SALDO | SITUAÇÃO — espaçamentos finais set/2026)
 
 Cabeçalho (`#gestorTableHead`) e cada linha (`gstor-row`) usam o mesmo grid. **Nunca voltar para 6 colunas** — a sexta coluna de ação foi fundida com Situação.
 
