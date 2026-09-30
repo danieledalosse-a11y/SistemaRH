@@ -418,6 +418,7 @@
 <div class="mod-tabs">
   <button class="mod-tab active" onclick="showSec('colaboradores',this)">Colaboradores</button>
   <button class="mod-tab" onclick="showSec('ciclos',this)">Ciclos de Avaliação</button>
+  <button class="mod-tab" onclick="showSec('dpCiclos',this)">Ciclos D&amp;P</button>
   <button class="mod-tab" onclick="showSec('competencias',this)">Competências</button>
   <button class="mod-tab" onclick="showSec('modelos',this)">Modelos</button>
   <button class="mod-tab" onclick="showSec('escalas',this)">Escalas</button>
@@ -492,6 +493,23 @@
       </button>
     </div>
     <div id="ciclosList">
+      <div class="loader"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- ══ SEC: CICLOS D&P ══ -->
+  <div id="sec-dpCiclos" class="sec">
+    <div class="toolbar">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:600;margin-bottom:2px">Ciclos D&amp;P</div>
+        <div style="font-size:13px;color:var(--text-sec)">Crie e gerencie ciclos de avaliação vinculados ao motor D&amp;P.</div>
+      </div>
+      <button class="btn btn-primary" onclick="dpAbrirModalCiclo()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo ciclo
+      </button>
+    </div>
+    <div id="dpCiclosList">
       <div class="loader"><div class="spinner"></div></div>
     </div>
   </div>
@@ -691,6 +709,35 @@
     <button class="btn btn-secondary" id="btnDvValidar" onclick="validarVersao()">Validar versão</button>
     <button class="btn btn-primary" id="btnDvPublicar" onclick="publicarVersao()" style="display:none">Publicar versão</button>
     <button class="btn btn-secondary" onclick="fecharDrawerVersao()">Fechar</button>
+  </div>
+</div>
+
+<!-- ══ DRAWER: CICLO D&P ══ -->
+<div class="drawer-overlay" id="drawerDpCicloOverlay" onclick="dpFecharDrawerCiclo()"></div>
+<div class="drawer-versao" id="drawerDpCiclo">
+  <div class="drawer-head">
+    <div class="drawer-person-info">
+      <div class="drawer-person-name" id="dpDcNome">—</div>
+      <div class="drawer-person-sub" id="dpDcSub">—</div>
+    </div>
+    <button class="drawer-close" onclick="dpFecharDrawerCiclo()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-tabs">
+    <button class="drawer-tab active" onclick="dpShowDcTab('participantes',this)">Participantes</button>
+    <button class="drawer-tab" onclick="dpShowDcTab('info',this)">Informações</button>
+  </div>
+  <div class="drawer-body">
+    <div id="dptab-participantes" class="drawer-sec active">
+      <div id="dpParticipantesBody"><div class="loader"><div class="spinner"></div></div></div>
+    </div>
+    <div id="dptab-info" class="drawer-sec">
+      <div id="dpInfoBody"><div class="loader"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-secondary" onclick="dpFecharDrawerCiclo()">Fechar</button>
   </div>
 </div>
 
@@ -894,6 +941,73 @@
   </div>
 </div>
 
+<!-- ══ MODAL: NOVO CICLO D&P ══ -->
+<div class="modal-overlay" id="modalDpCiclo">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">Novo Ciclo D&amp;P</div>
+    <div class="modal-sub">Configure o ciclo e defina a elegibilidade dos participantes.</div>
+    <div class="form-group">
+      <label class="form-label">Nome do ciclo *</label>
+      <input class="form-input" id="dpCicloNome" placeholder="Ex: Gratificação CD — Setembro/2026">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Versão do modelo *</label>
+      <select class="form-input" id="dpCicloVersao">
+        <option value="">— Selecione uma versão publicada —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tipo de avaliador *</label>
+      <select class="form-input" id="dpCicloAvaliador">
+        <option value="">— Selecione —</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Data início</label>
+        <input class="form-input" type="date" id="dpCicloInicio">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data fim</label>
+        <input class="form-input" type="date" id="dpCicloFim">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Elegibilidade</label>
+      <select class="form-input" id="dpCicloElegTipo" onchange="dpAtualizarElegibilidade()">
+        <option value="todos">Todos os colaboradores ativos</option>
+        <option value="por_setor">Por setor</option>
+        <option value="por_cargo">Por cargo</option>
+        <option value="por_colaborador">Colaboradores específicos</option>
+      </select>
+    </div>
+    <div id="dpCicloElegValorGrp" style="display:none">
+      <div class="form-group" id="dpCicloElegSetorGrp" style="display:none">
+        <label class="form-label">Setor</label>
+        <select class="form-input" id="dpCicloElegSetor">
+          <option value="">— Selecione o setor —</option>
+        </select>
+      </div>
+      <div class="form-group" id="dpCicloElegCargoGrp" style="display:none">
+        <label class="form-label">Cargo</label>
+        <input class="form-input" id="dpCicloElegCargo" placeholder="Digite o cargo exato (ex: Auxiliar de Estoque)">
+      </div>
+      <div id="dpCicloElegColabGrp" style="display:none">
+        <label class="form-label">Colaboradores</label>
+        <div class="search-box" style="margin-bottom:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" id="dpCicloElegColabSearch" placeholder="Buscar colaborador..." oninput="dpFiltrarColabEleg()">
+        </div>
+        <div id="dpCicloElegColabLista" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px 0"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="dpFecharModalCiclo()">Cancelar</button>
+      <button class="btn btn-primary" onclick="dpSalvarCiclo()">Criar ciclo</button>
+    </div>
+  </div>
+</div>
+
 <!-- toast container -->
 <div id="toast"></div>
 
@@ -980,6 +1094,12 @@ let _dpTiposAvaliador = [];
 let _dpTabelasConceito = [];
 let _dpFaixasConceito  = {}; // tabela_id -> [faixas]
 
+/* dp_ciclos */
+let _dpCiclos          = [];
+let _dpCicloAtual      = null;
+let _dpParticipantes   = [];   // participantes do ciclo aberto no drawer
+let _dpElegColabSel    = new Set(); // ids selecionados no picker de colaboradores
+
 /* ─────────────────────────────────────────────
    NAVEGAÇÃO
 ───────────────────────────────────────────── */
@@ -993,6 +1113,7 @@ function showSec(id, btn) {
   if (id === 'modelos')         renderModelos();
   if (id === 'escalas')         renderEscalas();
   if (id === 'configuracoes')   renderConfiguracoes();
+  if (id === 'dpCiclos')        dpRenderCiclos();
 }
 function showDrawerTab(id, btn) {
   document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
@@ -1016,17 +1137,19 @@ async function init() {
     loadCompetencias(),
     loadDpCriterios(),
     loadDpEscalas(),
+    loadDpModelos(),
     loadDpTiposCalculo(),
     loadDpTiposAvaliador(),
     loadDpTabelasConceito(),
-    loadParamSetores()
+    loadParamSetores(),
+    dpLoadCiclos()
   ]);
   populateSetorFilter();
   renderColabList();
 }
 
 async function loadColaboradores() {
-  _colaboradores = await sbGet('/rest/v1/colaboradores?select=matricula,nome,cargo,setor,empresa,situacao,foto_url&order=nome.asc');
+  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa,unidade,situacao,foto_url&order=nome.asc');
   _colaboradores = (_colaboradores || []).filter(c => c.situacao === 'ativo' || !c.situacao);
 }
 
@@ -2767,6 +2890,392 @@ async function salvarEscala() {
   fecharModalEscala();
   await loadDpEscalas();
   renderEscalas();
+}
+
+/* ─────────────────────────────────────────────
+   CICLOS D&P
+───────────────────────────────────────────── */
+
+async function dpLoadCiclos() {
+  const rows = await sbGet('/rest/v1/dp_ciclos?order=criado_em.desc&select=*');
+  _dpCiclos = rows || [];
+}
+
+function dpRenderCiclos() {
+  const el = document.getElementById('dpCiclosList');
+  if (!el) return;
+  if (!_dpCiclos.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-title">Nenhum ciclo criado</div><div class="empty-sub">Crie o primeiro ciclo D&P para começar.</div></div>`;
+    return;
+  }
+  const STATUS = { rascunho:'Rascunho', aberto:'Aberto', em_andamento:'Em andamento', encerrado:'Encerrado', cancelado:'Cancelado' };
+  el.innerHTML = _dpCiclos.map(c => {
+    const modelo = _dpCicloModeloNome(c.versao_id);
+    const avaliador = (_dpTiposAvaliador.find(a => a.id === c.tipo_avaliador_id) || {}).label || '—';
+    const periodo = (c.data_inicio || c.data_fim) ? `${formatDate(c.data_inicio)} → ${formatDate(c.data_fim)}` : 'Período não definido';
+    const st = c.status || 'rascunho';
+    return `<div class="ciclo-card" style="cursor:pointer" onclick="dpAbrirDrawerCiclo('${c.id}')">
+      <div class="ciclo-info">
+        <div class="ciclo-nome">${c.nome}</div>
+        <div class="ciclo-meta">${modelo} · ${avaliador} · ${periodo}</div>
+      </div>
+      <div class="ciclo-actions">
+        <span class="ciclo-badge ${st}">${STATUS[st]||st}</span>
+        ${st === 'rascunho' ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();dpMudarStatus('${c.id}','aberto')">Abrir</button>` : ''}
+        ${st === 'aberto' ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();dpMudarStatus('${c.id}','encerrado')">Encerrar</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _dpCicloModeloNome(versaoId) {
+  for (const [mid, versoes] of Object.entries(_dpVersoes)) {
+    const v = versoes.find(v => v.id === versaoId);
+    if (v) {
+      const m = _dpModelos.find(m => m.id === mid);
+      return m ? `${m.nome} — V${v.numero || v.versao || 1}` : '—';
+    }
+  }
+  return '—';
+}
+
+function dpAbrirModalCiclo() {
+  // Popular versões publicadas
+  const sel = document.getElementById('dpCicloVersao');
+  sel.innerHTML = '<option value="">— Selecione uma versão publicada —</option>';
+  for (const [mid, versoes] of Object.entries(_dpVersoes)) {
+    const m = _dpModelos.find(m => m.id === mid);
+    versoes.filter(v => v.em_uso).forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = `${m ? m.nome : '?'} — V${v.numero || v.versao || 1}`;
+      sel.appendChild(opt);
+    });
+  }
+  // Popular tipos de avaliador
+  const selAv = document.getElementById('dpCicloAvaliador');
+  selAv.innerHTML = '<option value="">— Selecione —</option>';
+  _dpTiposAvaliador.filter(a => a.ativo !== false).forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = a.label;
+    selAv.appendChild(opt);
+  });
+  // Popular setores no select de elegibilidade
+  const selSet = document.getElementById('dpCicloElegSetor');
+  selSet.innerHTML = '<option value="">— Selecione o setor —</option>';
+  _dpSetores.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.nome;
+    opt.textContent = s.nome;
+    selSet.appendChild(opt);
+  });
+  // Limpar campos
+  document.getElementById('dpCicloNome').value = '';
+  document.getElementById('dpCicloInicio').value = '';
+  document.getElementById('dpCicloFim').value = '';
+  document.getElementById('dpCicloElegTipo').value = 'todos';
+  document.getElementById('dpCicloElegValorGrp').style.display = 'none';
+  _dpElegColabSel.clear();
+  document.getElementById('modalDpCiclo').classList.add('open');
+}
+
+function dpFecharModalCiclo() {
+  document.getElementById('modalDpCiclo').classList.remove('open');
+}
+
+function dpAtualizarElegibilidade() {
+  const tipo = document.getElementById('dpCicloElegTipo').value;
+  const grp = document.getElementById('dpCicloElegValorGrp');
+  document.getElementById('dpCicloElegSetorGrp').style.display = 'none';
+  document.getElementById('dpCicloElegCargoGrp').style.display = 'none';
+  document.getElementById('dpCicloElegColabGrp').style.display = 'none';
+  if (tipo === 'todos') { grp.style.display = 'none'; return; }
+  grp.style.display = '';
+  if (tipo === 'por_setor')        document.getElementById('dpCicloElegSetorGrp').style.display = '';
+  else if (tipo === 'por_cargo')   document.getElementById('dpCicloElegCargoGrp').style.display = '';
+  else if (tipo === 'por_colaborador') {
+    document.getElementById('dpCicloElegColabGrp').style.display = '';
+    dpRenderColabElegLista('');
+  }
+}
+
+function dpFiltrarColabEleg() {
+  const q = document.getElementById('dpCicloElegColabSearch').value;
+  dpRenderColabElegLista(q);
+}
+
+function dpRenderColabElegLista(q) {
+  const lista = document.getElementById('dpCicloElegColabLista');
+  const term = (q || '').toLowerCase();
+  const colabs = _colaboradores.filter(c => !term || c.nome.toLowerCase().includes(term) || (c.setor||'').toLowerCase().includes(term));
+  if (!colabs.length) { lista.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text-ter)">Nenhum colaborador encontrado.</div>'; return; }
+  lista.innerHTML = colabs.slice(0, 50).map(c => {
+    const sel = _dpElegColabSel.has(c.id || c.matricula);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border-light)">
+      <input type="checkbox" ${sel ? 'checked' : ''} onchange="dpToggleColabEleg('${c.id || c.matricula}',this.checked)" style="cursor:pointer">
+      <span>${c.nome}</span><span style="color:var(--text-ter);margin-left:auto">${c.setor||'—'}</span>
+    </label>`;
+  }).join('');
+}
+
+function dpToggleColabEleg(id, checked) {
+  if (checked) _dpElegColabSel.add(id);
+  else _dpElegColabSel.delete(id);
+}
+
+// Variáveis transitórias de elegibilidade (para gerar preview após criação)
+let _dpCicloElegSetorTemp = '';
+let _dpCicloElegCargoTemp = '';
+
+async function dpSalvarCiclo() {
+  const nome = document.getElementById('dpCicloNome').value.trim();
+  const versaoId = document.getElementById('dpCicloVersao').value;
+  const avaliadorId = document.getElementById('dpCicloAvaliador').value;
+  if (!nome)       { toast('Informe o nome do ciclo.', true); return; }
+  if (!versaoId)   { toast('Selecione uma versão publicada.', true); return; }
+  if (!avaliadorId){ toast('Selecione o tipo de avaliador.', true); return; }
+  const elegTipo = document.getElementById('dpCicloElegTipo').value;
+  const inicio = document.getElementById('dpCicloInicio').value || null;
+  const fim    = document.getElementById('dpCicloFim').value    || null;
+  _dpCicloElegSetorTemp = document.getElementById('dpCicloElegSetor').value;
+  _dpCicloElegCargoTemp = document.getElementById('dpCicloElegCargo').value;
+  const payload = {
+    nome,
+    versao_id: versaoId,
+    tipo_avaliador_id: avaliadorId,
+    status: 'rascunho',
+    tipo_elegibilidade: elegTipo,
+    elegibilidade_ids: null,
+    data_inicio: inicio,
+    data_fim: fim
+  };
+  const res = await sbPost('/rest/v1/dp_ciclos', payload);
+  if (!res || !res[0]) { toast('Erro ao criar ciclo: ' + sbErrMsg(), true); return; }
+  toast('Ciclo criado com sucesso.');
+  dpFecharModalCiclo();
+  await dpLoadCiclos();
+  dpRenderCiclos();
+  // Abre o drawer para o RH definir os participantes
+  dpAbrirDrawerCiclo(res[0].id);
+}
+
+async function dpMudarStatus(id, status) {
+  if (status === 'aberto') {
+    // Verifica se há participantes antes de abrir
+    const parts = await sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=eq.${id}&select=id`);
+    if (!parts || !parts.length) {
+      toast('Adicione ao menos um participante antes de abrir o ciclo.', true);
+      return;
+    }
+  }
+  const res = await sbPatch(`/rest/v1/dp_ciclos?id=eq.${id}`, { status });
+  if (!res) { toast('Erro ao atualizar status: ' + sbErrMsg(), true); return; }
+  toast(`Ciclo ${status === 'aberto' ? 'aberto' : 'encerrado'}.`);
+  await dpLoadCiclos();
+  dpRenderCiclos();
+  if (_dpCicloAtual && _dpCicloAtual.id === id) {
+    _dpCicloAtual = _dpCiclos.find(c => c.id === id) || _dpCicloAtual;
+    dpRenderInfoCiclo();
+  }
+}
+
+async function dpAbrirDrawerCiclo(cicloId) {
+  _dpCicloAtual = _dpCiclos.find(c => c.id === cicloId) || null;
+  if (!_dpCicloAtual) return;
+  const modelo = _dpCicloModeloNome(_dpCicloAtual.versao_id);
+  document.getElementById('dpDcNome').textContent = _dpCicloAtual.nome;
+  document.getElementById('dpDcSub').textContent = modelo;
+  document.getElementById('drawerDpCicloOverlay').classList.add('open');
+  document.getElementById('drawerDpCiclo').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  dpShowDcTab('participantes', document.querySelector('#drawerDpCiclo .drawer-tab'));
+  await dpLoadParticipantes(cicloId);
+  dpRenderParticipantes();
+}
+
+function dpFecharDrawerCiclo() {
+  document.getElementById('drawerDpCicloOverlay').classList.remove('open');
+  document.getElementById('drawerDpCiclo').classList.remove('open');
+  document.body.style.overflow = '';
+  _dpCicloAtual = null;
+  _dpParticipantes = [];
+}
+
+function dpShowDcTab(id, btn) {
+  document.querySelectorAll('#drawerDpCiclo .drawer-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#drawerDpCiclo .drawer-sec').forEach(s => s.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById(`dptab-${id}`).classList.add('active');
+  if (id === 'info') dpRenderInfoCiclo();
+}
+
+async function dpLoadParticipantes(cicloId) {
+  const rows = await sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=eq.${cicloId}&order=adicionado_em.asc&select=*`);
+  _dpParticipantes = rows || [];
+}
+
+function dpRenderParticipantes() {
+  const el = document.getElementById('dpParticipantesBody');
+  if (!el) return;
+  const ciclo = _dpCicloAtual;
+  const readonly = ciclo && ciclo.status !== 'rascunho';
+  let html = '';
+  if (!readonly) {
+    html += `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-secondary btn-sm" onclick="dpGerarPreviewParticipantes()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.48-3.32"/></svg>
+        Gerar sugestão automática
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="dpAbrirPickerParticipante()">+ Adicionar manualmente</button>
+    </div>`;
+  }
+  if (!_dpParticipantes.length) {
+    html += `<div style="text-align:center;padding:32px;color:var(--text-ter);font-size:13px">
+      ${readonly ? 'Nenhum participante neste ciclo.' : 'Nenhum participante ainda. Use "Gerar sugestão automática" ou adicione manualmente.'}
+    </div>`;
+  } else {
+    html += `<div style="font-size:12px;color:var(--text-ter);margin-bottom:8px">${_dpParticipantes.length} participante(s)</div>`;
+    html += _dpParticipantes.map(p => {
+      const snap = p.snapshot || {};
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border-light);font-size:13px">
+        <div style="flex:1">
+          <div style="font-weight:500">${snap.nome || '—'}</div>
+          <div style="color:var(--text-ter);font-size:12px">${snap.cargo || '—'} · ${snap.setor || '—'}</div>
+        </div>
+        <div style="color:var(--text-ter);font-size:12px">${snap.matricula || '—'}</div>
+        ${!readonly ? `<button class="btn btn-secondary btn-sm" onclick="dpRemoverParticipante('${p.id}')" title="Remover" style="padding:3px 8px">✕</button>` : ''}
+      </div>`;
+    }).join('');
+  }
+  el.innerHTML = html;
+}
+
+async function dpGerarPreviewParticipantes() {
+  const ciclo = _dpCicloAtual;
+  if (!ciclo) return;
+  const el = document.getElementById('dpParticipantesBody');
+  el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  let colabs = await sbGet('/rest/v1/colaboradores?situacao=eq.ativo&select=id,matricula,nome,cargo,setor,empresa,unidade&order=nome.asc') || [];
+  if (ciclo.tipo_elegibilidade === 'por_setor' && _dpCicloElegSetorTemp) {
+    colabs = colabs.filter(c => (c.setor||'').toLowerCase().includes(_dpCicloElegSetorTemp.toLowerCase()));
+  } else if (ciclo.tipo_elegibilidade === 'por_cargo' && _dpCicloElegCargoTemp) {
+    colabs = colabs.filter(c => (c.cargo||'').toLowerCase().includes(_dpCicloElegCargoTemp.toLowerCase()));
+  }
+  const jaIds = new Set(_dpParticipantes.map(p => p.colaborador_id));
+  const novos = colabs.filter(c => !jaIds.has(c.id));
+  if (!novos.length) {
+    dpRenderParticipantes();
+    toast('Nenhum colaborador novo encontrado para essa elegibilidade.');
+    return;
+  }
+  const confirmar = confirm(`Foram encontrados ${novos.length} colaborador(es). Deseja adicioná-los ao ciclo?`);
+  if (!confirmar) { dpRenderParticipantes(); return; }
+  await dpAdicionarColaboradores(novos);
+}
+
+async function dpAdicionarColaboradores(colabs) {
+  let erros = 0;
+  for (const c of colabs) {
+    const snap = {
+      nome:      c.nome      || '',
+      matricula: c.matricula || '',
+      empresa:   c.empresa   || '',
+      setor:     c.setor     || '',
+      cargo:     c.cargo     || '',
+      unidade:   c.unidade   || ''
+    };
+    const res = await sbPost('/rest/v1/dp_ciclo_participantes', {
+      ciclo_id:       _dpCicloAtual.id,
+      colaborador_id: c.id,
+      snapshot:       snap
+    });
+    if (!res) erros++;
+  }
+  await dpLoadParticipantes(_dpCicloAtual.id);
+  dpRenderParticipantes();
+  if (erros) toast(`${erros} participante(s) não foram adicionados (podem já estar no ciclo).`, true);
+  else toast(`${colabs.length} participante(s) adicionados.`);
+}
+
+let _dpPickerColabs = [];
+async function dpAbrirPickerParticipante() {
+  const el = document.getElementById('dpParticipantesBody');
+  const jaIds = new Set(_dpParticipantes.map(p => p.colaborador_id));
+  _dpPickerColabs = _colaboradores.filter(c => !jaIds.has(c.id));
+  const picker = document.createElement('div');
+  picker.id = 'dpPickerInline';
+  picker.style.cssText = 'border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;background:var(--bg)';
+  picker.innerHTML = `<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-sec)">Adicionar participante</div>
+    <div class="search-box" style="margin-bottom:8px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="dpPickerSearch" placeholder="Buscar por nome ou setor..." oninput="dpFiltrarPicker()" autofocus>
+    </div>
+    <div id="dpPickerResultados" style="max-height:200px;overflow-y:auto"></div>
+    <div style="margin-top:8px;text-align:right"><button class="btn btn-secondary btn-sm" onclick="document.getElementById('dpPickerInline').remove()">Fechar busca</button></div>`;
+  el.prepend(picker);
+  dpFiltrarPicker();
+}
+
+function dpFiltrarPicker() {
+  const q = (document.getElementById('dpPickerSearch').value || '').toLowerCase();
+  const jaIds = new Set(_dpParticipantes.map(p => p.colaborador_id));
+  const lista = _colaboradores.filter(c => !jaIds.has(c.id) && (!q || c.nome.toLowerCase().includes(q) || (c.setor||'').toLowerCase().includes(q)));
+  const el = document.getElementById('dpPickerResultados');
+  if (!el) return;
+  if (!lista.length) { el.innerHTML = '<div style="padding:8px 12px;font-size:13px;color:var(--text-ter)">Nenhum resultado.</div>'; return; }
+  el.innerHTML = lista.slice(0, 30).map(c =>
+    `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--border-light)">
+      <span style="flex:1">${c.nome}</span>
+      <span style="color:var(--text-ter);font-size:12px">${c.setor||'—'}</span>
+      <button class="btn btn-primary btn-sm" onclick="dpAdicionarUm(${c.id})" style="padding:3px 10px">+</button>
+    </div>`
+  ).join('');
+}
+
+async function dpAdicionarUm(colaboradorId) {
+  const c = _colaboradores.find(col => col.id === colaboradorId);
+  if (!c) return;
+  await dpAdicionarColaboradores([c]);
+  dpFiltrarPicker();
+}
+
+async function dpRemoverParticipante(participanteId) {
+  const res = await sbDelete(`/rest/v1/dp_ciclo_participantes?id=eq.${participanteId}`);
+  if (!res) { toast('Erro ao remover participante.', true); return; }
+  _dpParticipantes = _dpParticipantes.filter(p => p.id !== participanteId);
+  dpRenderParticipantes();
+  toast('Participante removido.');
+}
+
+function dpRenderInfoCiclo() {
+  const el = document.getElementById('dpInfoBody');
+  if (!el || !_dpCicloAtual) return;
+  const c = _dpCicloAtual;
+  const STATUS = { rascunho:'Rascunho', aberto:'Aberto', em_andamento:'Em andamento', encerrado:'Encerrado', cancelado:'Cancelado' };
+  const avaliador = (_dpTiposAvaliador.find(a => a.id === c.tipo_avaliador_id) || {}).label || '—';
+  const ELEG = { todos:'Todos os colaboradores ativos', por_setor:'Por setor', por_cargo:'Por cargo', por_colaborador:'Colaboradores específicos' };
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;font-size:13px">
+      <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Status</div>
+        <span class="ciclo-badge ${c.status}">${STATUS[c.status]||c.status}</span></div>
+      <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Modelo / Versão</div>
+        <div>${_dpCicloModeloNome(c.versao_id)}</div></div>
+      <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Tipo de avaliador</div>
+        <div>${avaliador}</div></div>
+      <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Período</div>
+        <div>${formatDate(c.data_inicio)} → ${formatDate(c.data_fim)}</div></div>
+      <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Elegibilidade</div>
+        <div>${ELEG[c.tipo_elegibilidade]||c.tipo_elegibilidade||'—'}</div></div>
+      <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Criado em</div>
+        <div>${formatDate(c.criado_em ? c.criado_em.split('T')[0] : null)}</div></div>
+    </div>
+    ${c.status === 'rascunho' ? `<div style="margin-top:16px;display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm" onclick="dpMudarStatus('${c.id}','aberto')">Abrir ciclo</button>
+    </div>` : ''}
+    ${c.status === 'aberto' ? `<div style="margin-top:16px">
+      <button class="btn btn-secondary btn-sm" onclick="dpMudarStatus('${c.id}','encerrado')">Encerrar ciclo</button>
+    </div>` : ''}`;
 }
 
 /* ─────────────────────────────────────────────
