@@ -1126,11 +1126,15 @@ Agrupa `FERIAS_HISTORICO` por `ferias_id`, mantendo apenas o evento mais recente
 - **Histórico:** processos com `ativo: false` (desfecho concluído)
 - Datas exibidas: `inicio`/`fim`/`dias` do objeto `info` (vindos de `GESTOR_LANCAMENTOS` via `lanc?.inicio` com fallback para `h.detalhe`)
 
+**Fallback obrigatório (out/2026):** após `_gestorAgruparProcessos`, injeta itens sintéticos para lançamentos em `GESTOR_LANCAMENTOS` com `status='solicitado'` cujo `periodo_id` não existe em `FERIAS_HISTORICO`. Garante que solicitações antigas (anteriores ao `_logAtiv`) ou com falha silenciosa apareçam na Atividade Recente. Itens sintéticos têm `_fallback: true` e `criado_em: null`.
+
 #### `renderRhAtividade()` — RH
 
 Usa `_rhEhRecente(h)` para classificar eventos individuais (não processos agrupados):
 - **Atividade Recente:** evento sem resposta para o mesmo `ferias_id`
 - **Histórico:** evento que já teve resposta
+
+**Fallback obrigatório (out/2026):** após filtrar recentes do `FERIAS_HISTORICO`, injeta itens sintéticos para cada pendente em `getPendentes()` cujo `reg._sbId` não existe em `FERIAS_HISTORICO`. Garante convergência entre o KPI "Pendentes de aprovação" e a Atividade Recente.
 
 ```js
 function _rhEhRecente(h) {
