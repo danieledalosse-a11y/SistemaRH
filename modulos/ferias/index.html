@@ -8729,6 +8729,25 @@ function renderRhAtividade() {
   const recentes  = FERIAS_HISTORICO.filter(h => _rhEhRecente(h));
   const historico = FERIAS_HISTORICO.filter(h => !_rhEhRecente(h));
 
+  // Fallback: pendentes reais (ferias.status=Pendente/Alteracao/Cancelamento) sem entrada no histórico
+  const _feriasIdsNoHist = new Set(FERIAS_HISTORICO.map(h => String(h.ferias_id)));
+  getPendentes().forEach(({ colab, reg, lancamento, _tipo }) => {
+    const sbId = String(reg._sbId || '');
+    if (!sbId || _feriasIdsNoHist.has(sbId)) return; // já tem entrada no histórico
+    const acaoFallback = _tipo === 'alteracao' ? 'alteracao_solicitada'
+                       : _tipo === 'cancelamento' ? 'cancelamento_solicitado'
+                       : 'solicitado';
+    recentes.push({
+      ferias_id:      Number(sbId),
+      colaborador_id: Number(colab._sbColabId),
+      acao:           acaoFallback,
+      usuario:        null,
+      detalhe:        { inicio: lancamento?.inicio, fim: lancamento?.fim, dias: lancamento?.dias },
+      criado_em:      null,
+      _fallback:      true,
+    });
+  });
+
   const _itemRow = h => {
     const { cls, chip, svg } = _acaoInfo(h.acao || '');
     const colab = colabMap.get(String(h.colaborador_id));
