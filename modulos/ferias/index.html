@@ -8585,6 +8585,25 @@ function renderGestorAtividade() {
 
   // Processos agrupados por ferias_id (um item por período)
   const processos = _gestorAgruparProcessos(idsPermitidos);
+
+  // Fallback: lançamentos com status=solicitado sem entrada em FERIAS_HISTORICO
+  const _histFeriasIds = new Set(FERIAS_HISTORICO.map(h => String(h.ferias_id)));
+  (GESTOR_LANCAMENTOS || []).forEach(l => {
+    if ((l.status || '').toLowerCase() !== 'solicitado') return;
+    if (!idsPermitidos.has(String(l.colaborador_id))) return;
+    const pid = String(l.periodo_id || l.id || '');
+    if (!pid || _histFeriasIds.has(pid)) return;
+    processos.push({
+      ferias_id:      Number(pid),
+      colaborador_id: Number(l.colaborador_id),
+      acao:           'solicitado',
+      usuario:        null,
+      detalhe:        { inicio: l.inicio, fim: l.fim, dias: l.dias },
+      criado_em:      null,
+      _fallback:      true,
+    });
+  });
+
   const ativos    = processos.filter(h => _gestorProcessoInfo(h).ativo);
   const historico = processos.filter(h => !_gestorProcessoInfo(h).ativo);
   // Ordena ativos: aguardando primeiro, depois aprovados
