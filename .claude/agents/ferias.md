@@ -3092,14 +3092,14 @@ const ativoResolvido = diasAtras <= (FERIAS_CONFIG.dias_resposta_visivel ?? 7);
 
 ---
 
-## Visual — itens rejeitados na Atividade Recente do Gestor (set/2026)
+## Visual — itens rejeitados na Atividade Recente (set/2026 · unificado out/2026)
 
-**Regra:** quando `info.cls === 'recus'`, a linha de período (datas) é renderizada com `color: var(--red)` — sinal semântico padrão de mercado, sem ícone adicional.
+**Regra:** quando `cls === 'recus'`, a linha de período (datas) é renderizada com `color: var(--red)` — sinal semântico padrão de mercado, sem ícone adicional. **Vale para RH e Gestor.**
 
 ```js
-// Em _itemRow de renderGestorAtividade:
-const perLine = (info.inicio && info.fim)
-  ? `<div class="gstor-ativ-per"${info.cls === 'recus' ? ' style="color:var(--red)"' : ''}>${fmtD(info.inicio)} → ${fmtD(info.fim)}${info.dias ? ' · ' + info.dias + 'd' : ''}</div>`
+// Em _itemRow de renderGestorAtividade (info.cls) e renderRhAtividade (cls):
+const perLine = (inicio && fim)
+  ? `<div class="gstor-ativ-per"${cls === 'recus' ? ' style="color:var(--red)"' : ''}>${fmtD(inicio)} → ${fmtD(fim)}${dias ? ' · ' + dias + 'd' : ''}</div>`
   : '';
 ```
 
