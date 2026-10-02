@@ -431,6 +431,43 @@
   .wizard-revisao-item span:first-child { color: var(--text-sec); }
   .wizard-revisao-item span:last-child { font-weight: 500; }
 
+  /* ── row-card (padrão unificado de lista) ── */
+  .row-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 18px; display: flex; align-items: center; gap: 14px;
+    box-shadow: var(--shadow-sm); transition: box-shadow 0.15s, border-color 0.15s;
+    margin-bottom: 10px;
+  }
+  .row-card:last-child { margin-bottom: 0; }
+  .row-card:hover { box-shadow: var(--shadow-md); border-color: #CBD5E1; }
+  .row-card-expandable { cursor: default; }
+  .row-icon {
+    width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+  .row-body { flex: 1; min-width: 0; }
+  .row-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .row-desc { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
+  .row-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* row-card: bloco de versões */
+  .row-versions { border-top: 1px solid var(--border-light); margin-top: 12px; padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .row-version-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: var(--bg); border-radius: 8px; font-size: 13px; flex-wrap: wrap; }
+  .row-version-num { font-weight: 700; color: var(--text); min-width: 28px; }
+  .row-version-meta { flex: 1; color: var(--text-sec); font-size: 12px; min-width: 0; }
+  .row-version-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* escalas: opções colapsáveis */
+  .row-opcoes-list { border-top: 1px solid var(--border-light); margin-top: 12px; padding-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+  .row-opcao-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: var(--bg); border-radius: 6px; font-size: 13px; }
+  .row-opcao-num { width: 22px; height: 22px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--text-ter); flex-shrink: 0; }
+  .row-opcao-label { flex: 1; font-weight: 500; }
+  .row-opcao-valor { font-size: 12px; color: var(--text-sec); }
+
+  /* section label acima dos grupos */
+  .list-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-ter); margin: 20px 0 8px; }
+  .list-section-label:first-child { margin-top: 0; }
+
   /* ── responsive ── */
   @media (max-width: 900px) {
     .grid-colab { grid-template-columns: 1.5fr 1fr 1fr; }
@@ -1777,15 +1814,19 @@ async function renderCiclos() {
     return;
   }
   const STATUS_LABEL = { aberto:'Ativo', fechado:'Encerrado', rascunho:'Rascunho' };
+  const STATUS_BADGE = { aberto:'sbadge-green', fechado:'sbadge-gray', rascunho:'sbadge-amber' };
+  const CICLO_ICON  = { aberto:'#DBEAFE', fechado:'#F1F5F9', rascunho:'#FEF3C7' };
   el.innerHTML = _ciclos.map(c => {
     const dt = [c.periodo_inicio, c.periodo_fim].filter(Boolean).map(formatDate).join(' → ');
-    return `<div class="ciclo-card">
-      <div class="ciclo-info">
-        <div class="ciclo-nome">${c.nome}</div>
-        <div class="ciclo-meta">${dt || 'Período não definido'}${c.prazo_auto_avaliacao ? ' · Auto-avaliação até ' + formatDate(c.prazo_auto_avaliacao) : ''}</div>
+    const desc = [dt || 'Período não definido', c.prazo_auto_avaliacao ? 'Auto-avaliação até ' + formatDate(c.prazo_auto_avaliacao) : ''].filter(Boolean).join(' · ');
+    return `<div class="row-card">
+      <div class="row-icon" style="background:${CICLO_ICON[c.status]||'#F1F5F9'}">📅</div>
+      <div class="row-body">
+        <div class="row-name">${c.nome}</div>
+        <div class="row-desc">${desc}</div>
       </div>
-      <div class="ciclo-actions">
-        <span class="ciclo-badge ${c.status}">${STATUS_LABEL[c.status]||c.status}</span>
+      <div class="row-meta">
+        <span class="sbadge ${STATUS_BADGE[c.status]||'sbadge-gray'}">${STATUS_LABEL[c.status]||c.status}</span>
         ${c.status === 'rascunho' ? `<button class="btn btn-secondary btn-sm" onclick="mudarStatusCiclo(${c.id},'aberto')">Ativar</button>` : ''}
         ${c.status === 'aberto'   ? `<button class="btn btn-secondary btn-sm" onclick="mudarStatusCiclo(${c.id},'fechado')">Encerrar</button>` : ''}
         <button class="btn btn-secondary btn-sm" onclick="editarCiclo(${c.id})">Editar</button>
@@ -2459,26 +2500,28 @@ async function renderModelos() {
                <button class="btn btn-secondary btn-sm" onclick="novaVersaoBaseada('${v.id}')">Nova versão</button>`
             : `<button class="btn btn-secondary btn-sm" onclick="abrirDrawerVersao('${v.id}',false)">Configurar</button>
                <button class="btn btn-primary btn-sm" onclick="publicarVersaoDirecto('${v.id}')">Publicar</button>`;
-          return `<div class="versao-row">
-            <span class="versao-label">v${v.numero||'?'}</span>
-            <span class="versao-meta">${CALC_LABEL[v.tipo_calculo]||v.tipo_calculo||'—'}</span>
+          return `<div class="row-version-item">
+            <span class="row-version-num">v${v.numero||'?'}</span>
+            <span class="row-version-meta">${CALC_LABEL[v.tipo_calculo]||v.tipo_calculo||'—'}</span>
             ${statusBadge}
-            <div class="versao-actions">${btns}</div>
+            <div class="row-version-actions">${btns}</div>
           </div>`;
         }).join('')
-      : `<div style="font-size:12px;color:var(--text-ter);padding:8px 0">Nenhuma versão. <button class="btn btn-secondary btn-sm" onclick="criarVersaoModelo('${m.id}')">Criar versão</button></div>`;
+      : `<div style="font-size:12px;color:var(--text-ter);padding:6px 0">Nenhuma versão. <button class="btn btn-secondary btn-sm" onclick="criarVersaoModelo('${m.id}')">Criar versão</button></div>`;
     const atBadge = m.ativo
       ? `<span class="sbadge sbadge-green">Ativo</span>`
       : `<span class="sbadge sbadge-gray">Inativo</span>`;
-    return `<div class="modelo-card">
-      <div class="modelo-card-head">
-        <div class="modelo-card-info">
-          <div class="modelo-card-nome">${m.nome}</div>
-          <div class="modelo-card-meta">${(versoes.length||0)} versão(ões)</div>
-        </div>
-        ${atBadge}
+    return `<div class="row-card row-card-expandable">
+      <div class="row-icon" style="background:${m.ativo ? '#DBEAFE' : '#F1F5F9'}">📋</div>
+      <div class="row-body" style="min-width:0;flex:1">
+        <div class="row-name">${m.nome}</div>
+        <div class="row-desc">${versoes.length} versão(ões)</div>
+        ${versoes.length ? `<div class="row-versions">${versoesHtml}</div>` : ''}
       </div>
-      <div class="versoes-list">${versoesHtml}</div>
+      <div class="row-meta" style="align-self:flex-start;margin-top:2px">
+        ${atBadge}
+        <button class="btn btn-secondary btn-sm" onclick="criarVersaoModelo('${m.id}')">+ Versão</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2940,23 +2983,24 @@ async function renderEscalas() {
     const emUso = escalaEmUso.has(e.id);
     const emUsoBadge = emUso ? `<span class="sbadge sbadge-amber">Em uso</span>` : '';
     const opcoesHtml = opcoes.map(o =>
-      `<div class="escala-opcao-row">
-        <div class="escala-opcao-ordem">${o.ordem}</div>
-        <div class="escala-opcao-label">${o.label}</div>
-        <div class="escala-opcao-valor">${o.valor_numerico != null ? `Valor: ${o.valor_numerico}` : 'Sem valor'}</div>
+      `<div class="row-opcao-item">
+        <div class="row-opcao-num">${o.ordem}</div>
+        <div class="row-opcao-label">${o.label}</div>
+        <div class="row-opcao-valor">${o.valor_numerico != null ? `Valor: ${o.valor_numerico}` : 'Sem valor'}</div>
       </div>`
     ).join('');
-    return `<div class="escala-card">
-      <div class="escala-card-head">
-        <div class="escala-card-info">
-          <div class="escala-card-nome">${e.nome}</div>
-          <div style="font-size:12px;color:var(--text-sec)">${opcoes.length} opção(ões)${e.descricao ? ' · '+e.descricao : ''}</div>
-        </div>
+    return `<div class="row-card row-card-expandable">
+      <div class="row-icon" style="background:#EDE9FE">📏</div>
+      <div class="row-body" style="min-width:0;flex:1">
+        <div class="row-name">${e.nome}</div>
+        <div class="row-desc">${opcoes.length} opção(ões)${e.descricao ? ' · '+e.descricao : ''}</div>
+        <div class="row-opcoes-list" id="esc-${e.id}" style="display:none">${opcoesHtml||'<div style="font-size:12px;color:var(--text-ter)">Nenhuma opção cadastrada.</div>'}</div>
+      </div>
+      <div class="row-meta" style="align-self:flex-start;margin-top:2px">
         ${emUsoBadge}
         <button class="btn btn-secondary btn-sm" onclick="toggleEscalaOpcoes('esc-${e.id}')">Ver opções</button>
         <button class="btn btn-secondary btn-sm" onclick="abrirModalEscala('${e.id}')">Editar</button>
       </div>
-      <div class="escala-opcoes-list" id="esc-${e.id}" style="display:none">${opcoesHtml||'<div style="font-size:12px;color:var(--text-ter)">Nenhuma opção cadastrada.</div>'}</div>
     </div>`;
   }).join('');
 }
