@@ -299,7 +299,22 @@ GitHub Pages — branch `main`:
 
 Deploy automático após push (2–3 min). Para testar localmente usar Live Server ou similar.
 
+## Ficha de Registro — "Gerar PDF" (out/2026)
+
+Botão **Gerar PDF** disponível no painel de revisão da ficha. Gera a ficha de registro impressa via `window.print()` em uma nova janela.
+
+### Composição dos campos na Ficha de Registro (linha ~2421)
+
+```js
+// Nacionalidade / Naturalidade
+[f.nacionalidade, [f.naturalidade, f.estado_naturalidade].filter(Boolean).join(' / ')].filter(Boolean).join(' — ')
+// Resultado: "BRASILEIRA — PARANAVAÍ / PR"
+```
+
+**Regra:** `estado_naturalidade` deve estar salvo no banco para aparecer. Se o campo estiver nulo (ficha antiga), só a cidade aparece. O RH precisa abrir o painel, confirmar que PR está selecionado e clicar "Salvar alterações" antes de gerar o PDF.
+
+**Fix aplicado (out/2026):** antes, `estado_naturalidade` era ignorado no PDF — apenas `f.naturalidade` (cidade) entrava na composição. Corrigido para incluir a UF após a cidade separada por ` / `.
+
 ## Pendências conhecidas
 
-- Geração de PDF/contrato de trabalho a partir da ficha efetivada
 - Notificação por email ao candidato quando convite é criado
