@@ -1519,6 +1519,35 @@ async function savePanel() {
   if (_vtErro) _vtErro.style.display = 'none';
   if (_vtCard) _vtCard.style.borderColor = '';
 
+  // Validação de campos críticos — proteção contra exclusão acidental pelo RH
+  const _camposCriticos = [
+    { id: 'nome',        label: 'Nome completo',    aba: 'pessoal' },
+    { id: 'cpf',         label: 'CPF',              aba: 'pessoal' },
+    { id: 'rg',          label: 'RG',               aba: 'pessoal' },
+    { id: 'nascimento',  label: 'Data de nascimento', aba: 'pessoal' },
+    { id: 'sexo',        label: 'Sexo',             aba: 'pessoal' },
+    { id: 'celular',     label: 'Celular',          aba: 'pessoal' },
+    { id: 'cidade',      label: 'Cidade',           aba: 'pessoal' },
+    { id: 'uf',          label: 'UF',               aba: 'pessoal' },
+    { id: 'ctps_numero', label: 'CTPS nº',          aba: 'pessoal' },
+    { id: 'ctps_serie',  label: 'CTPS série',       aba: 'pessoal' },
+    { id: 'pis',         label: 'PIS/PASEP',        aba: 'pessoal' },
+  ];
+  const _faltando = _camposCriticos.filter(c => !fv(c.id));
+  if (_faltando.length > 0) {
+    const abaDestino = _faltando[0].aba;
+    const nomes = _faltando.map(c => c.label).join(', ');
+    _faltando.forEach(c => {
+      const el = document.getElementById('pf_' + c.id);
+      if (el) {
+        el.style.borderColor = '#DC2626';
+        setTimeout(() => { el.style.borderColor = ''; }, 6000);
+      }
+    });
+    _painelErro(info, `Campo(s) obrigatório(s) não preenchido(s): ${nomes}.`, abaDestino);
+    return;
+  }
+
   btn.disabled = true; btn.textContent = 'Salvando...';
   const payload = {
     nome: fv('nome'), nascimento: fv('nascimento')||null, sexo: fv('sexo'),
