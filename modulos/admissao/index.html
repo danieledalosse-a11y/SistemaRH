@@ -1470,11 +1470,28 @@ function renderPanelComp(f) {
   setTimeout(() => _atualizarBotaoVTFoto(f.docs?.vt_cartao_foto || null), 0);
 }
 
+function _painelIrAba(ptab) {
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel-tab-pane').forEach(p => p.classList.remove('active'));
+  const tab = document.querySelector(`.panel-tab[data-ptab="${ptab}"]`);
+  const pane = document.getElementById(`ptab-${ptab}`);
+  if (tab) tab.classList.add('active');
+  if (pane) pane.classList.add('active');
+}
+
+function _painelErro(info, mensagem, ptabDestino) {
+  info.innerHTML = `⚠ ${mensagem}`;
+  info.style.color = '#DC2626';
+  info.style.fontWeight = '600';
+  if (ptabDestino) _painelIrAba(ptabDestino);
+  setTimeout(() => { info.textContent = ''; info.style.fontWeight = ''; }, 6000);
+}
+
 async function savePanel() {
   const btn = document.getElementById('btnSalvarFicha');
   const info = document.getElementById('panelSaveInfo');
 
-  // Validação VT — destaque visual no card, sem mensagem no rodapé
+  // Validação VT
   const _vtErro = document.getElementById('vt_erro');
   const _vtCard = document.getElementById('vt_card');
   const _vtCartaoEl = document.getElementById('pf_vt_cartao');
@@ -1483,8 +1500,8 @@ async function savePanel() {
     const cartaoOk = !!fv('vt_cartao');
     const passesOk = !!fv('vt_passes');
     if (!cartaoOk || !passesOk) {
-      if (_vtErro) { _vtErro.style.display = 'flex'; }
-      if (_vtCard) { _vtCard.style.borderColor = '#DC2626'; }
+      if (_vtErro) _vtErro.style.display = 'flex';
+      if (_vtCard) _vtCard.style.borderColor = '#DC2626';
       if (_vtCartaoEl) _vtCartaoEl.style.borderColor = cartaoOk ? '' : '#DC2626';
       if (_vtPassesEl) _vtPassesEl.style.borderColor = passesOk ? '' : '#DC2626';
       setTimeout(() => {
@@ -1492,11 +1509,13 @@ async function savePanel() {
         if (_vtCard) _vtCard.style.borderColor = '';
         if (_vtCartaoEl) _vtCartaoEl.style.borderColor = '';
         if (_vtPassesEl) _vtPassesEl.style.borderColor = '';
-      }, 5000);
+      }, 6000);
+      const campos = [!cartaoOk && 'Nº do cartão', !passesOk && 'Qtd. de passes'].filter(Boolean).join(' e ');
+      _painelErro(info, `Preencha o(s) campo(s) obrigatório(s) de Vale Transporte: ${campos}.`, 'comp');
       return;
     }
   }
-  // Limpar estado de erro caso esteja ok
+  // Limpar estado de erro VT caso esteja ok
   if (_vtErro) _vtErro.style.display = 'none';
   if (_vtCard) _vtCard.style.borderColor = '';
 
@@ -1528,10 +1547,16 @@ async function savePanel() {
     });
     if (res.ok) {
       Object.assign(currentFicha, payload);
-      info.textContent = 'Salvo ✓'; info.style.color = 'var(--green)';
-      setTimeout(() => { info.textContent = ''; }, 3000);
-    } else { info.textContent = 'Erro ao salvar.'; info.style.color = 'var(--red)'; }
-  } catch(e) { info.textContent = 'Erro ao salvar.'; info.style.color = 'var(--red)'; }
+      info.innerHTML = '✓ Alterações salvas com sucesso.';
+      info.style.color = 'var(--green)';
+      info.style.fontWeight = '600';
+      setTimeout(() => { info.textContent = ''; info.style.fontWeight = ''; }, 4000);
+    } else {
+      _painelErro(info, 'Não foi possível salvar. Tente novamente ou recarregue a página.');
+    }
+  } catch(e) {
+    _painelErro(info, 'Erro de conexão. Verifique sua internet e tente novamente.');
+  }
   btn.disabled = false; btn.textContent = 'Salvar alterações';
 }
 
