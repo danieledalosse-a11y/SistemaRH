@@ -390,10 +390,11 @@
   .faixas-preview { display: flex; flex-wrap: wrap; gap: 6px; }
   .faixa-chip { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--border-light); }
 
-  /* ── wizard ── */
-  .wizard-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.45); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.22s; }
+  /* ── wizard (Nova Avaliação) — drawer lateral ── */
+  .wizard-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.22s; }
   .wizard-overlay.open { opacity: 1; pointer-events: all; }
-  .wizard-panel { background: var(--surface); border-radius: 16px; width: 760px; max-width: 96vw; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(16,24,40,0.22); }
+  .wizard-overlay.open .wizard-panel { transform: translateX(0); }
+  .wizard-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 820px; max-width: 96vw; background: var(--surface); box-shadow: -4px 0 32px rgba(16,24,40,0.18); display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.28s cubic-bezier(0.4,0,0.2,1); border-radius: 0; }
   .wizard-header { padding: 22px 28px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 16px; flex-shrink: 0; }
   .wizard-titulo { font-size: 17px; font-weight: 700; flex: 1; }
   .wizard-steps-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
@@ -752,12 +753,14 @@
 
   <!-- ══ SEC: COMPETÊNCIAS ══ -->
   <div id="sec-competencias" class="sec">
-    <div class="toolbar">
-      <div style="flex:1">
-        <div style="font-size:15px;font-weight:600;margin-bottom:2px">Biblioteca de Competências</div>
-        <div style="font-size:13px;color:var(--text-sec)">Gerencie os critérios que a Revest adota nas avaliações.</div>
-      </div>
-    </div>
+    <div class="content-area" style="align-items:flex-start">
+      <div class="list-col">
+        <div class="toolbar" style="padding-bottom:0;margin-bottom:0">
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:600;margin-bottom:2px">Biblioteca de Competências</div>
+            <div style="font-size:13px;color:var(--text-sec)">Gerencie os critérios que a Revest adota nas avaliações.</div>
+          </div>
+        </div>
 
     <!-- Abas internas -->
     <div class="bib-tabs">
@@ -814,6 +817,16 @@
       </div>
       <div id="catalogoList"></div>
     </div>
+      </div><!-- /list-col competencias -->
+      <div class="sidebar-col">
+        <div class="sidebar-panel">
+          <div class="panel-title">Biblioteca</div>
+          <div class="stat-row"><span class="stat-label">Critérios</span><span class="stat-value" id="sideCriterios">—</span></div>
+          <div class="stat-row"><span class="stat-label">Comportamentais</span><span class="stat-value" id="sideCriteriosComp">—</span></div>
+          <div class="stat-row"><span class="stat-label">Técnicas</span><span class="stat-value" id="sideCriteriosTec">—</span></div>
+        </div>
+      </div>
+    </div><!-- /content-area competencias -->
   </div>
 
 
@@ -864,7 +877,18 @@
         Nova escala
       </button>
     </div>
-    <div id="escalasList"><div class="loader"><div class="spinner"></div></div></div>
+    <div class="content-area">
+      <div class="list-col">
+        <div id="escalasList"><div class="loader"><div class="spinner"></div></div></div>
+      </div>
+      <div class="sidebar-col">
+        <div class="sidebar-panel">
+          <div class="panel-title">Biblioteca</div>
+          <div class="stat-row"><span class="stat-label">Escalas</span><span class="stat-value" id="sideEscalas">—</span></div>
+          <div class="stat-row"><span class="stat-label">Em uso em modelos</span><span class="stat-value accent" id="sideEscalasEmUso">—</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ══ SEC: CONFIGURAÇÕES D&P ══ -->
@@ -875,7 +899,19 @@
         <div style="font-size:13px;color:var(--text-sec)">Parâmetros globais do módulo de Desenvolvimento &amp; Performance.</div>
       </div>
     </div>
-    <div id="confBody"><div class="loader"><div class="spinner"></div></div></div>
+    <div class="content-area" style="align-items:flex-start">
+      <div class="list-col">
+        <div id="confBody"><div class="loader"><div class="spinner"></div></div></div>
+      </div>
+      <div class="sidebar-col">
+        <div class="sidebar-panel">
+          <div class="panel-title">Configurações globais</div>
+          <div class="stat-row"><span class="stat-label">Escala padrão</span><span class="stat-value">Likert 1–5</span></div>
+          <div class="stat-row"><span class="stat-label">Aviso de prazo</span><span class="stat-value">7 dias</span></div>
+          <div class="stat-row"><span class="stat-label">Tipos de avaliador</span><span class="stat-value" id="sideConfAvaliadores">—</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
 </div><!-- /container -->
@@ -2060,6 +2096,13 @@ async function renderBiblioteca() {
   }
 
   let lista = _dpCriterios.filter(c => c.na_biblioteca);
+  // atualiza sidebar
+  const scTotal = document.getElementById('sideCriterios');
+  const scComp  = document.getElementById('sideCriteriosComp');
+  const scTec   = document.getElementById('sideCriteriosTec');
+  if (scTotal) scTotal.textContent = lista.length;
+  if (scComp)  scComp.textContent  = lista.filter(c => c.tipo === 'comportamental').length;
+  if (scTec)   scTec.textContent   = lista.filter(c => c.tipo === 'tecnico').length;
   if (_bibFiltroTipo) lista = lista.filter(c => c.tipo === _bibFiltroTipo);
   if (areaFiltro)     lista = lista.filter(c => c.area === areaFiltro);
   if (q)              lista = lista.filter(c => (c.nome||'').toLowerCase().includes(q) || (c.descricao||'').toLowerCase().includes(q));
@@ -2369,23 +2412,30 @@ async function renderConfiguracoes() {
   const el = document.getElementById('confBody');
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
   await Promise.all([loadDpTiposCalculo(), loadDpTiposAvaliador(), loadDpTabelasConceito()]);
+  // atualiza sidebar
+  const sideAvs = document.getElementById('sideConfAvaliadores');
+  if (sideAvs) sideAvs.textContent = _dpTiposAvaliador.filter(a => a.ativo).length;
   el.innerHTML = `
-    <div class="list-section-label">Tipos de Avaliador</div>
+    <div class="section-header"><span class="section-title">Tipos de Avaliador</span><span class="section-count">${_dpTiposAvaliador.length}</span></div>
     <div id="confAvaliadores">${renderAvaliadores()}</div>
 
-    <div class="list-section-label" style="margin-top:28px;display:flex;align-items:center;justify-content:space-between">
-      <span>Escalas de Resposta</span>
+    <div class="section-header" style="margin-top:20px;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="section-title">Escalas de Resposta</span><span class="section-count">${_dpEscalas.length}</span>
+      </div>
       <button class="btn btn-secondary btn-sm" onclick="abrirModalEscala(null)">+ Nova escala</button>
     </div>
     <div id="confEscalas">${renderEscalasConf()}</div>
 
-    <div class="list-section-label" style="margin-top:28px;display:flex;align-items:center;justify-content:space-between">
-      <span>Tabelas de Conceito</span>
+    <div class="section-header" style="margin-top:20px;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="section-title">Tabelas de Conceito</span><span class="section-count">${_dpTabelasConceito.length}</span>
+      </div>
       <button class="btn btn-secondary btn-sm" onclick="abrirModalNovaTabela()">+ Nova tabela</button>
     </div>
     <div id="confTabelasConceito">${renderTabelasConceito()}</div>
 
-    <div class="list-section-label" style="margin-top:28px">Tipos de Cálculo</div>
+    <div class="section-header" style="margin-top:20px"><span class="section-title">Tipos de Cálculo</span><span class="section-count">${_dpTiposCalculo.length}</span></div>
     <div id="confCalculo">${renderTiposCalculo()}</div>
   `;
 }
@@ -3135,6 +3185,11 @@ async function renderEscalas() {
     const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${v.id}&select=escala_id`) || [];
     crits.forEach(c => { if (c.escala_id) escalaEmUso.add(c.escala_id); });
   }
+  // atualiza sidebar
+  const seTotal = document.getElementById('sideEscalas');
+  const seEmUso = document.getElementById('sideEscalasEmUso');
+  if (seTotal) seTotal.textContent = _dpEscalas.length;
+  if (seEmUso) seEmUso.textContent = escalaEmUso.size;
   if (!_dpEscalas.length) {
     el.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M3 3h18M3 9h18M3 15h18M3 21h18"/></svg><p>Nenhuma escala cadastrada.</p></div>`;
     return;
