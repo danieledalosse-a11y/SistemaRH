@@ -2241,105 +2241,101 @@ async function renderConfiguracoes() {
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
   await Promise.all([loadDpTiposCalculo(), loadDpTiposAvaliador(), loadDpTabelasConceito()]);
   el.innerHTML = `
-    <!-- Bloco: Avaliadores -->
-    <div class="conf-bloco">
-      <div class="conf-bloco-titulo">Tipos de Avaliador</div>
-      <div class="conf-bloco-desc">Defina os avaliadores disponíveis no sistema. O tipo escolhido é atribuído ao ciclo, não ao modelo.</div>
-      <table class="conf-table">
-        <thead><tr><th>Nome</th><th>Descrição</th><th>Ativo</th><th></th></tr></thead>
-        <tbody id="confAvaliadores">${renderAvaliadores()}</tbody>
-      </table>
-    </div>
+    <div class="list-section-label">Tipos de Avaliador</div>
+    <div id="confAvaliadores">${renderAvaliadores()}</div>
 
-    <!-- Bloco: Escalas de Resposta -->
-    <div class="conf-bloco">
-      <div class="conf-bloco-titulo">Escalas de Resposta</div>
-      <div class="conf-bloco-desc">Escalas usadas nos critérios de avaliação. Adicione e gerencie aqui.</div>
-      <table class="conf-table">
-        <thead><tr><th>Nome</th><th>Opções</th><th></th></tr></thead>
-        <tbody id="confEscalas">${renderEscalasConf()}</tbody>
-      </table>
-      <div style="margin-top:10px">
-        <button class="btn btn-secondary btn-sm" onclick="abrirModalEscala(null)">+ Nova escala</button>
-      </div>
+    <div class="list-section-label" style="margin-top:28px;display:flex;align-items:center;justify-content:space-between">
+      <span>Escalas de Resposta</span>
+      <button class="btn btn-secondary btn-sm" onclick="abrirModalEscala(null)">+ Nova escala</button>
     </div>
+    <div id="confEscalas">${renderEscalasConf()}</div>
 
-    <!-- Bloco: Tabelas de Conceito -->
-    <div class="conf-bloco">
-      <div class="conf-bloco-titulo">Tabelas de Conceito</div>
-      <div class="conf-bloco-desc">Defina as faixas de conversão de nota para conceito. Uma tabela pode ser reutilizada em vários modelos.</div>
-      <div id="confTabelasConceito">${renderTabelasConceito()}</div>
-      <div style="margin-top:12px">
-        <button class="btn btn-secondary btn-sm" onclick="abrirModalNovaTabela()">+ Nova tabela</button>
-      </div>
+    <div class="list-section-label" style="margin-top:28px;display:flex;align-items:center;justify-content:space-between">
+      <span>Tabelas de Conceito</span>
+      <button class="btn btn-secondary btn-sm" onclick="abrirModalNovaTabela()">+ Nova tabela</button>
     </div>
+    <div id="confTabelasConceito">${renderTabelasConceito()}</div>
 
-    <!-- Bloco: Tipos de Cálculo -->
-    <div class="conf-bloco">
-      <div class="conf-bloco-titulo">Tipos de Cálculo</div>
-      <div class="conf-bloco-desc">Controle quais algoritmos aparecem como opção ao configurar versões de modelos.</div>
-      <table class="conf-table">
-        <thead><tr><th>Nome</th><th>Descrição</th><th>Disponível</th></tr></thead>
-        <tbody id="confCalculo">${renderTiposCalculo()}</tbody>
-      </table>
-    </div>
+    <div class="list-section-label" style="margin-top:28px">Tipos de Cálculo</div>
+    <div id="confCalculo">${renderTiposCalculo()}</div>
   `;
 }
 
 function renderAvaliadores() {
-  if (!_dpTiposAvaliador.length) return `<tr><td colspan="4" style="color:var(--text-ter);font-size:12px">Nenhum avaliador cadastrado.</td></tr>`;
-  return _dpTiposAvaliador.map(a => `
-    <tr>
-      <td><input class="form-input form-input-sm" value="${a.label}" onchange="salvarAvaliador('${a.id}','label',this.value)"></td>
-      <td><input class="form-input form-input-sm" value="${a.descricao||''}" placeholder="Descrição opcional" onchange="salvarAvaliador('${a.id}','descricao',this.value)"></td>
-      <td style="text-align:center"><input type="checkbox" ${a.ativo?'checked':''} onchange="salvarAvaliador('${a.id}','ativo',this.checked)" style="accent-color:var(--accent)"></td>
-      <td></td>
-    </tr>`).join('');
+  if (!_dpTiposAvaliador.length) return `<div style="font-size:12px;color:var(--text-ter);padding:12px 0">Nenhum avaliador cadastrado.</div>`;
+  const ICONS = { autoavaliacao:'👤', gestor:'👥', par:'🔄' };
+  return _dpTiposAvaliador.map(a => {
+    const iconKey = (a.codigo||'').toLowerCase();
+    const icon = ICONS[iconKey] || '👤';
+    return `<div class="row-card" style="align-items:flex-start">
+      <div class="row-icon" style="background:${a.ativo?'#DBEAFE':'#F1F5F9'}">${icon}</div>
+      <div class="row-body" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center">
+        <input class="form-input form-input-sm" value="${(a.label||'').replace(/"/g,'&quot;')}" placeholder="Nome do avaliador" onchange="salvarAvaliador('${a.id}','label',this.value)" title="Nome">
+        <input class="form-input form-input-sm" value="${(a.descricao||'').replace(/"/g,'&quot;')}" placeholder="Descrição opcional" onchange="salvarAvaliador('${a.id}','descricao',this.value)" title="Descrição">
+      </div>
+      <div class="row-meta" style="align-self:center">
+        <span style="font-size:12px;color:var(--text-sec)">${a.ativo?'Ativo':'Inativo'}</span>
+        <input type="checkbox" ${a.ativo?'checked':''} onchange="salvarAvaliador('${a.id}','ativo',this.checked);this.closest('.row-card').querySelector('.row-icon').style.background=this.checked?'#DBEAFE':'#F1F5F9';this.previousElementSibling.textContent=this.checked?'Ativo':'Inativo'" style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer">
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderEscalasConf() {
-  if (!_dpEscalas.length) return `<tr><td colspan="3" style="color:var(--text-ter);font-size:12px">Nenhuma escala cadastrada.</td></tr>`;
+  if (!_dpEscalas.length) return `<div style="font-size:12px;color:var(--text-ter);padding:12px 0">Nenhuma escala cadastrada.</div>`;
   return _dpEscalas.map(e => {
-    const opcoes = (_dpEscalaOpcoes[e.id]||[]).map(o => o.rotulo).join(', ');
-    return `<tr>
-      <td>${e.nome}</td>
-      <td style="font-size:12px;color:var(--text-sec)">${opcoes||'—'}</td>
-      <td><button class="btn btn-secondary btn-sm" onclick="abrirModalEscala('${e.id}')">Editar</button></td>
-    </tr>`;
+    const opcoes = (_dpEscalaOpcoes[e.id]||[]).map(o => o.label||o.rotulo).filter(Boolean).join(' · ');
+    return `<div class="row-card">
+      <div class="row-icon" style="background:#EDE9FE">📏</div>
+      <div class="row-body">
+        <div class="row-name">${e.nome}</div>
+        <div class="row-desc">${opcoes||'Sem opções cadastradas'}</div>
+      </div>
+      <div class="row-meta">
+        <button class="btn btn-secondary btn-sm" onclick="abrirModalEscala('${e.id}')">Editar</button>
+      </div>
+    </div>`;
   }).join('');
 }
 
 function renderTabelasConceito() {
-  if (!_dpTabelasConceito.length) return `<div style="font-size:12px;color:var(--text-ter);padding:8px 0">Nenhuma tabela cadastrada.</div>`;
+  if (!_dpTabelasConceito.length) return `<div style="font-size:12px;color:var(--text-ter);padding:12px 0">Nenhuma tabela cadastrada.</div>`;
   return _dpTabelasConceito.map(t => {
     const faixas = _dpFaixasConceito[t.id] || [];
     const faixasHtml = faixas.length
-      ? `<div class="faixas-preview">${faixas.map(f => `<span class="faixa-chip" style="${f.cor?`background:${f.cor}20;border-color:${f.cor};color:${f.cor}`:''}">
+      ? `<div class="faixas-preview" style="margin-top:6px">${faixas.map(f => `<span class="faixa-chip" style="${f.cor?`background:${f.cor}20;border-color:${f.cor};color:${f.cor}`:''}">
           ${f.conceito} (${f.nota_min}–${f.nota_max})
         </span>`).join('')}</div>`
-      : `<div style="font-size:12px;color:var(--text-ter)">Nenhuma faixa configurada</div>`;
-    return `<div class="tabela-conceito-card">
-      <div class="tabela-conceito-head">
-        <span style="font-weight:600;font-size:13px">${t.nome}</span>
-        ${t.descricao?`<span style="font-size:12px;color:var(--text-sec);margin-left:8px">${t.descricao}</span>`:''}
-        <div style="margin-left:auto;display:flex;gap:8px">
-          <button class="btn btn-secondary btn-sm" onclick="abrirDrawerFaixas('${t.id}')">Editar faixas</button>
-          <button class="btn btn-secondary btn-sm" onclick="excluirTabela('${t.id}')">Excluir</button>
-        </div>
+      : `<div style="font-size:12px;color:var(--text-ter);margin-top:4px">Nenhuma faixa configurada</div>`;
+    return `<div class="row-card row-card-expandable">
+      <div class="row-icon" style="background:#F0FDF4">🏷️</div>
+      <div class="row-body">
+        <div class="row-name">${t.nome}</div>
+        ${t.descricao?`<div class="row-desc">${t.descricao}</div>`:''}
+        ${faixasHtml}
       </div>
-      ${faixasHtml}
+      <div class="row-meta" style="align-self:flex-start;margin-top:2px">
+        <button class="btn btn-secondary btn-sm" onclick="abrirDrawerFaixas('${t.id}')">Editar faixas</button>
+        <button class="btn btn-secondary btn-sm" onclick="excluirTabela('${t.id}')">Excluir</button>
+      </div>
     </div>`;
   }).join('');
 }
 
 function renderTiposCalculo() {
-  if (!_dpTiposCalculo.length) return `<tr><td colspan="3" style="color:var(--text-ter);font-size:12px">Nenhum tipo de cálculo encontrado.</td></tr>`;
+  if (!_dpTiposCalculo.length) return `<div style="font-size:12px;color:var(--text-ter);padding:12px 0">Nenhum tipo de cálculo encontrado.</div>`;
   return _dpTiposCalculo.map(t => `
-    <tr>
-      <td style="font-weight:500">${t.label}</td>
-      <td style="font-size:12px;color:var(--text-sec)">${t.descricao||'—'}</td>
-      <td style="text-align:center"><input type="checkbox" ${t.ativo?'checked':''} onchange="salvarTipoCalculo('${t.codigo}','ativo',this.checked)" style="accent-color:var(--accent)"></td>
-    </tr>`).join('');
+    <div class="row-card">
+      <div class="row-icon" style="background:${t.ativo?'#F0FDF4':'#F1F5F9'}">⚙️</div>
+      <div class="row-body">
+        <div class="row-name">${t.label}</div>
+        <div class="row-desc">${t.descricao||'—'}</div>
+      </div>
+      <div class="row-meta">
+        <span style="font-size:12px;color:var(--text-sec)">${t.ativo?'Disponível':'Oculto'}</span>
+        <input type="checkbox" ${t.ativo?'checked':''} onchange="salvarTipoCalculo('${t.codigo}','ativo',this.checked);this.closest('.row-card').querySelector('.row-icon').style.background=this.checked?'#F0FDF4':'#F1F5F9';this.previousElementSibling.textContent=this.checked?'Disponível':'Oculto'" style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer">
+      </div>
+    </div>`).join('');
 }
 
 
