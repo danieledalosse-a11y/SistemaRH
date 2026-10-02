@@ -9,8 +9,7 @@ description: Especialista no módulo Desenvolvimento & Performance do SistemaRH 
 
 Sistema RH da Revest do Brasil Acabamentos Ltda (varejo, Lucro Real).
 Stack: HTML + CSS + JS puro, sem framework. Backend: Supabase REST API.
-Arquivo principal: `C:\Users\reves\SistemaRH\modulos\desenvolvimento\index.html` (~2.070 linhas, tudo inline).
-Migration do motor: `migrations/065_desenvolvimento_performance_v1.sql` (executada em 2026-09-29).
+Arquivo principal: `C:\Users\reves\SistemaRH\modulos\desenvolvimento\index.html` (~2.700 linhas, tudo inline).
 
 ## Regras obrigatórias
 
@@ -19,11 +18,47 @@ Migration do motor: `migrations/065_desenvolvimento_performance_v1.sql` (executa
 3. **Sempre apresentar proposta antes de implementar** — aguardar aprovação da usuária.
 4. **Nunca abreviar valores** (`R$ 12.500,00`, não `12,5k`).
 5. **`guardModulo('desenvolvimento')` obrigatório** — chamado na primeira linha de `initAuth()`; ver [[permissoes]].
-6. **Não tocar nas abas legadas** (Colaboradores, Ciclos de Avaliação, Competências) — usam tabelas dev_* que ainda coexistem com as dp_*. Só alterar com aprovação explícita.
+6. **Não tocar nas abas legadas** (Colaboradores, Ciclos de Avaliação) — usam tabelas dev_* que ainda coexistem com as dp_*. Só alterar com aprovação explícita.
 7. **Imutabilidade de versões e escalas publicadas é garantia do banco** — o front deve verificar `em_uso` e desabilitar campos, mas o trigger do banco é a proteção real. Tratar erros HTTP 4xx com mensagem clara ao usuário.
 8. **Não misturar dados financeiros com valor_numerico da escala** — `valor_numerico` serve para cálculo/comparação; valores financeiros ficam em `dp_regras_financeiras`.
 9. **verde/laranja/amarelo (melhorou/piorou/manteve/sem_comparacao) são calculados na camada de apresentação** — nunca armazenar no banco.
 10. **Legibilidade mínima 11px** para qualquer texto informativo; usar tokens `--text-sec/#4B5565` e `--text-ter/#6C7589`.
+11. **Biblioteca de Critérios usa `dp_criterios` exclusivamente** — `dev_competencias` é legado preservado para referência histórica, nunca exibida na UI.
+
+---
+
+## Diretriz arquitetural permanente — Motor genérico
+
+**Antes de implementar qualquer etapa, responder internamente:**
+> "Estou criando uma solução parametrizável e reutilizável para diferentes modelos, ou estou criando uma regra para fazer o caso atual funcionar?"
+
+Se for a segunda opção, parar e ajustar a abordagem.
+
+### Requisitos inegociáveis
+
+- RH cria e configura modelos de avaliação **sem alterar código** — tudo via tabelas dp_* e param_*
+- Motor suporta: Sim/Não, escalas numéricas, pesos, conceitos, texto — com ou sem conversão financeira
+- Nenhuma string de negócio (nome de setor, cargo, modelo) como condição no código
+- Conversão financeira é **opcional por modelo** — motor funciona sem ela
+- Gestores vinculados às equipes via `colaboradores.gestor` — reutilizar, não duplicar
+- Visões RH / Gestor / Diretoria usam a mesma estrutura dp_*, mudam apenas escopo e permissão
+- Relatórios nascem da estrutura genérica — não de lógica avulsa
+- **Complexidade no motor; simplicidade para o RH operar**
+
+### Parametrizações canônicas — sempre reutilizar
+
+| O que | Fonte oficial | Nunca |
+|---|---|---|
+| Setores | `param_setor.descricao` (remove prefixo `"2148 - "` para exibição e busca) | Hardcodar nome de setor |
+| Cargos | `param_cargo` | Hardcodar cargo |
+| Gestores/equipes | `colaboradores.gestor` | Criar escopo paralelo ao de Férias |
+| Tipos de avaliador | `dp_tipos_avaliador` | ENUM no código |
+| Tipos de cálculo | `dp_tipos_calculo_config` | `if tipo === 'soma'` espalhado |
+
+### Quando surgir lacuna
+
+- **Lacuna arquitetural real:** sinalizar com impacto + proposta objetiva, aguardar aprovação
+- **Questão de parametrização/cadastro:** resolver com estrutura existente, sem interromper
 
 ---
 
@@ -33,16 +68,16 @@ Migration do motor: `migrations/065_desenvolvimento_performance_v1.sql` (executa
 
 ```
 Biblioteca (dp_criterios, dp_escalas)
-        ↓
+        ↓  [adotar: na_biblioteca=true]
 Modelo (dp_modelos)
         ↓
-Versão (dp_versoes) — define tipo_calculo, critérios, escalas, blocos
-        ↓   [publicar: em_uso=true → imutável]
-Ciclo (dp_ciclos) — referencia uma versão publicada
+Versão (dp_versoes) — define tipo_calculo, critérios, escalas, blocos, tabela_conceito
+        ↓   [publicar: em_uso=true → imutável + snapshot de nomes]
+Ciclo (dp_ciclos) — referencia versão publicada, define tipo_avaliador e elegibilidade
         ↓
 Participantes (dp_ciclo_participantes) — snapshot do colaborador
         ↓
-Avaliações (dp_avaliacoes) — por tipo_avaliador
+Avaliações (dp_avaliacoes) — por tipo_avaliador_id
         ↓
 Respostas (dp_respostas) — por critério
         ↓
@@ -58,17 +93,15 @@ dp_historico_eventos
 | `dp_versao_criterios` e `dp_versao_blocos` | versao.em_uso = true | INSERT/UPDATE/DELETE bloqueados (trigger) |
 | `dp_escala_opcoes` | escala referenciada por versão publicada | INSERT/UPDATE/DELETE bloqueados (trigger) |
 | `dp_escalas` | idem | DELETE bloqueado |
+| `dp_faixas_conceito` | tabela_conceito referenciada por versão publicada | INSERT/UPDATE/DELETE bloqueados (trigger) |
+| `dp_tabelas_conceito` | idem | DELETE bloqueado |
 
 **No front:** verificar `v.em_uso` e aplicar `disabled` nos campos. Tratar erro HTTP 4xx do banco com `toast('Mensagem do banco.', true)`.
 
 ### Regra de comparabilidade histórica
 
 `dp_fn_historico_criterio` retorna `{comparavel: false}` quando não encontra avaliação anterior **do mesmo**:
-- `modelo_id` — impede comparação cruzada entre modelos diferentes
-- `criterio_id` — mesmo critério
-- `escala_id` — mesma escala
-- `tipo_resposta` — mesmo tipo de resposta
-- status `publicada`
+- `modelo_id`, `criterio_id`, `escala_id`, `tipo_resposta`, status `publicada`
 
 ---
 
@@ -76,74 +109,89 @@ dp_historico_eventos
 
 ### `dp_criterios` — biblioteca de critérios
 ```
-id UUID PK
-nome TEXT NOT NULL
-tipo dp_tipo_criterio ('tecnico'|'comportamental'|'resultado'|'outros')
-area TEXT (nullable)
-descricao TEXT
-ativo BOOLEAN DEFAULT true
-dev_competencias_id BIGINT (legado — referência à dev_competencias original)
-criado_em TIMESTAMPTZ
-```
-- 39 critérios migrados de `dev_competencias` em 2026-09-29
-- `tipo` em dev_competencias era 'tecnica' → migrado para 'tecnico'
-- Não deletar esta tabela enquanto legado coexistir
-
-### `dp_escalas` — escalas de resposta
-```
-id UUID PK
-nome TEXT NOT NULL
-descricao TEXT
-ativo BOOLEAN DEFAULT true
-criado_em TIMESTAMPTZ
+id                 UUID PK
+nome               TEXT NOT NULL
+tipo               dp_tipo_criterio ('tecnico'|'comportamental'|'resultado'|'outros')
+area               TEXT nullable — área de aplicação (valor texto, ex: "Compras")
+descricao          TEXT nullable — "O que será avaliado?"
+referencia         TEXT nullable — "Resultado esperado" (referência conceitual para o avaliador)
+ativo              BOOLEAN DEFAULT true
+na_biblioteca      BOOLEAN DEFAULT false — true = adotado pela Revest; false = sugestão do catálogo
+dev_competencias_id BIGINT nullable — FK legada para dev_competencias (não dropar)
+criado_em          TIMESTAMPTZ
 ```
 
-### `dp_escala_opcoes` — opções de uma escala
+**Estados possíveis de um critério:**
+| `dev_competencias_id` | `na_biblioteca` | Estado na UI |
+|---|---|---|
+| IS NOT NULL | false | Catálogo de sugestões — não adotado |
+| IS NOT NULL | true | Sugestão adotada pela Revest |
+| IS NULL | true | Critério criado pela Revest |
+
+**Regras de UI:**
+- **Minha Biblioteca**: exibe apenas `na_biblioteca = true`
+- **Catálogo de Sugestões**: exibe apenas `dev_competencias_id IS NOT NULL`
+- **Picker de modelos**: exibe apenas `na_biblioteca = true AND ativo = true`
+- "Adicionar à minha biblioteca" = PATCH `{ na_biblioteca: true }` — sem duplicar registro
+- Novos critérios criados pelo RH entram com `na_biblioteca: true` no POST
+- `descricao` = "O que será avaliado?"; `referencia` = "Resultado esperado" (opcional)
+
+**Proteção de edição (front):**
+- Critério em versão publicada (`_dpCriteriosEmUso`): só Duplicar e Ativar/Desativar — sem Editar
+- `criterio_nome_snapshot` em `dp_versao_criterios` preserva o nome no momento da publicação
+
+### `dp_escalas` / `dp_escala_opcoes`
 ```
-id UUID PK
-escala_id UUID REFERENCES dp_escalas ON DELETE CASCADE
-label TEXT NOT NULL
-valor_numerico NUMERIC (nullable — para cálculo/comparação, não financeiro)
-ordem INTEGER NOT NULL DEFAULT 1
+dp_escalas: id UUID PK, nome TEXT, descricao TEXT, ativo BOOLEAN, criado_em
+dp_escala_opcoes: id UUID PK, escala_id FK, rotulo TEXT, valor_numerico NUMERIC, ordem INTEGER
 ```
-- Imutáveis quando a escala está em uso por versão publicada (trigger trg_eo_proteger_em_uso)
+- `valor_numerico` é para cálculo/comparação, nunca financeiro
+- Imutáveis quando referenciadas por versão publicada (triggers)
+
+### `dp_tipos_avaliador` — substitui ENUM dp_tipo_avaliador (migration 067)
+```
+id UUID PK, codigo TEXT UNIQUE, label TEXT, descricao TEXT, ativo BOOLEAN, ordem SMALLINT
+```
+Valores iniciais: `gestor_direto`, `autoavaliacao`, `rh`, `especifico`
+
+### `dp_tipos_calculo_config` — metadados de UI para tipos de cálculo (migration 067)
+```
+codigo TEXT PK (= valor do ENUM dp_tipo_calculo), label TEXT, descricao TEXT, ativo BOOLEAN, ordem SMALLINT
+```
+Valores: `media`, `media_ponderada`, `soma`, `percentual_atingimento`, `qualitativo`
+
+### `dp_tabelas_conceito` / `dp_faixas_conceito` — conversão nota→conceito (migration 067)
+```
+dp_tabelas_conceito: id UUID PK, nome TEXT, descricao TEXT, ativo BOOLEAN, criado_em
+dp_faixas_conceito:  id UUID PK, tabela_id FK, nota_min NUMERIC, nota_max NUMERIC,
+                     conceito TEXT, descricao TEXT, cor TEXT, ordem SMALLINT
+```
+- Substituem `faixas_conceito JSONB` que foi removido de `dp_versoes`
+- Imutáveis quando tabela referenciada por versão publicada (triggers)
 
 ### `dp_modelos` — modelos de avaliação
 ```
-id UUID PK
-nome TEXT NOT NULL
-descricao TEXT
-tipo_avaliador dp_tipo_avaliador DEFAULT 'gestor_direto'
-ativo BOOLEAN DEFAULT true
-criado_por UUID REFERENCES auth.users
-criado_em TIMESTAMPTZ
+id UUID PK, nome TEXT, descricao TEXT, ativo BOOLEAN, criado_por UUID, criado_em
 ```
 
 ### `dp_versoes` — versões de um modelo
 ```
 id UUID PK
 modelo_id UUID REFERENCES dp_modelos
-versao TEXT NOT NULL DEFAULT 'v1'     -- 'v1', 'v2', ...
-em_uso BOOLEAN NOT NULL DEFAULT false  -- true = publicada, imutável
+versao TEXT DEFAULT 'v1'
+em_uso BOOLEAN DEFAULT false          — true = publicada, imutável
 tipo_calculo dp_tipo_calculo NOT NULL DEFAULT 'soma'
-tipo_avaliador dp_tipo_avaliador NOT NULL DEFAULT 'gestor_direto'
-nota_maxima NUMERIC
+tipo_avaliador_id UUID REFERENCES dp_tipos_avaliador  — substituiu coluna ENUM
 converte_para_conceito BOOLEAN DEFAULT false
-faixas_conceito JSONB    -- [{"min":0,"max":59,"conceito":"D"}, ...]
-publicado_em TIMESTAMPTZ
-publicado_por UUID REFERENCES auth.users
-criado_em TIMESTAMPTZ
+tabela_conceito_id UUID REFERENCES dp_tabelas_conceito — substituiu faixas_conceito JSONB
+publicado_em TIMESTAMPTZ, publicado_por UUID, criado_em
 ```
 
-### `dp_versao_blocos` — blocos organizacionais de uma versão (opcional)
+### `dp_versao_blocos` — blocos organizacionais (opcional)
 ```
-id UUID PK
-versao_id UUID REFERENCES dp_versoes
-nome TEXT NOT NULL
-descricao TEXT
-ordem INTEGER NOT NULL DEFAULT 1
+id UUID PK, versao_id FK, nome TEXT, descricao TEXT, ordem INTEGER
 ```
-- Bloqueado quando versao.em_uso = true (trigger trg_vb_proteger_em_uso)
+Bloqueado quando versao.em_uso = true.
 
 ### `dp_versao_criterios` — critérios configurados em uma versão
 ```
@@ -153,108 +201,73 @@ criterio_id UUID REFERENCES dp_criterios
 bloco_id UUID REFERENCES dp_versao_blocos (nullable)
 tipo_resposta dp_tipo_resposta NOT NULL
 escala_id UUID REFERENCES dp_escalas (nullable)
-peso NUMERIC        -- usado quando tipo_calculo = 'media_ponderada'
-obrigatorio BOOLEAN DEFAULT true    -- deve ser respondido antes de concluir
-contribui_calculo BOOLEAN DEFAULT true  -- valor entra na fórmula
+criterio_nome_snapshot TEXT   — nome do critério no momento da publicação (snapshot)
+peso NUMERIC
+obrigatorio BOOLEAN DEFAULT true
+contribui_calculo BOOLEAN DEFAULT true
 obs_obrigatoria BOOLEAN DEFAULT false
-ordem INTEGER NOT NULL DEFAULT 1
+ordem INTEGER DEFAULT 1
 UNIQUE(versao_id, criterio_id)
 ```
-- **CHECKs no banco:**
-  - `qualitativo_nao_calcula`: tipo_resposta IN ('texto','conceito') → contribui_calculo = false
-  - `escala_obrigatoria`: tipo_resposta IN ('binario','escala') → escala_id IS NOT NULL
-- Bloqueado quando versao.em_uso = true (trigger trg_vc_proteger_em_uso)
+- `criterio_nome_snapshot` populado pelo trigger `trg_versao_snapshot_criterios` ao publicar
+- Bloqueado quando versao.em_uso = true (trigger)
 
 ### `dp_ciclos` — ciclos de avaliação
 ```
 id UUID PK
-versao_id UUID REFERENCES dp_versoes    -- versão publicada
+versao_id UUID REFERENCES dp_versoes
 nome TEXT NOT NULL
-status dp_status_ciclo DEFAULT 'rascunho'   -- 'rascunho'|'aberto'|'fechado'
-tipo_avaliador dp_tipo_avaliador DEFAULT 'gestor_direto'
-data_inicio DATE
-data_fim DATE
-aberto_por UUID
-aberto_em TIMESTAMPTZ
-encerrado_em TIMESTAMPTZ
-criado_em TIMESTAMPTZ
+status dp_status_ciclo DEFAULT 'rascunho'
+tipo_avaliador_id UUID REFERENCES dp_tipos_avaliador  — migrado de ENUM
+tipo_elegibilidade dp_tipo_elegibilidade DEFAULT 'todos'  — movido de dp_versoes
+elegibilidade_ids UUID[]   — movido de dp_versoes
+data_inicio DATE, data_fim DATE
+aberto_por UUID, aberto_em, encerrado_em, criado_em
 ```
 
-### `dp_ciclo_participantes` — colaboradores num ciclo
+### `dp_ciclo_participantes`
 ```
-id UUID PK
-ciclo_id UUID REFERENCES dp_ciclos ON DELETE CASCADE
-colaborador_id INTEGER REFERENCES colaboradores(id)   -- INTEGER, não UUID
-snapshot JSONB NOT NULL    -- {nome, matricula, empresa, setor, cargo, unidade}
-adicionado_em TIMESTAMPTZ
-UNIQUE(ciclo_id, colaborador_id)
+id UUID PK, ciclo_id FK, colaborador_id INTEGER REFERENCES colaboradores(id),
+snapshot JSONB NOT NULL  — {nome, matricula, empresa, setor, cargo, unidade}
+adicionado_em, UNIQUE(ciclo_id, colaborador_id)
 ```
-- **snapshot obrigatório:** `nome`, `matricula`, `empresa`, `setor`, `cargo`, `unidade`
-- Capturado no momento de inclusão — preserva dados históricos mesmo após alterações no cadastro
+`colaboradores.id` é INTEGER, não UUID — nunca declarar FK como UUID.
 
-### `dp_avaliacoes` — avaliação por tipo_avaliador
+### `dp_avaliacoes`
 ```
-id UUID PK
-ciclo_id UUID REFERENCES dp_ciclos
-participante_id UUID REFERENCES dp_ciclo_participantes
-tipo_avaliador dp_tipo_avaliador NOT NULL
-avaliador_id UUID REFERENCES auth.users
-status dp_status_avaliacao DEFAULT 'nao_iniciada'
-    -- 'nao_iniciada'|'em_andamento'|'concluida'|'publicada'
-iniciada_em TIMESTAMPTZ
-concluida_em TIMESTAMPTZ
-publicada_em TIMESTAMPTZ
-publicada_por UUID
-UNIQUE(ciclo_id, participante_id, tipo_avaliador)
+id UUID PK, ciclo_id FK, participante_id FK, tipo_avaliador_id UUID FK,
+avaliador_id UUID, status dp_status_avaliacao DEFAULT 'nao_iniciada',
+iniciada_em, concluida_em, publicada_em, publicada_por
+UNIQUE(ciclo_id, participante_id, tipo_avaliador_id)
 ```
 
-### `dp_respostas` — resposta por critério
+### `dp_respostas`
 ```
-id UUID PK
-avaliacao_id UUID REFERENCES dp_avaliacoes ON DELETE CASCADE
-versao_criterio_id UUID REFERENCES dp_versao_criterios
-escala_opcao_id UUID REFERENCES dp_escala_opcoes (nullable)
-valor_numerico_livre NUMERIC     -- para tipo 'numerico'
-meta NUMERIC                     -- para tipo 'numerico_com_meta'
-realizado NUMERIC                -- para tipo 'numerico_com_meta'
-conceito_selecionado TEXT        -- para tipo 'conceito'
-resposta_texto TEXT              -- para tipo 'texto'
-snapshot_opcao_label TEXT        -- populado automaticamente pelo trigger
-snapshot_opcao_valor_num NUMERIC -- populado automaticamente pelo trigger
-observacao TEXT
-respondido_em TIMESTAMPTZ DEFAULT now()
+id UUID PK, avaliacao_id FK, versao_criterio_id FK,
+escala_opcao_id FK nullable, valor_numerico_livre NUMERIC,
+meta NUMERIC, realizado NUMERIC, conceito_selecionado TEXT, resposta_texto TEXT,
+snapshot_opcao_label TEXT, snapshot_opcao_valor_num NUMERIC,  — trigger
+observacao TEXT, respondido_em TIMESTAMPTZ
 UNIQUE(avaliacao_id, versao_criterio_id)
 ```
-- O trigger `trg_resposta_snapshot` popula `snapshot_opcao_*` automaticamente no INSERT
 
-### `dp_resultados` — resultado calculado de uma avaliação
+### `dp_resultados`
 ```
-id UUID PK
-avaliacao_id UUID UNIQUE REFERENCES dp_avaliacoes
-nota_final NUMERIC
-conceito TEXT
-calculado_em TIMESTAMPTZ
-calculado_por UUID
+id UUID PK, avaliacao_id UNIQUE FK, nota_final NUMERIC, conceito TEXT,
+calculado_em, calculado_por
 CHECK(nota_final IS NOT NULL OR conceito IS NOT NULL)
 ```
 
-### Camada financeira (criada mas não vinculada à UI ainda)
+### Camada financeira (criada, sem UI)
 ```
-dp_regras_financeiras       -- tipo: 'percentual_salario'|'valor_fixo'|'por_criterio'
-dp_regra_financeira_opcoes  -- escala_opcao → valor_financeiro
-dp_regra_financeira_faixas  -- faixas de nota → valor/percentual
-dp_resultados_financeiros   -- resultado calculado por regra
+dp_regras_financeiras, dp_regra_financeira_opcoes,
+dp_regra_financeira_faixas, dp_resultados_financeiros
 ```
 
-### `dp_historico_eventos` — auditoria
+### `dp_historico_eventos`
 ```
-id UUID PK
-tipo dp_evento_historico
-entidade TEXT
-entidade_id UUID
-detalhe JSONB
-usuario_id UUID
-criado_em TIMESTAMPTZ
+id UUID PK, tipo dp_evento_historico, entidade TEXT, entidade_id UUID,
+detalhe JSONB, usuario_id UUID, criado_em
 ```
 
 ---
@@ -266,143 +279,132 @@ criado_em TIMESTAMPTZ
 | `dp_tipo_criterio` | `tecnico`, `comportamental`, `resultado`, `outros` |
 | `dp_tipo_resposta` | `binario`, `escala`, `numerico`, `numerico_com_meta`, `conceito`, `texto` |
 | `dp_tipo_calculo` | `soma`, `media`, `media_ponderada`, `percentual_atingimento`, `qualitativo` |
-| `dp_tipo_avaliador` | `gestor_direto`, `autoavaliacao`, `rh`, `especifico` |
 | `dp_status_ciclo` | `rascunho`, `aberto`, `em_andamento`, `encerrado`, `cancelado` |
 | `dp_status_avaliacao` | `nao_iniciada`, `em_andamento`, `concluida`, `publicada` |
+| `dp_tipo_elegibilidade` | `todos`, `por_setor`, `por_cargo`, `por_colaborador` |
 | `dp_tipo_regra_financeira` | `percentual_salario`, `valor_fixo`, `por_criterio` |
 | `dp_status_resultado_financeiro` | `calculado`, `ajustado`, `aprovado`, `pago` |
 | `dp_evento_historico` | `ciclo_aberto`, `ciclo_fechado`, `avaliacao_publicada`, `resultado_calculado`, `resultado_ajustado` |
+
+**Nota:** `dp_tipo_avaliador` ENUM foi DROPADO na migration 067 — substituído pela tabela `dp_tipos_avaliador`.
 
 ---
 
 ## Funções e triggers do banco
 
 ### `dp_validar_versao(p_versao_id UUID)` → JSONB
-Valida uma versão antes da publicação. Chamar via RPC:
-```js
-const r = await fetch(SB_URL + '/rest/v1/rpc/dp_validar_versao', {
-  method: 'POST', headers: HDR,
-  body: JSON.stringify({ p_versao_id: versaoId })
-});
-const data = await r.json();
-// data = { valido: true|false, erros: [{regra: '1', mensagem: '...'}] }
-```
+Valida versão antes de publicar. **Regra 2 (migration 068):** verifica `tabela_conceito_id IS NULL` (não mais `faixas_conceito`).
 
-**5 regras validadas:**
 | Regra | O que verifica |
 |---|---|
-| 1 | Versão não-qualitativa precisa de ao menos 1 critério com `contribui_calculo=true` |
-| 2 | `converte_para_conceito=true` exige `faixas_conceito` preenchidas |
+| 1 | Não-qualitativo precisa de ≥1 critério com `contribui_calculo=true` |
+| 2 | `converte_para_conceito=true` exige `tabela_conceito_id` preenchido |
 | 3 | Critérios calculáveis com escala precisam de `valor_numerico` nas opções |
-| 4 | `media_ponderada` exige `peso > 0` em todos os critérios calculáveis |
+| 4 | `media_ponderada` exige `peso > 0` em todos calculáveis |
 | 5a | `percentual_atingimento` exige `tipo_resposta='numerico_com_meta'` em todos calculáveis |
 | 5b | `qualitativo` proíbe `contribui_calculo=true` |
 
-### `dp_fn_historico_criterio(...)` → JSONB
-Retorna a última avaliação publicada do mesmo colaborador, mesmo modelo, mesmo critério, mesma escala, mesmo tipo_resposta.
-```js
-// Parâmetros:
-// p_colaborador_id INTEGER, p_criterio_id UUID, p_ciclo_atual_id UUID,
-// p_modelo_id UUID, p_escala_id UUID, p_tipo_resposta dp_tipo_resposta
-// Retorno: { comparavel: true, ciclo_nome, escala_opcao_label, nota_final, ... }
-//       ou { comparavel: false }
-```
-
 ### Triggers de imutabilidade
-- `trg_eo_proteger_em_uso` — BEFORE INSERT/UPDATE/DELETE ON dp_escala_opcoes
-- `trg_e_proteger_delete` — BEFORE DELETE ON dp_escalas
-- `trg_vc_proteger_em_uso` — BEFORE INSERT/UPDATE/DELETE ON dp_versao_criterios
-- `trg_vb_proteger_em_uso` — BEFORE INSERT/UPDATE/DELETE ON dp_versao_blocos
-- `trg_resposta_snapshot` — BEFORE INSERT ON dp_respostas (popula snapshot_opcao_*)
+- `trg_eo_proteger_em_uso` — dp_escala_opcoes
+- `trg_e_proteger_delete` — dp_escalas
+- `trg_vc_proteger_em_uso` — dp_versao_criterios
+- `trg_vb_proteger_em_uso` — dp_versao_blocos
+- `trg_fc_proteger_em_uso` — dp_faixas_conceito
+- `trg_tc_proteger_delete` — dp_tabelas_conceito
+- `trg_resposta_snapshot` — dp_respostas (popula snapshot_opcao_*)
+- `trg_versao_snapshot_criterios` — dp_versoes (popula criterio_nome_snapshot ao publicar)
 
 ---
 
 ## Tabelas legadas (dev_*) — coexistem com dp_*
 
-| Tabela | Status | Notas |
-|---|---|---|
-| `dev_competencias` | Mantida — base para dp_criterios | 39 registros, não deletar |
-| `dev_ciclos` | Ativa nas abas legadas | Aguarda migração |
-| `dev_avaliacoes` | Ativa nas abas legadas | notas_auto/gestor/rh em JSONB |
-| `dev_pdi` | **Mantida para V2 PDI** | Não deletar |
-| `dev_historico` | Ativa nas abas legadas | Timeline unificada |
-
-**Não fazer DROP** de nenhuma tabela dev_* sem aprovação explícita da usuária.
+| Tabela | Status |
+|---|---|
+| `dev_competencias` | Mantida — origem dos 39 critérios seed em dp_criterios. NUNCA dropar. |
+| `dev_ciclos` | Ativa nas abas legadas |
+| `dev_avaliacoes` | Ativa nas abas legadas |
+| `dev_pdi` | Mantida para V2 PDI |
+| `dev_historico` | Ativa nas abas legadas |
 
 ---
 
 ## Estrutura do módulo (abas atuais)
 
-| Aba | Tabelas | Status |
+| Aba | Tabelas principais | Status |
 |---|---|---|
 | Colaboradores | dev_ciclos, dev_avaliacoes, colaboradores | Legado — funcional |
 | Ciclos de Avaliação | dev_ciclos | Legado — funcional |
-| Competências | dev_competencias | Legado — funcional |
-| **Modelos** | dp_modelos, dp_versoes, dp_versao_blocos, dp_versao_criterios, dp_criterios, dp_escalas | Novo — V1 |
+| **Competências** | dp_criterios | Novo — Biblioteca de Critérios |
+| **Modelos** | dp_modelos, dp_versoes, dp_versao_blocos, dp_versao_criterios | Novo — V1 |
 | **Escalas** | dp_escalas, dp_escala_opcoes | Novo — V1 |
+| **Configurações D&P** | dp_tipos_avaliador, dp_tipos_calculo_config, dp_tabelas_conceito, dp_faixas_conceito | Novo — V1 |
+
+---
+
+## Aba Competências — Biblioteca de Critérios
+
+### Duas abas internas
+- **Minha Biblioteca** (`bibSecBiblioteca`): critérios com `na_biblioteca=true`; empty state com CTA "Novo critério" e "Explorar catálogo"
+- **Catálogo de Sugestões** (`bibSecCatalogo`): critérios com `dev_competencias_id IS NOT NULL`; botão "Adicionar" → PATCH `na_biblioteca=true`; badge "Já adicionado" quando `na_biblioteca=true`
+
+### Variáveis de estado (Competências)
+```js
+let _dpCriterios       = [];      // dp_criterios (todos)
+let _dpCriteriosEmUso  = new Set(); // ids em dp_versao_criterios de versão publicada
+let _dpSetores         = [];      // param_setor como fonte das áreas
+let _bibFiltroTipo     = '';      // filtro ativo na aba Minha Biblioteca
+let _catFiltroTipo     = '';      // filtro ativo na aba Catálogo
+```
+
+### Status visual nos cards (Minha Biblioteca)
+- `● Disponível` (verde): `ativo=true` e não em versão publicada
+- `● Em uso` (âmbar): `ativo=true` e `id ∈ _dpCriteriosEmUso`
+- `● Inativa` (cinza): `ativo=false`
+
+### Modal de competência (`modalCompetencia`)
+Campos:
+1. **Nome da competência** * — `compNome`
+2. **Tipo** * — `compTipo` (`comportamental`|`tecnico`); ao mudar para comportamental, área reseta para "Todas as áreas"
+3. **Área de aplicação** — `compArea` (select populado de `_dpSetores`; opção padrão "Todas as áreas" = `value=""` → salva `area=null`)
+4. **O que será avaliado?** * — `compDescricao`
+5. **Resultado esperado** (opcional) — `compReferencia`
+
+`salvarCompetencia()` envia: `{ nome, tipo, area, descricao, referencia, ativo: true, na_biblioteca: true }` no POST.
+Edição (`emUso=true`): todos os campos desabilitados, botão Salvar oculto, aviso exibido.
+
+---
+
+## Aba Configurações D&P
+
+4 blocos renderizados em `renderConfiguracoes()`:
+1. **Tipos de Avaliador** — tabela `dp_tipos_avaliador`; labels editáveis inline
+2. **Escalas de Resposta** — tabela `dp_escalas`; atalho para aba Escalas
+3. **Tabelas de Conceito** — cards com faixas; modal para nova tabela; drawer para editar faixas
+4. **Tipos de Cálculo** — tabela `dp_tipos_calculo_config`; toggle ativo/inativo
 
 ---
 
 ## Aba Modelos — detalhes de implementação
 
-### Listagem
-- Cards por modelo com versões aninhadas
-- Badge por versão: Rascunho (cinza) | Publicada (verde, `em_uso=true`)
-- Botões por versão:
-  - Rascunho: "Configurar" (drawer) + "Publicar" (valida via RPC → PATCH em_uso=true)
-  - Publicada: "Ver" (drawer readonly) + "Nova versão" (cria cópia rascunho)
-
-### Drawer de configuração de versão (`drawerVersao`, 900px)
-- **Tab Critérios:** accordion por bloco → tabela de critérios
-  - Colunas: Nome | Tipo resposta | Escala | Peso | Obrigatório | Contribui cálculo | Obs. obrig. | Ordem | Remover
-  - Todos desabilitados quando `em_uso=true` (`_dpVersaoReadonly`)
-  - Regras de UI: tipo_resposta conceito/texto → `contribui_calculo` forçado false + escala hidden
-- **Tab Configurações:** tipo_calculo, tipo_avaliador, nota_maxima, converte_para_conceito, faixas_conceito
-- **Footer:** "Validar versão" (RPC) → resultado inline → "Publicar" só aparece após validação ok
+### Drawer de versão (`drawerVersao`)
+- **Tab Critérios:** accordion por bloco → tabela de critérios (tudo `disabled` se `em_uso`)
+- **Tab Configurações:** `tipo_calculo`, `tipo_avaliador_id` (select de `dp_tipos_avaliador`), `converte_para_conceito`, `tabela_conceito_id` (select de `dp_tabelas_conceito`)
+- **Footer:** Validar → resultado inline → Publicar (só após validação ok)
+- Picker de critérios: filtra `na_biblioteca=true AND ativo=true`
 
 ### Variáveis de estado (Modelos)
 ```js
-let _dpModelos      = [];   // dp_modelos
-let _dpVersoes      = {};   // { modelo_id: [versao, ...] }
-let _dpCriterios    = [];   // dp_criterios (biblioteca)
-let _dpVersaoAtual  = null; // versão sendo configurada
-let _dpVersaoCrits  = [];   // dp_versao_criterios da versão ativa
-let _dpVersaoBlocos = [];   // dp_versao_blocos da versão ativa
-let _dpVersaoReadonly = false; // true quando versão publicada
-let _dpBlocoAlvoId  = null; // bloco selecionado no picker de critérios
-```
-
----
-
-## Aba Escalas — detalhes de implementação
-
-### Listagem
-- Cards com toggle inline de opções (label + valor_numerico)
-- Badge "Em uso" (amber) quando referenciada por versão publicada
-- Botão "Editar" → modal de criação/edição
-
-### Modal de escala (`modalEscala`)
-- Campos: nome, descrição
-- Lista de opções editáveis (label + valor_numerico opcional)
-- Ao salvar: DELETE bulk das opções antigas → INSERT das novas
-- Se DELETE falhar (HTTP 4xx): banco bloqueou por imutabilidade → toast com mensagem clara
-
-### Verificação de "em uso" na listagem
-```js
-// Carrega versões publicadas → busca escala_ids usadas → Set para lookup O(1)
-const versoesPublicadas = Object.values(_dpVersoes).flat().filter(v => v.em_uso);
-const escalaEmUso = new Set();
-for (const v of versoesPublicadas) {
-  const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${v.id}&select=escala_id`) || [];
-  crits.forEach(c => { if (c.escala_id) escalaEmUso.add(c.escala_id); });
-}
-```
-
-### Variáveis de estado (Escalas)
-```js
-let _dpEscalas       = [];   // dp_escalas
-let _dpEscalaOpcoes  = {};   // { escala_id: [opcao, ...] }
-let _escalaOpcoesTemp = [];  // opções em edição no modal
+let _dpModelos        = [];
+let _dpVersoes        = {};       // { modelo_id: [versao, ...] }
+let _dpVersaoAtual    = null;
+let _dpVersaoCrits    = [];
+let _dpVersaoBlocos   = [];
+let _dpVersaoReadonly = false;
+let _dpBlocoAlvoId    = null;
+let _dpTiposCalculo   = [];       // dp_tipos_calculo_config
+let _dpTiposAvaliador = [];       // dp_tipos_avaliador
+let _dpTabelasConceito = [];      // dp_tabelas_conceito
+let _dpFaixasConceito  = {};      // { tabela_id: [faixas] }
 ```
 
 ---
@@ -411,135 +413,84 @@ let _escalaOpcoesTemp = [];  // opções em edição no modal
 
 ```js
 const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // publishable key
-const HDR = {
-  apikey: SB_KEY,
-  Authorization: `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-  Prefer: 'return=representation'
-};
+const SB_KEY = '...'; // publishable key
+const HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
+              'Content-Type': 'application/json', Prefer: 'return=representation' };
 
-async function sbGet(path)        { const r = await fetch(SB_URL+path,{headers:HDR}); return r.ok ? r.json() : []; }
-async function sbPost(path,body)  { const r = await fetch(SB_URL+path,{method:'POST',  headers:HDR,body:JSON.stringify(body)}); return r.ok ? r.json() : null; }
-async function sbPatch(path,body) { const r = await fetch(SB_URL+path,{method:'PATCH', headers:HDR,body:JSON.stringify(body)}); return r.ok ? r.json() : null; }
-async function sbDelete(path)     { const r = await fetch(SB_URL+path,{method:'DELETE',headers:{...HDR,Prefer:'return=minimal'}}); return r.ok; }
-
-// RPC (funções do banco):
-// fetch(SB_URL + '/rest/v1/rpc/<nome>', { method:'POST', headers:HDR, body:JSON.stringify({param: valor}) })
+async function sbGet(path)        { ... }
+async function sbPost(path,body)  { ... }
+async function sbPatch(path,body) { ... }
+async function sbDelete(path)     { ... }
+// RPC: POST /rest/v1/rpc/<nome>
 ```
 
 ---
 
 ## Padrão de design — tokens CSS
 
-O módulo usa os mesmos tokens do sistema:
-
 ```css
---text:       #101828   /* texto principal */
---text-sec:   #4B5565   /* texto secundário — mínimo 11px */
---text-ter:   #6C7589   /* texto terciário / placeholder */
---border:     #E4E7EC
---border-light: #F2F4F7
---surface:    #ffffff
---bg:         #F0F2F5
---accent:     #101828
---green:      #12B76A  --green-bg:  #ECFDF3
---amber:      #F79009  --amber-bg:  #FFFAEB
---red:        #F04438  --red-bg:    #FEF3F2
---blue:       #2E90FA  --blue-bg:   #EFF8FF
---purple:     #7F56D9  --purple-bg: #F9F5FF
---radius:     12px
---shadow-sm:  0 1px 3px rgba(16,24,40,.08)
---shadow-md:  0 4px 8px rgba(16,24,40,.12)
---shadow-xl:  0 20px 60px rgba(16,24,40,.2)
+--text-sec: #4B5565  --text-ter: #6C7589
+--border: #E4E7EC    --border-light: #F2F4F7
+--surface: #ffffff   --bg: #F0F2F5   --accent: #101828
+--green: #12B76A     --amber: #F79009  --red: #F04438
+--blue: #2E90FA      --radius: 12px
 ```
 
-**Classes reutilizáveis existentes no arquivo:**
-- Botões: `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-sm`
-- Badges: `.sbadge`, `.sbadge-green`, `.sbadge-amber`, `.sbadge-blue`, `.sbadge-red`, `.sbadge-gray`
-- Tabela: `.proto-table`, `.proto-header`, `.proto-row`
-- Modal: `.modal-overlay`, `.modal`, `.modal-lg`, `.modal-title`, `.form-group`, `.form-label`, `.form-input`, `.form-row`, `.modal-footer`
-- Drawer: `.drawer-overlay`, `.drawer`, `.drawer-versao`, `.drawer-head`, `.drawer-tabs`, `.drawer-body`, `.drawer-footer`
-- Feedback: `.loader`, `.spinner`, `.empty-state`, `.validacao-result`, `.validacao-ok`, `.validacao-err`
-- Toast: `toast(msg, err=false)` — exibe notificação 3,2s
+**Classes:** `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-sm`, `.sbadge`, `.sbadge-green/amber/blue/red/gray`, `.modal-overlay`, `.modal`, `.modal-lg`, `.form-group`, `.form-label`, `.form-input`, `.drawer`, `.drawer-versao`, `.loader`, `.spinner`, `.empty-state`, `toast(msg, err=false)`
+
+**Classes da Biblioteca:** `.bib-tabs`, `.bib-tab`, `.bib-sec`, `.comp-card`, `.comp-card.inativo`, `.comp-card-top-row`, `.comp-card-nome`, `.comp-card-desc`, `.comp-card-ref`, `.comp-card-actions`, `.comp-area-header`, `.comp-grid-list`, `.comp-em-uso-aviso`, `.comp-status-row`, `.status-dot.disponivel/em-uso/inativa`, `.cat-card`, `.cat-ja-adicionado`, `.filter-chip`
+
+**Classes de Configurações:** `.conf-bloco`, `.conf-bloco-titulo`, `.conf-bloco-desc`, `.conf-table`, `.tabela-conceito-card`, `.faixas-preview`, `.faixa-chip`
 
 ---
 
-## Fluxo operacional planejado (próximas fases)
-
-### Fase 2 — Ciclos com motor dp_* (não implementado)
-```
-Ciclo (dp_ciclos) referencia versão publicada
-  → RH adiciona participantes (dp_ciclo_participantes com snapshot)
-  → Sistema cria dp_avaliacoes por tipo_avaliador para cada participante
-  → Gestor/avaliador responde (dp_respostas)
-  → RH calcula e publica resultados (dp_resultados)
-  → Histórico comparável via dp_fn_historico_criterio
-```
-
-### Fase 3 — Visão do gestor
-```
-"Meu ciclo" → lista quem precisa avaliar → preenche respostas → conclui
-  → histórico anterior visível (última avaliação: Ago/2026)
-  → NÃO pré-preenche respostas com dados anteriores
-```
-
-### Fase 4 — Camada de Análises (dashboard)
-```
-Painel por colaborador/equipe/setor/unidade
-Matriz de respostas (colaborador × critério)
-Evolução histórica com indicadores melhorou/piorou/manteve/sem_comparacao
-  (calculados no front, nunca armazenados)
-Filtros: setor, cargo, unidade, empresa, período, ciclo
-Exportação
-Dashboards por perfil (RH / Gestor / Diretoria)
-```
-
-### Fase 5 — PDI V2
-- `dev_pdi` será migrado para tabela dp_pdi vinculada a dp_ciclo_participantes
-- Preservar dados do dev_pdi durante a migração
-
----
-
-## Compatibilidade: colaboradores.id
-
-**`colaboradores.id` é INTEGER**, não UUID. Qualquer FK para colaboradores deve usar `INTEGER`:
-```sql
-colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id)
-```
-Erro comum: declarar como UUID — o banco rejeita com "uuid and integer incompatible".
-
----
-
-## Compatibilidade: dev_competencias
-
-- `dev_competencias.id` é **BIGINT** (não UUID)
-- `dev_competencias.tipo` usa 'tecnica' (feminino), enquanto `dp_tipo_criterio` usa 'tecnico'
-- Mapeamento usado na migration: `WHEN 'tecnica' THEN 'tecnico'`, `WHEN 'comportamental' THEN 'comportamental'`
-- Supabase UI trunca strings longas (ex: 'comportamental' aparecia como 'comportamenta') — sempre validar via `SELECT tipo, length(tipo)` ao depurar
-
----
-
-## Migrations relacionadas
+## Migrations executadas
 
 | Arquivo | Conteúdo | Status |
 |---|---|---|
-| `migrations/065_desenvolvimento_performance_v1.sql` | Motor D&P completo — ENUMs, tabelas dp_*, triggers, funções | Executado 2026-09-29 |
-| `migrations/065b_dp_continuacao.sql` | Script intermediário (referência histórica do processo de execução) | Não executar novamente |
+| `065_desenvolvimento_performance_v1.sql` | Motor D&P completo + migração dev_competencias → dp_criterios | Executado |
+| `066_dp_desabilitar_rls.sql` | Desabilitar RLS nas tabelas dp_* | Executado |
+| `067_dp_parametrizacao_v1.sql` | dp_tipos_avaliador, dp_tipos_calculo_config, dp_tabelas_conceito, dp_faixas_conceito, criterio_nome_snapshot, elegibilidade → dp_ciclos, DROP ENUM dp_tipo_avaliador | Executado |
+| `068_dp_corrigir_validar_versao.sql` | Corrige dp_validar_versao regra 2: tabela_conceito_id IS NULL | **PENDENTE** |
+| `069_dp_criterios_na_biblioteca.sql` | ADD COLUMN na_biblioteca BOOLEAN; UPDATE seed → false | Executado |
+| `070_dp_criterios_referencia_meta.sql` | ADD COLUMN referencia, meta_valor, meta_unidade; CREATE dp_meta_unidades | Executado (revertido em 071) |
+| `071_dp_criterios_remover_meta.sql` | DROP meta_valor, meta_unidade; DROP TABLE dp_meta_unidades | Executado |
 
-**Ao criar nova migration dp_*:** usar prefixo `066_dp_` e incrementar sequencialmente.
+**Próxima migration:** `072_dp_...`
+
+**Migration 068 pendente:** SQL pronto em `migrations/068_dp_corrigir_validar_versao.sql`. Executar antes de usar `converte_para_conceito` na UI.
 
 ---
 
-## Pendências abertas
+## Estado atual — Etapas D&P
 
-| Item | Prioridade | Fase |
+| Etapa | O que cobre | Status |
 |---|---|---|
-| Aba Ciclos com motor dp_* (dp_ciclos, participantes, avaliações) | Alta | 2 |
-| Visão do gestor — "meu ciclo" | Alta | 3 |
-| Cálculo de resultados (dp_resultados) | Alta | 2 |
-| Camada de Análises / dashboard | Média | 4 |
-| PDI V2 vinculado a dp_ciclo_participantes | Baixa | 5 |
-| DROP das tabelas dev_ciclos, dev_avaliacoes, dev_historico | Baixa | pós-migração |
-| Camada financeira (dp_regras_financeiras) — UI | Baixa | futuro |
-| RLS (Row Level Security) nas tabelas dp_* | Alta | antes de abrir para gestor |
+| **Etapa 1 — Ciclos D&P** | Criar ciclo, definir elegibilidade, adicionar/remover participantes, mudar status rascunho→aberto | ✅ Implementado (commit f94d3e9) — aguardando teste com `param_setor` populado |
+| **Etapa 2 — Avaliação do Gestor** | Formulário guiado por critérios da versão | Pendente |
+| **Etapa 3 — Cálculo** | RPC no banco → dp_resultados | Pendente |
+| **Etapa 4 — Regra financeira UI** | Configuração de dp_regras_financeiras no drawer da versão | Pendente |
+| **Etapa 5 — Análise e fechamento RH** | Revisão de resultados, aprovação, encerramento do ciclo | Pendente |
+| **Etapa 6 — Relatório/exportação** | Exportar resultados para Excel/PDF | Pendente |
+
+## Pendências técnicas
+
+| Item | Prioridade | Detalhe |
+|---|---|---|
+| **Executar migration 068** | Alta | Corrige `dp_validar_versao` regra 2 — necessário antes de usar `converte_para_conceito` |
+| **`param_setor` populado** | Alta | Pré-requisito para testar elegibilidade por setor no ciclo |
+| RLS nas tabelas dp_* | Alta | Obrigatório antes de abrir visão do gestor |
+| Visão do gestor — "meu ciclo" | Alta | Etapa 3 |
+| Cálculo de resultados (dp_resultados) | Alta | Etapa 3 |
+| Camada financeira UI | Baixa | Etapa 4 |
+| Camada de Análises / dashboard | Média | Etapa 5 |
+| PDI V2 vinculado a dp_ciclo_participantes | Baixa | Fase futura |
+| DROP tabelas dev_* | Baixa | Pós-migração completa |
+
+---
+
+## Compatibilidade: tipos de dados
+
+- **`colaboradores.id` é INTEGER** — FKs para colaboradores usam `INTEGER`, nunca UUID
+- **`dev_competencias.id` é BIGINT** — não confundir com UUID de dp_criterios
+- **`dev_competencias.tipo`** usa `'tecnica'` (feminino); `dp_tipo_criterio` usa `'tecnico'`
