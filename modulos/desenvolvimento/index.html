@@ -435,6 +435,98 @@
     .drawer { width: 100%; }
     .form-row { grid-template-columns: 1fr; }
   }
+
+  /* ══ WIZARD NOVO MODELO ══ */
+  .wiz-overlay {
+    position: fixed; inset: 0; background: rgba(16,24,40,0.5); z-index: 9000;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .wiz-overlay.open { opacity: 1; pointer-events: auto; }
+  .wiz-container {
+    background: var(--surface); border-radius: 16px; box-shadow: var(--shadow-xl);
+    width: 100%; max-width: 900px; max-height: 90vh; overflow: hidden;
+    display: flex; flex-direction: column;
+    transform: translateY(12px); transition: transform 0.2s;
+  }
+  .wiz-overlay.open .wiz-container { transform: translateY(0); }
+  .wiz-header {
+    padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .wiz-header-left { flex: 1; }
+  .wiz-step-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .wiz-step-sub { font-size: 13px; color: var(--text-sec); }
+  .wiz-progress { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
+  .wiz-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--border);
+    transition: background 0.2s, width 0.2s;
+  }
+  .wiz-dot.active { background: var(--text); width: 20px; border-radius: 4px; }
+  .wiz-dot.done { background: var(--green); }
+  .wiz-body {
+    flex: 1; overflow-y: auto; padding: 0;
+    display: flex; min-height: 0;
+  }
+  .wiz-main {
+    flex: 1; padding: 24px; overflow-y: auto; min-height: 300px;
+  }
+  .wiz-sidebar {
+    width: 260px; flex-shrink: 0; border-left: 1px solid var(--border);
+    padding: 20px; background: var(--bg); overflow-y: auto;
+  }
+  .wiz-sidebar-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-ter); margin-bottom: 14px;
+  }
+  .wiz-preview-row {
+    display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;
+  }
+  .wiz-preview-item {
+    display: flex; gap: 8px; align-items: flex-start; font-size: 13px;
+  }
+  .wiz-preview-label { color: var(--text-ter); min-width: 70px; flex-shrink: 0; }
+  .wiz-preview-value { color: var(--text); font-weight: 500; }
+  .wiz-preview-value.pending { color: var(--text-ter); font-style: italic; font-weight: 400; }
+  .wiz-preview-sep { border-top: 1px solid var(--border); margin: 10px 0; }
+  .wiz-preview-note { font-size: 12px; color: var(--text-ter); line-height: 1.5; }
+  .wiz-footer {
+    padding: 16px 24px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    background: var(--surface);
+  }
+  .wiz-step-label { font-size: 12px; color: var(--text-ter); }
+
+  /* Cards de seleção do wizard */
+  .wiz-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .wiz-card {
+    border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 16px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    background: var(--surface); position: relative;
+  }
+  .wiz-card:hover { border-color: #b0bdcc; background: #f8f9fb; }
+  .wiz-card.selected { border-color: var(--text); background: #f0f2f5; }
+  .wiz-card.disabled-card { opacity: 0.55; cursor: default; }
+  .wiz-card.disabled-card:hover { border-color: var(--border); background: var(--surface); }
+  .wiz-card-icon { font-size: 22px; margin-bottom: 8px; }
+  .wiz-card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .wiz-card-desc { font-size: 12px; color: var(--text-sec); line-height: 1.5; }
+  .wiz-card-badge {
+    position: absolute; top: 8px; right: 8px;
+    font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 20px;
+    background: var(--amber-bg); color: var(--amber); letter-spacing: 0.02em;
+  }
+
+  /* Passo 5 — campos de texto */
+  .wiz-field { margin-bottom: 16px; }
+  .wiz-field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .wiz-field input, .wiz-field textarea {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-size: 14px; font-family: inherit; color: var(--text);
+    background: var(--surface); outline: none; transition: border-color 0.15s;
+    resize: vertical;
+  }
+  .wiz-field input:focus, .wiz-field textarea:focus { border-color: var(--text); }
 </style>
 </head>
 <body>
@@ -625,7 +717,7 @@
         <div style="font-size:15px;font-weight:600;margin-bottom:2px">Modelos de Avaliação</div>
         <div style="font-size:13px;color:var(--text-sec)">Configure modelos com critérios e escalas de avaliação.</div>
       </div>
-      <button class="btn btn-primary" onclick="abrirModalNovoModelo()">
+      <button class="btn btn-primary" onclick="abrirWizard()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Novo modelo
       </button>
@@ -4102,10 +4194,308 @@ function toast(msg, err=false) {
 }
 
 /* ─────────────────────────────────────────────
+   WIZARD — NOVO MODELO
+───────────────────────────────────────────── */
+let _wiz = {
+  step: 1,
+  tipo: null,
+  tipo_resposta: null,
+  resultado: null,
+  tipo_calculo: null,
+  converte_conceito: false,
+  nome: '',
+  descricao: ''
+};
+
+const WIZ_TIPOS = [
+  { id: 'desempenho',    icon: '🎯', title: 'Desempenho',         desc: 'Avaliação geral de desempenho com critérios e notas',           calculo: 'media_ponderada', resposta: 'escala' },
+  { id: 'competencias', icon: '💼', title: 'Competências',        desc: 'Avaliação comportamental e técnica por escala',                 calculo: 'media',            resposta: 'escala' },
+  { id: 'metas',        icon: '📊', title: 'Metas e Resultados',  desc: 'Atingimento de metas com percentual',                          calculo: 'percentual_atingimento', resposta: 'numerico_com_meta' },
+  { id: 'experiencia',  icon: '✅', title: 'Experiência',         desc: 'Avaliação de período de experiência (45/90 dias)',              calculo: 'qualitativo',      resposta: 'binario' },
+  { id: 'personalizada',icon: '⚙️', title: 'Personalizada',       desc: 'Montar do zero com configuração livre',                        calculo: null,               resposta: null }
+];
+
+const WIZ_RESPOSTAS = [
+  { id: 'escala',            icon: '⭐', title: 'Nota (escala)',       desc: 'O avaliador escolhe um nível em uma escala definida' },
+  { id: 'binario',           icon: '✔️', title: 'Sim / Não',           desc: 'Resposta binária para critérios objetivos' },
+  { id: 'numerico_com_meta', icon: '🎯', title: 'Número com meta',     desc: 'Valor numérico comparado a uma meta definida' },
+  { id: 'texto',             icon: '✏️', title: 'Texto livre',         desc: 'Resposta descritiva sem cálculo numérico' }
+];
+
+const WIZ_RESULTADOS = [
+  { id: 'nenhum',     icon: '📋', title: 'Não',              desc: 'Apenas registro, sem pontuação ou conceito' },
+  { id: 'conceito',   icon: '🏅', title: 'Conceito',         desc: '"Ótimo / Bom / Precisa melhorar" — converte nota em conceito' },
+  { id: 'pontuacao',  icon: '🔢', title: 'Pontuação',        desc: 'Resultado numérico final' },
+  { id: 'financeiro', icon: '💰', title: 'Valor financeiro', desc: 'Vincula resultado a pagamento ou bonificação', badge: 'Em breve' }
+];
+
+const WIZ_CALCULOS = [
+  { id: 'media',                    icon: '∑÷', title: 'Média simples',      desc: 'Soma das notas dividida pela quantidade de critérios' },
+  { id: 'media_ponderada',          icon: '⚖️', title: 'Média ponderada',    desc: 'Critérios com pesos diferentes influenciam o resultado' },
+  { id: 'soma',                     icon: '∑',  title: 'Soma total',         desc: 'Somatório de todas as notas dos critérios' },
+  { id: 'percentual_atingimento',   icon: '%',  title: '% de atingimento',   desc: 'Percentual realizado em relação a metas definidas' },
+  { id: 'qualitativo',              icon: '📝', title: 'Qualitativo',        desc: 'Sem cálculo numérico — avaliação descritiva ou conceitual' }
+];
+
+const WIZ_STEPS = [
+  { title: 'O que você quer avaliar?',     sub: 'Escolha o tipo de avaliação para configurar os padrões automaticamente.' },
+  { title: 'Como o avaliador vai responder?', sub: 'Selecione o tipo de resposta que os avaliadores usarão nos critérios.' },
+  { title: 'O resultado gera algum retorno?', sub: 'Defina o que acontece com a nota final da avaliação.' },
+  { title: 'Como calcular?',               sub: 'Escolha o método de cálculo do resultado final.' },
+  { title: 'Detalhes finais',              sub: 'Dê um nome e descrição ao modelo de avaliação.' }
+];
+
+const WIZ_NOME_SUGESTAO = {
+  desempenho: 'Avaliação de Desempenho',
+  competencias: 'Avaliação de Competências',
+  metas: 'Avaliação de Metas e Resultados',
+  experiencia: 'Avaliação de Período de Experiência',
+  personalizada: 'Novo Modelo de Avaliação'
+};
+
+function abrirWizard() {
+  _wiz = { step: 1, tipo: null, tipo_resposta: null, resultado: null, tipo_calculo: null, converte_conceito: false, nome: '', descricao: '' };
+  wizRenderStep();
+  document.getElementById('wizOverlay').classList.add('open');
+}
+
+function fecharWizard() {
+  document.getElementById('wizOverlay').classList.remove('open');
+}
+
+function wizRenderStep() {
+  const s = _wiz.step;
+  const stepInfo = WIZ_STEPS[s - 1];
+  document.getElementById('wizStepTitle').textContent = stepInfo.title;
+  document.getElementById('wizStepSub').textContent = stepInfo.sub;
+  document.getElementById('wizStepLabel').textContent = `Passo ${s} de 5`;
+
+  // Progress dots
+  const prog = document.getElementById('wizProgress');
+  prog.innerHTML = [1,2,3,4,5].map(i => {
+    const cls = i < s ? 'done' : (i === s ? 'active' : '');
+    return `<div class="wiz-dot ${cls}"></div>`;
+  }).join('');
+
+  // Back button visibility
+  document.getElementById('wizBtnBack').style.display = s > 1 ? '' : 'none';
+
+  // Next button label
+  const btnNext = document.getElementById('wizBtnNext');
+  btnNext.textContent = s === 5 ? 'Criar avaliação' : 'Próximo →';
+
+  // Render main area
+  const main = document.getElementById('wizMain');
+  if (s === 1) main.innerHTML = wizRenderCards(WIZ_TIPOS, 'tipo', _wiz.tipo);
+  else if (s === 2) main.innerHTML = wizRenderCards(WIZ_RESPOSTAS, 'tipo_resposta', _wiz.tipo_resposta, wizRespostaDisabled());
+  else if (s === 3) main.innerHTML = wizRenderCards(WIZ_RESULTADOS, 'resultado', _wiz.resultado);
+  else if (s === 4) main.innerHTML = wizRenderCards(WIZ_CALCULOS, 'tipo_calculo', _wiz.tipo_calculo, wizCalculoDisabled());
+  else if (s === 5) main.innerHTML = wizRenderStep5();
+
+  // Preview
+  wizRenderPreview();
+}
+
+function wizRespostaDisabled() {
+  // Se tipo já fixou resposta (não-personalizada), desabilitar os outros
+  if (!_wiz.tipo || _wiz.tipo === 'personalizada') return new Set();
+  const t = WIZ_TIPOS.find(x => x.id === _wiz.tipo);
+  if (!t || !t.resposta) return new Set();
+  return new Set(['escala','binario','numerico_com_meta','texto'].filter(r => r !== t.resposta));
+}
+
+function wizCalculoDisabled() {
+  const disabled = new Set();
+  // Texto livre força qualitativo
+  if (_wiz.tipo_resposta === 'texto') {
+    ['media','media_ponderada','soma','percentual_atingimento'].forEach(c => disabled.add(c));
+  }
+  // Tipos não-personalizados pré-selecionam, mas ainda permitem editar no passo 4
+  return disabled;
+}
+
+function wizRenderCards(items, field, selected, disabledSet = new Set()) {
+  return `<div class="wiz-cards">` + items.map(item => {
+    const isSel = selected === item.id;
+    const isDis = disabledSet.has(item.id);
+    return `<div class="wiz-card ${isSel ? 'selected' : ''} ${isDis ? 'disabled-card' : ''}"
+      onclick="${isDis ? '' : `wizSelect('${field}','${item.id}')`}">
+      ${item.badge ? `<span class="wiz-card-badge">${item.badge}</span>` : ''}
+      <div class="wiz-card-icon">${item.icon}</div>
+      <div class="wiz-card-title">${item.title}</div>
+      <div class="wiz-card-desc">${item.desc}</div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+function wizRenderStep5() {
+  const sugestao = WIZ_NOME_SUGESTAO[_wiz.tipo] || 'Novo Modelo de Avaliação';
+  const nome = _wiz.nome || sugestao;
+  return `
+    <div style="max-width:520px">
+      <div class="wiz-field">
+        <label>Nome da avaliação <span style="color:var(--red)">*</span></label>
+        <input type="text" id="wizNomeInput" value="${nome.replace(/"/g,'&quot;')}"
+          oninput="_wiz.nome=this.value;wizRenderPreview()" placeholder="Ex: Avaliação de Desempenho Operacional">
+      </div>
+      <div class="wiz-field">
+        <label>Descrição <span style="color:var(--text-ter);font-weight:400">(opcional)</span></label>
+        <textarea id="wizDescInput" rows="3"
+          oninput="_wiz.descricao=this.value" placeholder="Descreva o objetivo desta avaliação...">${_wiz.descricao}</textarea>
+      </div>
+    </div>`;
+}
+
+function wizSelect(field, value) {
+  _wiz[field] = value;
+
+  // Aplicar defaults quando tipo é selecionado no passo 1
+  if (field === 'tipo') {
+    const t = WIZ_TIPOS.find(x => x.id === value);
+    if (t && value !== 'personalizada') {
+      _wiz.tipo_resposta = t.resposta;
+      _wiz.tipo_calculo  = t.calculo;
+    } else {
+      _wiz.tipo_resposta = null;
+      _wiz.tipo_calculo  = null;
+    }
+    _wiz.nome = WIZ_NOME_SUGESTAO[value] || '';
+  }
+
+  // Forçar qualitativo se texto livre
+  if (field === 'tipo_resposta' && value === 'texto') {
+    _wiz.tipo_calculo = 'qualitativo';
+  }
+
+  // Atualizar converte_conceito
+  if (field === 'resultado') {
+    _wiz.converte_conceito = (value === 'conceito');
+  }
+
+  wizRenderStep();
+}
+
+function wizBack() {
+  if (_wiz.step > 1) { _wiz.step--; wizRenderStep(); }
+}
+
+function wizNext() {
+  const s = _wiz.step;
+
+  // Validações por passo
+  if (s === 1 && !_wiz.tipo) { toast('Selecione um tipo de avaliação.', true); return; }
+  if (s === 2 && !_wiz.tipo_resposta) { toast('Selecione o tipo de resposta.', true); return; }
+  if (s === 3 && !_wiz.resultado) { toast('Selecione o tipo de resultado.', true); return; }
+  if (s === 4 && !_wiz.tipo_calculo) { toast('Selecione o tipo de cálculo.', true); return; }
+  if (s === 5) { salvarWizard(); return; }
+
+  _wiz.step++;
+  wizRenderStep();
+}
+
+function wizRenderPreview() {
+  const tipoLabel = _wiz.tipo ? (WIZ_TIPOS.find(x => x.id === _wiz.tipo)?.title || '—') : null;
+  const respLabel = _wiz.tipo_resposta ? (WIZ_RESPOSTAS.find(x => x.id === _wiz.tipo_resposta)?.title || '—') : null;
+  const calcLabel = _wiz.tipo_calculo ? (WIZ_CALCULOS.find(x => x.id === _wiz.tipo_calculo)?.title || '—') : null;
+  const resLabel  = _wiz.resultado ? (WIZ_RESULTADOS.find(x => x.id === _wiz.resultado)?.title || '—') : null;
+  const nomeExib  = _wiz.nome || (WIZ_NOME_SUGESTAO[_wiz.tipo] || '—');
+
+  const row = (label, value) => `
+    <div class="wiz-preview-item">
+      <span class="wiz-preview-label">${label}</span>
+      <span class="wiz-preview-value ${value ? '' : 'pending'}">${value || 'a definir'}</span>
+    </div>`;
+
+  document.getElementById('wizPreview').innerHTML = `
+    <div class="wiz-preview-row">
+      ${row('Nome:', _wiz.nome || nomeExib)}
+      ${row('Tipo:', tipoLabel)}
+      ${row('Resposta:', respLabel)}
+      ${row('Cálculo:', calcLabel)}
+      ${row('Resultado:', resLabel)}
+    </div>`;
+}
+
+async function salvarWizard() {
+  const nome = (_wiz.nome || '').trim() || (WIZ_NOME_SUGESTAO[_wiz.tipo] || 'Novo Modelo');
+  const descricao = (_wiz.descricao || '').trim() || undefined;
+
+  const btnNext = document.getElementById('wizBtnNext');
+  btnNext.disabled = true;
+  btnNext.textContent = 'Criando...';
+
+  try {
+    // 1. POST dp_modelos
+    const modeloRes = await sbPost('/rest/v1/dp_modelos', { nome, descricao: descricao || null, ativo: true });
+    if (!modeloRes || !modeloRes[0]) { toast('Erro ao criar modelo: ' + sbErrMsg(), true); return; }
+    const modeloId = modeloRes[0].id;
+
+    // 2. POST dp_versoes
+    const versaoRes = await sbPost('/rest/v1/dp_versoes', {
+      modelo_id: modeloId,
+      versao: 'v1',
+      tipo_calculo: _wiz.tipo_calculo || 'media',
+      converte_para_conceito: _wiz.converte_conceito
+    });
+    if (!versaoRes || !versaoRes[0]) { toast('Modelo criado mas erro ao criar versão: ' + sbErrMsg(), true); fecharWizard(); renderModelos(); return; }
+    const versaoId = versaoRes[0].id;
+
+    toast('Modelo criado. Configure os critérios no drawer.');
+    fecharWizard();
+
+    // 4. Atualizar lista e abrir drawer da versão criada
+    await renderModelos();
+    abrirDrawerVersao(versaoId, false);
+
+  } catch(e) {
+    toast('Erro inesperado: ' + e.message, true);
+  } finally {
+    btnNext.disabled = false;
+    btnNext.textContent = 'Criar avaliação';
+  }
+}
+
+/* ─────────────────────────────────────────────
    START
 ───────────────────────────────────────────── */
 init();
 
 </script>
+
+<!-- ══ WIZARD: NOVO MODELO ══ -->
+<div class="wiz-overlay" id="wizOverlay">
+  <div class="wiz-container">
+    <!-- Header -->
+    <div class="wiz-header">
+      <div class="wiz-header-left">
+        <div class="wiz-step-title" id="wizStepTitle">O que você quer avaliar?</div>
+        <div class="wiz-step-sub" id="wizStepSub">Escolha o tipo de avaliação para configurar os padrões automaticamente.</div>
+        <div class="wiz-progress" id="wizProgress"></div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="fecharWizard()" style="margin-left:16px;flex-shrink:0">Cancelar</button>
+    </div>
+
+    <!-- Body: main + sidebar -->
+    <div class="wiz-body">
+      <div class="wiz-main" id="wizMain"></div>
+      <div class="wiz-sidebar">
+        <div class="wiz-sidebar-title">Prévia da Avaliação</div>
+        <div class="wiz-preview-row" id="wizPreview"></div>
+        <div class="wiz-preview-sep"></div>
+        <div class="wiz-preview-note">Os critérios serão adicionados após criar o modelo.</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="wiz-footer">
+      <div class="wiz-step-label" id="wizStepLabel">Passo 1 de 5</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" id="wizBtnBack" onclick="wizBack()" style="display:none">← Voltar</button>
+        <button class="btn btn-primary" id="wizBtnNext" onclick="wizNext()">Próximo →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
