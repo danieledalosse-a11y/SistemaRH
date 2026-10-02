@@ -431,16 +431,168 @@ async function sbDelete(path)     { ... }
 ```css
 --text-sec: #4B5565  --text-ter: #6C7589
 --border: #E4E7EC    --border-light: #F2F4F7
---surface: #ffffff   --bg: #F0F2F5   --accent: #101828
+--surface: #ffffff   --bg: #F8FAFC   --accent: #101828
 --green: #12B76A     --amber: #F79009  --red: #F04438
 --blue: #2E90FA      --radius: 12px
 ```
 
-**Classes:** `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-sm`, `.sbadge`, `.sbadge-green/amber/blue/red/gray`, `.modal-overlay`, `.modal`, `.modal-lg`, `.form-group`, `.form-label`, `.form-input`, `.drawer`, `.drawer-versao`, `.loader`, `.spinner`, `.empty-state`, `toast(msg, err=false)`
+**Nota:** `--bg` foi alterado de `#E8EDF4` para `#F8FAFC` no redesign visual de 2026-10-02.
+
+**Classes base:** `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-sm`, `.sbadge`, `.sbadge-green/amber/blue/red/gray`, `.modal-overlay`, `.modal`, `.modal-lg`, `.form-group`, `.form-label`, `.form-input`, `.drawer`, `.drawer-versao`, `.loader`, `.spinner`, `.empty-state`, `toast(msg, err=false)`
 
 **Classes da Biblioteca:** `.bib-tabs`, `.bib-tab`, `.bib-sec`, `.comp-card`, `.comp-card.inativo`, `.comp-card-top-row`, `.comp-card-nome`, `.comp-card-desc`, `.comp-card-ref`, `.comp-card-actions`, `.comp-area-header`, `.comp-grid-list`, `.comp-em-uso-aviso`, `.comp-status-row`, `.status-dot.disponivel/em-uso/inativa`, `.cat-card`, `.cat-ja-adicionado`, `.filter-chip`
 
 **Classes de Configurações:** `.conf-bloco`, `.conf-bloco-titulo`, `.conf-bloco-desc`, `.conf-table`, `.tabela-conceito-card`, `.faixas-preview`, `.faixa-chip`
+
+---
+
+## Sistema visual — redesign D&P (2026-10-02)
+
+Redesign **somente visual** implementado em todas as seções do módulo D&P. Nenhuma lógica JS ou chamada ao Supabase foi alterada.
+
+### Layout de duas colunas — `.content-area`
+
+Todas as seções (exceto legadas) usam o padrão:
+
+```html
+<div class="content-area">
+  <div class="list-col"><!-- lista principal --></div>
+  <div class="sidebar-col"><!-- painéis laterais --></div>
+</div>
+```
+
+```css
+.content-area  { display: flex; gap: 20px; align-items: flex-start; }
+.list-col      { flex: 1; min-width: 0; }
+.sidebar-col   { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 900px) { .sidebar-col { display: none; } .content-area { display: block; } }
+```
+
+### Painéis laterais — `.sidebar-panel`
+
+```html
+<div class="sidebar-panel">
+  <div class="panel-title">TÍTULO</div>
+  <div class="stat-row">
+    <span class="stat-label">Label</span>
+    <span class="stat-value accent">42</span>
+  </div>
+  <div class="progress-bar-wrap">
+    <div class="progress-labels"><span>0%</span><span>100%</span></div>
+    <div class="progress-track"><div class="progress-fill" style="width:65%"></div></div>
+  </div>
+</div>
+```
+
+`.stat-value.accent` usa `var(--accent)`. `.progress-fill.green` usa `#22C55E`.
+
+**IDs dos elementos populados por JS:**
+
+| Seção | ID | Conteúdo |
+|---|---|---|
+| Ciclos | `cicloSidebarStats` | Contadores + progresso do ciclo ativo |
+| Modelos | `sideModAtivos`, `sideModInativos`, `sideModCiclos`, `sideModAtividade` | Contadores modelos |
+| Competências | `sideCriterios`, `sideCriteriosComp`, `sideCriteriosTec` | Totais critérios |
+| Escalas | `sideEscalas`, `sideEscalasEmUso` | Total + em uso |
+| Configurações | `sideConfAvaliadores` | Total tipos de avaliador |
+
+### Cabeçalhos de grupo — `.section-header`
+
+```html
+<div class="section-header">
+  <span class="section-title">RASCUNHOS</span>
+  <span class="section-count">3</span>
+</div>
+```
+
+Usado em `renderCiclos()` (rascunhos / ciclos anteriores), `renderModelos()` (ativos / inativos), `renderConfiguracoes()` (cada bloco de config).
+
+### Ciclo banner — `.ciclo-banner`
+
+Exibido no topo da lista de ciclos quando há ciclo com `status === 'aberto'`:
+
+```html
+<div class="ciclo-banner">
+  <div class="ciclo-banner-title">Nome do ciclo</div>
+  <div class="ciclo-banner-sub">X participantes · encerra dd/mm/aaaa</div>
+  <div class="ciclo-banner-progress"><div class="ciclo-banner-fill" style="width:65%"></div></div>
+</div>
+```
+
+### Toggle switches — `.toggle`
+
+Substitui `<input type="checkbox">` raw nas seções Avaliadores e Tipos de Cálculo:
+
+```html
+<label class="toggle">
+  <input type="checkbox" checked onchange="salvarAvaliador(id, this.checked)">
+  <div class="toggle-track"></div>
+  <div class="toggle-thumb"></div>
+</label>
+```
+
+`toggle-track` fica azul (`var(--accent)`) quando checked. `toggle-thumb` desliza 14px.
+
+### Ícones SVG nas row-cards
+
+Substituíram emojis em todas as funções de render. Padrão:
+
+```js
+// dentro da string do row-icon
+`<div class="row-icon" style="background:${cor}22;color:${cor}">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+    <path .../>
+  </svg>
+</div>`
+```
+
+| Seção | Cor | Ícone |
+|---|---|---|
+| Ciclos | `#2563EB` (aberto) / `#D97706` (rascunho) / `#64748B` (outros) | calendar |
+| Modelos | `#2563EB` (ativo) / `#64748B` (inativo) | clipboard-list |
+| Escalas | `#7C3AED` | bar-chart |
+| Avaliadores | `#2563EB` (autoavaliacao) / `#7C3AED` (gestor) / `#D97706` (par) | user / users / arrows |
+| Tabelas de Conceito | `#16A34A` | tag |
+| Tipos de Cálculo | `#16A34A` (ativo) / `#64748B` (inativo) | gear/settings |
+
+### Botões de ação — `.icon-btn`
+
+```html
+<div class="row-actions">
+  <button class="icon-btn" onclick="..."><!-- SVG 16×16 --></button>
+</div>
+```
+
+### Busca em lista — `.list-search`
+
+Implementado na seção Modelos (`id="modelosSearchInput"`). Filtra em tempo real via `oninput="renderModelos()"`:
+
+```html
+<div class="list-search">
+  <svg .../><!-- lupa 16×16 -->
+  <input id="modelosSearchInput" type="text" placeholder="Buscar modelo...">
+</div>
+```
+
+### Drawers — padrão right-side
+
+Ambos os wizards do módulo usam right-side drawer (não modal centrado):
+
+| Overlay class | Panel class | Abertura | Fechamento |
+|---|---|---|---|
+| `.wiz-overlay` | `.wiz-panel` | `abrirWizard()` | `fecharWizard()` |
+| `.wizard-overlay` | `.wizard-panel` | `wizardAbrir()` | `wizardFechar()` |
+
+CSS base (mesmo padrão nos dois):
+```css
+.wizard-panel {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 820px; max-width: 96vw;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+}
+.wizard-overlay.open .wizard-panel { transform: translateX(0); }
+```
 
 ---
 
