@@ -156,6 +156,40 @@ CEP tem autocomplete ViaCEP: preenche logradouro e bairro via API pública
 
 ## Painel RH (modulos/admissao/index.html)
 
+### Salvar alterações na revisão — `savePanel()` (out/2026)
+
+Botão "Salvar alterações" no rodapé do painel de revisão. Executa PATCH em `admissao_fichas`.
+
+**Helpers de feedback (não alterar):**
+- `_painelIrAba(ptab)` — troca a aba ativa do painel (`pessoal`, `familia`, `comp`, `docs`)
+- `_painelErro(info, mensagem, ptabDestino)` — exibe mensagem vermelha em negrito no rodapé + navega para a aba do erro automaticamente; desaparece após 6s
+
+**Ordem de validação antes do fetch:**
+
+1. **VT incompleto:** se `vale_transporte === true` e `vt_cartao` ou `vt_passes` estiver vazio → destaca campos em vermelho + mensagem no rodapé + navega para aba `comp`. Campos: `pf_vt_cartao`, `pf_vt_passes`.
+
+2. **Campos críticos em branco:** verifica os 11 campos obrigatórios abaixo. Se algum estiver vazio → borda vermelha nos elementos `pf_<id>` + mensagem listando todos os que faltam + navega para aba do primeiro campo com erro.
+
+| Campo (`fv(id)`) | Label na mensagem | Aba |
+|---|---|---|
+| `nome` | Nome completo | pessoal |
+| `cpf` | CPF | pessoal |
+| `rg` | RG | pessoal |
+| `nascimento` | Data de nascimento | pessoal |
+| `sexo` | Sexo | pessoal |
+| `celular` | Celular | pessoal |
+| `cidade` | Cidade | pessoal |
+| `uf` | UF | pessoal |
+| `ctps_numero` | CTPS nº | pessoal |
+| `ctps_serie` | CTPS série | pessoal |
+| `pis` | PIS/PASEP | pessoal |
+
+3. **Erro de servidor:** mensagem "Não foi possível salvar. Tente novamente ou recarregue a página."
+4. **Erro de rede:** mensagem "Erro de conexão. Verifique sua internet e tente novamente."
+5. **Sucesso:** mensagem verde "✓ Alterações salvas com sucesso." por 4s.
+
+**Regra:** nunca bloquear campos opcionais (título eleitor, CNH, hobbie, banco). Apenas os 11 listados acima + VT quando marcado.
+
 ### Geração de matrícula automática
 ```js
 // Busca top 10 matrículas em desc, extrai parte numérica, max+1, mantém zero-padding
