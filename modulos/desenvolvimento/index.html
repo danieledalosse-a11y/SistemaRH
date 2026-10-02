@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
   :root {
-    --bg: #E8EDF4;
+    --bg: #F8FAFC;
     --surface: #ffffff;
     --border: #E2E8F0;
     --border-light: #F0F4F8;
@@ -470,12 +470,68 @@
   .list-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-ter); margin: 20px 0 8px; }
   .list-section-label:first-child { margin-top: 0; }
 
+  /* ── layout de conteúdo com sidebar ── */
+  .content-area { display: flex; gap: 20px; align-items: flex-start; }
+  .list-col { flex: 1; min-width: 0; }
+  .sidebar-col { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ── section header com contador ── */
+  .section-header { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; }
+  .section-header:first-child { margin-top: 0; }
+  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-sec); }
+  .section-count { background: var(--border); color: var(--text-ter); font-size: 11px; font-weight: 700; border-radius: 10px; padding: 1px 7px; }
+
+  /* ── sidebar panel ── */
+  .sidebar-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow-sm); }
+  .panel-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-sec); margin-bottom: 14px; }
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 12px; color: var(--text-sec); }
+  .stat-value { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+  .stat-value.accent { color: var(--accent); }
+  .progress-bar-wrap { margin-top: 12px; }
+  .progress-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sec); margin-bottom: 4px; }
+  .progress-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+  .progress-fill.green { background: #22C55E; }
+  .activity-feed { display: flex; flex-direction: column; gap: 10px; }
+  .activity-item-time { font-size: 11px; color: var(--text-ter); }
+  .activity-item-text { font-size: 12px; color: var(--text); margin-top: 1px; }
+
+  /* ── ciclo ativo header banner ── */
+  .ciclo-banner { background: linear-gradient(135deg, #1E3A5F 0%, #1D4ED8 100%); border-radius: var(--radius); padding: 16px 18px; color: #fff; margin-bottom: 12px; }
+  .ciclo-banner-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .ciclo-banner-sub { font-size: 12px; opacity: .75; }
+  .ciclo-banner-progress { margin-top: 12px; height: 5px; background: rgba(255,255,255,.2); border-radius: 3px; overflow: hidden; }
+  .ciclo-banner-fill { height: 100%; background: #fff; border-radius: 3px; }
+
+  /* ── icon action buttons ── */
+  .icon-btn { width: 30px; height: 30px; border-radius: 6px; border: none; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-ter); transition: background .15s, color .15s; }
+  .icon-btn:hover { background: var(--bg); color: var(--text-sec); }
+  .row-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+
+  /* ── toggle switch ── */
+  .toggle { position: relative; width: 34px; height: 20px; flex-shrink: 0; display: inline-block; }
+  .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track { position: absolute; inset: 0; border-radius: 10px; background: #CBD5E1; cursor: pointer; transition: background .2s; }
+  .toggle input:checked + .toggle-track { background: var(--accent); }
+  .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .toggle input:checked ~ .toggle-thumb { transform: translateX(14px); }
+
+  /* ── search bar ── */
+  .list-search { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; margin-bottom: 14px; }
+  .list-search svg { color: var(--text-ter); flex-shrink: 0; }
+  .list-search input { flex: 1; border: none; background: none; font-size: 13px; color: var(--text); outline: none; }
+  .list-search input::placeholder { color: var(--text-ter); }
+
   /* ── responsive ── */
   @media (max-width: 900px) {
     .grid-colab { grid-template-columns: 1.5fr 1fr 1fr; }
     .grid-colab .col-hide { display: none; }
     .drawer { width: 100%; }
     .form-row { grid-template-columns: 1fr; }
+    .sidebar-col { display: none; }
+    .content-area { display: block; }
   }
 
   /* ══ WIZARD NOVO MODELO — drawer lateral ══ */
@@ -667,8 +723,16 @@
         Novo ciclo
       </button>
     </div>
-    <div id="ciclosList">
-      <div class="loader"><div class="spinner"></div></div>
+    <div class="content-area">
+      <div class="list-col">
+        <div id="ciclosList"><div class="loader"><div class="spinner"></div></div></div>
+      </div>
+      <div class="sidebar-col" id="ciclosSidebar">
+        <div class="sidebar-panel">
+          <div class="panel-title">Ciclo atual</div>
+          <div id="cicloSidebarStats"><div style="font-size:12px;color:var(--text-ter)">Nenhum ciclo ativo.</div></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -765,7 +829,27 @@
         Novo modelo
       </button>
     </div>
-    <div id="modelosList"><div class="loader"><div class="spinner"></div></div></div>
+    <div class="content-area">
+      <div class="list-col">
+        <div class="list-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" id="modelosSearchInput" placeholder="Filtrar modelos por nome…" oninput="renderModelos()">
+        </div>
+        <div id="modelosList"><div class="loader"><div class="spinner"></div></div></div>
+      </div>
+      <div class="sidebar-col">
+        <div class="sidebar-panel">
+          <div class="panel-title">Resumo</div>
+          <div class="stat-row"><span class="stat-label">Modelos ativos</span><span class="stat-value accent" id="sideModAtivos">—</span></div>
+          <div class="stat-row"><span class="stat-label">Ciclos em andamento</span><span class="stat-value accent" id="sideModCiclos">—</span></div>
+          <div class="stat-row"><span class="stat-label">Modelos inativos</span><span class="stat-value" id="sideModInativos">—</span></div>
+        </div>
+        <div class="sidebar-panel">
+          <div class="panel-title">Últimas ações</div>
+          <div class="activity-feed" id="sideModAtividade"><div style="font-size:12px;color:var(--text-ter)">Sem atividade recente.</div></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ══ SEC: ESCALAS ══ -->
@@ -1817,12 +1901,43 @@ async function renderCiclos() {
   }
   const STATUS_LABEL = { aberto:'Ativo', fechado:'Encerrado', rascunho:'Rascunho' };
   const STATUS_BADGE = { aberto:'sbadge-green', fechado:'sbadge-gray', rascunho:'sbadge-amber' };
-  const CICLO_ICON  = { aberto:'#DBEAFE', fechado:'#F1F5F9', rascunho:'#FEF3C7' };
-  el.innerHTML = _ciclos.map(c => {
+  const CICLO_ICON_BG = { aberto:'#DBEAFE', fechado:'#F1F5F9', rascunho:'#FEF3C7' };
+  const CICLO_ICON_COLOR = { aberto:'#2563EB', fechado:'#64748B', rascunho:'#D97706' };
+  const CAL_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+  const EDIT_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+
+  const ativo = _ciclos.find(c => c.status === 'aberto');
+  const rascunhos = _ciclos.filter(c => c.status === 'rascunho');
+  const anteriores = _ciclos.filter(c => c.status === 'fechado');
+
+  let html = '';
+
+  // Banner do ciclo ativo
+  if (ativo) {
+    const dtBanner = [ativo.periodo_inicio, ativo.periodo_fim].filter(Boolean).map(formatDate).join(' a ');
+    html += `<div class="ciclo-banner">
+      <div class="ciclo-banner-title">${ativo.nome} — Em andamento</div>
+      <div class="ciclo-banner-sub">${dtBanner || 'Período não definido'}</div>
+      <div class="ciclo-banner-progress"><div class="ciclo-banner-fill" style="width:0%"></div></div>
+    </div>`;
+    // atualiza sidebar
+    const stats = document.getElementById('cicloSidebarStats');
+    if (stats) {
+      const dtSub = dtBanner ? `<div style="font-size:11px;color:var(--text-ter);margin-bottom:8px">${dtBanner}</div>` : '';
+      stats.innerHTML = `${dtSub}
+        <div class="stat-row"><span class="stat-label">Encerrar em</span><span class="stat-value">${ativo.periodo_fim ? formatDate(ativo.periodo_fim) : '—'}</span></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="mudarStatusCiclo(${ativo.id},'fechado')">Encerrar ciclo</button>`;
+    }
+  } else {
+    const stats = document.getElementById('cicloSidebarStats');
+    if (stats) stats.innerHTML = `<div style="font-size:12px;color:var(--text-ter)">Nenhum ciclo ativo.</div>`;
+  }
+
+  function renderCicloCard(c) {
     const dt = [c.periodo_inicio, c.periodo_fim].filter(Boolean).map(formatDate).join(' → ');
     const desc = [dt || 'Período não definido', c.prazo_auto_avaliacao ? 'Auto-avaliação até ' + formatDate(c.prazo_auto_avaliacao) : ''].filter(Boolean).join(' · ');
     return `<div class="row-card">
-      <div class="row-icon" style="background:${CICLO_ICON[c.status]||'#F1F5F9'};color:${c.status==='aberto'?'#2563EB':c.status==='rascunho'?'#D97706':'#64748B'}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+      <div class="row-icon" style="background:${CICLO_ICON_BG[c.status]||'#F1F5F9'};color:${CICLO_ICON_COLOR[c.status]||'#64748B'}">${CAL_SVG}</div>
       <div class="row-body">
         <div class="row-name">${c.nome}</div>
         <div class="row-desc">${desc}</div>
@@ -1830,11 +1945,23 @@ async function renderCiclos() {
       <div class="row-meta">
         <span class="sbadge ${STATUS_BADGE[c.status]||'sbadge-gray'}">${STATUS_LABEL[c.status]||c.status}</span>
         ${c.status === 'rascunho' ? `<button class="btn btn-secondary btn-sm" onclick="mudarStatusCiclo(${c.id},'aberto')">Ativar</button>` : ''}
-        ${c.status === 'aberto'   ? `<button class="btn btn-secondary btn-sm" onclick="mudarStatusCiclo(${c.id},'fechado')">Encerrar</button>` : ''}
-        <button class="btn btn-secondary btn-sm" onclick="editarCiclo(${c.id})">Editar</button>
+        <div class="row-actions"><button class="icon-btn" title="Editar" onclick="editarCiclo(${c.id})">${EDIT_SVG}</button></div>
       </div>
     </div>`;
-  }).join('');
+  }
+
+  if (rascunhos.length) {
+    html += `<div class="section-header"><span class="section-title">Rascunhos</span><span class="section-count">${rascunhos.length}</span></div>`;
+    html += rascunhos.map(renderCicloCard).join('');
+  }
+  if (anteriores.length) {
+    html += `<div class="section-header" style="margin-top:${ativo||rascunhos.length?'20px':'0'}"><span class="section-title">Ciclos anteriores</span><span class="section-count">${anteriores.length}</span></div>`;
+    html += anteriores.map(renderCicloCard).join('');
+  }
+  if (!ativo && !rascunhos.length && !anteriores.length) {
+    html = `<div class="empty-state"><p>Nenhum ciclo cadastrado. Crie o primeiro ciclo de avaliação.</p></div>`;
+  }
+  el.innerHTML = html;
 }
 
 function abrirModalCiclo() {
@@ -2280,8 +2407,11 @@ function renderAvaliadores() {
         <input class="form-input form-input-sm" value="${(a.descricao||'').replace(/"/g,'&quot;')}" placeholder="Descrição opcional" onchange="salvarAvaliador('${a.id}','descricao',this.value)" title="Descrição">
       </div>
       <div class="row-meta" style="align-self:center">
-        <span style="font-size:12px;color:var(--text-sec)">${a.ativo?'Ativo':'Inativo'}</span>
-        <input type="checkbox" ${a.ativo?'checked':''} onchange="salvarAvaliador('${a.id}','ativo',this.checked);this.closest('.row-card').querySelector('.row-icon').style.background=this.checked?'#DBEAFE':'#F1F5F9';this.previousElementSibling.textContent=this.checked?'Ativo':'Inativo'" style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer">
+        <label class="toggle" title="${a.ativo?'Ativo — clique para desativar':'Inativo — clique para ativar'}">
+          <input type="checkbox" ${a.ativo?'checked':''} onchange="salvarAvaliador('${a.id}','ativo',this.checked);const ic=this.closest('.row-card').querySelector('.row-icon');ic.style.background=this.checked?'#DBEAFE':'#F1F5F9';ic.style.color=this.checked?'#2563EB':'#64748B'">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
       </div>
     </div>`;
   }).join('');
@@ -2338,8 +2468,11 @@ function renderTiposCalculo() {
         <div class="row-desc">${t.descricao||'—'}</div>
       </div>
       <div class="row-meta">
-        <span style="font-size:12px;color:var(--text-sec)">${t.ativo?'Disponível':'Oculto'}</span>
-        <input type="checkbox" ${t.ativo?'checked':''} onchange="salvarTipoCalculo('${t.codigo}','ativo',this.checked);this.closest('.row-card').querySelector('.row-icon').style.background=this.checked?'#F0FDF4':'#F1F5F9';this.previousElementSibling.textContent=this.checked?'Disponível':'Oculto'" style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer">
+        <label class="toggle" title="${t.ativo?'Disponível — clique para ocultar':'Oculto — clique para ativar'}">
+          <input type="checkbox" ${t.ativo?'checked':''} onchange="salvarTipoCalculo('${t.codigo}','ativo',this.checked);const ic=this.closest('.row-card').querySelector('.row-icon');ic.style.background=this.checked?'#F0FDF4':'#F1F5F9';ic.style.color=this.checked?'#16A34A':'#64748B'">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
       </div>
     </div>`).join('');
 }
@@ -2483,13 +2616,18 @@ async function renderModelos() {
   const el = document.getElementById('modelosList');
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
   await loadDpModelos();
-  if (!_dpModelos.length) {
-    el.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h4"/></svg><p>Nenhum modelo cadastrado. Crie o primeiro modelo de avaliação.</p></div>`;
+  const q = (document.getElementById('modelosSearchInput')?.value||'').toLowerCase().trim();
+  const visíveis = q ? _dpModelos.filter(m => m.nome.toLowerCase().includes(q)) : _dpModelos;
+  if (!visíveis.length) {
+    el.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h4"/></svg><p>${q ? 'Nenhum modelo encontrado.' : 'Nenhum modelo cadastrado. Crie o primeiro modelo de avaliação.'}</p></div>`;
+    _atualizarSidebarModelos([]);
     return;
   }
+  _atualizarSidebarModelos(visíveis);
   const calcLabelMap = Object.fromEntries(_dpTiposCalculo.map(t => [t.codigo, t.label]));
   const CALC_LABEL = { soma:'Soma', media:'Média', media_ponderada:'Média ponderada', percentual_atingimento:'% Atingimento', qualitativo:'Qualitativo', ...calcLabelMap };
-  el.innerHTML = _dpModelos.map(m => {
+  const EDIT_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+  function renderModelo(m) {
     const versoes = _dpVersoes[m.id] || [];
     const versoesHtml = versoes.length
       ? versoes.map(v => {
@@ -2510,10 +2648,7 @@ async function renderModelos() {
           </div>`;
         }).join('')
       : `<div style="font-size:12px;color:var(--text-ter);padding:6px 0">Nenhuma versão. <button class="btn btn-secondary btn-sm" onclick="criarVersaoModelo('${m.id}')">Criar versão</button></div>`;
-    const atBadge = m.ativo
-      ? `<span class="sbadge sbadge-green">Ativo</span>`
-      : `<span class="sbadge sbadge-gray">Inativo</span>`;
-    return `<div class="row-card row-card-expandable">
+    return `<div class="row-card row-card-expandable" style="${m.ativo?'':'opacity:.65'}">
       <div class="row-icon" style="background:${m.ativo?'#DBEAFE':'#F1F5F9'};color:${m.ativo?'#2563EB':'#64748B'}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></div>
       <div class="row-body" style="min-width:0;flex:1">
         <div class="row-name">${m.nome}</div>
@@ -2521,11 +2656,35 @@ async function renderModelos() {
         ${versoes.length ? `<div class="row-versions">${versoesHtml}</div>` : ''}
       </div>
       <div class="row-meta" style="align-self:flex-start;margin-top:2px">
-        ${atBadge}
         <button class="btn btn-secondary btn-sm" onclick="criarVersaoModelo('${m.id}')">+ Versão</button>
+        <div class="row-actions"><button class="icon-btn" title="Editar" onclick="/* edit */">${EDIT_SVG}</button></div>
       </div>
     </div>`;
-  }).join('');
+  }
+  const ativos = visíveis.filter(m => m.ativo);
+  const inativos = visíveis.filter(m => !m.ativo);
+  let html = '';
+  if (ativos.length) {
+    html += `<div class="section-header"><span class="section-title">Ativos</span><span class="section-count">${ativos.length}</span></div>`;
+    html += ativos.map(renderModelo).join('');
+  }
+  if (inativos.length) {
+    html += `<div class="section-header" style="margin-top:${ativos.length?'20px':'0'}"><span class="section-title">Inativos</span><span class="section-count">${inativos.length}</span></div>`;
+    html += inativos.map(renderModelo).join('');
+  }
+  el.innerHTML = html;
+}
+
+function _atualizarSidebarModelos(lista) {
+  const ativos = lista.filter(m => m.ativo).length;
+  const inativos = lista.filter(m => !m.ativo).length;
+  const ciclosAtivos = _ciclos.filter(c => c.status === 'aberto').length;
+  const elAt = document.getElementById('sideModAtivos');
+  const elIn = document.getElementById('sideModInativos');
+  const elCi = document.getElementById('sideModCiclos');
+  if (elAt) elAt.textContent = ativos;
+  if (elIn) elIn.textContent = inativos;
+  if (elCi) elCi.textContent = ciclosAtivos;
 }
 
 function abrirModalNovoModelo() {
