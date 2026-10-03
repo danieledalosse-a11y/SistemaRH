@@ -618,12 +618,99 @@ CSS base (mesmo padrão nos dois):
 
 | Etapa | O que cobre | Status |
 |---|---|---|
-| **Etapa 1 — Ciclos D&P** | Criar ciclo, definir elegibilidade, adicionar/remover participantes, mudar status rascunho→aberto | ✅ Implementado (commit f94d3e9) — aguardando teste com `param_setor` populado |
-| **Etapa 2 — Avaliação do Gestor** | Formulário guiado por critérios da versão | Pendente |
-| **Etapa 3 — Cálculo** | RPC no banco → dp_resultados | Pendente |
-| **Etapa 4 — Regra financeira UI** | Configuração de dp_regras_financeiras no drawer da versão | Pendente |
-| **Etapa 5 — Análise e fechamento RH** | Revisão de resultados, aprovação, encerramento do ciclo | Pendente |
-| **Etapa 6 — Relatório/exportação** | Exportar resultados para Excel/PDF | Pendente |
+| **Etapa 1 — Ciclos D&P** | Criar ciclo, definir elegibilidade, adicionar/remover participantes, mudar status rascunho→aberto | ✅ Implementado (commit f94d3e9) |
+| **Etapa 2 — Avaliação do Gestor** | Formulário guiado por critérios da versão; CRUD dp_avaliacoes + dp_respostas | ✅ Implementado (2026-10-03) |
+| **Etapa 3 — Cálculo** | Cálculo JS por tipo_calculo → dp_resultados; conversão para conceito | ✅ Implementado (2026-10-03) |
+| **Etapa 4 — Regra financeira UI** | Configuração de dp_regras_financeiras no drawer da versão | ⏭ Pulada — baixa prioridade |
+| **Etapa 5 — Análise e fechamento RH** | Ajuste inline de resultados, encerramento com confirmação, histórico de eventos | ✅ Implementado (2026-10-03) |
+| **Etapa 6 — Relatório/exportação** | Botão Exportar Excel na aba Resultados | ✅ Implementado (2026-10-03) |
+
+## Drawer `drawerDpCiclo` — abas e funções por aba
+
+| Aba | Visível quando | Função de load | O que faz |
+|---|---|---|---|
+| Participantes | sempre | `dpLoadParticipantes(cicloId)` | Lista + adicionar/remover participantes |
+| Avaliações | aberto ou encerrado | `dpLoadAvaliacoes(cicloId)` | Cards por participante com status; abre `formAvalOverlay` |
+| Resultados | aberto ou encerrado | `dpLoadResultados(cicloId)` | Cards com nota/conceito; calcular, ajustar, encerrar, exportar |
+| Histórico | sempre | `dpLoadHistorico(cicloId)` | Eventos do ciclo e avaliações em ordem cronológica reversa |
+| Informações | sempre | inline em `dpAbrirDrawerCiclo` | Detalhes do ciclo, versão, tipo avaliador |
+
+## Variáveis de estado — motor D&P (completo)
+
+```js
+// Biblioteca/escalas
+let _dpCriterios, _dpEscalas, _dpEscalaOpcoes, _dpCriteriosEmUso, _dpSetores
+let _bibFiltroTipo, _catFiltroTipo
+
+// Modelos/versões
+let _dpModelos, _dpVersoes, _dpVersaoAtual, _dpVersaoCrits, _dpVersaoBlocos
+let _dpVersaoReadonly, _dpBlocoAlvoId, _escalaOpcoesTemp
+
+// Configuração
+let _dpTiposCalculo, _dpTiposAvaliador, _dpTabelasConceito, _dpFaixasConceito
+
+// Ciclos
+let _dpCiclos, _dpCicloAtual
+let _dpCicloElegSetorTemp, _dpCicloElegCargoTemp
+let _dpElegColabSel, _dpPickerColabs
+
+// Participantes
+let _dpParticipantes    // [{ id, ciclo_id, colaborador_id, snapshot:{nome,matricula,empresa,setor,cargo,unidade} }]
+
+// Avaliações (Etapa 2)
+let _dpAvaliacoes       // [{ id, ciclo_id, colaborador_id, tipo_avaliador_id, status }]
+let _dpAvaliacaoAtual   // avaliação aberta no formulário
+let _dpRespostasAtual   // respostas da avaliação aberta
+let _dpVersaoCritsParaForm  // critérios da versão para o formulário
+
+// Resultados (Etapa 3)
+let _dpResultados       // [{ id, avaliacao_id, nota_final, conceito, calculado_em }]
+```
+
+## Funções novas — Etapas 2, 3, 5, 6
+
+### Etapa 2 — Avaliação do Gestor
+| Função | O que faz |
+|---|---|
+| `dpLoadAvaliacoes(cicloId)` | GET dp_avaliacoes; chama dpRenderAvaliacoes |
+| `dpRenderAvaliacoes()` | Card por participante cruzando _dpAvaliacoes; badge por status |
+| `dpAbrirFormAvaliacao(participanteId)` | Busca/cria dp_avaliacao; carrega critérios+respostas; abre formAvalOverlay |
+| `dpRenderFormAvaliacao()` | Bloco por critério com input adaptado ao tipo_resposta |
+| `salvarAvaliacao(status)` | Coleta resp_*; PATCH/POST dp_respostas; PATCH dp_avaliacoes; registra evento |
+| `fecharFormAval()` | Fecha overlay; limpa estado |
+
+**Overlay:** `#formAvalOverlay` / `#formAvalPanel` — right-side drawer (`.wiz-overlay` pattern, largura 680px)
+**IDs dos inputs de resposta:** `resp_${versaoCriterioId}`
+
+### Etapa 3 — Cálculo
+| Função | O que faz |
+|---|---|
+| `dpLoadResultados(cicloId)` | GET dp_resultados filtrando pelos ids das avaliações do ciclo |
+| `dpRenderResultados()` | Toolbar com contador + botões; card por participante com badge + nota + conceito |
+| `dpCalcularTodos()` | Promise.all de dpCalcularAvaliacao para todas concluídas sem resultado |
+| `dpCalcularAvaliacao(avaliacaoId)` | Busca versão+critérios+respostas; aplica tipo_calculo; converte conceito; POST/PATCH dp_resultados |
+
+**Lógica de tipo_calculo:** soma · media · media_ponderada (usa `peso`) · percentual_atingimento (media simples — meta removida em 071) · qualitativo (nota=null, conceito da resposta de texto)
+
+### Etapa 5 — Análise e Fechamento
+| Função | O que faz |
+|---|---|
+| `dpRegistrarEvento(tipo, entidade, entidadeId, detalhe)` | POST dp_historico_eventos; silencioso em caso de falha |
+| `dpToggleAjuste(resultadoId, avaliacaoId)` | Alterna modo visualização/edição inline no card de resultado |
+| `dpSalvarAjuste(resultadoId, avaliacaoId)` | PATCH dp_resultados com nota/conceito editados |
+| `dpEncerrarCiclo()` | Confirmação dois cliques → dpMudarStatus('encerrado') → fecha drawer |
+| `dpLoadHistorico(cicloId)` | GET eventos do ciclo + avaliações em paralelo; ordena desc |
+| `dpRenderHistorico(eventos)` | Lista label legível + detalhe + data/hora |
+
+**Eventos registrados automaticamente:**
+- `ciclo_aberto` / `ciclo_encerrado` — em `dpMudarStatus`
+- `avaliacao_iniciada` — em `dpAbrirFormAvaliacao` ao criar avaliação nova
+- `avaliacao_concluida` — em `salvarAvaliacao('concluida')`
+
+### Etapa 6 — Exportação
+| Função | O que faz |
+|---|---|
+| `dpExportarResultados()` | Gera .xls (HTML-as-XLS com mso-conditionals) com todos os participantes; colunas: matrícula, nome, cargo, setor, unidade, status avaliação, nota final, conceito |
 
 ## Pendências técnicas
 
@@ -632,10 +719,8 @@ CSS base (mesmo padrão nos dois):
 | **Executar migration 068** | Alta | Corrige `dp_validar_versao` regra 2 — necessário antes de usar `converte_para_conceito` |
 | **`param_setor` populado** | Alta | Pré-requisito para testar elegibilidade por setor no ciclo |
 | RLS nas tabelas dp_* | Alta | Obrigatório antes de abrir visão do gestor |
-| Visão do gestor — "meu ciclo" | Alta | Etapa 3 |
-| Cálculo de resultados (dp_resultados) | Alta | Etapa 3 |
-| Camada financeira UI | Baixa | Etapa 4 |
-| Camada de Análises / dashboard | Média | Etapa 5 |
+| Visão do gestor — "meu ciclo" | Alta | Fase futura |
+| Camada financeira UI (Etapa 4) | Baixa | dp_regras_financeiras — pulada |
 | PDI V2 vinculado a dp_ciclo_participantes | Baixa | Fase futura |
 | DROP tabelas dev_* | Baixa | Pós-migração completa |
 
