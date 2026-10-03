@@ -13,6 +13,8 @@ function showTab(id, btn) {
   document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('sec-'+id).classList.add('active');
+  if (id==='carreira')       renderCarreira();
+  if (id==='financeiro')     renderFinanceiro();
   if (id==='ferias')        renderFerias();
   if (id==='desenvolvimento') renderDesenvolvimento();
   if (id==='historico')     renderHistorico();
@@ -257,6 +259,110 @@ function renderResumo() {
 function infoRow(label, val) {
   if (!val || val === '—') return '';
   return `<div class="info-row"><label>${label}</label><span>${val}</span></div>`;
+}
+
+/* ── Carreira ── */
+function renderCarreira() {
+  const el = document.getElementById('carreiraContent');
+
+  const eventos = [];
+
+  // Admissão sintética
+  if (_colab.data_admissao) {
+    eventos.push({
+      data: _colab.data_admissao,
+      tipo: 'admissao',
+      titulo: `Admitido como ${_colab.cargo || 'colaborador'}`,
+      descricao: [_colab.empresa_registro_nome, _colab.setor].filter(Boolean).join(' · '),
+    });
+  }
+
+  // Processos concluídos: mudança de função (reajuste com nova_funcao) e transferência
+  _processosConcluidos.forEach(p => {
+    const dx = p.dados_extras || {};
+    if (p.tipo === 'reajuste' && dx.nova_funcao) {
+      eventos.push({
+        data: (p.created_at || '').slice(0, 10),
+        tipo: 'pdi',
+        titulo: 'Mudança de função',
+        descricao: [dx.nova_funcao, dx.motivo].filter(Boolean).join(' · '),
+      });
+    } else if (p.tipo === 'transferencia') {
+      eventos.push({
+        data: (p.created_at || '').slice(0, 10),
+        tipo: 'pdi',
+        titulo: 'Transferência de setor',
+        descricao: [dx.setor_origem, dx.setor_destino].filter(Boolean).join(' → ') || dx.motivo || '',
+      });
+    }
+  });
+
+  eventos.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
+  if (!eventos.length) {
+    el.innerHTML = `<div class="empty-state"><p>Nenhum evento de carreira registrado.</p></div>`;
+    return;
+  }
+
+  const ICONS = {
+    admissao: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>`,
+    pdi:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+  };
+
+  el.innerHTML = `<div class="timeline">${eventos.map(e => {
+    const tipo = e.tipo || 'geral';
+    const icon = ICONS[tipo] || ICONS.pdi;
+    return `<div class="tl-item">
+      <div class="tl-dot ${tipo}">${icon}</div>
+      <div class="tl-content">
+        <div class="tl-titulo">${e.titulo || '—'}</div>
+        ${e.descricao ? `<div class="tl-desc">${e.descricao}</div>` : ''}
+        <div class="tl-date">${fd(e.data)}</div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* ── Financeiro ── */
+function renderFinanceiro() {
+  const el = document.getElementById('financeiroContent');
+
+  const reajustes = _processosConcluidos.filter(p => p.tipo === 'reajuste');
+
+  if (!reajustes.length) {
+    el.innerHTML = `<div class="empty-state"><p>Nenhum reajuste salarial registrado.</p></div>`;
+    return;
+  }
+
+  const ICON_REAJUSTE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
+
+  function fBRL(v) {
+    if (v == null || v === '') return null;
+    return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  el.innerHTML = `<div class="timeline">${reajustes.map(p => {
+    const dx = p.dados_extras || {};
+    const novo = fBRL(dx.salario_novo);
+    const ant  = fBRL(dx.salario_anterior);
+    const titulo = novo
+      ? (ant ? `Reajuste salarial — ${ant} → ${novo}` : `Reajuste salarial — novo salário ${novo}`)
+      : 'Reajuste salarial';
+    const descParts = [];
+    if (dx.percentual) descParts.push(`${dx.percentual}% de reajuste`);
+    if (dx.motivo)     descParts.push(dx.motivo);
+    if (dx.data_vigencia) descParts.push(`Vigência: ${fd(dx.data_vigencia)}`);
+    const descricao = descParts.join(' · ');
+    const data = (p.created_at || '').slice(0, 10);
+    return `<div class="tl-item">
+      <div class="tl-dot reajuste">${ICON_REAJUSTE}</div>
+      <div class="tl-content">
+        <div class="tl-titulo">${titulo}</div>
+        ${descricao ? `<div class="tl-desc">${descricao}</div>` : ''}
+        <div class="tl-date">${fd(data)}</div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 /* ── Férias ── */
