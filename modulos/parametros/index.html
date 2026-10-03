@@ -831,6 +831,7 @@ const CATS = {
     desc:  'Gerencie os motivos utilizados no desligamento de colaboradores.',
     table: 'param_motivo_desligamento',
     cols:  ['codigo','descricao'],
+    uniqueFields: [{ key: 'codigo', label: 'Código' }],
     fields: [
       { key: 'codigo',   label: 'Código',    type: 'text',   placeholder: 'Ex: 0.2', width: 1 },
       { key: 'descricao',label: 'Descrição', type: 'text',   placeholder: 'Ex: Demitido s/ justa causa', width: 3 },
@@ -1693,6 +1694,24 @@ async function salvar() {
   const missingReq = cat.fields.filter(f => f.required && !body[f.key]);
   if (missingReq.length) { showToast(`${missingReq[0].label} é obrigatório.`, 'error'); return; }
 
+  // Validação genérica de unicidade — respeita uniqueFields definido no CATS
+  if (cat.uniqueFields && cat.uniqueFields.length) {
+    for (const uf of cat.uniqueFields) {
+      const val = body[uf.key];
+      if (val === undefined || val === null || val === '') continue;
+      let url = `${SB_URL}/rest/v1/${cat.table}?${uf.key}=eq.${encodeURIComponent(val)}&select=id`;
+      if (editingId) url += `&id=neq.${editingId}`;
+      const chk = await fetch(url, { headers: SB_HEADERS });
+      if (chk.ok) {
+        const rows = await chk.json();
+        if (rows.length > 0) {
+          showToast(`Já existe um registro com ${uf.label} "${val}". Escolha um valor diferente.`, 'error');
+          return;
+        }
+      }
+    }
+  }
+
   try {
     if (editingId) {
       const original = allRows.find(r => r.id === editingId);
@@ -1712,7 +1731,13 @@ async function salvar() {
     fecharModal(true);
     carregar();
   } catch(e) {
-    showToast('Erro: ' + e.message, 'error');
+    const msg = e?.message || String(e);
+    // 409 = violação de constraint UNIQUE no banco (fallback caso a validação frontend falhe)
+    if (msg.includes('409') || msg.includes('duplicate') || msg.includes('unique') || msg.includes('uq_pmd')) {
+      showToast('Já existe um registro com esse valor. Verifique os campos únicos.', 'error');
+    } else {
+      showToast('Erro: ' + msg, 'error');
+    }
   }
 }
 
