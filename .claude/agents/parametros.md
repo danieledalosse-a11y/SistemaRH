@@ -190,6 +190,55 @@ await sbPatch(cat.table, id, _patch);
 
 **Regra:** usar `noAuditCols: true` em toda nova categoria cujo `CREATE TABLE` não inclua `alterado_por`, `updated_at` e `criado_por`. Tabelas padrão do sistema (criadas antes de set/2026) têm essas colunas e não precisam da flag.
 
+## `param_motivo_desligamento` — deduplicação e proteção (migration 073, out/2026)
+
+### Contexto
+
+A tabela acumulou 23 registros (deveria ter 12) porque o seed foi executado duas vezes. Corrigido em migration 073.
+
+### Estado atual após correção
+
+12 registros com `codigo` únicos, `ordem` 1–12 sem gaps. Constraint UNIQUE pendente de execução manual (ver abaixo).
+
+### Migration 073 executada
+
+Passos executados via curl (service_role):
+1. `UPDATE colaboradores SET motivo_demissao = 'Demitido s/ Justa Causa' WHERE motivo_demissao = 'Demitido s/ justa causa'` — 1 registro corrigido (Rennan, id=1812)
+2. `DELETE FROM param_motivo_desligamento WHERE id IN (2,3,4,5,6,10,13,19,20,22,23)` — 11 duplicatas removidas
+3. `UPDATE param_motivo_desligamento SET ordem = 10 WHERE id = 21` — Transferência corrigida de ordem=9 para ordem=10
+
+### UNIQUE constraint — pendente de execução manual
+
+SQL salvo em `migrations/073_unique_motivo_desligamento_codigo.sql`. Executar uma vez no **Supabase Dashboard → SQL Editor**:
+```sql
+ALTER TABLE param_motivo_desligamento
+ADD CONSTRAINT uq_pmd_codigo UNIQUE (codigo);
+```
+
+### Proteção no frontend — mecanismo genérico `uniqueFields` no CATS
+
+A categoria `motivo_desligamento` no objeto `CATS` recebeu:
+```js
+motivo_desligamento: {
+  // ...campos existentes...
+  uniqueFields: [{ key: 'codigo', label: 'Código' }]
+}
+```
+
+A função `salvar()` itera sobre `cat.uniqueFields` antes do POST/PATCH:
+- Faz GET no Supabase filtrando pelo valor informado
+- Em edição: exclui o próprio registro via `id=neq.${editingId}`
+- Se encontrar conflito → aborta com toast de erro "Já existe um registro com este Código"
+- Fallback: erro HTTP 409 do Supabase (constraint violation) exibe toast amigável
+
+**Para proteger outro parâmetro:** basta adicionar `uniqueFields` na entrada correspondente do CATS — sem alterar a lógica central.
+
+### Regra para futuras migrações
+
+Nunca executar seeds de `param_motivo_desligamento` (ou qualquer tabela param_*) mais de uma vez. O `ON CONFLICT DO NOTHING` sem target de coluna não protege contra re-inserção se a constraint UNIQUE ainda não existir.
+
+---
+
 ## Categoria `escopo_ferias` — Escopo de Gestão de Férias
 
 Cadastro de escopos adicionais que expandem a equipe visível de um gestor no módulo Férias.
