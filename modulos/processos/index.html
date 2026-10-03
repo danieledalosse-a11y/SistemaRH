@@ -1346,8 +1346,11 @@ function buildCard(p) {
   // Extras
   const extras = p.dados_extras || {};
   let extraHtml = '';
-  if (p.tipo === 'reajuste' && extras.salario_novo)
-    extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Novo salário: ${fmtMoeda(extras.salario_novo)} a partir de ${fmtData(extras.data_vigencia)}</div>`;
+  if (p.tipo === 'reajuste' && extras.salario_novo) {
+    const _pctTag = extras.percentual != null ? ` · <span style="color:${extras.percentual>=0?'#166534':'#991b1b'}">${extras.percentual >= 0 ? '+' : ''}${parseFloat(extras.percentual).toFixed(2).replace('.', ',')}%</span>` : '';
+    const _motTag = extras.motivo_descricao ? ` · ${extras.motivo_descricao}` : '';
+    extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Novo salário: ${fmtMoeda(extras.salario_novo)} a partir de ${fmtData(extras.data_vigencia)}${_pctTag}${_motTag}</div>`;
+  }
   else if (p.tipo === 'bonus_indicacao' && extras.indicado_nome) {
     const valorBonusLabel = extras.valor_bonus != null ? ` · ${fmtMoeda(extras.valor_bonus)}` : '';
     extraHtml = `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Indicado: ${extras.indicado_nome} · Folha de ${extras.mes_folha || '—'}${valorBonusLabel}</div>`;
@@ -3086,6 +3089,29 @@ document.addEventListener('click', e => {
 // ─── Campos extras por tipo ───────────────────────────────────────
 function onTipoChange() { atualizarCamposExtras(); }
 
+async function _carregarMotivosReajuste() {
+  const sel = document.getElementById('xMotivoReajuste');
+  if (!sel) return;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/param_motivo_reajuste?ativo=eq.true&order=ordem`, { headers: SB_HEADERS });
+    const rows = await r.json();
+    if (!Array.isArray(rows)) { sel.innerHTML = '<option value="">Erro ao carregar</option>'; return; }
+    sel.innerHTML = '<option value="">Selecione o motivo</option>' +
+      rows.map(m => `<option value="${m.codigo}">${m.descricao}</option>`).join('');
+  } catch { sel.innerHTML = '<option value="">Erro ao carregar</option>'; }
+}
+
+function _calcPercentualReajuste() {
+  const atual = parseFloat(document.getElementById('xSalarioAtual')?.dataset.raw) || 0;
+  const novoRaw = (document.getElementById('xSalarioNovo')?.value || '').replace(/[^\d,]/g, '').replace(',', '.');
+  const novo = parseFloat(novoRaw) || 0;
+  const pctEl = document.getElementById('xPercentualReajuste');
+  if (!pctEl) return;
+  if (!atual || !novo) { pctEl.value = ''; return; }
+  const pct = ((novo - atual) / atual * 100);
+  pctEl.value = (pct >= 0 ? '+' : '') + pct.toFixed(2).replace('.', ',') + '%';
+}
+
 function toggleCamposVTAlteracao() {
   const op = document.querySelector('input[name="xVtOperacao"]:checked')?.value || 'inclusao';
   const inc = document.getElementById('camposVTInclusao');
@@ -3111,17 +3137,36 @@ function atualizarCamposExtras() {
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Salário atual</label>
-          <input class="form-control" type="text" readonly value="${salario ? fmtMoeda(salario) : '—'}" tabindex="-1">
+          <input class="form-control" type="text" readonly value="${salario ? fmtMoeda(salario) : '—'}" tabindex="-1" id="xSalarioAtual" data-raw="${salario || 0}">
         </div>
         <div class="form-group">
           <label class="form-label">Novo salário (R$)</label>
-          <input class="form-control" type="number" id="xSalarioNovo" min="0" step="0.01" placeholder="0,00">
+          <input class="form-control" type="text" id="xSalarioNovo" placeholder="R$ 0,00" oninput="_calcPercentualReajuste()">
         </div>
+        <div class="form-group" style="max-width:130px;">
+          <label class="form-label">Percentual</label>
+          <input class="form-control" type="text" id="xPercentualReajuste" readonly tabindex="-1" placeholder="—" style="background:#f8fafc;">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Motivo do reajuste</label>
+        <select class="form-control" id="xMotivoReajuste">
+          <option value="">Carregando...</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">Data de vigência</label>
         <input class="form-control" type="date" id="xDataVigencia">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nova função <span style="font-weight:400;color:#667085">(opcional — preencha somente se houver mudança de cargo)</span></label>
+        <input class="form-control" type="text" id="xNovaFuncao" placeholder="Ex: Assistente Administrativo">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observação <span style="font-weight:400;color:#667085">(opcional)</span></label>
+        <textarea class="form-control" id="xObservacaoReajuste" rows="2" placeholder="Informações adicionais sobre o reajuste..."></textarea>
       </div>`;
+    setTimeout(() => _carregarMotivosReajuste(), 0);
   } else if (tipo === 'vt_alteracao') {
     html = `
       <div class="form-group">
@@ -3363,10 +3408,25 @@ async function submitNovoProcesso() {
 
   let dadosExtras = {};
   if (tipo === 'reajuste') {
-    const sn = parseFloat(document.getElementById('xSalarioNovo')?.value);
+    const snRaw = document.getElementById('xSalarioNovo')?.value || '';
+    const snNum = parseFloat(snRaw.replace(/[^\d,]/g, '').replace(',', '.'));
     const dv = document.getElementById('xDataVigencia')?.value;
-    if (!sn || !dv) { showToast('Preencha novo salário e data de vigência', 'error'); return; }
-    dadosExtras = { salario_novo: sn, data_vigencia: dv };
+    if (!snNum || !dv) { showToast('Preencha novo salário e data de vigência', 'error'); return; }
+    const motivoEl = document.getElementById('xMotivoReajuste');
+    const motivo = motivoEl?.value || '';
+    const motivoDesc = motivoEl?.options[motivoEl.selectedIndex]?.text || '';
+    const pct = parseFloat(document.getElementById('xPercentualReajuste')?.value) || null;
+    const novaFuncao = document.getElementById('xNovaFuncao')?.value?.trim() || null;
+    const obs = document.getElementById('xObservacaoReajuste')?.value?.trim() || null;
+    dadosExtras = {
+      salario_novo: snNum,
+      data_vigencia: dv,
+      percentual: pct,
+      motivo_codigo: motivo || null,
+      motivo_descricao: motivoDesc || null,
+      nova_funcao: novaFuncao,
+      observacao: obs,
+    };
   } else if (tipo === 'vt_alteracao') {
     const op = document.querySelector('input[name="xVtOperacao"]:checked')?.value || 'inclusao';
     dadosExtras = { operacao: op };
