@@ -3692,10 +3692,24 @@ function salvarFicha() {
       .then(async () => {
         registrarAudit('editado', c._sbId, alteracoes.length ? alteracoes.join(' | ') : null);
         mostrarToast('Salvo no banco de dados ✓');
-        // Automação: processo de demissão via Workflow
-        if (novaDem) {
-          await _sincronizarProcessoDemissao(c._sbId, c.nome, novaDem, c.motivo);
-          await _criarWorkflowDevolucaoUniforme(c._sbId, c.nome, novaDem);
+        // Automação: processo de demissão via Workflow — só quando a data mudou
+        const demAnterior = c.dataDemissao || '';
+        if (novaDem && novaDem !== demAnterior) {
+          const novaData = novaDem;
+          const nomeColab = c.nome;
+          const sbId = c._sbId;
+          const motivo = c.motivo;
+          const ehNovaData = !demAnterior;
+          _mostrarConfirmWorkflowDemissao({
+            titulo: ehNovaData ? 'Abrir processo de demissão?' : 'Data alterada — atualizar Workflow?',
+            texto:  ehNovaData
+              ? 'Deseja abrir o processo de demissão no Workflow para este colaborador?'
+              : `A data de demissão foi alterada de <strong>${fmtDateBR(demAnterior)}</strong> para <strong>${fmtDateBR(novaData)}</strong>. Deseja atualizar o processo no Workflow?`,
+            onSim: async () => {
+              await _sincronizarProcessoDemissao(sbId, nomeColab, novaData, motivo);
+              await _criarWorkflowDevolucaoUniforme(sbId, nomeColab, novaData);
+            }
+          });
         }
       })
       .catch(e => mostrarToast('Erro ao salvar: ' + e.message));
@@ -3704,6 +3718,23 @@ function salvarFicha() {
   const badge = document.getElementById('salvoBadge');
   badge.classList.add('show');
   setTimeout(() => badge.classList.remove('show'), 3000);
+}
+
+// ─── Modal confirmação workflow demissão ─────────────────────────────────────
+function _mostrarConfirmWorkflowDemissao({ titulo, texto, onSim }) {
+  const overlay = document.getElementById('wfDemissaoOverlay');
+  document.getElementById('wfDemissaoTitulo').textContent = titulo;
+  document.getElementById('wfDemissaoTexto').innerHTML = texto;
+  overlay.classList.add('open');
+  overlay._onSim = onSim;
+}
+function _fecharConfirmWorkflowDemissao() {
+  document.getElementById('wfDemissaoOverlay').classList.remove('open');
+}
+async function _confirmarWorkflowDemissao() {
+  const overlay = document.getElementById('wfDemissaoOverlay');
+  _fecharConfirmWorkflowDemissao();
+  if (overlay._onSim) await overlay._onSim();
 }
 
 // ─── Workflow: processo de demissão ─────────────────────────────────────────
@@ -4894,6 +4925,21 @@ async function salvarDocPasta() {
   }
 }
 </script>
+
+<!-- Modal confirmação workflow demissão -->
+<div class="drawer-overlay" id="wfDemissaoOverlay" onclick="if(event.target===this)_fecharConfirmWorkflowDemissao()">
+  <div class="drawer" style="max-width:420px;padding:28px 24px 24px;border-radius:12px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <span style="font-size:20px;">⚙️</span>
+      <span id="wfDemissaoTitulo" style="font-size:15px;font-weight:700;color:var(--text-main);"></span>
+    </div>
+    <p id="wfDemissaoTexto" style="font-size:13px;color:var(--text-sec);line-height:1.6;margin:0 0 20px;"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="_fecharConfirmWorkflowDemissao()">Não, só salvar</button>
+      <button class="btn btn-primary" onclick="_confirmarWorkflowDemissao()">Sim, atualizar Workflow</button>
+    </div>
+  </div>
+</div>
 
 <!-- Crop modal -->
 <div id="cropOverlay" onclick="if(event.target===this)cancelarCrop()">
