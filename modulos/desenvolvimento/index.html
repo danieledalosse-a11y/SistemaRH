@@ -5047,6 +5047,7 @@ function dpRenderResultados() {
     <span style="font-size:12px;color:var(--text-ter)">${calculados} de ${total} calculados</span>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       ${aguardando.length ? `<button class="btn btn-secondary btn-sm" onclick="dpCalcularTodos()" style="font-size:12px">Calcular resultados (${aguardando.length})</button>` : ''}
+      <button class="btn btn-secondary btn-sm" onclick="dpExportarResultados()" style="font-size:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:-2px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Exportar Excel</button>
       ${podeEncerrar ? `<button class="btn btn-primary btn-sm" id="btnEncerrarCiclo" onclick="dpEncerrarCiclo()" style="font-size:12px">Encerrar ciclo</button>` : ''}
     </div>
   </div>`;
@@ -5235,6 +5236,78 @@ async function dpSalvarAjuste(resultadoId, avaliacaoId) {
   if (!ok) { toast('Erro ao salvar: ' + sbErrMsg(), true); return; }
   toast('Resultado ajustado.');
   await dpLoadResultados(_dpCicloAtual.id);
+}
+
+async function dpExportarResultados() {
+  const nomeCiclo = _dpCiclos.find(c => c.id === _dpCicloAtual?.id)?.nome || 'Ciclo';
+  const dataExp = new Date().toLocaleDateString('pt-BR');
+
+  const linhas = _dpParticipantes.map(p => {
+    const aval = _dpAvaliacoes.find(a => a.colaborador_id === p.colaborador_id);
+    const res  = aval ? _dpResultados.find(r => r.avaliacao_id === aval.id) : null;
+    const snap = p.snapshot || {};
+    return {
+      nome:     snap.nome      || '—',
+      cargo:    snap.cargo     || '—',
+      setor:    snap.setor     || '—',
+      unidade:  snap.unidade   || '—',
+      mat:      snap.matricula || '—',
+      status:   { nao_iniciada: 'Não iniciada', em_andamento: 'Em andamento', concluida: 'Concluída' }[aval?.status] || '—',
+      nota:     res?.nota_final != null ? Number(res.nota_final).toFixed(2).replace('.', ',') : '—',
+      conceito: res?.conceito || '—',
+    };
+  });
+
+  const thStyle = 'font-family:Calibri,Arial,sans-serif;font-size:11pt;font-weight:bold;background:#1E3A5F;color:#ffffff;border:1px solid #999;padding:4px 8px;white-space:nowrap';
+  const tdStyle = 'font-family:Calibri,Arial,sans-serif;font-size:10pt;border:1px solid #D0D0D0;padding:3px 7px';
+  const tdAlt   = 'font-family:Calibri,Arial,sans-serif;font-size:10pt;border:1px solid #D0D0D0;padding:3px 7px;background:#F5F7FA';
+
+  const rows = linhas.map((l, i) => {
+    const td = i % 2 === 0 ? tdStyle : tdAlt;
+    return `<tr>
+      <td style="${td}">${l.mat}</td>
+      <td style="${td}">${l.nome}</td>
+      <td style="${td}">${l.cargo}</td>
+      <td style="${td}">${l.setor}</td>
+      <td style="${td}">${l.unidade}</td>
+      <td style="${td};text-align:center">${l.status}</td>
+      <td style="${td};text-align:center">${l.nota}</td>
+      <td style="${td};text-align:center">${l.conceito}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
+<head><meta charset="UTF-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+<x:Name>Resultados</x:Name>
+<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head><body>
+<table>
+  <tr><td colspan="8" style="font-family:Calibri,Arial,sans-serif;font-size:13pt;font-weight:bold;padding:6px 8px">Avaliações D&amp;P — ${nomeCiclo}</td></tr>
+  <tr><td colspan="8" style="font-family:Calibri,Arial,sans-serif;font-size:9pt;color:#666;padding:2px 8px 8px">Exportado em ${dataExp}</td></tr>
+  <tr>
+    <th style="${thStyle}">Matrícula</th>
+    <th style="${thStyle}">Nome</th>
+    <th style="${thStyle}">Cargo</th>
+    <th style="${thStyle}">Setor</th>
+    <th style="${thStyle}">Unidade</th>
+    <th style="${thStyle}">Status Avaliação</th>
+    <th style="${thStyle}">Nota Final</th>
+    <th style="${thStyle}">Conceito</th>
+  </tr>
+  ${rows}
+</table>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `DP_Resultados_${nomeCiclo.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
 }
 
 async function dpEncerrarCiclo() {
