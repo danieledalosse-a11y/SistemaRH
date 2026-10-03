@@ -1021,6 +1021,7 @@
     <button class="drawer-tab" id="dptabBtn-avaliacoes" onclick="dpShowDcTab('avaliacoes',this)" style="display:none">Avaliações</button>
     <button class="drawer-tab" id="dptabBtn-resultados" onclick="dpShowDcTab('resultados',this)" style="display:none">Resultados</button>
     <button class="drawer-tab" onclick="dpShowDcTab('info',this)">Informações</button>
+    <button class="drawer-tab" id="dptabBtn-historico" onclick="dpShowDcTab('historico',this)" style="display:none">Histórico</button>
   </div>
   <div class="drawer-body">
     <div id="dptab-participantes" class="drawer-sec active">
@@ -1034,6 +1035,9 @@
     </div>
     <div id="dptab-info" class="drawer-sec">
       <div id="dpInfoBody"><div class="loader"><div class="spinner"></div></div></div>
+    </div>
+    <div id="dptab-historico" class="drawer-sec">
+      <div id="dpHistoricoBody"><div class="loader"><div class="spinner"></div></div></div>
     </div>
   </div>
   <div class="drawer-footer">
@@ -3496,9 +3500,12 @@ async function dpMudarStatus(id, status) {
       return;
     }
   }
+  const cicloNome = (_dpCiclos.find(c => c.id === id) || {}).nome;
   const res = await sbPatch(`/rest/v1/dp_ciclos?id=eq.${id}`, { status });
   if (!res) { toast('Erro ao atualizar status: ' + sbErrMsg(), true); return; }
   toast(`Ciclo ${status === 'aberto' ? 'aberto' : 'encerrado'}.`);
+  if (status === 'aberto')    await dpRegistrarEvento('ciclo_aberto',    'dp_ciclos', id, { nome: cicloNome });
+  if (status === 'encerrado') await dpRegistrarEvento('ciclo_encerrado', 'dp_ciclos', id, { nome: cicloNome });
   await dpLoadCiclos();
   dpRenderCiclos();
   if (_dpCicloAtual && _dpCicloAtual.id === id) {
@@ -3516,15 +3523,19 @@ async function dpAbrirDrawerCiclo(cicloId) {
   document.getElementById('drawerDpCicloOverlay').classList.add('open');
   document.getElementById('drawerDpCiclo').classList.add('open');
   document.body.style.overflow = 'hidden';
-  // Mostrar abas Avaliações e Resultados apenas para ciclos abertos
+  // Mostrar abas Avaliações e Resultados para ciclos abertos ou encerrados
+  const aberto = _dpCicloAtual.status === 'aberto';
+  const encerrado = _dpCicloAtual.status === 'encerrado';
   const btnAval = document.getElementById('dptabBtn-avaliacoes');
-  if (btnAval) btnAval.style.display = _dpCicloAtual.status === 'aberto' ? '' : 'none';
+  if (btnAval) btnAval.style.display = (aberto || encerrado) ? '' : 'none';
   const btnRes = document.getElementById('dptabBtn-resultados');
-  if (btnRes) btnRes.style.display = _dpCicloAtual.status === 'aberto' ? '' : 'none';
+  if (btnRes) btnRes.style.display = (aberto || encerrado) ? '' : 'none';
+  const btnHist = document.getElementById('dptabBtn-historico');
+  if (btnHist) btnHist.style.display = '';
   dpShowDcTab('participantes', document.querySelector('#drawerDpCiclo .drawer-tab'));
   await dpLoadParticipantes(cicloId);
   dpRenderParticipantes();
-  if (_dpCicloAtual.status === 'aberto') {
+  if (aberto || encerrado) {
     await dpLoadAvaliacoes(cicloId);
     await dpLoadResultados(cicloId);
   }
@@ -3548,6 +3559,7 @@ function dpShowDcTab(id, btn) {
   if (id === 'info') dpRenderInfoCiclo();
   if (id === 'avaliacoes') dpRenderAvaliacoes();
   if (id === 'resultados') dpLoadResultados(_dpCicloAtual ? _dpCicloAtual.id : null);
+  if (id === 'historico') dpLoadHistorico(_dpCicloAtual ? _dpCicloAtual.id : null);
 }
 
 async function dpLoadParticipantes(cicloId) {
@@ -4790,6 +4802,7 @@ async function dpAbrirFormAvaliacao(participanteId) {
     if (!res || !res[0]) { toast('Erro ao criar avaliação: ' + sbErrMsg(), true); return; }
     aval = res[0];
     _dpAvaliacoes.push(aval);
+    await dpRegistrarEvento('avaliacao_iniciada', 'dp_avaliacoes', aval.id, { colaborador: snap.nome });
   }
   _dpAvaliacaoAtual = aval;
 
@@ -4979,6 +4992,11 @@ async function salvarAvaliacao(status) {
   if (erros) toast(`Avaliação salva com ${erros} erro(s).`, true);
   else toast('Avaliação salva com sucesso.');
 
+  if (status === 'concluida') {
+    const partSnap = (_dpParticipantes.find(p => p.id === _dpAvaliacaoAtual.participante_id) || {}).snapshot || {};
+    await dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', avalId, { colaborador: partSnap.nome });
+  }
+
   await dpLoadAvaliacoes(_dpCicloAtual.id);
 
   if (status === 'concluida') fecharFormAval();
@@ -5024,9 +5042,13 @@ function dpRenderResultados() {
   // Toolbar
   const total = _dpParticipantes.length;
   const calculados = _dpResultados.length;
-  html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:0 2px">
+  const podeEncerrar = _dpCicloAtual && _dpCicloAtual.status === 'aberto' && calculados > 0;
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:0 2px;gap:8px;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--text-ter)">${calculados} de ${total} calculados</span>
-    ${aguardando.length ? `<button class="btn btn-primary btn-sm" onclick="dpCalcularTodos()" style="font-size:12px">Calcular resultados (${aguardando.length})</button>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${aguardando.length ? `<button class="btn btn-secondary btn-sm" onclick="dpCalcularTodos()" style="font-size:12px">Calcular resultados (${aguardando.length})</button>` : ''}
+      ${podeEncerrar ? `<button class="btn btn-primary btn-sm" id="btnEncerrarCiclo" onclick="dpEncerrarCiclo()" style="font-size:12px">Encerrar ciclo</button>` : ''}
+    </div>
   </div>`;
 
   // Cards por participante
@@ -5035,10 +5057,19 @@ function dpRenderResultados() {
     const aval = _dpAvaliacoes.find(a => a.participante_id === p.id || a.colaborador_id === p.colaborador_id);
     const resultado = aval ? _dpResultados.find(r => r.avaliacao_id === aval.id) : null;
 
-    let badge, btnHtml;
+    let badge, btnHtml, ajusteHtml = '';
     if (resultado) {
       badge = `<span class="sbadge sbadge-green" style="font-size:11px">Calculado</span>`;
       btnHtml = `<button class="btn btn-secondary btn-sm" onclick="dpCalcularAvaliacao('${aval.id}',true)" style="font-size:12px">Recalcular</button>`;
+      if (_dpCicloAtual && _dpCicloAtual.status === 'aberto') {
+        btnHtml += ` <button class="btn btn-secondary btn-sm" onclick="dpToggleAjuste('${resultado.id}','${aval.id}')" style="font-size:12px">Ajustar</button>`;
+        ajusteHtml = `<div id="re_${aval.id}" style="display:none;margin-top:8px;display:none;align-items:center;gap:6px;flex-wrap:wrap">
+          <input type="number" step="0.01" id="re_nota_${resultado.id}" value="${resultado.nota_final != null ? resultado.nota_final : ''}" placeholder="Nota" class="form-input" style="width:80px;padding:4px 8px;font-size:12px">
+          <input type="text" id="re_conceito_${resultado.id}" value="${resultado.conceito || ''}" placeholder="Conceito" class="form-input" style="width:120px;padding:4px 8px;font-size:12px">
+          <button class="btn btn-primary btn-sm" onclick="dpSalvarAjuste('${resultado.id}','${aval.id}')" style="font-size:12px">Salvar</button>
+          <button class="btn btn-secondary btn-sm" onclick="dpToggleAjuste('${resultado.id}','${aval.id}')" style="font-size:12px">Cancelar</button>
+        </div>`;
+      }
     } else if (aval && aval.status === 'concluida') {
       badge = `<span class="sbadge sbadge-amber" style="font-size:11px">Aguardando cálculo</span>`;
       btnHtml = `<button class="btn btn-secondary btn-sm" onclick="dpCalcularAvaliacao('${aval.id}',true)" style="font-size:12px">Calcular</button>`;
@@ -5048,22 +5079,25 @@ function dpRenderResultados() {
     }
 
     const notaInfo = resultado
-      ? `<div style="font-size:11px;color:var(--text-ter);margin-top:3px">
+      ? `<div id="rv_${aval.id}" style="font-size:11px;color:var(--text-ter);margin-top:3px">
           ${resultado.nota_final != null ? `nota: <b>${Number(resultado.nota_final).toFixed(2)}</b>` : ''}
           ${resultado.nota_final != null && resultado.conceito ? ' · ' : ''}
           ${resultado.conceito ? `conceito: <b>${resultado.conceito}</b>` : ''}
         </div>`
       : '';
 
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-light)">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-ter)" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500;color:var(--text)">${snap.nome || '—'}</div>
-        <div style="font-size:11px;color:var(--text-ter);margin-top:2px">${snap.cargo || '—'} · ${snap.setor || '—'}</div>
-        ${notaInfo}
+    return `<div style="padding:10px 12px;border-bottom:1px solid var(--border-light)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-ter)" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${snap.nome || '—'}</div>
+          <div style="font-size:11px;color:var(--text-ter);margin-top:2px">${snap.cargo || '—'} · ${snap.setor || '—'}</div>
+          ${notaInfo}
+        </div>
+        ${badge}
+        <div style="display:flex;gap:4px;flex-wrap:wrap">${btnHtml}</div>
       </div>
-      ${badge}
-      ${btnHtml}
+      ${ajusteHtml}
     </div>`;
   }).join('');
 
@@ -5167,6 +5201,104 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
     await dpLoadResultados(_dpCicloAtual.id);
     toast('Resultado calculado.');
   }
+}
+
+/* ─────────────────────────────────────────────
+   ETAPA 5 — ANÁLISE, FECHAMENTO E HISTÓRICO
+───────────────────────────────────────────── */
+
+async function dpRegistrarEvento(tipo, entidade, entidadeId, detalhe = {}) {
+  try {
+    await sbPost(`/rest/v1/dp_historico_eventos`, {
+      tipo, entidade, entidade_id: entidadeId, detalhe
+    });
+  } catch(e) { /* silencioso — log não deve travar o fluxo */ }
+}
+
+function dpToggleAjuste(resultadoId, avaliacaoId) {
+  const edit = document.getElementById(`re_${avaliacaoId}`);
+  if (!edit) return;
+  const showing = edit.style.display === 'flex';
+  edit.style.display = showing ? 'none' : 'flex';
+  // Ocultar/mostrar nota info
+  const view = document.getElementById(`rv_${avaliacaoId}`);
+  if (view) view.style.display = showing ? '' : 'none';
+}
+
+async function dpSalvarAjuste(resultadoId, avaliacaoId) {
+  const notaEl = document.getElementById(`re_nota_${resultadoId}`);
+  const conceitoEl = document.getElementById(`re_conceito_${resultadoId}`);
+  const nota = notaEl && notaEl.value !== '' ? parseFloat(notaEl.value) : null;
+  const conceito = conceitoEl ? (conceitoEl.value.trim() || null) : null;
+  if (nota === null && !conceito) { toast('Informe nota ou conceito.', true); return; }
+  const ok = await sbPatch(`/rest/v1/dp_resultados?id=eq.${resultadoId}`, { nota_final: nota, conceito });
+  if (!ok) { toast('Erro ao salvar: ' + sbErrMsg(), true); return; }
+  toast('Resultado ajustado.');
+  await dpLoadResultados(_dpCicloAtual.id);
+}
+
+async function dpEncerrarCiclo() {
+  const btn = document.getElementById('btnEncerrarCiclo');
+  if (!btn) return;
+  if (btn.dataset.confirming !== 'true') {
+    btn.dataset.confirming = 'true';
+    btn.textContent = 'Confirmar encerramento';
+    btn.style.background = 'var(--red)';
+    btn.style.borderColor = 'var(--red)';
+    setTimeout(() => {
+      btn.dataset.confirming = 'false';
+      btn.textContent = 'Encerrar ciclo';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+    }, 4000);
+    return;
+  }
+  await dpMudarStatus(_dpCicloAtual.id, 'encerrado');
+  dpFecharDrawerCiclo();
+}
+
+async function dpLoadHistorico(cicloId) {
+  const body = document.getElementById('dpHistoricoBody');
+  if (!body) return;
+  if (!cicloId) { body.innerHTML = `<div class="empty-state"><p>Nenhum evento registrado.</p></div>`; return; }
+  body.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
+  const eventos = await sbGet(`/rest/v1/dp_historico_eventos?entidade_id=eq.${cicloId}&order=criado_em.desc&select=*`) || [];
+  const avalIds = _dpAvaliacoes.map(a => a.id);
+  let avalEventos = [];
+  if (avalIds.length) {
+    avalEventos = await sbGet(`/rest/v1/dp_historico_eventos?entidade_id=in.(${avalIds.join(',')})&order=criado_em.desc&select=*`) || [];
+  }
+  const todos = [...eventos, ...avalEventos].sort((a, b) => b.criado_em.localeCompare(a.criado_em));
+  dpRenderHistorico(todos);
+}
+
+function dpRenderHistorico(eventos) {
+  const body = document.getElementById('dpHistoricoBody');
+  if (!body) return;
+  if (!eventos.length) {
+    body.innerHTML = `<div class="empty-state"><p>Nenhum evento registrado.</p></div>`;
+    return;
+  }
+  const labelMap = {
+    ciclo_criado: 'Ciclo criado', ciclo_aberto: 'Ciclo aberto', ciclo_encerrado: 'Ciclo encerrado',
+    ciclo_cancelado: 'Ciclo cancelado', avaliacao_iniciada: 'Avaliação iniciada',
+    avaliacao_concluida: 'Avaliação concluída', avaliacao_publicada: 'Avaliação publicada',
+    avaliacao_reaberta: 'Avaliação reaberta', participante_adicionado: 'Participante adicionado',
+    participante_removido: 'Participante removido', versao_publicada: 'Versão publicada'
+  };
+  body.innerHTML = `<div style="padding:4px 0">` + eventos.map(e => {
+    const d = new Date(e.criado_em);
+    const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const label = labelMap[e.tipo] || e.tipo;
+    const detalhe = e.detalhe && Object.keys(e.detalhe).length
+      ? Object.entries(e.detalhe).map(([k, v]) => `${k}: ${v}`).join(' · ')
+      : '';
+    return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border-light)">
+      <span style="font-size:12px;color:var(--text-sec)">${label}${detalhe ? `<span style="color:var(--text-ter)"> — ${detalhe}</span>` : ''}</span>
+      <span style="font-size:11px;color:var(--text-ter);white-space:nowrap;flex-shrink:0">${data}</span>
+    </div>`;
+  }).join('') + `</div>`;
 }
 
 /* ─────────────────────────────────────────────
