@@ -536,6 +536,24 @@ function renderHistorico() {
     });
   }
 
+  // adicionar promoções/mudanças de cargo de _historicoRemuneracao
+  _historicoRemuneracao.forEach(h => {
+    if (!h.cargo_novo) return;
+    const dataEvt = h.data_vigencia || (h.created_at || '').slice(0, 10);
+    // evita duplicata se _historico já tiver evento do mesmo processo
+    if (h.processo_id && eventos.some(e => e.processo_id === h.processo_id)) return;
+    const descParts = [];
+    if (h.cargo_anterior) descParts.push(`De: ${h.cargo_anterior}`);
+    if (h.motivo_descricao) descParts.push(h.motivo_descricao);
+    eventos.push({
+      data: dataEvt,
+      tipo: 'promocao',
+      titulo: `Promovido para ${h.cargo_novo}`,
+      descricao: descParts.join(' · '),
+      processo_id: h.processo_id,
+    });
+  });
+
   // adicionar desligamento se houver
   if (_colab.data_demissao && !eventos.some(e=>e.tipo==='desligamento')) {
     eventos.push({
@@ -588,6 +606,7 @@ function renderHistorico() {
     avaliacao:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
     pdi:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
     desligamento:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    promocao:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>`,
     geral:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="4"/></svg>`,
   };
 
