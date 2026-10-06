@@ -540,9 +540,9 @@ function renderHistorico() {
   // montar eventos: dev_historico + sintetizados de férias + admissão
   const eventos = [..._historico];
 
-  // adicionar admissão se não existir no histórico
+  // adicionar admissão se não existe já em historico_eventos
   // cargo de admissão: usa cargo_anterior do reajuste mais antigo com mudança de cargo
-  if (_colab.data_admissao && !eventos.some(e=>e.tipo==='admissao')) {
+  if (_colab.data_admissao && !_tiposEmEventos.has('admissao') && !eventos.some(e=>e.tipo==='admissao')) {
     let _cargoAdm = _colab.cargo || 'colaborador';
     const _comCargo = _historicoRemuneracao.filter(h => h.cargo_novo && h.cargo_anterior);
     if (_comCargo.length) _cargoAdm = _comCargo[_comCargo.length - 1].cargo_anterior || _cargoAdm;
@@ -554,12 +554,13 @@ function renderHistorico() {
     });
   }
 
-  // adicionar eventos de historico_eventos (reajuste_salarial, promocao)
-  // se disponível, é a fonte canônica; os processos cobertos aqui não são sintetizados novamente
+  // adicionar todos os eventos de historico_eventos (fonte canônica para qualquer tipo)
   const _processosEmEventos = new Set();
+  const _tiposEmEventos = new Set();
   _historicoEventos.forEach(ev => {
-    if (ev.tipo !== 'reajuste_salarial' && ev.tipo !== 'promocao') return;
     if (ev.processo_id) _processosEmEventos.add(ev.processo_id);
+    _tiposEmEventos.add(ev.tipo);
+    const meta = _tiposEvento[ev.tipo] || {};
     const d = ev.dados || {};
     eventos.push({
       data: ev.data_evento,
@@ -571,6 +572,8 @@ function renderHistorico() {
       motivo_descricao: d.motivo_descricao || null,
       processo_id: ev.processo_id,
       registrado_por: ev.registrado_por || null,
+      _iconeChave: meta.icone_chave || null,
+      _corHex: meta.cor_hex || null,
     });
   });
 
@@ -591,8 +594,8 @@ function renderHistorico() {
     });
   });
 
-  // adicionar desligamento se houver
-  if (_colab.data_demissao && !eventos.some(e=>e.tipo==='desligamento')) {
+  // adicionar desligamento se não existe já em historico_eventos
+  if (_colab.data_demissao && !_tiposEmEventos.has('demissao') && !eventos.some(e=>e.tipo==='desligamento')) {
     eventos.push({
       data: _colab.data_demissao,
       tipo: 'desligamento',
@@ -637,19 +640,37 @@ function renderHistorico() {
     return;
   }
 
+  // Ícones indexados por icone_chave (valor de tipos_evento.icone_chave)
+  // Tipos sintéticos (admissao, ferias, etc.) usam o mesmo índice via chave arbitrária
   const ICONS = {
-    admissao:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>`,
-    ferias:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
-    avaliacao:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
-    pdi:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
-    desligamento:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
-    promocao:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>`,
-    geral:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="4"/></svg>`,
+    'user-check':   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>`,
+    'calendar':     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+    'star':         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+    'check-square': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+    'x-circle':     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+    'chevrons-up':  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>`,
+    'trending-up':  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`,
+    'building':     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>`,
+    'bus':          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6v6m8-6v6M3 16h18M3 8a5 5 0 0 1 5-5h8a5 5 0 0 1 5 5v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="16.5" cy="18.5" r="1.5"/></svg>`,
+    'circle':       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="4"/></svg>`,
+  };
+
+  // Mapa tipo-sintético → icone_chave (para tipos que não vêm de tipos_evento)
+  const TIPO_ICONE = {
+    admissao: 'user-check', ferias: 'calendar', avaliacao: 'star',
+    pdi: 'check-square', desligamento: 'x-circle', geral: 'circle',
   };
 
   el.innerHTML = `<div class="timeline">${eventos.map(e=>{
     const tipo = e.tipo||'geral';
-    const icon = ICONS[tipo]||ICONS.geral;
+    // ícone: usa icone_chave do evento (vindo de _tiposEvento) ou do mapa de tipos sintéticos
+    const chave = e._iconeChave || TIPO_ICONE[tipo] || 'circle';
+    const icon = ICONS[chave] || ICONS['circle'];
+    // cor: usa cor_hex do evento (vindo de _tiposEvento) — se ausente, cai no CSS class
+    const dotStyle = e._corHex
+      ? `style="border-color:${e._corHex};background:${e._corHex}18"`
+      : '';
+    const dotClass = e._corHex ? '' : tipo;
     const descHtml = e.motivo_descricao
       ? [
           e.cargo_anterior ? `De: ${e.cargo_anterior}` : '',
@@ -658,7 +679,7 @@ function renderHistorico() {
         ].filter(Boolean).join(' · ')
       : (e.descricao || '');
     return `<div class="tl-item">
-      <div class="tl-dot ${tipo}">${icon}</div>
+      <div class="tl-dot ${dotClass}" ${dotStyle}>${icon}</div>
       <div class="tl-content">
         <div class="tl-titulo">${e.titulo||'—'}</div>
         ${descHtml?`<div class="tl-desc">${descHtml}</div>`:''}
