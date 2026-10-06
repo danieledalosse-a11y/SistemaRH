@@ -554,11 +554,31 @@ function renderHistorico() {
     });
   }
 
-  // adicionar promoções/mudanças de cargo de _historicoRemuneracao
+  // adicionar eventos de historico_eventos (reajuste_salarial, promocao)
+  // se disponível, é a fonte canônica; os processos cobertos aqui não são sintetizados novamente
+  const _processosEmEventos = new Set();
+  _historicoEventos.forEach(ev => {
+    if (ev.tipo !== 'reajuste_salarial' && ev.tipo !== 'promocao') return;
+    if (ev.processo_id) _processosEmEventos.add(ev.processo_id);
+    const d = ev.dados || {};
+    eventos.push({
+      data: ev.data_evento,
+      tipo: ev.tipo,
+      titulo: ev.titulo,
+      descricao: ev.resumo || '',
+      cargo_anterior: d.cargo_anterior || null,
+      motivo_codigo: d.motivo_codigo || null,
+      motivo_descricao: d.motivo_descricao || null,
+      processo_id: ev.processo_id,
+      registrado_por: ev.registrado_por || null,
+    });
+  });
+
+  // sintetiza promoções de _historicoRemuneracao somente para processos ainda não cobertos
   _historicoRemuneracao.forEach(h => {
     if (!h.cargo_novo) return;
     const dataEvt = h.data_vigencia || (h.created_at || '').slice(0, 10);
-    // evita duplicata se _historico já tiver evento do mesmo processo
+    if (h.processo_id && _processosEmEventos.has(h.processo_id)) return;
     if (h.processo_id && eventos.some(e => e.processo_id === h.processo_id)) return;
     eventos.push({
       data: dataEvt,
@@ -642,7 +662,7 @@ function renderHistorico() {
       <div class="tl-content">
         <div class="tl-titulo">${e.titulo||'—'}</div>
         ${descHtml?`<div class="tl-desc">${descHtml}</div>`:''}
-        <div class="tl-date">${fd(e.data)}${e.created_by?' · '+e.created_by:''}</div>
+        <div class="tl-date">${fd(e.data)}${(e.created_by||e.registrado_por)?' · '+(e.created_by||e.registrado_por):''}</div>
       </div>
     </div>`;
   }).join('')}</div>`;

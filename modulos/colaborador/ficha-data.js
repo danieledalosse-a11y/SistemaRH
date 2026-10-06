@@ -50,7 +50,7 @@ function logout() {
 function getParam(k) { return new URLSearchParams(window.location.search).get(k); }
 
 /* ── Dados ── */
-let _colab = null, _ferias = [], _avaliacoes = [], _ciclos = [], _pdi = [], _historico = [], _processosAbertos = [], _processosConcluidos = [], _historicoRemuneracao = [];
+let _colab = null, _ferias = [], _avaliacoes = [], _ciclos = [], _pdi = [], _historico = [], _processosAbertos = [], _processosConcluidos = [], _historicoRemuneracao = [], _historicoEventos = [];
 
 /* ── Helpers ferias ── */
 function addDays(dateStr, days) {
@@ -122,7 +122,7 @@ async function init() {
   const colabId  = _colab.id;
   const matricula = _colab.matricula;
 
-  const [ferias, avaliacoes, ciclos, pdi, hist, processos, processosConcluidos, histRemuneracao] = await Promise.all([
+  const [ferias, avaliacoes, ciclos, pdi, hist, processos, processosConcluidos, histRemuneracao, histEventos] = await Promise.all([
     sbGet(`/rest/v1/ferias?colaborador_id=eq.${colabId}&order=ano.desc`),
     matricula ? sbGet(`/rest/v1/dev_avaliacoes?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=*`) : Promise.resolve([]),
     sbGet('/rest/v1/dev_ciclos?order=created_at.desc'),
@@ -131,6 +131,7 @@ async function init() {
     sbGet(`/rest/v1/processos_rh?colaborador_id=eq.${colabId}&status=eq.aberto&select=id,tipo,criado_em&limit=10`),
     sbGet(`/rest/v1/processos_rh?colaborador_id=eq.${colabId}&status=eq.concluido&select=*&order=created_at.desc`),
     sbGet(`/rest/v1/historico_remuneracao?colaborador_id=eq.${colabId}&order=data_vigencia.desc`),
+    sbGet(`/rest/v1/historico_eventos?colaborador_id=eq.${colabId}&order=data_evento.desc`).catch(() => []),
   ]);
 
   _ferias                = ferias || [];
@@ -141,6 +142,7 @@ async function init() {
   _processosAbertos      = processos || [];
   _processosConcluidos   = processosConcluidos || [];
   _historicoRemuneracao  = histRemuneracao || [];
+  _historicoEventos      = histEventos || [];
 
   // Aplica reajustes com vigência vencida que o cron ainda não processou
   await _verificarReajustesPendentes(colabId);
