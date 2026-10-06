@@ -384,27 +384,20 @@ function renderFinanceiro() {
       ? `<span class="fin-status ok">✓ Aplicado</span>`
       : `<span class="fin-status pend">⏳ Pendente</span>`;
 
-    // Bloco de valores: DE | PARA | VARIAÇÃO (só exibe colunas com dados)
-    const colDe = ant
-      ? `<div class="fin-col"><span class="fin-col-label">De</span><span class="fin-col-val sec">${ant}</span></div><div class="fin-col-sep">→</div>`
-      : '';
-    const colPara = `<div class="fin-col"><span class="fin-col-label">${ant ? 'Para' : 'Novo salário'}</span><span class="fin-col-val">${novo || '—'}</span></div>`;
-    const colPct = pctStr
-      ? `<div class="fin-col fin-col-pct"><span class="fin-col-label">Variação</span><span class="fin-pct-badge ${pctNum >= 0 ? 'pos' : 'neg'}">${pctStr}</span></div>`
-      : '';
+    // Linha de valores: De R$ X → R$ Y  +12%
+    const salDeHtml = ant ? `<span class="fin-sal-de">${ant}</span><span class="fin-sal-sep">→</span>` : '';
+    const salPctHtml = pctStr ? `<span class="fin-pct-badge ${pctNum >= 0 ? 'pos' : 'neg'}">${pctStr}</span>` : '';
 
+    // Linha de cargo
     const cargoHtml = h.cargo_novo
-      ? `<div class="fin-extra-row">
-          <span class="fin-extra-label">Cargo</span>
-          <span class="fin-extra-val">
-            ${h.cargo_anterior ? `<span class="fin-extra-de">${h.cargo_anterior}</span><span class="fin-extra-arrow">→</span>` : ''}
-            <strong>${h.cargo_novo}</strong>
-          </span>
+      ? `<div class="fin-cargo-row">
+          ${h.cargo_anterior ? `<span class="fin-cargo-de">${h.cargo_anterior}</span><span class="fin-cargo-sep">→</span>` : ''}
+          <span class="fin-cargo-novo">${h.cargo_novo}</span>
         </div>`
       : '';
 
     const obsHtml = h.observacao
-      ? `<div class="fin-extra-row"><span class="fin-extra-label">Obs.</span><span class="fin-extra-val" style="font-style:italic;color:var(--text-sec)">${h.observacao}</span></div>`
+      ? `<div class="fin-obs">${h.observacao}</div>`
       : '';
 
     return `<div class="fin-card" style="border-left-color:${cor.border}">
@@ -412,8 +405,8 @@ function renderFinanceiro() {
         <span class="fin-motivo-tag" style="background:${cor.bg};color:${cor.txt}">${motivoLabel}</span>
         ${statusHtml}
       </div>
-      <div class="fin-values-row">${colDe}${colPara}${colPct}</div>
-      ${cargoHtml || obsHtml ? `<div class="fin-extra-block">${cargoHtml}${obsHtml}</div>` : ''}
+      <div class="fin-values-row">${salDeHtml}<span class="fin-sal-novo">${novo || '—'}</span>${salPctHtml}</div>
+      ${cargoHtml}${obsHtml}
       <div class="fin-footer">
         <span class="fin-vigencia">Vigência: <strong>${fd(h.data_vigencia)}</strong></span>
         ${h.registrado_por ? `<span class="fin-by">por ${h.registrado_por}</span>` : ''}
