@@ -530,11 +530,15 @@ function renderHistorico() {
   const eventos = [..._historico];
 
   // adicionar admissão se não existir no histórico
+  // cargo de admissão: usa cargo_anterior do reajuste mais antigo com mudança de cargo
   if (_colab.data_admissao && !eventos.some(e=>e.tipo==='admissao')) {
+    let _cargoAdm = _colab.cargo || 'colaborador';
+    const _comCargo = _historicoRemuneracao.filter(h => h.cargo_novo && h.cargo_anterior);
+    if (_comCargo.length) _cargoAdm = _comCargo[_comCargo.length - 1].cargo_anterior || _cargoAdm;
     eventos.push({
       data: _colab.data_admissao,
       tipo: 'admissao',
-      titulo: `Admitido como ${_colab.cargo||'colaborador'}`,
+      titulo: `Admitido como ${_cargoAdm}`,
       descricao: [_colab.empresa_registro_nome, _colab.setor].filter(Boolean).join(' · '),
     });
   }
