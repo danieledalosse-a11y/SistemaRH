@@ -327,9 +327,7 @@ function renderCarreira() {
 function renderFinanceiro() {
   const el = document.getElementById('financeiroContent');
 
-  const reajustes = _processosConcluidos.filter(p => p.tipo === 'reajuste');
-
-  if (!reajustes.length) {
+  if (!_historicoRemuneracao.length) {
     el.innerHTML = `<div class="empty-state"><p>Nenhum reajuste salarial registrado.</p></div>`;
     return;
   }
@@ -341,25 +339,34 @@ function renderFinanceiro() {
     return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
-  el.innerHTML = `<div class="timeline">${reajustes.map(p => {
-    const dx = p.dados_extras || {};
-    const novo = fBRL(dx.salario_novo);
-    const ant  = fBRL(dx.salario_anterior);
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  el.innerHTML = `<div class="timeline">${_historicoRemuneracao.map(h => {
+    const novo  = fBRL(h.salario_novo);
+    const ant   = fBRL(h.salario_anterior);
     const titulo = novo
-      ? (ant ? `Reajuste salarial — ${ant} → ${novo}` : `Reajuste salarial — novo salário ${novo}`)
+      ? (ant ? `Reajuste salarial — ${ant} → ${novo}` : `Novo salário — ${novo}`)
       : 'Reajuste salarial';
+
     const descParts = [];
-    if (dx.percentual) descParts.push(`${dx.percentual}% de reajuste`);
-    if (dx.motivo)     descParts.push(dx.motivo);
-    if (dx.data_vigencia) descParts.push(`Vigência: ${fd(dx.data_vigencia)}`);
+    if (h.percentual != null)    descParts.push(`${h.percentual > 0 ? '+' : ''}${h.percentual}%`);
+    if (h.motivo_descricao)      descParts.push(h.motivo_descricao);
+    if (h.cargo_novo)            descParts.push(`Cargo: ${h.cargo_novo}`);
+    if (h.data_vigencia)         descParts.push(`Vigência: ${fd(h.data_vigencia)}`);
     const descricao = descParts.join(' · ');
-    const data = (p.created_at || '').slice(0, 10);
+
+    // Status: aplicado (vigência passada) ou aguardando (vigência futura)
+    const aplicado = h.aplicado_em || h.data_vigencia <= hoje;
+    const statusHtml = aplicado
+      ? `<span class="tl-status aplicado">✓ Aplicado</span>`
+      : `<span class="tl-status pendente">⏳ Vigência em ${fd(h.data_vigencia)}</span>`;
+
     return `<div class="tl-item">
       <div class="tl-dot reajuste">${ICON_REAJUSTE}</div>
       <div class="tl-content">
         <div class="tl-titulo">${titulo}</div>
         ${descricao ? `<div class="tl-desc">${descricao}</div>` : ''}
-        <div class="tl-date">${fd(data)}</div>
+        <div class="tl-date">${fd(h.data_vigencia)} ${statusHtml}</div>
       </div>
     </div>`;
   }).join('')}</div>`;
