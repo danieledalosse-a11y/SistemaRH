@@ -261,6 +261,20 @@ function infoRow(label, val) {
   return `<div class="info-row"><label>${label}</label><span>${val}</span></div>`;
 }
 
+/* helper compartilhado: badge colorido de motivo de reajuste */
+function _motivoBadge(cod, label) {
+  if (!label) return '';
+  const c = String(cod || '');
+  let bg, txt;
+  if (c === '0.2') { bg = '#ECFDF3'; txt = '#027A48'; }       // Promoção
+  else if (c === '0.1') { bg = '#EFF4FF'; txt = '#1849A9'; }  // Mérito
+  else if (c === '0.3' || c === '0.5') { bg = '#FFFAEB'; txt = '#92400E'; } // Dissídio/Acordo
+  else if (c === '0.4') { bg = '#F4F3FF'; txt = '#5925DC'; }  // Equiparação
+  else if (c === '0.6') { bg = '#F0F9FF'; txt = '#026AA2'; }  // Enquadramento
+  else { bg = '#F2F4F7'; txt = '#344054'; }
+  return `<span class="tl-motivo-badge" style="background:${bg};color:${txt}">${label}</span>`;
+}
+
 /* ── Carreira ── */
 function renderCarreira() {
   const el = document.getElementById('carreiraContent');
@@ -289,14 +303,13 @@ function renderCarreira() {
   // Mudanças de cargo via historico_remuneracao (fonte primária e mais confiável)
   _historicoRemuneracao.forEach(h => {
     if (!h.cargo_novo) return;
-    const descParts = [];
-    if (h.cargo_anterior) descParts.push(`De: ${h.cargo_anterior}`);
-    if (h.motivo_descricao) descParts.push(h.motivo_descricao);
     eventos.push({
       data: h.data_vigencia,
       tipo: 'promocao',
       titulo: `Promovido para ${h.cargo_novo}`,
-      descricao: descParts.join(' · '),
+      cargo_anterior: h.cargo_anterior || null,
+      motivo_codigo: h.motivo_codigo || null,
+      motivo_descricao: h.motivo_descricao || null,
     });
   });
 
@@ -330,11 +343,16 @@ function renderCarreira() {
   el.innerHTML = `<div class="timeline">${eventos.map(e => {
     const tipo = e.tipo || 'geral';
     const icon = ICONS[tipo] || ICONS.pdi;
+    const descHtml = [
+      e.cargo_anterior ? `De: ${e.cargo_anterior}` : '',
+      e.motivo_descricao ? _motivoBadge(e.motivo_codigo, e.motivo_descricao) : '',
+      e.descricao || '',
+    ].filter(Boolean).join(' · ');
     return `<div class="tl-item">
       <div class="tl-dot ${tipo}">${icon}</div>
       <div class="tl-content">
         <div class="tl-titulo">${e.titulo || '—'}</div>
-        ${e.descricao ? `<div class="tl-desc">${e.descricao}</div>` : ''}
+        ${descHtml ? `<div class="tl-desc">${descHtml}</div>` : ''}
         <div class="tl-date">${fd(e.data)}</div>
       </div>
     </div>`;
@@ -542,14 +560,13 @@ function renderHistorico() {
     const dataEvt = h.data_vigencia || (h.created_at || '').slice(0, 10);
     // evita duplicata se _historico já tiver evento do mesmo processo
     if (h.processo_id && eventos.some(e => e.processo_id === h.processo_id)) return;
-    const descParts = [];
-    if (h.cargo_anterior) descParts.push(`De: ${h.cargo_anterior}`);
-    if (h.motivo_descricao) descParts.push(h.motivo_descricao);
     eventos.push({
       data: dataEvt,
       tipo: 'promocao',
       titulo: `Promovido para ${h.cargo_novo}`,
-      descricao: descParts.join(' · '),
+      cargo_anterior: h.cargo_anterior || null,
+      motivo_codigo: h.motivo_codigo || null,
+      motivo_descricao: h.motivo_descricao || null,
       processo_id: h.processo_id,
     });
   });
@@ -613,11 +630,18 @@ function renderHistorico() {
   el.innerHTML = `<div class="timeline">${eventos.map(e=>{
     const tipo = e.tipo||'geral';
     const icon = ICONS[tipo]||ICONS.geral;
+    const descHtml = e.motivo_descricao
+      ? [
+          e.cargo_anterior ? `De: ${e.cargo_anterior}` : '',
+          _motivoBadge(e.motivo_codigo, e.motivo_descricao),
+          e.descricao || '',
+        ].filter(Boolean).join(' · ')
+      : (e.descricao || '');
     return `<div class="tl-item">
       <div class="tl-dot ${tipo}">${icon}</div>
       <div class="tl-content">
         <div class="tl-titulo">${e.titulo||'—'}</div>
-        ${e.descricao?`<div class="tl-desc">${e.descricao}</div>`:''}
+        ${descHtml?`<div class="tl-desc">${descHtml}</div>`:''}
         <div class="tl-date">${fd(e.data)}${e.created_by?' · '+e.created_by:''}</div>
       </div>
     </div>`;
