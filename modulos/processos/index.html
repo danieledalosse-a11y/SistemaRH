@@ -3101,6 +3101,25 @@ async function _carregarMotivosReajuste() {
   } catch { sel.innerHTML = '<option value="">Erro ao carregar</option>'; }
 }
 
+async function _carregarCargosReajuste() {
+  const sel = document.getElementById('xNovaFuncao');
+  if (!sel) return;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/param_cargo?ativo=eq.true&order=nome`, { headers: SB_HEADERS });
+    const rows = await r.json();
+    if (!Array.isArray(rows)) { sel.innerHTML = '<option value="">Erro ao carregar</option>'; return; }
+    sel.innerHTML = '<option value="">Nenhuma mudança de cargo</option>' +
+      rows.map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
+  } catch { sel.innerHTML = '<option value="">Erro ao carregar</option>'; }
+}
+
+function _mascaraMonetaria(el) {
+  let raw = el.value.replace(/\D/g, '');
+  if (!raw) { el.value = ''; return; }
+  const num = parseInt(raw, 10) / 100;
+  el.value = num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 function _calcPercentualReajuste() {
   const atual = parseFloat(document.getElementById('xSalarioAtual')?.dataset.raw) || 0;
   const novoRaw = (document.getElementById('xSalarioNovo')?.value || '').replace(/[^\d,]/g, '').replace(',', '.');
@@ -3141,7 +3160,7 @@ function atualizarCamposExtras() {
         </div>
         <div class="form-group">
           <label class="form-label">Novo salário (R$)</label>
-          <input class="form-control" type="text" id="xSalarioNovo" placeholder="R$ 0,00" oninput="_calcPercentualReajuste()">
+          <input class="form-control" type="text" id="xSalarioNovo" placeholder="R$ 0,00" oninput="_mascaraMonetaria(this);_calcPercentualReajuste()">
         </div>
         <div class="form-group" style="max-width:130px;">
           <label class="form-label">Percentual</label>
@@ -3160,13 +3179,13 @@ function atualizarCamposExtras() {
       </div>
       <div class="form-group">
         <label class="form-label">Nova função <span style="font-weight:400;color:#667085">(opcional — preencha somente se houver mudança de cargo)</span></label>
-        <input class="form-control" type="text" id="xNovaFuncao" placeholder="Ex: Assistente Administrativo">
+        <select class="form-control" id="xNovaFuncao"></select>
       </div>
       <div class="form-group">
         <label class="form-label">Observação <span style="font-weight:400;color:#667085">(opcional)</span></label>
         <textarea class="form-control" id="xObservacaoReajuste" rows="2" placeholder="Informações adicionais sobre o reajuste..."></textarea>
       </div>`;
-    setTimeout(() => _carregarMotivosReajuste(), 0);
+    setTimeout(() => { _carregarMotivosReajuste(); _carregarCargosReajuste(); }, 0);
   } else if (tipo === 'vt_alteracao') {
     html = `
       <div class="form-group">
