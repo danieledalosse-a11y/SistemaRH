@@ -264,35 +264,52 @@ function infoRow(label, val) {
 /* ── Carreira ── */
 function renderCarreira() {
   const el = document.getElementById('carreiraContent');
-
   const eventos = [];
+
+  // Cargo de admissão: inferido do cargo_anterior do registro mais antigo em
+  // historico_remuneracao que tenha mudança de cargo. Evita mostrar o cargo atual
+  // (pós-promoção) como cargo de entrada.
+  // _historicoRemuneracao está ordenado DESC → o último é o mais antigo.
+  let cargoAdmissao = _colab.cargo || 'colaborador';
+  const comCargo = _historicoRemuneracao.filter(h => h.cargo_novo && h.cargo_anterior);
+  if (comCargo.length) {
+    cargoAdmissao = comCargo[comCargo.length - 1].cargo_anterior || cargoAdmissao;
+  }
 
   // Admissão sintética
   if (_colab.data_admissao) {
     eventos.push({
       data: _colab.data_admissao,
       tipo: 'admissao',
-      titulo: `Admitido como ${_colab.cargo || 'colaborador'}`,
+      titulo: `Admitido como ${cargoAdmissao}`,
       descricao: [_colab.empresa_registro_nome, _colab.setor].filter(Boolean).join(' · '),
     });
   }
 
-  // Processos concluídos: mudança de função (reajuste com nova_funcao) e transferência
+  // Mudanças de cargo via historico_remuneracao (fonte primária e mais confiável)
+  _historicoRemuneracao.forEach(h => {
+    if (!h.cargo_novo) return;
+    const descParts = [];
+    if (h.cargo_anterior) descParts.push(`De: ${h.cargo_anterior}`);
+    if (h.motivo_descricao) descParts.push(h.motivo_descricao);
+    eventos.push({
+      data: h.data_vigencia,
+      tipo: 'promocao',
+      titulo: `Promovido para ${h.cargo_novo}`,
+      descricao: descParts.join(' · '),
+    });
+  });
+
+  // Transferências de unidade/CNPJ (de _processosConcluidos — sem representação em historico_remuneracao)
   _processosConcluidos.forEach(p => {
     const dx = p.dados_extras || {};
-    if (p.tipo === 'reajuste' && dx.nova_funcao) {
+    if (p.tipo === 'transferencia_cnpj' || p.tipo === 'transferencia') {
+      const dataEvt = dx.data_transferencia || (p.concluido_em || p.created_at || '').slice(0, 10);
       eventos.push({
-        data: (p.created_at || '').slice(0, 10),
+        data: dataEvt,
         tipo: 'pdi',
-        titulo: 'Mudança de função',
-        descricao: [dx.nova_funcao, dx.motivo].filter(Boolean).join(' · '),
-      });
-    } else if (p.tipo === 'transferencia') {
-      eventos.push({
-        data: (p.created_at || '').slice(0, 10),
-        tipo: 'pdi',
-        titulo: 'Transferência de setor',
-        descricao: [dx.setor_origem, dx.setor_destino].filter(Boolean).join(' → ') || dx.motivo || '',
+        titulo: 'Transferência',
+        descricao: [dx.empresa_origem, dx.empresa_destino].filter(Boolean).join(' → ') || dx.motivo || '',
       });
     }
   });
@@ -306,6 +323,7 @@ function renderCarreira() {
 
   const ICONS = {
     admissao: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>`,
+    promocao: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>`,
     pdi:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
   };
 
@@ -332,8 +350,6 @@ function renderFinanceiro() {
     return;
   }
 
-  const ICON_REAJUSTE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
-
   function fBRL(v) {
     if (v == null || v === '') return null;
     return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -341,32 +357,64 @@ function renderFinanceiro() {
 
   const hoje = new Date().toISOString().slice(0, 10);
 
-  el.innerHTML = `<div class="timeline">${_historicoRemuneracao.map(h => {
-    const novo  = fBRL(h.salario_novo);
-    const ant   = fBRL(h.salario_anterior);
-    const titulo = novo
-      ? (ant ? `Reajuste salarial — ${ant} → ${novo}` : `Novo salário — ${novo}`)
-      : 'Reajuste salarial';
+  // Paleta por código de motivo (alinhada com param_motivo_reajuste)
+  function _motivoCfg(cod) {
+    const c = String(cod || '');
+    if (c === '0.2') return { border: '#12B76A', bg: '#ECFDF3', txt: '#027A48' }; // Promoção
+    if (c === '0.1') return { border: '#1849A9', bg: '#EFF4FF', txt: '#1849A9' }; // Mérito
+    if (c === '0.3' || c === '0.5') return { border: '#F79009', bg: '#FFFAEB', txt: '#92400E' }; // Dissídio/Acordo
+    if (c === '0.4') return { border: '#5925DC', bg: '#F4F3FF', txt: '#5925DC' }; // Equiparação
+    if (c === '0.6') return { border: '#026AA2', bg: '#F0F9FF', txt: '#026AA2' }; // Enquadramento
+    return { border: '#667085', bg: '#F9FAFB', txt: '#344054' };
+  }
 
-    const descParts = [];
-    if (h.percentual != null)    descParts.push(`${h.percentual > 0 ? '+' : ''}${h.percentual}%`);
-    if (h.motivo_descricao)      descParts.push(h.motivo_descricao);
-    if (h.cargo_novo)            descParts.push(`Cargo: ${h.cargo_novo}`);
-    if (h.data_vigencia)         descParts.push(`Vigência: ${fd(h.data_vigencia)}`);
-    const descricao = descParts.join(' · ');
+  const ICO_ARROW = `<svg class="fin-arrow-ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12M12 5l5 5-5 5"/></svg>`;
 
-    // Status: aplicado (vigência passada) ou aguardando (vigência futura)
-    const aplicado = h.aplicado_em || h.data_vigencia <= hoje;
+  el.innerHTML = `<div class="fin-list">${_historicoRemuneracao.map(h => {
+    const novo     = fBRL(h.salario_novo);
+    const ant      = fBRL(h.salario_anterior);
+    const aplicado = !!(h.aplicado_em || h.data_vigencia <= hoje);
+    const cor      = _motivoCfg(h.motivo_codigo);
+    const motivoLabel = h.motivo_descricao || 'Reajuste salarial';
+
+    const pctNum = h.percentual != null ? Number(h.percentual) : null;
+    const pctStr = pctNum != null
+      ? `${pctNum > 0 ? '+' : ''}${pctNum.toFixed(2).replace('.', ',')}%`
+      : null;
+
     const statusHtml = aplicado
-      ? `<span class="tl-status aplicado">✓ Aplicado</span>`
-      : `<span class="tl-status pendente">⏳ Vigência em ${fd(h.data_vigencia)}</span>`;
+      ? `<span class="fin-status ok">✓ Aplicado</span>`
+      : `<span class="fin-status pend">⏳ Pendente</span>`;
 
-    return `<div class="tl-item">
-      <div class="tl-dot reajuste">${ICON_REAJUSTE}</div>
-      <div class="tl-content">
-        <div class="tl-titulo">${titulo}</div>
-        ${descricao ? `<div class="tl-desc">${descricao}</div>` : ''}
-        <div class="tl-date">${fd(h.data_vigencia)} ${statusHtml}</div>
+    const cargoHtml = h.cargo_novo
+      ? `<div class="fin-cargo-row">
+          <span class="fin-cargo-label">Cargo</span>
+          <span class="fin-cargo-val">
+            ${h.cargo_anterior ? `<span class="fin-cargo-de">${h.cargo_anterior}</span>${ICO_ARROW}` : ''}
+            <span class="fin-cargo-para">${h.cargo_novo}</span>
+          </span>
+        </div>`
+      : '';
+
+    const obsHtml = h.observacao
+      ? `<div class="fin-obs">${h.observacao}</div>`
+      : '';
+
+    return `<div class="fin-card" style="border-left-color:${cor.border}">
+      <div class="fin-card-top">
+        <span class="fin-motivo-tag" style="background:${cor.bg};color:${cor.txt}">${motivoLabel}</span>
+        ${statusHtml}
+      </div>
+      <div class="fin-salary-row">
+        ${ant ? `<span class="fin-sal-ant">${ant}</span>${ICO_ARROW}` : ''}
+        <span class="fin-sal-novo">${novo || '—'}</span>
+        ${pctStr ? `<span class="fin-pct ${pctNum >= 0 ? 'pos' : 'neg'}">${pctStr}</span>` : ''}
+      </div>
+      ${cargoHtml}
+      ${obsHtml}
+      <div class="fin-footer">
+        <span class="fin-vigencia">Vigência: <strong>${fd(h.data_vigencia)}</strong></span>
+        ${h.registrado_por ? `<span class="fin-by">por ${h.registrado_por}</span>` : ''}
       </div>
     </div>`;
   }).join('')}</div>`;
