@@ -2413,6 +2413,58 @@ async function confirmarConclusao() {
 async function _executarConclusao(processoId, justificativa) {
   const cardEl = document.getElementById('card-' + processoId);
   try {
+    const _proc = _PROC_MAP[processoId];
+
+    // ── Reajuste salarial: fluxo atômico via RPC ────────────────────────────
+    // A função fn_concluir_reajuste executa tudo em uma transação PostgreSQL:
+    // conclui o processo, insere em historico_remuneracao e atualiza
+    // colaboradores.salario/cargo se data_vigencia <= hoje.
+    if (_proc && _proc.tipo === 'reajuste') {
+      const _usuario = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}').nome || 'Sistema'; } catch(_) { return 'Sistema'; } })();
+
+      // Salva justificativa em dados_extras antes de chamar a rpc (se houver)
+      if (justificativa) {
+        await fetch(`${SB_URL}/rest/v1/processos_rh?id=eq.${processoId}`, {
+          method: 'PATCH', headers: SB_HEADERS,
+          body: JSON.stringify({ dados_extras: { ...(_proc.dados_extras || {}), conclusao_justificativa: justificativa } })
+        });
+      }
+
+      const _chamarRpc = () => fetch(`${SB_URL}/rest/v1/rpc/fn_concluir_reajuste`, {
+        method: 'POST', headers: SB_HEADERS,
+        body: JSON.stringify({ p_processo_id: processoId, p_usuario: _usuario })
+      });
+
+      let rpc = await _chamarRpc();
+      if (!rpc.ok) {
+        const txt = await rpc.text();
+        if ((txt.includes('JWT expired') || txt.includes('PGRST303')) && await _sbRefreshSession()) {
+          rpc = await _chamarRpc();
+        }
+        if (!rpc.ok) throw new Error(`HTTP ${rpc.status}`);
+      }
+
+      const resultado = await rpc.json();
+      if (!resultado.ok) throw new Error(resultado.erro || 'Erro ao concluir reajuste');
+
+      const msg = resultado.aplicado
+        ? `Reajuste concluído! Novo salário aplicado a partir de ${resultado.data_vigencia}.`
+        : `Reajuste registrado! O novo salário entrará em vigor em ${resultado.data_vigencia}.`;
+      showToast(msg, 'success');
+      cardEl?.remove();
+      concluidosCarregados = false;
+      const lista = document.querySelector('#andamentoConteudo .processos-lista');
+      if (lista && !lista.querySelector('.processo-row')) {
+        document.getElementById('andamentoConteudo').innerHTML = `<div class="empty-state">
+          <div class="empty-state-icon">✅</div>
+          <div class="empty-state-title">Nenhum processo em andamento</div>
+          <div class="empty-state-desc">Todos os processos foram concluídos.</div>
+        </div>`;
+      }
+      return;
+    }
+
+    // ── Demais tipos: fluxo padrão ───────────────────────────────────────────
     const dadosExtrasAtuais = {};
     if (justificativa) dadosExtrasAtuais.conclusao_justificativa = justificativa;
 
@@ -2439,7 +2491,6 @@ async function _executarConclusao(processoId, justificativa) {
     }
 
     // Transferência concluída → atualizar empresa no cadastro do colaborador
-    const _proc = _PROC_MAP[processoId];
     if (_proc && _proc.tipo === 'transferencia_cnpj' && _proc.colaborador_id) {
       const destino   = _proc.dados_extras?.empresa_destino;
       const destinoId = _proc.dados_extras?.empresa_destino_id ?? null;
