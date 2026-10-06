@@ -50,7 +50,7 @@ function logout() {
 function getParam(k) { return new URLSearchParams(window.location.search).get(k); }
 
 /* ── Dados ── */
-let _colab = null, _ferias = [], _avaliacoes = [], _ciclos = [], _pdi = [], _historico = [], _processosAbertos = [], _processosConcluidos = [];
+let _colab = null, _ferias = [], _avaliacoes = [], _ciclos = [], _pdi = [], _historico = [], _processosAbertos = [], _processosConcluidos = [], _historicoRemuneracao = [];
 
 /* ── Helpers ferias ── */
 function addDays(dateStr, days) {
@@ -122,7 +122,7 @@ async function init() {
   const colabId  = _colab.id;
   const matricula = _colab.matricula;
 
-  const [ferias, avaliacoes, ciclos, pdi, hist, processos, processosConcluidos] = await Promise.all([
+  const [ferias, avaliacoes, ciclos, pdi, hist, processos, processosConcluidos, histRemuneracao] = await Promise.all([
     sbGet(`/rest/v1/ferias?colaborador_id=eq.${colabId}&order=ano.desc`),
     matricula ? sbGet(`/rest/v1/dev_avaliacoes?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=*`) : Promise.resolve([]),
     sbGet('/rest/v1/dev_ciclos?order=created_at.desc'),
@@ -130,15 +130,20 @@ async function init() {
     matricula ? sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&order=data.desc&limit=100`) : Promise.resolve([]),
     sbGet(`/rest/v1/processos_rh?colaborador_id=eq.${colabId}&status=eq.aberto&select=id,tipo,criado_em&limit=10`),
     sbGet(`/rest/v1/processos_rh?colaborador_id=eq.${colabId}&status=eq.concluido&select=*&order=created_at.desc`),
+    sbGet(`/rest/v1/historico_remuneracao?colaborador_id=eq.${colabId}&order=data_vigencia.desc`),
   ]);
 
-  _ferias              = ferias || [];
-  _avaliacoes          = avaliacoes || [];
-  _ciclos              = ciclos || [];
-  _pdi                 = pdi || [];
-  _historico           = hist || [];
-  _processosAbertos    = processos || [];
-  _processosConcluidos = processosConcluidos || [];
+  _ferias                = ferias || [];
+  _avaliacoes            = avaliacoes || [];
+  _ciclos                = ciclos || [];
+  _pdi                   = pdi || [];
+  _historico             = hist || [];
+  _processosAbertos      = processos || [];
+  _processosConcluidos   = processosConcluidos || [];
+  _historicoRemuneracao  = histRemuneracao || [];
+
+  // Aplica reajustes com vigência vencida que o cron ainda não processou
+  await _verificarReajustesPendentes(colabId);
 
   renderHero();
   renderResumo();
@@ -147,6 +152,41 @@ async function init() {
   document.getElementById('heroArea').style.display = '';
   document.getElementById('tabsArea').style.display = '';
   document.getElementById('tabContent').style.display = '';
+}
+
+// Aplica reajustes com data_vigencia vencida que o cron ainda não processou.
+// Roda silenciosamente ao carregar qualquer colaborador — garante que o
+// cadastro esteja atualizado mesmo se o cron falhar em determinado dia.
+async function _verificarReajustesPendentes(colabId) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const pendentes = _historicoRemuneracao.filter(
+    h => !h.aplicado_em && !h.estornado && h.data_vigencia <= hoje
+  );
+  if (!pendentes.length) return;
+
+  const _usuario = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}').nome || 'Sistema'; } catch(_) { return 'Sistema'; } })();
+
+  for (const h of pendentes) {
+    if (!h.processo_id) continue; // registros manuais/migração sem processo vinculado: pula
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/rpc/fn_concluir_reajuste`, {
+        method: 'POST', headers: SB_HEADERS,
+        body: JSON.stringify({ p_processo_id: h.processo_id, p_usuario: _usuario })
+      });
+      if (r.ok) {
+        const res = await r.json();
+        if (res.ok) {
+          // Atualiza o array local para refletir a aplicação
+          h.aplicado_em = new Date().toISOString();
+          // Atualiza colab local para renderHero exibir salário correto
+          if (_colab) {
+            _colab.salario = String(h.salario_novo);
+            if (h.cargo_novo) _colab.cargo = h.cargo_novo;
+          }
+        }
+      }
+    } catch(_) { /* falha silenciosa — cron tentará novamente */ }
+  }
 }
 
 function mostrarErro(msg) {
