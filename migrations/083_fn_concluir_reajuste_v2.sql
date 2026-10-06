@@ -159,7 +159,7 @@ BEGIN
   -- ── ETAPA 2: Extrair e validar campos de dados_extras ───────────────────
   v_extras        := COALESCE(v_proc.dados_extras, '{}'::JSONB);
   v_data_vigencia := (v_extras->>'data_vigencia')::DATE;
-  v_salario_novo  := REPLACE(REPLACE(v_extras->>'salario_novo', '.', ''), ',', '.')::NUMERIC;
+  v_salario_novo  := (v_extras->>'salario_novo')::NUMERIC;
   v_cargo_novo    := NULLIF(TRIM(v_extras->>'nova_funcao'), '');
   v_motivo_cod    := v_extras->>'motivo_codigo';
   v_motivo_desc   := v_extras->>'motivo_descricao';
