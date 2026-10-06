@@ -271,6 +271,84 @@ if (
 `_PROC_MAP` é um objeto `{ [id]: processoObj }` populado durante o carregamento dos cards.
 Usado por `_executarConclusao`, `_renderFichaVT` e demais funções que precisam do objeto processo pelo id.
 
+## Formulário de Reajuste Salarial (out/2026)
+
+Tipo `reajuste` no formulário de novo processo. Campos e IDs:
+
+| ID DOM | Campo | Tipo | Observação |
+|---|---|---|---|
+| `xSalarioAtual` | Salário atual | `input readonly` | `data-raw` com valor numérico para cálculo |
+| `xSalarioNovo` | Novo salário | `input text` | `oninput="_mascaraMonetaria(this);_calcPercentualReajuste()"` |
+| `xPercentualReajuste` | Percentual | `input readonly` | Calculado em tempo real; aceita valor negativo (vermelho) |
+| `xMotivoReajuste` | Motivo | `select` | Carregado de `param_motivo_reajuste` |
+| `xDataVigencia` | Data de vigência | `input date` | — |
+| `xNovaFuncao` | Nova função | `select` | Carregado de `param_cargo?ativo=eq.true&order=nome`; opção default "Nenhuma mudança de cargo" |
+| `xObservacaoReajuste` | Observação | `textarea` | Opcional |
+
+### Funções auxiliares
+
+```js
+// Máscara monetária — formata enquanto digita
+function _mascaraMonetaria(el) {
+  let raw = el.value.replace(/\D/g, '');
+  if (!raw) { el.value = ''; return; }
+  const num = parseInt(raw, 10) / 100;
+  el.value = num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// Percentual calculado — lê data-raw do salário atual
+function _calcPercentualReajuste() {
+  const atual = parseFloat(document.getElementById('xSalarioAtual')?.dataset.raw) || 0;
+  const novoRaw = (document.getElementById('xSalarioNovo')?.value || '').replace(/[^\d,]/g, '').replace(',', '.');
+  const novo = parseFloat(novoRaw) || 0;
+  const pctEl = document.getElementById('xPercentualReajuste');
+  // exibe +/-X,XX% e colore conforme sinal
+}
+
+// Carrega param_motivo_reajuste (lazy, chamado no setTimeout ao abrir o form)
+async function _carregarMotivosReajuste() { ... }
+
+// Carrega param_cargo (lazy, chamado no mesmo setTimeout)
+async function _carregarCargosReajuste() { ... }
+```
+
+O `setTimeout` que dispara ambas as cargas:
+```js
+setTimeout(() => { _carregarMotivosReajuste(); _carregarCargosReajuste(); }, 0);
+```
+
+### `dados_extras` salvo ao criar processo
+
+```js
+{
+  salario_novo:      <number>,   // obrigatório
+  data_vigencia:     'YYYY-MM-DD',
+  percentual:        <number>,   // calculado
+  motivo_codigo:     '0.x',
+  motivo_descricao:  'Mérito',
+  nova_funcao:       'Coordenador Comercial' | null,
+  observacao:        'texto' | null,
+}
+```
+
+### Exibição no card (painel Em andamento)
+
+`Novo salário: R$ X.XXX,XX a partir de DD/MM/AAAA · +X,XX% · Motivo`
+Percentual em verde (`#166534`) se positivo, vermelho (`#991b1b`) se negativo.
+
+### Tabela `param_motivo_reajuste` (migration 074, out/2026)
+
+```sql
+CREATE TABLE param_motivo_reajuste (
+  id SERIAL PRIMARY KEY, codigo TEXT NOT NULL, descricao TEXT NOT NULL,
+  ordem INTEGER DEFAULT 0, ativo BOOLEAN DEFAULT true, criado_por TEXT,
+  CONSTRAINT uq_pmr_codigo UNIQUE (codigo)
+);
+```
+Registros padrão: Mérito (0.1), Promoção (0.2), Dissídio coletivo (0.3), Equiparação salarial (0.4), Acordo coletivo (0.5), Enquadramento (0.6).
+
+---
+
 ## Tipo `transferencia_cnpj`
 
 Processo para registrar transferência de colaborador entre CNPJs do grupo.
