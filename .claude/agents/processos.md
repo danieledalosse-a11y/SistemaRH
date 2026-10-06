@@ -239,6 +239,59 @@ Cada campo de VT tem um botão `×` que zera o input e dispara `_salvarDadosVT`.
 
 ## Conclusão de processo — `_executarConclusao`
 
+### Tipo `reajuste` — conclusão atômica via RPC
+
+Quando `_proc.tipo === 'reajuste'`, a conclusão **não** faz PATCH direto em `processos_rh`. Em vez disso, chama a função PostgreSQL `fn_concluir_reajuste` que executa tudo atomicamente:
+
+```js
+// Salva justificativa se preenchida
+if (justificativa) {
+  await fetch(`${SB_URL}/rest/v1/processos_rh?id=eq.${processoId}`, {
+    method: 'PATCH', headers: SB_HEADERS,
+    body: JSON.stringify({ dados_extras: { ...(_proc.dados_extras || {}), justificativa } })
+  });
+}
+
+// Chama RPC atômico
+let rpcRes, rpcOk = false;
+const rpcR = await fetch(`${SB_URL}/rest/v1/rpc/fn_concluir_reajuste`, {
+  method: 'POST', headers: SB_HEADERS,
+  body: JSON.stringify({ p_processo_id: processoId, p_usuario: _usuario })
+});
+// (JWT retry pattern idêntico ao resto do módulo)
+if (rpcR.ok) { rpcRes = await rpcR.json(); rpcOk = rpcRes?.ok; }
+
+// Toast diferenciado por vigência
+if (rpcOk) {
+  if (rpcRes.aplicado) {
+    toast(`Reajuste concluído! Novo salário aplicado a partir de ${rpcRes.data_vigencia}`);
+  } else {
+    toast(`Reajuste registrado! O novo salário entrará em vigor em ${rpcRes.data_vigencia}`);
+  }
+  return; // early return — VT/transferência não é tocado
+}
+```
+
+**Função `fn_concluir_reajuste` (migration 076)** — 7 etapas atômicas em PL/pgSQL:
+
+| Etapa | O que faz |
+|---|---|
+| 1 | `SELECT ... FOR UPDATE` em `processos_rh` — evita conclusão simultânea |
+| 2 | Extrai e valida `data_vigencia`, `salario_novo`, `cargo_novo` de `dados_extras` |
+| 3 | `SELECT ... FOR UPDATE` em `colaboradores` — captura `salario_anterior` e `cargo_anterior` AGORA (não no momento da criação) |
+| 4 | Verifica idempotência: se já existe em `historico_remuneracao`, pula INSERT |
+| 5 | UPDATE `processos_rh` → `status='concluido'`, grava `percentual_real` e `salario_anterior` em `dados_extras` |
+| 6 | INSERT em `historico_remuneracao` (`ON CONFLICT DO NOTHING`) |
+| 7 | Se `data_vigencia <= CURRENT_DATE`: UPDATE `colaboradores.salario/cargo` + dois eventos JSONB em `colaboradores.historico` |
+
+Retorna `{ ok, aplicado, data_vigencia, salario_novo, percentual }` ou `{ ok: false, erro }`.
+
+**BUG CONHECIDO (corrigido out/2026):** linha original `salario = v_salario_novo::TEXT` causava erro `column "salario" is of type numeric but expression is of type text`. Fix: `salario = v_salario_novo` (sem cast — `v_salario_novo` já é `NUMERIC(12,2)`). A migration 076 no repositório **não reflete este fix** — o SQL correto foi executado manualmente via `CREATE OR REPLACE FUNCTION` no Supabase Dashboard. Se recriar a função, usar `salario = v_salario_novo` (sem `::TEXT`).
+
+**Idempotência:** `UNIQUE (colaborador_id, processo_id)` + `FOR UPDATE` previnem duplicatas mesmo se "Concluir" for clicado duas vezes. Processo já concluído retorna `{ ok: true, aviso: 'Processo já estava concluído' }`.
+
+### Tipo `vt_alteracao` — sincronização com cadastro
+
 Após PATCH `status='concluido'` bem-sucedido, verifica se deve sincronizar dados VT de volta ao cadastro:
 
 ```js
@@ -265,6 +318,32 @@ if (
 ```
 
 **Regra:** só sincroniza em `inclusao` e `alteracao` (não em `exclusao`). Exclusão não altera dados VT no cadastro.
+
+## Checklists — regras de prazo (out/2026)
+
+### Demissão — prazos legais preservados
+
+O checklist `demissao` mantém `prazo_dias` em todos os itens — prazos trabalhistas com validade legal.
+
+### Todos os demais tipos — sem prazo
+
+Tipos `reajuste`, `vt_avulso`, `vt_alteracao` (todos os subtipos), `prorrogacao_experiencia`, `avaliacao_final_experiencia`, `bonus_indicacao`, `atestado`, `transferencia_cnpj`: **`prazo_dias` removido** de todos os itens (out/2026).
+
+**Motivo:** prazos arbitrários causavam alerta "Vencido" constante, gerando fadiga de alertas sem valor real. Somente obrigações legais têm prazo.
+
+**Fix colateral (out/2026):** ao salvar checklist no banco, linha corrigida de `prazo_dias: it.prazo_dias ?? 0` para `prazo_dias: it.prazo_dias ?? null`. O `?? 0` fazia itens sem prazo serem gravados com `prazo_dias=0` (= prazo "hoje"), gerando alertas "Vencido" no próximo acesso.
+
+### Checklist `reajuste` — itens atuais
+
+```js
+reajuste: [
+  { item: 'Aprovação do gestor' },
+  { item: 'Comunicar ao colaborador por escrito' },
+  { item: 'Atualizar folha de pagamento' },
+]
+```
+
+Item "Atualizar salário no sistema" **removido** (out/2026) — o sistema agora atualiza automaticamente via `fn_concluir_reajuste` ao concluir o processo.
 
 ## Cache global `_PROC_MAP`
 
