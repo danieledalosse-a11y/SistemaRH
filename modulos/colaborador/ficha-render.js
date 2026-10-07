@@ -90,10 +90,11 @@ function renderHero() {
     metaItems.push(_miItem(_MI_ICO.mat,   'Matrícula',     c.matricula,             'c-blue'));
   if (vinculoVal)
     metaItems.push(_miItem(_MI_ICO.vinc,  'Vínculo',       vinculoVal,              ''));
-  if (c.data_admissao)
-    metaItems.push(_miItem(_MI_ICO.adm,   'Admissão',      fd(c.data_admissao),     'c-blue'));
-  if (c.data_admissao)
-    metaItems.push(_miItem(_MI_ICO.tempo, 'Tempo de casa', tempoStr(c.data_ingresso_grupo || c.data_admissao), 'c-purple'));
+  if (c.data_admissao) {
+    const refAdm = c.data_ingresso_grupo || c.data_admissao;
+    metaItems.push(_miItem(_MI_ICO.adm,   'Admissão',      fd(refAdm),                          'c-blue'));
+    metaItems.push(_miItem(_MI_ICO.tempo, 'Tempo de casa', tempoStr(refAdm),                     'c-purple'));
+  }
 
   document.getElementById('heroMeta').innerHTML =
     metaItems.length ? `<div class="hero-meta-row">${metaItems.join('')}</div>` : '';
