@@ -92,10 +92,10 @@ function tempoStr(dataAdm) {
   const dias = Math.floor(ms/(1000*60*60*24));
   if (dias < 30)  return `${dias} dia${dias!==1?'s':''}`;
   const meses = Math.floor(dias/30.4);
-  if (meses < 12) return `${meses} mês${meses!==1?'es':''}`;
+  if (meses < 12) return `${meses} ${meses!==1?'meses':'mês'}`;
   const anos  = Math.floor(meses/12);
   const rm    = meses % 12;
-  return rm > 0 ? `${anos} ano${anos!==1?'s':''} e ${rm} mês${rm!==1?'es':''}` : `${anos} ano${anos!==1?'s':''}`;
+  return rm > 0 ? `${anos} ano${anos!==1?'s':''} e ${rm} ${rm!==1?'meses':'mês'}` : `${anos} ano${anos!==1?'s':''}`;
 }
 
 /* ── Init ── */
