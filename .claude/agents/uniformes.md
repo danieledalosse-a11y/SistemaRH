@@ -234,3 +234,75 @@ const motivoLabel = {
   devolucao:            'Devolução'
 };
 ```
+
+---
+
+## Modal Novo Item — bug `toggleCampoCA` corrigido (out/2026)
+
+**Commit:** `10cd2cb`
+
+**Sintoma:** ao abrir "+ Novo item" na seção "Catálogo de EPIs", o campo Nome não aparecia no modal — apenas Tamanhos e Item ativo ficavam visíveis.
+
+**Causa:** `abrirModalItem()` pré-define `iTipo = 'epi'` quando `window._catalogoSecTab === 'epis'` (linha 4277), depois chama `toggleCampoCA()`. Essa função usava `generoToggle.parentElement.style.display = isEpi ? 'none' : ''` para ocultar o bloco de Gênero. O problema: `generoToggle` era filho direto do `<div>` que envolvia **toda** a seção Identificação (Nome, Tipo, CA, Unidade) — ocultar o `parentElement` escondia tudo.
+
+**Fix:** bloco de Gênero envolvido em `<div id="campoGenero">` no HTML. `toggleCampoCA` alterada para referenciar `#campoGenero` diretamente:
+```js
+// Antes (errado):
+const gt = document.getElementById('generoToggle');
+if (gt) gt.closest('div')?.style && (gt.parentElement.style.display = isEpi ? 'none' : '');
+
+// Depois (correto):
+const cg = document.getElementById('campoGenero');
+if (cg) cg.style.display = isEpi ? 'none' : '';
+```
+
+**Regra:** nunca usar `parentElement` para ocultar seções do modal — sempre dar um `id` ao wrapper e referenciar diretamente.
+
+---
+
+## Integração com historico_eventos — Fase D (out/2026)
+
+Entregas de uniforme são integradas à timeline unificada do colaborador via `historico_eventos`.
+
+### Arquitetura
+
+- **Unidade de evento:** `(colaborador_id + data_movimentacao + motivo)` = 1 evento. Múltiplas linhas do mesmo grupo são agregadas em `dados.itens[]`.
+- **Sem `processo_id`:** movimentações não passam pelo workflow de `processos_rh`. O campo `processo_id` fica `NULL` em eventos de entrega.
+- **Não altera `unif_movimentacoes`** — leitura pura, sem inserção ou atualização.
+
+### Função `fn_registrar_entrega_uniforme`
+
+```sql
+fn_registrar_entrega_uniforme(
+  p_colaborador_id  BIGINT,
+  p_data            DATE,       -- data_movimentacao
+  p_motivo          TEXT,       -- ex: 'admissao', 'troca_programada'
+  p_usuario         TEXT
+) RETURNS JSONB
+```
+
+Retorno:
+- `{ ok: true, total_itens, motivo, data_evento }` — evento criado
+- `{ ok: true, aviso }` — já existia (idempotente)
+- `{ ok: false, erro }` — nenhuma movimentação encontrada ou outro erro
+
+**Idempotência:** `EXISTS` por `(colaborador_id, tipo='entrega_uniforme', data_evento, dados->>'motivo')`.
+
+### Migrations executadas
+
+| Migration | Conteúdo |
+|---|---|
+| 099 | `tipos_evento` para `entrega_uniforme` (categoria `cadastro`, icone `shirt`, cor `#026AA2`) |
+| 100 | `fn_registrar_entrega_uniforme` — função genérica |
+| 101 | Recovery — 6 grupos históricos de `unif_movimentacoes` → 5 eventos criados, 1 pulado |
+
+### EPI (futuro)
+
+`unif_catalogo` já tem campo `ca_numero` para CA (Certificado de Aprovação). Quando EPI for cadastrado com `tipo='epi'`:
+1. Adicionar `tipos_evento 'entrega_epi'` (1 INSERT)
+2. A mesma `fn_registrar_entrega_uniforme` pode ser adaptada com parâmetro `p_tipo_item TEXT` filtrando `catalogo.tipo`
+3. Sem alteração de schema
+
+### Ícone `shirt` no frontend
+
+Adicionado ao mapa `ICONS` em `modulos/colaborador/ficha-render.js` (linha ~656). SVG Feather-style de camiseta.
