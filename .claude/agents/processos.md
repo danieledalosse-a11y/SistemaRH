@@ -507,7 +507,16 @@ Ao concluir, faz PATCH em `colaboradores`:
 
 ### Relação com `data_ingresso_grupo`
 
-Colaboradores transferidos de CNPJ têm `data_ingresso_grupo` preenchida manualmente (a data em que entraram no grupo, não na empresa atual). Esse campo é usado no relatório Tempo de Casa como referência prioritária sobre `data_admissao`.
+Colaboradores transferidos de CNPJ têm `data_ingresso_grupo` preenchida manualmente (a data em que entraram no grupo, não na empresa atual).
+
+**Regra global de tempo de casa (padronizada 2026-10-07):** `data_ingresso_grupo || data_admissao` é a data de referência para **todo cálculo e exibição de tempo de empresa** em qualquer tela. `data_admissao` é dado contratual do CNPJ atual — exibido separadamente como "Admissão", nunca substitui `data_ingresso_grupo` para tempo de casa.
+
+Telas que aplicam essa regra:
+- `modulos/relatorios/index.html` — Relatório Tempo de Casa (já estava correto)
+- `modulos/cadastro/index.html` — coluna Admissão na lista e exportação CSV
+- `modulos/colaborador/ficha-render.js` — card Tempo de Casa e texto "desde X" no Resumo
+
+Ao criar nova tela ou cálculo que envolva tempo de empresa, aplicar o mesmo padrão.
 
 ## Tipo `alteracao_setor` (Mig 105-B, out/2026)
 
