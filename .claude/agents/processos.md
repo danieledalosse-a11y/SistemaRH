@@ -437,12 +437,16 @@ Registros padrão: Mérito (0.1), Promoção (0.2), Dissídio coletivo (0.3), Eq
 - Se a fonte (planilha, sistema externo) armazena como decimal (`0.06`): multiplicar por 100 antes de inserir
 - Para piso salarial sem percentual informado: calcular `round((sal_nov/sal_ant - 1) * 100, 4)`
 
-### Migração de massa em `historico_remuneracao` — boas práticas (Mig 106, out/2026)
+### Migração de massa em `historico_remuneracao` — boas práticas (Mig 106–107, out/2026)
 
 - `motivo_descricao` deve ser preenchido com o label do `param_motivo_reajuste` correspondente ao `motivo_codigo` (a tela usa esse campo para exibição, com fallback para "Reajuste salarial")
 - `observacao`: usar texto informativo da fonte quando existir; `NULL` quando vazio ou genérico (ex.: "Reajuste integral" é rótulo sem valor — descartar)
 - Para demitidos **após** a data de vigência: inserir histórico normalmente, mas **não** atualizar `colaboradores.salario`
 - Para colaboradores com múltiplos vínculos (inativo+ativo): usar o vínculo **ativo** para reajuste salarial
+- **Idempotência obrigatória:** verificar existência de cada registro antes de inserir (por `colaborador_id + data_vigencia + motivo_codigo`). PATCH em `colaboradores` só executa se houve inserção nessa execução — nunca sobrescrever alteração posterior de outro processo
+- **`historico_eventos` em migrações:** constraint `origem` aceita apenas `'sistema'` — nunca usar `'migracao'`
+- **Mudança de setor causada por promoção:** incluir `setor_anterior`/`setor_novo` nos `dados` do evento `promocao`, sem criar `alteracao_setor` separado. `alteracao_setor` é para mudança sem promoção de cargo
+- **Motivos carregados do banco:** não hardcodar labels de `param_motivo_reajuste` — carregar via query e usar snapshot no momento do registro (Mig 107: labels carregados de `param_motivo_reajuste?select=codigo,descricao,ativo`)
 
 ---
 
