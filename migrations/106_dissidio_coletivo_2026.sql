@@ -1,24 +1,44 @@
 -- Migration 106 — Dissídio Coletivo 2026
---
--- Executado via script Python (mig_e_dissidio.py) em 07/10/2026.
+-- Executado em 07/10/2026 via script Python (mig_e_v2.py).
 --
 -- Fonte: Dissidio 2026.xlsx
 --   Caminho: RH - Documentos\4.0-FOLHA DE PAGAMENTO\DISSIDIO Acordos coletivos GRUPO REVEST\
 --            RELAÇÃO DE REAJUSTES GERAL\2026\Dissidio 2026.xlsx
 --
--- Resultados:
---   119 registros inseridos em historico_remuneracao
---     motivo_codigo = 'dissidio_coletivo'
---     data_vigencia = '2026-08-01'
---   119 colaboradores.salario atualizados
+-- Resultados (versão final):
+--   149 registros inseridos em historico_remuneracao
+--     motivo_codigo    = 'dissidio_coletivo'
+--     motivo_descricao = 'Dissídio coletivo'
+--     data_vigencia    = '2026-08-01'
+--     percentual       = inteiro percentual (6.0 para 6%, não 0.06)
+--     observacao       = texto da planilha quando informativo; NULL quando vazio
+--                        ou igual a "Reajuste integral" (rótulo genérico descartado)
+--   141 colaboradores.salario atualizados (somente ativos / sem demissão após vigência)
+--     8 casos somente histórico (demitidos após 01/08/2026):
+--       Nathalia Brunholi (dem. 30/09), Mateus Valério (dem. 06/10),
+--       Matheus Ferreira (dem. 08/09), Thiago Alves (dem. 29/09),
+--       Sidiney Lopes (dem. 30/09), Gabriele Gandin (dem. 03/09),
+--       Giovana Gomes (dem. 02/09), Sabrina Yasmin (dem. 14/09)
 --
 -- Excluídos da planilha:
---   31 linhas "PISO SALARIAL" (não são reajustes percentuais)
---   3 colaboradores ignorados: Everton (JP/113), Antonio (CD/491), Juliana (Atelier/222)
+--   31 linhas "PISO SALARIAL" → incorporadas como 30 registros (ver abaixo)
+--   3 colaboradores sem reajuste: Everton (JP/113), Antonio (CD/491), Juliana (Atelier/222)
+--   1 divergência pendente: Felipe Gonçalves (CD/485, id=1711) — sal.banco R$1.024,69 ≠
+--     planilha R$2.163,00; aguarda verificação manual (Mig E-bis futura)
 --
--- Múltiplos resolvidos (usado colaborador_id ATIVO):
---   REVESTLOG mat=107  Marcilene    → id=1787 (ativo, emp_reg=Log)
---   REVESTLOG mat=102  Sabrina      → id=1778 (ativo, emp_reg=Log)
---   JP FILIAL SARANDI mat=107 Ana Claudia → id=1752 (ativo, emp_reg=Sarandi)
---   MATRIZ mat=549     Maria Luiza  → id=1629 (ativo, emp_reg=Matriz)
---   CD mat=424         Francisco    → id=1688 (ativo, emp_reg=CD)
+-- Casos PISO SALARIAL (30 registros, percentual calculado efetivo):
+--   2163 → 2293: 6,01% (piso categoria 1)
+--   2266 → 2402: 6,00% (piso categoria 2)
+--
+-- Múltiplos resolvidos (colaborador_id ATIVO):
+--   REVESTLOG mat=107  Marcilene    → id=1787
+--   REVESTLOG mat=102  Sabrina      → id=1778
+--   JP FILIAL SARANDI mat=107 Ana Claudia → id=1752
+--   MATRIZ mat=549     Maria Luiza  → id=1629
+--   CD mat=424         Francisco    → id=1688
+--
+-- Convenção percentual: inteiro (6.0 = 6%). Tela usa pctNum.toFixed(2) diretamente.
+--
+-- Pendências após esta migration:
+--   - Parâmetros Gerais: alterar label de 'dissidio_coletivo' para "Dissídio coletivo"
+--   - Mig E-bis: investigar e lançar dissídio do Felipe (id=1711) após verificar salário
