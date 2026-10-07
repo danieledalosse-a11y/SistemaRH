@@ -539,6 +539,8 @@ function renderHistorico() {
 
   // montar eventos: dev_historico + sintetizados de férias + admissão
   const eventos = [..._historico];
+  const _processosEmEventos = new Set();
+  const _tiposEmEventos = new Set();
 
   // adicionar admissão se não existe já em historico_eventos
   // cargo de admissão: usa cargo_anterior do reajuste mais antigo com mudança de cargo
@@ -555,8 +557,6 @@ function renderHistorico() {
   }
 
   // adicionar todos os eventos de historico_eventos (fonte canônica para qualquer tipo)
-  const _processosEmEventos = new Set();
-  const _tiposEmEventos = new Set();
   _historicoEventos.forEach(ev => {
     if (ev.processo_id) _processosEmEventos.add(ev.processo_id);
     _tiposEmEventos.add(ev.tipo);
