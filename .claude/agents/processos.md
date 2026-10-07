@@ -432,6 +432,20 @@ Registros padrão: Mérito (0.1), Promoção (0.2), Dissídio coletivo (0.3), Eq
 
 Processo para registrar transferência de colaborador entre CNPJs do grupo.
 
+### `tipo_transferencia` — parametrizado (Mig 102–103, out/2026)
+
+O campo `tipo_transferencia` em `dados_extras` é carregado dinamicamente de `param_tipo_transferencia`:
+- `'unidade'` → Transferência de unidade (altera só `empresa_atuacao`)
+- `'cnpj'` → Alteração de CNPJ/contrato (altera `empresa_registro` + `empresa_atuacao`)
+
+**Radios no formulário:** renderizados via fetch de `param_tipo_transferencia?ativo=eq.true&order=ordem`. A hint de descrição (`xTipoTransferenciaHint`) é atualizada a cada mudança de seleção.
+
+**Validação obrigatória:** se nenhum radio selecionado, exibe toast de erro e bloqueia conclusão. Sem fallback hardcoded.
+
+**Fallback somente para processos legados** (linha 2497 do HTML): `|| 'unidade'` aplicado apenas ao ler `dados_extras` de processos criados antes da parametrização — preserva comportamento retrocompatível, nunca afeta novos processos.
+
+**Snapshot em `historico_eventos.dados`:** `fn_concluir_transferencia_cnpj` (Mig 103) busca o label de `param_tipo_transferencia` e grava `tipo_transferencia_label` no JSONB do evento. Histórico imune a renomeações futuras.
+
 ### Campos extras (`dados_extras`)
 
 | key | descrição |
@@ -439,6 +453,7 @@ Processo para registrar transferência de colaborador entre CNPJs do grupo.
 | `empresa_origem` | preenchida automaticamente do `colaboradores.empresa_registro` ao selecionar o colaborador |
 | `empresa_destino` | selecionada via `<select>` carregado de `param_empresa?ativo=eq.true` (excluindo origem) |
 | `data_transferencia` | data da transferência (`<input type="date">`) |
+| `tipo_transferencia` | código do tipo: `'unidade'` ou `'cnpj'` — carregado de `param_tipo_transferencia` |
 
 ### Checklist padrão
 
@@ -471,6 +486,29 @@ Ao concluir, faz PATCH em `colaboradores`:
 ### Relação com `data_ingresso_grupo`
 
 Colaboradores transferidos de CNPJ têm `data_ingresso_grupo` preenchida manualmente (a data em que entraram no grupo, não na empresa atual). Esse campo é usado no relatório Tempo de Casa como referência prioritária sobre `data_admissao`.
+
+## Tipo `alteracao_setor` (Mig 105-B, out/2026)
+
+Evento de carreira para **mudança de setor sem transferência de empresa nem promoção de cargo**. Distinto de `transferencia_cnpj` (mecanismo de empresa) e `promocao` (mudança de cargo).
+
+- Criado em `tipos_evento` com `categoria='carreira'`, `icone_chave='briefcase'`
+- **Quando usar:** colaborador muda de setor dentro da mesma empresa — ex.: "SDI Adm → Matriz Adm" (Ana Claudia, jul/2025)
+- **Schema `dados`:** `setor_anterior`, `setor_anterior_label`, `setor_novo`, `setor_novo_label`
+- **Snapshot pattern:** gravar `_label` além do código — proteção contra renomeação futura de `param_setor`
+- **`resumo_template`:** `{setor_anterior_label} → {setor_novo_label}`
+
+## Padrão snapshot em `historico_eventos.dados`
+
+Sempre que um evento referencia um param table (setor, tipo_transferencia, etc.), gravar tanto o código estável quanto o label no momento do registro:
+
+```json
+{ "setor_anterior": "2584 - SDI Adm", "setor_anterior_label": "SDI Adm",
+  "setor_novo": "Matriz Adm",         "setor_novo_label": "Matriz Adm" }
+```
+
+O histórico exibirá o label original mesmo se o param mudar de nome. Funções SQL como `fn_concluir_transferencia_cnpj` já implementam este padrão para `tipo_transferencia_label`.
+
+---
 
 ## Automação central — Edge Function `verificar-workflows` (set/2026)
 
