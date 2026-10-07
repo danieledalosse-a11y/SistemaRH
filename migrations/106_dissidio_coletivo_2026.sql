@@ -1,0 +1,24 @@
+-- Migration 106 — Dissídio Coletivo 2026
+--
+-- Executado via script Python (mig_e_dissidio.py) em 07/10/2026.
+--
+-- Fonte: Dissidio 2026.xlsx
+--   Caminho: RH - Documentos\4.0-FOLHA DE PAGAMENTO\DISSIDIO Acordos coletivos GRUPO REVEST\
+--            RELAÇÃO DE REAJUSTES GERAL\2026\Dissidio 2026.xlsx
+--
+-- Resultados:
+--   119 registros inseridos em historico_remuneracao
+--     motivo_codigo = 'dissidio_coletivo'
+--     data_vigencia = '2026-08-01'
+--   119 colaboradores.salario atualizados
+--
+-- Excluídos da planilha:
+--   31 linhas "PISO SALARIAL" (não são reajustes percentuais)
+--   3 colaboradores ignorados: Everton (JP/113), Antonio (CD/491), Juliana (Atelier/222)
+--
+-- Múltiplos resolvidos (usado colaborador_id ATIVO):
+--   REVESTLOG mat=107  Marcilene    → id=1787 (ativo, emp_reg=Log)
+--   REVESTLOG mat=102  Sabrina      → id=1778 (ativo, emp_reg=Log)
+--   JP FILIAL SARANDI mat=107 Ana Claudia → id=1752 (ativo, emp_reg=Sarandi)
+--   MATRIZ mat=549     Maria Luiza  → id=1629 (ativo, emp_reg=Matriz)
+--   CD mat=424         Francisco    → id=1688 (ativo, emp_reg=CD)
