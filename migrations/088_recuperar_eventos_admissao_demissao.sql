@@ -3,6 +3,8 @@
 -- já concluídos que ainda não possuem evento em historico_eventos.
 -- Idempotente: pode ser re-executado sem duplicar eventos.
 -- Execute APÓS as migrations 085, 086 e 087.
+--
+-- Processos com colaborador_id IS NULL são pulados (candidatos não contratados).
 
 DO $$
 DECLARE
@@ -11,6 +13,7 @@ DECLARE
   v_ok      INTEGER := 0;
   v_recup   INTEGER := 0;
   v_erro    INTEGER := 0;
+  v_pulado  INTEGER := 0;
 BEGIN
 
   -- ── Admissão ─────────────────────────────────────────────────────────────
@@ -21,6 +24,7 @@ BEGIN
     FROM processos_rh p
     WHERE p.tipo = 'admissao'
       AND p.status = 'concluido'
+      AND p.colaborador_id IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM historico_eventos he WHERE he.processo_id = p.id
       )
@@ -42,6 +46,17 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- Conta processos de admissão sem colaborador (dados legados inválidos)
+  SELECT COUNT(*) INTO v_pulado
+  FROM processos_rh
+  WHERE tipo = 'admissao'
+    AND status = 'concluido'
+    AND colaborador_id IS NULL;
+
+  IF v_pulado > 0 THEN
+    RAISE NOTICE '  admissao: % processo(s) sem colaborador vinculado — pulados', v_pulado;
+  END IF;
+
   -- ── Demissão ─────────────────────────────────────────────────────────────
   RAISE NOTICE '=== Recuperando eventos de demissão ===';
 
@@ -50,6 +65,7 @@ BEGIN
     FROM processos_rh p
     WHERE p.tipo = 'demissao'
       AND p.status = 'concluido'
+      AND p.colaborador_id IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM historico_eventos he WHERE he.processo_id = p.id
       )
@@ -71,8 +87,8 @@ BEGIN
     END IF;
   END LOOP;
 
-  RAISE NOTICE '=== Resultado: % eventos criados, % já existiam, % erros ===',
-    v_ok, v_recup, v_erro;
+  RAISE NOTICE '=== Resultado: % eventos criados, % já existiam, % pulados (sem colaborador), % erros ===',
+    v_ok, v_recup, v_pulado, v_erro;
 
   IF v_erro > 0 THEN
     RAISE EXCEPTION 'Recuperação concluída com % erro(s). Verifique os avisos acima antes de prosseguir.', v_erro;
