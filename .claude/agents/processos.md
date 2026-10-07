@@ -514,7 +514,9 @@ Colaboradores transferidos de CNPJ têm `data_ingresso_grupo` preenchida manualm
 Telas que aplicam essa regra:
 - `modulos/relatorios/index.html` — Relatório Tempo de Casa (já estava correto)
 - `modulos/cadastro/index.html` — coluna Admissão na lista e exportação CSV
-- `modulos/colaborador/ficha-render.js` — card Tempo de Casa e texto "desde X" no Resumo
+- `modulos/colaborador/ficha-render.js` — campo "Admissão" e "Tempo de Casa" no cabeçalho da ficha; card Tempo de Casa e texto "desde X" no Resumo
+
+A data contratual (`data_admissao`) permanece visível apenas no formulário de edição do Cadastro — não deve aparecer em nenhum campo de exibição de tempo de empresa.
 
 Ao criar nova tela ou cálculo que envolva tempo de empresa, aplicar o mesmo padrão.
 
