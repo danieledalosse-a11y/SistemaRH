@@ -426,6 +426,24 @@ CREATE TABLE param_motivo_reajuste (
 ```
 Registros padrão: Mérito (0.1), Promoção (0.2), Dissídio coletivo (0.3), Equiparação salarial (0.4), Acordo coletivo (0.5), Enquadramento (0.6).
 
+> **Atenção:** o registro `codigo='dissidio_coletivo'` foi incluído na Mig 106 com `label='Reajuste integral'` (erro de cadastro). Deve ser corrigido para **"Dissídio coletivo"** no Parâmetros Gerais.
+
+### Convenção do campo `percentual` em `historico_remuneracao` (definida out/2026)
+
+**Inteiro percentual:** `6.0` representa 6%, **não** `0.06`.
+
+- Ao inserir via script/API: usar o valor direto (ex: `6.0`, `2.5`)
+- A tela (`ficha-render.js`) usa `pctNum.toFixed(2)` diretamente — sem multiplicar por 100
+- Se a fonte (planilha, sistema externo) armazena como decimal (`0.06`): multiplicar por 100 antes de inserir
+- Para piso salarial sem percentual informado: calcular `round((sal_nov/sal_ant - 1) * 100, 4)`
+
+### Migração de massa em `historico_remuneracao` — boas práticas (Mig 106, out/2026)
+
+- `motivo_descricao` deve ser preenchido com o label do `param_motivo_reajuste` correspondente ao `motivo_codigo` (a tela usa esse campo para exibição, com fallback para "Reajuste salarial")
+- `observacao`: usar texto informativo da fonte quando existir; `NULL` quando vazio ou genérico (ex.: "Reajuste integral" é rótulo sem valor — descartar)
+- Para demitidos **após** a data de vigência: inserir histórico normalmente, mas **não** atualizar `colaboradores.salario`
+- Para colaboradores com múltiplos vínculos (inativo+ativo): usar o vínculo **ativo** para reajuste salarial
+
 ---
 
 ## Tipo `transferencia_cnpj`
