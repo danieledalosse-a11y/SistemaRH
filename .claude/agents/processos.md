@@ -518,6 +518,8 @@ Telas que aplicam essa regra:
 
 A data contratual (`data_admissao`) permanece visível apenas no formulário de edição do Cadastro — não deve aparecer em nenhum campo de exibição de tempo de empresa.
 
+**Validação de ano (2026-10-07):** `data_admissao` deve ter ano entre 1950 e 2099. Um ano fora desse intervalo causa `NaN anos` no cálculo de tempo de empresa e impede a abertura do drawer no Cadastro. A validação existe nos inputs HTML (`min`/`max`) e na lógica JS de `salvarFicha()` (cadastro) e `confirmarEfetivar()` (admissão).
+
 Ao criar nova tela ou cálculo que envolva tempo de empresa, aplicar o mesmo padrão.
 
 ## Tipo `alteracao_setor` (Mig 105-B, out/2026)

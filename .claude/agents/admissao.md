@@ -234,6 +234,7 @@ async function _confirmarAprovar(f, temVT) {
 1. `efetivarContratacao(f)`: abre modal com dados pré-preenchidos da ficha
 2. `confirmarEfetivar()`:
    - Valida: matrícula, data_admissao, empresa, cargo, tipo_contrato, salario
+   - **Valida ano de `data_admissao`:** rejeita valores com ano < 1950 ou > 2099 e exibe erro inline antes de enviar ao Supabase (previne `NaN anos` e drawer inoperante no Cadastro)
    - POST `colaboradores` com TODOS os dados da ficha mapeados
    - PATCH `admissao_convites` → `status = 'efetivado'`
    - Vincula `colaborador_id` nos processos criados na aprovação:
