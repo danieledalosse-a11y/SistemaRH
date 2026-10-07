@@ -736,7 +736,7 @@
           </div>
         </div>
         <div class="sf-row">
-          <div class="sf-cell"><div class="sf-lbl obrigatorio">Data de admissão</div><input class="sf-inp" type="date" id="df-admissao" oninput="calcularFimExperiencia()"></div>
+          <div class="sf-cell"><div class="sf-lbl obrigatorio">Data de admissão</div><input class="sf-inp" type="date" id="df-admissao" min="1950-01-01" max="2099-12-31" oninput="calcularFimExperiencia()"></div>
           <div class="sf-cell"><div class="sf-lbl">Ingresso no Grupo</div><input class="sf-inp" type="date" id="df-ingresso-grupo"><div class="sf-hint" style="font-size:11px;color:#667085;margin-top:3px">Preencher apenas quando diferente da admissão (ex: transferência de CNPJ)</div></div>
         </div>
         <div class="sf-row full">
@@ -3372,7 +3372,8 @@ function salvarFicha() {
     };
     if (!nome)     { pendencias.push('Nome do colaborador'); _mark('df-nome', false); } else _mark('df-nome', true);
     if (!empresa)  { pendencias.push('Empresa de registro'); _mark('df-empresa', false); } else _mark('df-empresa', true);
-    if (!admissao) { pendencias.push('Data de admissão'); _mark('df-admissao', false); } else _mark('df-admissao', true);
+    if (!admissao) { pendencias.push('Data de admissão'); _mark('df-admissao', false); }
+    else { const _anoAdm = parseInt(admissao.split('-')[0]); if (_anoAdm < 1950 || _anoAdm > 2099) { pendencias.push('Data de admissão com ano inválido (use entre 1950 e 2099)'); _mark('df-admissao', false); } else _mark('df-admissao', true); }
     if (matriculaObrigatoria && !matricula) { pendencias.push('Matrícula (obrigatória para CLT)'); _mark('df-codigo', false); } else _mark('df-codigo', true);
 
     if (pendencias.length > 0) {
@@ -3457,6 +3458,7 @@ function salvarFicha() {
   const novoNome    = document.getElementById('df-nome').value.trim().toUpperCase();
   const novaAdm     = document.getElementById('df-admissao').value;
   const novaDem     = document.getElementById('df-demissao').value;
+  if (novaAdm) { const _anoAdm = parseInt(novaAdm.split('-')[0]); if (_anoAdm < 1950 || _anoAdm > 2099) { mostrarToast('Data de admissão com ano inválido. Use um ano entre 1950 e 2099.', 'erro'); document.getElementById('df-admissao').style.outline = '2px solid var(--red, #dc2626)'; return; } }
   if (!c.historico) c.historico = [];
   const _uAtual = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil')||'{}').nome||'Sistema'; } catch(_){return 'Sistema';} })();
   const _h = (tipo, de, para) => c.historico.unshift({ tipo, de: de||'—', para: para||'—', data: hoje, usuario: _uAtual });
