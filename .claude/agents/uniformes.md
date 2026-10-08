@@ -312,7 +312,7 @@ _operacaoId = crypto.randomUUID();
 
 - **Idempotência:** `EXISTS` por `(colaborador_id, tipo, data_evento, dados->>'motivo')`.
 - A 108-B adicionou `AND m.operacao_id IS NULL` ao FOR loop para não agregar registros novos.
-- Recovery pendente (out/2026): RAYSSA KELLE (id=2282, 2026-09-05, admissao, 3 itens) e SANDRA LARANJEIRA (id=1639, 2026-10-05, troca_antecipada, 1 item).
+- Recovery concluído (out/2026): todos os registros antigos (`operacao_id IS NULL`) já têm evento correspondente em `historico_eventos`. Não há pendências.
 
 ### `tipos_evento` — categoria uniforme (108-E)
 
@@ -329,6 +329,30 @@ A aba "Uniformes e EPIs" na Ficha do RH filtra por `categoria = 'uniforme'` — 
 | 108-C | `fn_registrar_movimentacao_uniforme` — RPC canônica unificada |
 | 108-D | `UPDATE unif_almoxarifados SET tipo = 'cd' WHERE nome = 'Almoxarifado CD'` |
 | 108-E | Expande CHECK constraint + `UPDATE tipos_evento SET categoria = 'uniforme'` para tipos de uniforme |
+
+---
+
+## Aba "Uniformes e EPIs" — Ficha Completa do Cadastro (out/2026)
+
+Visão histórica de entregas e devoluções por colaborador, implementada em `modulos/cadastro/index.html`.
+
+**Fonte de dados:** `historico_eventos` filtrado por `tipo IN (SELECT codigo FROM tipos_evento WHERE categoria = 'uniforme' AND ativo = true)`.
+
+**Sem lista hardcoded:** os tipos válidos são consultados dinamicamente a cada abertura da aba via `_getCodigosUniforme()`. Para adicionar um novo tipo (ex: EPI específico), basta INSERT em `tipos_evento` com `categoria = 'uniforme'` — nenhuma alteração de frontend ou schema necessária.
+
+**Função JS:** `renderUniformesEPIs()` — chamada em `setDrawerTab('uniformes')`.
+
+**O que exibe por evento:**
+- Badge visual: azul para entrega, laranja para devolução
+- Motivo traduzido: `admissao` → "Admissão", `troca_antecipada` → "Troca antecipada", etc.
+- Itens: nome, variante, tamanho, quantidade — ou `resumo` como fallback para eventos legados sem `dados.itens`
+- Status de confirmação (apenas entrega com `confirmado=true/false`; legado com `null` omite o badge)
+- Registrado por (rodapé discreto)
+
+**Regras de isolamento:**
+- Não altera o módulo de Uniformes (`modulos/uniformes/index.html`)
+- Não acessa `unif_movimentacoes` — lê apenas `historico_eventos` e `tipos_evento`
+- Somente leitura; nenhum dado é alterado ao abrir a aba
 
 ### EPI (futuro)
 
