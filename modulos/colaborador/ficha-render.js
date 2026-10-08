@@ -18,6 +18,7 @@ function showTab(id, btn) {
   if (id==='ferias')        renderFerias();
   if (id==='desenvolvimento') renderDesenvolvimento();
   if (id==='historico')     renderHistorico();
+  if (id==='uniformes')     renderUniformesEPIs();
 }
 
 /* ── Hero ── */
@@ -690,4 +691,81 @@ function renderHistorico() {
       </div>
     </div>`;
   }).join('')}</div>`;
+}
+
+/* ── Uniformes e EPIs ── */
+function renderUniformesEPIs() {
+  const el = document.getElementById('unifContent');
+
+  const MOTIVO_LABEL = {
+    admissao:         'Admissão',
+    reposicao:        'Reposição',
+    troca_antecipada: 'Troca antecipada',
+    demissao:         'Demissão',
+    devolucao:        'Devolução',
+    kit_completo:     'Kit completo',
+  };
+
+  // Filtra eventos pela categoria 'uniforme' usando _tiposEvento já carregado
+  const eventos = _historicoEventos.filter(ev => {
+    const meta = _tiposEvento[ev.tipo];
+    return meta && meta.categoria === 'uniforme';
+  });
+
+  if (!eventos.length) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--text-sec,#667085);padding:8px 0;">Nenhuma entrega ou devolução registrada.</p>';
+    return;
+  }
+
+  // Já chegam ordenados por data_evento DESC (ficha-data busca com order=data_evento.desc)
+  el.innerHTML = eventos.map(ev => {
+    const dados     = ev.dados || {};
+    const tipoMov   = ev.tipo === 'devolucao_uniforme' ? 'devolucao' : 'entrega';
+    const motivo    = dados.motivo || '';
+    const itens     = Array.isArray(dados.itens) ? dados.itens : [];
+    const confirmado = dados.confirmado;
+
+    const badgeColor  = tipoMov === 'devolucao' ? '#C4320A' : '#1570EF';
+    const badgeBg     = tipoMov === 'devolucao' ? '#FFF4ED' : '#EFF8FF';
+    const badgeLabel  = tipoMov === 'devolucao' ? '↩ Devolução' : '↓ Entrega';
+    const motivoLabel = MOTIVO_LABEL[motivo] || motivo || '—';
+
+    let statusHtml = '';
+    if (tipoMov === 'entrega') {
+      if (confirmado === true)
+        statusHtml = `<span style="font-size:10px;background:#ECFDF3;color:#027A48;padding:2px 7px;border-radius:20px;font-weight:600;flex-shrink:0;">✓ Confirmada</span>`;
+      else if (confirmado === false)
+        statusHtml = `<span style="font-size:10px;background:#FFF4ED;color:#B54708;padding:2px 7px;border-radius:20px;font-weight:600;flex-shrink:0;">Pendente confirmação</span>`;
+    }
+
+    const itensHtml = itens.length
+      ? itens.map(it => {
+          const nome     = it.nome    || it.item_id || '—';
+          const variante = it.variante ? ` · ${it.variante}` : '';
+          const tamanho  = it.tamanho  ? ` · ${it.tamanho}`  : '';
+          const qty      = it.quantidade || 1;
+          return `<div style="display:flex;align-items:baseline;gap:6px;font-size:12px;padding:2px 0;">
+            <span style="font-weight:600;color:var(--text,#101828);">${nome}</span>
+            <span style="color:var(--text-sec,#667085);">${variante}${tamanho}</span>
+            <span style="font-size:11px;font-weight:700;color:var(--text-sec,#667085);background:var(--bg,#F9FAFB);border-radius:4px;padding:1px 5px;">×${qty}</span>
+          </div>`;
+        }).join('')
+      : `<div style="font-size:12px;color:var(--text-sec,#667085);">${ev.resumo || '—'}</div>`;
+
+    const registrado = ev.registrado_por
+      ? `<div style="font-size:11px;color:var(--text-ter,#98A2B3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border,#E4E7EC);">Registrado por ${ev.registrado_por}</div>`
+      : '';
+
+    return `
+    <div style="border:1px solid var(--border,#E4E7EC);border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:20px;background:${badgeBg};color:${badgeColor};flex-shrink:0;">${badgeLabel}</span>
+        <span style="font-size:11px;color:var(--text-sec,#667085);">${motivoLabel}</span>
+        ${statusHtml}
+        <span style="font-size:11px;color:var(--text-sec,#667085);margin-left:auto;">${fd(ev.data_evento)}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;">${itensHtml}</div>
+      ${registrado}
+    </div>`;
+  }).join('');
 }
