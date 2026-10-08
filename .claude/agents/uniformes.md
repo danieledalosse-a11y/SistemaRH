@@ -332,27 +332,46 @@ A aba "Uniformes e EPIs" na Ficha do RH filtra por `categoria = 'uniforme'` — 
 
 ---
 
-## Aba "Uniformes e EPIs" — Ficha Completa do Cadastro (out/2026)
+## Aba "Uniformes e EPIs" — dois pontos de acesso (out/2026)
 
-Visão histórica de entregas e devoluções por colaborador, implementada em `modulos/cadastro/index.html`.
+A aba existe em **dois lugares** e deve ser mantida em ambos:
 
-**Fonte de dados:** `historico_eventos` filtrado por `tipo IN (SELECT codigo FROM tipos_evento WHERE categoria = 'uniforme' AND ativo = true)`.
+### 1. Drawer do Cadastro — `modulos/cadastro/index.html`
 
-**Sem lista hardcoded:** os tipos válidos são consultados dinamicamente a cada abertura da aba via `_getCodigosUniforme()`. Para adicionar um novo tipo (ex: EPI específico), basta INSERT em `tipos_evento` com `categoria = 'uniforme'` — nenhuma alteração de frontend ou schema necessária.
+Acessada pelo RH ao abrir a ficha de um colaborador na lista do Cadastro.
 
+**Fonte de dados:** busca `historico_eventos` + `tipos_evento` a cada abertura (sem cache):
+```js
+async function _getCodigosUniforme() {
+  const rows = await sbGet('tipos_evento', 'categoria=eq.uniforme&select=codigo&ativo=eq.true');
+  return rows.map(r => r.codigo).join(',');
+}
+```
 **Função JS:** `renderUniformesEPIs()` — chamada em `setDrawerTab('uniformes')`.
 
-**O que exibe por evento:**
+### 2. Ficha Completa standalone — `modulos/colaborador/ficha-render.js`
+
+Acessada via link direto `modulos/colaborador/index.html?id=...` (botão "Ver ficha completa" ou link direto).
+
+**Fonte de dados:** filtra `_historicoEventos` (já carregado no `init()`) por `categoria = 'uniforme'` via `_tiposEvento` — **sem chamada extra ao banco**:
+```js
+const eventos = _historicoEventos.filter(ev => {
+  const meta = _tiposEvento[ev.tipo];
+  return meta && meta.categoria === 'uniforme';
+});
+```
+**Função JS:** `renderUniformesEPIs()` — chamada em `showTab('uniformes')`.
+
+### Comportamento comum (ambas as implementações)
+
 - Badge visual: azul para entrega, laranja para devolução
 - Motivo traduzido: `admissao` → "Admissão", `troca_antecipada` → "Troca antecipada", etc.
 - Itens: nome, variante, tamanho, quantidade — ou `resumo` como fallback para eventos legados sem `dados.itens`
 - Status de confirmação (apenas entrega com `confirmado=true/false`; legado com `null` omite o badge)
 - Registrado por (rodapé discreto)
-
-**Regras de isolamento:**
-- Não altera o módulo de Uniformes (`modulos/uniformes/index.html`)
-- Não acessa `unif_movimentacoes` — lê apenas `historico_eventos` e `tipos_evento`
 - Somente leitura; nenhum dado é alterado ao abrir a aba
+- Não acessa `unif_movimentacoes` — lê apenas `historico_eventos` e `tipos_evento`
+- Para adicionar novo tipo (ex: EPI específico): INSERT em `tipos_evento` com `categoria = 'uniforme'` — nenhuma alteração de frontend necessária
 
 ### EPI (futuro)
 
