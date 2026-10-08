@@ -260,49 +260,76 @@ if (cg) cg.style.display = isEpi ? 'none' : '';
 
 ---
 
-## Integração com historico_eventos — Fase D (out/2026)
+## Integração com historico_eventos — RPC unificada (out/2026)
 
-Entregas de uniforme são integradas à timeline unificada do colaborador via `historico_eventos`.
+Todas as entregas e devoluções de uniforme são registradas atomicamente via RPC, com um único evento em `historico_eventos` por operação.
 
-### Arquitetura
-
-- **Unidade de evento:** `(colaborador_id + data_movimentacao + motivo)` = 1 evento. Múltiplas linhas do mesmo grupo são agregadas em `dados.itens[]`.
-- **Sem `processo_id`:** movimentações não passam pelo workflow de `processos_rh`. O campo `processo_id` fica `NULL` em eventos de entrega.
-- **Não altera `unif_movimentacoes`** — leitura pura, sem inserção ou atualização.
-
-### Função `fn_registrar_entrega_uniforme`
+### RPC canônica: `fn_registrar_movimentacao_uniforme`
 
 ```sql
-fn_registrar_entrega_uniforme(
-  p_colaborador_id  BIGINT,
-  p_data            DATE,       -- data_movimentacao
-  p_motivo          TEXT,       -- ex: 'admissao', 'troca_programada'
-  p_usuario         TEXT
+fn_registrar_movimentacao_uniforme(
+  p_colaborador_id   BIGINT,
+  p_almoxarifado_id  UUID,
+  p_tipo             TEXT,    -- 'entrega' | 'devolucao'
+  p_motivo           TEXT,
+  p_data             DATE,
+  p_registrado_por   TEXT,
+  p_itens            JSONB,   -- [{item_id, tamanho, quantidade, ca_numero_lote?}]
+  p_operacao_id      UUID   DEFAULT NULL,
+  p_obs              TEXT   DEFAULT NULL
 ) RETURNS JSONB
 ```
 
-Retorno:
-- `{ ok: true, total_itens, motivo, data_evento }` — evento criado
-- `{ ok: true, aviso }` — já existia (idempotente)
-- `{ ok: false, erro }` — nenhuma movimentação encontrada ou outro erro
+- **`confirmado` derivado internamente:** `entrega → false`, `devolucao → true`. Não recebe como parâmetro.
+- **Idempotência:** `EXISTS` por `operacao_id` em `unif_movimentacoes`. Retorna `{ok:true, aviso}` sem duplicar.
+- **Atomicidade:** 1 tx — N INSERTs em `unif_movimentacoes` + UPDATE `unif_estoque` (se devolução e não CD) + 1 INSERT `historico_eventos` + 1 INSERT `unif_log`. Rollback total se qualquer etapa falhar.
+- **CD detection:** `unif_almoxarifados.tipo = 'cd'` (não `nome.includes`).
+- **Estoque:** `GREATEST(0, quantidade + sinal * qtd)` — sem estoque negativo.
+- **`tipos_evento`:** lookup por `codigo` obrigatório — RAISE EXCEPTION se não encontrado ou inativo.
 
-**Idempotência:** `EXISTS` por `(colaborador_id, tipo='entrega_uniforme', data_evento, dados->>'motivo')`.
+### `operacao_id` no frontend
 
-### Migrations executadas
+```js
+let _operacaoId = null;
+// gerado em abrirModalEntrega() e abrirModalEntregaKit()
+_operacaoId = crypto.randomUUID();
+```
+
+**Individual:** `p_itens = [{item_id, tamanho, quantidade, ca_numero_lote}]` — array de 1 elemento.
+**Kit:** todos os itens entregues acumulados em array; chamada RPC **uma vez** fora do loop. Itens pendentes (`quantidade: 0`) continuam com `sbPost` direto, fora da transação.
+
+### Histórico por operação
+
+| operacao_id | unif_movimentacoes | historico_eventos |
+|---|---|---|
+| individual | 1 linha | 1 evento |
+| kit N itens | N linhas | 1 evento com `dados.itens[N]` |
+| pendente (qtd=0) | 1 linha | nenhum evento |
+
+### Recovery de registros antigos (operacao_id IS NULL)
+
+`fn_registrar_entrega_uniforme` (Migration 100 + 108-B) agrega linhas históricas (`AND m.operacao_id IS NULL`) em eventos de histórico.
+
+- **Idempotência:** `EXISTS` por `(colaborador_id, tipo, data_evento, dados->>'motivo')`.
+- A 108-B adicionou `AND m.operacao_id IS NULL` ao FOR loop para não agregar registros novos.
+- Recovery pendente (out/2026): RAYSSA KELLE (id=2282, 2026-09-05, admissao, 3 itens) e SANDRA LARANJEIRA (id=1639, 2026-10-05, troca_antecipada, 1 item).
+
+### `tipos_evento` — categoria uniforme (108-E)
+
+`entrega_uniforme` e `devolucao_uniforme` têm `categoria = 'uniforme'` (alterado em 108-E).
+O CHECK constraint de `tipos_evento.categoria` foi expandido para incluir `'uniforme'`.
+A aba "Uniformes e EPIs" na Ficha do RH filtra por `categoria = 'uniforme'` — sem lista hardcoded no frontend.
+
+### Migrations executadas (bloco 108)
 
 | Migration | Conteúdo |
 |---|---|
-| 099 | `tipos_evento` para `entrega_uniforme` (categoria `cadastro`, icone `shirt`, cor `#026AA2`) |
-| 100 | `fn_registrar_entrega_uniforme` — função genérica |
-| 101 | Recovery — 6 grupos históricos de `unif_movimentacoes` → 5 eventos criados, 1 pulado |
+| 108-A | `ADD COLUMN operacao_id UUID` em `unif_movimentacoes` (índice parcial); `ADD COLUMN tipo TEXT DEFAULT 'normal'` em `unif_almoxarifados` |
+| 108-B | `fn_registrar_entrega_uniforme` v2 — `AND m.operacao_id IS NULL` no FOR loop |
+| 108-C | `fn_registrar_movimentacao_uniforme` — RPC canônica unificada |
+| 108-D | `UPDATE unif_almoxarifados SET tipo = 'cd' WHERE nome = 'Almoxarifado CD'` |
+| 108-E | Expande CHECK constraint + `UPDATE tipos_evento SET categoria = 'uniforme'` para tipos de uniforme |
 
 ### EPI (futuro)
 
-`unif_catalogo` já tem campo `ca_numero` para CA (Certificado de Aprovação). Quando EPI for cadastrado com `tipo='epi'`:
-1. Adicionar `tipos_evento 'entrega_epi'` (1 INSERT)
-2. A mesma `fn_registrar_entrega_uniforme` pode ser adaptada com parâmetro `p_tipo_item TEXT` filtrando `catalogo.tipo`
-3. Sem alteração de schema
-
-### Ícone `shirt` no frontend
-
-Adicionado ao mapa `ICONS` em `modulos/colaborador/ficha-render.js` (linha ~656). SVG Feather-style de camiseta.
+Para adicionar tipo EPI: INSERT em `tipos_evento` com `categoria = 'uniforme'`. A aba da Ficha e a RPC já estão preparadas — nenhuma alteração de schema ou frontend necessária.

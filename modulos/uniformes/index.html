@@ -1495,6 +1495,13 @@ async function sbDelete(tabela, filtro) {
     method: 'DELETE', headers: SB_HEADERS,
   });
 }
+async function sbRpc(fn, params) {
+  const r = await _sbFetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST', headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+    body: JSON.stringify(params || {}),
+  });
+  return r.json();
+}
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 let _toastTimer = null;
@@ -2784,6 +2791,7 @@ async function carregarHistoricoColab(colabId) {
 }
 
 // ─── Modal: Registrar Entrega ─────────────────────────────────────────────────
+let _operacaoId = null; // UUID gerado por abrirModalEntrega/abrirModalEntregaKit; garante idempotência no RPC
 
 let _modoEntrega = 'kit'; // 'kit' | 'avulso'
 let _kitCargoSelecionado = ''; // cargo usado na entrega do kit (pode diferir de _colabAtual.cargo)
@@ -2819,6 +2827,7 @@ function onKitCargoChange() {
 
 async function abrirModalEntrega() {
   if (!_colabAtual) return;
+  _operacaoId = crypto.randomUUID();
   await _garantirEstoqueCarregado();
   _popularCamposComuns();
   // abre sempre em Kit — se não houver kit configurado, renderKitEntrega mostra msg
@@ -2828,6 +2837,7 @@ async function abrirModalEntrega() {
 
 async function abrirModalEntregaKit() {
   if (!_colabAtual) return;
+  _operacaoId = crypto.randomUUID();
   await _garantirEstoqueCarregado();
   _popularCamposComuns();
   setModoEntrega('kit');
@@ -3188,8 +3198,8 @@ async function marcarUniformeEntregueNoProcesso(colaboradorId) {
       }),
     });
     toast('✓ Item "Uniforme entregue" marcado automaticamente no Processo de Admissão');
-  } catch(_) {
-    // silencioso — não bloqueia o fluxo principal
+  } catch(e) {
+    toast('Entrega registrada, mas não foi possível marcar no processo de admissão: ' + (e?.message || e), 'aviso');
   }
 }
 
@@ -3232,12 +3242,14 @@ async function salvarEntregaKit() {
     let entregues = 0;
     let pendentes = 0;
     const motivoKit = document.getElementById('eMotivoKit')?.value || 'admissao';
+    const itensEntrega = [];
+
     for (let idx = 0; idx < itensKit.length; idx++) {
       if (_kitItensRemovidosIdx.has(idx)) continue;
       const k = itensKit[idx];
 
       if (_kitItensPendentesIdx.has(idx)) {
-        // grava como "não entregue" com motivo de pendência
+        // grava como "não entregue" com motivo de pendência — fora da operação principal
         const motivo_pend = document.getElementById(`kitPendMotivo-${idx}`)?.value || 'sem_estoque';
         await sbPost('unif_movimentacoes', {
           colaborador_id:    _colabAtual.id,
@@ -3257,24 +3269,31 @@ async function salvarEntregaKit() {
       } else {
         const tamanho = (document.getElementById(`kitTam-${idx}`).value || '').trim();
         const qtd     = parseInt(document.getElementById(`kitQtd-${idx}`).value) || 1;
-        await sbPost('unif_movimentacoes', {
-          colaborador_id:    _colabAtual.id,
-          item_id:           k.item_id,
-          almoxarifado_id:   almoxId,
-          tipo:              'entrega',
-          motivo:            motivoKit,
-          tamanho,
-          quantidade:        qtd,
-          data_movimentacao: data || new Date().toISOString().split('T')[0],
-          confirmado:        false,
-          registrado_por:    registradoPor,
-          obs:               obs || null,
-        });
+        itensEntrega.push({ item_id: k.item_id, tamanho, quantidade: qtd });
         entregues++;
       }
     }
 
-    if (motivoKit === 'admissao') marcarUniformeEntregueNoProcesso(_colabAtual.id);
+    // todos os itens entregues em uma única transação, com um único operacao_id e um único evento
+    if (itensEntrega.length > 0) {
+      const res = await sbRpc('fn_registrar_movimentacao_uniforme', {
+        p_colaborador_id:  _colabAtual.id,
+        p_almoxarifado_id: almoxId,
+        p_tipo:            'entrega',
+        p_motivo:          motivoKit,
+        p_data:            data || new Date().toISOString().split('T')[0],
+        p_registrado_por:  registradoPor,
+        p_itens:           itensEntrega,
+        p_operacao_id:     _operacaoId,
+        p_obs:             obs || null,
+      });
+      if (res && res.ok === false) throw new Error(res.erro || 'Erro ao registrar kit');
+    }
+
+    if (motivoKit === 'admissao') {
+      try { await marcarUniformeEntregueNoProcesso(_colabAtual.id); }
+      catch(e) { toast('Kit salvo, mas não foi possível marcar no processo de admissão: ' + (e?.message || e), 'aviso'); }
+    }
     const partes = [];
     if (entregues) partes.push(`${entregues} ${entregues === 1 ? 'item registrado' : 'itens registrados'}`);
     if (pendentes) partes.push(`${pendentes} ${pendentes === 1 ? 'item pendente' : 'itens pendentes'}`);
@@ -3315,42 +3334,27 @@ async function salvarEntrega() {
   }
 
   const tipoMov = motivo === 'demissao' ? 'devolucao' : 'entrega';
-  // devoluções são confirmadas imediatamente; entregas ficam pendentes até confirmação física
-  const confirmarImediato = tipoMov === 'devolucao';
-
-  const payload = {
-    colaborador_id:    _colabAtual.id,
-    item_id:           itemId,
-    almoxarifado_id:   almoxId,
-    tipo:              tipoMov,
-    motivo,
-    tamanho,
-    quantidade:        qtd,
-    ca_numero_lote:    caLote || null,
-    data_movimentacao: data || new Date().toISOString().split('T')[0],
-    confirmado:        confirmarImediato,
-    registrado_por:    perfil.nome || 'RH',
-    obs:               obsFinal,
-  };
 
   try {
-    await sbPost('unif_movimentacoes', payload);
+    const res = await sbRpc('fn_registrar_movimentacao_uniforme', {
+      p_colaborador_id:  _colabAtual.id,
+      p_almoxarifado_id: almoxId,
+      p_tipo:            tipoMov,
+      p_motivo:          motivo,
+      p_data:            data || new Date().toISOString().split('T')[0],
+      p_registrado_por:  perfil.nome || 'RH',
+      p_itens:           [{ item_id: itemId, tamanho, quantidade: qtd, ca_numero_lote: caLote || null }],
+      p_operacao_id:     _operacaoId,
+      p_obs:             obsFinal,
+    });
+    if (res && res.ok === false) throw new Error(res.erro || 'Erro ao registrar movimentação');
 
-    if (!isCDAlmox(almoxId) && confirmarImediato) {
-      const sinal = tipoMov === 'devolucao' ? 1 : -1;
-      const estoqRows = await sbGet('unif_estoque',
-        `almoxarifado_id=eq.${almoxId}&item_id=eq.${itemId}&tamanho=eq.${encodeURIComponent(tamanho)}&select=id,quantidade`);
-      if (estoqRows.length) {
-        const novaQtd = Math.max(0, (estoqRows[0].quantidade || 0) + sinal * qtd);
-        await sbPatch('unif_estoque', `id=eq.${estoqRows[0].id}`, { quantidade: novaQtd });
-      }
+    if (motivo === 'admissao') {
+      try { await marcarUniformeEntregueNoProcesso(_colabAtual.id); }
+      catch(e) { toast('Entrega registrada, mas não foi possível marcar no processo de admissão: ' + (e?.message || e), 'aviso'); }
     }
 
-    if (motivo === 'admissao') marcarUniformeEntregueNoProcesso(_colabAtual.id);
-    await _logUnif(tipoMov === 'devolucao' ? 'devolucao_registrada' : 'entrega_registrada',
-      'unif_movimentacoes', _colabAtual.id, null,
-      { colaborador_id: _colabAtual.id, item_id: itemId, tamanho, quantidade: qtd, motivo, almoxarifado_id: almoxId });
-    toast(confirmarImediato ? '✓ Devolução registrada' : '✓ Entrega registrada — aguardando confirmação de entrega física');
+    toast(tipoMov === 'devolucao' ? '✓ Devolução registrada' : '✓ Entrega registrada — aguardando confirmação de entrega física');
     fecharModalEntrega();
     carregarHistoricoColab(_colabAtual.id);
   } catch(e) {
@@ -3850,7 +3854,9 @@ async function carregarPendenciasUniforme() {
 // ─── Fluxo CD ────────────────────────────────────────────────────────────────
 function isCDAlmox(almoxId) {
   const a = ALMOXARIFADOS.find(x => x.id === almoxId);
-  return !!(a && a.nome.toUpperCase().includes('CD'));
+  if (!a) return false;
+  // usa campo tipo quando disponível (migration 108-A); fallback ao nome para dados legados
+  return a.tipo === 'cd' || a.nome.toUpperCase().includes('CD');
 }
 
 let _docCDLinhas = [];

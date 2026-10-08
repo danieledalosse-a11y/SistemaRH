@@ -251,6 +251,22 @@
   .hist-data { font-size: 11px; color: var(--text-sec); margin-top: 2px; }
   .hist-vazio { font-size: 12px; color: var(--text-sec); padding: 8px 0; }
 
+  /* Uniformes e EPIs */
+  .unif-card { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+  .unif-card:last-child { margin-bottom: 0; }
+  .unif-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .unif-tipo-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 8px; border-radius: 20px; }
+  .unif-tipo-badge.entrega  { background: #EFF8FF; color: #1570EF; }
+  .unif-tipo-badge.devolucao { background: #FFF4ED; color: #C4320A; }
+  .unif-motivo { font-size: 11px; color: var(--text-sec); }
+  .unif-data   { font-size: 11px; color: var(--text-sec); margin-left: auto; }
+  .unif-itens  { display: flex; flex-direction: column; gap: 5px; }
+  .unif-item-row { display: flex; align-items: baseline; gap: 6px; font-size: 12px; }
+  .unif-item-nome  { font-weight: 600; color: var(--text); }
+  .unif-item-det   { color: var(--text-sec); }
+  .unif-item-qty   { font-size: 11px; font-weight: 700; color: var(--text-sec); background: var(--bg); border-radius: 4px; padding: 1px 5px; }
+  .unif-registrado { font-size: 11px; color: var(--text-ter); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+
   .toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; z-index: 200; opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; }
   .toast.show { opacity: 1; transform: translateY(0); }
   .toast.erro  { background: #B42318; }
@@ -670,6 +686,7 @@
     <button class="drawer-tab" onclick="setDrawerTab('beneficios', this)"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>Benefícios</button>
     <button class="drawer-tab" onclick="setDrawerTab('arquivos', this)"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Arquivos</button>
     <button class="drawer-tab" onclick="setDrawerTab('historico', this)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Histórico</button>
+    <button class="drawer-tab" onclick="setDrawerTab('uniformes', this)"><svg viewBox="0 0 24 24"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg>Uniformes e EPIs</button>
   </div>
   <div class="drawer-body">
 
@@ -1228,6 +1245,16 @@
       <div class="drawer-section">
         <div class="drawer-section-title">Movimentações registradas</div>
         <div id="historicoList"></div>
+      </div>
+    </div>
+
+    <div id="tab-uniformes" style="display:none;">
+      <div class="drawer-section">
+        <div class="drawer-section-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg>
+          Entregas e devoluções
+        </div>
+        <div id="uniformesList"></div>
       </div>
     </div>
 
@@ -3342,12 +3369,13 @@ function fecharFicha() {
 }
 
 function setDrawerTab(nome, btn) {
-  ['geral','contato','documentos','arquivos','familia','remuneracao','beneficios','historico'].forEach(t => {
+  ['geral','contato','documentos','arquivos','familia','remuneracao','beneficios','historico','uniformes'].forEach(t => {
     document.getElementById('tab-' + t).style.display = t === nome ? 'block' : 'none';
   });
   document.querySelectorAll('.drawer-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (nome === 'historico') renderHistoricoFicha();
+  if (nome === 'uniformes') renderUniformesEPIs();
   if (nome === 'contato') setTimeout(atualizarMapa, 100);
   if (nome === 'arquivos') { const c = _fichaIdx !== null ? COLABORADORES[_fichaIdx] : null; if (c?._sbId) loadDocsPasta(c._sbId); }
 }
@@ -4048,6 +4076,111 @@ function renderHistoricoFicha() {
       </div>
     </div>`;
   }).join('');
+}
+
+// ─── Uniformes e EPIs ────────────────────────────────────────────────────────
+
+async function renderUniformesEPIs() {
+  if (_fichaIdx === null) return;
+  const c = COLABORADORES[_fichaIdx];
+  const el = document.getElementById('uniformesList');
+  if (!c?._sbId) { el.innerHTML = '<p class="hist-vazio">Colaborador sem ID cadastrado.</p>'; return; }
+
+  el.innerHTML = '<p class="hist-vazio">Carregando...</p>';
+
+  try {
+    // Busca eventos de uniforme via categoria (sem lista hardcoded de tipos)
+    const eventos = await sbGet(
+      'historico_eventos',
+      `colaborador_id=eq.${c._sbId}` +
+      `&tipo=in.(${await _getCodigosUniforme()})` +
+      `&order=data_evento.desc,id.desc` +
+      `&select=id,tipo,titulo,data_evento,resumo,dados,registrado_por`
+    );
+
+    if (!eventos.length) {
+      el.innerHTML = '<p class="hist-vazio">Nenhuma entrega ou devolução registrada.</p>';
+      return;
+    }
+
+    const MOTIVO_LABEL = {
+      admissao:          'Admissão',
+      reposicao:         'Reposição',
+      troca_antecipada:  'Troca antecipada',
+      demissao:          'Demissão',
+      devolucao:         'Devolução',
+      kit_completo:      'Kit completo',
+    };
+
+    const fmtData = d => {
+      if (!d) return '—';
+      const [y, m, day] = d.split('-');
+      return `${day}/${m}/${y}`;
+    };
+
+    el.innerHTML = eventos.map(ev => {
+      const dados   = ev.dados || {};
+      const tipoMov = ev.tipo === 'devolucao_uniforme' ? 'devolucao' : 'entrega';
+      const motivo  = dados.motivo || '';
+      const itens   = Array.isArray(dados.itens) ? dados.itens : [];
+      const confirmado = dados.confirmado;
+
+      const badgeClass = tipoMov === 'devolucao' ? 'devolucao' : 'entrega';
+      const badgeLabel = tipoMov === 'devolucao' ? '↩ Devolução' : '↓ Entrega';
+      const motivoLabel = MOTIVO_LABEL[motivo] || motivo || '—';
+
+      // Status: devolução já é confirmada; entrega pode ter confirmado=true/false/null (legado)
+      let statusHtml = '';
+      if (tipoMov === 'entrega') {
+        if (confirmado === true) {
+          statusHtml = `<span style="font-size:10px;background:#ECFDF3;color:#027A48;padding:2px 7px;border-radius:20px;font-weight:600;">✓ Confirmada</span>`;
+        } else if (confirmado === false) {
+          statusHtml = `<span style="font-size:10px;background:#FFF4ED;color:#B54708;padding:2px 7px;border-radius:20px;font-weight:600;">Pendente confirmação</span>`;
+        }
+        // confirmado null/undefined = registro legado, omite status
+      }
+
+      const itensHtml = itens.length
+        ? itens.map(it => {
+            const nome     = it.nome    || it.item_id || '—';
+            const variante = it.variante ? ` · ${it.variante}` : '';
+            const tamanho  = it.tamanho  ? ` · ${it.tamanho}` : '';
+            const qty      = it.quantidade || 1;
+            return `<div class="unif-item-row">
+              <span class="unif-item-nome">${nome}</span>
+              <span class="unif-item-det">${variante}${tamanho}</span>
+              <span class="unif-item-qty">×${qty}</span>
+            </div>`;
+          }).join('')
+        : `<div class="unif-item-row"><span class="unif-item-det">${ev.resumo || '—'}</span></div>`;
+
+      const registrado = ev.registrado_por
+        ? `<div class="unif-registrado">Registrado por ${ev.registrado_por}</div>`
+        : '';
+
+      return `
+      <div class="unif-card">
+        <div class="unif-card-header">
+          <span class="unif-tipo-badge ${badgeClass}">${badgeLabel}</span>
+          <span class="unif-motivo">${motivoLabel}</span>
+          ${statusHtml}
+          <span class="unif-data">${fmtData(ev.data_evento)}</span>
+        </div>
+        <div class="unif-itens">${itensHtml}</div>
+        ${registrado}
+      </div>`;
+    }).join('');
+
+  } catch (err) {
+    el.innerHTML = `<p class="hist-vazio">Erro ao carregar: ${err.message}</p>`;
+  }
+}
+
+// Retorna os códigos de tipos_evento cuja categoria = 'uniforme', como string para IN()
+// Sem cache permanente: busca a cada abertura da aba para refletir novos tipos sem reload.
+async function _getCodigosUniforme() {
+  const rows = await sbGet('tipos_evento', 'categoria=eq.uniforme&select=codigo&ativo=eq.true');
+  return rows.map(r => r.codigo).join(',');
 }
 
 // ─── CEP ─────────────────────────────────────────────────────────────────────
