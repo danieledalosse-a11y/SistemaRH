@@ -145,16 +145,20 @@
 
   /* Modal "Ver todos" */
   .hd-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 900; display: flex; align-items: center; justify-content: center; }
-  .hd-modal { background: var(--surface); border-radius: 16px; padding: 24px; width: 420px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 8px 32px rgba(0,0,0,.18); }
-  .hd-modal-hd { display: flex; align-items: center; justify-content: space-between; }
+  .hd-modal { background: var(--surface); border-radius: 16px; padding: 24px; width: 440px; max-width: 92vw; max-height: 78vh; display: flex; flex-direction: column; gap: 0; box-shadow: 0 12px 40px rgba(0,0,0,.2); }
+  .hd-modal-hd { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
   .hd-modal-title { font-size: 15px; font-weight: 700; color: var(--text); }
-  .hd-modal-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--text-ter); line-height: 1; padding: 0; }
-  .hd-modal-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-  .hd-modal-row { display: flex; align-items: center; gap: 12px; }
-  .hd-modal-av { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; background-size: cover; background-position: center; }
-  .hd-modal-info { display: flex; flex-direction: column; gap: 1px; }
-  .hd-modal-nome { font-size: 13px; font-weight: 600; color: var(--text); }
-  .hd-modal-detalhe { font-size: 12px; color: var(--text-ter); }
+  .hd-modal-subtitle { font-size: 12px; color: var(--text-ter); font-weight: 400; }
+  .hd-modal-close { background: none; border: none; cursor: pointer; font-size: 22px; color: var(--text-ter); line-height: 1; padding: 0; }
+  .hd-modal-close:hover { color: var(--text); }
+  .hd-modal-list { overflow-y: auto; display: flex; flex-direction: column; }
+  .hd-modal-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .hd-modal-row:last-child { border-bottom: none; }
+  .hd-modal-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .hd-modal-nome { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hd-modal-cargo { font-size: 11px; color: var(--text-sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hd-modal-data { font-size: 11px; font-weight: 500; }
+  .hd-modal-av { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; font-size: 13px; font-weight: 700; }
 
   /* Férias — stats com número + avatares */
   .hd-ferias-inner { display: flex; align-items: flex-start; gap: 14px; }
@@ -697,24 +701,35 @@ function _renderEventos(team, hoje) {
     </div>`;
   }
 
-  // Modal "Ver todos"
-  function _openModal(titulo, rows) {
+  // Modal "Ver todos" — exibe registros além dos 5 visíveis no card
+  // rows: [{ nome, foto_url, cargo, setor, detalhe, corData }]
+  function _openModal(titulo, subtitulo, rows) {
     const existing = document.getElementById('hd-modal-overlay');
     if (existing) existing.remove();
     const overlay = document.createElement('div');
     overlay.id = 'hd-modal-overlay';
     overlay.className = 'hd-modal-overlay';
+    const rowsHtml = rows.map(r => {
+      const avEl = _avHtml(r.nome, r.foto_url, 'hd-modal-av');
+      const cargoSetor = [r.cargo, r.setor].filter(Boolean).join(' · ');
+      return `<div class="hd-modal-row">
+        ${avEl}
+        <div class="hd-modal-info">
+          <div class="hd-modal-nome">${r.nome}</div>
+          ${cargoSetor ? `<div class="hd-modal-cargo">${cargoSetor}</div>` : ''}
+          <div class="hd-modal-data" style="color:${r.corData||'var(--text-ter)'}">${r.detalhe}</div>
+        </div>
+      </div>`;
+    }).join('');
     overlay.innerHTML = `<div class="hd-modal">
       <div class="hd-modal-hd">
-        <span class="hd-modal-title">${titulo}</span>
+        <div>
+          <div class="hd-modal-title">${titulo}</div>
+          ${subtitulo ? `<div class="hd-modal-subtitle">${subtitulo}</div>` : ''}
+        </div>
         <button class="hd-modal-close" id="hd-modal-close-btn">×</button>
       </div>
-      <div class="hd-modal-list">${rows.map(r => {
-        const av = r.foto && r.foto.startsWith('http')
-          ? `<div class="hd-modal-av" style="background:#e5e7eb;background-image:url('${r.foto}');"></div>`
-          : `<div class="hd-modal-av" style="background:${_avColor(r.nome)}">${_initials(r.nome)}</div>`;
-        return `<div class="hd-modal-row">${av}<div class="hd-modal-info"><div class="hd-modal-nome">${r.nome}</div><div class="hd-modal-detalhe">${r.detalhe}</div></div></div>`;
-      }).join('')}</div>
+      <div class="hd-modal-list">${rowsHtml}</div>
     </div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -734,12 +749,17 @@ function _renderEventos(team, hoje) {
         const ring = isToday ? 'ring-today' : '';
         return _personColHtml(c.nome, c.foto_url, infoHtml, ring);
       }).join('') + `</div>`;
-    if (anivs.length > 0) {
+    if (anivs.length > 5) {
       btnAniv.style.display = '';
-      btnAniv.onclick = () => _openModal('Próximos aniversários', anivs.map(({ c, day, mon, diff }) => ({
-        nome: c.nome, foto: c.foto_url,
-        detalhe: diff <= 0 ? `Hoje! (${day} ${mon})` : `${day} ${mon}`
-      })));
+      btnAniv.onclick = () => _openModal(
+        'Próximos aniversários',
+        `${anivs.length - 5} além dos exibidos`,
+        anivs.slice(5).map(({ c, day, mon, diff }) => ({
+          nome: c.nome, foto_url: c.foto_url, cargo: c.cargo, setor: c.setor,
+          detalhe: diff <= 0 ? `Hoje! · ${day} ${mon}` : `${day} ${mon}`,
+          corData: diff <= 0 ? 'var(--amber)' : 'var(--text-ter)'
+        }))
+      );
     }
   } else {
     elAniv.innerHTML = '<div class="hd-empty">Nenhum aniversário nos próximos 30 dias</div>';
@@ -755,12 +775,17 @@ function _renderEventos(team, hoje) {
         const ring = i === 0 ? 'ring-top' : '';
         return _personColHtml(c.nome, c.foto_url, infoHtml, ring);
       }).join('') + `</div>`;
-    if (casas.length > 0) {
+    if (casas.length > 5) {
       btnCasa.style.display = '';
-      btnCasa.onclick = () => _openModal('Tempo de Casa', casas.map(({ c, anos, day, mon }) => ({
-        nome: c.nome, foto: c.foto_url,
-        detalhe: `${anos} ano${anos>1?'s':''} · ${day} ${mon}`
-      })));
+      btnCasa.onclick = () => _openModal(
+        'Tempo de Casa',
+        `${casas.length - 5} além dos exibidos`,
+        casas.slice(5).map(({ c, anos, day, mon }) => ({
+          nome: c.nome, foto_url: c.foto_url, cargo: c.cargo, setor: c.setor,
+          detalhe: `${anos} ano${anos>1?'s':''} · ${day} ${mon}`,
+          corData: 'var(--green)'
+        }))
+      );
     }
   } else {
     elCasa.innerHTML = '<div class="hd-empty">Nenhum tempo de casa nos próximos 30 dias</div>';
