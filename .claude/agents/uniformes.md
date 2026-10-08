@@ -77,8 +77,26 @@ let _ajusteTamanho    = null;  // tamanho (para uso futuro)
 | `23503` | "Referência inválida — verifique os dados selecionados." (FK violation) |
 | `23505` | "Registro duplicado — este item já existe." (unique violation) |
 | `42501` | "Sem permissão para esta operação." |
+| JWT expired / `PGRST303` | "Sessão expirada. Recarregue a página." |
+| Qualquer outro código | Exibe `body.message` diretamente (corrigido out/2026 — antes retornava sempre o genérico) |
 
-Quando o erro não bate em nenhum código, retorna: `"Erro ao salvar. Verifique os campos e tente novamente."`
+Quando o erro não tem código nem mensagem parseable, retorna: `"Erro ao salvar. Verifique os campos e tente novamente."`
+
+**Fix out/2026 — commit `b16fd69`:** adicionado `if (msg) return msg;` antes do fallback, para que erros com código desconhecido (ex: `P0001` de RAISE EXCEPTION no RPC) exibam a mensagem real ao usuário.
+
+## `salvarEntregaKit` — tratamento de erro do RPC (out/2026)
+
+**Commit `b16fd69`:** corrigido o tratamento de `res.ok === false` na linha 3290.
+
+```js
+// ANTES (errado — lançava Error com string simples que _erroApi não parseava):
+if (res && res.ok === false) throw new Error(res.erro || 'Erro ao registrar kit');
+
+// DEPOIS (correto — exibe o erro direto e retorna):
+if (res && res.ok === false) { toast(res.erro || 'Erro ao registrar kit', 'erro'); return; }
+```
+
+O `catch` também ganhou `console.error('[salvarEntregaKit]', e)` para diagnóstico.
 
 ## Exclusão de entrada com motivo (`excluirEntrada`) — 2026-09-16
 
@@ -329,6 +347,7 @@ A aba "Uniformes e EPIs" na Ficha do RH filtra por `categoria = 'uniforme'` — 
 | 108-C | `fn_registrar_movimentacao_uniforme` — RPC canônica unificada |
 | 108-D | `UPDATE unif_almoxarifados SET tipo = 'cd' WHERE nome = 'Almoxarifado CD'` |
 | 108-E | Expande CHECK constraint + `UPDATE tipos_evento SET categoria = 'uniforme'` para tipos de uniforme |
+| 110 | **Bug fix:** `origem = 'uniforme'` → `'sistema'` no INSERT de `historico_eventos` dentro de `fn_registrar_movimentacao_uniforme`. A constraint `historico_eventos_origem_check` aceita apenas `'sistema'`, `'legado'`, `'manual'` — o valor `'uniforme'` violava a constraint e impedia qualquer "Registrar kit". Identificação do evento continua por `tipo` e `ref_tabela`, não por `origem`. |
 
 ---
 
