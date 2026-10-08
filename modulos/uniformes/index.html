@@ -1528,6 +1528,7 @@ function _erroApi(e) {
     if (code === '23505') return 'Registro duplicado — este item já existe.';
     if (code === '42501') return 'Sem permissão para esta operação.';
     if (msg.includes('JWT expired') || code === 'PGRST303') return 'Sessão expirada. Recarregue a página.';
+    if (msg) return msg;
   } catch (_) {}
   return 'Erro ao salvar. Verifique os campos e tente novamente.';
 }
@@ -3287,7 +3288,7 @@ async function salvarEntregaKit() {
         p_operacao_id:     _operacaoId,
         p_obs:             obs || null,
       });
-      if (res && res.ok === false) throw new Error(res.erro || 'Erro ao registrar kit');
+      if (res && res.ok === false) { toast(res.erro || 'Erro ao registrar kit', 'erro'); return; }
     }
 
     if (motivoKit === 'admissao') {
@@ -3301,6 +3302,7 @@ async function salvarEntregaKit() {
     fecharModalEntrega();
     carregarHistoricoColab(_colabAtual.id);
   } catch(e) {
+    console.error('[salvarEntregaKit]', e);
     toast(_erroApi(e), 'erro');
   } finally {
     btn.disabled = false;
