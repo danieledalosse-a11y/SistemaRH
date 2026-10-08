@@ -531,15 +531,23 @@ async function renderHomeGestor(p) {
   _renderModules(p);
 
   // Foto do gestor — colaborador_id vem de sb_perfil (usuarios_perfil), fonte canônica
+  console.log('[FOTO] p.colaborador_id=', p.colaborador_id, 'tipo=', typeof p.colaborador_id);
   if (p.colaborador_id) {
     const gc = await _hdGet('colaboradores', `id=eq.${p.colaborador_id}&select=foto_url`);
+    console.log('[FOTO] gc=', JSON.stringify(gc));
     if (gc.length && gc[0].foto_url) {
       gestorAv.textContent = '';
       gestorAv.style.background = '#e5e7eb';
       gestorAv.style.backgroundImage = `url('${gc[0].foto_url}')`;
       gestorAv.style.backgroundSize = 'cover';
       gestorAv.style.backgroundPosition = 'center';
+      console.log('[FOTO] aplicado. outerHTML=', gestorAv.outerHTML.substring(0, 200));
+      console.log('[FOTO] computed backgroundImage=', getComputedStyle(gestorAv).backgroundImage);
+    } else {
+      console.log('[FOTO] foto_url ausente ou gc vazio');
     }
+  } else {
+    console.log('[FOTO] p.colaborador_id falsy — bloco ignorado');
   }
 
   // Busca apelido em param_gestor
