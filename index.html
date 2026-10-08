@@ -530,26 +530,25 @@ async function renderHomeGestor(p) {
   // Módulos (renderiza imediatamente com dados locais)
   _renderModules(p);
 
-  // Busca apelido e colaborador_id em param_gestor
+  // Foto do gestor — colaborador_id vem de sb_perfil (usuarios_perfil), fonte canônica
+  if (p.colaborador_id) {
+    const gc = await _hdGet('colaboradores', `id=eq.${p.colaborador_id}&select=foto_url`);
+    if (gc.length && gc[0].foto_url) {
+      gestorAv.textContent = '';
+      gestorAv.style.background = '#e5e7eb';
+      gestorAv.style.backgroundImage = `url('${gc[0].foto_url}')`;
+      gestorAv.style.backgroundSize = 'cover';
+      gestorAv.style.backgroundPosition = 'center';
+    }
+  }
+
+  // Busca apelido em param_gestor
   const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
   const uid  = _jwtSub(sess.access_token || '');
   let apelido = null;
   if (uid) {
-    const pg = await _hdGet('param_gestor', `gestor_id=eq.${uid}&select=apelido,colaborador_id`);
-    if (pg.length) {
-      apelido = pg[0].apelido;
-      // Atualiza avatar com foto real se o gestor tiver colaborador_id vinculado
-      if (pg[0].colaborador_id) {
-        const gc = await _hdGet('colaboradores', `id=eq.${pg[0].colaborador_id}&select=foto_url`);
-        if (gc.length && gc[0].foto_url) {
-          gestorAv.textContent = '';
-          gestorAv.style.background = '#e5e7eb';
-          gestorAv.style.backgroundImage = `url('${gc[0].foto_url}')`;
-          gestorAv.style.backgroundSize = 'cover';
-          gestorAv.style.backgroundPosition = 'center';
-        }
-      }
-    }
+    const pg = await _hdGet('param_gestor', `gestor_id=eq.${uid}&select=apelido`);
+    if (pg.length) apelido = pg[0].apelido;
   }
   if (!apelido) apelido = primeiroNome;
 
