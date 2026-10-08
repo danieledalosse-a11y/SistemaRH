@@ -411,8 +411,10 @@ if (!localStorage.getItem('sb_session')) { window.location.href = 'login.html'; 
   } catch(_) {}
 })();
 
-// Constante de cores para avatares — declarada antes da IIFE para evitar TDZ
+// Constantes declaradas antes da IIFE para evitar TDZ
 const _AV_COLORS = ['#1849A9','#027A48','#5925DC','#B45309','#C11574','#026AA2','#2D6A4F'];
+const _HD_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const _HD_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
 
 // ── 2. UI e RBAC (nunca redireciona — erros aqui não são falha de auth) ──
 (function() {
@@ -465,9 +467,6 @@ function logout() {
 }
 
 // ── Home Dashboard ──────────────────────────────────────────────────────────
-const _HD_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
-const _HD_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
-
 function _hdHeaders() {
   const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
   return { 'apikey': _HD_KEY, 'Authorization': 'Bearer ' + (sess.access_token || _HD_KEY) };
@@ -531,25 +530,15 @@ async function renderHomeGestor(p) {
   _renderModules(p);
 
   // Foto do gestor — colaborador_id vem de sb_perfil (usuarios_perfil), fonte canônica
-  console.log('[FOTO] p.colaborador_id=', p.colaborador_id, 'tipo=', typeof p.colaborador_id);
   if (p.colaborador_id) {
-    const _fotoR = await fetch(`${_HD_URL}/rest/v1/colaboradores?id=eq.${p.colaborador_id}&select=foto_url`, { headers: _hdHeaders() });
-    console.log('[FOTO] status=', _fotoR.status, 'ok=', _fotoR.ok);
-    const gc = _fotoR.ok ? await _fotoR.json() : [];
-    console.log('[FOTO] gc=', JSON.stringify(gc));
+    const gc = await _hdGet('colaboradores', `id=eq.${p.colaborador_id}&select=foto_url`);
     if (gc.length && gc[0].foto_url) {
       gestorAv.textContent = '';
       gestorAv.style.background = '#e5e7eb';
       gestorAv.style.backgroundImage = `url('${gc[0].foto_url}')`;
       gestorAv.style.backgroundSize = 'cover';
       gestorAv.style.backgroundPosition = 'center';
-      console.log('[FOTO] aplicado. outerHTML=', gestorAv.outerHTML.substring(0, 200));
-      console.log('[FOTO] computed backgroundImage=', getComputedStyle(gestorAv).backgroundImage);
-    } else {
-      console.log('[FOTO] foto_url ausente ou gc vazio');
     }
-  } else {
-    console.log('[FOTO] p.colaborador_id falsy — bloco ignorado');
   }
 
   // Busca apelido em param_gestor
