@@ -414,6 +414,9 @@ if (!localStorage.getItem('sb_session')) { window.location.href = 'login.html'; 
   } catch(_) {}
 })();
 
+// Constante de cores para avatares — declarada antes da IIFE para evitar TDZ
+const _AV_COLORS = ['#1849A9','#027A48','#5925DC','#B45309','#C11574','#026AA2','#2D6A4F'];
+
 // ── 2. UI e RBAC (nunca redireciona — erros aqui não são falha de auth) ──
 (function() {
   try {
@@ -484,7 +487,6 @@ function _jwtSub(token) {
 }
 
 // Helpers de avatar
-const _AV_COLORS = ['#1849A9','#027A48','#5925DC','#B45309','#C11574','#026AA2','#2D6A4F'];
 function _avColor(name) {
   let h = 0;
   for (let i = 0; i < (name||'').length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xFFFF;
@@ -529,7 +531,7 @@ async function renderHomeGestor(p) {
   gestorAv.textContent = _initials(nome);
 
   // Módulos (renderiza imediatamente com dados locais)
-  try { _renderModules(p); } catch(e) { console.error('[_renderModules]', e); }
+  _renderModules(p);
 
   // Busca apelido em param_gestor
   const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
@@ -587,9 +589,9 @@ async function renderHomeGestor(p) {
     return ini <= hoje && fim >= hoje;
   });
 
-  try { _renderEventos(team, hoje); } catch(e) { console.error('[_renderEventos]', e); }
-  try { _renderFerias(feriasData, emGozo, hoje); } catch(e) { console.error('[_renderFerias]', e); }
-  try { _renderAtividades(eventsData, colabMap, hoje); } catch(e) { console.error('[_renderAtividades]', e); }
+  _renderEventos(team, hoje);
+  _renderFerias(feriasData, emGozo, hoje);
+  _renderAtividades(eventsData, colabMap, hoje);
 }
 
 function _renderModules(p) {
