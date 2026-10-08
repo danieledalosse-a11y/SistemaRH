@@ -126,7 +126,8 @@
   .hd-card-icon svg { width: 17px; height: 17px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .hd-card-icon.cake  { background: var(--amber-bg); } .hd-card-icon.cake  svg { stroke: var(--amber); }
   .hd-card-icon.clock { background: var(--green-bg); } .hd-card-icon.clock svg { stroke: var(--green); }
-  .hd-count-tag { font-size: 11px; font-weight: 500; color: var(--text-ter); }
+  .hd-ver-todos { font-size: 11px; font-weight: 500; color: var(--blue); cursor: pointer; white-space: nowrap; background: none; border: none; padding: 0; text-decoration: none; }
+  .hd-ver-todos:hover { text-decoration: underline; }
 
   /* Pessoa — apresentação horizontal (avatar + nome + data em coluna) */
   .hd-person-grid { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
@@ -139,8 +140,21 @@
   .hd-person-badge { position: absolute; bottom: -1px; right: -1px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 9px; }
   .hd-person-name-sm { font-size: 10px; font-weight: 600; color: var(--text); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 76px; }
   .hd-person-date-sm { font-size: 11px; color: var(--text-ter); text-align: center; }
-  .hd-today-pill { font-size: 9px; font-weight: 700; background: var(--amber-bg); color: var(--amber); border-radius: 20px; padding: 1px 7px; white-space: nowrap; }
-  .hd-years-pill { font-size: 9px; font-weight: 700; background: var(--green-bg); color: var(--green); border-radius: 20px; padding: 1px 7px; white-space: nowrap; }
+  .hd-today-pill { font-size: 10px; font-weight: 700; color: var(--amber); white-space: nowrap; }
+  .hd-years-text { font-size: 11px; font-weight: 600; color: var(--green); white-space: nowrap; }
+
+  /* Modal "Ver todos" */
+  .hd-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 900; display: flex; align-items: center; justify-content: center; }
+  .hd-modal { background: var(--surface); border-radius: 16px; padding: 24px; width: 420px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 8px 32px rgba(0,0,0,.18); }
+  .hd-modal-hd { display: flex; align-items: center; justify-content: space-between; }
+  .hd-modal-title { font-size: 15px; font-weight: 700; color: var(--text); }
+  .hd-modal-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--text-ter); line-height: 1; padding: 0; }
+  .hd-modal-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .hd-modal-row { display: flex; align-items: center; gap: 12px; }
+  .hd-modal-av { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; background-size: cover; background-position: center; }
+  .hd-modal-info { display: flex; flex-direction: column; gap: 1px; }
+  .hd-modal-nome { font-size: 13px; font-weight: 600; color: var(--text); }
+  .hd-modal-detalhe { font-size: 12px; color: var(--text-ter); }
 
   /* Férias — stats com número + avatares */
   .hd-ferias-inner { display: flex; align-items: flex-start; gap: 14px; }
@@ -371,7 +385,7 @@
             </div>
             Próximos aniversários
           </span>
-          <span class="hd-count-tag" id="hd-aniv-count"></span>
+          <button class="hd-ver-todos" id="hd-aniv-vertodos" style="display:none">Ver todos →</button>
         </div>
         <div id="hd-aniv-list"><div class="hd-empty">Carregando…</div></div>
       </div>
@@ -383,7 +397,7 @@
             </div>
             Tempo de Casa
           </span>
-          <span class="hd-count-tag" id="hd-casa-count"></span>
+          <button class="hd-ver-todos" id="hd-casa-vertodos" style="display:none">Ver todos →</button>
         </div>
         <div id="hd-casa-list"><div class="hd-empty">Carregando…</div></div>
       </div>
@@ -670,11 +684,8 @@ function _renderEventos(team, hoje) {
     return `<span class="hd-ev-badge soon">${d} dia${d>1?'s':''}</span>`;
   };
 
-  document.getElementById('hd-aniv-count').textContent = anivs.length ? `${anivs.length} este mês` : '';
-  document.getElementById('hd-casa-count').textContent = casas.length ? `${casas.length} este mês` : '';
-
-  // Apresentação horizontal: avatar + nome + data/pill em coluna
-  function _personColHtml(nome, fotoUrl, dateLabel, pillHtml, ringClass) {
+  // Apresentação horizontal: avatar + nome + info em coluna
+  function _personColHtml(nome, fotoUrl, infoHtml, ringClass) {
     const primeiroNome = nome.split(' ').slice(0,2).join(' ');
     const av = fotoUrl && fotoUrl.startsWith('http')
       ? `<div class="hd-person-av${ringClass ? ' ' + ringClass : ''}" style="background:#e5e7eb;background-image:url('${fotoUrl}');background-size:cover;background-position:center;"></div>`
@@ -682,35 +693,75 @@ function _renderEventos(team, hoje) {
     return `<div class="hd-person-col">
       <div class="hd-person-av-wrap">${av}</div>
       <div class="hd-person-name-sm">${primeiroNome}</div>
-      ${pillHtml}
+      ${infoHtml}
     </div>`;
   }
 
+  // Modal "Ver todos"
+  function _openModal(titulo, rows) {
+    const existing = document.getElementById('hd-modal-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'hd-modal-overlay';
+    overlay.className = 'hd-modal-overlay';
+    overlay.innerHTML = `<div class="hd-modal">
+      <div class="hd-modal-hd">
+        <span class="hd-modal-title">${titulo}</span>
+        <button class="hd-modal-close" id="hd-modal-close-btn">×</button>
+      </div>
+      <div class="hd-modal-list">${rows.map(r => {
+        const av = r.foto && r.foto.startsWith('http')
+          ? `<div class="hd-modal-av" style="background:#e5e7eb;background-image:url('${r.foto}');"></div>`
+          : `<div class="hd-modal-av" style="background:${_avColor(r.nome)}">${_initials(r.nome)}</div>`;
+        return `<div class="hd-modal-row">${av}<div class="hd-modal-info"><div class="hd-modal-nome">${r.nome}</div><div class="hd-modal-detalhe">${r.detalhe}</div></div></div>`;
+      }).join('')}</div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('hd-modal-close-btn').addEventListener('click', () => overlay.remove());
+  }
+
   const elAniv = document.getElementById('hd-aniv-list');
+  const btnAniv = document.getElementById('hd-aniv-vertodos');
   if (anivs.length) {
     const visible = anivs.slice(0, 5);
     elAniv.innerHTML = `<div class="hd-person-grid">` +
       visible.map(({ c, day, mon, diff }) => {
         const isToday = diff <= 0;
-        const pill = isToday
+        const infoHtml = isToday
           ? `<span class="hd-today-pill">Hoje!</span>`
           : `<div class="hd-person-date-sm">${day} ${mon}</div>`;
         const ring = isToday ? 'ring-today' : '';
-        return _personColHtml(c.nome, c.foto_url, `${day} ${mon}`, pill, ring);
+        return _personColHtml(c.nome, c.foto_url, infoHtml, ring);
       }).join('') + `</div>`;
+    if (anivs.length > 5) {
+      btnAniv.style.display = '';
+      btnAniv.onclick = () => _openModal('Próximos aniversários', anivs.map(({ c, day, mon, diff }) => ({
+        nome: c.nome, foto: c.foto_url,
+        detalhe: diff <= 0 ? `Hoje! (${day} ${mon})` : `${day} ${mon}`
+      })));
+    }
   } else {
     elAniv.innerHTML = '<div class="hd-empty">Nenhum aniversário nos próximos 30 dias</div>';
   }
 
   const elCasa = document.getElementById('hd-casa-list');
+  const btnCasa = document.getElementById('hd-casa-vertodos');
   if (casas.length) {
     const visible = casas.slice(0, 5);
     elCasa.innerHTML = `<div class="hd-person-grid">` +
       visible.map(({ c, anos, day, mon }, i) => {
-        const pill = `<span class="hd-years-pill">${anos} ano${anos>1?'s':''}</span><div class="hd-person-date-sm">${day} ${mon}</div>`;
+        const infoHtml = `<span class="hd-years-text">${anos} ano${anos>1?'s':''}</span><div class="hd-person-date-sm">${day} ${mon}</div>`;
         const ring = i === 0 ? 'ring-top' : '';
-        return _personColHtml(c.nome, c.foto_url, `${anos} anos`, pill, ring);
+        return _personColHtml(c.nome, c.foto_url, infoHtml, ring);
       }).join('') + `</div>`;
+    if (casas.length > 5) {
+      btnCasa.style.display = '';
+      btnCasa.onclick = () => _openModal('Tempo de Casa', casas.map(({ c, anos, day, mon }) => ({
+        nome: c.nome, foto: c.foto_url,
+        detalhe: `${anos} ano${anos>1?'s':''} · ${day} ${mon}`
+      })));
+    }
   } else {
     elCasa.innerHTML = '<div class="hd-empty">Nenhum tempo de casa nos próximos 30 dias</div>';
   }
