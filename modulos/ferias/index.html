@@ -5615,7 +5615,19 @@ async function rhAprovarSolicitado(feriasId, idx) {
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
     const _agora = new Date().toISOString();
-    await sbPatch('ferias', `id=eq.${feriasId}`, { status: 'Aprovado', atualizado_em: _agora });
+
+    // Atualiza status do item 'solicitado' em periodos[] para 'aprovado' junto com o PATCH principal
+    let _periosAprov = null;
+    COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
+      if (String(reg._sbId) === String(feriasId) && reg._periodos?.length) {
+        const _arr = reg._periodos.map(p => p.status === 'solicitado' ? { ...p, status: 'aprovado' } : p);
+        if (_arr.some((p, i) => p.status !== reg._periodos[i].status)) _periosAprov = _arr;
+      }
+    }));
+
+    const _patchAprov = { status: 'Aprovado', atualizado_em: _agora, ...(_periosAprov ? { periodos: _periosAprov } : {}) };
+    await sbPatch('ferias', `id=eq.${feriasId}`, _patchAprov);
+
     let _aprovColabId = null;
     let _aprovLanc    = null;
     COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
@@ -5623,6 +5635,7 @@ async function rhAprovarSolicitado(feriasId, idx) {
         _aprovColabId = colab._sbColabId;
         reg.status = 'Aprovado';
         reg._atualizadoEm = _agora;
+        if (_periosAprov) reg._periodos = _periosAprov;
         if (reg._novoLanc) {
           _aprovLanc = { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias };
           reg.lancamentos.push({ ...reg._novoLanc });
@@ -5632,7 +5645,10 @@ async function rhAprovarSolicitado(feriasId, idx) {
     }));
     // Sincroniza GESTOR_LANCAMENTOS e _feriasRow para refletir na visão do gestor sem reload
     const _perAprov = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
-    if (_perAprov?._feriasRow) _perAprov._feriasRow.atualizado_em = _agora;
+    if (_perAprov?._feriasRow) {
+      _perAprov._feriasRow.atualizado_em = _agora;
+      if (_periosAprov) _perAprov._feriasRow.periodos = _periosAprov;
+    }
     GESTOR_LANCAMENTOS.forEach(l => {
       if (String(l.periodo_id) === String(feriasId) && (l.status||'').toLowerCase() === 'solicitado') {
         l.status = 'aprovado';
@@ -5966,7 +5982,14 @@ async function rejeitarPendente() {
     // Fluxo padrão
     const _recLancPad = reg._novoLanc ? { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias } : {};
     if (reg._sbId) {
-      await sbPatch('ferias', `id=eq.${reg._sbId}`, { status: 'Rejeitado', obs_gestor: motivo });
+      // Marca item 'solicitado' em periodos[] como 'recusado' para manter o array limpo
+      let _periosRej = null;
+      if (reg._periodos?.length) {
+        const _arr = reg._periodos.map(p => p.status === 'solicitado' ? { ...p, status: 'recusado' } : p);
+        if (_arr.some((p, i) => p.status !== reg._periodos[i].status)) _periosRej = _arr;
+      }
+      await sbPatch('ferias', `id=eq.${reg._sbId}`, { status: 'Rejeitado', obs_gestor: motivo, ...(_periosRej ? { periodos: _periosRej } : {}) });
+      if (_periosRej) reg._periodos = _periosRej;
     }
     reg._novoLanc = null;
     reg.status = 'Rejeitado';
@@ -12345,17 +12368,26 @@ async function grhEnviarSolicitacaoInline(perId, colabId) {
   );
   if (jaSolicitado) { showErr('Já existe uma solicitação aguardando aprovação do RH para este período.'); return; }
 
-  let patchData, slotKey;
   const _obsBase = `Solicitado por: ${GESTOR_NOME_USUARIO}${obs ? ' — ' + obs : ''}`;
-  if (!row.periodo1_inicio) {
-    patchData = { periodo1_inicio: inicio, periodo1_fim: fim, dias1: diasVal, obs_gestor: _obsBase, status: 'Pendente' };
-    slotKey = 'p1';
-  } else if (!row.periodo2_inicio) {
-    patchData = { periodo2_inicio: inicio, periodo2_fim: fim, dias2: diasVal, obs_gestor: _obsBase, status: 'Pendente' };
-    slotKey = 'p2';
-  } else {
-    showErr('Ambos os períodos já estão preenchidos. Contate o RH.'); return;
-  }
+
+  // Fonte de verdade: periodos[]; fallback para campos flat em registros antigos
+  const _periosAtual = (row.periodos && row.periodos.length > 0)
+    ? [...row.periodos]
+    : [
+        ...(row.periodo1_inicio ? [{ id: 0, inicio: row.periodo1_inicio, fim: row.periodo1_fim, dias: row.dias1 || 0, nota: null, status: 'aprovado' }] : []),
+        ...(row.periodo2_inicio ? [{ id: 1, inicio: row.periodo2_inicio, fim: row.periodo2_fim, dias: row.dias2 || 0, nota: null, status: 'aprovado' }] : []),
+      ];
+
+  const _newPerId = _periosAtual.length > 0 ? Math.max(..._periosAtual.map(p => p.id ?? 0)) + 1 : 0;
+  const novoPeriodo = { id: _newPerId, inicio, fim, dias: diasVal, nota: obs || null, status: 'solicitado' };
+  const _periosNovos = [..._periosAtual, novoPeriodo];
+
+  const _flatCompat = _newPerId === 0 ? { periodo1_inicio: inicio, periodo1_fim: fim, dias1: diasVal }
+                    : _newPerId === 1 ? { periodo2_inicio: inicio, periodo2_fim: fim, dias2: diasVal }
+                    : {};
+
+  const patchData = { periodos: _periosNovos, obs_gestor: _obsBase, status: 'Pendente', ..._flatCompat };
+  const slotKey = `p${_newPerId}`;
 
   try {
     if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Enviando...'; }
@@ -12367,7 +12399,7 @@ async function grhEnviarSolicitacaoInline(perId, colabId) {
     if (!r.ok) throw new Error(await r.text());
 
     const pIdx = GESTOR_PERIODOS.findIndex(p => String(p.id) === String(perId));
-    if (pIdx !== -1) GESTOR_PERIODOS[pIdx]._feriasRow = { ...row, ...patchData };
+    if (pIdx !== -1) GESTOR_PERIODOS[pIdx]._feriasRow = { ...row, ...patchData, periodos: _periosNovos };
 
     GESTOR_LANCAMENTOS.push({
       id: `${perId}-${slotKey}`, colaborador_id: colabId, periodo_id: perId,
