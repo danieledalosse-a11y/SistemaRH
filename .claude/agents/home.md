@@ -192,7 +192,7 @@ A Home **nunca escreve** no banco. Toda query é GET via `_hdGet`.
 
 ---
 
-## Estrutura visual da Home Gestor (UX revisado 2026-10-08)
+## Estrutura visual da Home Gestor (UX revisado 2026-10-09)
 
 ### Blocos e ordem (imutável)
 
@@ -281,13 +281,18 @@ Badge colorido por tipo antes do título:
 
 ```css
 .hd-gestor-av {
-  width: 46px; height: 46px; border-radius: 50%;
+  width: 80px; height: 80px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 15px; font-weight: 700; color: #fff; flex-shrink: 0;
+  font-size: 24px; font-weight: 700; color: #fff; flex-shrink: 0;
   background: var(--blue);
   background-size: cover; background-position: center;
 }
 ```
+
+
+**Valores do card saudação (`.hd-greeting`):** `padding: 24px 28px`, `gap: 20px`
+**`.hd-greeting-main`:** `gap: 18px`
+**`.hd-greeting-title`:** `font-size: 22px`
 
 ---
 
