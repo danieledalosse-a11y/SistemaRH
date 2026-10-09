@@ -663,18 +663,20 @@ function _renderEventos(team, hoje) {
   team.forEach(c => {
     if (c.data_nascimento) {
       const d = new Date(c.data_nascimento + 'T00:00:00');
-      const thisYear = new Date(hoje.getFullYear(), d.getMonth(), d.getDate());
+      let thisYear = new Date(hoje.getFullYear(), d.getMonth(), d.getDate());
+      if (thisYear < hoje) thisYear = new Date(hoje.getFullYear() + 1, d.getMonth(), d.getDate());
       const diff = thisYear - hoje;
-      if (diff >= -86400000 && diff <= 30 * 86400000)
+      if (diff >= 0 && diff <= 30 * 86400000)
         anivs.push({ c, d, diff, day: d.getDate(), mon: mesesNum[d.getMonth()] });
     }
     if (c.data_admissao) {
       const d = new Date(c.data_admissao + 'T00:00:00');
-      const anos = hoje.getFullYear() - d.getFullYear();
+      let thisYear = new Date(hoje.getFullYear(), d.getMonth(), d.getDate());
+      if (thisYear < hoje) thisYear = new Date(hoje.getFullYear() + 1, d.getMonth(), d.getDate());
+      const anos = thisYear.getFullYear() - d.getFullYear();
       if (anos <= 0) return;
-      const thisYear = new Date(hoje.getFullYear(), d.getMonth(), d.getDate());
       const diff = thisYear - hoje;
-      if (diff >= -86400000 && diff <= 30 * 86400000)
+      if (diff >= 0 && diff <= 30 * 86400000)
         casas.push({ c, d, anos, diff, day: d.getDate(), mon: mesesNum[d.getMonth()] });
     }
   });
