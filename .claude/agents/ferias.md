@@ -101,9 +101,52 @@ Todos os helpers compartilhados ficam **agrupados antes de `_ganttPrepararLancs`
 - O campo `gestor` **deve estar no `select=`** da query — também usado pelo filtro secundário `gestorFiltroGestor` dentro da lista carregada
 
 ### `ferias`
-`id, colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status, dias_antecipados, abono_pecuniario` + colunas de lançamentos
+`id, colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status, dias_antecipados, abono_pecuniario` + colunas de lançamentos + `periodos` JSONB
 
-### `ferias_historico` (criada 2026-09-14)
+#### Coluna `periodos` JSONB (migration 073, 2026-10-09 — executada em produção)
+
+Fonte de verdade para períodos de férias após 2026-10-09.
+
+```sql
+ALTER TABLE ferias ADD COLUMN IF NOT EXISTS periodos JSONB NOT NULL DEFAULT '[]'::jsonb;
+CREATE INDEX IF NOT EXISTS idx_ferias_periodos ON ferias USING GIN (periodos);
+```
+
+**Estrutura de cada item:**
+```json
+{ "id": 0, "inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD", "dias": N, "nota": "...", "status": "aprovado" }
+```
+
+**Regras obrigatórias — append-only:**
+- `periodos[]` nunca tem itens removidos; exclusão = `status: 'excluido'`; cancelamento = `status: 'cancelado'`
+- `id` de cada item é sequencial a partir de 0 e **nunca muda** — `lancIdx` dos acordos de gozo depende disso
+- Para `id=0` e `id=1`, os campos flat `periodo1_*/periodo2_*` são mantidos em paralelo (backward compat)
+- Registros antigos têm `periodos = []`; fallback: reconstruir de `periodo1_*/periodo2_*` em `supabaseParaModelo` e `processGestorFerias`
+
+**Funções que gravam em `periodos[]`:**
+
+| Função | O que faz |
+|---|---|
+| `supabaseParaModelo` | Lê `periodos[]`; fallback para campos flat; popula `reg._periodos` |
+| `processGestorFerias` | Idem — visão Gestor |
+| `confirmarDrawerLancamento` | Append com id sequencial; mantém flat compat p0/p1 |
+| `salvarEditLanc` | Atualiza `periodos[id]` pelo campo `id` do item |
+| `excluirLancamento` | Marca `status:'excluido'`; sem compactação de slots |
+| `validarDrawerForm` | Check `maxPeriodosPorPA` |
+| `renderDrawerHistorico` | Itera `periodos[]` |
+| `aprovarPendente` | Todos os 3 ramos gravam em `periodos[]` |
+| `gestorEnviarSolicitacao` | Append com `status:'solicitado'` |
+| `gestorCancelarSolicitacao` | Marca `status:'cancelado'` |
+| `grhEnviarSolicitarGozo` | Lê períodos disponíveis de `periodos[]` |
+
+**Como fazer PATCH em `periodos[]` (Supabase REST não suporta jsonb_set):**
+1. Ler array atual: `sbGet('ferias', 'id=eq.{id}&select=periodos')`
+2. Modificar o array em JS
+3. PATCH com o array inteiro: `{ periodos: [...] }`
+
+**Bug corrigido (commit 2745d68):** `confirmarDrawerLancamento` tinha lógica `length===0 ? p1 : p2` que sobrescrevia o 2º período ao lançar o 3º. Substituído por append-only. Casos de perda confirmados: Victor Hugo (mat.402) e Valdir Felix (mat.439) — períodos não recuperáveis do sistema.
+
+### `ferias_historico` (criada 2026-09-14, expandida 2026-10-09)
 
 Tabela de auditoria imutável — nunca editada, só recebe INSERT.
 
@@ -112,10 +155,25 @@ Tabela de auditoria imutável — nunca editada, só recebe INSERT.
 | `id` | bigserial PK | auto |
 | `ferias_id` | bigint | FK para `ferias.id` |
 | `colaborador_id` | bigint | FK para `colaboradores.id` |
-| `acao` | text | `'solicitado'` / `'aprovado'` / `'rejeitado'` |
+| `acao` | text | ver tabela abaixo |
 | `usuario` | text | Nome/email de quem executou a ação |
-| `detalhe` | jsonb | Snapshot do evento (`inicio`, `fim`, `dias`, `obs_gestor`, `slot`) |
+| `detalhe` | jsonb | Snapshot do evento |
 | `criado_em` | timestamptz | Gerado pelo banco (`DEFAULT NOW()`) |
+
+**Ações registradas:**
+
+| `acao` | Origem | Detalhe |
+|---|---|---|
+| `'solicitado'` | Gestor (autoatendimento) | `{ inicio, fim, dias, slot }` |
+| `'aprovado'` | RH | `{ status: 'Aprovado' }` |
+| `'rejeitado'` | RH | `{ status, obs_gestor }` |
+| `'gozo_solicitado'` | Gestor | `{ saida, retorno, dias, lancIdx }` |
+| `'gozo_aprovado'` | RH | `{ saida, dias, lancIdx }` |
+| `'lancado_rh'` | RH drawer (commit ea7c99e) | `{ inicio, fim, dias, id_periodo, nota }` |
+| `'editado_rh'` | RH drawer (commit ea7c99e) | `{ id_periodo, inicio_anterior, fim_anterior, inicio_novo, fim_novo, dias_novo }` |
+| `'excluido_rh'` | RH drawer (commit ea7c99e) | `{ id_periodo, inicio, fim, dias }` |
+
+As ações `lancado_rh`, `editado_rh` e `excluido_rh` usam `sbPost('ferias_historico', ...).catch(() => {})` diretamente (não passam por `_logAtiv`) — falha no log nunca bloqueia a operação principal.
 
 Índices: `ferias_id`, `colaborador_id`, `criado_em DESC`.
 
