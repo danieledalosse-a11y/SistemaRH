@@ -2940,6 +2940,16 @@ cancelamento_recusado:   '#067647',  // verde
 - Eliminar aba "Solicitações" permanentemente (aguardando testes do novo fluxo unificado)
 - Visão Diretoria — validar banda base (47 ativos / 31 com PA / 16 sem PA) como elemento de design permanente ou remover
 - Testar fluxo completo de cancelamento (gestor solicita → RH aprova/rejeita) — em aberto desde 2026-09-23
+- **[PENDÊNCIA ESTRUTURAL] `lancIdx` binário em `realizacoes[]`** (commit af9f1f6, 2026-10-09):
+  O campo `lancIdx` nas realizações é gravado como 0 ou 1 (heurística `-p2` → 1, resto → 0).
+  Funciona corretamente para flat fields e periodos[] com p.id ∈ {0, 2}.
+  Limitação: `p.id=1` colide com `p.id=0` (ambos → lancIdx=0), causando leitura incorreta quando um mesmo row tem realizações para os dois primeiros períodos da nova estrutura `periodos[]`.
+  **Deve ser corrigido ANTES** de liberar o fluxo de solicitação de gozo (autoatendimento Gestor) para rows com periodos[] contendo p.id=1.
+  Escopo da correção:
+  1. `grhEnviarSolicitarGozo` — gravar `p.id` real em vez do valor binário
+  2. `_renderGsolHistoricoRH` (linha ~12127) — derivar lancIdx do sufixo numérico real do ID do lançamento (ex: `-p3` → 3), em vez de `endsWith('-p2') ? 1 : 0`
+  3. `_gestorColabsComAcordoAndamento` — atualizar filtro de realizacoes para usar p.id real
+  4. Manter retrocompatibilidade: realizacoes existentes com lancIdx=0/1 (flat fields) devem continuar funcionando
 
 ---
 
