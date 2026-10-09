@@ -8190,7 +8190,25 @@ function processGestorFerias(rows) {
   const lancamentos = [];
   const _periodoKeys = new Map(); // _pKey → periodo.id do sobrevivente
 
-  rows.forEach(row => {
+  // Ordenação determinística antes da dedup: garante que o registro mais
+  // completo e válido seja sempre o survivor, independente da ordem do banco.
+  // Critérios: (1) prioridade de status, (2) tem lançamentos, (3) id menor.
+  const _pgStatusPrio = s => ({'aprovado':0,'concluído':0,'concluido':0,'gozado':0,'agendado':0,
+    'solicitado':1,'pendente':1,
+    'alteracao_solicitada':2,'cancelamento_solicitado':2,
+    'rejeitado':3,'cancelado':3,'descartado':3}[(s||'').toLowerCase()] ?? 2);
+  const _pgHasLancs = r =>
+    (r.periodo1_inicio && Number(r.dias1) > 0) ||
+    (Array.isArray(r.periodos) && r.periodos.some(p => p.inicio && Number(p.dias) > 0));
+  const _rows = [...rows].sort((a, b) => {
+    const pA = _pgStatusPrio(a.status), pB = _pgStatusPrio(b.status);
+    if (pA !== pB) return pA - pB;
+    const lA = _pgHasLancs(a) ? 0 : 1, lB = _pgHasLancs(b) ? 0 : 1;
+    if (lA !== lB) return lA - lB;
+    return a.id - b.id;
+  });
+
+  _rows.forEach(row => {
     // Deduplicação por colaborador_id + ano (+ pa_inicio como fallback)
     const _pKey = `${row.colaborador_id}|${row.ano || row.pa_inicio || row.id}`;
     if (_periodoKeys.has(_pKey)) {
