@@ -2559,57 +2559,72 @@ function supabaseParaModelo(feriasRows, colaborRows) {
     if (tipoVinculo !== 'clt') return; // exclui pro_labore e promotora
     const __key = mat + '|' + nome;
 
+    // Fonte de verdade: periodos[] JSONB quando disponível e populado
+    const _hasPeriodos = Array.isArray(f.periodos) && f.periodos.length > 0;
     const lancamentos = [];
-    const dias1 = Number(f.dias1) || 0;
-    const dias2 = Number(f.dias2) || 0;
-    const _isPendente = f.status === 'Pendente' || f.status === 'Solicitado';
-    const _temP2rh    = !!(f.periodo2_inicio && dias2 > 0);
-    // Períodos pendentes vão para _novoLanc, não para lancamentos (senão saldo é descontado antes da aprovação)
-    // Pendente + p2 existe → p1 já aprovado (add), p2 é pendente (skip)
-    // Pendente + só p1   → p1 é pendente (skip)
-    if (f.periodo1_inicio && dias1 > 0 && !(_isPendente && !_temP2rh)) {
-      lancamentos.push({
-        inicio: f.periodo1_inicio,
-        fim:    addDays(f.periodo1_inicio, dias1 - 1),
-        dias:   dias1,
-        diasUsadosReal: null,
-        motivo: f.motivo1 || null,
-        nota:   f.nota1   || null,
-        diasTrabalhar: null,
-        _proximoPA: false,
+    if (_hasPeriodos) {
+      f.periodos.forEach(p => {
+        if (!p || !p.inicio || !p.dias) return;
+        if (['excluido', 'cancelado', 'solicitado'].includes(p.status)) return;
+        lancamentos.push({
+          id:            p.id ?? lancamentos.length,
+          inicio:        p.inicio,
+          fim:           p.fim || addDays(p.inicio, p.dias - 1),
+          dias:          p.dias,
+          nota:          p.nota          || null,
+          status:        p.status        || 'aprovado',
+          diasUsadosReal: null,
+          motivo:        null,
+          diasTrabalhar: null,
+          _proximoPA:    false,
+        });
       });
-    }
-    if (f.periodo2_inicio && dias2 > 0 && !(_isPendente && _temP2rh)) {
-      lancamentos.push({
-        inicio: f.periodo2_inicio,
-        fim:    addDays(f.periodo2_inicio, dias2 - 1),
-        dias:   dias2,
-        diasUsadosReal: null,
-        motivo: f.motivo2 || null,
-        nota:   f.nota2   || null,
-        diasTrabalhar: null,
-        _proximoPA: false,
-      });
+    } else {
+      // Fallback: campos flat legacy (periodos[] vazio ou ausente)
+      const dias1 = Number(f.dias1) || 0;
+      const dias2 = Number(f.dias2) || 0;
+      const _isPendente = f.status === 'Pendente' || f.status === 'Solicitado';
+      const _temP2rh    = !!(f.periodo2_inicio && dias2 > 0);
+      if (f.periodo1_inicio && dias1 > 0 && !(_isPendente && !_temP2rh)) {
+        lancamentos.push({ id: 0, inicio: f.periodo1_inicio, fim: addDays(f.periodo1_inicio, dias1 - 1), dias: dias1, diasUsadosReal: null, motivo: f.motivo1 || null, nota: f.nota1 || null, diasTrabalhar: null, _proximoPA: false });
+      }
+      if (f.periodo2_inicio && dias2 > 0 && !(_isPendente && _temP2rh)) {
+        lancamentos.push({ id: 1, inicio: f.periodo2_inicio, fim: addDays(f.periodo2_inicio, dias2 - 1), dias: dias2, diasUsadosReal: null, motivo: f.motivo2 || null, nota: f.nota2 || null, diasTrabalhar: null, _proximoPA: false });
+      }
     }
 
     const abono = Number(f.abono_pecuniario) || 0;
-    const totalDias = (dias1 + dias2 + abono) > 0 ? Math.max(dias1 + dias2 + abono, 30) : 30;
+    const _diasLancados = _hasPeriodos
+      ? f.periodos.filter(p => !['excluido', 'cancelado', 'solicitado'].includes(p.status)).reduce((s, p) => s + (Number(p.dias) || 0), 0)
+      : (Number(f.dias1) || 0) + (Number(f.dias2) || 0);
+    const totalDias = (_diasLancados + abono) > 0 ? Math.max(_diasLancados + abono, 30) : 30;
 
-    // Se o gestor criou uma solicitação Pendente, reconstrói _novoLanc para o RH aprovar
-    // Quando há p1+p2: p1 já aprovado, p2 é o pendente → _novoLanc aponta para p2
+    // Reconstrói _novoLanc para o RH aprovar (solicitação pendente do Gestor)
     let _novoLancFromGestor = null;
     if ((f.status === 'Pendente' || f.status === 'Solicitado')) {
-      const _temP2rh = f.periodo2_inicio && dias2 > 0;
-      const _pIni = _temP2rh ? f.periodo2_inicio : f.periodo1_inicio;
-      const _pFim = _temP2rh ? addDays(f.periodo2_inicio, dias2 - 1)
-                              : addDays(f.periodo1_inicio, dias1 - 1);
-      const _pDias = _temP2rh ? dias2 : dias1;
-      if (_pIni && _pDias > 0) {
+      const _solItem = _hasPeriodos ? f.periodos.find(p => p.status === 'solicitado') : null;
+      if (_solItem) {
         _novoLancFromGestor = {
-          inicio: _pIni, fim: _pFim, dias: _pDias,
+          inicio: _solItem.inicio,
+          fim:    _solItem.fim || addDays(_solItem.inicio, _solItem.dias - 1),
+          dias:   _solItem.dias,
           diasTrabalhar: null, motivo: f.obs_gestor || 'Solicitado pelo gestor',
           diasUsadosReal: null, nota: null, _proximoPA: false,
         };
+      } else {
+        // Fallback flat
+        const _d1f = Number(f.dias1) || 0, _d2f = Number(f.dias2) || 0;
+        const _temP2f = !!(f.periodo2_inicio && _d2f > 0);
+        const _pIni = _temP2f ? f.periodo2_inicio : f.periodo1_inicio;
+        const _pFim = _temP2f ? addDays(f.periodo2_inicio, _d2f - 1) : addDays(f.periodo1_inicio, _d1f - 1);
+        const _pDias = _temP2f ? _d2f : _d1f;
+        if (_pIni && _pDias > 0) {
+          _novoLancFromGestor = {
+            inicio: _pIni, fim: _pFim, dias: _pDias,
+            diasTrabalhar: null, motivo: f.obs_gestor || 'Solicitado pelo gestor',
+            diasUsadosReal: null, nota: null, _proximoPA: false,
+          };
+        }
       }
     }
 
@@ -2632,6 +2647,7 @@ function supabaseParaModelo(feriasRows, colaborRows) {
       totalDias,
       status:   (f.status === 'Solicitado') ? 'Pendente' : (f.status || 'Aprovado'),
       lancamentos,
+      _periodos: _hasPeriodos ? [...f.periodos] : null,
       abonoPecuniario: abono,
       diasAntecipados: Number(f.dias_antecipados) || 0,
       _notaLivre:       f.nota_livre    || null,
@@ -3924,6 +3940,9 @@ function validarDrawerForm() {
   const minDias = nPer === 0 ? REGRAS_FERIAS.minDiasPrimeiroPeriodo : REGRAS_FERIAS.minDiasOutrosPeriodos;
   if (dias < minDias && saldo >= 5) alertas.push({ tipo: 'aviso', msg: `Mínimo recomendado: ${minDias} dias` });
   if (dias > saldo) alertas.push({ tipo: 'erro', msg: `Saldo disponível: ${saldo} dias` });
+  if (reg && reg.lancamentos.length >= REGRAS_FERIAS.maxPeriodosPorPA) {
+    alertas.push({ tipo: 'erro', msg: `Máximo de ${REGRAS_FERIAS.maxPeriodosPorPA} períodos por PA atingido` });
+  }
 
   el.innerHTML = alertas.map(a => `<div class="alerta-form ${a.tipo === 'erro' ? 'erro' : 'aviso'}">${a.msg}</div>`).join('');
 }
@@ -4051,18 +4070,30 @@ async function confirmarDrawerLancamento() {
   const novoLanc = { inicio: ini, fim, dias, diasTrabalhar: dt, motivo: mot, diasUsadosReal: null, nota: null, _proximoPA: false };
 
   if (IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir') && reg._sbId) {
-    // RH lança direto como Aprovado — persiste imediatamente
-    const lancamentos = [...reg.lancamentos, { inicio: ini, fim, dias }];
-    const campo = reg.lancamentos.length === 0
-      ? { periodo1_inicio: ini, periodo1_fim: fim, dias1: dias, nota1: mot || null, status: 'Aprovado' }
-      : { periodo2_inicio: ini, periodo2_fim: fim, dias2: dias, nota2: mot || null, status: 'Aprovado' };
+    if (reg.lancamentos.length >= REGRAS_FERIAS.maxPeriodosPorPA) {
+      toast(`Máximo de ${REGRAS_FERIAS.maxPeriodosPorPA} períodos por PA atingido.`);
+      return;
+    }
+    // RH lança direto como Aprovado — persiste em periodos[] JSONB (append-only)
+    const _periosAtual = reg._periodos
+      ? [...reg._periodos]
+      : reg.lancamentos.map((l, i) => ({ id: l.id ?? i, inicio: l.inicio, fim: l.fim, dias: l.dias, nota: l.nota || null, status: l.status || 'aprovado' }));
+    const _newPerId = _periosAtual.length > 0 ? Math.max(..._periosAtual.map(p => p.id ?? 0)) + 1 : 0;
+    const novoPeriodo = { id: _newPerId, inicio: ini, fim, dias, nota: mot || null, status: 'aprovado' };
+    const _periosNovos = [..._periosAtual, novoPeriodo];
+    // Mantém campos flat p0→periodo1 e p1→periodo2 para compatibilidade
+    const _flatCompat = _newPerId === 0 ? { periodo1_inicio: ini, periodo1_fim: fim, dias1: dias, nota1: mot || null }
+                      : _newPerId === 1 ? { periodo2_inicio: ini, periodo2_fim: fim, dias2: dias, nota2: mot || null }
+                      : {};
+    const campo = { periodos: _periosNovos, status: 'Aprovado', ..._flatCompat };
     try {
       await sbPatch('ferias', `id=eq.${reg._sbId}`, campo);
     } catch(e) {
       toast(_erroApi(e), 'erro');
       return;
     }
-    reg.lancamentos.push({ inicio: ini, fim, dias, nota: mot || null });
+    reg._periodos = _periosNovos;
+    reg.lancamentos.push({ id: _newPerId, inicio: ini, fim, dias, nota: mot || null });
     reg.status = 'Aprovado';
     toast(`✓ Férias lançadas — ${colab.nome}`);
     const _keyParaReabrir = _drawerKey;
@@ -4126,13 +4157,21 @@ async function salvarEditLanc(chave, sbId, lancIdx) {
   const antigo = `${l.inicio} → ${l.fim} · ${l.dias}d`;
   const novo   = `${inicio} → ${fim} · ${dias}d`;
 
-  const n = lancIdx + 1;
-  const payload = {
-    [`periodo${n}_inicio`]: inicio,
-    [`periodo${n}_fim`]:    fim,
-    [`dias${n}`]:           dias,
-    [`nota${n}`]:           nota || null,
-  };
+  // Atualiza periodos[] JSONB (append-only — modifica o item existente no lugar)
+  const _pid = l.id ?? lancIdx;
+  const _periosAtual = reg._periodos
+    ? [...reg._periodos]
+    : reg.lancamentos.map((ll, i) => ({ id: ll.id ?? i, inicio: ll.inicio, fim: ll.fim, dias: ll.dias, nota: ll.nota || null, status: ll.status || 'aprovado' }));
+  const _perIdx = _periosAtual.findIndex(p => p.id === _pid);
+  if (_perIdx >= 0) {
+    _periosAtual[_perIdx] = { ..._periosAtual[_perIdx], inicio, fim, dias, nota: nota || null };
+  }
+  // Mantém campos flat p0/p1 para compatibilidade
+  const _flatUpd = _pid === 0 ? { periodo1_inicio: inicio, periodo1_fim: fim, dias1: dias, nota1: nota || null }
+                : _pid === 1 ? { periodo2_inicio: inicio, periodo2_fim: fim, dias2: dias, nota2: nota || null }
+                : {};
+  const payload = { periodos: _periosAtual, ..._flatUpd };
+  const n = lancIdx + 1; // mantido para mensagem de auditoria
 
   try {
     await sbPatch('ferias', `id=eq.${sbId}`, payload);
@@ -4147,6 +4186,7 @@ async function salvarEditLanc(chave, sbId, lancIdx) {
     }
 
     // Atualiza modelo em memória
+    reg._periodos = _periosAtual;
     l.inicio = inicio;
     l.fim    = fim;
     l.dias   = dias;
@@ -4169,19 +4209,19 @@ async function excluirLancamento(chave, sbId, lancIdx) {
 
   if (!confirm(`Excluir lançamento "${descricao}"?\n\nEssa ação não pode ser desfeita.`)) return;
 
-  const n = lancIdx + 1;
-  let payload;
-  if (n === 1 && reg.lancamentos.length === 2) {
-    const l2 = reg.lancamentos[1];
-    payload = {
-      periodo1_inicio: l2.inicio, periodo1_fim: l2.fim, dias1: l2.dias, nota1: l2.nota || null,
-      periodo2_inicio: null, periodo2_fim: null, dias2: null, nota2: null,
-    };
-  } else {
-    payload = {
-      [`periodo${n}_inicio`]: null, [`periodo${n}_fim`]: null, [`dias${n}`]: null, [`nota${n}`]: null,
-    };
-  }
+  const n = lancIdx + 1; // mantido para mensagem de auditoria
+  const _pid = l.id ?? lancIdx;
+  // Marca como excluido em periodos[] (append-only — nunca remove do array)
+  const _periosAtual = reg._periodos
+    ? [...reg._periodos]
+    : reg.lancamentos.map((ll, i) => ({ id: ll.id ?? i, inicio: ll.inicio, fim: ll.fim, dias: ll.dias, nota: ll.nota || null, status: ll.status || 'aprovado' }));
+  const _exclIdx = _periosAtual.findIndex(p => p.id === _pid);
+  if (_exclIdx >= 0) _periosAtual[_exclIdx] = { ..._periosAtual[_exclIdx], status: 'excluido' };
+  // Mantém campos flat: limpa o slot correspondente para compatibilidade
+  const _flatDel = _pid === 0 ? { periodo1_inicio: null, periodo1_fim: null, dias1: null, nota1: null }
+                : _pid === 1 ? { periodo2_inicio: null, periodo2_fim: null, dias2: null, nota2: null }
+                : {};
+  const payload = { periodos: _periosAtual, ..._flatDel };
 
   try {
     await sbPatch('ferias', `id=eq.${sbId}`, payload);
@@ -4192,6 +4232,7 @@ async function excluirLancamento(chave, sbId, lancIdx) {
       hist.push({ tipo: 'ferias_periodo_excluido', detalhe: `${n}º período excluído: ${descricao}`, data: new Date().toISOString(), usuario: perfil.nome || 'RH' });
       await sbPatch('colaboradores', `id=eq.${colab._sbColabId}`, { historico: hist });
     }
+    reg._periodos = _periosAtual;
     reg.lancamentos.splice(lancIdx, 1);
     toast('Lançamento excluído');
     renderDrawerHistorico(colab);
@@ -5737,12 +5778,23 @@ async function aprovarPendente() {
         btnAprovar.textContent = '✓ Aprovar alteração';
         return;
       }
-      const patch = _altMeta.slot === 'p1'
-        ? { periodo1_inicio: _altMeta.novo_inicio, periodo1_fim: _altMeta.novo_fim, status: 'Aprovado', obs_gestor: null }
-        : { periodo2_inicio: _altMeta.novo_inicio, periodo2_fim: _altMeta.novo_fim, status: 'Aprovado', obs_gestor: null };
-      await sbPatch('ferias', `id=eq.${reg._sbId}`, patch);
-      // Atualizar local
       const slotIdx = _altMeta.slot === 'p2' ? 1 : 0;
+      // Atualiza periodos[] para alteração aprovada
+      const _periosAlt = reg._periodos
+        ? [...reg._periodos]
+        : reg.lancamentos.map((ll, i) => ({ id: ll.id ?? i, inicio: ll.inicio, fim: ll.fim, dias: ll.dias, nota: ll.nota || null, status: ll.status || 'aprovado' }));
+      const _lAlterado = reg.lancamentos[slotIdx];
+      const _pidAlt = _lAlterado ? (_lAlterado.id ?? slotIdx) : slotIdx;
+      const _perAltIdx = _periosAlt.findIndex(p => p.id === _pidAlt);
+      if (_perAltIdx >= 0) {
+        _periosAlt[_perAltIdx] = { ..._periosAlt[_perAltIdx], inicio: _altMeta.novo_inicio, fim: _altMeta.novo_fim };
+      }
+      const patch = _altMeta.slot === 'p1'
+        ? { periodo1_inicio: _altMeta.novo_inicio, periodo1_fim: _altMeta.novo_fim, periodos: _periosAlt, status: 'Aprovado', obs_gestor: null }
+        : { periodo2_inicio: _altMeta.novo_inicio, periodo2_fim: _altMeta.novo_fim, periodos: _periosAlt, status: 'Aprovado', obs_gestor: null };
+      await sbPatch('ferias', `id=eq.${reg._sbId}`, patch);
+      reg._periodos = _periosAlt;
+      // Atualizar local
       if (reg.lancamentos[slotIdx]) {
         reg.lancamentos[slotIdx].inicio = _altMeta.novo_inicio;
         reg.lancamentos[slotIdx].fim    = _altMeta.novo_fim;
@@ -5772,10 +5824,19 @@ async function aprovarPendente() {
       // PA fica Cancelado só se não restar outro slot válido
       const outroSlotValido = reg.lancamentos.length > 1 && (reg.lancamentos[outroIdx]?.dias || 0) > 0;
       const novoStatus  = outroSlotValido ? 'Aprovado' : 'Cancelado';
+      // Marca item em periodos[] como cancelado (append-only)
+      const _periosCanc = reg._periodos
+        ? [...reg._periodos]
+        : reg.lancamentos.map((ll, i) => ({ id: ll.id ?? i, inicio: ll.inicio, fim: ll.fim, dias: ll.dias, nota: ll.nota || null, status: ll.status || 'aprovado' }));
+      const _lCanc = reg.lancamentos[slotIdx];
+      const _pidCanc = _lCanc ? (_lCanc.id ?? slotIdx) : slotIdx;
+      const _perCancIdx = _periosCanc.findIndex(p => p.id === _pidCanc);
+      if (_perCancIdx >= 0) _periosCanc[_perCancIdx] = { ..._periosCanc[_perCancIdx], status: 'cancelado' };
       const patch = _cancelMeta.slot === 'p1'
-        ? { status: novoStatus, obs_gestor: null, periodo1_inicio: null, periodo1_fim: null, dias1: 0 }
-        : { status: novoStatus, obs_gestor: null, periodo2_inicio: null, periodo2_fim: null, dias2: 0 };
+        ? { status: novoStatus, obs_gestor: null, periodo1_inicio: null, periodo1_fim: null, dias1: 0, periodos: _periosCanc }
+        : { status: novoStatus, obs_gestor: null, periodo2_inicio: null, periodo2_fim: null, dias2: 0, periodos: _periosCanc };
       await sbPatch('ferias', `id=eq.${reg._sbId}`, patch);
+      reg._periodos = _periosCanc;
       // Atualizar local
       reg.lancamentos.splice(slotIdx, 1);
       reg._cancelamentoMeta = null;
@@ -5793,21 +5854,30 @@ async function aprovarPendente() {
       renderAll();
       return;
     }
-    // Fluxo padrão (nova solicitação)
+    // Fluxo padrão (nova solicitação): promove item solicitado → aprovado em periodos[]
     if (reg._sbId) {
       const nl = reg._novoLanc;
-      const payload = {
-        status: 'Aprovado',
-        periodo1_inicio: reg.lancamentos.length === 0 ? nl.inicio : undefined,
-        periodo1_fim:    reg.lancamentos.length === 0 ? nl.fim    : undefined,
-        dias1:           reg.lancamentos.length === 0 ? nl.dias   : undefined,
-        periodo2_inicio: reg.lancamentos.length === 1 ? nl.inicio : undefined,
-        periodo2_fim:    reg.lancamentos.length === 1 ? nl.fim    : undefined,
-        dias2:           reg.lancamentos.length === 1 ? nl.dias   : undefined,
-      };
-      // remove campos undefined
+      const _periosAprov = reg._periodos
+        ? [...reg._periodos]
+        : reg.lancamentos.map((ll, i) => ({ id: ll.id ?? i, inicio: ll.inicio, fim: ll.fim, dias: ll.dias, nota: ll.nota || null, status: ll.status || 'aprovado' }));
+      // Tenta promover item 'solicitado' existente; senão, append novo
+      const _solIdx = _periosAprov.findIndex(p => p.status === 'solicitado');
+      let _newPerId;
+      if (_solIdx >= 0) {
+        _newPerId = _periosAprov[_solIdx].id;
+        _periosAprov[_solIdx] = { ..._periosAprov[_solIdx], inicio: nl.inicio, fim: nl.fim, dias: nl.dias, status: 'aprovado' };
+      } else {
+        _newPerId = _periosAprov.length > 0 ? Math.max(..._periosAprov.map(p => p.id ?? 0)) + 1 : reg.lancamentos.length;
+        _periosAprov.push({ id: _newPerId, inicio: nl.inicio, fim: nl.fim, dias: nl.dias, nota: null, status: 'aprovado' });
+      }
+      // Mantém campos flat p0/p1 para compatibilidade
+      const _flatAprov = _newPerId === 0 ? { periodo1_inicio: nl.inicio, periodo1_fim: nl.fim, dias1: nl.dias }
+                       : _newPerId === 1 ? { periodo2_inicio: nl.inicio, periodo2_fim: nl.fim, dias2: nl.dias }
+                       : {};
+      const payload = { status: 'Aprovado', periodos: _periosAprov, ..._flatAprov };
       Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
       await sbPatch('ferias', `id=eq.${reg._sbId}`, payload);
+      reg._periodos = _periosAprov;
     }
     reg.lancamentos.push({ ...reg._novoLanc });
     reg._novoLanc = null;
@@ -8139,42 +8209,70 @@ function processGestorFerias(rows) {
     const _temP2 = row.periodo2_inicio && Number(row.dias2) > 0;
     const _stP1 = (_rowStNorm === 'solicitado' && _temP2) ? 'aprovado' : _rowStNorm;
 
-    // período 1
-    if (row.periodo1_inicio && Number(row.dias1) > 0) {
-      const _dias1 = Number(row.dias1);
-      const lanc1 = {
-        id:            `${row.id}-p1`,
-        colaborador_id: row.colaborador_id,
-        periodo_id:    row.id,
-        inicio:        row.periodo1_inicio,
-        fim:           addDays(row.periodo1_inicio, _dias1 - 1),
-        dias:          _dias1,
-        status:        _stP1,
-        _obsGestor:    row.obs_gestor || null,
-        nota:          row.nota1 || null,
-      };
-      if (_stP1 === 'recusado' && _obsMotivo) lanc1._motivoRecusa = _obsMotivo;
-      if (_stP1 === 'cancelado' && _obsMotivo) lanc1._motivoCancelamento = _obsMotivo;
-      lancamentos.push(lanc1);
-    }
+    // Lançamentos: usa periodos[] como fonte de verdade quando disponível
+    const _hasPer = Array.isArray(row.periodos) && row.periodos.length > 0;
+    if (_hasPer) {
+      row.periodos.forEach(p => {
+        if (!p || !p.inicio || !p.dias) return;
+        const _stP = (p.status || 'aprovado').toLowerCase();
+        const _stNormP = (_stP === 'pendente' || _stP === 'solicitado') ? 'solicitado'
+                       : _stP === 'rejeitado' ? 'recusado'
+                       : (_stP === 'concluído' || _stP === 'concluido') ? 'gozado'
+                       : _stP;
+        const lancP = {
+          id:            `${row.id}-p${p.id}`,
+          colaborador_id: row.colaborador_id,
+          periodo_id:    row.id,
+          inicio:        p.inicio,
+          fim:           p.fim || addDays(p.inicio, p.dias - 1),
+          dias:          p.dias,
+          status:        _stNormP,
+          _obsGestor:    row.obs_gestor || null,
+          nota:          p.nota || null,
+        };
+        if (_stNormP === 'recusado' && _obsMotivo) lancP._motivoRecusa = _obsMotivo;
+        if (_stNormP === 'cancelado' && _obsMotivo) lancP._motivoCancelamento = _obsMotivo;
+        lancamentos.push(lancP);
+      });
+    } else {
+      // Fallback: campos flat legacy
+      // período 1
+      if (row.periodo1_inicio && Number(row.dias1) > 0) {
+        const _dias1 = Number(row.dias1);
+        const lanc1 = {
+          id:            `${row.id}-p1`,
+          colaborador_id: row.colaborador_id,
+          periodo_id:    row.id,
+          inicio:        row.periodo1_inicio,
+          fim:           addDays(row.periodo1_inicio, _dias1 - 1),
+          dias:          _dias1,
+          status:        _stP1,
+          _obsGestor:    row.obs_gestor || null,
+          nota:          row.nota1 || null,
+        };
+        if (_stP1 === 'recusado' && _obsMotivo) lanc1._motivoRecusa = _obsMotivo;
+        if (_stP1 === 'cancelado' && _obsMotivo) lanc1._motivoCancelamento = _obsMotivo;
+        lancamentos.push(lanc1);
+      }
 
-    // período 2
-    if (_temP2) {
-      const _dias2 = Number(row.dias2);
-      const lanc2 = {
-        id:            `${row.id}-p2`,
-        colaborador_id: row.colaborador_id,
-        periodo_id:    row.id,
-        inicio:        row.periodo2_inicio,
-        fim:           addDays(row.periodo2_inicio, _dias2 - 1),
-        dias:          _dias2,
-        status:        _rowStNorm,
-        _obsGestor:    row.obs_gestor || null,
-        nota:          row.nota2 || null,
-      };
-      if (_rowStNorm === 'recusado' && _obsMotivo) lanc2._motivoRecusa = _obsMotivo;
-      if (_rowStNorm === 'cancelado' && _obsMotivo) lanc2._motivoCancelamento = _obsMotivo;
-      lancamentos.push(lanc2);
+      // período 2
+      if (_temP2) {
+        const _dias2 = Number(row.dias2);
+        const lanc2 = {
+          id:            `${row.id}-p2`,
+          colaborador_id: row.colaborador_id,
+          periodo_id:    row.id,
+          inicio:        row.periodo2_inicio,
+          fim:           addDays(row.periodo2_inicio, _dias2 - 1),
+          dias:          _dias2,
+          status:        _rowStNorm,
+          _obsGestor:    row.obs_gestor || null,
+          nota:          row.nota2 || null,
+        };
+        if (_rowStNorm === 'recusado' && _obsMotivo) lanc2._motivoRecusa = _obsMotivo;
+        if (_rowStNorm === 'cancelado' && _obsMotivo) lanc2._motivoCancelamento = _obsMotivo;
+        lancamentos.push(lanc2);
+      }
     }
 
     // realizacoes JSONB
@@ -11208,22 +11306,39 @@ async function gestorCancelarSolicitacao(feriasId, colabId, lancId) {
   const motivo = prompt('Motivo do cancelamento (opcional):') ?? '';
 
   try {
-    // Identifica o slot (p1 ou p2) a partir do ID do lançamento (formato: "{rowId}-p1" ou "{rowId}-p2")
+    const per = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
+    const row = per?._feriasRow || {};
+
+    // Marca item em periodos[] como 'cancelado' (append-only — nunca remove do array)
+    const _periosGC = Array.isArray(row.periodos) && row.periodos.length > 0
+      ? [...row.periodos]
+      : (GESTOR_LANCAMENTOS
+          .filter(l => String(l.periodo_id) === String(feriasId) && !l._isRealizacao)
+          .map((l, i) => ({ id: i, inicio: l.inicio, fim: l.fim, dias: l.dias, nota: l.nota || null, status: l.status || 'aprovado' })));
+    // Tenta identificar o item pelo inicio do lançamento
+    const lancAtualGC = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
+    const _perGCIdx = lancAtualGC
+      ? _periosGC.findIndex(p => p.inicio === lancAtualGC.inicio && p.status !== 'cancelado' && p.status !== 'excluido')
+      : -1;
+    if (_perGCIdx >= 0) _periosGC[_perGCIdx] = { ..._periosGC[_perGCIdx], status: 'cancelado' };
+
+    // Verifica se restam itens ativos (para decidir o status da row)
+    const _restaAtivo = _periosGC.some(p => !['cancelado','excluido','solicitado'].includes(p.status));
+    // Slot-based compat para p0/p1
     const slot = String(lancId).endsWith('-p2') ? 'p2' : 'p1';
     const clearSlot = slot === 'p1'
       ? { periodo1_inicio: null, periodo1_fim: null, dias1: 0, motivo1: null, nota1: null }
       : { periodo2_inicio: null, periodo2_fim: null, dias2: 0, motivo2: null, nota2: null };
+    // Só limpa o campo flat se o lançamento corresponde ao slot clássico p1/p2
+    const _isClassicSlot = String(lancId).endsWith('-p1') || String(lancId).endsWith('-p2');
 
-    // Verifica se o outro slot ainda tem dados (para decidir o status da row)
-    const per = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
-    const row = per?._feriasRow || {};
-    const outroSlotTemDados = slot === 'p1'
-      ? !!(row.periodo2_inicio && Number(row.dias2) > 0)
-      : !!(row.periodo1_inicio && Number(row.dias1) > 0);
-
-    // Se o outro slot ainda tem férias aprovadas/gozadas, mantém o status; senão volta a Aprovado
-    const novoStatus = outroSlotTemDados ? (row.status || 'Aprovado') : 'Aprovado';
-    const patchData = { ...clearSlot, status: novoStatus, obs_gestor: motivo.trim() || null };
+    const novoStatus = _restaAtivo ? (row.status || 'Aprovado') : 'Aprovado';
+    const patchData = {
+      ...(_isClassicSlot ? clearSlot : {}),
+      periodos: _periosGC,
+      status: novoStatus,
+      obs_gestor: motivo.trim() || null,
+    };
 
     await sbPatch('ferias', `id=eq.${feriasId}`, patchData);
 
@@ -11643,16 +11758,31 @@ async function gestorEnviarSolicitacao() {
     const _obsGestor = (document.getElementById('mgObs')?.value || '').trim();
     const _obsBase = `Solicitado por: ${GESTOR_NOME_USUARIO}${_obsGestor ? ' — ' + _obsGestor : ''}`;
     const _agoraSolic = new Date().toISOString();
+    // Prepara periodos[] com novo item 'solicitado' (append-only)
+    const _periosGestorAtual = Array.isArray(row.periodos) && row.periodos.length > 0
+      ? [...row.periodos]
+      : [];
+    // Remove qualquer item solicitado anterior deste período (será substituído)
+    const _periosBase = _periosGestorAtual.filter(p => p.status !== 'solicitado');
+    const _newSolId = _periosBase.length > 0 ? Math.max(..._periosBase.map(p => p.id ?? 0)) + 1 : _periosBase.length;
+    const _periosComSol = [..._periosBase, { id: _newSolId, inicio, fim, dias: diasVal, nota: null, status: 'solicitado' }];
+
     if (slotForcado === 'p1' || (!slotForcado && !row.periodo1_inicio)) {
       patchData = { periodo1_inicio: inicio, periodo1_fim: fim, dias1: diasVal,
+                    periodos: _periosComSol,
                     obs_gestor: _obsBase, status: 'Pendente', atualizado_em: _agoraSolic };
       slotKey = 'p1';
     } else if (slotForcado === 'p2' || (!slotForcado && !row.periodo2_inicio)) {
       patchData = { periodo2_inicio: inicio, periodo2_fim: fim, dias2: diasVal,
+                    periodos: _periosComSol,
                     obs_gestor: _obsBase, status: 'Pendente', atualizado_em: _agoraSolic };
       slotKey = 'p2';
+    } else if (_periosBase.length < REGRAS_FERIAS.maxPeriodosPorPA) {
+      // 3º período ou mais — apenas periodos[], sem slot flat
+      patchData = { periodos: _periosComSol, obs_gestor: _obsBase, status: 'Pendente', atualizado_em: _agoraSolic };
+      slotKey = `per${_newSolId}`;
     } else {
-      toast('Ambos os períodos já estão preenchidos para este PA. Contate o RH.');
+      toast('Todos os períodos já estão preenchidos para este PA. Contate o RH.');
       btn.disabled = false; btn.textContent = 'Enviar para RH aprovar';
       return;
     }
