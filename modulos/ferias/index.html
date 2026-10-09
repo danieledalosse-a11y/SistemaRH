@@ -9028,6 +9028,43 @@ function renderRhAtividade() {
   el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">${tabsHtml}${conteudo}</div>`;
 }
 
+// ── Helper: colaboradores com gozo parcial confirmado e dias ainda a registrar ─
+// Regra: ao menos uma realização confirmada (status !== 'pendente_gestor') para o
+// lançamento, e a soma confirmada < dias acordados naquele lançamento.
+// LIMITAÇÃO TÉCNICA (pendência): lancIdx usa heurística binária (sufixo '-p2' → 1,
+// demais → 0). Funciona corretamente para flat fields e periodos[] com p.id != 1.
+// Antes de liberar fluxo de gozo via autoatendimento para periodos[] com p.id >= 1,
+// corrigir: (1) grhEnviarSolicitarGozo — armazenar p.id em vez do valor binário;
+// (2) _renderGsolHistoricoRH — ler por p.id em vez do sufixo de ID;
+// (3) manter fallback para realizacoes antigas com lancIdx 0/1 (flat fields).
+function _gestorColabsComAcordoAndamento(colabsBase) {
+  const result = new Set();
+  const colabsArr = colabsBase || GESTOR_COLABS;
+  const colabIds = new Set(colabsArr.map(c => String(c.id)));
+  GESTOR_PERIODOS.forEach(per => {
+    if (!colabIds.has(String(per.colaborador_id))) return;
+    const realizacoes = per._feriasRow?.realizacoes;
+    if (!Array.isArray(realizacoes) || !realizacoes.length) return;
+    const lancs = GESTOR_LANCAMENTOS.filter(l =>
+      String(l.periodo_id) === String(per.id) &&
+      !l._isRealizacao &&
+      ['aprovado', 'agendado', 'gozado'].includes((l.status || '').toLowerCase())
+    );
+    lancs.forEach(lanc => {
+      const lancIdx = lanc.id.endsWith('-p2') ? 1 : 0;
+      const gozosDoLanc = realizacoes.filter(r =>
+        (r.lancIdx !== undefined ? Number(r.lancIdx) : 0) === lancIdx
+      );
+      const gozosConf = gozosDoLanc.filter(rx => (rx.status || 'gozado') !== 'pendente_gestor');
+      const totalConf = gozosConf.reduce((s, rx) => s + (Number(rx.dias) || 0), 0);
+      if (gozosConf.length > 0 && totalConf < (Number(lanc.dias) || 0)) {
+        result.add(String(per.colaborador_id));
+      }
+    });
+  });
+  return [...result].map(id => colabsArr.find(c => String(c.id) === id)).filter(Boolean);
+}
+
 // ── Computação compartilhada de métricas do Gestor ──────────────────────────
 // Separada do render para que Diretoria e Gestor usem os mesmos cálculos
 function _computeGestorMetricas(base) {
@@ -9067,18 +9104,20 @@ function _computeGestorMetricas(base) {
   const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
   const aguardandoAprov = colabs.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
   const agendados = colabs.filter(c => gestorIsAgendado(c.id));
-  return { riscoDobra, semAgendado, emFeriasHoje, agendados, aguardandoAprov };
+  const acordosAndamento = _gestorColabsComAcordoAndamento(colabs);
+  return { riscoDobra, semAgendado, emFeriasHoje, agendados, aguardandoAprov, acordosAndamento };
 }
 
 function renderGestorAlerts(colabsBase) {
   const base = colabsBase || GESTOR_COLABS;
-  const { riscoDobra, semAgendado, emFeriasHoje, agendados, aguardandoAprov } = _computeGestorMetricas(base);
+  const { riscoDobra, semAgendado, emFeriasHoje, agendados, aguardandoAprov, acordosAndamento } = _computeGestorMetricas(base);
 
-  window._gestorRiscoDobra   = riscoDobra.map(c => String(c.id));
-  window._gestorSemAgendado  = semAgendado.map(c => String(c.id));
-  window._gestorEmFeriasHoje = emFeriasHoje.map(c => String(c.id));
-  window._gestorAguardAprov  = aguardandoAprov.map(c => String(c.id));
-  window._gestorAgendados    = agendados.map(c => String(c.id));
+  window._gestorRiscoDobra        = riscoDobra.map(c => String(c.id));
+  window._gestorSemAgendado       = semAgendado.map(c => String(c.id));
+  window._gestorEmFeriasHoje      = emFeriasHoje.map(c => String(c.id));
+  window._gestorAguardAprov       = aguardandoAprov.map(c => String(c.id));
+  window._gestorAgendados         = agendados.map(c => String(c.id));
+  window._gestorAcordosAndamento  = acordosAndamento.map(c => String(c.id));
 
   // Card "Pendentes" — sempre visível; visual muda conforme há pendências
   const _cardAprovHtml = aguardandoAprov.length > 0
@@ -9156,6 +9195,18 @@ function renderGestorAlerts(colabsBase) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>
+    ${acordosAndamento.length > 0 ? `
+    <div class="proto-alert-card${_gestorAlertaAtivo==='acordo'?' pa-active':''}" style="background:#F0F9FF;border-color:#BAE6FD;cursor:pointer;" onclick="filtrarGestorAlerta('acordo')">
+      <div class="proto-alert-icon" style="background:#E0F2FE;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0284C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div class="proto-alert-eyebrow" style="color:#0369A1;">Acordos em andamento</div>
+        <div class="proto-alert-num" style="color:#0369A1;">${acordosAndamento.length}</div>
+        <div class="proto-alert-sub">Gozo parcial registrado — dias ainda a concluir</div>
+      </div>
+      <div class="proto-alert-arr"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
+    </div>` : ''}
   `;
 }
 
@@ -10800,6 +10851,10 @@ function renderGestorAtencao() {
   } else if (_gestorAlertaAtivo === 'agendado') {
     colabs = colabs.filter(c => gestorIsAgendado(c.id));
     _sub = `${colabs.length} colaborador(es) com férias aprovadas agendadas`;
+  } else if (_gestorAlertaAtivo === 'acordo') {
+    const _acordoIds = new Set(window._gestorAcordosAndamento || []);
+    colabs = colabs.filter(c => _acordoIds.has(String(c.id)));
+    _sub = `${colabs.length} colaborador(es) com acordo de gozo em andamento`;
   }
 
   const sEl = document.getElementById('gestorListaSub');
@@ -10980,6 +11035,11 @@ function renderGestorAtencao() {
       borderClr = (temSolPend && !temAprovF) ? '#F79009' : (temRecF && !temAprovF && !temSolPend) ? '#D92D20' : '#1849A9';
     }
 
+    const _temAcordoAnd = (window._gestorAcordosAndamento || []).includes(String(c.id));
+    const _chipAcordoAnd = _temAcordoAnd
+      ? `<span style="display:inline-block;font-size:11px;font-weight:600;color:#0369A1;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:4px;padding:2px 6px;">↩ Acordo em andamento</span>`
+      : '';
+
     const cor = _cor(c.nome);
     const ini = _ini(c.nome);
     const avatarHtml = c.foto_url
@@ -11034,6 +11094,7 @@ function renderGestorAtencao() {
       <div class="proto-td" style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;justify-content:center;">
         ${badge || ''}
         ${btnAcao}
+        ${_chipAcordoAnd}
       </div>
     </div>
     <div id="gestorHist-${c.id}" style="display:none;background:var(--surface-alt,var(--bg-2));border-bottom:1px solid var(--border);padding:12px 20px 16px;">
