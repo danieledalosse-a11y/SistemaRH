@@ -4095,6 +4095,13 @@ async function confirmarDrawerLancamento() {
     reg._periodos = _periosNovos;
     reg.lancamentos.push({ id: _newPerId, inicio: ini, fim, dias, nota: mot || null });
     reg.status = 'Aprovado';
+    await sbPost('ferias_historico', {
+      ferias_id: reg._sbId,
+      colaborador_id: colab._sbColabId || null,
+      acao: 'lancado_rh',
+      usuario: JSON.parse(localStorage.getItem('sb_perfil') || '{}').nome || 'RH',
+      detalhe: { inicio: ini, fim, dias, id_periodo: _newPerId, nota: mot || null }
+    }).catch(() => {});
     toast(`✓ Férias lançadas — ${colab.nome}`);
     const _keyParaReabrir = _drawerKey;
     try { renderAll(); } catch(_) {}
@@ -4185,6 +4192,15 @@ async function salvarEditLanc(chave, sbId, lancIdx) {
       await sbPatch('colaboradores', `id=eq.${colab._sbColabId}`, { historico: hist });
     }
 
+    // Log no ferias_historico
+    await sbPost('ferias_historico', {
+      ferias_id: sbId,
+      colaborador_id: colab._sbColabId || null,
+      acao: 'editado_rh',
+      usuario: JSON.parse(localStorage.getItem('sb_perfil') || '{}').nome || 'RH',
+      detalhe: { id_periodo: _pid, inicio_anterior: l.inicio, fim_anterior: l.fim, inicio_novo: inicio, fim_novo: fim, dias_novo: dias }
+    }).catch(() => {});
+
     // Atualiza modelo em memória
     reg._periodos = _periosAtual;
     l.inicio = inicio;
@@ -4232,6 +4248,13 @@ async function excluirLancamento(chave, sbId, lancIdx) {
       hist.push({ tipo: 'ferias_periodo_excluido', detalhe: `${n}º período excluído: ${descricao}`, data: new Date().toISOString(), usuario: perfil.nome || 'RH' });
       await sbPatch('colaboradores', `id=eq.${colab._sbColabId}`, { historico: hist });
     }
+    await sbPost('ferias_historico', {
+      ferias_id: sbId,
+      colaborador_id: colab._sbColabId || null,
+      acao: 'excluido_rh',
+      usuario: JSON.parse(localStorage.getItem('sb_perfil') || '{}').nome || 'RH',
+      detalhe: { id_periodo: _pid, inicio: l.inicio, fim: l.fim, dias: l.dias }
+    }).catch(() => {});
     reg._periodos = _periosAtual;
     reg.lancamentos.splice(lancIdx, 1);
     toast('Lançamento excluído');
