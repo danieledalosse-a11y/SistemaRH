@@ -224,11 +224,11 @@ A Home **nunca escreve** no banco. Toda query é GET via `_hdGet`.
 
 ### Modal "Ver todos"
 
-- Abre lista **completa** de todos os registros do mês (não só os que ficaram de fora)
+- Abre lista **completa** de todos os registros dentro da janela de 60 dias (não só os que ficaram de fora)
 - Cada linha: `_avHtml(nome, foto_url, 'hd-modal-av')` + nome completo + cargo · setor + data/anos
 - `cargo` e `setor` vêm da query de equipe (já disponíveis no objeto `c`)
 - Cor da data: âmbar para aniversário hoje, verde para tempo de casa, cinza para demais
-- Subtítulo: "X registros este mês"
+- **Sem subtítulo** — contagem removida a pedido (2026-10-09)
 - Fecha ao clicar fora (overlay) ou no ×
 - **Preparado para Diretoria:** cargo e setor já presentes para dar contexto em equipes maiores
 - **Não criar lógica paralela de avatar** — sempre usar `_avHtml`, que já tem foto + fallback
