@@ -8649,13 +8649,14 @@ function _gestorProcessoInfo(h) {
   const dias   = lanc?.dias   || det.dias;
   const motivo = det.motivo || det.obs_gestor || null;
 
-  // Atividade Recente: aguardando resposta do RH
+  // Atividade Recente: aguardando resposta do RH (só para registros sobreviventes da dedup)
+  const _ehSurvivor = (GESTOR_PERIODOS || []).some(p => String(p.id) === String(h.ferias_id));
   if (acao === 'solicitado')
-    return { estado: 'Aguardando RH',             cls: 'neutro',     ativo: true,  inicio, fim, dias, motivo };
+    return { estado: 'Aguardando RH',             cls: 'neutro',     ativo: _ehSurvivor, inicio, fim, dias, motivo };
   if (acao === 'alteracao_solicitada')
-    return { estado: 'Alteração aguardando RH',   cls: 'cancel-sol', ativo: true,  inicio, fim, dias, motivo };
+    return { estado: 'Alteração aguardando RH',   cls: 'cancel-sol', ativo: _ehSurvivor, inicio, fim, dias, motivo };
   if (acao === 'cancelamento_solicitado')
-    return { estado: 'Cancelamento aguardando RH',cls: 'cancel-sol', ativo: true,  inicio, fim, dias, motivo };
+    return { estado: 'Cancelamento aguardando RH',cls: 'cancel-sol', ativo: _ehSurvivor, inicio, fim, dias, motivo };
 
   // Desfechos: ficam em Atividade Recente por param_ferias_config.dias_resposta_visivel dias
   const diasAtras = h.criado_em ? (Date.now() - new Date(h.criado_em).getTime()) / 86400000 : 999;
@@ -8684,6 +8685,9 @@ function _rhEhRecente(h) {
     alteracao_solicitada:    ['alteracao_aprovada',    'alteracao_recusada'],
   };
   if (!respostas[acao]) return false;
+  const _reg = COLABORADORES.flatMap(c => c.registros)
+                             .find(r => String(r._sbId) === String(h.ferias_id));
+  if (!_reg || _reg.status === 'Descartado') return false;
   return !respostas[acao].some(r =>
     FERIAS_HISTORICO.some(x => x.ferias_id === h.ferias_id && (x.acao || '').toLowerCase() === r)
   );
