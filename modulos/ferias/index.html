@@ -2978,6 +2978,9 @@ function normSetor(s) {
 function normGestor(s) {
   return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
+function _normGA(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
 
 // Cache da lista de gestores ativos de param_gestor — evita consultas repetidas
 let _gestoresAtivosCache = null;
@@ -8678,12 +8681,13 @@ async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
   if (original?.detalhe?.dias)   det.dias   = original.detalhe.dias;
   try {
     await _logAtiv(feriasId, colabId, 'gestor_ciente', GESTOR_NOME_USUARIO, det);
-    renderGestorAtividade();
   } catch(e) {
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Ciente'; }
     toast('Não foi possível registrar. Tente novamente.', 'erro');
     console.error('[gestorMarcarCiente]', e);
+    return;
   }
+  try { renderGestorAtividade(); } catch(e) { console.error('[renderGestorAtividade pós-ciente]', e); }
 }
 
 // Gestor: retorna { estado, cls, ativo, inicio, fim, dias, motivo } para o processo
