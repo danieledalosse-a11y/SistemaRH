@@ -8795,6 +8795,7 @@ function _acaoInfo(acao) {
 let _gestorExpandido  = false;
 let _gestorAba        = 'recente';
 let _gestorHistOffset = 0;
+const _gestorHistExpanded = new Set(); // IDs de colaboradores com card expandido no Histórico
 const _HIST_PAGE = 20;
 
 function renderGestorAtividade() {
@@ -8898,8 +8899,10 @@ function renderGestorAtividade() {
     });
 
     const _renderCardGestor = g => {
+      const cid   = String(g.colab?.id || g.eventos[0]?.colaborador_id || '');
       const nome  = g.colab ? g.colab.nome : '—';
       const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
+      const expandido = _gestorHistExpanded.has(cid);
 
       // Subagrupamento por ferias_id — cada processo vira um bloco de timeline
       const procMap = new Map();
@@ -8914,42 +8917,58 @@ function renderGestorAtividade() {
       const processosArr = [...procMap.values()].sort((a, b) =>
         (b[b.length - 1]?.criado_em || '').localeCompare(a[a.length - 1]?.criado_em || ''));
 
-      const processoBlocos = processosArr.map((evts, pIdx) => {
-        // Período: primeiro evento com datas disponíveis
-        const infoComPer = evts.map(h => _gestorProcessoInfo(h)).find(i => i.inicio && i.fim);
-        const headerPer = infoComPer
-          ? `<div style="font-size:12px;color:var(--text-sec);margin-bottom:4px;">${fmtD(infoComPer.inicio)} → ${fmtD(infoComPer.fim)}${infoComPer.dias ? ' · ' + infoComPer.dias + 'd' : ''}</div>`
-          : '';
+      // Resumo visível no header mesmo quando colapsado
+      const ultimoInfo = _gestorProcessoInfo(processosArr[0]?.[processosArr[0].length - 1] || g.eventos[0]);
+      const nProc = processosArr.length;
+      const resumoHeader = `<span class="gstor-ativ-chip ${ultimoInfo.cls}" style="font-size:10px;padding:2px 7px;">${ultimoInfo.estado}</span>`
+        + (nProc > 1 ? `<span style="font-size:11px;color:var(--text-sec);margin-left:6px;">+${nProc - 1} processo${nProc > 2 ? 's' : ''}</span>` : '');
 
-        const eventoRows = evts.map(h => {
-          const info = _gestorProcessoInfo(h);
-          const tsLine = h.criado_em
-            ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>`
+      const chevronSvg = expandido
+        ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`
+        : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
+
+      let processoBlocos = '';
+      if (expandido) {
+        processoBlocos = processosArr.map((evts, pIdx) => {
+          const infoComPer = evts.map(h => _gestorProcessoInfo(h)).find(i => i.inicio && i.fim);
+          const headerPer = infoComPer
+            ? `<div style="font-size:12px;color:var(--text-sec);margin-bottom:4px;">${fmtD(infoComPer.inicio)} → ${fmtD(infoComPer.fim)}${infoComPer.dias ? ' · ' + infoComPer.dias + 'd' : ''}</div>`
             : '';
-          const motivoLine = info.motivo
-            ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${info.motivo}</div>`
-            : '';
-          return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
-            <div class="gstor-ativ-icon ${info.cls}" style="width:20px;height:20px;min-width:20px;margin-top:1px;">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
-            <div style="flex:1;min-width:0;">
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>
+
+          const eventoRows = evts.map(h => {
+            const info = _gestorProcessoInfo(h);
+            const tsLine = h.criado_em
+              ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>`
+              : '';
+            const motivoLine = info.motivo
+              ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${info.motivo}</div>`
+              : '';
+            return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
+              <div class="gstor-ativ-icon ${info.cls}" style="width:20px;height:20px;min-width:20px;margin-top:1px;">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                  <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>
+                </div>
+                ${tsLine}${motivoLine}
               </div>
-              ${tsLine}${motivoLine}
-            </div>
-          </div>`;
+            </div>`;
+          }).join('');
+
+          const sep = pIdx > 0 ? '<div style="height:1px;background:var(--border);margin:6px 0 8px;"></div>' : '';
+          return `${sep}${headerPer ? `<div style="padding:0 12px;">${headerPer}</div>` : ''}<div style="padding:0 12px 2px;">${eventoRows}</div>`;
         }).join('');
+      }
 
-        const sep = pIdx > 0 ? '<div style="height:1px;background:var(--border);margin:6px 0 8px;"></div>' : '';
-        return `${sep}${headerPer ? `<div style="padding:0 12px;">${headerPer}</div>` : ''}<div style="padding:0 12px 2px;">${eventoRows}</div>`;
-      }).join('');
-
+      const toggleFn = `(function(cid){if(_gestorHistExpanded.has(cid))_gestorHistExpanded.delete(cid);else _gestorHistExpanded.add(cid);renderGestorAtividade();}('${cid}'))`;
       return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
-        <div style="padding:10px 12px 6px;">
-          <span class="gstor-ativ-nome">${nome}</span>
-          ${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}
+        <div onclick="${toggleFn}" style="padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;">
+          <div style="flex:1;min-width:0;">
+            <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">${resumoHeader}</div>
+          </div>
+          <div style="color:var(--text-sec);flex-shrink:0;">${chevronSvg}</div>
         </div>
-        <div style="padding:0 0 4px;">${processoBlocos}</div>
+        ${expandido ? `<div style="border-top:1px solid var(--border);padding:0 0 4px;">${processoBlocos}</div>` : ''}
       </div>`;
     };
 
