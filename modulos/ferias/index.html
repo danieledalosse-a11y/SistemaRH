@@ -9187,7 +9187,12 @@ function _computeGestorMetricas(base) {
     if (st === 'cancelamento_solicitado') return true;
     return st === 'recusado' && l.fim >= hoje;
   });
-  const colabsComPend = [...new Set(aguardAprov.map(l => l.colaborador_id))];
+  // Alterações/cancelamentos pendentes cujo status fica no PA (ferias.status),
+  // não no lancamento individual — mesmo critério da visão RH (getPendentes).
+  const _altPendIds = GESTOR_PERIODOS
+    .filter(p => { const st = (p._feriasRow?.status || '').toLowerCase(); return st === 'alteracao_solicitada' || st === 'cancelamento_solicitado'; })
+    .map(p => p.colaborador_id);
+  const colabsComPend = [...new Set([...aguardAprov.map(l => l.colaborador_id), ..._altPendIds])];
   const aguardandoAprov = colabs.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
   const agendados = colabs.filter(c => gestorIsAgendado(c.id));
   const acordosAndamento = _gestorColabsComAcordoAndamento(colabs);
