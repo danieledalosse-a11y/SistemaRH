@@ -8733,8 +8733,9 @@ function _acaoInfo(acao) {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-let _gestorAtivAba    = 'recente'; // 'recente' | 'historico'
-let _gestorHistOffset = 0;
+let _gestorAtivAba       = 'recente'; // 'recente' | 'historico'
+let _gestorHistOffset    = 0;
+let _gestorAtivExpandido = false; // sempre recolhido ao entrar na tela
 const _HIST_PAGE = 20;
 
 function renderGestorAtividade() {
@@ -8881,17 +8882,29 @@ function renderGestorAtividade() {
         : `<div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`);
   }
 
-  el.innerHTML = `<div class="gstor-ativ-wrap">${tabsHtml}${conteudo}</div>`;
+  const _gBadge = recentes.length > 0
+    ? `<span style="background:var(--blue,#1570EF);color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:2px 7px;margin-left:6px;">${recentes.length}</span>`
+    : `<span style="background:var(--border);color:var(--text-ter);border-radius:10px;font-size:11px;font-weight:600;padding:2px 7px;margin-left:6px;">0</span>`;
+  const _gChevron = _gestorAtivExpandido
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
+  const _gHeader = `<div onclick="_gestorAtivExpandido=!_gestorAtivExpandido;renderGestorAtividade()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:${_gestorAtivExpandido ? '1px solid var(--border)' : 'none'};">
+    <div style="display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--text);">Pendências${_gBadge}</div>
+    <span style="color:var(--text-sec);display:flex;align-items:center;">${_gChevron}</span>
+  </div>`;
 
-  if (!abaRecente) {
+  el.innerHTML = `<div class="gstor-ativ-wrap">${_gHeader}${_gestorAtivExpandido ? tabsHtml + conteudo : ''}</div>`;
+
+  if (!abaRecente && _gestorAtivExpandido) {
     const inp = document.getElementById('gestorHistBusca');
     if (inp && document.activeElement !== inp) { /* não forçar foco */ }
   }
 }
 
 // ─── Atividade recente — Visão RH ────────────────────────────────────────────
-let _rhAtivAba    = 'recente'; // 'recente' | 'historico'
-let _rhHistOffset = 0;
+let _rhAtivAba       = 'recente'; // 'recente' | 'historico'
+let _rhHistOffset    = 0;
+let _rhAtivExpandido = false; // sempre recolhido ao entrar na tela
 
 function _rhAtivAbrirModal(feriasId) {
   const lista = getPendentes();
@@ -9047,7 +9060,18 @@ function renderRhAtividade() {
         : `<div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`);
   }
 
-  el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">${tabsHtml}${conteudo}</div>`;
+  const _rhBadge = recentes.length > 0
+    ? `<span style="background:var(--blue,#1570EF);color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:2px 7px;margin-left:6px;">${recentes.length}</span>`
+    : `<span style="background:var(--border);color:var(--text-ter);border-radius:10px;font-size:11px;font-weight:600;padding:2px 7px;margin-left:6px;">0</span>`;
+  const _rhChevron = _rhAtivExpandido
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
+  const _rhHeader = `<div onclick="_rhAtivExpandido=!_rhAtivExpandido;renderRhAtividade()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:${_rhAtivExpandido ? '1px solid var(--border)' : 'none'};">
+    <div style="display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--text);">Pendências${_rhBadge}</div>
+    <span style="color:var(--text-sec);display:flex;align-items:center;">${_rhChevron}</span>
+  </div>`;
+
+  el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">${_rhHeader}${_rhAtivExpandido ? tabsHtml + conteudo : ''}</div>`;
 }
 
 // ── Helper: colaboradores com gozo parcial confirmado e dias ainda a registrar ─
