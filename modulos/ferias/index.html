@@ -8733,9 +8733,9 @@ function _acaoInfo(acao) {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-let _gestorAtivAba       = 'recente'; // 'recente' | 'historico'
-let _gestorHistOffset    = 0;
-let _gestorAtivExpandido = false; // sempre recolhido ao entrar na tela
+let _gestorRecenteExpandido = false;
+let _gestorHistExpandido    = false;
+let _gestorHistOffset       = 0;
 const _HIST_PAGE = 20;
 
 function renderGestorAtividade() {
@@ -8800,66 +8800,47 @@ function renderGestorAtividade() {
     </div>`;
   };
 
-  const abaRecente  = _gestorAtivAba === 'recente';
-  const tabsHtml = `
-    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0;">
-      <button onclick="_gestorAtivAba='recente';_gestorHistOffset=0;renderGestorAtividade()" style="padding:10px 16px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${abaRecente ? 'var(--blue,#1570EF)' : 'transparent'};color:${abaRecente ? 'var(--blue,#1570EF)' : 'var(--text-sec)'};font-family:inherit;">
-        Atividade recente${recentes.length > 0 ? ` <span style="background:var(--blue,#1570EF);color:#fff;border-radius:10px;font-size:11px;padding:1px 6px;margin-left:4px;">${recentes.length}</span>` : ''}
-      </button>
-      <button onclick="_gestorAtivAba='historico';_gestorHistOffset=0;renderGestorAtividade()" style="padding:10px 16px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${!abaRecente ? 'var(--blue,#1570EF)' : 'transparent'};color:${!abaRecente ? 'var(--blue,#1570EF)' : 'var(--text-sec)'};font-family:inherit;">
-        Histórico
-      </button>
-    </div>`;
+  // Atividade recente (coluna esquerda)
+  const recenteConteudo = recentes.length > 0
+    ? `<div class="gstor-ativ-list">${recentes.map(_itemRow).join('')}</div>`
+    : `<div style="border-top:1px solid var(--border);padding:20px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhuma atividade recente.</div>`;
 
-  let conteudo = '';
-  if (abaRecente) {
-    conteudo = recentes.length > 0
-      ? `<div class="gstor-ativ-list">${recentes.map(_itemRow).join('')}</div>`
-      : `<div style="padding:20px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhuma atividade recente.</div>`;
-  } else {
-    // Histórico: agrupado por colaborador
-    const busca = _normGA(document.getElementById('gestorHistBusca')?.value || '');
+  // Histórico (coluna direita) — agrupado por colaborador
+  const busca = _normGA(document.getElementById('gestorHistBusca')?.value || '');
+  const gruposMap = new Map();
+  historico.forEach(h => {
+    const cid = String(h.colaborador_id);
+    if (!gruposMap.has(cid)) gruposMap.set(cid, { colab: colabMap.get(cid), processos: [] });
+    gruposMap.get(cid).processos.push(h);
+  });
+  let gruposArr = [...gruposMap.values()];
+  if (busca) gruposArr = gruposArr.filter(g => g.colab ? _normGA(g.colab.nome).includes(busca) : false);
 
-    // Agrupa processos (já por ferias_id) em grupos por colaborador_id
-    const gruposMap = new Map();
-    historico.forEach(h => {
-      const cid = String(h.colaborador_id);
-      if (!gruposMap.has(cid)) gruposMap.set(cid, { colab: colabMap.get(cid), processos: [] });
-      gruposMap.get(cid).processos.push(h);
-    });
-    let gruposArr = [...gruposMap.values()];
-    if (busca) gruposArr = gruposArr.filter(g => g.colab ? _normGA(g.colab.nome).includes(busca) : false);
-    // Já estão em ordem de mais recente pois historico vem de FERIAS_HISTORICO (criado_em desc)
-
-    const _renderCardGestor = g => {
-      const nome  = g.colab ? g.colab.nome : '—';
-      const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
-
-      // Determina se todos os processos têm o mesmo período
-      const pares = g.processos.map(h => { const i = _gestorProcessoInfo(h); return (i.inicio && i.fim) ? `${i.inicio}|${i.fim}` : null; }).filter(Boolean);
-      const unicos = [...new Set(pares)];
-      const periodoUnico = unicos.length === 1;
-      let headerPer = '';
-      if (periodoUnico) {
-        const [ini, fim] = unicos[0].split('|');
-        headerPer = `<div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${fmtD(ini)} → ${fmtD(fim)}</div>`;
+  const _renderCardGestor = g => {
+    const nome  = g.colab ? g.colab.nome : '—';
+    const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
+    const pares = g.processos.map(h => { const i = _gestorProcessoInfo(h); return (i.inicio && i.fim) ? `${i.inicio}|${i.fim}` : null; }).filter(Boolean);
+    const unicos = [...new Set(pares)];
+    const periodoUnico = unicos.length === 1;
+    let headerPer = '';
+    if (periodoUnico) {
+      const [ini, fim] = unicos[0].split('|');
+      headerPer = `<div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${fmtD(ini)} → ${fmtD(fim)}</div>`;
+    }
+    const eventoRows = g.processos.map(h => {
+      const info = _gestorProcessoInfo(h);
+      let perInline = '';
+      if (!periodoUnico && info.inicio && info.fim) {
+        perInline = `<span style="font-size:11px;color:var(--text-sec);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap;">📅 ${fmtD(info.inicio)} → ${fmtD(info.fim)}</span>`;
       }
-
-      const eventoRows = g.processos.map(h => {
-        const info = _gestorProcessoInfo(h);
-        let perInline = '';
-        if (!periodoUnico && info.inicio && info.fim) {
-          perInline = `<span style="font-size:11px;color:var(--text-sec);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap;">📅 ${fmtD(info.inicio)} → ${fmtD(info.fim)}</span>`;
-        }
-        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
           <div class="gstor-ativ-icon ${info.cls}" style="width:20px;height:20px;min-width:20px;">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
           <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>${perInline}
           </div>
         </div>`;
-      }).join('');
-
-      return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
+    }).join('');
+    return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
         <div style="padding:10px 12px;">
           <span class="gstor-ativ-nome">${nome}</span>
           ${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}
@@ -8867,44 +8848,54 @@ function renderGestorAtividade() {
         </div>
         <div style="padding:0 12px 4px;">${eventoRows}</div>
       </div>`;
-    };
+  };
 
-    const pagina = gruposArr.slice(0, _gestorHistOffset + _HIST_PAGE);
-    const temMais = gruposArr.length > pagina.length;
-    conteudo = `<div style="padding:10px 12px 6px;">
-        <input id="gestorHistBusca" type="text" placeholder="Buscar colaborador…"
-          oninput="renderGestorAtividade()"
-          style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
-      </div>` +
-      (pagina.length > 0
-        ? `<div style="padding-top:4px;">${pagina.map(_renderCardGestor).join('')}</div>
-           ${temMais ? `<button class="gstor-ativ-vermais" onclick="_gestorHistOffset+=_HIST_PAGE;renderGestorAtividade()">Ver mais ${Math.min(gruposArr.length - pagina.length, _HIST_PAGE)} colaboradores</button>` : ''}`
-        : `<div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`);
-  }
+  const pagina = gruposArr.slice(0, _gestorHistOffset + _HIST_PAGE);
+  const temMais = gruposArr.length > pagina.length;
+  const historicoConteudo = `<div style="border-top:1px solid var(--border);padding:10px 12px 6px;">
+      <input id="gestorHistBusca" type="text" placeholder="Buscar colaborador…"
+        oninput="renderGestorAtividade()"
+        style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+    </div>` +
+    (pagina.length > 0
+      ? `<div style="padding-top:4px;">${pagina.map(_renderCardGestor).join('')}</div>
+         ${temMais ? `<button class="gstor-ativ-vermais" onclick="_gestorHistOffset+=_HIST_PAGE;renderGestorAtividade()">Ver mais ${Math.min(gruposArr.length - pagina.length, _HIST_PAGE)} colaboradores</button>` : ''}`
+      : `<div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`);
+
+  const chevronUp   = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`;
+  const chevronDown = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
 
   const _gBadge = recentes.length > 0
     ? `<span style="background:var(--blue,#1570EF);color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:2px 7px;margin-left:6px;">${recentes.length}</span>`
     : `<span style="background:var(--border);color:var(--text-ter);border-radius:10px;font-size:11px;font-weight:600;padding:2px 7px;margin-left:6px;">0</span>`;
-  const _gChevron = _gestorAtivExpandido
-    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`
-    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
-  const _gHeader = `<div onclick="_gestorAtivExpandido=!_gestorAtivExpandido;renderGestorAtividade()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:${_gestorAtivExpandido ? '1px solid var(--border)' : 'none'};">
-    <div style="display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--text);">Pendências${_gBadge}</div>
-    <span style="color:var(--text-sec);display:flex;align-items:center;">${_gChevron}</span>
+
+  const _gRHeader = `<div onclick="_gestorRecenteExpandido=!_gestorRecenteExpandido;renderGestorAtividade()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:${_gestorRecenteExpandido ? '1px solid var(--border)' : 'none'};">
+    <div style="display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--text);">Atividade recente${_gBadge}</div>
+    <span style="color:var(--text-sec);display:flex;align-items:center;">${_gestorRecenteExpandido ? chevronUp : chevronDown}</span>
   </div>`;
 
-  el.innerHTML = `<div class="gstor-ativ-wrap">${_gHeader}${_gestorAtivExpandido ? tabsHtml + conteudo : ''}</div>`;
+  const _gHHeader = `<div onclick="_gestorHistExpandido=!_gestorHistExpandido;renderGestorAtividade()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:${_gestorHistExpandido ? '1px solid var(--border)' : 'none'};">
+    <div style="display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--text);">Histórico</div>
+    <span style="color:var(--text-sec);display:flex;align-items:center;">${_gestorHistExpandido ? chevronUp : chevronDown}</span>
+  </div>`;
 
-  if (!abaRecente && _gestorAtivExpandido) {
-    const inp = document.getElementById('gestorHistBusca');
-    if (inp && document.activeElement !== inp) { /* não forçar foco */ }
-  }
+  el.innerHTML = `
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;align-items:start;margin-bottom:16px;">
+  <div class="gstor-ativ-wrap" style="margin-bottom:0;">
+    ${_gRHeader}
+    ${_gestorRecenteExpandido ? recenteConteudo : ''}
+  </div>
+  <div class="gstor-ativ-wrap" style="margin-bottom:0;">
+    ${_gHHeader}
+    ${_gestorHistExpandido ? historicoConteudo : ''}
+  </div>
+</div>`;
 }
 
 // ─── Atividade recente — Visão RH ────────────────────────────────────────────
-let _rhAtivAba       = 'recente'; // 'recente' | 'historico'
-let _rhHistOffset    = 0;
-let _rhAtivExpandido = false; // sempre recolhido ao entrar na tela
+let _rhRecenteExpandido = false;
+let _rhHistExpandido    = false;
+let _rhHistOffset       = 0;
 
 function _rhAtivAbrirModal(feriasId) {
   const lista = getPendentes();
@@ -8967,65 +8958,46 @@ function renderRhAtividade() {
     </div>`;
   };
 
-  const abaRecente = _rhAtivAba === 'recente';
-  const tabsHtml = `
-    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0;">
-      <button onclick="_rhAtivAba='recente';_rhHistOffset=0;renderRhAtividade()" style="padding:10px 16px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${abaRecente ? 'var(--blue,#1570EF)' : 'transparent'};color:${abaRecente ? 'var(--blue,#1570EF)' : 'var(--text-sec)'};font-family:inherit;">
-        Atividade recente${recentes.length > 0 ? ` <span style="background:var(--blue,#1570EF);color:#fff;border-radius:10px;font-size:11px;padding:1px 6px;margin-left:4px;">${recentes.length}</span>` : ''}
-      </button>
-      <button onclick="_rhAtivAba='historico';_rhHistOffset=0;renderRhAtividade()" style="padding:10px 16px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${!abaRecente ? 'var(--blue,#1570EF)' : 'transparent'};color:${!abaRecente ? 'var(--blue,#1570EF)' : 'var(--text-sec)'};font-family:inherit;">
-        Histórico
-      </button>
-    </div>`;
+  // Atividade recente (coluna esquerda)
+  const recenteConteudo = recentes.length > 0
+    ? `<div class="gstor-ativ-list">${recentes.map(_itemRow).join('')}</div>`
+    : `<div style="border-top:1px solid var(--border);padding:20px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhuma atividade recente.</div>`;
 
-  let conteudo = '';
-  if (abaRecente) {
-    conteudo = recentes.length > 0
-      ? `<div class="gstor-ativ-list">${recentes.map(_itemRow).join('')}</div>`
-      : `<div style="padding:20px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhuma atividade recente.</div>`;
-  } else {
-    // Histórico: agrupado por colaborador
-    const busca = _norm(document.getElementById('rhHistBusca')?.value || '');
+  // Histórico (coluna direita) — agrupado por colaborador
+  const busca = _norm(document.getElementById('rhHistBusca')?.value || '');
+  const gruposMap = new Map();
+  historico.forEach(h => {
+    const cid = String(h.colaborador_id);
+    if (!gruposMap.has(cid)) gruposMap.set(cid, { colab: colabMap.get(cid), eventos: [] });
+    gruposMap.get(cid).eventos.push(h);
+  });
+  let gruposArr = [...gruposMap.values()];
+  if (busca) gruposArr = gruposArr.filter(g => g.colab ? _norm(g.colab.nome).includes(busca) : false);
+  gruposArr.sort((a, b) => (b.eventos[0]?.criado_em || '').localeCompare(a.eventos[0]?.criado_em || ''));
 
-    // Agrupa entradas brutas por colaborador_id
-    const gruposMap = new Map();
-    historico.forEach(h => {
-      const cid = String(h.colaborador_id);
-      if (!gruposMap.has(cid)) gruposMap.set(cid, { colab: colabMap.get(cid), eventos: [] });
-      gruposMap.get(cid).eventos.push(h);
-    });
-    let gruposArr = [...gruposMap.values()];
-    if (busca) gruposArr = gruposArr.filter(g => g.colab ? _norm(g.colab.nome).includes(busca) : false);
-    // Ordem: grupo cujo evento mais recente é o mais novo primeiro
-    gruposArr.sort((a, b) => (b.eventos[0]?.criado_em || '').localeCompare(a.eventos[0]?.criado_em || ''));
-
-    const _renderCardRH = g => {
-      const nome  = g.colab ? g.colab.nome : '—';
-      const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
-
-      // Detecta períodos distintos dentro dos eventos deste colaborador
-      const pares = g.eventos
-        .map(h => { const d = h.detalhe || {}; return (d.inicio && d.fim) ? `${d.inicio}|${d.fim}` : null; })
-        .filter(Boolean);
-      const unicos = [...new Set(pares)];
-      const periodoUnico = unicos.length === 1;
-      let headerPer = '';
-      if (periodoUnico) {
-        const [ini, fim] = unicos[0].split('|');
-        headerPer = `<div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${fmtD(ini)} → ${fmtD(fim)}</div>`;
+  const _renderCardRH = g => {
+    const nome  = g.colab ? g.colab.nome : '—';
+    const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
+    const pares = g.eventos
+      .map(h => { const d = h.detalhe || {}; return (d.inicio && d.fim) ? `${d.inicio}|${d.fim}` : null; })
+      .filter(Boolean);
+    const unicos = [...new Set(pares)];
+    const periodoUnico = unicos.length === 1;
+    let headerPer = '';
+    if (periodoUnico) {
+      const [ini, fim] = unicos[0].split('|');
+      headerPer = `<div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${fmtD(ini)} → ${fmtD(fim)}</div>`;
+    }
+    const eventoRows = g.eventos.map(h => {
+      const { cls, chip, svg } = _acaoInfo(h.acao || '');
+      const det = h.detalhe || {};
+      const ts  = h.criado_em ? `${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}` : '';
+      let perInline = '';
+      if (!periodoUnico && det.inicio && det.fim) {
+        perInline = `<span style="font-size:11px;color:var(--text-sec);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap;">📅 ${fmtD(det.inicio)} → ${fmtD(det.fim)}</span>`;
       }
-
-      const eventoRows = g.eventos.map(h => {
-        const { cls, chip, svg } = _acaoInfo(h.acao || '');
-        const det = h.detalhe || {};
-        const ts  = h.criado_em ? `${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}` : '';
-        // Período inline apenas quando há múltiplos períodos distintos
-        let perInline = '';
-        if (!periodoUnico && det.inicio && det.fim) {
-          perInline = `<span style="font-size:11px;color:var(--text-sec);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap;">📅 ${fmtD(det.inicio)} → ${fmtD(det.fim)}</span>`;
-        }
-        const motivoEvento = det.motivo || det.obs_gestor;
-        return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
+      const motivoEvento = det.motivo || det.obs_gestor;
+      return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
           <div class="gstor-ativ-icon ${cls}" style="width:20px;height:20px;min-width:20px;margin-top:1px;">${svg}</div>
           <div style="flex:1;min-width:0;">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -9035,9 +9007,8 @@ function renderRhAtividade() {
             ${motivoEvento ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${motivoEvento}</div>` : ''}
           </div>
         </div>`;
-      }).join('');
-
-      return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
+    }).join('');
+    return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
         <div style="padding:10px 12px;">
           <span class="gstor-ativ-nome">${nome}</span>
           ${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}
@@ -9045,33 +9016,48 @@ function renderRhAtividade() {
         </div>
         <div style="padding:0 12px 4px;">${eventoRows}</div>
       </div>`;
-    };
+  };
 
-    const pagina = gruposArr.slice(0, _rhHistOffset + _HIST_PAGE);
-    const temMais = gruposArr.length > pagina.length;
-    conteudo = `<div style="padding:10px 12px 6px;">
-        <input id="rhHistBusca" type="text" placeholder="Buscar colaborador…"
-          oninput="renderRhAtividade()"
-          style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
-      </div>` +
-      (pagina.length > 0
-        ? `<div style="padding-top:4px;">${pagina.map(_renderCardRH).join('')}</div>
-           ${temMais ? `<button class="gstor-ativ-vermais" onclick="_rhHistOffset+=_HIST_PAGE;renderRhAtividade()">Ver mais ${Math.min(gruposArr.length - pagina.length, _HIST_PAGE)} colaboradores</button>` : ''}`
-        : `<div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`);
-  }
+  const pagina = gruposArr.slice(0, _rhHistOffset + _HIST_PAGE);
+  const temMais = gruposArr.length > pagina.length;
+  const historicoConteudo = `<div style="border-top:1px solid var(--border);padding:10px 12px 6px;">
+      <input id="rhHistBusca" type="text" placeholder="Buscar colaborador…"
+        oninput="renderRhAtividade()"
+        style="width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+    </div>` +
+    (pagina.length > 0
+      ? `<div style="padding-top:4px;">${pagina.map(_renderCardRH).join('')}</div>
+         ${temMais ? `<button class="gstor-ativ-vermais" onclick="_rhHistOffset+=_HIST_PAGE;renderRhAtividade()">Ver mais ${Math.min(gruposArr.length - pagina.length, _HIST_PAGE)} colaboradores</button>` : ''}`
+      : `<div style="padding:16px;font-size:13px;color:var(--text-ter);text-align:center;">${busca ? 'Nenhum resultado para essa busca.' : 'Nenhum histórico ainda.'}</div>`);
+
+  const chevronUp   = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`;
+  const chevronDown = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
 
   const _rhBadge = recentes.length > 0
     ? `<span style="background:var(--blue,#1570EF);color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:2px 7px;margin-left:6px;">${recentes.length}</span>`
     : `<span style="background:var(--border);color:var(--text-ter);border-radius:10px;font-size:11px;font-weight:600;padding:2px 7px;margin-left:6px;">0</span>`;
-  const _rhChevron = _rhAtivExpandido
-    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`
-    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
-  const _rhHeader = `<div onclick="_rhAtivExpandido=!_rhAtivExpandido;renderRhAtividade()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:${_rhAtivExpandido ? '1px solid var(--border)' : 'none'};">
-    <div style="display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--text);">Pendências${_rhBadge}</div>
-    <span style="color:var(--text-sec);display:flex;align-items:center;">${_rhChevron}</span>
+
+  const _rhRHeader = `<div onclick="_rhRecenteExpandido=!_rhRecenteExpandido;renderRhAtividade()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:${_rhRecenteExpandido ? '1px solid var(--border)' : 'none'};">
+    <div style="display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--text);">Atividade recente${_rhBadge}</div>
+    <span style="color:var(--text-sec);display:flex;align-items:center;">${_rhRecenteExpandido ? chevronUp : chevronDown}</span>
   </div>`;
 
-  el.innerHTML = `<div class="gstor-ativ-wrap" style="margin-bottom:16px;">${_rhHeader}${_rhAtivExpandido ? tabsHtml + conteudo : ''}</div>`;
+  const _rhHHeader = `<div onclick="_rhHistExpandido=!_rhHistExpandido;renderRhAtividade()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:${_rhHistExpandido ? '1px solid var(--border)' : 'none'};">
+    <div style="display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--text);">Histórico</div>
+    <span style="color:var(--text-sec);display:flex;align-items:center;">${_rhHistExpandido ? chevronUp : chevronDown}</span>
+  </div>`;
+
+  el.innerHTML = `
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;align-items:start;margin-bottom:16px;">
+  <div class="gstor-ativ-wrap" style="margin-bottom:0;">
+    ${_rhRHeader}
+    ${_rhRecenteExpandido ? recenteConteudo : ''}
+  </div>
+  <div class="gstor-ativ-wrap" style="margin-bottom:0;">
+    ${_rhHHeader}
+    ${_rhHistExpandido ? historicoConteudo : ''}
+  </div>
+</div>`;
 }
 
 // ── Helper: colaboradores com gozo parcial confirmado e dias ainda a registrar ─
