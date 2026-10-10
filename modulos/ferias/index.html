@@ -4499,11 +4499,15 @@ async function rhAprovarGozoPendente(colabKey, sbId, lancIdx, saida) {
   try { renderMetricas(); } catch(_) {}
   const _gozoAprov = nova.find(rx => Number(rx.lancIdx) === Number(lancIdx) && rx.saida === saida);
   const _perfGozo = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-  if (colab?._sbColabId) try { await _logAtiv(sbId, colab._sbColabId, 'gozo_aprovado', _perfGozo.nome || 'RH', { saida, dias: _gozoAprov?.dias ?? null, lancIdx: Number(lancIdx) }); } catch(_) {}
+  let _histFalhouGozo = false;
+  if (colab?._sbColabId) {
+    try { await _logAtiv(sbId, colab._sbColabId, 'gozo_aprovado', _perfGozo.nome || 'RH', { saida, dias: _gozoAprov?.dias ?? null, lancIdx: Number(lancIdx) }); }
+    catch(e) { _histFalhouGozo = true; console.error('[_logAtiv gozo_aprovado]', e); }
+  }
   if (colab?._sbColabId) await _logColabHist(colab._sbColabId, 'ferias_gozo_aprovado', `Gozo aprovado: saída ${saida}${_gozoAprov?.dias ? ' · ' + _gozoAprov.dias + 'd' : ''}`, _perfGozo.nome || 'RH');
   renderRhAtividade();
   if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
-  toast('✓ Gozo aprovado e registrado!');
+  toast(_histFalhouGozo ? '✓ Gozo aprovado (histórico não registrado — contate o suporte)' : '✓ Gozo aprovado e registrado!', _histFalhouGozo ? 'aviso' : '');
 }
 
 async function rhRejeitarGozoPendente(colabKey, sbId, lancIdx, saida) {
@@ -5659,9 +5663,13 @@ async function rhAprovarSolicitado(feriasId, idx) {
       if (syncL) window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(syncL.colaborador_id));
     }
     const _perfAprov = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-    if (_aprovColabId) await _logAtiv(feriasId, _aprovColabId, 'aprovado', _perfAprov.nome || 'RH', { status: 'Aprovado', ...(_aprovLanc || {}) });
+    let _histFalhouAprov = false;
+    if (_aprovColabId) {
+      try { await _logAtiv(feriasId, _aprovColabId, 'aprovado', _perfAprov.nome || 'RH', { status: 'Aprovado', ...(_aprovLanc || {}) }); }
+      catch(e) { _histFalhouAprov = true; console.error('[_logAtiv aprovado]', e); }
+    }
     if (_aprovColabId) await _logColabHist(_aprovColabId, 'ferias_aprovado', `Férias aprovadas${_aprovLanc?.inicio ? ': ' + formatDate(_aprovLanc.inicio) + ' → ' + formatDate(_aprovLanc.fim) + ' (' + (_aprovLanc.dias||'?') + 'd)' : ''}`, _perfAprov.nome || 'RH');
-    toast('✓ Férias aprovadas');
+    toast(_histFalhouAprov ? '✓ Férias aprovadas — histórico não registrado, contate o suporte.' : '✓ Férias aprovadas', _histFalhouAprov ? 'aviso' : '');
     renderPendentes();
     renderListaAnual();
     renderRhAtividade();
@@ -5710,8 +5718,12 @@ async function rhRecusarSolicitado(feriasId, idx) {
       if (syncL) window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(syncL.colaborador_id));
     }
     const _perfRec = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-    if (_recColabId) await _logAtiv(feriasId, _recColabId, 'rejeitado', _perfRec.nome || 'RH', { status: 'Rejeitado', obs_gestor: motivo.trim(), ...(_recLanc || {}) });
-    toast('Solicitação recusada');
+    let _histFalhouRec = false;
+    if (_recColabId) {
+      try { await _logAtiv(feriasId, _recColabId, 'rejeitado', _perfRec.nome || 'RH', { status: 'Rejeitado', obs_gestor: motivo.trim(), ...(_recLanc || {}) }); }
+      catch(e) { _histFalhouRec = true; console.error('[_logAtiv rejeitado]', e); }
+    }
+    toast(_histFalhouRec ? 'Solicitação recusada — histórico não registrado, contate o suporte.' : 'Solicitação recusada', _histFalhouRec ? 'aviso' : '');
     renderPendentes();
     renderListaAnual();
     renderRhAtividade();
@@ -5843,16 +5855,20 @@ async function aprovarPendente() {
       reg.status = 'Aprovado';
       // Log
       const _perfAprov2 = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-      if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'alteracao_aprovada', _perfAprov2.nome || 'RH', {
-        data_anterior_inicio: _altMeta.data_anterior_inicio,
-        data_anterior_fim:    _altMeta.data_anterior_fim,
-        novo_inicio:          _altMeta.novo_inicio,
-        novo_fim:             _altMeta.novo_fim,
-        aprovado_por:         _perfAprov2.nome || 'RH'
-      });
+      let _histFalhouAlt = false;
+      if (reg._sbId && colab._sbColabId) {
+        try { await _logAtiv(reg._sbId, colab._sbColabId, 'alteracao_aprovada', _perfAprov2.nome || 'RH', {
+          data_anterior_inicio: _altMeta.data_anterior_inicio,
+          data_anterior_fim:    _altMeta.data_anterior_fim,
+          novo_inicio:          _altMeta.novo_inicio,
+          novo_fim:             _altMeta.novo_fim,
+          aprovado_por:         _perfAprov2.nome || 'RH'
+        }); }
+        catch(e) { _histFalhouAlt = true; console.error('[_logAtiv alteracao_aprovada]', e); }
+      }
       if (colab._sbColabId) await _logColabHist(colab._sbColabId, 'ferias_alteracao_aprovada', `Alteração de data aprovada: ${formatDate(_altMeta.data_anterior_inicio)}→${formatDate(_altMeta.data_anterior_fim)} passou para ${formatDate(_altMeta.novo_inicio)}→${formatDate(_altMeta.novo_fim)}`, _perfAprov2.nome || 'RH');
       document.getElementById('modalAprovar').classList.remove('open');
-      toast(`✓ Alteração de data aprovada — ${colab.nome}`);
+      toast(_histFalhouAlt ? `✓ Alteração aprovada — ${colab.nome} (histórico não registrado)` : `✓ Alteração de data aprovada — ${colab.nome}`, _histFalhouAlt ? 'aviso' : '');
       renderAll();
       return;
     }
@@ -5883,13 +5899,17 @@ async function aprovarPendente() {
       reg.status = novoStatus;
       // Log
       const _perfAprovC = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-      if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'cancelamento_aprovado', _perfAprovC.nome || 'RH', {
-        inicio: _cancelMeta.inicio, fim: _cancelMeta.fim, dias: _cancelMeta.dias,
-        aprovado_por: _perfAprovC.nome || 'RH'
-      });
+      let _histFalhouCancAprov = false;
+      if (reg._sbId && colab._sbColabId) {
+        try { await _logAtiv(reg._sbId, colab._sbColabId, 'cancelamento_aprovado', _perfAprovC.nome || 'RH', {
+          inicio: _cancelMeta.inicio, fim: _cancelMeta.fim, dias: _cancelMeta.dias,
+          aprovado_por: _perfAprovC.nome || 'RH'
+        }); }
+        catch(e) { _histFalhouCancAprov = true; console.error('[_logAtiv cancelamento_aprovado]', e); }
+      }
       if (colab._sbColabId) await _logColabHist(colab._sbColabId, 'ferias_cancelamento_aprovado', `Cancelamento aprovado: ${formatDate(_cancelMeta.inicio)} → ${formatDate(_cancelMeta.fim)} (${_cancelMeta.dias}d) · saldo devolvido`, _perfAprovC.nome || 'RH');
       document.getElementById('modalAprovar').classList.remove('open');
-      toast(`✓ Cancelamento aprovado — ${colab.nome}. Saldo devolvido.`);
+      toast(_histFalhouCancAprov ? `✓ Cancelamento aprovado — ${colab.nome} (histórico não registrado)` : `✓ Cancelamento aprovado — ${colab.nome}. Saldo devolvido.`, _histFalhouCancAprov ? 'aviso' : '');
       renderAll();
       return;
     }
@@ -5949,17 +5969,21 @@ async function rejeitarPendente() {
       reg.status = 'Aprovado';
       // Log
       const _perfRec2 = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-      if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'alteracao_recusada', _perfRec2.nome || 'RH', {
-        motivo,
-        data_anterior_inicio: _altMeta.data_anterior_inicio,
-        data_anterior_fim:    _altMeta.data_anterior_fim,
-        novo_inicio:          _altMeta.novo_inicio,
-        novo_fim:             _altMeta.novo_fim,
-        recusado_por:         _perfRec2.nome || 'RH'
-      });
+      let _histFalhouAltRec = false;
+      if (reg._sbId && colab._sbColabId) {
+        try { await _logAtiv(reg._sbId, colab._sbColabId, 'alteracao_recusada', _perfRec2.nome || 'RH', {
+          motivo,
+          data_anterior_inicio: _altMeta.data_anterior_inicio,
+          data_anterior_fim:    _altMeta.data_anterior_fim,
+          novo_inicio:          _altMeta.novo_inicio,
+          novo_fim:             _altMeta.novo_fim,
+          recusado_por:         _perfRec2.nome || 'RH'
+        }); }
+        catch(e) { _histFalhouAltRec = true; console.error('[_logAtiv alteracao_recusada]', e); }
+      }
       if (colab._sbColabId) await _logColabHist(colab._sbColabId, 'ferias_alteracao_recusada', `Alteração de data recusada. Motivo: ${motivo}`, _perfRec2.nome || 'RH');
       document.getElementById('modalAprovar').classList.remove('open');
-      toast(`Alteração de data recusada — ${colab.nome}`);
+      toast(_histFalhouAltRec ? `Alteração de data recusada — ${colab.nome} (histórico não registrado)` : `Alteração de data recusada — ${colab.nome}`, _histFalhouAltRec ? 'aviso' : '');
       renderAll();
       return;
     }
@@ -5970,12 +5994,16 @@ async function rejeitarPendente() {
       reg._obsGestor        = null;
       reg.status = 'Aprovado';
       const _perfRecC = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-      if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'cancelamento_recusado', _perfRecC.nome || 'RH', {
-        motivo, inicio: _cancelMeta.inicio, fim: _cancelMeta.fim, recusado_por: _perfRecC.nome || 'RH'
-      });
+      let _histFalhouCancRec = false;
+      if (reg._sbId && colab._sbColabId) {
+        try { await _logAtiv(reg._sbId, colab._sbColabId, 'cancelamento_recusado', _perfRecC.nome || 'RH', {
+          motivo, inicio: _cancelMeta.inicio, fim: _cancelMeta.fim, recusado_por: _perfRecC.nome || 'RH'
+        }); }
+        catch(e) { _histFalhouCancRec = true; console.error('[_logAtiv cancelamento_recusado]', e); }
+      }
       if (colab._sbColabId) await _logColabHist(colab._sbColabId, 'ferias_cancelamento_recusado', `Cancelamento recusado: ${formatDate(_cancelMeta.inicio)} → ${formatDate(_cancelMeta.fim)}. Motivo: ${motivo}`, _perfRecC.nome || 'RH');
       document.getElementById('modalAprovar').classList.remove('open');
-      toast(`Solicitação de cancelamento recusada — ${colab.nome}`);
+      toast(_histFalhouCancRec ? `Cancelamento recusado — ${colab.nome} (histórico não registrado)` : `Solicitação de cancelamento recusada — ${colab.nome}`, _histFalhouCancRec ? 'aviso' : '');
       renderAll();
       return;
     }
@@ -5995,10 +6023,14 @@ async function rejeitarPendente() {
     reg.status = 'Rejeitado';
     reg._motivoRejeicao = motivo;
     const _perfRejPad = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
-    if (reg._sbId && colab._sbColabId) await _logAtiv(reg._sbId, colab._sbColabId, 'rejeitado', _perfRejPad.nome || 'RH', { status: 'Rejeitado', obs_gestor: motivo, ..._recLancPad });
+    let _histFalhouRejPad = false;
+    if (reg._sbId && colab._sbColabId) {
+      try { await _logAtiv(reg._sbId, colab._sbColabId, 'rejeitado', _perfRejPad.nome || 'RH', { status: 'Rejeitado', obs_gestor: motivo, ..._recLancPad }); }
+      catch(e) { _histFalhouRejPad = true; console.error('[_logAtiv rejeitado]', e); }
+    }
     if (colab._sbColabId) await _logColabHist(colab._sbColabId, 'ferias_rejeitado', `Férias rejeitadas${_recLancPad.inicio ? ': ' + formatDate(_recLancPad.inicio) + ' → ' + formatDate(_recLancPad.fim) : ''}. Motivo: ${motivo}`, _perfRejPad.nome || 'RH');
     document.getElementById('modalAprovar').classList.remove('open');
-    toast(`Lançamento rejeitado — ${colab.nome}`);
+    toast(_histFalhouRejPad ? `Lançamento rejeitado — ${colab.nome} (histórico não registrado)` : `Lançamento rejeitado — ${colab.nome}`, _histFalhouRejPad ? 'aviso' : '');
     renderAll();
   } catch(e) {
     alert('Erro ao salvar rejeição: ' + e.message);
@@ -8608,7 +8640,7 @@ function gestorLancFuturos30(colabsBase) {
 
 async function _logAtiv(feriasId, colabId, acao, usuario, detalhe) {
   const entry = { ferias_id: Number(feriasId), colaborador_id: Number(colabId), acao, usuario: usuario || null, detalhe: detalhe || null };
-  try { await sbPost('ferias_historico', entry); } catch(e) { console.warn('[ferias_historico] insert falhou:', e?.message || e); }
+  await sbPost('ferias_historico', entry);
   FERIAS_HISTORICO.unshift({ ...entry, id: Date.now(), criado_em: new Date().toISOString() });
 }
 
@@ -11704,10 +11736,12 @@ async function gestorEnviarCancelamento() {
       per._feriasRow.status     = 'Cancelamento_Solicitado';
       per._feriasRow.obs_gestor = JSON.stringify(meta);
     }
-    try { await _logAtiv(periodoId, colabId, 'cancelamento_solicitado', GESTOR_NOME_USUARIO, { inicio: meta.inicio, fim: meta.fim, dias: meta.dias, slot }); } catch(_) {}
+    let _histFalhouCancSol = false;
+    try { await _logAtiv(periodoId, colabId, 'cancelamento_solicitado', GESTOR_NOME_USUARIO, { inicio: meta.inicio, fim: meta.fim, dias: meta.dias, slot }); }
+    catch(e) { _histFalhouCancSol = true; console.error('[_logAtiv cancelamento_solicitado]', e); }
     await _logColabHist(colabId, 'ferias_cancelamento_solicitado', `Cancelamento solicitado: ${formatDate(meta.inicio)} → ${formatDate(meta.fim)} (${meta.dias}d)`, GESTOR_NOME_USUARIO);
     fecharModalGestorCancel();
-    toast('✓ Solicitação de cancelamento enviada para o RH.');
+    toast(_histFalhouCancSol ? '✓ Cancelamento enviado para o RH (histórico não registrado)' : '✓ Solicitação de cancelamento enviada para o RH.', _histFalhouCancSol ? 'aviso' : '');
     const c = GESTOR_COLABS.find(c => String(c.id) === String(colabId));
     if (c) _renderGsolHistoricoRH(c);
     if (typeof renderGestorAlerts    === 'function') renderGestorAlerts();
@@ -11783,9 +11817,11 @@ async function gestorEnviarAlteracao() {
     }
     fecharModalGestorAlt();
     // Log de auditoria
-    try { await _logAtiv(ctx.periodoId, ctx.colabId, 'alteracao_solicitada', GESTOR_NOME_USUARIO, { inicio: novoInicio, fim: novoFim, dias: ctx.dias, slot }); } catch(_) {}
+    let _histFalhouAltSol = false;
+    try { await _logAtiv(ctx.periodoId, ctx.colabId, 'alteracao_solicitada', GESTOR_NOME_USUARIO, { inicio: novoInicio, fim: novoFim, dias: ctx.dias, slot }); }
+    catch(e) { _histFalhouAltSol = true; console.error('[_logAtiv alteracao_solicitada]', e); }
     await _logColabHist(ctx.colabId, 'ferias_alteracao_solicitada', `Alteração de data solicitada: ${formatDate(novoInicio)} → ${formatDate(novoFim)}`, GESTOR_NOME_USUARIO);
-    toast('✓ Solicitação de alteração enviada para o RH.');
+    toast(_histFalhouAltSol ? '✓ Alteração enviada para o RH (histórico não registrado)' : '✓ Solicitação de alteração enviada para o RH.', _histFalhouAltSol ? 'aviso' : '');
     const c = GESTOR_COLABS.find(c => String(c.id) === String(ctx.colabId));
     if (c) _renderGsolHistoricoRH(c);
     if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
@@ -11960,13 +11996,15 @@ async function gestorEnviarSolicitacao() {
     if (window._gestorAguardAprov && !window._gestorAguardAprov.some(id => String(id) === String(colab.id))) {
       window._gestorAguardAprov.push(String(colab.id));
     }
-    await _logAtiv(feriasId, colab.id, 'solicitado', GESTOR_NOME_USUARIO, { inicio, fim, dias: diasVal, slot: slotKey });
+    let _histFalhouSol = false;
+    try { await _logAtiv(feriasId, colab.id, 'solicitado', GESTOR_NOME_USUARIO, { inicio, fim, dias: diasVal, slot: slotKey }); }
+    catch(e) { _histFalhouSol = true; console.error('[_logAtiv solicitado]', e); }
     await _logColabHist(colab.id, 'ferias_solicitado', `Férias solicitadas: ${formatDate(inicio)} → ${formatDate(fim)} (${diasVal}d)`, GESTOR_NOME_USUARIO);
     fecharModalGestor();
     renderGestorAlerts();
     renderGestorAtencao();
     renderGestorAtividade();
-    toast('✓ Solicitação enviada para o RH aprovar.');
+    toast(_histFalhouSol ? '✓ Solicitação enviada para o RH aprovar (histórico não registrado)' : '✓ Solicitação enviada para o RH aprovar.', _histFalhouSol ? 'aviso' : '');
   } catch(e) {
     toast('Erro ao enviar: ' + (e.message || e));
     const btn = document.getElementById('mgBtnEnviar');
@@ -12580,9 +12618,11 @@ async function grhEnviarSolicitarGozo(perId, lancIdx, colabId, realLancIdx) {
 
     const colab = GESTOR_COLABS.find(cc => String(cc.id) === String(colabId));
     if (colab && typeof _renderGsolHistoricoRH === 'function') _renderGsolHistoricoRH(colab);
-    try { await _logAtiv(feriasId, colabId, 'gozo_solicitado', GESTOR_NOME_USUARIO, { saida, retorno, dias: diasVal, lancIdx: Number(realLancIdx) }); } catch(_) {}
+    let _histFalhouGozoSol = false;
+    try { await _logAtiv(feriasId, colabId, 'gozo_solicitado', GESTOR_NOME_USUARIO, { saida, retorno, dias: diasVal, lancIdx: Number(realLancIdx) }); }
+    catch(e) { _histFalhouGozoSol = true; console.error('[_logAtiv gozo_solicitado]', e); }
     await _logColabHist(colabId, 'ferias_gozo_solicitado', `Gozo solicitado: saída ${saida} · retorno ${retorno}`, GESTOR_NOME_USUARIO);
-    toast('✓ Solicitação de gozo enviada para o RH aprovar.');
+    toast(_histFalhouGozoSol ? '✓ Gozo enviado para o RH aprovar (histórico não registrado)' : '✓ Solicitação de gozo enviada para o RH aprovar.', _histFalhouGozoSol ? 'aviso' : '');
   } catch(e) {
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Enviar para RH'; }
     showErr('Erro ao enviar: ' + (e.message || e));
