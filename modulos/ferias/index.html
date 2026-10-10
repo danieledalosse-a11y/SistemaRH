@@ -8872,48 +8872,84 @@ function renderGestorAtividade() {
       ? `<div class="gstor-ativ-list">${recentes.map(_itemRow).join('')}</div>`
       : `<div style="padding:20px 16px;font-size:13px;color:var(--text-ter);text-align:center;">Nenhuma atividade recente.</div>`;
   } else {
-    // Histórico: agrupado por colaborador
+    // Histórico: todos os eventos dos processos concluídos, agrupados por colaborador
     const busca = _normGA(document.getElementById('gestorHistBusca')?.value || '');
+
+    // Determina quais ferias_ids já saíram da Atividade Recente (evento mais recente ativo:false)
+    const processosHistoricoIds = new Set(historico.map(h => String(h.ferias_id)));
+
+    // Coleta TODOS os eventos de FERIAS_HISTORICO para esses processos
     const gruposMap = new Map();
-    historico.forEach(h => {
+    FERIAS_HISTORICO.forEach(h => {
+      if (!idsPermitidos.has(String(h.colaborador_id))) return;
+      if (!processosHistoricoIds.has(String(h.ferias_id))) return;
       const cid = String(h.colaborador_id);
-      if (!gruposMap.has(cid)) gruposMap.set(cid, { colab: colabMap.get(cid), processos: [] });
-      gruposMap.get(cid).processos.push(h);
+      if (!gruposMap.has(cid)) gruposMap.set(cid, { colab: colabMap.get(cid), eventos: [] });
+      gruposMap.get(cid).eventos.push(h);
     });
+
     let gruposArr = [...gruposMap.values()];
     if (busca) gruposArr = gruposArr.filter(g => g.colab ? _normGA(g.colab.nome).includes(busca) : false);
+    // Colaborador com evento mais recente aparece primeiro
+    gruposArr.sort((a, b) => {
+      const latA = a.eventos.reduce((m, h) => (h.criado_em || '') > m ? (h.criado_em || '') : m, '');
+      const latB = b.eventos.reduce((m, h) => (h.criado_em || '') > m ? (h.criado_em || '') : m, '');
+      return latB.localeCompare(latA);
+    });
 
     const _renderCardGestor = g => {
       const nome  = g.colab ? g.colab.nome : '—';
       const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
-      const pares = g.processos.map(h => { const i = _gestorProcessoInfo(h); return (i.inicio && i.fim) ? `${i.inicio}|${i.fim}` : null; }).filter(Boolean);
-      const unicos = [...new Set(pares)];
-      const periodoUnico = unicos.length === 1;
-      let headerPer = '';
-      if (periodoUnico) {
-        const [ini, fim] = unicos[0].split('|');
-        headerPer = `<div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${fmtD(ini)} → ${fmtD(fim)}</div>`;
-      }
-      const eventoRows = g.processos.map(h => {
-        const info = _gestorProcessoInfo(h);
-        let perInline = '';
-        if (!periodoUnico && info.inicio && info.fim) {
-          perInline = `<span style="font-size:11px;color:var(--text-sec);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap;">📅 ${fmtD(info.inicio)} → ${fmtD(info.fim)}</span>`;
-        }
-        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
-          <div class="gstor-ativ-icon ${info.cls}" style="width:20px;height:20px;min-width:20px;">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
-          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>${perInline}
-          </div>
-        </div>`;
+
+      // Subagrupamento por ferias_id — cada processo vira um bloco de timeline
+      const procMap = new Map();
+      g.eventos.forEach(h => {
+        const pid = String(h.ferias_id);
+        if (!procMap.has(pid)) procMap.set(pid, []);
+        procMap.get(pid).push(h);
+      });
+      // Cada bloco: eventos em ordem cronológica (do mais antigo ao mais recente)
+      procMap.forEach(evts => evts.sort((a, b) => (a.criado_em || '').localeCompare(b.criado_em || '')));
+      // Processos mais recentes primeiro
+      const processosArr = [...procMap.values()].sort((a, b) =>
+        (b[b.length - 1]?.criado_em || '').localeCompare(a[a.length - 1]?.criado_em || ''));
+
+      const processoBlocos = processosArr.map((evts, pIdx) => {
+        // Período: primeiro evento com datas disponíveis
+        const infoComPer = evts.map(h => _gestorProcessoInfo(h)).find(i => i.inicio && i.fim);
+        const headerPer = infoComPer
+          ? `<div style="font-size:12px;color:var(--text-sec);margin-bottom:4px;">${fmtD(infoComPer.inicio)} → ${fmtD(infoComPer.fim)}${infoComPer.dias ? ' · ' + infoComPer.dias + 'd' : ''}</div>`
+          : '';
+
+        const eventoRows = evts.map(h => {
+          const info = _gestorProcessoInfo(h);
+          const tsLine = h.criado_em
+            ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>`
+            : '';
+          const motivoLine = info.motivo
+            ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${info.motivo}</div>`
+            : '';
+          return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
+            <div class="gstor-ativ-icon ${info.cls}" style="width:20px;height:20px;min-width:20px;margin-top:1px;">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>
+              </div>
+              ${tsLine}${motivoLine}
+            </div>
+          </div>`;
+        }).join('');
+
+        const sep = pIdx > 0 ? '<div style="height:1px;background:var(--border);margin:6px 0 8px;"></div>' : '';
+        return `${sep}${headerPer ? `<div style="padding:0 12px;">${headerPer}</div>` : ''}<div style="padding:0 12px 2px;">${eventoRows}</div>`;
       }).join('');
+
       return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
-        <div style="padding:10px 12px;">
+        <div style="padding:10px 12px 6px;">
           <span class="gstor-ativ-nome">${nome}</span>
           ${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}
-          ${headerPer}
         </div>
-        <div style="padding:0 12px 4px;">${eventoRows}</div>
+        <div style="padding:0 0 4px;">${processoBlocos}</div>
       </div>`;
     };
 
