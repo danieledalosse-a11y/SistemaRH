@@ -8668,6 +8668,24 @@ function _gestorAgruparProcessos(idsPermitidos) {
   return [...byId.values()];
 }
 
+async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '...'; }
+  // Copia datas do registro original para o detalhe do ciente
+  const original = FERIAS_HISTORICO.find(h => String(h.ferias_id) === String(feriasId) && (h.acao || '').toLowerCase() === (acaoRef || '').toLowerCase());
+  const det = { acao_referencia: acaoRef };
+  if (original?.detalhe?.inicio) det.inicio = original.detalhe.inicio;
+  if (original?.detalhe?.fim)    det.fim    = original.detalhe.fim;
+  if (original?.detalhe?.dias)   det.dias   = original.detalhe.dias;
+  try {
+    await _logAtiv(feriasId, colabId, 'gestor_ciente', GESTOR_NOME_USUARIO, det);
+    renderGestorAtividade();
+  } catch(e) {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Ciente'; }
+    toast('Não foi possível registrar. Tente novamente.', 'erro');
+    console.error('[gestorMarcarCiente]', e);
+  }
+}
+
 // Gestor: retorna { estado, cls, ativo, inicio, fim, dias, motivo } para o processo
 // ativo: true para processos aguardando resposta do RH
 function _gestorProcessoInfo(h) {
@@ -8705,6 +8723,9 @@ function _gestorProcessoInfo(h) {
   if (acao === 'cancelamento_recusado')
     return { estado: 'Canc. recusado',       cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
 
+  if (acao === 'gestor_ciente')
+    return { estado: 'Ciente', cls: 'aprov', ativo: false, inicio: det.inicio || inicio, fim: det.fim || fim, dias: det.dias || dias, motivo };
+
   return { estado: acao, cls: 'neutro', ativo: false, inicio, fim, dias, motivo };
 }
 
@@ -8736,6 +8757,7 @@ const ACAO_LABEL = {
   cancelamento_solicitado: 'Cancelamento solicitado',
   cancelamento_aprovado:   'Cancelamento aprovado',
   cancelamento_recusado:   'Cancelamento recusado',
+  gestor_ciente:           'Ciente',
 };
 const ACAO_CLS = {
   aprovado:                'aprov',
@@ -8747,6 +8769,7 @@ const ACAO_CLS = {
   cancelamento_solicitado: 'cancel-sol',
   solicitado:              'neutro',
   alteracao_solicitada:    'neutro',
+  gestor_ciente:           'aprov',
 };
 // SVGs reutilizáveis por categoria visual
 const ACAO_SVG = {
@@ -8812,6 +8835,7 @@ function renderGestorAtividade() {
   });
   const recentes = ativos; // alias semântico para o template
 
+  const _DESFECHOS_RH = new Set(['aprovado','alteracao_aprovada','rejeitado','alteracao_recusada','cancelamento_aprovado','cancelamento_recusado']);
   const _itemRow = h => {
     const info  = _gestorProcessoInfo(h);
     const colab = colabMap.get(String(h.colaborador_id));
@@ -8822,13 +8846,17 @@ function renderGestorAtividade() {
       : '';
     const motivoLine = info.motivo ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${info.motivo}</div>` : '';
     const tsLine = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
+    const ehDesfecho = _DESFECHOS_RH.has((h.acao || '').toLowerCase());
+    const btnCiente = ehDesfecho
+      ? `<button onclick="gestorMarcarCiente(${h.ferias_id},${h.colaborador_id},'${h.acao}',this)" style="margin-left:6px;padding:4px 10px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text-sec);cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">Ciente</button>`
+      : '';
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${info.cls}">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
       <div class="gstor-ativ-body">
         <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
         ${perLine}${motivoLine}${tsLine}
       </div>
-      <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>
+      <div style="display:flex;align-items:center;flex-shrink:0;"><span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>${btnCiente}</div>
     </div>`;
   };
 
