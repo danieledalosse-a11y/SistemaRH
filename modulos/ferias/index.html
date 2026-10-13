@@ -3486,19 +3486,23 @@ function renderDrawerAuditoria(colab) {
     alteracao_aprovada:      'Alteração aprovada',
     alteracao_recusada:      'Alteração recusada',
     cancelamento_solicitado: 'Cancelamento solicitado',
-    cancelamento_aprovado:   'Cancelamento aprovado',
-    cancelamento_recusado:   'Cancelamento recusado',
+    cancelamento_aprovado:        'Cancelamento aprovado',
+    cancelamento_recusado:        'Cancelamento recusado',
+    solicitacao_retirada:         'Solicitação retirada',
+    solicitacao_datas_alteradas:  'Datas da solicitação atualizadas',
   };
   const acaoCor = {
-    solicitado:              'var(--blue)',
-    aprovado:                'var(--green)',
-    rejeitado:               '#D92D20',
-    alteracao_solicitada:    '#1570EF',
-    alteracao_aprovada:      '#067647',
-    alteracao_recusada:      '#D92D20',
-    cancelamento_solicitado: '#B45309',
-    cancelamento_aprovado:   '#D92D20',
-    cancelamento_recusado:   '#067647',
+    solicitado:                   'var(--blue)',
+    aprovado:                     'var(--green)',
+    rejeitado:                    '#D92D20',
+    alteracao_solicitada:         '#1570EF',
+    alteracao_aprovada:           '#067647',
+    alteracao_recusada:           '#D92D20',
+    cancelamento_solicitado:      '#B45309',
+    cancelamento_aprovado:        '#D92D20',
+    cancelamento_recusado:        '#067647',
+    solicitacao_retirada:         '#B45309',
+    solicitacao_datas_alteradas:  '#1570EF',
   };
   el.innerHTML = `<div style="padding:16px 20px;">
     <div style="display:flex;flex-direction:column;">
@@ -5947,9 +5951,35 @@ async function aprovarPendente() {
     }
     // Fluxo padrão (nova solicitação): promove item solicitado → aprovado em periodos[]
     if (reg._sbId) {
+      // Pré-verificação obrigatória — sem fallback se falhar
+      let registroAtual;
+      try {
+        const rows = await sbGet('ferias', `id=eq.${reg._sbId}&select=status,periodos,obs_gestor,atualizado_em`);
+        if (!rows?.length) throw new Error('not_found');
+        registroAtual = rows[0];
+      } catch(e) {
+        btnAprovar.disabled = false;
+        btnAprovar.textContent = '✓ Aprovar';
+        toast('Não foi possível verificar o estado atual do registro. Recarregue a página e tente novamente.', 'erro');
+        return;
+      }
+      if (registroAtual.status !== 'Pendente') {
+        btnAprovar.disabled = false;
+        btnAprovar.textContent = '✓ Aprovar';
+        toast('Conflito: este registro já foi processado por outro usuário. Recarregue a página.', 'erro');
+        return;
+      }
       const nl = reg._novoLanc;
-      const _periosAprov = reg._periodos
-        ? [...reg._periodos]
+      const solAtualNoDb = (registroAtual.periodos || []).find(p => p.status === 'solicitado');
+      if (solAtualNoDb && (solAtualNoDb.inicio !== nl.inicio || solAtualNoDb.fim !== nl.fim || solAtualNoDb.dias !== nl.dias)) {
+        btnAprovar.disabled = false;
+        btnAprovar.textContent = '✓ Aprovar';
+        toast('Conflito: as datas da solicitação foram alteradas pelo gestor. Recarregue a página.', 'erro');
+        return;
+      }
+      const tsLido = registroAtual.atualizado_em;
+      const _periosAprov = registroAtual.periodos
+        ? [...registroAtual.periodos]
         : reg.lancamentos.map((ll, i) => ({ id: ll.id ?? i, inicio: ll.inicio, fim: ll.fim, dias: ll.dias, nota: ll.nota || null, status: ll.status || 'aprovado' }));
       // Tenta promover item 'solicitado' existente; senão, append novo
       const _solIdx = _periosAprov.findIndex(p => p.status === 'solicitado');
@@ -5965,9 +5995,23 @@ async function aprovarPendente() {
       const _flatAprov = _newPerId === 0 ? { periodo1_inicio: nl.inicio, periodo1_fim: nl.fim, dias1: nl.dias }
                        : _newPerId === 1 ? { periodo2_inicio: nl.inicio, periodo2_fim: nl.fim, dias2: nl.dias }
                        : {};
-      const payload = { status: 'Aprovado', periodos: _periosAprov, ..._flatAprov };
+      const payload = { status: 'Aprovado', periodos: _periosAprov, atualizado_em: new Date().toISOString(), ..._flatAprov };
       Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
-      await sbPatch('ferias', `id=eq.${reg._sbId}`, payload);
+      // PATCH condicional com atualizado_em para detectar conflito de concorrência
+      const _filtroCondicional = `id=eq.${reg._sbId}&status=eq.Pendente&atualizado_em=eq.${encodeURIComponent(tsLido)}`;
+      const _patchResp = await _sbFetch(`${SB_URL}/rest/v1/ferias?${_filtroCondicional}`, {
+        method: 'PATCH',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+        _extra: { 'Prefer': 'return=representation' },
+        body: JSON.stringify(payload),
+      });
+      const _patchRows = await _patchResp.json();
+      if (!_patchRows?.length) {
+        btnAprovar.disabled = false;
+        btnAprovar.textContent = '✓ Aprovar';
+        toast('Conflito: o registro foi modificado enquanto você aprovava. Recarregue a página e tente novamente.', 'erro');
+        return;
+      }
       reg._periodos = _periosAprov;
     }
     reg.lancamentos.push({ ...reg._novoLanc });
@@ -8783,21 +8827,25 @@ const ACAO_LABEL = {
   alteracao_aprovada:      'Alt. aprovada',
   alteracao_recusada:      'Alt. recusada',
   cancelamento_solicitado: 'Cancelamento solicitado',
-  cancelamento_aprovado:   'Cancelamento aprovado',
-  cancelamento_recusado:   'Cancelamento recusado',
-  gestor_ciente:           'Ciente',
+  cancelamento_aprovado:        'Cancelamento aprovado',
+  cancelamento_recusado:        'Cancelamento recusado',
+  gestor_ciente:                'Ciente',
+  solicitacao_retirada:         'Solicitação retirada',
+  solicitacao_datas_alteradas:  'Datas da solicitação atualizadas',
 };
 const ACAO_CLS = {
-  aprovado:                'aprov',
-  alteracao_aprovada:      'aprov',
-  cancelamento_recusado:   'aprov',      // resultado positivo (saldo devolvido)
-  rejeitado:               'recus',
-  alteracao_recusada:      'recus',
-  cancelamento_aprovado:   'cancel-aprov',
-  cancelamento_solicitado: 'cancel-sol',
-  solicitado:              'neutro',
-  alteracao_solicitada:    'neutro',
-  gestor_ciente:           'aprov',
+  aprovado:                    'aprov',
+  alteracao_aprovada:          'aprov',
+  cancelamento_recusado:       'aprov',
+  rejeitado:                   'recus',
+  alteracao_recusada:          'recus',
+  cancelamento_aprovado:       'cancel-aprov',
+  cancelamento_solicitado:     'cancel-sol',
+  solicitado:                  'neutro',
+  alteracao_solicitada:        'neutro',
+  gestor_ciente:               'aprov',
+  solicitacao_retirada:        'cancel-sol',
+  solicitacao_datas_alteradas: 'neutro',
 };
 // SVGs reutilizáveis por categoria visual
 const ACAO_SVG = {
@@ -11632,6 +11680,15 @@ function fecharGestorSolicitacoes() {
   });
 })();
 
+function _encontrarPeriodoSolicitado(perArr, lancInicio) {
+  const candidatos = perArr.filter(p =>
+    p.inicio === lancInicio && !['cancelado', 'excluido'].includes(p.status)
+  );
+  if (candidatos.length === 0) return { ok: false, motivo: 'Período não encontrado ou já cancelado.' };
+  if (candidatos.length > 1)  return { ok: false, motivo: 'Mais de um período com a mesma data de início — operação bloqueada.' };
+  return { ok: true, periodo: candidatos[0], idx: perArr.indexOf(candidatos[0]) };
+}
+
 async function gestorCancelarSolicitacao(feriasId, colabId, lancId) {
   const lancAtual = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
   const isSolicitado = lancAtual && (lancAtual.status||'').toLowerCase() === 'solicitado';
@@ -11825,6 +11882,121 @@ function gestorAbrirModalAlt(colabId, periodoId, lancId) {
 function fecharModalGestorAlt() {
   document.getElementById('modalGestorAlt').style.display = 'none';
   _gestorAltCtx = null;
+  const titleEl = document.querySelector('#modalGestorAlt .modal-title');
+  if (titleEl) titleEl.textContent = 'Solicitar alteração de data';
+}
+
+// ─── Alterar datas de solicitação pendente (Gestor) ──────────────────────────
+function gestorAbrirModalAltSol(colabId, periodoId, lancId) {
+  const lancamento = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
+  if (!lancamento) { toast('Lançamento não encontrado (id: ' + lancId + ')'); return; }
+  const slot = lancId.endsWith('-p2') ? 'p2' : 'p1';
+  const c = (GESTOR_COLABS || []).find(c => String(c.id) === String(colabId));
+  _gestorAltCtx = { colabId, periodoId, lancId, slot, inicio: lancamento.inicio, fim: lancamento.fim, dias: lancamento.dias, _modoSolicitado: true };
+  const dias = Number(lancamento.dias) || 0;
+  document.getElementById('mgAltNome').textContent         = c ? `${c.nome} · ${c.cargo || '—'}` : '';
+  document.getElementById('mgAltPeriodoTexto').textContent = `${formatDate(lancamento.inicio)} → ${formatDate(lancamento.fim)}`;
+  document.getElementById('mgAltDiasTexto').textContent    = `${dias} dia${dias !== 1 ? 's' : ''}`;
+  document.getElementById('mgAltNovoInicio').value         = '';
+  document.getElementById('mgAltNovoFim').value            = '—';
+  document.getElementById('mgAltDuracaoNota').textContent  = '';
+  const erroEl = document.getElementById('mgAltErro');
+  erroEl.style.display = 'none';
+  erroEl.textContent   = '';
+  const btn = document.getElementById('mgAltBtnEnviar');
+  btn.disabled    = false;
+  btn.textContent = 'Alterar datas';
+  const titleEl = document.querySelector('#modalGestorAlt .modal-title');
+  if (titleEl) titleEl.textContent = 'Alterar datas da solicitação';
+  const _mAlt = document.getElementById('modalGestorAlt');
+  document.body.appendChild(_mAlt);
+  _mAlt.style.display = 'flex';
+}
+
+// ─── Retirar solicitação pendente (Gestor) ────────────────────────────────────
+function gestorConfirmarRetirada(colabId, feriasId, lancId) {
+  const lancamento = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
+  if (!lancamento) { toast('Lançamento não encontrado.'); return; }
+  const c = (GESTOR_COLABS || []).find(c => String(c.id) === String(colabId));
+  const nomeColab = c ? c.nome : 'colaborador';
+  abrirModalConfirm({
+    titulo: 'Retirar solicitação',
+    texto:  `Retirar a solicitação de ${formatDate(lancamento.inicio)} → ${formatDate(lancamento.fim)} (${lancamento.dias}d) de ${nomeColab}? O saldo retorna ao PA.`,
+    labelOk: 'Retirar solicitação',
+    corOk:   '#D92D20',
+    cb: () => gestorExecutarRetirada(feriasId, colabId, lancId),
+  });
+}
+
+async function gestorExecutarRetirada(feriasId, colabId, lancId) {
+  try {
+    const per      = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
+    const row      = per?._feriasRow || {};
+    const lancAtual = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(lancId));
+
+    const perArr = Array.isArray(row.periodos) && row.periodos.length > 0
+      ? [...row.periodos]
+      : GESTOR_LANCAMENTOS
+          .filter(l => String(l.periodo_id) === String(feriasId) && !l._isRealizacao)
+          .map((l, i) => ({ id: i, inicio: l.inicio, fim: l.fim, dias: l.dias, nota: l.nota || null, status: l.status || 'aprovado' }));
+
+    const busca = _encontrarPeriodoSolicitado(perArr, lancAtual?.inicio);
+    if (!busca.ok) { toast(busca.motivo, 'erro'); return; }
+
+    perArr[busca.idx] = { ...perArr[busca.idx], status: 'cancelado' };
+
+    const _restaSolicit   = perArr.some(p => p.status === 'solicitado');
+    const _statusProteger = ['Alteracao_Solicitada', 'Cancelamento_Solicitado'];
+    const novoStatus = _restaSolicit
+      ? 'Pendente'
+      : _statusProteger.includes(row.status) ? row.status : 'Aprovado';
+
+    const patchData = { periodos: perArr, status: novoStatus, atualizado_em: new Date().toISOString() };
+    if (!_restaSolicit) patchData.obs_gestor = null;
+
+    // PATCH condicional: só retira se a solicitação ainda estiver Pendente
+    const _filtroRetirada = `id=eq.${feriasId}&status=eq.Pendente`;
+    const _respRetirada = await _sbFetch(`${SB_URL}/rest/v1/ferias?${_filtroRetirada}`, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+      _extra: { 'Prefer': 'return=representation' },
+      body: JSON.stringify(patchData),
+    });
+    const _rowsRetirada = await _respRetirada.json();
+    if (!_rowsRetirada?.length) {
+      toast('Conflito: a solicitação foi modificada por outra sessão. Recarregue a página e tente novamente.', 'erro');
+      return;
+    }
+
+    // Atualiza memória local (com dados confirmados)
+    const lancIdx = GESTOR_LANCAMENTOS.findIndex(l => String(l.id) === String(lancId));
+    if (lancIdx >= 0) GESTOR_LANCAMENTOS.splice(lancIdx, 1);
+    if (per?._feriasRow) Object.assign(per._feriasRow, _rowsRetirada[0]);
+
+    const aindaTemPend = GESTOR_LANCAMENTOS.some(l =>
+      String(l.colaborador_id) === String(colabId) &&
+      ['solicitado','recusado'].includes((l.status||'').toLowerCase()) &&
+      l.fim >= new Date().toISOString().slice(0,10)
+    );
+    if (!aindaTemPend && window._gestorAguardAprov) {
+      window._gestorAguardAprov = window._gestorAguardAprov.filter(id => String(id) !== String(colabId));
+    }
+
+    let _histFalhou = false;
+    try {
+      await _logAtiv(feriasId, colabId, 'solicitacao_retirada', GESTOR_NOME_USUARIO, {
+        inicio: lancAtual?.inicio, fim: lancAtual?.fim, dias: lancAtual?.dias,
+      });
+    } catch(e) { _histFalhou = true; console.error('[_logAtiv solicitacao_retirada]', e); }
+    await _logColabHist(colabId, 'ferias_solicitacao_retirada', `Solicitação retirada: ${formatDate(lancAtual?.inicio)} → ${formatDate(lancAtual?.fim)}`, GESTOR_NOME_USUARIO);
+
+    toast(_histFalhou ? '✓ Solicitação retirada (histórico não registrado)' : '✓ Solicitação retirada com sucesso.', _histFalhou ? 'aviso' : '');
+    fecharGestorSolicitacoes();
+    renderGestorAlerts();
+    renderGestorAtencao();
+  } catch(e) {
+    toast('Erro ao retirar solicitação: ' + (e.message || e), 'erro');
+  }
 }
 
 // ─── Solicitar cancelamento (Gestor) ─────────────────────────────────────────
@@ -11973,6 +12145,63 @@ async function gestorEnviarAlteracao() {
   // Captura o contexto antes de fechar o modal
   const ctx = { ..._gestorAltCtx };
   try {
+    // ── Ramo: alterar datas de solicitação pendente ──────────────────────────
+    if (ctx._modoSolicitado) {
+      const per    = GESTOR_PERIODOS.find(p => String(p.id) === String(ctx.periodoId));
+      const row    = per?._feriasRow || {};
+      const perArr = Array.isArray(row.periodos) && row.periodos.length > 0
+        ? [...row.periodos]
+        : GESTOR_LANCAMENTOS
+            .filter(l => String(l.periodo_id) === String(ctx.periodoId) && !l._isRealizacao)
+            .map((l, i) => ({ id: i, inicio: l.inicio, fim: l.fim, dias: l.dias, nota: l.nota || null, status: l.status || 'aprovado' }));
+      const busca = _encontrarPeriodoSolicitado(perArr, ctx.inicio);
+      if (!busca.ok) {
+        erroEl.textContent   = busca.motivo;
+        erroEl.style.display = '';
+        btn.disabled    = false;
+        btn.textContent = 'Alterar datas';
+        return;
+      }
+      perArr[busca.idx] = { ...perArr[busca.idx], inicio: novoInicio, fim: novoFim };
+      const patchData = {
+        periodos:      perArr,
+        status:        'Pendente',
+        obs_gestor:    row.obs_gestor ?? null,
+        atualizado_em: new Date().toISOString(),
+      };
+      // PATCH condicional: só atualiza se a solicitação ainda estiver Pendente
+      const _filtroAltSol = `id=eq.${ctx.periodoId}&status=eq.Pendente`;
+      const _respAltSol = await _sbFetch(`${SB_URL}/rest/v1/ferias?${_filtroAltSol}`, {
+        method: 'PATCH',
+        headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
+        _extra: { 'Prefer': 'return=representation' },
+        body: JSON.stringify(patchData),
+      });
+      const _rowsAltSol = await _respAltSol.json();
+      if (!_rowsAltSol?.length) {
+        erroEl.textContent   = 'Conflito: a solicitação foi modificada por outra sessão. Recarregue a página e tente novamente.';
+        erroEl.style.display = '';
+        btn.disabled    = false;
+        btn.textContent = 'Alterar datas';
+        return;
+      }
+      // Atualiza memória com dados confirmados pelo banco
+      if (per?._feriasRow) Object.assign(per._feriasRow, _rowsAltSol[0]);
+      const lancLocal = GESTOR_LANCAMENTOS.find(l => String(l.id) === String(ctx.lancId));
+      if (lancLocal) { lancLocal.inicio = novoInicio; lancLocal.fim = novoFim; }
+      fecharModalGestorAlt();
+      let _histFalhouAltSol = false;
+      try { await _logAtiv(ctx.periodoId, ctx.colabId, 'solicitacao_datas_alteradas', GESTOR_NOME_USUARIO, { inicio: novoInicio, fim: novoFim, dias: ctx.dias, inicio_anterior: ctx.inicio, fim_anterior: ctx.fim }); }
+      catch(e) { _histFalhouAltSol = true; console.error('[_logAtiv solicitacao_datas_alteradas]', e); }
+      await _logColabHist(ctx.colabId, 'ferias_solicitacao_datas_alteradas', `Datas da solicitação atualizadas: ${formatDate(novoInicio)} → ${formatDate(novoFim)}`, GESTOR_NOME_USUARIO);
+      toast(_histFalhouAltSol ? '✓ Datas atualizadas (histórico não registrado)' : '✓ Datas da solicitação atualizadas.', _histFalhouAltSol ? 'aviso' : '');
+      const c = GESTOR_COLABS.find(c => String(c.id) === String(ctx.colabId));
+      if (c) _renderGsolHistoricoRH(c);
+      if (typeof renderGestorAlerts    === 'function') renderGestorAlerts();
+      if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
+      return;
+    }
+    // ── Ramo padrão: solicitar alteração de aprovado ──────────────────────────
     await sbPatch('ferias', `id=eq.${ctx.periodoId}`, { status: 'Alteracao_Solicitada', obs_gestor: JSON.stringify(meta) });
     // Atualiza estado local RH
     COLABORADORES.forEach(colab => colab.registros.forEach(reg => {
@@ -12003,7 +12232,7 @@ async function gestorEnviarAlteracao() {
     erroEl.textContent   = 'Erro ao enviar: ' + (e.message || e);
     erroEl.style.display = '';
     btn.disabled    = false;
-    btn.textContent = 'Enviar para RH aprovar';
+    btn.textContent = ctx?._modoSolicitado ? 'Alterar datas' : 'Enviar para RH aprovar';
   }
 }
 
@@ -12314,20 +12543,24 @@ function _renderGsolHistoricoAuditoria() {
     alteracao_solicitada:    'Alteração solicitada',
     alteracao_aprovada:      'Alteração aprovada',
     alteracao_recusada:      'Alteração recusada',
-    cancelamento_solicitado: 'Cancelamento solicitado',
-    cancelamento_aprovado:   'Cancelamento aprovado',
-    cancelamento_recusado:   'Cancelamento recusado',
+    cancelamento_solicitado:      'Cancelamento solicitado',
+    cancelamento_aprovado:        'Cancelamento aprovado',
+    cancelamento_recusado:        'Cancelamento recusado',
+    solicitacao_retirada:         'Solicitação retirada',
+    solicitacao_datas_alteradas:  'Datas da solicitação atualizadas',
   };
   const acaoCor = {
-    solicitado:              'var(--blue)',
-    aprovado:                'var(--green)',
-    rejeitado:               '#D92D20',
-    alteracao_solicitada:    '#1570EF',
-    alteracao_aprovada:      '#067647',
-    alteracao_recusada:      '#D92D20',
-    cancelamento_solicitado: '#B45309',
-    cancelamento_aprovado:   '#D92D20',
-    cancelamento_recusado:   '#067647',
+    solicitado:                   'var(--blue)',
+    aprovado:                     'var(--green)',
+    rejeitado:                    '#D92D20',
+    alteracao_solicitada:         '#1570EF',
+    alteracao_aprovada:           '#067647',
+    alteracao_recusada:           '#D92D20',
+    cancelamento_solicitado:      '#B45309',
+    cancelamento_aprovado:        '#D92D20',
+    cancelamento_recusado:        '#067647',
+    solicitacao_retirada:         '#B45309',
+    solicitacao_datas_alteradas:  '#1570EF',
   };
   el.innerHTML = `<div style="padding:14px 16px;">
     <div style="display:flex;flex-direction:column;">
@@ -12524,11 +12757,17 @@ function _renderGsolHistoricoRH(c) {
             <span style="color:var(--text-sec);">Período: ${formatDate(_cancelMetaGsol.inicio)} → ${formatDate(_cancelMetaGsol.fim)} · ${_cancelMetaGsol.dias} dias</span>
           </div>` : '';
 
-      // Botões de ação para lançamentos futuros aprovados
+      // Botões de ação para lançamentos futuros
       const stNormLanc = (l.status||'').toLowerCase();
-      const isAprovadoLanc = stNormLanc === 'aprovado' || stNormLanc === 'agendado';
+      const isAprovadoLanc  = stNormLanc === 'aprovado' || stNormLanc === 'agendado';
+      const isSolicitadoLanc = stNormLanc === 'solicitado';
       const isFuturoLanc = l.inicio > hoje;
       let botoesAcao = '';
+      if (isSolicitadoLanc && isFuturoLanc) {
+        const btnAltSol = `<button style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #1570EF;background:transparent;color:#1570EF;cursor:pointer;font-weight:600;font-family:inherit;" onclick="gestorAbrirModalAltSol('${c.id}','${per.id}','${l.id}')">Alterar datas</button>`;
+        const btnRetirar = `<button style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;cursor:pointer;font-weight:600;font-family:inherit;" onclick="gestorConfirmarRetirada('${c.id}','${per.id}','${l.id}')">Retirar solicitação</button>`;
+        botoesAcao = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">${btnAltSol}${btnRetirar}</div>`;
+      }
       if (isAprovadoLanc && isFuturoLanc) {
         const btnAlt = temQualquerPendente
           ? `<button disabled title="Já há uma solicitação pendente — aguardando RH" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #D0D5DD;background:transparent;color:#98A2B3;cursor:not-allowed;font-weight:600;font-family:inherit;">Alterar data</button>`
