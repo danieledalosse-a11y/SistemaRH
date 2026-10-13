@@ -172,6 +172,13 @@ Tabela de auditoria imutável — nunca editada, só recebe INSERT.
 | `'lancado_rh'` | RH drawer (commit ea7c99e) | `{ inicio, fim, dias, id_periodo, nota }` |
 | `'editado_rh'` | RH drawer (commit ea7c99e) | `{ id_periodo, inicio_anterior, fim_anterior, inicio_novo, fim_novo, dias_novo }` |
 | `'excluido_rh'` | RH drawer (commit ea7c99e) | `{ id_periodo, inicio, fim, dias }` |
+| `'alteracao_solicitada'` | Gestor | `{ inicio, fim, dias, slot }` |
+| `'cancelamento_solicitado'` | Gestor | `{ inicio, fim, dias }` |
+| `'alteracao_aprovada'` | RH | `{ status: 'Alteração aprovada' }` |
+| `'alteracao_recusada'` | RH | `{ status: 'Alteração recusada' }` |
+| `'cancelamento_aprovado'` | RH | `{ status: 'Cancelamento aprovado' }` |
+| `'cancelamento_recusado'` | RH | `{ status: 'Cancelamento recusado' }` |
+| `'gestor_ciente'` | Gestor (commit 993c54f) | `{ acao_referencia, inicio, fim, dias }` |
 
 As ações `lancado_rh`, `editado_rh` e `excluido_rh` usam `sbPost('ferias_historico', ...).catch(() => {})` diretamente (não passam por `_logAtiv`) — falha no log nunca bloqueia a operação principal.
 
@@ -1070,12 +1077,22 @@ function setGestorTab(tab) {
 **Solicitações com status `solicitado`** devem ser consideradas **independentemente de `l.fim >= hoje`**. O critério de data se aplica apenas a `recusado`. Aplicar esse padrão em todos os lugares que filtram `GESTOR_LANCAMENTOS`:
 
 ```js
-// Card Pendentes (renderGestorAlerts):
+// Card Pendentes (renderGestorAlerts) — commit d442144:
 const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
   const st = (l.status||'').toLowerCase();
   if (st === 'solicitado') return true;           // sem filtro de data
+  if (st === 'pendente_gestor') return true;
+  if (st === 'cancelamento_solicitado') return true;
   return st === 'recusado' && l.fim >= hoje;
 });
+// Alterações/cancelamentos pendentes cujo status fica no PA (ferias.status),
+// não no lancamento — quando o PA usa periodos[] JSONB o lancamento individual
+// ainda tem status 'aprovado'. GESTOR_PERIODOS é a fonte correta, igual à
+// visão RH que usa reg.status === 'Alteracao_Solicitada' (getPendentes).
+const _altPendIds = GESTOR_PERIODOS
+  .filter(p => { const st = (p._feriasRow?.status||'').toLowerCase(); return st === 'alteracao_solicitada' || st === 'cancelamento_solicitado'; })
+  .map(p => p.colaborador_id);
+const colabsComPend = [...new Set([...aguardAprov.map(l => l.colaborador_id), ..._altPendIds])];
 
 // Filtro de lista 'aguard' (renderGestorAtencao):
 colabs = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => {
@@ -1126,27 +1143,109 @@ async function sbPost(tabela, dados) {
 
 ### Helper `_logAtiv(feriasId, colabId, acao, usuario, detalhe)`
 
+**CORRIGIDO em commit `3fca0d2`** — versão anterior silenciava falhas de INSERT.
+
 ```js
 async function _logAtiv(feriasId, colabId, acao, usuario, detalhe) {
   const entry = { ferias_id: Number(feriasId), colaborador_id: Number(colabId), acao, usuario: usuario || null, detalhe: detalhe || null };
-  try { await sbPost('ferias_historico', entry); } catch(_) {}
+  await sbPost('ferias_historico', entry);   // lança em caso de falha — sem try/catch interno
   FERIAS_HISTORICO.unshift({ ...entry, id: Date.now(), criado_em: new Date().toISOString() });
 }
 ```
 
-O `unshift` garante atualização otimista de `FERIAS_HISTORICO` mesmo que o POST falhe silenciosamente.
+**Comportamento obrigatório:**
+- Se `sbPost` falhar, a função lança — `FERIAS_HISTORICO.unshift` **não** executa.
+- Cada caller envolve `_logAtiv` em seu **próprio** `try/catch` local com flag `_histFalhouXxx`.
+- Se a operação principal (sbPatch) teve sucesso mas o log falhou: toast com aviso distinto, botão permanece bloqueado (sem risco de submissão duplicada).
+- Nunca mostrar "Erro ao [operação]" quando apenas o log falhou.
 
-### Onde `_logAtiv` é chamado
+### Onde `_logAtiv` é chamado — padrão dos callers
 
-| Função | `acao` | `usuario` | `detalhe` |
+Todos os 13 callers seguem este padrão (commit `3fca0d2`):
+
+```js
+let _histFalhouXxx = false;
+try { await _logAtiv(feriasId, colabId, 'acao', usuario, detalhe); }
+catch(e) { _histFalhouXxx = true; console.error('[_logAtiv acao]', e); }
+toast(_histFalhouXxx ? '✓ Operação — histórico não registrado, contate o suporte.' : '✓ Operação', _histFalhouXxx ? 'aviso' : '');
+```
+
+| Função | `acao` | Flag local | `usuario` |
 |---|---|---|---|
-| `gestorEnviarSolicitacao` | `'solicitado'` | `GESTOR_NOME_USUARIO` | `{ inicio, fim, dias, slot }` |
-| `rhAprovarSolicitado` | `'aprovado'` | `perfil.nome \|\| 'RH'` | `{ status: 'Aprovado' }` |
-| `rhRecusarSolicitado` | `'rejeitado'` | `perfil.nome \|\| 'RH'` | `{ status: 'Rejeitado', obs_gestor: motivo }` |
-| `grhEnviarSolicitarGozo` | `'gozo_solicitado'` | `GESTOR_NOME_USUARIO` | `{ saida, retorno, dias, lancIdx }` |
-| `rhAprovarGozoPendente` | `'gozo_aprovado'` | `perfil.nome \|\| 'RH'` | `{ saida, dias, lancIdx }` |
+| `rhAprovarGozoPendente` | `'gozo_aprovado'` | `_histFalhouGozo` | `perfil.nome \|\| 'RH'` |
+| `rhAprovarSolicitado` | `'aprovado'` | `_histFalhouAprov` | `perfil.nome \|\| 'RH'` |
+| `rhRecusarSolicitado` | `'rejeitado'` | `_histFalhouRec` | `perfil.nome \|\| 'RH'` |
+| `aprovarPendente` (alteração) | `'alteracao_aprovada'` | `_histFalhouAlt` | `perfil.nome \|\| 'RH'` |
+| `aprovarPendente` (cancelamento) | `'cancelamento_aprovado'` | `_histFalhouCancAprov` | `perfil.nome \|\| 'RH'` |
+| `rejeitarPendente` (alteração) | `'alteracao_recusada'` | `_histFalhouAltRec` | `perfil.nome \|\| 'RH'` |
+| `rejeitarPendente` (cancelamento) | `'cancelamento_recusado'` | `_histFalhouCancRec` | `perfil.nome \|\| 'RH'` |
+| `rejeitarPendente` (pad) | `'rejeitado'` | `_histFalhouRejPad` | `perfil.nome \|\| 'RH'` |
+| `grhEnviarSolicitarCancelamento` | `'cancelamento_solicitado'` | `_histFalhouCancSol` | `GESTOR_NOME_USUARIO` |
+| `grhEnviarSolicitarAlteracao` | `'alteracao_solicitada'` | `_histFalhouAltSol` | `GESTOR_NOME_USUARIO` |
+| `gestorEnviarSolicitacao` | `'solicitado'` | `_histFalhouSol` | `GESTOR_NOME_USUARIO` |
+| `grhEnviarSolicitarGozo` | `'gozo_solicitado'` | `_histFalhouGozoSol` | `GESTOR_NOME_USUARIO` |
+| `gestorMarcarCiente` | `'gestor_ciente'` | — (catch próprio da função) | `GESTOR_NOME_USUARIO` |
 
 `perfil` = `JSON.parse(localStorage.getItem('sb_perfil') || '{}')`.
+
+**Atenção `gestorEnviarSolicitacao`:** a ferias row é criada **antes** de `_logAtiv`. Se `_logAtiv` falhar, a criação já ocorreu — o caller **não** re-habilita o botão para evitar submissão duplicada.
+
+### `gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl)`
+
+Botão "Ciente" exibido ao Gestor quando o RH responde (aprovado, rejeitado, alterações, cancelamentos). **Corrigido em commit `6bbdfad`** (dois try/catch separados).
+
+```js
+async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '...'; }
+  const original = FERIAS_HISTORICO.find(h =>
+    String(h.ferias_id) === String(feriasId) &&
+    (h.acao || '').toLowerCase() === (acaoRef || '').toLowerCase()
+  );
+  const det = { acao_referencia: acaoRef };
+  if (original?.detalhe?.inicio) det.inicio = original.detalhe.inicio;
+  if (original?.detalhe?.fim)    det.fim    = original.detalhe.fim;
+  if (original?.detalhe?.dias)   det.dias   = original.detalhe.dias;
+  try {
+    await _logAtiv(feriasId, colabId, 'gestor_ciente', GESTOR_NOME_USUARIO, det);
+  } catch(e) {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Ciente'; }
+    toast('Não foi possível registrar. Tente novamente.', 'erro');
+    console.error('[gestorMarcarCiente]', e);
+    return;
+  }
+  try { renderGestorAtividade(); } catch(e) { console.error('[renderGestorAtividade pós-ciente]', e); }
+}
+```
+
+**Regra obrigatória (commit `6bbdfad`):** INSERT e render em blocos try/catch **separados**. Se o INSERT tiver sucesso mas `renderGestorAtividade` lançar, o erro de render é logado silenciosamente — jamais exibe toast de falha nem reabilita o botão. Isso evita que o Gestor clique "Ciente" duas vezes quando o registro já foi gravado.
+
+**Dedup natural:** após INSERT bem-sucedido, `_gestorAgruparProcessos` elege `gestor_ciente` como evento mais recente → `_gestorProcessoInfo` retorna `ativo: false` → item sai de "Atividade Recente" → botão nunca é renderizado novamente.
+
+**Ações que exibem o botão Ciente** (`_DESFECHOS_RH`):
+```js
+const _DESFECHOS_RH = new Set(['aprovado','alteracao_aprovada','rejeitado','alteracao_recusada','cancelamento_aprovado','cancelamento_recusado']);
+```
+
+### `_normGA(s)` — helper de normalização do Histórico
+
+Definida logo após `normGestor` (~linha 2981). Idêntica a `normGestor`:
+
+```js
+function _normGA(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+```
+
+Usada em `renderGestorAtividade` no branch `else` (aba Histórico) para normalizar a busca:
+```js
+const busca = _normGA(document.getElementById('gestorHistBusca')?.value || '');
+// ...
+if (busca) gruposArr = gruposArr.filter(g => g.colab ? _normGA(g.colab.nome).includes(busca) : false);
+```
+
+**Bug corrigido (commit `6bbdfad`):** `_normGA` não estava definida, causando `ReferenceError` quando a aba Histórico era clicada. O fluxo de falha era: clicar "Histórico" → `_gestorAba='historico'` atualizado → `renderGestorAtividade()` lança antes de atualizar o DOM → botões "Ciente" da renderização anterior permanecem visíveis → clicar "Ciente" → INSERT bem-sucedido → `renderGestorAtividade()` lança novamente → catch exibe toast "Não foi possível registrar" → botão reabilitado → Gestor clica de novo (registro duplicado). **O INSERT sempre funcionava; o erro era apenas na renderização.**
+
+---
 
 ### Atividade Recente + Histórico — arquitetura atual (baseada em `FERIAS_HISTORICO`)
 
@@ -1170,6 +1269,7 @@ A função `_gestorProcessoInfo(h)` recebe o evento mais recente de um processo 
 'alteracao_recusada'               → 'Alt. recusada', cls: 'recus'
 'cancelamento_aprovado'            → 'Canceladas',    cls: 'cancel-aprov'
 'cancelamento_recusado'            → 'Canc. recusado',cls: 'aprov'
+'gestor_ciente'                    → 'Ciente',        cls: 'aprov'   // commit 993c54f
 ```
 
 **Nunca** verificar data (`passou`) ou retomada (`temNovo`, `paVenc`) para decidir `ativo`. A classificação é puramente pelo tipo de ação do último evento.
@@ -1180,11 +1280,48 @@ Agrupa `FERIAS_HISTORICO` por `ferias_id`, mantendo apenas o evento mais recente
 
 #### `renderGestorAtividade()` — Gestor
 
-- **Atividade Recente:** processos com `ativo: true` (aguardando RH)
-- **Histórico:** processos com `ativo: false` (desfecho concluído)
+- **Atividade Recente:** processos com `ativo: true` (aguardando RH) — usa `_gestorAgruparProcessos` (1 evento por `ferias_id`, o mais recente)
+- **Histórico:** todos os eventos de processos concluídos (`ativo: false`), agrupados por colaborador → subagrupados por `ferias_id` → ordenados cronologicamente dentro de cada bloco (commits `87c3723` e `ea3278e`)
 - Datas exibidas: `inicio`/`fim`/`dias` do objeto `info` (vindos de `GESTOR_LANCAMENTOS` via `lanc?.inicio` com fallback para `h.detalhe`)
 
+**Estado global:**
+```js
+let _gestorExpandido  = false;   // toda a seção aberta/fechada
+let _gestorAba        = 'recente'; // 'recente' | 'historico'
+let _gestorHistOffset = 0;       // paginação do Histórico
+const _gestorHistExpanded = new Set(); // IDs de colaboradores com card expandido no Histórico
+```
+
 **Fallback obrigatório (out/2026):** após `_gestorAgruparProcessos`, injeta itens sintéticos para lançamentos em `GESTOR_LANCAMENTOS` com `status='solicitado'` cujo `periodo_id` não existe em `FERIAS_HISTORICO`. Garante que solicitações antigas (anteriores ao `_logAtiv`) ou com falha silenciosa apareçam na Atividade Recente. Itens sintéticos têm `_fallback: true` e `criado_em: null`.
+
+#### KPI "Acordos em Andamento" — removido da visão Gestor (commits `27c2a76` + `5274678`, 2026-10-13)
+
+O KPI era calculado por `_gestorColabsComAcordoAndamento` (função preservada) e exibido em `renderGestorAlerts`. Removido porque não é acionável pelo Gestor — quem registra realizações é o RH.
+
+**O que foi removido:**
+- Card KPI em `renderGestorAlerts` (condicional `acordosAndamento.length > 0`)
+- Branch `'acordo'` em `filtrarGestorAlerta`
+
+**O que foi mantido:**
+- `_gestorColabsComAcordoAndamento` e retorno `acordosAndamento` em `_computeGestorMetricas` (preservados para uso futuro)
+- `window._gestorAcordosAndamento` — restaurada para alimentar o chip contextual nos cards
+- Chip "↩ Acordo em andamento" nos cards individuais da lista (commit `5274678`) — informação contextual útil por colaborador, sem ser um alerta global
+
+#### Histórico do Gestor — arquitetura (commits `87c3723` + `ea3278e`, 2026-10-10)
+
+**Problema anterior:** `_gestorAgruparProcessos` guardava apenas o evento mais recente por `ferias_id`, fazendo o fluxo `solicitado → aprovado → gestor_ciente` aparecer apenas como "Ciente" — sem contexto da decisão do RH.
+
+**Solução:**
+
+1. **Fonte de dados:** identifica os `ferias_id` cujo evento mais recente tem `ativo:false` (via `historico = processos.filter(h => !_gestorProcessoInfo(h).ativo)`), depois coleta **todos** os eventos de `FERIAS_HISTORICO` para esses processos — garante que processos ainda na Atividade Recente não apareçam no Histórico.
+
+2. **Agrupamento:** por `colaborador_id` → sub-agrupado por `ferias_id` → eventos ordenados por `criado_em` asc dentro de cada bloco de processo.
+
+3. **Cards colapsados por padrão:** header mostra nome + cargo + chip do status mais recente + indicador `+N processos` quando há mais de um. Clicar expande a timeline completa. Estado em `_gestorHistExpanded` (Set de colaborador IDs).
+
+4. **Cada linha de evento exibe:** ícone colorido + chip de estado (`_gestorProcessoInfo`) + timestamp (`fmtDH(h.criado_em)`) + responsável (`h.usuario`) + motivo (se existir em `info.motivo`).
+
+**Regra de não-sobreposição:** um processo aparece integralmente na Atividade Recente OU integralmente no Histórico — nunca nos dois. O critério é o `ativo` do **evento mais recente** do processo.
 
 #### `renderRhAtividade()` — RH
 
@@ -1208,25 +1345,50 @@ function _rhEhRecente(h) {
 }
 ```
 
+**Problema conhecido — entrada órfã em `ferias_historico` (out/2026):**
+
+Se um registro de férias foi marcado como `Descartado` após uma solicitação pendente ter sido gravada em `ferias_historico`, a entrada fica órfã: `_rhEhRecente` retorna `true` (nenhuma resposta registrada para aquele `ferias_id`), mas `_rhAtivAbrirModal` falha com "Solicitação não encontrada nos pendentes" porque `getPendentes()` nunca inclui registros `Descartado`.
+
+**Correção pendente de aprovação (não implementada):** adicionar guard no início de `_rhEhRecente` para retornar `false` quando o `ferias_id` não existe em nenhum `reg._sbId` ativo de `COLABORADORES`:
+
+```js
+// Adicionar ANTES do return final:
+const _feriasExiste = COLABORADORES.some(c =>
+  c.registros.some(r => String(r._sbId) === String(h.ferias_id))
+);
+if (!_feriasExiste) return false;
+```
+
+Efeito: entradas cujo registro de origem foi Descartado migram automaticamente para a aba "Histórico" (sem botão "Analisar"), preservando o dado original para consulta. Sem inserções nem alterações no banco.
+
 **O que cada item exibe:**
 - Nome e cargo do colaborador
 - Período de férias (`detalhe.inicio → detalhe.fim · dias`)
 - Data/hora exata + nome do usuário (`fmtDH(h.criado_em) · h.usuario`)
 - Chip de estado (`info.estado`)
 
-### Card "Pendentes" — inclui `cancelamento_solicitado`
+### Card "Pendentes" — fontes: `GESTOR_LANCAMENTOS` + `GESTOR_PERIODOS` (commit d442144)
+
+`GESTOR_LANCAMENTOS` cobre novas solicitações, gozo e cancelamentos cujo status chegou ao lancamento. `GESTOR_PERIODOS._feriasRow.status` é a fonte complementar obrigatória para **alterações e cancelamentos** quando o PA usa `periodos[]` JSONB — nesses casos o lancamento individual mantém `'aprovado'` e o status real fica só no `ferias.status` (= `_feriasRow.status`).
 
 ```js
 const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
   const st = (l.status||'').toLowerCase();
-  if (st === 'solicitado')             return true;
-  if (st === 'pendente_gestor')        return true;
-  if (st === 'cancelamento_solicitado') return true;  // ← obrigatório
+  if (st === 'solicitado')              return true;
+  if (st === 'pendente_gestor')         return true;
+  if (st === 'cancelamento_solicitado') return true;
   return st === 'recusado' && l.fim >= hoje;
 });
+const _altPendIds = GESTOR_PERIODOS
+  .filter(p => { const st = (p._feriasRow?.status||'').toLowerCase(); return st === 'alteracao_solicitada' || st === 'cancelamento_solicitado'; })
+  .map(p => p.colaborador_id);
+const colabsComPend = [...new Set([...aguardAprov.map(l => l.colaborador_id), ..._altPendIds])];
 ```
 
-**Solicitações com `solicitado`/`cancelamento_solicitado`** não têm filtro de data — devem aparecer mesmo com datas no passado.
+**Regras:**
+- Sem filtro de data para `solicitado`/`cancelamento_solicitado`/`alteracao_solicitada`
+- `Set` garante sem duplicidade quando o mesmo colaborador aparece nas duas fontes
+- Nunca usar só `GESTOR_LANCAMENTOS` para verificar pendências de alteração
 
 ### Modal de confirmação genérico (`abrirModalConfirm`)
 
@@ -1432,6 +1594,66 @@ Quando há duplicata:
 3. Status é normalizado antes de criar o lançamento
 
 **Por quê `row.ano` e não `row.pa_inicio`:** dois rows do mesmo PA podem ter datas `pa_inicio` ligeiramente diferentes (ex: ajuste retroativo), mas `ano` é estável — usar `pa_inicio` como chave causava merge incorreto de PAs de anos diferentes.
+
+### Ordenação determinística antes da dedup (commit 3c89065, 2026-10-09)
+
+**Problema:** a query Supabase retorna rows sem garantia de ordem dentro do mesmo `colaborador_id|ano`. O survivor era escolhido pelo first-come-first-served da iteração, o que podia selecionar um registro secundário (ex: `Alteracao_Solicitada` com realizacoes vazias) em vez do registro principal (`Aprovado` com lançamentos e realizacoes).
+
+**Fix:** sort determinístico aplicado ANTES do loop de dedup em `processGestorFerias`:
+
+```js
+const _pgStatusPrio = s => ({'aprovado':0,'concluído':0,'concluido':0,'gozado':0,'agendado':0,
+  'solicitado':1,'pendente':1,
+  'alteracao_solicitada':2,'cancelamento_solicitado':2,
+  'rejeitado':3,'cancelado':3,'descartado':3}[(s||'').toLowerCase()] ?? 2);
+const _pgHasLancs = r =>
+  (r.periodo1_inicio && Number(r.dias1) > 0) ||
+  (Array.isArray(r.periodos) && r.periodos.some(p => p.inicio && Number(p.dias) > 0));
+const _rows = [...rows].sort((a, b) => {
+  const pA = _pgStatusPrio(a.status), pB = _pgStatusPrio(b.status);
+  if (pA !== pB) return pA - pB;
+  const lA = _pgHasLancs(a) ? 0 : 1, lB = _pgHasLancs(b) ? 0 : 1;
+  if (lA !== lB) return lA - lB;
+  return a.id - b.id;
+});
+_rows.forEach(row => { ... }); // era: rows.forEach(row => { ... });
+```
+
+**Critérios de prioridade (maior → menor):**
+1. Status do PA: Aprovado/Gozado (0) > Solicitado (1) > Alteracao_Solicitada (2) > Descartado (3)
+2. Tem lançamentos com datas e dias (0 = tem, 1 = não tem)
+3. ID menor (registro mais antigo ganha o desempate)
+
+**Impacto em `_feriasRow`:** o survivor agora é sempre o registro mais completo e válido. O campo `_feriasRow` em `GESTOR_PERIODOS` aponta para esse survivor, garantindo que `_gestorColabsComAcordoAndamento` encontre as `realizacoes` corretas.
+
+### Visão RH — `supabaseParaModelo` não deduplica
+
+`supabaseParaModelo` cria um `registro` por row do Supabase sem dedup. O drawer RH filtra apenas por `r.status !== 'Descartado'`. Portanto, um PA duplicado com outro status (ex: `Alteracao_Solicitada`) apareceria duas vezes no drawer.
+
+**Solução adotada:** manter rows secundárias como `Descartado` no banco — o filtro existente as exclui sem mudança de código. Não tentar dedup em `supabaseParaModelo` sem análise de impacto abrangente.
+
+### Incidente Victor Hugo (mat.402) — out/2026
+
+- Registro 1891: Aprovado, lançamentos reais (p1: 11/06 15d, p2: 12/10 15d), realizacoes com gozo parcial
+- Registro 1893: criado como duplicata, status `Alteracao_Solicitada`, sem lançamentos, `obs_gestor` com JSON da solicitação (mudança de 12/10 → 13/10)
+
+**Sequência de eventos:**
+1. 1893 virou survivor do dedup (ordem não determinística da query) → `_feriasRow = 1893`
+2. `_gestorColabsComAcordoAndamento` lia `realizacoes` de 1893 (vazia) → Victor Hugo não aparecia no card "Acordos em andamento"
+3. No drawer RH, ambos (1891 + 1893) passavam pelo filtro `status !== 'Descartado'` → PA 2026 duplicado
+
+**Correção aplicada (2026-10-09):**
+1. Commit 3c89065: ordenação determinística em `processGestorFerias` → 1891 agora é sempre o survivor
+2. PATCH no banco: `ferias WHERE id=1893 SET status='Descartado'` — resolveu a duplicidade visual no RH sem alterar código
+
+**Status final:** 1891 = survivor ativo; 1893 = Descartado (dados preservados no banco, incluindo `obs_gestor` com a intenção da solicitação e registros em `ferias_historico`)
+
+### Pendências arquiteturais registradas
+
+- **`_rhEhRecente` — entrada órfã:** quando o `ferias_id` de uma entrada de `ferias_historico` aponta para um registro `Descartado`, o botão "Analisar" aparece mas falha. Correção proposta e aprovada conceitualmente (guard `_feriasExiste`) — aguardando implementação.
+- **`lancIdx` heurístico:** `l.id.endsWith('-p2') ? 1 : 0` em `_gestorColabsComAcordoAndamento` — pode causar subdetecção de acordos em edge cases. Correção estrutural pendente (não urgente).
+- **Proteção contra criação de PAs duplicados:** `rhCriarNovoPa` e `autocriarPasFaltantes` não verificam PAs existentes antes de criar — avaliação de guard futura, separada.
+- **Dedup em `supabaseParaModelo`:** avaliar proteção arquitetural para tornar a visão RH resiliente a duplicatas residuais no banco, sem alterar comportamento atual.
 
 ## Normalização de status
 
@@ -1706,14 +1928,37 @@ Cada bloco de PA tem `id="pa-block-${r._sbId}"` para o scroll funcionar. Banner 
 | `_SETOR_CORES` | Map de setor normalizado → `{ bg, text }`. Chave: `_normKey(setor)` |
 | `_corSetor(setor)` | Retorna `{ bg, text }` via `_SETOR_CORES`; fallback `#f8fafc`/`#111` |
 | `_fmtData(str)` | Converte `YYYY-MM-DD` → `DD/MM/YYYY` |
-| `_buildRelatorioHTML(linhas, mesLabel)` | Gera HTML para **PDF/visualização**: ícone 📅, cabeçalho azul escuro, separador por empresa, legenda com bolinhas CSS, footer `position:fixed` |
-| `_buildExcelHTML(linhas, mesLabel)` | Gera HTML para **Excel**: sem emoji, sem `position:fixed`, legenda em células coloridas, **todos os estilos inline** (Excel ignora `<style>`) |
+| `_buildRelatorioHTML(linhas, mesLabel, opts?)` | Gera HTML para **PDF/visualização**: ícone 📅, cabeçalho azul escuro, separador por empresa, legenda com bolinhas CSS, footer `position:fixed` |
+| `_buildExcelHTML(linhas, mesLabel, opts?)` | Gera HTML para **Excel**: sem emoji, sem `position:fixed`, legenda em células coloridas, **todos os estilos inline** (Excel ignora `<style>`) |
 | `exportarRelatorioPDF()` | Abre nova aba com `_buildRelatorioHTML` |
 | `exportarRelatorioExcel()` | Gera blob `.xls` com `_buildExcelHTML` |
 
 ### Campo empresa
 
 `c.empresa` (não `c.empresaRegistro`) é o campo correto na camada de dados do módulo férias. `c.empresaRegistro` nunca é preenchido neste módulo.
+
+### Parâmetro `opts.hideColumns` (adicionado 2026-10-13)
+
+Ambos os builders aceitam um terceiro parâmetro opcional `opts = { hideColumns: [...] }`:
+
+```js
+// Keys disponíveis:
+// 'empresa' | 'setor' | 'matricula' | 'nome' | 'cargo' | 'dias' | 'inicio' | 'fim'
+
+// Visão RH — sem opts, comportamento intacto:
+_buildRelatorioHTML(linhas, mesLabel)
+_buildExcelHTML(linhas, mesLabel)
+
+// Visão Gestor (escala por período):
+_buildRelatorioHTML(linhas, mesLabel, { hideColumns: ['empresa','setor','matricula'] })
+_buildExcelHTML(linhas, mesLabel, { hideColumns: ['empresa','setor','matricula'] })
+```
+
+**Comportamento interno:**
+- Larguras de colgroup redistribuídas proporcionalmente às colunas visíveis
+- Separador `emp-sep` suprimido quando `'empresa'` está oculta
+- Legenda de setores no Excel suprimida quando `'setor'` está oculta (evita células deslocadas ao final da planilha)
+- `colspan` do separador usa `nCols` (contagem dinâmica)
 
 ### Regra crítica — Excel
 
@@ -1763,6 +2008,34 @@ O arquivo gerado é `.xls` com MIME `application/vnd.ms-excel` — o Excel abre 
 
 **PDF (8 colunas):** Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo | Situação
 **Excel (9 colunas):** Setor | Nome | Cargo | Ano PA | Período Aquisitivo | Férias Início | Férias Fim | Saldo (d) | Situação
+
+### Escala por período — Gestor (commits 927407a + aa41903 + e0f8818 + b850a82 + a22894e, 2026-10-13)
+
+Exportação específica do Gestor para gerar escala de férias de um mês selecionado (quem vai estar de férias em outubro, por exemplo), para enviar ao grupo.
+
+**Modal:** `#modalEscalaGestor` — input mês (`escalaGestorMes`) + botões PDF/Excel.
+**Botão de acesso:** botão "Escala por período" no header da visão Gestor (aciona `abrirModalEscalaGestor()`).
+
+**Funções:**
+
+| Função | Descrição |
+|---|---|
+| `_getDadosEscalaGestor()` | Filtra `GESTOR_LANCAMENTOS` pelo mês selecionado (status `aprovado`/`agendado`, `!_isRealizacao`). Retorna `{ linhas, mesLabel }` |
+| `gestorEscalaPDF()` | Chama `_buildRelatorioHTML(linhas, mesLabel, { hideColumns: ['empresa','setor','matricula'] })` |
+| `gestorEscalaExcel()` | Chama `_buildExcelHTML(linhas, mesLabel, { hideColumns: ['empresa','setor','matricula'] })` |
+
+**Shape de cada item em `linhas` (compatível com os builders RH):**
+```js
+{ nome, cargo, setor, empresa: c.empresa||c.unidade||'', matricula: c.matricula||'',
+  inicio: l.inicio, fim: l.fim, dias: l.dias||'',
+  status: l.status capitalizado }
+```
+
+**Colunas visíveis no relatório do Gestor:** Nome do Colaborador | Cargo | Dias | Início | Fim (5 colunas — empresa, setor e matrícula ocultos via `opts.hideColumns`).
+
+**Regra da legenda Excel:** quando `setor` está em `hideColumns`, a linha de legenda colorida de setores é suprimida do Excel (evita células "CD", "Logística" etc. aparecendo deslocadas após a última linha de dados).
+
+**Colunas do RH intactas** — `_buildRelatorioHTML` e `_buildExcelHTML` chamados sem `opts` pela visão RH continuam com as 8 colunas originais.
 
 ### PDF — regras visuais
 
@@ -3226,3 +3499,156 @@ Nome padronizado em ambas as visões (RH e Gestor). No Gestor, o card tem dois e
 - **Verde** (`#ECFDF3 / #A7F3D0`) quando zerado
 
 Ambos os estados exibem o label `"Pendentes de aprovação"` (não apenas `"Pendentes"`).
+
+---
+
+## Fluxos do Gestor — Alterar datas da solicitação e Retirar solicitação (commit `85373c9`, out/2026)
+
+Implementa dois novos fluxos para o Gestor operar sobre períodos com status `'solicitado'` no `periodos[]` JSONB — enquanto o RH ainda não aprovou.
+
+### Onde os botões aparecem
+
+**Aba "Férias"** do drawer do colaborador (elemento `gsolListaRHConteudo`), renderizada por `_renderGsolHistoricoRH`. **Não confundir com a aba "Solicitações"** (`gsolLista`).
+
+Regra de renderização dos botões em `_renderGsolHistoricoRH`:
+
+```js
+const stNormLanc    = (l.status||'').toLowerCase();
+const isAprovadoLanc  = stNormLanc === 'aprovado' || stNormLanc === 'agendado';
+const isSolicitadoLanc = stNormLanc === 'solicitado';
+const isFuturoLanc = l.inicio > hoje;
+
+// Botões de alteração/retirada — apenas solicitações futuras
+if (isSolicitadoLanc && isFuturoLanc) {
+  // exibe botões "Alterar datas" (azul outline) e "Retirar solicitação" (vermelho outline)
+}
+// Botões de acordo/gozo — apenas aprovados futuros
+if (isAprovadoLanc && isFuturoLanc) {
+  // botões existentes inalterados
+}
+```
+
+### `_encontrarPeriodoSolicitado(perArr, lancInicio)`
+
+Localiza um período em `periodos[]` pela data `inicio`, excluindo cancelados e excluídos. Bloqueia operação se houver ambiguidade (mais de um período com a mesma data de início).
+
+```js
+function _encontrarPeriodoSolicitado(perArr, lancInicio) {
+  const candidatos = perArr.filter(p =>
+    p.inicio === lancInicio && !['cancelado', 'excluido'].includes(p.status)
+  );
+  if (candidatos.length === 0) return { ok: false, motivo: 'Período não encontrado ou já cancelado.' };
+  if (candidatos.length > 1)  return { ok: false, motivo: 'Mais de um período com a mesma data de início — operação bloqueada.' };
+  return { ok: true, periodo: candidatos[0], idx: perArr.indexOf(candidatos[0]) };
+}
+```
+
+**Por quê:** identifica por `inicio` (não por `p.id` nem por índice) — consistente com `gestorCancelarSolicitacao`.
+
+### `gestorAbrirModalAltSol(colabId, periodoId, lancId)`
+
+Reutiliza `#modalGestorAlt` (o mesmo modal de alteração de datas existente) com um novo título e flag `_modoSolicitado: true`.
+
+```js
+function gestorAbrirModalAltSol(colabId, periodoId, lancId) {
+  // ...popula campos de data do modal com lancamento.inicio / lancamento.fim...
+  _gestorAltCtx = { colabId, periodoId, lancId, slot, inicio, fim, dias, _modoSolicitado: true };
+  const titleEl = document.querySelector('#modalGestorAlt .modal-title');
+  if (titleEl) titleEl.textContent = 'Alterar datas da solicitação';
+  btn.textContent = 'Alterar datas';
+}
+```
+
+`fecharModalGestorAlt` sempre reseta o título para `'Solicitar alteração de data'`.
+
+### `_gestorAltCtx._modoSolicitado` — switch em `gestorEnviarAlteracao`
+
+`gestorEnviarAlteracao` verifica `ctx._modoSolicitado` no início. Quando `true`, entra no branch "alterar datas da solicitação":
+
+1. Lê `periodos[]` da row atual (`per._feriasRow`) ou reconstrói de `GESTOR_LANCAMENTOS` (fallback registros antigos)
+2. Chama `_encontrarPeriodoSolicitado` para localizar o período pelo `ctx.inicio`
+3. Atualiza `periodos[idx].inicio` e `periodos[idx].fim` com as novas datas
+4. PATCH condicional: filtro `id=eq.{periodoId}&status=eq.Pendente`
+5. Se retornar array vazio → conflito de concorrência (toast de erro, sem atualizar memória local)
+6. Se sucesso → atualiza memória local SOMENTE a partir do `_rowsAltSol[0]` retornado pelo banco
+
+**TextContent do botão no catch:** `ctx?._modoSolicitado ? 'Alterar datas' : 'Enviar para RH aprovar'`
+
+### `gestorConfirmarRetirada(colabId, feriasId, lancId)`
+
+Exibe modal de confirmação antes de retirar a solicitação.
+
+**CRÍTICO:** usa `abrirModalConfirm` com `texto` em **plain text** — NUNCA passar tags HTML. `abrirModalConfirm` usa `textContent` internamente, não `innerHTML`. Tags como `<strong>` serão renderizadas literalmente.
+
+```js
+function gestorConfirmarRetirada(colabId, feriasId, lancId) {
+  // ...
+  abrirModalConfirm({
+    titulo: 'Retirar solicitação',
+    texto: `Retirar a solicitação de ${formatDate(lancamento.inicio)} → ${formatDate(lancamento.fim)} (${lancamento.dias}d) de ${nomeColab}? O saldo retorna ao PA.`,
+    labelOk: 'Retirar solicitação',
+    corOk: '#D92D20',
+    cb: () => gestorExecutarRetirada(feriasId, colabId, lancId),
+  });
+}
+```
+
+### `gestorExecutarRetirada(feriasId, colabId, lancId)`
+
+Marca o período como `status: 'cancelado'` em `periodos[]` e atualiza o status do PA.
+
+**Lógica de status pós-retirada:**
+```js
+const _restaSolicit = perArr.some(p => p.status === 'solicitado');
+const novoStatus = _restaSolicit
+  ? 'Pendente'
+  : (_statusProteger.includes(row.status) ? row.status : 'Aprovado');
+// _statusProteger = ['Alteracao_Solicitada', 'Cancelamento_Solicitado']
+// Se ainda há outros períodos solicitados → permanece Pendente
+// Se não há mais solicitados e o PA não está em outro estado protegido → volta a Aprovado
+if (!_restaSolicit) patchData.obs_gestor = null;
+```
+
+**PATCH condicional:** filtro `id=eq.{feriasId}&status=eq.Pendente` com `Prefer: return=representation`. Array vazio na resposta = conflito (outra sessão modificou o registro).
+
+**Memória local:** atualiza `GESTOR_LANCAMENTOS` (remove o lancamento retirado) e `per._feriasRow` SOMENTE a partir do `_rowsRetirada[0]` retornado — nunca de dados locais.
+
+### `aprovarPendente` — pre-check + PATCH condicional com `atualizado_em` (commit `85373c9`)
+
+Antes do PATCH de aprovação, `aprovarPendente` agora faz uma leitura do estado atual do registro para detectar concorrência:
+
+```js
+// 1. Lê estado atual
+const rows = await sbGet('ferias', `id=eq.${reg._sbId}&select=status,periodos,obs_gestor,atualizado_em`);
+const registroAtual = rows[0];
+
+// 2. Bloqueia se já não está Pendente
+if (registroAtual.status !== 'Pendente') { /* toast + return */ }
+
+// 3. Bloqueia se as datas do período solicitado foram alteradas pelo Gestor após o RH abriu o modal
+const solAtualNoDb = (registroAtual.periodos || []).find(p => p.status === 'solicitado');
+if (solAtualNoDb && (solAtualNoDb.inicio !== nl.inicio || ...)) { /* toast "datas foram alteradas" */ }
+
+// 4. PATCH condicional com timestamp
+const tsLido = registroAtual.atualizado_em;
+const _filtroCondicional = `id=eq.${reg._sbId}&status=eq.Pendente&atualizado_em=eq.${encodeURIComponent(tsLido)}`;
+// PATCH com Prefer: return=representation
+// Array vazio → conflito → toast, re-enable botão, return
+```
+
+**Importante:** o pre-check usa `sbGet` padrão; o PATCH usa `_sbFetch` direto com `Prefer: return=representation` para detectar 0 rows affected.
+
+### Novas ações em `ACAO_LABEL`, `ACAO_CLS` e `acaoCor`
+
+Adicionadas em 3 locais no arquivo (`ferias_historico` rendering, Gestor atividade, RH atividade):
+
+| `acao` | Label | Cor | Classe CSS |
+|---|---|---|---|
+| `solicitacao_retirada` | `'Solicitação retirada'` | `#B45309` | `'cancel-sol'` |
+| `solicitacao_datas_alteradas` | `'Datas da solicitação atualizadas'` | `#1570EF` | `'neutro'` |
+
+### Teste de concorrência T4 — implementado, não validado em ambiente real
+
+O PATCH condicional de `gestorExecutarRetirada` e o branch `_modoSolicitado` de `gestorEnviarAlteracao` protegem contra concorrência via `status=eq.Pendente` no filtro. `aprovarPendente` usa adicionalmente `atualizado_em=eq.{tsLido}`.
+
+**T4 não foi executado na aplicação real** — testaria duas sessões simultâneas. A proteção está implementada no código mas não foi validada em prática.

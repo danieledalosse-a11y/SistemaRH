@@ -126,9 +126,10 @@ p (sb_perfil do localStorage)
   │
   └─ await Promise.all([
         ferias da equipe,
-        v_historico_eventos_home (atividades)
+        v_historico_eventos_home (atividades),
+        param_marco_tempo_casa (marcos de tempo de casa) ← .catch(()=>[]) independente
      ])
-      └─ _renderEventos / _renderFerias / _renderAtividades
+      └─ _renderEventos(team, hoje, marcosGestor) / _renderFerias / _renderAtividades
 ```
 
 ### Foto do Gestor
@@ -176,8 +177,9 @@ Exemplo: `"+8% · set/2026 · cargo mantido"`
 | Foto do gestor | `colaboradores` | `id=eq.${p.colaborador_id}&select=foto_url` |
 | Apelido | `param_gestor` | `gestor_id=eq.${uid}&select=apelido` |
 | Equipe | `colaboradores` | `gestor=ilike.${apelido}&data_demissao=is.null&select=id,nome,cargo,setor,data_nascimento,data_admissao,foto_url` |
-| Férias | `ferias` | `colaborador_id=in.(${teamIds})` |
+| Férias | `ferias` | `colaborador_id=in.(${teamIds})&select=colaborador_id,status,periodos,periodo1_inicio,periodo1_fim,periodo2_inicio,periodo2_fim` |
 | Atividades | `v_historico_eventos_home` | `colaborador_id=in.(${teamIds})&order=id.desc&limit=5` |
+| Marcos de tempo de casa | `param_marco_tempo_casa` | `select=anos&ativo=eq.true&order=anos` — `.catch(() => [])` independente; falha → `marcosGestor=[]`, sem troféus, Home continua funcionando |
 
 A Home **nunca escreve** no banco. Toda query é GET via `_hdGet`.
 
@@ -188,7 +190,7 @@ A Home **nunca escreve** no banco. Toda query é GET via `_hdGet`.
 | Endpoint | Código | Motivo |
 |---|---|---|
 | `param_gestor?gestor_id=...` | 400 | Tabela sem RLS para gestor ou coluna inexistente — não impede funcionamento |
-| `ferias?...&select=...dias_corridos` | 400 | Coluna `dias_corridos` não existe na tabela `ferias` — fix pendente |
+| `param_gestor?gestor_id=...` | 400 | Tabela sem RLS correta — não impede funcionamento |
 
 ---
 
@@ -206,7 +208,7 @@ A Home **nunca escreve** no banco. Toda query é GET via `_hdGet`.
 
 ### Cards de Eventos (Aniversários e Tempo de Casa)
 
-- Header do card: ícone colorido (30px, bolo = âmbar, relógio = verde) + título + botão "Ver todos →"
+- Header do card: ícone colorido (36px, bolo = âmbar, relógio = verde) + título + botão "Ver todos →"
 - **Card exibe os 3 primeiros** registros mais próximos (limite visual para compactação)
 - Apresentação horizontal: `hd-person-grid` → colunas `hd-person-col`
   - Avatar 46px com foto (`background-image`) ou iniciais (fallback)
@@ -215,6 +217,7 @@ A Home **nunca escreve** no banco. Toda query é GET via `_hdGet`.
   - Nome: 2 primeiros nomes completos, 10px bold, max-width 76px
   - **Aniversários:** data em `hd-person-date-sm` (cinza, sem pill) ou `hd-today-pill` (âmbar, sem fundo)
   - **Tempo de Casa:** anos em `hd-years-text` (verde, sem fundo) + data do aniversário em `hd-person-date-sm`
+  - **Marco de tempo de casa:** troféu 🏆 (`.hd-marco-icon`, 11px, `opacity:0.85`) aparece inline após os anos quando o colaborador atinge um marco ativo cadastrado em `param_marco_tempo_casa`. Mesmo indicador no modal "Ver todos" (campo `detalhe`)
 
 ### Botão "Ver todos →"
 
@@ -232,6 +235,7 @@ A Home **nunca escreve** no banco. Toda query é GET via `_hdGet`.
 - Fecha ao clicar fora (overlay) ou no ×
 - **Preparado para Diretoria:** cargo e setor já presentes para dar contexto em equipes maiores
 - **Não criar lógica paralela de avatar** — sempre usar `_avHtml`, que já tem foto + fallback
+- **`_openModal` é função global** (escopo de script), não local a `_renderEventos` — acessível por qualquer função da Home
 
 ### Atividades (`_renderAtividades`)
 
@@ -252,9 +256,30 @@ Badge colorido por tipo antes do título:
 
 ### Férias da equipe (`_renderFerias`)
 
-- Dois stats lado a lado: número grande "em férias hoje" + número "agendadas (30 dias)"
-- Mini-avatares (iniciais por `colaborador_id`) abaixo de cada stat
-- Sem chips de texto
+**Assinatura:** `_renderFerias(feriasData, periodosList, emGozo, hoje, colabMap)`
+
+**Fonte de dados — `periodosList`** (construído em `renderHomeGestor` após o fetch):
+- Cada row da tabela é "explodida" em entradas individuais `{ colaborador_id, inicio, fim }`
+- Fonte principal: itens de `periodos[]` JSONB com `status` aprovado ou agendado (exclui cancelado/excluido)
+- Fallback: campos flat `periodo1_inicio/fim` e `periodo2_inicio/fim` quando `periodos=[]` (registros legados)
+- `emGozo`: períodos onde `ini <= hoje <= fim`, deduplicados por `colaborador_id`
+- `proximos`: períodos com `ini > hoje` e `ini - hoje <= 30 dias`, deduplicados por `colaborador_id`
+
+**Visual — dois stats lado a lado:**
+- Número grande colorido (`active` = âmbar para em gozo; `next` = azul para agendadas)
+- Label abaixo do número
+- Stack de avatares sobrepostos (`.hd-ferias-stack`): máximo 5 fotos visíveis + indicador `+N` para excedentes
+  - Avatares 28px, sobrepostos com `margin-left: -8px`, borda `var(--surface)` para efeito premium
+  - Foto real via `background-image` quando `foto_url` disponível; iniciais coloridas como fallback
+  - Indicador `+N` usa `.hd-ferias-stack-more` (fundo cinza neutro)
+- Linha de nomes resumida (`.hd-ferias-stack-nomes`): até 2 primeiros nomes + "e mais N"
+- **Botão "Ver todos →"** — aparece sempre que há colaboradores na categoria (nunca omitido por quantidade)
+  - Em gozo: abre modal com detalhe em âmbar
+  - Agendadas: abre modal com detalhe em verde
+  - Modal: `_openModal` com foto + nome + cargo + setor + período (`DD/MM → DD/MM · N dias`)
+  - Classe `.hd-ferias-vertodos` — fica no rodapé de cada coluna (não no header do card, pois são dois grupos independentes)
+  - **Padrão visual alinhado ao `.hd-ver-todos`:** `font-weight:500`, `white-space:nowrap`, `text-decoration:none` (commit `cf5db31`)
+- Quando count = 0: stack, linha de nomes e botão não são renderizados (sem espaço vazio)
 
 ---
 
@@ -274,6 +299,10 @@ Badge colorido por tipo antes do título:
 | `hd-casa-vertodos` | Botão "Ver todos" tempo de casa | `_renderEventos` |
 | `hd-ferias-stats` | Stats de férias | `_renderFerias` |
 | `hd-act-list` | Lista de atividades | `_renderAtividades` |
+| `hd-bell-wrap` | Wrapper do sino (oculto por padrão, mostrado por JS para Gestor) | `renderHomeGestor` |
+| `hd-bell-btn` | Botão do sino | `_toggleBellPanel` |
+| `hd-bell-badge` | Badge numérico vermelho do sino | `_loadPendencias` |
+| `hd-bell-panel` | Painel suspenso de pendências | `_toggleBellPanel` / `_bellExpandir` |
 
 ---
 
@@ -304,6 +333,131 @@ registro em `colaboradores`. Protegido pelo trigger `trg_check_colaborador_obrig
 
 ---
 
+## Bell de pendências (Gestor)
+
+### Visão geral
+
+O sino na topbar (visível apenas para Gestor) é um painel geral de acompanhamento de férias.
+Exibe **duas categorias** de itens pendentes, com badge numérico e pulso visual para chamar
+atenção. Ao clicar, abre painel suspenso com a lista diferenciada por categoria.
+
+### Funções envolvidas
+
+| Função | Responsabilidade |
+|---|---|
+| `_loadPendencias(teamIds, team)` | Busca histórico + tabela ferias, deduplica, classifica, armazena em `_bellItens`, atualiza badge |
+| `_toggleBellPanel(e)` | Abre/fecha o painel; renderiza os primeiros `_BELL_PAGE_SIZE` (5) itens |
+| `_bellExpandir()` | Expande o painel com todos os itens restantes — **sem navegar** |
+| `_renderBellLista(itens)` | Gera HTML dos itens com dot colorido + chip de categoria |
+| `_getItemHref(h)` | Mapa extensível: `acao → módulo → href` |
+
+### Duas categorias
+
+| Categoria | `_categoria` | Ações | Dot | Chip | Janela |
+|---|---|---|---|---|---|
+| Aguardando Ciente | `'ciente'` | `aprovado`, `rejeitado`, `alteracao_aprovada`, `alteracao_recusada`, `cancelamento_aprovado`, `cancelamento_recusado` | Azul | "Ag. Ciente" | `dias_resposta_visivel` (7 dias) |
+| Aguardando RH | `'aguardando_rh'` | `solicitado`, `alteracao_solicitada`, `cancelamento_solicitado` | Âmbar | "Ag. RH" | Sem limite — item permanece até RH responder |
+
+Itens "Ag. Ciente" aparecem primeiro no painel (requerem ação do Gestor).
+
+### Lógica de `_loadPendencias` — três fontes em paralelo
+
+```
+Promise.all([
+  ferias_historico (colaborador_id=in.(teamIds), limit=500),
+  param_ferias_config (dias_resposta_visivel),
+  ferias (status=in.(Solicitado,solicitado,Pendente,pendente,...), fallback)
+])
+```
+
+**Passo 1 — deduplicação do histórico:** para cada `ferias_id`, mantém o evento com `criado_em` mais recente (espelho de `_gestorAgruparProcessos`).
+
+**Passo 2 — fallback da tabela `ferias`:** registros com status "solicitado/pendente" na tabela `ferias` sem entrada no `ferias_historico` são injetados como `{ acao:'solicitado', _fallback:true }`. Isso cobre solicitudes anteriores ao audit log. O historico **sempre** prevalece sobre o fallback no mesmo `ferias_id`.
+
+**Passo 3 — classificação:**
+- `ACOES_CIENTE` → categoria `ciente`, respeita `dias_resposta_visivel`
+- `ACOES_AGUARDANDO` → categoria `aguardando_rh`, sem janela de tempo
+- Demais ações (`gestor_ciente`, `lancado_rh`, etc.) → ignoradas silenciosamente
+
+**Passo 4 — validação de órfãos:** candidatos `aguardando_rh` vindos do histórico (não fallback) são cruzados com a tabela `ferias` para descartar `ferias_id` que não existem mais. Candidatos fallback têm existência garantida pela query direta.
+
+**Passo 5 — ordenação:** `ciente` antes de `aguardando_rh`; dentro de cada grupo, `criado_em` desc.
+
+### Badge visual
+
+- Tamanho: 18px × 18px, border-radius 9px
+- Animação: `bell-pulse` — `box-shadow` vermelho translúcido expande e some a cada 2,4s
+- Ativo apenas quando `_bellItens.length > 0`
+
+### Extensão para novos módulos
+
+Para adicionar um novo tipo de notificação:
+
+1. Inserir as ações em `_BELL_MODULO_MAP` com o nome do módulo destino
+2. Inserir o módulo e `href` em `_BELL_MODULO_HREF`
+3. Inserir labels em `_BELL_ACAO_LABEL`
+4. Incluir as ações nos sets `ACOES_CIENTE` ou `ACOES_AGUARDANDO` dentro de `_loadPendencias`
+5. Adicionar query à tabela de histórico do novo módulo na `Promise.all`
+
+```js
+const _BELL_MODULO_MAP  = { aprovado:'ferias', solicitado:'ferias', /* futuro: avaliacao_concluida:'desenvolvimento' */ };
+const _BELL_MODULO_HREF = { ferias:'modulos/ferias/index.html',     /* futuro: desenvolvimento:'modulos/desenvolvimento/index.html' */ };
+```
+
+### Comportamento do painel
+
+- Exibe os primeiros 5 itens (`_BELL_PAGE_SIZE`)
+- Se houver mais: botão `Ver mais N itens` expande **dentro do painel** (`_bellExpandir`) — sem navegar
+- Cada item tem dot colorido + chip de categoria + label da ação + horário relativo
+- Fecha ao clicar fora (listener `click` no `document`, removido após uso)
+- Se `_bellItens` estiver vazio: exibe "Sem pendências no momento."
+
+### Tolerância a falhas
+
+- `_loadPendencias` chamado com `.catch(() => {})` — não impede o carregamento da Home
+- Todas as três queries têm `.catch(() => [])` — fallback para array vazio em erro de rede
+- Se `hd-bell-badge` não existir no DOM, a função retorna silenciosamente
+
+---
+
+## Topbar — variante Gestor
+
+Classe `.topbar-gestor` adicionada via JS no início de `renderHomeGestor`:
+```js
+document.querySelector('.topbar').classList.add('topbar-gestor');
+```
+Fundo branco, texto escuro, sombra sutil. Aplicada **somente** para perfil Gestor — outros
+perfis mantêm a topbar escura (`.topbar` sem a classe).
+
+### Botão Sair na topbar branca
+
+O botão Sair usa a classe compartilhada `.btn-sair` (definida em `shared.css`). O override para
+topbar branca está em `index.html`:
+
+```css
+/* Override — botão Sair na topbar branca (Home Gestor) */
+.topbar-gestor .btn-sair { border-color:var(--border); color:var(--text-ter); background:var(--bg); }
+.topbar-gestor .btn-sair:hover { border-color:var(--text-sec); color:var(--text); background:var(--border); }
+```
+
+Futuras Homes de RH/Diretoria com topbar branca: adicionar `.topbar-<perfil> .btn-sair { ... }` com os mesmos tokens.
+Futuras Homes com topbar azul: herdam `.btn-sair` de `shared.css` automaticamente — sem override.
+
+---
+
+## Recursos compartilhados — `shared.css`
+
+`shared.css` (raiz do projeto) é a fonte única de estilos reutilizáveis entre módulos e Homes.
+Carregado em `index.html` via `<link rel="stylesheet" href="shared.css">`.
+Nos módulos, carregado automaticamente via `permissoes.js` (injeção no `<head>`).
+
+**Componentes disponíveis:**
+- `.btn-sair` — botão Sair com ícone SVG + texto "Sair" (padrão topbar azul)
+
+**Regra:** novas classes compartilhadas entre 2+ telas vão em `shared.css`, nunca inline em cada arquivo.
+
+---
+
 ## Regras de expansão futura
 
 1. **RH e Diretoria:** NÃO implementar ainda. Validar Home do Gestor em produção primeiro.
@@ -313,6 +467,7 @@ registro em `colaboradores`. Protegido pelo trigger `trg_check_colaborador_obrig
 5. **A Home é somente leitura:** nenhuma operação de escrita deve ser adicionada a ela.
 6. **Modal de consulta:** sempre usar `_avHtml` — nunca recriar lógica de avatar.
 7. **Cargo e setor no modal:** já disponíveis na query de equipe — não adicionar nova query.
+8. **Novo módulo no sino:** ver seção "Extensão para novos módulos" acima.
 
 ---
 
@@ -324,3 +479,6 @@ registro em `colaboradores`. Protegido pelo trigger `trg_check_colaborador_obrig
 | `gc = []` sem erro no console | `_hdGet` tem `try/catch` global que engole TDZ ReferenceError | Diagnóstico: substituir `_hdGet` por `fetch` direto para ver status HTTP bruto |
 | Migration 111 | View expõe `resumo_home` sem dados salariais | Executada 2026-10-08, status: ✅ |
 | Fotos não apareciam no modal | Modal criava `<div>` de avatar manualmente em vez de usar `_avHtml` | Substituir por `_avHtml(r.nome, r.foto_url, 'hd-modal-av')` |
+| Botão "Ver todos" em Férias não abria modal | `_openModal` era `function` local dentro de `_renderEventos` — inacessível para `_renderFerias` | Mover `_openModal` para escopo global, antes de `_renderEventos` (commit `5f8a1be`) |
+| Bell contava ações com nomes errados | `alteracao_rejeitada` / `cancelamento_rejeitado` não existem — nomes corretos são `alteracao_recusada` / `cancelamento_recusado` | Corrigir `ACOES_CIENTE` (commit `6542425`) |
+| Bell mostrava só 2 de 5 pendências | Solicitudes antigas sem entrada em `ferias_historico` (anteriores ao audit log) eram invisíveis ao bell | Fallback via tabela `ferias` com merge — espelha `renderGestorAtividade` (commit `92595b2`) |

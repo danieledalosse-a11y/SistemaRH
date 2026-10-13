@@ -185,13 +185,34 @@ const MODULOS_SISTEMA = [
 
 ---
 
+## `permissoes.js` também injeta `shared.css`
+
+As primeiras linhas de `permissoes.js` injetam `shared.css` automaticamente no `<head>` de
+qualquer módulo que o carregue:
+
+```js
+(function(){ if (document.getElementById('srh-shared-css')) return;
+  const l = document.createElement('link');
+  l.id = 'srh-shared-css'; l.rel = 'stylesheet'; l.href = '../../shared.css';
+  document.head.appendChild(l); })();
+```
+
+**Efeito:** todo módulo que carrega `permissoes.js` recebe automaticamente os padrões visuais
+compartilhados do SistemaRH (`.btn-sair` e futuros componentes) — sem necessidade de adicionar
+`<link>` em cada arquivo HTML.
+
+`shared.css` fica na raiz do projeto. `index.html` o carrega via `<link rel="stylesheet" href="shared.css">`.
+
+---
+
 ## Adicionando um novo módulo protegido
 
 1. Criar `modulos/<nome>/index.html` com `<script src="../../permissoes.js"></script>` no `<head>`
 2. Primeira linha do bloco de auth: `guardModulo('<chave>')`
-3. Adicionar `<chave>: 'card-<nome>'` no `mapa` de `index.html`
-4. Adicionar entrada em `MODULOS_SISTEMA` em `modulos/parametros/index.html`
-5. Fazer PATCH em `usuarios_perfil` no Supabase para os perfis que devem ter acesso
+3. Usar `class="btn-sair"` no botão de logout — estilos vêm automaticamente de `shared.css`
+4. Adicionar `<chave>: 'card-<nome>'` no `mapa` de `index.html`
+5. Adicionar entrada em `MODULOS_SISTEMA` em `modulos/parametros/index.html`
+6. Fazer PATCH em `usuarios_perfil` no Supabase para os perfis que devem ter acesso
 
 ---
 
