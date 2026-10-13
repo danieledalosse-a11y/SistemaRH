@@ -8045,7 +8045,10 @@ function _fmtData(iso) {
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
 }
 
-function _buildRelatorioHTML(linhas, mesLabel) {
+function _buildRelatorioHTML(linhas, mesLabel, opts) {
+  opts = opts || {};
+  const hide = new Set(opts.hideColumns || []);
+
   // Ordena: empresa → setor → nome
   const sorted = [...linhas].sort((a, b) => {
     const ea = (a.empresa||'').localeCompare(b.empresa||'', 'pt-BR');
@@ -8057,26 +8060,40 @@ function _buildRelatorioHTML(linhas, mesLabel) {
 
   const gerado = new Date().toLocaleDateString('pt-BR');
 
-  // Linhas com separador por empresa
+  const ALL_COLS = [
+    { key: 'empresa',   label: 'Empresa de Registro',  thStyle: '',                  w: '15%',
+      td: l => { const c=_corSetor(l.setor); return `<td style="background:${c.bg};color:${c.text};">${l.empresa}</td>`; } },
+    { key: 'setor',     label: 'Setor',                 thStyle: '',                  w: '11%',
+      td: l => { const c=_corSetor(l.setor); return `<td style="background:${c.bg};color:${c.text};font-weight:600;">${l.setor}</td>`; } },
+    { key: 'matricula', label: 'Matrícula',              thStyle: 'text-align:center;', w: '7%',
+      td: l => { const c=_corSetor(l.setor); return `<td style="background:${c.bg};color:${c.text};text-align:center;font-weight:700;">${l.matricula}</td>`; } },
+    { key: 'nome',      label: 'Nome do Colaborador',   thStyle: '',                  w: '23%',
+      td: l => { const c=_corSetor(l.setor); return `<td style="background:${c.bg};color:${c.text};">${l.nome}</td>`; } },
+    { key: 'cargo',     label: 'Cargo',                 thStyle: '',                  w: '22%',
+      td: l => `<td>${l.cargo}</td>` },
+    { key: 'dias',      label: 'Dias',                  thStyle: 'text-align:center;', w: '5%',
+      td: l => `<td style="text-align:center;">${l.dias}</td>` },
+    { key: 'inicio',    label: 'Início',                thStyle: 'text-align:center;', w: '9%',
+      td: l => { const c=_corSetor(l.setor); return `<td style="background:${c.bg};color:${c.text};text-align:center;">${_fmtData(l.inicio)}</td>`; } },
+    { key: 'fim',       label: 'Fim',                   thStyle: 'text-align:center;', w: '8%',
+      td: l => { const c=_corSetor(l.setor); return `<td style="background:${c.bg};color:${c.text};text-align:center;">${_fmtData(l.fim)}</td>`; } },
+  ];
+  const cols = ALL_COLS.filter(c => !hide.has(c.key));
+  const nCols = cols.length;
+
+  // Redistribui larguras proporcionalmente
+  const totalW = cols.reduce((s, c) => s + parseInt(c.w), 0);
+  const colgroup = cols.map(c => `<col style="width:${Math.round(parseInt(c.w)*100/totalW)}%">`).join('');
+  const thead = cols.map(c => `<th${c.thStyle ? ` style="${c.thStyle}"` : ''}>${c.label}</th>`).join('');
+
   let trs = '';
   let empAtual = null;
   sorted.forEach(l => {
-    if (l.empresa !== empAtual) {
+    if (!hide.has('empresa') && l.empresa !== empAtual) {
       empAtual = l.empresa;
-      trs += `<tr class="emp-sep"><td colspan="8">— ${(l.empresa||'').toUpperCase()}</td></tr>`;
+      trs += `<tr class="emp-sep"><td colspan="${nCols}">— ${(l.empresa||'').toUpperCase()}</td></tr>`;
     }
-    const cor = _corSetor(l.setor);
-    const cs = `background:${cor.bg};color:${cor.text};`;
-    trs += `<tr>
-      <td style="${cs}">${l.empresa}</td>
-      <td style="${cs}font-weight:600;">${l.setor}</td>
-      <td style="${cs}text-align:center;font-weight:700;">${l.matricula}</td>
-      <td style="${cs}">${l.nome}</td>
-      <td>${l.cargo}</td>
-      <td style="text-align:center;">${l.dias}</td>
-      <td style="${cs}text-align:center;">${_fmtData(l.inicio)}</td>
-      <td style="${cs}text-align:center;">${_fmtData(l.fim)}</td>
-    </tr>`;
+    trs += `<tr>${cols.map(c => c.td(l)).join('')}</tr>`;
   });
 
   // Legenda de setores únicos
@@ -8094,12 +8111,10 @@ function _buildRelatorioHTML(linhas, mesLabel) {
     @page { size: A4 landscape; margin: 10mm 12mm; }
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a2e; background: #fff; padding: 20px 20px 60px; }
-    /* Header */
     .rel-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1.5px solid #e2e8f0; }
     .rel-icon { font-size: 28px; line-height: 1; margin-top: 2px; }
     .rel-mes { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #1a1a2e; margin-bottom: 3px; }
     .rel-sub { font-size: 11px; color: #64748b; }
-    /* Tabela */
     table { width: 100%; border-collapse: collapse; table-layout: fixed; border-radius: 6px; overflow: hidden; border: 1px solid #cbd5e1; }
     thead tr { background: #1e3a5f; }
     th { padding: 9px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #fff; border-right: 1px solid rgba(255,255,255,0.15); text-align: left; white-space: nowrap; }
@@ -8107,15 +8122,6 @@ function _buildRelatorioHTML(linhas, mesLabel) {
     td { padding: 5px 10px; border-bottom: 1px solid rgba(0,0,0,0.07); border-right: 1px solid rgba(0,0,0,0.07); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
     td:last-child { border-right: none; }
     tr.emp-sep td { background: #f1f5f9; color: #334155; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; padding: 5px 10px; border-bottom: 1px solid #cbd5e1; border-right: none; }
-    colgroup col:nth-child(1) { width: 15%; }
-    colgroup col:nth-child(2) { width: 11%; }
-    colgroup col:nth-child(3) { width: 7%;  }
-    colgroup col:nth-child(4) { width: 23%; }
-    colgroup col:nth-child(5) { width: 22%; }
-    colgroup col:nth-child(6) { width: 5%;  }
-    colgroup col:nth-child(7) { width: 9%;  }
-    colgroup col:nth-child(8) { width: 8%;  }
-    /* Rodapé */
     .rel-footer { position: fixed; bottom: 8mm; left: 12mm; right: 12mm; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; }
     .legenda { display: flex; flex-wrap: wrap; gap: 4px; }
     @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
@@ -8129,17 +8135,8 @@ function _buildRelatorioHTML(linhas, mesLabel) {
     </div>
   </div>
   <table>
-    <colgroup><col><col><col><col><col><col><col><col></colgroup>
-    <thead><tr>
-      <th>Empresa de Registro</th>
-      <th>Setor</th>
-      <th style="text-align:center;">Matrícula</th>
-      <th>Nome do Colaborador</th>
-      <th>Cargo</th>
-      <th style="text-align:center;">Dias</th>
-      <th style="text-align:center;">Início</th>
-      <th style="text-align:center;">Fim</th>
-    </tr></thead>
+    <colgroup>${colgroup}</colgroup>
+    <thead><tr>${thead}</tr></thead>
     <tbody>${trs}</tbody>
   </table>
   <div class="rel-footer">
@@ -8149,7 +8146,10 @@ function _buildRelatorioHTML(linhas, mesLabel) {
   </body></html>`;
 }
 
-function _buildExcelHTML(linhas, mesLabel) {
+function _buildExcelHTML(linhas, mesLabel, opts) {
+  opts = opts || {};
+  const hide = new Set(opts.hideColumns || []);
+
   const sorted = [...linhas].sort((a, b) => {
     const ea = (a.empresa||'').localeCompare(b.empresa||'', 'pt-BR');
     if (ea !== 0) return ea;
@@ -8159,53 +8159,49 @@ function _buildExcelHTML(linhas, mesLabel) {
   });
   const gerado = new Date().toLocaleDateString('pt-BR');
 
+  const TH  = 'background:#1e3a5f;color:#fff;font-family:Arial,sans-serif;font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;border:1px solid #16304f;text-align:left;';
+  const THC = TH + 'text-align:center;';
+
+  const ALL_COLS = [
+    { key: 'empresa',   thStyle: TH,  td: (l, cs) => `<td style="${cs}padding:5px 10px;">${l.empresa}</td>`,                                                            label: 'Empresa de Registro' },
+    { key: 'setor',     thStyle: TH,  td: (l, cs) => `<td style="${cs}font-weight:700;padding:5px 10px;">${l.setor}</td>`,                                              label: 'Setor' },
+    { key: 'matricula', thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;font-weight:700;padding:5px 10px;">${l.matricula}</td>`,                        label: 'Matrícula' },
+    { key: 'nome',      thStyle: TH,  td: (l, cs) => `<td style="${cs}padding:5px 10px;">${l.nome}</td>`,                                                               label: 'Nome do Colaborador' },
+    { key: 'cargo',     thStyle: TH,  td: (l)     => `<td style="padding:5px 10px;">${l.cargo}</td>`,                                                                   label: 'Cargo' },
+    { key: 'dias',      thStyle: THC, td: (l)     => `<td style="text-align:center;padding:5px 10px;">${l.dias}</td>`,                                                  label: 'Dias' },
+    { key: 'inicio',    thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.inicio)}</td>`,                                 label: 'Início' },
+    { key: 'fim',       thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.fim)}</td>`,                                    label: 'Fim' },
+  ];
+  const cols = ALL_COLS.filter(c => !hide.has(c.key));
+  const nCols = cols.length;
+
   let trs = '';
   let empAtual = null;
   sorted.forEach(l => {
-    if (l.empresa !== empAtual) {
+    if (!hide.has('empresa') && l.empresa !== empAtual) {
       empAtual = l.empresa;
-      trs += `<tr><td colspan="8" style="background:#e2e8f0;color:#334155;font-size:11pt;font-weight:700;padding:5px 10px;border-bottom:1px solid #cbd5e1;">— ${(l.empresa||'').toUpperCase()}</td></tr>`;
+      trs += `<tr><td colspan="${nCols}" style="background:#e2e8f0;color:#334155;font-size:11pt;font-weight:700;padding:5px 10px;border-bottom:1px solid #cbd5e1;">— ${(l.empresa||'').toUpperCase()}</td></tr>`;
     }
     const cor = _corSetor(l.setor);
-    const cs = `background:${cor.bg};color:${cor.text};`;
-    trs += `<tr>
-      <td style="${cs}padding:5px 10px;">${l.empresa}</td>
-      <td style="${cs}font-weight:700;padding:5px 10px;">${l.setor}</td>
-      <td style="${cs}text-align:center;font-weight:700;padding:5px 10px;">${l.matricula}</td>
-      <td style="${cs}padding:5px 10px;">${l.nome}</td>
-      <td style="padding:5px 10px;">${l.cargo}</td>
-      <td style="text-align:center;padding:5px 10px;">${l.dias}</td>
-      <td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.inicio)}</td>
-      <td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.fim)}</td>
-    </tr>`;
+    const cs  = `background:${cor.bg};color:${cor.text};`;
+    trs += `<tr>${cols.map(c => c.td(l, cs)).join('')}</tr>`;
   });
 
-  // Legenda: células coloridas simples
   const setoresUnicos = [...new Map(sorted.map(l => [l.setor, _corSetor(l.setor)])).entries()];
   const legendaCells = setoresUnicos.map(([s, c]) =>
     `<td style="background:${c.bg};color:${c.text};padding:4px 10px;font-size:10pt;border:1px solid rgba(0,0,0,0.1);">${s}</td>`
   ).join('');
 
-  const TH = 'background:#1e3a5f;color:#fff;font-family:Arial,sans-serif;font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;border:1px solid #16304f;text-align:left;';
-  const THC = TH + 'text-align:center;';
+  const thead = cols.map(c => `<td style="${c.thStyle}">${c.label}</td>`).join('');
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
   <head><meta charset="UTF-8"></head><body>
   <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;">
-    <tr><td colspan="8" style="font-size:18pt;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;padding:12px 10px 4px;border:none;font-family:Arial,sans-serif;">FÉRIAS — ${mesLabel.toUpperCase()}</td></tr>
-    <tr><td colspan="8" style="font-size:10pt;color:#64748b;padding:0 10px 10px;border:none;font-family:Arial,sans-serif;">${sorted.length} registro(s) · Gerado em ${gerado}</td></tr>
-    <tr>
-      <td style="${TH}">Empresa de Registro</td>
-      <td style="${TH}">Setor</td>
-      <td style="${THC}">Matrícula</td>
-      <td style="${TH}">Nome do Colaborador</td>
-      <td style="${TH}">Cargo</td>
-      <td style="${THC}">Dias</td>
-      <td style="${THC}">Início</td>
-      <td style="${THC}">Fim</td>
-    </tr>
+    <tr><td colspan="${nCols}" style="font-size:18pt;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;padding:12px 10px 4px;border:none;font-family:Arial,sans-serif;">FÉRIAS — ${mesLabel.toUpperCase()}</td></tr>
+    <tr><td colspan="${nCols}" style="font-size:10pt;color:#64748b;padding:0 10px 10px;border:none;font-family:Arial,sans-serif;">${sorted.length} registro(s) · Gerado em ${gerado}</td></tr>
+    <tr>${thead}</tr>
     ${trs}
-    <tr><td colspan="8" style="padding:6px 0;border:none;"></td></tr>
+    <tr><td colspan="${nCols}" style="padding:6px 0;border:none;"></td></tr>
     <tr>${legendaCells}</tr>
   </table>
   </body></html>`;
@@ -10778,7 +10774,7 @@ function gestorEscalaPDF() {
   if (!dados) return;
   const { linhas, mesLabel } = dados;
   if (!linhas.length) { toast('Nenhuma férias aprovada encontrada para o período selecionado.', 'aviso'); return; }
-  const html = _buildRelatorioHTML(linhas, mesLabel);
+  const html = _buildRelatorioHTML(linhas, mesLabel, { hideColumns: ['empresa','setor','matricula'] });
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
@@ -10790,7 +10786,7 @@ function gestorEscalaExcel() {
   if (!dados) return;
   const { linhas, mesLabel } = dados;
   if (!linhas.length) { toast('Nenhuma férias aprovada encontrada para o período selecionado.', 'aviso'); return; }
-  const xls  = _buildExcelHTML(linhas, mesLabel);
+  const xls  = _buildExcelHTML(linhas, mesLabel, { hideColumns: ['empresa','setor','matricula'] });
   const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
