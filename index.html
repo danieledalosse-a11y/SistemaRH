@@ -696,6 +696,41 @@ function _renderModules(p) {
     .join('');
 }
 
+// Modal compartilhado — usado por _renderEventos (Aniversários/Tempo de Casa) e _renderFerias (Férias)
+// rows: [{ nome, foto_url, cargo, setor, detalhe, corData }]
+function _openModal(titulo, subtitulo, rows) {
+  const existing = document.getElementById('hd-modal-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'hd-modal-overlay';
+  overlay.className = 'hd-modal-overlay';
+  const rowsHtml = rows.map(r => {
+    const avEl = _avHtml(r.nome, r.foto_url, 'hd-modal-av');
+    const cargoSetor = [r.cargo, r.setor].filter(Boolean).join(' · ');
+    return `<div class="hd-modal-row">
+      ${avEl}
+      <div class="hd-modal-info">
+        <div class="hd-modal-nome">${r.nome}</div>
+        ${cargoSetor ? `<div class="hd-modal-cargo">${cargoSetor}</div>` : ''}
+        <div class="hd-modal-data" style="color:${r.corData||'var(--text-ter)'}">${r.detalhe}</div>
+      </div>
+    </div>`;
+  }).join('');
+  overlay.innerHTML = `<div class="hd-modal">
+    <div class="hd-modal-hd">
+      <div>
+        <div class="hd-modal-title">${titulo}</div>
+        ${subtitulo ? `<div class="hd-modal-subtitle">${subtitulo}</div>` : ''}
+      </div>
+      <button class="hd-modal-close" id="hd-modal-close-btn">×</button>
+    </div>
+    <div class="hd-modal-list">${rowsHtml}</div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('hd-modal-close-btn').addEventListener('click', () => overlay.remove());
+}
+
 function _renderEventos(team, hoje) {
   const meses = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const mesesNum = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -742,41 +777,6 @@ function _renderEventos(team, hoje) {
       <div class="hd-person-name-sm">${primeiroNome}</div>
       ${infoHtml}
     </div>`;
-  }
-
-  // Modal "Ver todos" — exibe registros além dos 5 visíveis no card
-  // rows: [{ nome, foto_url, cargo, setor, detalhe, corData }]
-  function _openModal(titulo, subtitulo, rows) {
-    const existing = document.getElementById('hd-modal-overlay');
-    if (existing) existing.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'hd-modal-overlay';
-    overlay.className = 'hd-modal-overlay';
-    const rowsHtml = rows.map(r => {
-      const avEl = _avHtml(r.nome, r.foto_url, 'hd-modal-av');
-      const cargoSetor = [r.cargo, r.setor].filter(Boolean).join(' · ');
-      return `<div class="hd-modal-row">
-        ${avEl}
-        <div class="hd-modal-info">
-          <div class="hd-modal-nome">${r.nome}</div>
-          ${cargoSetor ? `<div class="hd-modal-cargo">${cargoSetor}</div>` : ''}
-          <div class="hd-modal-data" style="color:${r.corData||'var(--text-ter)'}">${r.detalhe}</div>
-        </div>
-      </div>`;
-    }).join('');
-    overlay.innerHTML = `<div class="hd-modal">
-      <div class="hd-modal-hd">
-        <div>
-          <div class="hd-modal-title">${titulo}</div>
-          ${subtitulo ? `<div class="hd-modal-subtitle">${subtitulo}</div>` : ''}
-        </div>
-        <button class="hd-modal-close" id="hd-modal-close-btn">×</button>
-      </div>
-      <div class="hd-modal-list">${rowsHtml}</div>
-    </div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.getElementById('hd-modal-close-btn').addEventListener('click', () => overlay.remove());
   }
 
   const elAniv = document.getElementById('hd-aniv-list');
