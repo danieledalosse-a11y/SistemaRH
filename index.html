@@ -176,18 +176,16 @@
   .hd-ferias-av { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--surface); display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 700; color: #fff; margin-left: -5px; flex-shrink: 0; background-size: cover; background-position: center; }
   .hd-ferias-av:first-child { margin-left: 0; }
   .hd-ferias-divider { width: 1px; background: var(--border); margin: 2px 0; align-self: stretch; }
-  /* Mini-cards 2 colunas — próximas férias */
+  /* Stack de avatares sobrepostos — próximas férias */
   .hd-ferias-stat-prox { flex: 1; min-width: 0; }
-  .hd-ferias-proxlist { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
-  .hd-ferias-row { display: flex; align-items: center; gap: 7px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-width: 0; }
-  .hd-ferias-mini-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; background-size: cover; background-position: center; }
-  .hd-ferias-row-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .hd-ferias-row-nome { font-size: 11px; font-weight: 700; color: var(--text-pri); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .hd-ferias-row-cargo { font-size: 10px; color: var(--text-ter); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .hd-ferias-row-periodo { font-size: 10px; color: var(--green); font-weight: 600; }
-  .hd-ferias-vertodos { grid-column: 1 / -1; background: none; border: none; color: var(--blue); font-size: 11px; font-weight: 600; cursor: pointer; padding: 2px 0 0; text-align: left; }
+  .hd-ferias-stack-wrap { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .hd-ferias-stack { display: flex; align-items: center; }
+  .hd-ferias-stack-av { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--surface); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; background-size: cover; background-position: center; margin-left: -8px; }
+  .hd-ferias-stack-av:first-child { margin-left: 0; }
+  .hd-ferias-stack-more { background: var(--border); color: var(--text-sec); font-size: 9px; font-weight: 700; }
+  .hd-ferias-stack-nomes { font-size: 11px; color: var(--text-sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hd-ferias-vertodos { background: none; border: none; color: var(--blue); font-size: 11px; font-weight: 600; cursor: pointer; padding: 0; text-align: left; margin-top: 2px; display: inline-block; }
   .hd-ferias-vertodos:hover { text-decoration: underline; }
-  @media (max-width: 480px) { .hd-ferias-proxlist { grid-template-columns: 1fr; } }
   /* manter classes antigas para não quebrar nada */
   .hd-ferias-hint { display: none; }
   .hd-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -851,66 +849,67 @@ function _renderFerias(feriasData, periodosList, emGozo, hoje, colabMap) {
     return `${fmt(ini)} → ${fmt(fim)}`;
   };
 
-  // Avatares das pessoas em gozo (até 4) — sem colabMap, mantém comportamento atual
-  const gozoAvsHtml = emGozo.slice(0,4).map(f => {
-    const col = _avColor(String(f.colaborador_id));
-    return `<div class="hd-ferias-av" style="background:${col}">${String(f.colaborador_id).slice(-2)}</div>`;
-  }).join('');
+  const MAX_STACK = 5; // quantos avatares aparecem visíveis no stack
 
-  // Próximas: até 3 linhas compactas com foto/nome/cargo/período + botão "Ver todos"
-  const MAX_INLINE = 3;
-  const proxVisiveis = proximos.slice(0, MAX_INLINE);
-  const proxListHtml = proxVisiveis.map(p => {
-    const c = colabMap ? colabMap[p.colaborador_id] : null;
-    const nome = c ? c.nome : String(p.colaborador_id);
-    const cargo = c ? (c.cargo || '') : '';
-    const primeiroNome = nome.split(' ').slice(0,2).join(' ');
-    const avHtml = _avHtml(nome, c && c.foto_url ? c.foto_url : null, 'hd-ferias-mini-av');
-    const periodo = _fmtPeriodo(p.inicio, p.fim);
-    return `<div class="hd-ferias-row">
-      ${avHtml}
-      <div class="hd-ferias-row-info">
-        <div class="hd-ferias-row-nome">${primeiroNome}</div>
-        ${cargo ? `<div class="hd-ferias-row-cargo">${cargo}</div>` : ''}
-        <div class="hd-ferias-row-periodo">${periodo}</div>
-      </div>
+  // Monta stack de avatares sobrepostos para um grupo de períodos
+  function _buildStack(grupo) {
+    if (!grupo.length) return '';
+    const visiveis = grupo.slice(0, MAX_STACK);
+    const extra = grupo.length - MAX_STACK;
+    const stackAvsHtml = visiveis.map(p => {
+      const c = colabMap ? colabMap[p.colaborador_id] : null;
+      const nome = c ? c.nome : String(p.colaborador_id);
+      const url = c && c.foto_url && c.foto_url.startsWith('http') ? c.foto_url : null;
+      if (url) return `<div class="hd-ferias-stack-av" style="background:#e5e7eb;background-image:url('${url}');background-size:cover;background-position:center;" title="${nome}"></div>`;
+      return `<div class="hd-ferias-stack-av" style="background:${_avColor(nome)}" title="${nome}">${_initials(nome)}</div>`;
+    }).join('');
+    const maisHtml = extra > 0 ? `<div class="hd-ferias-stack-av hd-ferias-stack-more">+${extra}</div>` : '';
+    // Linha de nomes: até 2 primeiros nomes + "e mais N"
+    const primeiroNome = n => (n||'').split(' ')[0];
+    const nomes2 = grupo.slice(0,2).map(p => { const c = colabMap ? colabMap[p.colaborador_id] : null; return primeiroNome(c ? c.nome : ''); }).filter(Boolean);
+    const restantes = grupo.length - nomes2.length;
+    const nomesLinha = restantes > 0 ? `${nomes2.join(', ')} e mais ${restantes}` : nomes2.join(' e ');
+    return `<div class="hd-ferias-stack-wrap">
+      <div class="hd-ferias-stack">${stackAvsHtml}${maisHtml}</div>
+      ${nomesLinha ? `<div class="hd-ferias-stack-nomes">${nomesLinha}</div>` : ''}
     </div>`;
-  }).join('');
-
-  const verTodosBtn = proximos.length > MAX_INLINE
-    ? `<button class="hd-ferias-vertodos" id="hd-ferias-vertodos-btn">Ver todos →</button>`
-    : '';
+  }
 
   el.innerHTML = `
     <div class="hd-ferias-stat">
       <div class="hd-ferias-num active">${emGozo.length}</div>
       <div class="hd-ferias-lbl">em férias hoje</div>
-      ${emGozo.length ? `<div class="hd-ferias-avs">${gozoAvsHtml}</div>` : ''}
+      ${emGozo.length ? _buildStack(emGozo) : ''}
+      ${emGozo.length ? `<button class="hd-ferias-vertodos" id="hd-ferias-gozo-btn">Ver todos →</button>` : ''}
     </div>
     <div class="hd-ferias-divider"></div>
     <div class="hd-ferias-stat hd-ferias-stat-prox">
       <div class="hd-ferias-num next">${proximos.length}</div>
       <div class="hd-ferias-lbl">agendada${proximos.length!==1?'s':''} (30 dias)</div>
-      ${proximos.length ? `<div class="hd-ferias-proxlist">${proxListHtml}${verTodosBtn}</div>` : ''}
+      ${proximos.length ? _buildStack(proximos) : ''}
+      ${proximos.length ? `<button class="hd-ferias-vertodos" id="hd-ferias-prox-btn">Ver todos →</button>` : ''}
     </div>`;
 
-  if (proximos.length > MAX_INLINE) {
-    document.getElementById('hd-ferias-vertodos-btn').addEventListener('click', () => {
-      _openModal(
-        'Próximas férias',
-        'Períodos agendados nos próximos 30 dias',
-        proximos.map(p => {
-          const c = colabMap ? colabMap[p.colaborador_id] : null;
-          return {
-            nome: c ? c.nome : String(p.colaborador_id),
-            foto_url: c ? c.foto_url : null,
-            cargo: c ? c.cargo : '',
-            setor: c ? c.setor : '',
-            detalhe: _fmtPeriodo(p.inicio, p.fim),
-            corData: 'var(--green)'
-          };
-        })
-      );
+  // Modal "Ver todos" — em gozo
+  if (emGozo.length) {
+    document.getElementById('hd-ferias-gozo-btn').addEventListener('click', () => {
+      _openModal('Em férias hoje', '', emGozo.map(p => {
+        const c = colabMap ? colabMap[p.colaborador_id] : null;
+        return { nome: c ? c.nome : String(p.colaborador_id), foto_url: c ? c.foto_url : null,
+          cargo: c ? c.cargo : '', setor: c ? c.setor : '',
+          detalhe: _fmtPeriodo(p.inicio, p.fim), corData: 'var(--amber)' };
+      }));
+    });
+  }
+  // Modal "Ver todos" — agendadas
+  if (proximos.length) {
+    document.getElementById('hd-ferias-prox-btn').addEventListener('click', () => {
+      _openModal('Próximas férias', 'Períodos agendados nos próximos 30 dias', proximos.map(p => {
+        const c = colabMap ? colabMap[p.colaborador_id] : null;
+        return { nome: c ? c.nome : String(p.colaborador_id), foto_url: c ? c.foto_url : null,
+          cargo: c ? c.cargo : '', setor: c ? c.setor : '',
+          detalhe: _fmtPeriodo(p.inicio, p.fim), corData: 'var(--green)' };
+      }));
     });
   }
 }
