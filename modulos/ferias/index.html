@@ -1857,6 +1857,29 @@
   </div>
 </div>
 
+<!-- ═══ MODAL ESCALA GESTOR ═══ -->
+<div class="modal-relatorio" id="modalEscalaGestor" onclick="fecharEscalaGestor(event)">
+  <div class="modal-rel-box">
+    <div class="modal-rel-title">Escala de férias por período</div>
+    <div class="modal-rel-sub">Colaboradores da equipe com férias aprovadas no mês selecionado</div>
+    <div class="rel-field">
+      <label>Mês de referência</label>
+      <input type="month" id="escalaGestorMes">
+    </div>
+    <div class="rel-actions">
+      <button class="btn-rel-cancel" onclick="document.getElementById('modalEscalaGestor').classList.remove('open')">Cancelar</button>
+      <button class="btn-excel" onclick="gestorEscalaExcel()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:4px;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Exportar Excel
+      </button>
+      <button class="btn-pdf" onclick="gestorEscalaPDF()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Visualizar PDF
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ LANÇAR ═══ -->
 <div id="sec-lancar" class="container" style="display:none;">
   <div class="card">
@@ -2025,6 +2048,11 @@
               <button onclick="gestorExportarExcel();document.getElementById('gestorExportMenu').style.display='none';" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:none;background:transparent;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer;text-align:left;" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background='transparent'">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6M3 15h6M15 9l-3 6 3 6M21 9l-3 6 3 6"/></svg>
                 Exportar Excel
+              </button>
+              <div style="height:1px;background:var(--border);margin:0 10px;"></div>
+              <button onclick="abrirEscalaGestor();document.getElementById('gestorExportMenu').style.display='none';" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:none;background:transparent;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer;text-align:left;" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background='transparent'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Escala por período
               </button>
             </div>
           </div>
@@ -10696,6 +10724,197 @@ async function _gestorExportarExcelXlsx(hoje, cargofs, gestorf, gerado, dataLabe
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ─── Escala de Férias por Período — Gestor ───────────────────────────────────
+
+function abrirEscalaGestor() {
+  const inp = document.getElementById('escalaGestorMes');
+  if (inp && !inp.value) {
+    const hoje = new Date();
+    inp.value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  }
+  document.getElementById('modalEscalaGestor')?.classList.add('open');
+}
+
+function fecharEscalaGestor(e) {
+  if (e.target === document.getElementById('modalEscalaGestor'))
+    document.getElementById('modalEscalaGestor').classList.remove('open');
+}
+
+function _getDadosEscalaGestor() {
+  const mesVal = document.getElementById('escalaGestorMes')?.value || '';
+  if (!mesVal) { toast('Selecione um mês de referência.', 'aviso'); return null; }
+  const [anoR, mesR] = mesVal.split('-').map(Number);
+  const mesStr    = String(mesR).padStart(2,'0');
+  const mesInicio = `${anoR}-${mesStr}-01`;
+  const mesFim    = `${anoR}-${mesStr}-${String(new Date(anoR, mesR, 0).getDate()).padStart(2,'0')}`;
+  const meses     = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  if (!GESTOR_COLABS.length) { toast('Dados da equipe não carregados. Aguarde e tente novamente.', 'aviso'); return null; }
+
+  const colabMap = new Map(GESTOR_COLABS.map(c => [String(c.id), c]));
+  const linhas   = [];
+
+  GESTOR_LANCAMENTOS.forEach(l => {
+    if (l._isRealizacao) return;
+    if (!['aprovado','agendado'].includes((l.status||'').toLowerCase())) return;
+    if ((l.inicio||'') > mesFim || (l.fim||'') < mesInicio) return;
+    const c = colabMap.get(String(l.colaborador_id));
+    if (!c) return;
+    linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||'', inicio: l.inicio, fim: l.fim, dias: l.dias||'' });
+  });
+
+  linhas.sort((a, b) => a.inicio.localeCompare(b.inicio) || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  return { linhas, mesLabel: `${meses[mesR]} ${anoR}` };
+}
+
+function _buildEscalaGestorHTML(linhas, mesLabel) {
+  const gerado = new Date().toLocaleDateString('pt-BR');
+  let trs = '';
+  let setorAtual = null;
+  linhas.forEach(l => {
+    if (l.setor !== setorAtual) {
+      setorAtual = l.setor;
+      const cor = _corSetor(l.setor);
+      trs += `<tr class="sep-setor"><td colspan="5" style="background:${cor.bg};color:${cor.text};font-size:10px;font-weight:700;letter-spacing:0.05em;padding:5px 10px;border-bottom:1px solid rgba(0,0,0,.1);">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
+    }
+    const cor = _corSetor(l.setor);
+    const cs  = `background:${cor.bg};color:${cor.text};`;
+    trs += `<tr>
+      <td style="${cs}font-weight:600;">${l.nome}</td>
+      <td>${l.cargo}</td>
+      <td style="${cs}font-weight:600;">${l.setor}</td>
+      <td style="${cs}text-align:center;">${_fmtData(l.inicio)}</td>
+      <td style="${cs}text-align:center;">${_fmtData(l.fim)} <span style="color:rgba(0,0,0,.4);font-size:10px;">(${l.dias}d)</span></td>
+    </tr>`;
+  });
+
+  const setoresUnicos = [...new Map(linhas.map(l => [l.setor, _corSetor(l.setor)])).entries()];
+  const legenda = setoresUnicos.map(([s, c]) =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:16px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:${c.bg};border:1px solid rgba(0,0,0,.15);display:inline-block;"></span>
+      <span>${s}</span>
+    </span>`
+  ).join('');
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+  <title>Escala de Férias — ${mesLabel}</title>
+  <style>
+    @page { size: A4 portrait; margin: 10mm 14mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a2e; background: #fff; padding: 20px 20px 60px; }
+    .rel-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1.5px solid #e2e8f0; }
+    .rel-icon { font-size: 28px; line-height: 1; margin-top: 2px; }
+    .rel-mes { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #1a1a2e; margin-bottom: 3px; }
+    .rel-sub { font-size: 11px; color: #64748b; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; border-radius: 6px; overflow: hidden; border: 1px solid #cbd5e1; }
+    thead tr { background: #1e3a5f; }
+    th { padding: 9px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #fff; border-right: 1px solid rgba(255,255,255,.15); text-align: left; white-space: nowrap; }
+    th:last-child { border-right: none; }
+    td { padding: 6px 10px; border-bottom: 1px solid rgba(0,0,0,.07); border-right: 1px solid rgba(0,0,0,.07); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+    td:last-child { border-right: none; }
+    colgroup col:nth-child(1) { width: 28%; }
+    colgroup col:nth-child(2) { width: 26%; }
+    colgroup col:nth-child(3) { width: 18%; }
+    colgroup col:nth-child(4) { width: 14%; }
+    colgroup col:nth-child(5) { width: 14%; }
+    .rel-footer { position: fixed; bottom: 8mm; left: 14mm; right: 14mm; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; }
+    .legenda { display: flex; flex-wrap: wrap; gap: 4px; }
+    @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
+  </style>
+  </head><body>
+  <div class="rel-header">
+    <div class="rel-icon">📅</div>
+    <div>
+      <div class="rel-mes">Escala de Férias — ${mesLabel}</div>
+      <div class="rel-sub">${linhas.length} período(s) · Gerado em ${gerado}</div>
+    </div>
+  </div>
+  <table>
+    <colgroup><col><col><col><col><col></colgroup>
+    <thead><tr>
+      <th>Colaborador</th>
+      <th>Cargo</th>
+      <th>Setor</th>
+      <th style="text-align:center;">Início</th>
+      <th style="text-align:center;">Término</th>
+    </tr></thead>
+    <tbody>${trs}</tbody>
+  </table>
+  <div class="rel-footer">
+    <div class="legenda">${legenda}</div>
+    <div>ESCALA DE FÉRIAS — ${mesLabel.toUpperCase()}</div>
+  </div>
+  </body></html>`;
+}
+
+function _buildEscalaGestorExcel(linhas, mesLabel) {
+  const gerado = new Date().toLocaleDateString('pt-BR');
+  const TH  = 'background:#1e3a5f;color:#fff;font-family:Arial,sans-serif;font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;border:1px solid #16304f;text-align:left;';
+  const THC = TH + 'text-align:center;';
+
+  let trs = '';
+  let setorAtual = null;
+  linhas.forEach(l => {
+    if (l.setor !== setorAtual) {
+      setorAtual = l.setor;
+      const cor = _corSetor(l.setor);
+      trs += `<tr><td colspan="5" style="background:${cor.bg};color:${cor.text};font-size:11pt;font-weight:700;padding:5px 10px;border-bottom:1px solid #cbd5e1;">— ${(l.setor||'SEM SETOR').toUpperCase()}</td></tr>`;
+    }
+    const cor = _corSetor(l.setor);
+    const cs  = `background:${cor.bg};color:${cor.text};`;
+    trs += `<tr>
+      <td style="${cs}font-weight:700;padding:5px 10px;">${l.nome}</td>
+      <td style="padding:5px 10px;">${l.cargo}</td>
+      <td style="${cs}padding:5px 10px;">${l.setor}</td>
+      <td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.inicio)}</td>
+      <td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.fim)} (${l.dias}d)</td>
+    </tr>`;
+  });
+
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="UTF-8"></head><body>
+  <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;">
+    <tr><td colspan="5" style="font-size:18pt;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;padding:12px 10px 4px;border:none;font-family:Arial,sans-serif;">ESCALA DE FÉRIAS — ${mesLabel.toUpperCase()}</td></tr>
+    <tr><td colspan="5" style="font-size:10pt;color:#64748b;padding:0 10px 10px;border:none;font-family:Arial,sans-serif;">${linhas.length} período(s) · Gerado em ${gerado}</td></tr>
+    <tr>
+      <td style="${TH}">Colaborador</td>
+      <td style="${TH}">Cargo</td>
+      <td style="${TH}">Setor</td>
+      <td style="${THC}">Início</td>
+      <td style="${THC}">Término (dias)</td>
+    </tr>
+    ${trs}
+  </table>
+  </body></html>`;
+}
+
+function gestorEscalaPDF() {
+  const dados = _getDadosEscalaGestor();
+  if (!dados) return;
+  const { linhas, mesLabel } = dados;
+  if (!linhas.length) { toast('Nenhuma férias aprovada encontrada para o período selecionado.', 'aviso'); return; }
+  const html = _buildEscalaGestorHTML(linhas, mesLabel);
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  document.getElementById('modalEscalaGestor')?.classList.remove('open');
+}
+
+function gestorEscalaExcel() {
+  const dados = _getDadosEscalaGestor();
+  if (!dados) return;
+  const { linhas, mesLabel } = dados;
+  if (!linhas.length) { toast('Nenhuma férias aprovada encontrada para o período selecionado.', 'aviso'); return; }
+  const xls  = _buildEscalaGestorExcel(linhas, mesLabel);
+  const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `Escala_Ferias_${mesLabel.replace(' ','_')}.xls`;
+  a.click(); URL.revokeObjectURL(url);
+  document.getElementById('modalEscalaGestor')?.classList.remove('open');
 }
 
 function renderGestorRelatorio() {
