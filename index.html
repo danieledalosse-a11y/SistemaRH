@@ -755,9 +755,11 @@ let _bellItens = []; // cache para renderização sob demanda
 
 async function _loadPendencias(teamIds, team) {
   const ids = teamIds.join(',');
-  const [hist, cfgRows] = await Promise.all([
+  const [hist, cfgRows, feriasRH] = await Promise.all([
     _hdGet('ferias_historico', `colaborador_id=in.(${ids})&select=ferias_id,acao,criado_em,colaborador_id&order=criado_em.desc&limit=500`),
     _hdGet('param_ferias_config', 'select=dias_resposta_visivel&limit=1').catch(() => []),
+    // Fallback: registros da tabela ferias com status "aguardando RH" (solicitações sem entrada no historico)
+    _hdGet('ferias', `colaborador_id=in.(${ids})&status=in.(Solicitado,solicitado,Pendente,pendente,alteracao_solicitada,cancelamento_solicitado)&select=id,colaborador_id,status&limit=500`).catch(() => []),
   ]);
   const diasVisivel = cfgRows?.[0]?.dias_resposta_visivel ?? 7;
   const ACOES_CIENTE      = new Set(['aprovado','rejeitado','alteracao_aprovada','alteracao_recusada','cancelamento_aprovado','cancelamento_recusado']);
@@ -770,6 +772,17 @@ async function _loadPendencias(teamIds, team) {
     const key = String(h.ferias_id);
     const ex = byId.get(key);
     if (!ex || (h.criado_em || '') > (ex.criado_em || '')) byId.set(key, h);
+  });
+
+  // Fallback: injetar registros "Aguardando RH" da tabela ferias que não têm entrada no historico
+  (feriasRH || []).forEach(r => {
+    const key = String(r.id);
+    if (byId.has(key)) return; // já coberto pelo historico — o historico prevalece
+    const stRaw = (r.status || '').toLowerCase();
+    const acao = (stRaw === 'pendente') ? 'solicitado'
+               : ACOES_AGUARDANDO.has(stRaw) ? stRaw
+               : 'solicitado';
+    byId.set(key, { ferias_id: r.id, colaborador_id: r.colaborador_id, acao, criado_em: null, _fallback: true });
   });
 
   const agora = Date.now();
@@ -785,21 +798,25 @@ async function _loadPendencias(teamIds, team) {
       if (diasAtras > diasVisivel) return;
       _bellItens.push({ ...h, _colab: colab, _diasAtras: diasAtras, _categoria: 'ciente' });
     } else if (ACOES_AGUARDANDO.has(h.acao)) {
-      // Aguardando RH: valida existência do PA antes de incluir
       candidatosRH.push({ ...h, _colab: colab });
     }
   });
 
-  // Validar candidatos "Aguardando RH": o ferias_id deve ainda existir na tabela ferias
-  if (candidatosRH.length) {
-    const idsParaValidar = [...new Set(candidatosRH.map(h => h.ferias_id))].join(',');
+  // Itens "Aguardando RH" vindos do historico (não fallback) precisam de validação de existência
+  // Itens fallback já vieram da tabela ferias — existência garantida
+  const candidatosHistorico = candidatosRH.filter(h => !h._fallback);
+  if (candidatosHistorico.length) {
+    const idsParaValidar = [...new Set(candidatosHistorico.map(h => h.ferias_id))].join(',');
     const feriasExistentes = await _hdGet('ferias', `id=in.(${idsParaValidar})&select=id`).catch(() => []);
     const idsValidos = new Set((feriasExistentes || []).map(r => String(r.id)));
-    candidatosRH.forEach(h => {
-      if (!idsValidos.has(String(h.ferias_id))) return; // registro órfão — ignorar
+    candidatosHistorico.forEach(h => {
+      if (!idsValidos.has(String(h.ferias_id))) return; // órfão — ignorar
       _bellItens.push({ ...h, _categoria: 'aguardando_rh' });
     });
   }
+  candidatosRH.filter(h => h._fallback).forEach(h => {
+    _bellItens.push({ ...h, _categoria: 'aguardando_rh' });
+  });
 
   // Ordena: "Aguardando Ciente" primeiro (requer ação do Gestor), depois "Aguardando RH"; dentro de cada grupo, mais recente primeiro
   _bellItens.sort((a, b) => {
