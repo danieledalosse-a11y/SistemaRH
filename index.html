@@ -176,6 +176,17 @@
   .hd-ferias-av { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--surface); display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 700; color: #fff; margin-left: -5px; flex-shrink: 0; background-size: cover; background-position: center; }
   .hd-ferias-av:first-child { margin-left: 0; }
   .hd-ferias-divider { width: 1px; background: var(--border); margin: 2px 0; align-self: stretch; }
+  /* Lista compacta de próximas férias */
+  .hd-ferias-stat-prox { flex: 1; min-width: 0; }
+  .hd-ferias-proxlist { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .hd-ferias-row { display: flex; align-items: center; gap: 8px; }
+  .hd-ferias-mini-av { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; background-size: cover; background-position: center; }
+  .hd-ferias-row-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .hd-ferias-row-nome { font-size: 12px; font-weight: 600; color: var(--text-pri); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hd-ferias-row-cargo { font-size: 10px; color: var(--text-ter); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hd-ferias-row-periodo { font-size: 11px; color: var(--green); font-weight: 500; }
+  .hd-ferias-vertodos { margin-top: 4px; background: none; border: none; color: var(--blue); font-size: 11px; font-weight: 600; cursor: pointer; padding: 0; text-align: left; }
+  .hd-ferias-vertodos:hover { text-decoration: underline; }
   /* manter classes antigas para não quebrar nada */
   .hd-ferias-hint { display: none; }
   .hd-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -654,7 +665,7 @@ async function renderHomeGestor(p) {
   const emGozo = [...emGozoIds].map(cid => emGozoRaw.find(p => p.colaborador_id === cid));
 
   _renderEventos(team, hoje);
-  _renderFerias(feriasData, periodosList, emGozo, hoje);
+  _renderFerias(feriasData, periodosList, emGozo, hoje, colabMap);
   _renderAtividades(eventsData, colabMap, hoje);
 }
 
@@ -818,7 +829,7 @@ function _renderEventos(team, hoje) {
   }
 }
 
-function _renderFerias(feriasData, periodosList, emGozo, hoje) {
+function _renderFerias(feriasData, periodosList, emGozo, hoje, colabMap) {
   // Próximas férias: períodos futuros (aprovado ou agendado) nos próximos 30 dias, deduplica por colaborador
   const proxRaw = periodosList.filter(p => {
     const ini = new Date(p.inicio + 'T00:00:00');
@@ -834,17 +845,40 @@ function _renderFerias(feriasData, periodosList, emGozo, hoje) {
     return;
   }
 
-  // Avatares das pessoas em gozo (até 4)
+  const _fmtPeriodo = (ini, fim) => {
+    const fmt = s => { const d = new Date(s + 'T00:00:00'); return `${d.getDate()}/${String(d.getMonth()+1).padStart(2,'0')}`; };
+    return `${fmt(ini)} → ${fmt(fim)}`;
+  };
+
+  // Avatares das pessoas em gozo (até 4) — sem colabMap, mantém comportamento atual
   const gozoAvsHtml = emGozo.slice(0,4).map(f => {
     const col = _avColor(String(f.colaborador_id));
     return `<div class="hd-ferias-av" style="background:${col}">${String(f.colaborador_id).slice(-2)}</div>`;
   }).join('');
 
-  // Avatares das próximas (até 4)
-  const proxAvsHtml = proximos.slice(0,4).map(f => {
-    const col = _avColor(String(f.colaborador_id));
-    return `<div class="hd-ferias-av" style="background:${col}">${String(f.colaborador_id).slice(-2)}</div>`;
+  // Próximas: até 3 linhas compactas com foto/nome/cargo/período + botão "Ver todos"
+  const MAX_INLINE = 3;
+  const proxVisiveis = proximos.slice(0, MAX_INLINE);
+  const proxListHtml = proxVisiveis.map(p => {
+    const c = colabMap ? colabMap[p.colaborador_id] : null;
+    const nome = c ? c.nome : String(p.colaborador_id);
+    const cargo = c ? (c.cargo || '') : '';
+    const primeiroNome = nome.split(' ').slice(0,2).join(' ');
+    const avHtml = _avHtml(nome, c && c.foto_url ? c.foto_url : null, 'hd-ferias-mini-av');
+    const periodo = _fmtPeriodo(p.inicio, p.fim);
+    return `<div class="hd-ferias-row">
+      ${avHtml}
+      <div class="hd-ferias-row-info">
+        <div class="hd-ferias-row-nome">${primeiroNome}</div>
+        ${cargo ? `<div class="hd-ferias-row-cargo">${cargo}</div>` : ''}
+        <div class="hd-ferias-row-periodo">${periodo}</div>
+      </div>
+    </div>`;
   }).join('');
+
+  const verTodosBtn = proximos.length > MAX_INLINE
+    ? `<button class="hd-ferias-vertodos" id="hd-ferias-vertodos-btn">Ver todos →</button>`
+    : '';
 
   el.innerHTML = `
     <div class="hd-ferias-stat">
@@ -853,11 +887,31 @@ function _renderFerias(feriasData, periodosList, emGozo, hoje) {
       ${emGozo.length ? `<div class="hd-ferias-avs">${gozoAvsHtml}</div>` : ''}
     </div>
     <div class="hd-ferias-divider"></div>
-    <div class="hd-ferias-stat">
+    <div class="hd-ferias-stat hd-ferias-stat-prox">
       <div class="hd-ferias-num next">${proximos.length}</div>
       <div class="hd-ferias-lbl">agendada${proximos.length!==1?'s':''} (30 dias)</div>
-      ${proximos.length ? `<div class="hd-ferias-avs">${proxAvsHtml}</div>` : ''}
+      ${proximos.length ? `<div class="hd-ferias-proxlist">${proxListHtml}${verTodosBtn}</div>` : ''}
     </div>`;
+
+  if (proximos.length > MAX_INLINE) {
+    document.getElementById('hd-ferias-vertodos-btn').addEventListener('click', () => {
+      _openModal(
+        'Próximas férias',
+        'Períodos agendados nos próximos 30 dias',
+        proximos.map(p => {
+          const c = colabMap ? colabMap[p.colaborador_id] : null;
+          return {
+            nome: c ? c.nome : String(p.colaborador_id),
+            foto_url: c ? c.foto_url : null,
+            cargo: c ? c.cargo : '',
+            setor: c ? c.setor : '',
+            detalhe: _fmtPeriodo(p.inicio, p.fim),
+            corData: 'var(--green)'
+          };
+        })
+      );
+    });
+  }
 }
 
 function _renderAtividades(events, colabMap, hoje) {
