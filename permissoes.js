@@ -1,4 +1,9 @@
 // permissoes.js — carregado no login, lido localmente (zero chamadas de rede nos módulos)
+// Garante shared.css (estilos compartilhados) no <head> de todos os módulos
+(function(){ if (document.getElementById('srh-shared-css')) return;
+  const l = document.createElement('link');
+  l.id = 'srh-shared-css'; l.rel = 'stylesheet'; l.href = '../../shared.css';
+  document.head.appendChild(l); })();
 const _PERM = (() => {
   try { return JSON.parse(localStorage.getItem('sb_permissoes') || '{}'); }
   catch { return {}; }

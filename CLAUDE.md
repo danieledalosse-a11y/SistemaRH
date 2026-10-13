@@ -491,6 +491,23 @@ Acesso exclusivo para perfil `admin`. Sidebar com grupos colapsáveis + busca. N
 - Matrículas podem se repetir entre empresas — identificação correta: matrícula + nome
 - `historico` JSONB é a trilha de auditoria de qualquer alteração relevante
 
+## Recursos compartilhados — regra obrigatória para novos módulos
+
+Todo novo módulo (`modulos/<nome>/index.html`) deve incluir no `<head>`:
+
+```html
+<script src="../../permissoes.js"></script>
+```
+
+Isso garante automaticamente:
+1. Autenticação e controle de acesso (`guardModulo('chave')`)
+2. Carregamento de `shared.css` — estilos compartilhados do SistemaRH
+
+**`shared.css`** (raiz do projeto) é a fonte única de estilos reutilizáveis entre módulos e Homes. Adicionar novos padrões visuais compartilhados lá, nunca duplicar em cada módulo.
+
+Componentes disponíveis em `shared.css`:
+- `.btn-sair` — botão Sair com ícone e texto (padrão topbar azul; override `.topbar-<perfil> .btn-sair` para topbar branca)
+
 # Preferências da usuária (RH — Daniele)
 
 - Nunca abreviar valores monetários (`R$ 12.500,00`, não `12,5k`)
