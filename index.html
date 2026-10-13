@@ -610,7 +610,7 @@ async function renderHomeGestor(p) {
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const [feriasData, eventsData] = await Promise.all([
     teamIds.length ? _hdGet('ferias',
-      `colaborador_id=in.(${teamIds.join(',')})&select=colaborador_id,status,data_inicio,data_fim,dias_corridos`
+      `colaborador_id=in.(${teamIds.join(',')})&select=colaborador_id,status,periodos,periodo1_inicio,periodo1_fim,periodo2_inicio,periodo2_fim`
     ) : Promise.resolve([]),
     teamIds.length ? _hdGet('v_historico_eventos_home',
       `colaborador_id=in.(${teamIds.join(',')})&select=id,colaborador_id,tipo,titulo,resumo_home,data_evento&order=id.desc&limit=5`
@@ -620,17 +620,41 @@ async function renderHomeGestor(p) {
   const colabMap = {};
   team.forEach(c => { colabMap[c.id] = c; });
 
-  // Férias em gozo hoje
-  const emGozo = feriasData.filter(f => {
-    const s = (f.status || '').toLowerCase();
-    if (s === 'cancelado' || s === 'encerrado') return false;
-    const ini = new Date(f.data_inicio + 'T00:00:00');
-    const fim = new Date(f.data_fim + 'T00:00:00');
-    return ini <= hoje && fim >= hoje;
+  // Expande cada registro em períodos individuais: periodos[] JSONB (fonte principal)
+  // ou fallback para campos flat periodo1/periodo2 (registros anteriores à migration 073)
+  const periodosList = [];
+  feriasData.forEach(f => {
+    const cid = f.colaborador_id;
+    const items = Array.isArray(f.periodos) && f.periodos.length > 0 ? f.periodos : null;
+    if (items) {
+      items.forEach(p => {
+        const s = (p.status || '').toLowerCase();
+        if (s === 'cancelado' || s === 'excluido') return;
+        if (s !== 'aprovado' && s !== 'agendado') return;
+        if (p.inicio && p.fim) periodosList.push({ colaborador_id: cid, inicio: p.inicio, fim: p.fim });
+      });
+    } else {
+      // Fallback: usa status do registro pai
+      const rs = (f.status || '').toLowerCase();
+      if (rs !== 'aprovado' && rs !== 'agendado') return;
+      if (f.periodo1_inicio && f.periodo1_fim)
+        periodosList.push({ colaborador_id: cid, inicio: f.periodo1_inicio, fim: f.periodo1_fim });
+      if (f.periodo2_inicio && f.periodo2_fim)
+        periodosList.push({ colaborador_id: cid, inicio: f.periodo2_inicio, fim: f.periodo2_fim });
+    }
   });
 
+  // Férias em gozo hoje — deduplica por colaborador
+  const emGozoRaw = periodosList.filter(p => {
+    const ini = new Date(p.inicio + 'T00:00:00');
+    const fim = new Date(p.fim + 'T00:00:00');
+    return ini <= hoje && fim >= hoje;
+  });
+  const emGozoIds = new Set(emGozoRaw.map(p => p.colaborador_id));
+  const emGozo = [...emGozoIds].map(cid => emGozoRaw.find(p => p.colaborador_id === cid));
+
   _renderEventos(team, hoje);
-  _renderFerias(feriasData, emGozo, hoje);
+  _renderFerias(feriasData, periodosList, emGozo, hoje);
   _renderAtividades(eventsData, colabMap, hoje);
 }
 
@@ -794,13 +818,15 @@ function _renderEventos(team, hoje) {
   }
 }
 
-function _renderFerias(feriasData, emGozo, hoje) {
-  const proximos = feriasData.filter(f => {
-    if ((f.status||'').toLowerCase() !== 'aprovado') return false;
-    const ini = new Date(f.data_inicio + 'T00:00:00');
+function _renderFerias(feriasData, periodosList, emGozo, hoje) {
+  // Próximas férias: períodos futuros (aprovado ou agendado) nos próximos 30 dias, deduplica por colaborador
+  const proxRaw = periodosList.filter(p => {
+    const ini = new Date(p.inicio + 'T00:00:00');
     const diff = ini - hoje;
     return diff > 0 && diff <= 30 * 86400000;
   });
+  const proxIds = new Set(proxRaw.map(p => p.colaborador_id));
+  const proximos = [...proxIds].map(cid => proxRaw.find(p => p.colaborador_id === cid));
   const el = document.getElementById('hd-ferias-stats');
   if (!el) return;
   if (!feriasData.length) {
