@@ -262,10 +262,9 @@
   .bell-panel-nome { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bell-panel-acao { font-size: 11px; color: var(--text-sec); margin-top: 2px; }
   .bell-panel-time { font-size: 11px; color: var(--text-ter); flex-shrink: 0; white-space: nowrap; }
-  .bell-panel-footer { padding: 10px 16px; border-top: 1px solid var(--border); text-align: center; }
-  .bell-panel-footer a { font-size: 12px; font-weight: 600; color: var(--blue); text-decoration: none; }
-  .bell-panel-footer a:hover { text-decoration: underline; }
   .bell-panel-empty { padding: 20px 16px; font-size: 12px; color: var(--text-ter); text-align: center; }
+  .bell-panel-vermais { width: 100%; padding: 10px 16px; font-size: 12px; font-weight: 600; color: var(--blue); background: none; border: none; border-top: 1px solid var(--border); cursor: pointer; text-align: center; font-family: inherit; display: block; }
+  .bell-panel-vermais:hover { background: var(--bg); }
 
   /* ── Phase 3: Refinamentos visuais ───────────────────── */
   .hd-greeting { box-shadow: var(--shadow-md); }
@@ -787,46 +786,85 @@ async function _loadPendencias(teamIds, team) {
   }
 }
 
+// Mapa extensível: ação → módulo de destino
+// Para adicionar um novo módulo: incluir as ações dele aqui e o href em MODULO_HREF
+const _BELL_MODULO_MAP = {
+  aprovado:              'ferias',
+  rejeitado:             'ferias',
+  alteracao_aprovada:    'ferias',
+  alteracao_recusada:    'ferias',
+  cancelamento_aprovado: 'ferias',
+  cancelamento_recusado: 'ferias',
+};
+const _BELL_MODULO_HREF = {
+  ferias:          'modulos/ferias/index.html',
+  desenvolvimento: 'modulos/desenvolvimento/index.html',
+  processos:       'modulos/processos/index.html',
+};
+function _getItemHref(h) {
+  const modulo = _BELL_MODULO_MAP[h.acao] || 'ferias';
+  return _BELL_MODULO_HREF[modulo] || 'modulos/ferias/index.html';
+}
+
+const _BELL_PAGE_SIZE = 5;
+const _fmtBellTime = d => {
+  if (!d) return '';
+  const dias = (Date.now() - new Date(d).getTime()) / 86400000;
+  if (dias < 0.5) return 'Agora';
+  if (dias < 1.5) return 'Ontem';
+  return `${Math.floor(dias)}d atrás`;
+};
+
+function _renderBellLista(itens) {
+  return itens.map(h => {
+    const nome  = h._colab ? h._colab.nome : `Colaborador #${h.colaborador_id}`;
+    const label = _BELL_ACAO_LABEL[h.acao] || h.acao;
+    const time  = _fmtBellTime(h.criado_em);
+    const href  = _getItemHref(h);
+    return `<a class="bell-panel-item" href="${href}">
+      <span class="bell-panel-dot"></span>
+      <div class="bell-panel-body">
+        <div class="bell-panel-nome">${nome}</div>
+        <div class="bell-panel-acao">${label}</div>
+      </div>
+      <span class="bell-panel-time">${time}</span>
+    </a>`;
+  }).join('');
+}
+
+function _bellExpandir() {
+  const panel = document.getElementById('hd-bell-panel');
+  if (!panel) return;
+  const lista = panel.querySelector('.bell-panel-list');
+  if (lista) lista.innerHTML = _renderBellLista(_bellItens);
+  const btn = panel.querySelector('.bell-panel-vermais');
+  if (btn) btn.remove();
+}
+
 function _toggleBellPanel(e) {
   if (e) e.stopPropagation();
   const panel = document.getElementById('hd-bell-panel');
   if (!panel) return;
-  const aberto = panel.style.display === 'block';
-  if (aberto) { panel.style.display = 'none'; return; }
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
 
-  // Renderizar itens
-  const fmtTime = d => {
-    if (!d) return '';
-    const dias = (Date.now() - new Date(d).getTime()) / 86400000;
-    if (dias < 0.5) return 'Agora';
-    if (dias < 1.5) return 'Ontem';
-    return `${Math.floor(dias)}d atrás`;
-  };
   const count = _bellItens.length;
+  const visiveis = _bellItens.slice(0, _BELL_PAGE_SIZE);
+  const ocultos  = count - visiveis.length;
+
   let html = `<div class="bell-panel-hd">
-    <div class="bell-panel-title">Pendências de férias</div>
+    <div class="bell-panel-title">Pendências</div>
     <div class="bell-panel-subtitle">${count > 0 ? count + ' item' + (count > 1 ? 's' : '') + ' aguardando confirmação' : 'Nenhuma pendência'}</div>
   </div>`;
+
   if (count === 0) {
     html += `<div class="bell-panel-empty">Sem pendências no momento.</div>`;
   } else {
-    html += `<div class="bell-panel-list">` +
-      _bellItens.map(h => {
-        const nome = h._colab ? h._colab.nome : `Colaborador #${h.colaborador_id}`;
-        const label = _BELL_ACAO_LABEL[h.acao] || h.acao;
-        const time = fmtTime(h.criado_em);
-        return `<a class="bell-panel-item" href="modulos/ferias/index.html">
-          <span class="bell-panel-dot"></span>
-          <div class="bell-panel-body">
-            <div class="bell-panel-nome">${nome}</div>
-            <div class="bell-panel-acao">${label}</div>
-          </div>
-          <span class="bell-panel-time">${time}</span>
-        </a>`;
-      }).join('') +
-    `</div>
-    <div class="bell-panel-footer"><a href="modulos/ferias/index.html">Ver todas as atividades →</a></div>`;
+    html += `<div class="bell-panel-list">${_renderBellLista(visiveis)}</div>`;
+    if (ocultos > 0) {
+      html += `<button class="bell-panel-vermais" onclick="_bellExpandir()">Ver mais ${ocultos} item${ocultos > 1 ? 's' : ''}</button>`;
+    }
   }
+
   panel.innerHTML = html;
   panel.style.display = 'block';
 
