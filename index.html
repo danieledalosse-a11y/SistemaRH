@@ -143,6 +143,7 @@
   .hd-person-date-sm { font-size: 12px; color: var(--text-ter); text-align: center; }
   .hd-today-pill { font-size: 11px; font-weight: 700; color: var(--amber); white-space: nowrap; }
   .hd-years-text { font-size: 12px; font-weight: 600; color: var(--green); white-space: nowrap; }
+  .hd-marco-icon { font-size: 11px; opacity: 0.85; margin-left: 2px; }
 
   /* Modal "Ver todos" */
   .hd-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 900; display: flex; align-items: center; justify-content: center; }
@@ -692,14 +693,16 @@ async function renderHomeGestor(p) {
 
   // Férias e atividades em paralelo
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  const [feriasData, eventsData] = await Promise.all([
+  const [feriasData, eventsData, marcosRows] = await Promise.all([
     teamIds.length ? _hdGet('ferias',
       `colaborador_id=in.(${teamIds.join(',')})&select=colaborador_id,status,periodos,periodo1_inicio,periodo1_fim,periodo2_inicio,periodo2_fim`
     ) : Promise.resolve([]),
     teamIds.length ? _hdGet('v_historico_eventos_home',
       `colaborador_id=in.(${teamIds.join(',')})&select=id,colaborador_id,tipo,titulo,resumo_home,data_evento&order=id.desc&limit=5`
     ) : Promise.resolve([]),
+    _hdGet('param_marco_tempo_casa', 'select=anos&ativo=eq.true&order=anos').catch(() => []),
   ]);
+  const marcosGestor = marcosRows.map(r => r.anos);
 
   const colabMap = {};
   team.forEach(c => { colabMap[c.id] = c; });
@@ -737,7 +740,7 @@ async function renderHomeGestor(p) {
   const emGozoIds = new Set(emGozoRaw.map(p => p.colaborador_id));
   const emGozo = [...emGozoIds].map(cid => emGozoRaw.find(p => p.colaborador_id === cid));
 
-  _renderEventos(team, hoje);
+  _renderEventos(team, hoje, marcosGestor);
   _renderFerias(feriasData, periodosList, emGozo, hoje, colabMap);
   _renderAtividades(eventsData, colabMap, hoje);
 }
@@ -997,7 +1000,8 @@ function _openModal(titulo, subtitulo, rows) {
   document.getElementById('hd-modal-close-btn').addEventListener('click', () => overlay.remove());
 }
 
-function _renderEventos(team, hoje) {
+function _renderEventos(team, hoje, marcosGestor) {
+  marcosGestor = marcosGestor || [];
   const meses = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const mesesNum = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const anivs = [], casas = [];
@@ -1080,7 +1084,8 @@ function _renderEventos(team, hoje) {
     const visible = casas.slice(0, 3);
     elCasa.innerHTML = `<div class="hd-person-grid">` +
       visible.map(({ c, anos, day, mon }, i) => {
-        const infoHtml = `<span class="hd-years-text">${anos} ano${anos>1?'s':''}</span><div class="hd-person-date-sm">${day} ${mon}</div>`;
+        const trofeu = marcosGestor.includes(anos) ? `<span class="hd-marco-icon" title="Marco de reconhecimento">🏆</span>` : '';
+        const infoHtml = `<span class="hd-years-text">${anos} ano${anos>1?'s':''}${trofeu}</span><div class="hd-person-date-sm">${day} ${mon}</div>`;
         const ring = i === 0 ? 'ring-top' : '';
         return _personColHtml(c.nome, c.foto_url, infoHtml, ring);
       }).join('') + `</div>`;
@@ -1091,7 +1096,7 @@ function _renderEventos(team, hoje) {
         '',
         casas.map(({ c, anos, day, mon }) => ({
           nome: c.nome, foto_url: c.foto_url, cargo: c.cargo, setor: c.setor,
-          detalhe: `${anos} ano${anos>1?'s':''} · ${day} ${mon}`,
+          detalhe: `${anos} ano${anos>1?'s':''}${marcosGestor.includes(anos) ? ' 🏆' : ''} · ${day} ${mon}`,
           corData: 'var(--green)'
         }))
       );
