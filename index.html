@@ -265,6 +265,11 @@
   .bell-panel-empty { padding: 20px 16px; font-size: 12px; color: var(--text-ter); text-align: center; }
   .bell-panel-vermais { width: 100%; padding: 10px 16px; font-size: 12px; font-weight: 600; color: var(--blue); background: none; border: none; border-top: 1px solid var(--border); cursor: pointer; text-align: center; font-family: inherit; display: block; }
   .bell-panel-vermais:hover { background: var(--bg); }
+  /* Bell — categoria visual */
+  .bell-panel-dot--rh { background: #F59E0B; }
+  .bell-chip { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.03em; border-radius: 4px; padding: 1px 5px; margin-right: 4px; vertical-align: middle; line-height: 14px; }
+  .bell-chip--ciente  { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+  .bell-chip--rh      { background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; }
 
   /* ── Phase 3: Refinamentos visuais ───────────────────── */
   .hd-greeting { box-shadow: var(--shadow-md); }
@@ -734,12 +739,17 @@ async function renderHomeGestor(p) {
 
 // Phase 2 — bell: carrega pendências e monta painel suspenso
 const _BELL_ACAO_LABEL = {
+  // Aguardando Ciente do Gestor (RH já respondeu)
   aprovado:              'Férias aprovadas pelo RH',
   rejeitado:             'Férias recusadas pelo RH',
-  alteracao_aprovada:    'Alteração de férias aprovada',
-  alteracao_recusada:    'Alteração de férias recusada',
+  alteracao_aprovada:    'Alteração aprovada pelo RH',
+  alteracao_recusada:    'Alteração recusada pelo RH',
   cancelamento_aprovado: 'Cancelamento aprovado',
   cancelamento_recusado: 'Cancelamento recusado',
+  // Aguardando RH (Gestor já solicitou)
+  solicitado:              'Férias solicitadas',
+  alteracao_solicitada:    'Alteração solicitada',
+  cancelamento_solicitado: 'Cancelamento solicitado',
 };
 let _bellItens = []; // cache para renderização sob demanda
 
@@ -750,7 +760,8 @@ async function _loadPendencias(teamIds, team) {
     _hdGet('param_ferias_config', 'select=dias_resposta_visivel&limit=1').catch(() => []),
   ]);
   const diasVisivel = cfgRows?.[0]?.dias_resposta_visivel ?? 7;
-  const ACOES_CIENTE = new Set(Object.keys(_BELL_ACAO_LABEL));
+  const ACOES_CIENTE      = new Set(['aprovado','rejeitado','alteracao_aprovada','alteracao_recusada','cancelamento_aprovado','cancelamento_recusado']);
+  const ACOES_AGUARDANDO  = new Set(['solicitado','alteracao_solicitada','cancelamento_solicitado']);
   const colabMap = new Map((team || []).map(c => [String(c.id), c]));
 
   // Deduplicação: manter o evento mais recente por ferias_id (espelho de _gestorAgruparProcessos)
@@ -761,19 +772,40 @@ async function _loadPendencias(teamIds, team) {
     if (!ex || (h.criado_em || '') > (ex.criado_em || '')) byId.set(key, h);
   });
 
-  // Filtrar pendentes de Ciente dentro da janela de visibilidade
   const agora = Date.now();
   _bellItens = [];
+  const candidatosRH = [];
+
   byId.forEach(h => {
-    if (!ACOES_CIENTE.has(h.acao)) return;
-    if (!h.criado_em) return;
-    const diasAtras = (agora - new Date(h.criado_em).getTime()) / 86400000;
-    if (diasAtras > diasVisivel) return;
     const colab = colabMap.get(String(h.colaborador_id));
-    _bellItens.push({ ...h, _colab: colab, _diasAtras: diasAtras });
+    if (ACOES_CIENTE.has(h.acao)) {
+      // Aguardando Ciente: respeita janela de dias_resposta_visivel
+      if (!h.criado_em) return;
+      const diasAtras = (agora - new Date(h.criado_em).getTime()) / 86400000;
+      if (diasAtras > diasVisivel) return;
+      _bellItens.push({ ...h, _colab: colab, _diasAtras: diasAtras, _categoria: 'ciente' });
+    } else if (ACOES_AGUARDANDO.has(h.acao)) {
+      // Aguardando RH: valida existência do PA antes de incluir
+      candidatosRH.push({ ...h, _colab: colab });
+    }
   });
-  // Ordena: mais recente primeiro
-  _bellItens.sort((a, b) => (b.criado_em || '').localeCompare(a.criado_em || ''));
+
+  // Validar candidatos "Aguardando RH": o ferias_id deve ainda existir na tabela ferias
+  if (candidatosRH.length) {
+    const idsParaValidar = [...new Set(candidatosRH.map(h => h.ferias_id))].join(',');
+    const feriasExistentes = await _hdGet('ferias', `id=in.(${idsParaValidar})&select=id`).catch(() => []);
+    const idsValidos = new Set((feriasExistentes || []).map(r => String(r.id)));
+    candidatosRH.forEach(h => {
+      if (!idsValidos.has(String(h.ferias_id))) return; // registro órfão — ignorar
+      _bellItens.push({ ...h, _categoria: 'aguardando_rh' });
+    });
+  }
+
+  // Ordena: "Aguardando Ciente" primeiro (requer ação do Gestor), depois "Aguardando RH"; dentro de cada grupo, mais recente primeiro
+  _bellItens.sort((a, b) => {
+    if (a._categoria !== b._categoria) return a._categoria === 'ciente' ? -1 : 1;
+    return (b.criado_em || '').localeCompare(a.criado_em || '');
+  });
 
   const badge = document.getElementById('hd-bell-badge');
   if (!badge) return;
@@ -795,6 +827,9 @@ const _BELL_MODULO_MAP = {
   alteracao_recusada:    'ferias',
   cancelamento_aprovado: 'ferias',
   cancelamento_recusado: 'ferias',
+  solicitado:              'ferias',
+  alteracao_solicitada:    'ferias',
+  cancelamento_solicitado: 'ferias',
 };
 const _BELL_MODULO_HREF = {
   ferias:          'modulos/ferias/index.html',
@@ -821,11 +856,16 @@ function _renderBellLista(itens) {
     const label = _BELL_ACAO_LABEL[h.acao] || h.acao;
     const time  = _fmtBellTime(h.criado_em);
     const href  = _getItemHref(h);
+    const isCiente = h._categoria === 'ciente';
+    const dotCls   = isCiente ? 'bell-panel-dot' : 'bell-panel-dot bell-panel-dot--rh';
+    const chip     = isCiente
+      ? '<span class="bell-chip bell-chip--ciente">Ag. Ciente</span>'
+      : '<span class="bell-chip bell-chip--rh">Ag. RH</span>';
     return `<a class="bell-panel-item" href="${href}">
-      <span class="bell-panel-dot"></span>
+      <span class="${dotCls}"></span>
       <div class="bell-panel-body">
         <div class="bell-panel-nome">${nome}</div>
-        <div class="bell-panel-acao">${label}</div>
+        <div class="bell-panel-acao">${chip}${label}</div>
       </div>
       <span class="bell-panel-time">${time}</span>
     </a>`;
@@ -853,7 +893,7 @@ function _toggleBellPanel(e) {
 
   let html = `<div class="bell-panel-hd">
     <div class="bell-panel-title">Pendências</div>
-    <div class="bell-panel-subtitle">${count > 0 ? count + ' item' + (count > 1 ? 's' : '') + ' aguardando confirmação' : 'Nenhuma pendência'}</div>
+    <div class="bell-panel-subtitle">${count > 0 ? count + ' item' + (count > 1 ? 's' : '') + ' em andamento' : 'Nenhuma pendência'}</div>
   </div>`;
 
   if (count === 0) {
