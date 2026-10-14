@@ -915,10 +915,10 @@
       </div>
       <div class="sidebar-col">
         <div class="sidebar-panel">
-          <div class="panel-title">Configurações globais</div>
-          <div class="stat-row"><span class="stat-label">Escala padrão</span><span class="stat-value">Likert 1–5</span></div>
-          <div class="stat-row"><span class="stat-label">Aviso de prazo</span><span class="stat-value">7 dias</span></div>
-          <div class="stat-row"><span class="stat-label">Tipos de avaliador</span><span class="stat-value" id="sideConfAvaliadores">—</span></div>
+          <div class="panel-title">Resumo</div>
+          <div class="stat-row"><span class="stat-label">Tabelas de conceito</span><span class="stat-value" id="sideConfTabelas">—</span></div>
+          <div class="stat-row"><span class="stat-label">Escalas cadastradas</span><span class="stat-value" id="sideConfEscalas">—</span></div>
+          <div class="stat-row"><span class="stat-label">Avaliadores ativos</span><span class="stat-value" id="sideConfAvaliadores">—</span></div>
         </div>
       </div>
     </div>
@@ -2495,31 +2495,44 @@ async function renderConfiguracoes() {
   const el = document.getElementById('confBody');
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
   await Promise.all([loadDpTiposCalculo(), loadDpTiposAvaliador(), loadDpTabelasConceito()]);
-  // atualiza sidebar
+  // atualiza sidebar com contadores reais
   const sideAvs = document.getElementById('sideConfAvaliadores');
-  if (sideAvs) sideAvs.textContent = _dpTiposAvaliador.filter(a => a.ativo).length;
+  if (sideAvs) sideAvs.textContent = _dpTiposAvaliador.filter(a => a.ativo).length || '0';
+  const sideTab = document.getElementById('sideConfTabelas');
+  if (sideTab) sideTab.textContent = _dpTabelasConceito.length || '0';
+  const sideEsc = document.getElementById('sideConfEscalas');
+  if (sideEsc) sideEsc.textContent = _dpEscalas.length || '0';
+
   el.innerHTML = `
-    <div class="section-header"><span class="section-title">Tipos de Avaliador</span><span class="section-count">${_dpTiposAvaliador.length}</span></div>
-    <div id="confAvaliadores">${renderAvaliadores()}</div>
-
-    <div class="section-header" style="margin-top:20px;justify-content:space-between">
+    <!-- 1. Resultado da avaliação (Tabelas de Conceito) -->
+    <div class="section-header" style="justify-content:space-between">
       <div style="display:flex;align-items:center;gap:8px">
-        <span class="section-title">Escalas de Resposta</span><span class="section-count">${_dpEscalas.length}</span>
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="abrirModalEscala(null)">+ Nova escala</button>
-    </div>
-    <div id="confEscalas">${renderEscalasConf()}</div>
-
-    <div class="section-header" style="margin-top:20px;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="section-title">Tabelas de Conceito</span><span class="section-count">${_dpTabelasConceito.length}</span>
+        <span class="section-title">Resultado da avaliação</span><span class="section-count">${_dpTabelasConceito.length}</span>
       </div>
       <button class="btn btn-secondary btn-sm" onclick="abrirModalNovaTabela()">+ Nova tabela</button>
     </div>
+    <div style="font-size:12px;color:var(--text-sec);margin:-4px 0 10px">Converte a nota final em um rótulo — ex: 0 a 4 = Precisa Desenvolver, 5 a 7 = Bom, 8 a 10 = Referência. Configure aqui antes de ativar a opção "Exibir conceito" em um modelo.</div>
     <div id="confTabelasConceito">${renderTabelasConceito()}</div>
 
-    <div class="section-header" style="margin-top:20px"><span class="section-title">Tipos de Cálculo</span><span class="section-count">${_dpTiposCalculo.length}</span></div>
+    <!-- 2. Métodos de avaliação disponíveis (Tipos de Cálculo) -->
+    <div class="section-header" style="margin-top:24px"><span class="section-title">Métodos de avaliação disponíveis</span><span class="section-count">${_dpTiposCalculo.length}</span></div>
+    <div style="font-size:12px;color:var(--text-sec);margin:-4px 0 10px">Controla quais opções de cálculo aparecem ao criar um modelo. Desativar um método o remove da lista de escolhas.</div>
     <div id="confCalculo">${renderTiposCalculo()}</div>
+
+    <!-- 3. Perfis de avaliador (Tipos de Avaliador) -->
+    <div class="section-header" style="margin-top:24px"><span class="section-title">Perfis de avaliador</span><span class="section-count">${_dpTiposAvaliador.length}</span></div>
+    <div style="font-size:12px;color:var(--text-sec);margin:-4px 0 10px">Define quem pode avaliar em um ciclo — Gestor Direto, Autoavaliação, Avaliação por Par. Vêm pré-cadastrados; ative ou desative conforme a política da empresa.</div>
+    <div id="confAvaliadores">${renderAvaliadores()}</div>
+
+    <!-- 4. Escalas de resposta qualitativas -->
+    <div class="section-header" style="margin-top:24px;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="section-title">Escalas de resposta qualitativas</span><span class="section-count">${_dpEscalas.length}</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="abrirModalEscala(null)">+ Nova escala</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-sec);margin:-4px 0 10px">Opções pré-definidas usadas em critérios do tipo "Escala" — ex: Nunca / Às vezes / Sempre. Se seus critérios usam nota numérica, esta seção pode ser ignorada.</div>
+    <div id="confEscalas">${renderEscalasConf()}</div>
   `;
 }
 

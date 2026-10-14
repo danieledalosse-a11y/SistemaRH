@@ -711,22 +711,51 @@ let _dpResultados       // [{ id, avaliacao_id, nota_final, conceito, calculado_
 |---|---|
 | `dpExportarResultados()` | Gera .xls (HTML-as-XLS com mso-conditionals) com todos os participantes; colunas: matrícula, nome, cargo, setor, unidade, status avaliação, nota final, conceito |
 
-## Correções entregues (2026-10-14)
+## Correções e melhorias entregues (2026-10-14)
 
-| Commit | Correção |
+| Commit | O que foi feito |
 |---|---|
 | `9137cdc` | Removido `obs_obrigatoria` de todos os INSERTs em `dp_versao_criterios` (campo inexistente → PGRST204) |
 | `9137cdc` | Default `tipo_resposta` trocado de `'escala'` para `'numerico'` (constraint `escala_obrigatoria` exige `escala_id` não-nulo quando escala) |
 | `9137cdc` | Label "v?" no drawer corrigido: `_dpVersaoAtual.versao` → `_dpVersaoAtual.numero` |
 | `9137cdc` | Checkbox `obs_obrigatoria` e header "Obs." removidos da tabela de critérios (campo não existe) |
 | `bbc29f4` | Modal "Adicionar Critério" arrastável pelo título; reset ao reabrir |
+| `9cfdab0` | UX: reordenação de abas, renome de colunas, fluxo Verificar e publicar unificado, helper texts |
+| `274143c` | Aba Ciclos conectada ao motor dp_* — `renderCiclos()` reescrita para dp_ciclos; botão chama `dpAbrirModalCiclo()`; sec-avaliacoes legada restaurada para `renderColabList()` |
+| `9da2c52` | UX aba Modelos: faixa de orientação ①②③, barra de status contextual no drawer (`dvStatusBar`), tab renomeada, dica "+ Novo bloco", coluna Escala oculta quando irrelevante, aviso no footer |
+| `d9ee5b7` | Fix: `renderModelos()` chamado na inicialização — spinner infinito ao entrar no módulo corrigido |
+
+## Estrutura de abas atual (pós-commits 2026-10-14)
+
+| Aba | Tabelas | Status |
+|---|---|---|
+| Configurações | dp_tipos_avaliador, dp_tipos_calculo_config, dp_tabelas_conceito | Novo — funcional |
+| Critérios | dp_criterios | Novo — funcional |
+| **Modelos** | dp_modelos, dp_versoes, dp_versao_blocos, dp_versao_criterios | Novo — **aba padrão ao entrar** |
+| **Ciclos** | dp_ciclos, dp_ciclo_participantes | Novo — conectado ao motor dp_* |
+| Colaboradores · legado | dev_ciclos, dev_avaliacoes | Legado — preservado |
+| Avaliações · legado | dev_ciclos, dev_avaliacoes | Legado — preservado |
+| Minha Equipe | dp_ciclos, dp_avaliacoes, dp_respostas | Gestor — funcional |
+
+## Regra de navegação: aba ativa ao inicializar
+
+`sec-modelos` tem `class="sec active"` no HTML e `renderModelos()` é chamada no `init()` RH (última linha após o `Promise.all`). Ao alterar a aba padrão: (1) mudar `active` no HTML; (2) trocar `renderModelos()` pela função da nova aba no `init()`.
+
+## Barra de status contextual — `dvStatusBar`
+
+Div `id="dvStatusBar"` posicionada entre metadados do header e as abas do drawer de versão. Atualizada por `atualizarStatusBarVersao()`, chamada ao abrir o drawer e a cada `renderVersaoCriterios()`.
+
+- Versão sem critérios: fundo vermelho suave, texto "Adicione pelo menos um critério antes de publicar."
+- Versão com critérios, rascunho: fundo âmbar, texto "Versão em rascunho. Confirme e clique em Verificar e publicar."
+- Versão publicada: fundo verde, texto "Versão publicada. Para alterar, crie uma nova versão a partir desta."
 
 ## Pendências técnicas
 
 | Item | Prioridade | Detalhe |
 |---|---|---|
-| **`param_setor` populado** | Alta | Pré-requisito para testar elegibilidade por setor no ciclo |
-| Testes funcionais Gestor | Alta | Aguardando RH parametrizar versão v1 (critérios + configs), publicar e criar primeiro ciclo real |
+| **Primeiro ciclo real** | Alta | RH deve: (1) publicar v1 do modelo; (2) criar ciclo em Ciclos; (3) adicionar participantes da equipe Oriel no drawer; (4) mudar status para "aberto" |
+| Testes funcionais Gestor (Oriel) | Alta | Depende do primeiro ciclo real estar aberto com participantes |
+| `param_setor` populado | Média | Pré-requisito para elegibilidade por setor |
 | Camada financeira UI (Etapa 4) | Baixa | dp_regras_financeiras — pulada |
 | PDI V2 vinculado a dp_ciclo_participantes | Baixa | Fase futura |
 | DROP tabelas dev_* | Baixa | Pós-migração completa |
