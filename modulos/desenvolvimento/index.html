@@ -1472,6 +1472,7 @@ let _dpElegColabSel    = new Set(); // ids selecionados no picker de colaborador
 /* dp_avaliacoes / dp_respostas / dp_resultados */
 let _dpAvaliacoes          = [];
 let _dpResultados          = [];
+let _dpResultadosBonus     = [];
 let _dpAvaliacaoAtual      = null;
 let _dpRespostasAtual      = [];
 let _dpVersaoCritsParaForm = [];
@@ -5250,10 +5251,17 @@ function fecharFormAval() {
 ───────────────────────────────────────────── */
 
 async function dpLoadResultados(cicloId) {
-  if (!cicloId) { _dpResultados = []; dpRenderResultados(); return; }
+  if (!cicloId) { _dpResultados = []; _dpResultadosBonus = []; dpRenderResultados(); return; }
   const ids = _dpAvaliacoes.map(a => a.id);
-  if (!ids.length) { _dpResultados = []; dpRenderResultados(); return; }
+  if (!ids.length) { _dpResultados = []; _dpResultadosBonus = []; dpRenderResultados(); return; }
   _dpResultados = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${ids.join(',')})&select=*`) || [];
+  // Carrega bônus financeiros (tabela separada — RLS restringe a rh/admin/diretoria)
+  const resultadoIds = _dpResultados.map(r => r.id);
+  if (resultadoIds.length) {
+    _dpResultadosBonus = await sbGet(`/rest/v1/dp_resultados_bonus?resultado_id=in.(${resultadoIds.join(',')})`) || [];
+  } else {
+    _dpResultadosBonus = [];
+  }
   dpRenderResultados();
 }
 
@@ -5314,13 +5322,17 @@ function dpRenderResultados() {
       btnHtml = '';
     }
 
-    const bonusInfo = resultado && resultado.resultado_bonus != null && Number(resultado.resultado_bonus) > 0
-      ? `<br>bônus: <b>R$ ${Number(resultado.resultado_bonus).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</b>`
+    const bonusObj = resultado ? _dpResultadosBonus.find(b => b.resultado_id === resultado.id) : null;
+    const bonusValor = bonusObj?.valor_bonus;
+    const bonusInfo = bonusValor != null && Number(bonusValor) > 0
+      ? `<br>bônus: <b>R$ ${Number(bonusValor).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</b>`
       : '';
+    // Suprimir nota quando modelo é puramente monetário (nota_final===0 e há bônus)
+    const exibirNota = resultado && !(resultado.nota_final === 0 && bonusValor != null);
     const notaInfo = resultado
       ? `<div id="rv_${aval.id}" style="font-size:11px;color:var(--text-ter);margin-top:3px">
-          ${resultado.nota_final != null ? `nota: <b>${Number(resultado.nota_final).toFixed(2)}</b>` : ''}
-          ${resultado.nota_final != null && resultado.conceito ? ' · ' : ''}
+          ${exibirNota && resultado.nota_final != null ? `nota: <b>${Number(resultado.nota_final).toFixed(2)}</b>` : ''}
+          ${exibirNota && resultado.nota_final != null && resultado.conceito ? ' · ' : ''}
           ${resultado.conceito ? `conceito: <b>${resultado.conceito}</b>` : ''}
           ${bonusInfo}
         </div>`
@@ -5441,22 +5453,37 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
     }
   }
 
-  if (nota == null && conceito == null) { toast('Sem dados suficientes para calcular.', true); return; }
+  // nota_final=0 para modelos puramente monetários — satisfaz constraint sem misturar valores financeiros
+  if (nota == null && conceito == null && bonusTotal == null) { toast('Sem dados suficientes para calcular.', true); return; }
 
   // f) Salvar em dp_resultados
   const existing = _dpResultados.find(r => r.avaliacao_id === avaliacaoId);
   const payload = {
-    nota_final: nota,
+    nota_final: nota ?? 0,  // 0 quando apenas critérios monetários (satisfaz constraint resultado_tem_valor)
     conceito,
-    resultado_bonus: bonusTotal,  // ignorado pelo banco até migration 114 adicionar a coluna
     calculado_em: new Date().toISOString()
   };
+  let resultadoId;
   if (existing) {
     const res = await sbPatch(`/rest/v1/dp_resultados?id=eq.${existing.id}`, payload);
     if (!res) { toast('Erro ao salvar resultado: ' + sbErrMsg(), true); return; }
+    resultadoId = existing.id;
   } else {
+    // sbPost usa HDR com Prefer: return=representation — retorna array com o objeto criado
     const res = await sbPost('/rest/v1/dp_resultados', { avaliacao_id: avaliacaoId, ...payload });
-    if (!res) { toast('Erro ao salvar resultado: ' + sbErrMsg(), true); return; }
+    if (!res || !res[0]?.id) { toast('Erro ao salvar resultado: ' + sbErrMsg(), true); return; }
+    resultadoId = res[0].id;
+  }
+
+  // g) Salvar bônus monetário em tabela separada (apenas se houver critérios binários com valor)
+  if (bonusTotal != null && resultadoId) {
+    const bonusPayload = { resultado_id: resultadoId, valor_bonus: bonusTotal, calculado_em: new Date().toISOString() };
+    const existingBonus = _dpResultadosBonus.find(b => b.resultado_id === resultadoId);
+    if (existingBonus) {
+      await sbPatch(`/rest/v1/dp_resultados_bonus?id=eq.${existingBonus.id}`, bonusPayload);
+    } else {
+      await sbPost('/rest/v1/dp_resultados_bonus', bonusPayload);
+    }
   }
 
   if (rerender) {

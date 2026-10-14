@@ -125,31 +125,66 @@ END;
 $$;
 
 -- ============================================================
--- 4. Campo resultado_bonus em dp_resultados (Opção B)
---    Permite armazenar o resultado financeiro de critérios
---    binários com valor_se_sim separado da nota_final.
+-- 4. Tabela dp_resultados_bonus (Opção B com segurança por banco)
+--    Armazena o resultado financeiro de critérios binários Sim/Não.
+--    Separada de dp_resultados para que gestores não acessem via API.
+--    FK para dp_resultados.id: o resultado base deve existir primeiro.
 -- ============================================================
 
-ALTER TABLE dp_resultados
-  ADD COLUMN IF NOT EXISTS resultado_bonus NUMERIC;
+CREATE TABLE IF NOT EXISTS dp_resultados_bonus (
+  id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  resultado_id   UUID        NOT NULL UNIQUE REFERENCES dp_resultados(id) ON DELETE CASCADE,
+  valor_bonus    NUMERIC     NOT NULL CHECK (valor_bonus >= 0),
+  calculado_em   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  calculado_por  UUID        REFERENCES auth.users(id)
+);
 
-COMMENT ON COLUMN dp_resultados.resultado_bonus IS 'Soma dos valores monetários de critérios binários (Opção B — independente da nota_final)';
+COMMENT ON TABLE  dp_resultados_bonus                  IS 'Resultado financeiro de critérios binários Sim/Não (Opção B). Separado de dp_resultados para controle de acesso por perfil.';
+COMMENT ON COLUMN dp_resultados_bonus.valor_bonus      IS 'Soma dos valores monetários das respostas válidas (sim/não) com valor_se_sim ou valor_se_nao configurado.';
+COMMENT ON COLUMN dp_resultados_bonus.resultado_id     IS 'FK para dp_resultados — registro base da avaliação calculada. Exclusão em cascata.';
 
 -- ============================================================
--- 5. Atualizar constraint resultado_tem_valor em dp_resultados
---    Antes: nota_final IS NOT NULL OR conceito IS NOT NULL
---    Depois: inclui resultado_bonus como terceira opção válida
---    → modelos com APENAS critérios monetários podem ter
---      nota_final=null e conceito=null, desde que resultado_bonus
---      seja preenchido.
---    Resultados históricos: todos têm nota_final ou conceito
---    preenchidos, portanto passam na nova constraint sem alteração.
+-- 5. RLS em dp_resultados_bonus
+--    Apenas rh, admin e diretoria podem ler.
+--    Gestor e colaborador: sem acesso por design.
+--    INSERT/UPDATE/DELETE: rh e admin apenas.
 -- ============================================================
 
-ALTER TABLE dp_resultados
-  DROP CONSTRAINT IF EXISTS resultado_tem_valor;
+ALTER TABLE dp_resultados_bonus ENABLE ROW LEVEL SECURITY;
 
-ALTER TABLE dp_resultados
-  ADD CONSTRAINT resultado_tem_valor CHECK (
-    nota_final IS NOT NULL OR conceito IS NOT NULL OR resultado_bonus IS NOT NULL
-  );
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+    AND tablename='dp_resultados_bonus' AND policyname='dp_resultados_bonus_sel') THEN
+    CREATE POLICY dp_resultados_bonus_sel ON dp_resultados_bonus
+      FOR SELECT TO authenticated
+      USING (auth_perfil() IN ('admin','rh','diretoria'));
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+    AND tablename='dp_resultados_bonus' AND policyname='dp_resultados_bonus_ins') THEN
+    CREATE POLICY dp_resultados_bonus_ins ON dp_resultados_bonus
+      FOR INSERT TO authenticated
+      WITH CHECK (auth_perfil() IN ('admin','rh'));
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+    AND tablename='dp_resultados_bonus' AND policyname='dp_resultados_bonus_upd') THEN
+    CREATE POLICY dp_resultados_bonus_upd ON dp_resultados_bonus
+      FOR UPDATE TO authenticated
+      USING  (auth_perfil() IN ('admin','rh'))
+      WITH CHECK (auth_perfil() IN ('admin','rh'));
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+    AND tablename='dp_resultados_bonus' AND policyname='dp_resultados_bonus_del') THEN
+    CREATE POLICY dp_resultados_bonus_del ON dp_resultados_bonus
+      FOR DELETE TO authenticated
+      USING (auth_perfil() IN ('admin','rh'));
+  END IF;
+END $$;
