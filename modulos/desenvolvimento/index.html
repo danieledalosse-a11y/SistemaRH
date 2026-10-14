@@ -49,6 +49,9 @@
   .mod-tab { padding: 15px 18px; font-size: 13px; font-weight: 500; color: var(--text-sec); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; transition: color 0.15s; }
   .mod-tab:hover { color: var(--text); }
   .mod-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .mod-tab.tab-legado { color: var(--text-ter); font-size: 12px; border-left: 1px solid var(--border); margin-left: 8px; padding-left: 14px; }
+  .mod-tab.tab-legado:hover { color: var(--text-sec); }
+  .mod-tab.tab-legado.active { color: var(--text-sec); border-bottom-color: var(--text-ter); font-weight: 500; }
   .mod-tab .tab-badge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--red-bg); color: var(--red); font-size: 10px; font-weight: 700; margin-left: 6px; }
 
   /* ── container ── */
@@ -652,19 +655,19 @@
 
 <!-- Tabs -->
 <div class="mod-tabs">
-  <button class="mod-tab active" onclick="showSec('colaboradores',this)" data-rh-only>Colaboradores</button>
-  <button class="mod-tab" onclick="showSec('ciclos',this)" data-rh-only>Ciclos de Avaliação</button>
-  <button class="mod-tab" onclick="showSec('avaliacoes',this)" data-rh-only>Avaliações</button>
-  <button class="mod-tab" onclick="showSec('modelos',this)" data-rh-only>Modelos</button>
-  <button class="mod-tab" onclick="showSec('competencias',this)" data-rh-only>Competências</button>
-  <button class="mod-tab" onclick="showSec('configuracoes',this)" data-rh-only>Configurações D&amp;P</button>
+  <button class="mod-tab" onclick="showSec('configuracoes',this)" data-rh-only>Configurações</button>
+  <button class="mod-tab" onclick="showSec('competencias',this)" data-rh-only>Critérios</button>
+  <button class="mod-tab active" onclick="showSec('modelos',this)" data-rh-only>Modelos</button>
+  <button class="mod-tab" onclick="showSec('ciclos',this)" data-rh-only>Ciclos</button>
+  <button class="mod-tab tab-legado" onclick="showSec('colaboradores',this)" data-rh-only>Colaboradores · legado</button>
+  <button class="mod-tab tab-legado" onclick="showSec('avaliacoes',this)" data-rh-only>Avaliações · legado</button>
   <button class="mod-tab" id="tabGestorDP" onclick="showSec('gestor-dp',this)" style="display:none">Minha Equipe</button>
 </div>
 
 <div class="container">
 
   <!-- ══ SEC: COLABORADORES ══ -->
-  <div id="sec-colaboradores" class="sec active">
+  <div id="sec-colaboradores" class="sec">
 
     <!-- métricas -->
     <div class="metrics" id="metricsBar">
@@ -835,7 +838,7 @@
 
 
   <!-- ══ SEC: MODELOS ══ -->
-  <div id="sec-modelos" class="sec">
+  <div id="sec-modelos" class="sec active">
     <div class="toolbar">
       <div style="flex:1">
         <div style="font-size:15px;font-weight:600;margin-bottom:2px">Modelos de Avaliação</div>
@@ -1036,8 +1039,7 @@
   </div>
   <div class="drawer-footer">
     <div id="dvValidacaoInline" style="flex:1;min-width:0;"></div>
-    <button class="btn btn-secondary" id="btnDvValidar" onclick="validarVersao()">Validar versão</button>
-    <button class="btn btn-primary" id="btnDvPublicar" onclick="publicarVersao()" style="display:none">Publicar versão</button>
+    <button class="btn btn-primary" id="btnDvVerificarPublicar" onclick="verificarEPublicar()">Verificar e publicar →</button>
     <button class="btn btn-secondary" onclick="fecharDrawerVersao()">Fechar</button>
   </div>
 </div>
@@ -2904,9 +2906,10 @@ async function abrirDrawerVersao(versaoId, readonly) {
   document.getElementById('dvNome').textContent = modelo ? modelo.nome : '—';
   const pub = _dpVersaoAtual.em_uso;
   const CALC_LABEL = { soma:'Soma', media:'Média', media_ponderada:'Média ponderada', percentual_atingimento:'% Atingimento', qualitativo:'Qualitativo' };
-  document.getElementById('dvSub').innerHTML = `v${_dpVersaoAtual.numero||'?'} &nbsp;·&nbsp; ${CALC_LABEL[_dpVersaoAtual.tipo_calculo]||'—'} &nbsp;·&nbsp; <span class="sbadge ${pub?'sbadge-green':'sbadge-gray'}">${pub?'Publicada':'Rascunho'}</span>`;
-  document.getElementById('btnDvPublicar').style.display = readonly ? 'none' : 'none'; // mostrado só após validação
-  document.getElementById('btnDvValidar').style.display  = readonly ? 'none' : '';
+  const hint = pub ? '' : ' &nbsp;<span style="font-size:11px;color:var(--text-ter)">— configure e publique para criar ciclos</span>';
+  document.getElementById('dvSub').innerHTML = `v${_dpVersaoAtual.numero||'?'} &nbsp;·&nbsp; ${CALC_LABEL[_dpVersaoAtual.tipo_calculo]||'—'} &nbsp;·&nbsp; <span class="sbadge ${pub?'sbadge-green':'sbadge-gray'}">${pub?'Publicada':'Rascunho'}</span>${hint}`;
+  const btnVP = document.getElementById('btnDvVerificarPublicar');
+  if (btnVP) btnVP.style.display = readonly ? 'none' : '';
   document.getElementById('dvValidacaoInline').innerHTML = '';
   const [crits, blocos] = await Promise.all([
     sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&select=*&order=ordem.asc`),
@@ -2975,9 +2978,9 @@ function renderVersaoCriterios() {
     if (!crits.length) return `<div style="font-size:12px;color:var(--text-ter);padding:12px 0">Nenhum critério neste bloco.</div>`;
     return `<div style="overflow-x:auto"><table class="crit-table">
       <thead><tr>
-        <th>Critério</th><th>Tipo resposta</th><th>Escala</th>
+        <th>Critério</th><th>Como avaliar</th><th>Escala de notas</th>
         <th ${showPeso?'':'style="display:none"'}>Peso</th>
-        <th>Obrig.</th><th>Calc.</th><th></th>
+        <th>Obrigatório</th><th>Conta na nota</th><th></th>
       </tr></thead>
       <tbody>${crits.map(c=>critRow(c)).join('')}</tbody>
     </table></div>`;
@@ -3028,15 +3031,17 @@ function renderVersaoConfigs() {
   ).join('');
   el.innerHTML = `
     <div class="form-group">
-      <label class="form-label">Tipo de cálculo</label>
+      <label class="form-label">Como calcular a nota final</label>
       <select class="form-input" id="dvCalculo" ${readonly?'disabled':''} onchange="salvarConfigVersao()">
         ${calcOpts}
       </select>
+      <div style="font-size:11px;color:var(--text-ter);margin-top:4px">Soma: soma todos os pontos. Média: divide pelo número de critérios.</div>
     </div>
     <div class="form-group" style="display:flex;align-items:center;gap:10px">
       <input type="checkbox" id="dvConverteConceiro" ${v.converte_para_conceito?'checked':''} ${readonly?'disabled':''} onchange="salvarConfigVersao();toggleFaixasConceito()" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer">
-      <label class="form-label" style="margin:0;cursor:pointer" for="dvConverteConceiro">Converter nota para conceito</label>
+      <label class="form-label" style="margin:0;cursor:pointer" for="dvConverteConceiro">Exibir conceito ao final (ex: Bom, Ótimo)</label>
     </div>
+    <div style="font-size:11px;color:var(--text-ter);margin-top:-8px;margin-bottom:8px">Transforma a nota numérica em uma classificação. Configure as faixas em Configurações.</div>
     <div id="dvTabelaConceitoGrp" ${v.converte_para_conceito?'':'style="display:none"'}>
       <div class="form-group">
         <label class="form-label">Tabela de conceito</label>
@@ -3045,11 +3050,11 @@ function renderVersaoConfigs() {
                <option value="">— Selecione —</option>
                ${tabelaOpts}
              </select>`
-          : `<div style="font-size:12px;color:var(--text-ter);padding:8px 0">Nenhuma tabela de conceito cadastrada. Acesse <b>Configurações D&amp;P</b> para criar.</div>`
+          : `<div style="font-size:12px;color:var(--text-ter);padding:8px 0">Nenhuma tabela de conceito cadastrada. Acesse <b>Configurações</b> para criar.</div>`
         }
       </div>
     </div>
-    ${readonly?'<div style="padding:10px 14px;background:var(--amber-bg);color:var(--amber);border-radius:8px;font-size:12px;margin-top:16px">Esta versão está publicada e não pode ser editada.</div>':''}
+    ${readonly?'<div style="padding:10px 14px;background:var(--amber-bg);color:var(--amber);border-radius:8px;font-size:12px;margin-top:16px">Esta versão está publicada e não pode ser alterada. Para novos ajustes, crie uma nova versão a partir desta.</div>':''}
   `;
 }
 
@@ -3241,27 +3246,52 @@ async function adicionarCritVersao(criterioId) {
 }
 
 async function validarVersao() {
+  // mantida para compatibilidade com publicarVersaoDirecto
   if (!_dpVersaoAtual) return;
-  const btn = document.getElementById('btnDvValidar');
-  btn.disabled = true; btn.textContent = 'Validando...';
+  try {
+    const r = await fetch(SB_URL+'/rest/v1/rpc/dp_validar_versao', {
+      method: 'POST', headers: HDR, body: JSON.stringify({ p_versao_id: _dpVersaoAtual.id })
+    });
+    return await r.json();
+  } catch(e) { return { valido: false, erros: [{ mensagem: e.message }] }; }
+}
+
+async function verificarEPublicar() {
+  if (!_dpVersaoAtual) return;
+  const btn = document.getElementById('btnDvVerificarPublicar');
+  const el  = document.getElementById('dvValidacaoInline');
+  btn.disabled = true; btn.textContent = 'Verificando...';
+  el.innerHTML = '';
   try {
     const r = await fetch(SB_URL+'/rest/v1/rpc/dp_validar_versao', {
       method: 'POST', headers: HDR, body: JSON.stringify({ p_versao_id: _dpVersaoAtual.id })
     });
     const data = await r.json();
-    const el = document.getElementById('dvValidacaoInline');
     if (data.valido) {
-      el.innerHTML = `<div class="validacao-result validacao-ok">Versão válida. Pronta para publicação.</div>`;
-      document.getElementById('btnDvPublicar').style.display = '';
+      el.innerHTML = `<div class="validacao-result validacao-ok" style="display:flex;align-items:center;gap:10px">
+        <span>✓ Versão válida.</span>
+        <button class="btn btn-primary btn-sm" onclick="confirmarPublicacao()">Publicar agora</button>
+        <span style="font-size:11px;color:var(--text-ter)">ou feche para publicar depois</span>
+      </div>`;
+      btn.style.display = 'none';
     } else {
       const erros = (data.erros||[]).map(e=>`<li>${e.mensagem||JSON.stringify(e)}</li>`).join('');
-      el.innerHTML = `<div class="validacao-result validacao-err"><strong>Inválida:</strong><ul>${erros}</ul></div>`;
-      document.getElementById('btnDvPublicar').style.display = 'none';
+      el.innerHTML = `<div class="validacao-result validacao-err"><strong>Pendências:</strong><ul>${erros}</ul></div>`;
+      btn.disabled = false; btn.textContent = 'Verificar e publicar →';
     }
   } catch(e) {
-    document.getElementById('dvValidacaoInline').innerHTML = `<div class="validacao-result validacao-err">Erro ao validar: ${e.message}</div>`;
+    el.innerHTML = `<div class="validacao-result validacao-err">Erro ao verificar: ${e.message}</div>`;
+    btn.disabled = false; btn.textContent = 'Verificar e publicar →';
   }
-  btn.disabled = false; btn.textContent = 'Validar versão';
+}
+
+async function confirmarPublicacao() {
+  if (!_dpVersaoAtual) return;
+  const el = document.getElementById('dvValidacaoInline');
+  el.innerHTML = `<div class="validacao-result validacao-ok">Publicando...</div>`;
+  const ok = await sbPatch(`/rest/v1/dp_versoes?id=eq.${_dpVersaoAtual.id}`, { em_uso: true, publicado_em: new Date().toISOString() });
+  if (ok) { toast('Versão publicada com sucesso.'); fecharDrawerVersao(); renderModelos(); }
+  else { el.innerHTML = `<div class="validacao-result validacao-err">Erro ao publicar.</div>`; }
 }
 
 async function publicarVersao() {
