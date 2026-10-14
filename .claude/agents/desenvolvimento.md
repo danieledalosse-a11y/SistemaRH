@@ -608,8 +608,7 @@ CSS base (mesmo padrão nos dois):
 | `070_dp_criterios_referencia_meta.sql` | ADD COLUMN referencia, meta_valor, meta_unidade; CREATE dp_meta_unidades | Executado (revertido em 071) |
 | `071_dp_criterios_remover_meta.sql` | DROP meta_valor, meta_unidade; DROP TABLE dp_meta_unidades | Executado |
 | `112_dp_rls.sql` | Habilita RLS nas 21 tabelas dp_*; políticas por perfil: RH/admin CRUD, diretoria SELECT, gestor sem acesso (fase 2), histórico append-only | Executado |
-
-**Próxima migration:** `113_dp_...`
+| `113_dp_rls_gestor.sql` | Fase 2 RLS: função `auth_gestor_equipe_ids()` SECURITY DEFINER + 21 políticas gestor por equipe (SELECT config, CRUD operacional restrito, INSERT histórico) | Executado |
 
 ---
 
@@ -623,6 +622,7 @@ CSS base (mesmo padrão nos dois):
 | **Etapa 4 — Regra financeira UI** | Configuração de dp_regras_financeiras no drawer da versão | ⏭ Pulada — baixa prioridade |
 | **Etapa 5 — Análise e fechamento RH** | Ajuste inline de resultados, encerramento com confirmação, histórico de eventos | ✅ Implementado (2026-10-03) |
 | **Etapa 6 — Relatório/exportação** | Botão Exportar Excel na aba Resultados | ✅ Implementado (2026-10-03) |
+| **Gestor D&P — Minha Equipe** | Aba exclusiva do Gestor: lista ciclos ativos, drawer com 3 abas (Participantes/Avaliações/Resultados), formulário de avaliação reutilizando motor RH | ✅ Implementado (commit fbd50bb, 2026-10-14) |
 
 ## Drawer `drawerDpCiclo` — abas e funções por aba
 
@@ -716,10 +716,115 @@ let _dpResultados       // [{ id, avaliacao_id, nota_final, conceito, calculado_
 | Item | Prioridade | Detalhe |
 |---|---|---|
 | **`param_setor` populado** | Alta | Pré-requisito para testar elegibilidade por setor no ciclo |
-| Visão do gestor — "meu ciclo" | Alta | Fase futura — RLS já preparado (migration 112); adicionar políticas por equipe via `colaboradores.gestor` |
+| Testes funcionais Gestor | Alta | Aguardando RH criar primeiro ciclo com `dp_ciclos` não vazio para validar fluxo real |
 | Camada financeira UI (Etapa 4) | Baixa | dp_regras_financeiras — pulada |
 | PDI V2 vinculado a dp_ciclo_participantes | Baixa | Fase futura |
 | DROP tabelas dev_* | Baixa | Pós-migração completa |
+
+---
+
+---
+
+## Visão Gestor D&P — "Minha Equipe" (commit fbd50bb, 2026-10-14)
+
+### Modelo de negócio
+
+- RH cria modelos / versões / ciclos — Gestor **só preenche avaliações**
+- Gestor não vê abas de RH; RH não vê aba do Gestor
+- `auth_gestor_equipe_ids()` (migration 113) determina quem pertence à equipe via `colaboradores.gestor ILIKE param_gestor.apelido`
+
+### Separação de perfis no `init()`
+
+```js
+const isGestor = _perfil === 'gestor';
+document.querySelectorAll('[data-rh-only]').forEach(el => {
+  el.style.display = isGestor ? 'none' : '';
+});
+const tabGestor = document.getElementById('tabGestorDP');
+if (tabGestor) tabGestor.style.display = isGestor ? '' : 'none';
+if (isGestor) {
+  await initDpGestor();
+  // ativa sec-gestor-dp e tabGestorDP; retorna sem chamar init RH
+  return;
+}
+```
+
+Todas as 6 abas de RH têm `data-rh-only` no HTML. O `init()` RH continua após o `return`.
+
+### IDs HTML da visão Gestor
+
+| Elemento | ID / classe |
+|---|---|
+| Tab nav | `tabGestorDP` |
+| Seção principal | `sec-gestor-dp` |
+| Corpo da lista de ciclos | `gestorDpBody` |
+| Overlay do drawer | `gestorDpDrawerOverlay` |
+| Botão aba Participantes | `gdptab-btn-participantes` |
+| Botão aba Avaliações | `gdptab-btn-avaliacoes` |
+| Botão aba Resultados | `gdptab-btn-resultados` |
+| Conteúdo aba Participantes | `gdptab-participantes` |
+| Conteúdo aba Avaliações | `gdptab-avaliacoes` |
+| Conteúdo aba Resultados | `gdptab-resultados` |
+
+### Variáveis de estado (Gestor)
+
+```js
+let _gdpCicloAtual    = null;   // ciclo selecionado no drawer (objeto completo)
+let _gdpParticipantes = [];     // participantes da equipe no ciclo
+let _gdpAvaliacoes    = [];     // avaliações do gestor no ciclo
+let _gdpResultados    = [];     // resultados para aba Resultados
+let _gdpTipoGestorId  = null;   // UUID de dp_tipos_avaliador WHERE codigo='gestor_direto'
+```
+
+**Atenção — variáveis compartilhadas com o motor RH:** `_dpCicloAtual`, `_dpParticipantes`, `_dpAvaliacoes` são reaproveitadas para chamar `dpAbrirFormAvaliacao`. Devem ser limpas ao fechar o drawer.
+
+### Funções JS
+
+| Função | O que faz |
+|---|---|
+| `initDpGestor()` | Resolve `_gdpTipoGestorId` (fallback GET se `_dpTiposAvaliador` vazio) |
+| `gestorDpLoadCiclos()` | GET `dp_ciclos?status=in.(aberto,em_andamento)` com joins; renderiza cards |
+| `gestorDpRenderCiclos(ciclos)` | Renderiza lista de ciclos; clique → `gestorDpAbrirDrawer` |
+| `gestorDpAbrirDrawer(cicloId)` | Busca dados completos do ciclo; pre-carrega participantes + avaliações; abre overlay |
+| `gestorDpFecharDrawer()` | Fecha overlay; limpa `_gdpCicloAtual` e as 3 variáveis compartilhadas |
+| `gestorDpShowTab(id, btn)` | Troca aba ativa no drawer |
+| `gestorDpRenderParticipantes()` | Tabela read-only de `_gdpParticipantes` |
+| `gestorDpRenderAvaliacoes()` | Cards por participante; botão Avaliar → `gestorDpAbrirFormAvaliacao` |
+| `gestorDpAbrirFormAvaliacao(participanteId)` | **Usa spread** para não mutar cache: `_dpCicloAtual = { ..._gdpCicloAtual, tipo_avaliador_id: _gdpTipoGestorId }` ; chama `dpAbrirFormAvaliacao` do motor RH |
+| `gestorDpLoadResultados()` | Filtra resultados por `tipo_avaliador_id === _gdpTipoGestorId` |
+| `gestorDpRenderResultados()` | Exibe nota_final + conceito por participante |
+
+### Regra crítica: spread no `gestorDpAbrirFormAvaliacao`
+
+```js
+async function gestorDpAbrirFormAvaliacao(participanteId) {
+  // SPREAD obrigatório — sem isso, mutaria _gdpCicloAtual (mesmo objeto)
+  _dpCicloAtual = { ..._gdpCicloAtual, tipo_avaliador_id: _gdpTipoGestorId || _gdpCicloAtual?.tipo_avaliador_id };
+  _dpParticipantes = _gdpParticipantes;
+  _dpAvaliacoes    = _gdpAvaliacoes;
+  await dpAbrirFormAvaliacao(participanteId);
+}
+```
+
+### Limpeza ao fechar drawer
+
+```js
+function gestorDpFecharDrawer() {
+  document.getElementById('gestorDpDrawerOverlay').classList.remove('open');
+  _gdpCicloAtual   = null;
+  _dpCicloAtual    = null;   // compartilhada — limpar para não vazar para motor RH
+  _dpParticipantes = [];
+  _dpAvaliacoes    = [];
+}
+```
+
+### RLS (migration 113)
+
+- **Grupo 1 — config (11 tabelas):** SELECT para `auth_perfil()='gestor'`
+- **Grupo 2 — operacional:** SELECT por equipe; INSERT/UPDATE com guarda `gestor_direto` + ciclo `aberto/em_andamento` + status `NOT IN ('concluida','publicada')`
+- **Grupo 3 — histórico:** INSERT restrito a `avaliacao_iniciada/concluida` de `entidade='dp_avaliacoes'` vinculadas à equipe
+- Total: 21 políticas aditivas (não altera policies de RH da migration 112)
+- Idempotente via consulta a `pg_policies` (PostgreSQL não tem `CREATE POLICY IF NOT EXISTS`)
 
 ---
 

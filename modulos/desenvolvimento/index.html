@@ -2882,7 +2882,7 @@ async function novaVersaoBaseada(versaoId) {
       versao_id: novoId, criterio_id: c.criterio_id, bloco_id: blocoNovoId,
       tipo_resposta: c.tipo_resposta, escala_id: c.escala_id, peso: c.peso,
       obrigatorio: c.obrigatorio, contribui_calculo: c.contribui_calculo,
-      obs_obrigatoria: c.obs_obrigatoria, ordem: c.ordem
+      ordem: c.ordem
     });
   }
   toast('Nova versão criada com base na anterior.');
@@ -2902,7 +2902,7 @@ async function abrirDrawerVersao(versaoId, readonly) {
   document.getElementById('dvNome').textContent = modelo ? modelo.nome : '—';
   const pub = _dpVersaoAtual.em_uso;
   const CALC_LABEL = { soma:'Soma', media:'Média', media_ponderada:'Média ponderada', percentual_atingimento:'% Atingimento', qualitativo:'Qualitativo' };
-  document.getElementById('dvSub').innerHTML = `${_dpVersaoAtual.versao||'v?'} &nbsp;·&nbsp; ${CALC_LABEL[_dpVersaoAtual.tipo_calculo]||'—'} &nbsp;·&nbsp; <span class="sbadge ${pub?'sbadge-green':'sbadge-gray'}">${pub?'Publicada':'Rascunho'}</span>`;
+  document.getElementById('dvSub').innerHTML = `v${_dpVersaoAtual.numero||'?'} &nbsp;·&nbsp; ${CALC_LABEL[_dpVersaoAtual.tipo_calculo]||'—'} &nbsp;·&nbsp; <span class="sbadge ${pub?'sbadge-green':'sbadge-gray'}">${pub?'Publicada':'Rascunho'}</span>`;
   document.getElementById('btnDvPublicar').style.display = readonly ? 'none' : 'none'; // mostrado só após validação
   document.getElementById('btnDvValidar').style.display  = readonly ? 'none' : '';
   document.getElementById('dvValidacaoInline').innerHTML = '';
@@ -2965,7 +2965,6 @@ function renderVersaoCriterios() {
       <td ${showPeso?'':'style="display:none"'}><input class="crit-input-sm" type="number" min="0" step="0.1" value="${c.peso!=null?c.peso:1}" ${readonly?'disabled':''} onchange="setCritField('${c.id}','peso',parseFloat(this.value)||1)"></td>
       <td style="text-align:center"><input type="checkbox" class="crit-cb" ${c.obrigatorio?'checked':''} ${readonly?'disabled':''} onchange="setCritField('${c.id}','obrigatorio',this.checked)"></td>
       <td style="text-align:center"><input type="checkbox" class="crit-cb" ${(c.contribui_calculo&&!noCalc)?'checked':''} ${(readonly||noCalc)?'disabled':''} onchange="setCritField('${c.id}','contribui_calculo',this.checked)"></td>
-      <td style="text-align:center"><input type="checkbox" class="crit-cb" ${c.obs_obrigatoria?'checked':''} ${readonly?'disabled':''} onchange="setCritField('${c.id}','obs_obrigatoria',this.checked)"></td>
       <td><div style="display:flex;gap:4px;flex-shrink:0">${!readonly?`<button class="btn btn-secondary btn-sm" onclick="moverCrit('${c.id}',-1)" title="Subir">↑</button><button class="btn btn-secondary btn-sm" onclick="moverCrit('${c.id}',1)" title="Descer">↓</button><button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="removerCrit('${c.id}')" title="Remover">✕</button>`:''}</div></td>
     </tr>`;
   }
@@ -2976,7 +2975,7 @@ function renderVersaoCriterios() {
       <thead><tr>
         <th>Critério</th><th>Tipo resposta</th><th>Escala</th>
         <th ${showPeso?'':'style="display:none"'}>Peso</th>
-        <th>Obrig.</th><th>Calc.</th><th>Obs.</th><th></th>
+        <th>Obrig.</th><th>Calc.</th><th></th>
       </tr></thead>
       <tbody>${crits.map(c=>critRow(c)).join('')}</tbody>
     </table></div>`;
@@ -3185,8 +3184,8 @@ async function adicionarCritVersao(criterioId) {
   const proxOrdem = _dpVersaoCrits.length + 1;
   const body = {
     versao_id: _dpVersaoAtual.id, criterio_id: criterioId, bloco_id: _dpBlocoAlvoId,
-    tipo_resposta: 'escala', escala_id: _dpEscalas[0] ? _dpEscalas[0].id : null,
-    peso: 1, obrigatorio: true, contribui_calculo: true, obs_obrigatoria: false, ordem: proxOrdem
+    tipo_resposta: 'numerico', escala_id: null,
+    peso: 1, obrigatorio: true, contribui_calculo: true, ordem: proxOrdem
   };
   const ok = await sbPost('/rest/v1/dp_versao_criterios', body);
   if (ok && ok[0]) {
@@ -4475,7 +4474,6 @@ async function wizardPublicar() {
           ordem: i + 1,
           obrigatorio: true,
           contribui_calculo: true,
-          obs_obrigatoria: false,
         });
       }
 
