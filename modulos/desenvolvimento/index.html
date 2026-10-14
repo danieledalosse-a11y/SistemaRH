@@ -5188,6 +5188,21 @@ async function salvarAvaliacao(status) {
     payloads.push({ existente, body });
   }
 
+  // Validar ranges numéricos antes de salvar
+  for (const vc of _dpVersaoCritsParaForm) {
+    const isNumerico = ['numerico', 'numerico_com_meta'].includes(vc.tipo_resposta);
+    if (!isNumerico) continue;
+    if (vc.nota_min == null || vc.nota_max == null) continue;
+    const el = document.getElementById(`resp_${vc.id}`);
+    if (!el || el.value === '') continue;
+    const val = Number(el.value);
+    if (val < vc.nota_min || val > vc.nota_max) {
+      const label = vc.dp_criterios?.nome || vc.criterio_nome_snapshot || 'Critério';
+      toast(`"${label}" deve estar entre ${vc.nota_min} e ${vc.nota_max}.`, true);
+      return;
+    }
+  }
+
   // Salvar respostas
   let erros = 0;
   for (const { existente, body } of payloads) {
@@ -5297,11 +5312,15 @@ function dpRenderResultados() {
       btnHtml = '';
     }
 
+    const bonusInfo = resultado && resultado.resultado_bonus != null && Number(resultado.resultado_bonus) > 0
+      ? `<br>bônus: <b>R$ ${Number(resultado.resultado_bonus).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</b>`
+      : '';
     const notaInfo = resultado
       ? `<div id="rv_${aval.id}" style="font-size:11px;color:var(--text-ter);margin-top:3px">
           ${resultado.nota_final != null ? `nota: <b>${Number(resultado.nota_final).toFixed(2)}</b>` : ''}
           ${resultado.nota_final != null && resultado.conceito ? ' · ' : ''}
           ${resultado.conceito ? `conceito: <b>${resultado.conceito}</b>` : ''}
+          ${bonusInfo}
         </div>`
       : '';
 
@@ -5365,33 +5384,51 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
     critsComValor.push({ ...c, valor: Number(val), resposta_texto: r.resposta_texto });
   }
 
+  // d2) Opção B: separar critérios de nota dos critérios de bônus monetário
+  // Binários com valor_se_sim produzem resultado_bonus, não contribuem para nota_final
+  const critsBonus = critsComValor.filter(c => c.tipo_resposta === 'binario' && c.valor_se_sim != null);
+  const critsNota  = critsComValor.filter(c => !(c.tipo_resposta === 'binario' && c.valor_se_sim != null));
+
+  // Calcular bônus total
+  let bonusTotal = null;
+  if (critsBonus.length) {
+    bonusTotal = critsBonus.reduce((s, c) => s + c.valor, 0);
+  }
+
   let nota = null;
   let conceito = null;
 
   if (tc === 'qualitativo') {
     // conceito vem do resposta_texto do critério qualitativo
-    const rtexto = critsComValor.find(c => c.resposta_texto)?.resposta_texto
+    const rtexto = critsNota.find(c => c.resposta_texto)?.resposta_texto
+      || critsBonus.find(c => c.resposta_texto)?.resposta_texto
       || respostas.find(r => r.resposta_texto)?.resposta_texto
       || null;
     if (!rtexto) { toast('Sem resposta qualitativa para calcular.', true); return; }
     conceito = rtexto;
     nota = null;
   } else {
-    if (!critsComValor.length) { toast('Sem dados suficientes para calcular.', true); return; }
-    const valores = critsComValor.map(c => c.valor);
-
-    if (tc === 'soma') {
-      nota = valores.reduce((s, v) => s + v, 0);
-    } else if (tc === 'media') {
-      nota = valores.reduce((s, v) => s + v, 0) / valores.length;
-    } else if (tc === 'media_ponderada') {
-      const pesoTotal = critsComValor.reduce((s, c) => s + (c.peso || 1), 0);
-      nota = critsComValor.reduce((s, c) => s + c.valor * (c.peso || 1), 0) / pesoTotal;
-    } else if (tc === 'percentual_atingimento') {
-      // meta removida na migration 071 — tratar como média
-      nota = valores.reduce((s, v) => s + v, 0) / valores.length;
+    if (!critsNota.length) {
+      // Sem critérios de nota: verificar se há pelo menos bônus (satisfaz constraint NOT NULL)
+      if (bonusTotal == null) { toast('Sem dados suficientes para calcular.', true); return; }
+      // Armazenar bonusTotal como nota_final temporariamente até migration 114 adicionar resultado_bonus
+      nota = bonusTotal;
     } else {
-      nota = valores.reduce((s, v) => s + v, 0) / valores.length;
+      const valores = critsNota.map(c => c.valor);
+
+      if (tc === 'soma') {
+        nota = valores.reduce((s, v) => s + v, 0);
+      } else if (tc === 'media') {
+        nota = valores.reduce((s, v) => s + v, 0) / valores.length;
+      } else if (tc === 'media_ponderada') {
+        const pesoTotal = critsNota.reduce((s, c) => s + (c.peso || 1), 0);
+        nota = critsNota.reduce((s, c) => s + c.valor * (c.peso || 1), 0) / pesoTotal;
+      } else if (tc === 'percentual_atingimento') {
+        // meta removida na migration 071 — tratar como média
+        nota = valores.reduce((s, v) => s + v, 0) / valores.length;
+      } else {
+        nota = valores.reduce((s, v) => s + v, 0) / valores.length;
+      }
     }
 
     // e) Converter para conceito
@@ -5409,6 +5446,7 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
   const payload = {
     nota_final: nota,
     conceito,
+    resultado_bonus: bonusTotal,  // ignorado pelo banco até migration 114 adicionar a coluna
     calculado_em: new Date().toISOString()
   };
   if (existing) {
