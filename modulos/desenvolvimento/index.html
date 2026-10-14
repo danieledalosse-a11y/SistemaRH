@@ -2651,8 +2651,13 @@ async function salvarNovaTabela() {
   if (!res || !res[0]) { toast('Erro ao criar tabela: ' + sbErrMsg(), true); return; }
   document.getElementById('modalNovaTabela').classList.remove('open');
   await loadDpTabelasConceito();
-  document.getElementById('confTabelasConceito').innerHTML = renderTabelasConceito();
+  const confEl = document.getElementById('confTabelasConceito');
+  if (confEl) confEl.innerHTML = renderTabelasConceito();
   toast('Tabela criada.');
+  // Se o drawer de versão estiver aberto, atualiza aba de configs para mostrar o novo select
+  if (_dpVersaoAtual && document.getElementById('drawerVersao').classList.contains('open')) {
+    renderVersaoConfigs();
+  }
 }
 
 async function excluirTabela(id) {
@@ -2981,13 +2986,28 @@ function renderVersaoCriterios() {
     const nome = crit ? crit.nome : `(id: ${c.criterio_id})`;
     const needEscala = ['binario','escala'].includes(c.tipo_resposta);
     const noCalc = ['conceito','texto'].includes(c.tipo_resposta);
-    const escalaSelect = `<select class="crit-select" ${readonly||!needEscala?'disabled':''} style="${!needEscala?'display:none':''}" onchange="setCritField('${c.id}','escala_id',this.value)">
-      <option value="">— selecione —</option>
-      ${_dpEscalas.map(e=>`<option value="${e.id}" ${c.escala_id===e.id?'selected':''}>${e.nome}</option>`).join('')}
-    </select>`;
-    const tipoSelect = `<select class="crit-select" ${readonly?'disabled':''} onchange="setCritField('${c.id}','tipo_resposta',this.value)">
+    const escalaSelect = needEscala && !readonly && !_dpEscalas.length
+      ? `<span style="font-size:11px;color:var(--text-ter)">Nenhuma escala. <a href="#" style="color:var(--accent);text-decoration:none" onclick="event.preventDefault();abrirModalEscala(null)">Criar escala →</a></span>`
+      : `<select class="crit-select" ${readonly||!needEscala?'disabled':''} style="${!needEscala?'display:none':''}" onchange="setCritField('${c.id}','escala_id',this.value)">
+          <option value="">— selecione —</option>
+          ${_dpEscalas.map(e=>`<option value="${e.id}" ${c.escala_id===e.id?'selected':''}>${e.nome}</option>`).join('')}
+        </select>`;
+    const isNumerico = ['numerico','numerico_com_meta'].includes(c.tipo_resposta);
+    const isBinario  = c.tipo_resposta === 'binario';
+    const rangeHtml = isNumerico && !readonly ? `<div style="display:flex;gap:4px;margin-top:4px;align-items:center">
+      <input class="crit-input-sm" type="number" step="any" placeholder="Mín" title="Valor mínimo esperado" style="width:52px" value="${c.nota_min!=null?c.nota_min:''}" onchange="setCritField('${c.id}','nota_min',this.value===''?null:parseFloat(this.value))">
+      <span style="font-size:11px;color:var(--text-ter)">–</span>
+      <input class="crit-input-sm" type="number" step="any" placeholder="Máx" title="Valor máximo esperado" style="width:52px" value="${c.nota_max!=null?c.nota_max:''}" onchange="setCritField('${c.id}','nota_max',this.value===''?null:parseFloat(this.value))">
+    </div>` : (isNumerico && c.nota_min!=null && c.nota_max!=null ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px">${c.nota_min} – ${c.nota_max}</div>` : '');
+    const monetarioHtml = isBinario && !readonly ? `<div style="display:flex;gap:6px;margin-top:4px;align-items:center;flex-wrap:wrap">
+      <label style="font-size:11px;color:var(--text-ter);white-space:nowrap">R$ Sim:</label>
+      <input class="crit-input-sm" type="number" step="0.01" min="0" placeholder="0,00" title="Valor monetário se Sim" style="width:70px" value="${c.valor_se_sim!=null?c.valor_se_sim:''}" onchange="setCritField('${c.id}','valor_se_sim',this.value===''?null:parseFloat(this.value))">
+      <label style="font-size:11px;color:var(--text-ter);white-space:nowrap">R$ Não:</label>
+      <input class="crit-input-sm" type="number" step="0.01" min="0" placeholder="0,00" title="Valor monetário se Não" style="width:70px" value="${c.valor_se_nao!=null?c.valor_se_nao:''}" onchange="setCritField('${c.id}','valor_se_nao',this.value===''?null:parseFloat(this.value))">
+    </div>` : (isBinario && c.valor_se_sim!=null ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px">Sim = R$ ${Number(c.valor_se_sim).toFixed(2).replace('.',',')} · Não = R$ ${Number(c.valor_se_nao||0).toFixed(2).replace('.',',')}</div>` : '');
+    const tipoSelect = `<div><select class="crit-select" ${readonly?'disabled':''} onchange="setCritField('${c.id}','tipo_resposta',this.value)">
       ${RESP_OPTS.map(o=>`<option value="${o.v}" ${c.tipo_resposta===o.v?'selected':''}>${o.l}</option>`).join('')}
-    </select>`;
+    </select>${rangeHtml}${monetarioHtml}</div>`;
     return `<tr data-crit-id="${c.id}">
       <td style="font-size:13px;font-weight:500;min-width:140px">${nome}</td>
       <td>${tipoSelect}</td>
@@ -3109,7 +3129,7 @@ function renderVersaoConfigs() {
                <option value="">— Selecione —</option>
                ${tabelaOpts}
              </select>`
-          : `<div style="font-size:12px;color:var(--text-ter);padding:8px 0">Nenhuma tabela de conceito cadastrada. Acesse <b>Configurações</b> para criar.</div>`
+          : `<div style="font-size:12px;color:var(--text-ter);padding:8px 0">Nenhuma tabela criada ainda. <a href="#" style="color:var(--accent);text-decoration:none;font-size:12px" onclick="event.preventDefault();abrirModalNovaTabela()">Criar tabela de conceito →</a></div>`
         }
       </div>
     </div>
@@ -3509,6 +3529,10 @@ async function salvarEscala() {
   fecharModalEscala();
   await loadDpEscalas();
   renderEscalas();
+  // Se o drawer de versão estiver aberto, atualiza critérios para refletir nova escala
+  if (_dpVersaoAtual && document.getElementById('drawerVersao').classList.contains('open')) {
+    renderVersaoCriterios();
+  }
 }
 
 /* ─────────────────────────────────────────────
@@ -5040,13 +5064,18 @@ function dpRenderFormAvaliacao() {
       }
     } else if (tipo === 'binario') {
       const val = resp ? resp.resposta_texto : null;
-      inputHtml = `<div style="display:flex;gap:8px;margin-top:8px">
-        <button type="button" id="resp_${vc.id}_sim" data-tipo="binario" data-campo="resp_${vc.id}"
-          onclick="dpAvalBinario('${vc.id}','sim')"
-          style="padding:6px 18px;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:13px;${val==='sim'?'background:var(--green);color:#fff;border-color:var(--green)':'background:var(--surface)'}">Sim</button>
-        <button type="button" id="resp_${vc.id}_nao" data-tipo="binario" data-campo="resp_${vc.id}"
-          onclick="dpAvalBinario('${vc.id}','nao')"
-          style="padding:6px 18px;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:13px;${val==='nao'?'background:var(--red);color:#fff;border-color:var(--red)':'background:var(--surface)'}">Não</button>
+      const temValMon = vc.valor_se_sim != null;
+      const valSimFmt = temValMon ? `R$ ${Number(vc.valor_se_sim).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null;
+      const valNaoFmt = temValMon ? `R$ ${Number(vc.valor_se_nao||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null;
+      inputHtml = `<div style="margin-top:8px">
+        <div style="display:flex;gap:8px">
+          <button type="button" id="resp_${vc.id}_sim" data-tipo="binario" data-campo="resp_${vc.id}"
+            onclick="dpAvalBinario('${vc.id}','sim')"
+            style="padding:6px 18px;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:13px;${val==='sim'?'background:var(--green);color:#fff;border-color:var(--green)':'background:var(--surface)'}">Sim${temValMon?` · ${valSimFmt}`:''}</button>
+          <button type="button" id="resp_${vc.id}_nao" data-tipo="binario" data-campo="resp_${vc.id}"
+            onclick="dpAvalBinario('${vc.id}','nao')"
+            style="padding:6px 18px;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:13px;${val==='nao'?'background:var(--red);color:#fff;border-color:var(--red)':'background:var(--surface)'}">Não${temValMon?` · ${valNaoFmt}`:''}</button>
+        </div>
         <input type="hidden" id="resp_${vc.id}" data-tipo="binario" value="${val||''}">
       </div>`;
     } else if (tipo === 'texto') {
@@ -5056,12 +5085,17 @@ function dpRenderFormAvaliacao() {
     } else if (tipo === 'numerico' || tipo === 'numerico_com_meta') {
       const vNum = resp ? (resp.valor_numerico_livre != null ? resp.valor_numerico_livre : '') : '';
       const vMeta = resp ? (resp.meta != null ? resp.meta : '') : '';
+      const temRange = vc.nota_min != null && vc.nota_max != null;
+      const minAttr  = temRange ? `min="${vc.nota_min}"` : '';
+      const maxAttr  = temRange ? `max="${vc.nota_max}"` : '';
+      const rangeHint = temRange ? `<div style="font-size:11px;color:var(--text-ter);margin-top:3px">Digite um valor de ${vc.nota_min} a ${vc.nota_max}</div>` : '';
       inputHtml = `<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
         <div>
           <label style="font-size:11px;color:var(--text-ter)">Realizado</label>
-          <input type="number" id="resp_${vc.id}" data-tipo="${tipo}" step="any"
+          <input type="number" id="resp_${vc.id}" data-tipo="${tipo}" step="any" ${minAttr} ${maxAttr}
             style="display:block;margin-top:4px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:140px"
-            value="${vNum}" placeholder="0">
+            value="${vNum}" placeholder="${temRange?vc.nota_min:'0'}">
+          ${rangeHint}
         </div>
         ${tipo==='numerico_com_meta' ? `<div>
           <label style="font-size:11px;color:var(--text-ter)">Meta</label>
@@ -5308,7 +5342,7 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
   const tc = versao.tipo_calculo;
 
   // b) Critérios calculáveis da versão
-  const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${_dpCicloAtual.versao_id}&contribui_calculo=eq.true&select=id,peso,tipo_resposta`) || [];
+  const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${_dpCicloAtual.versao_id}&contribui_calculo=eq.true&select=id,peso,tipo_resposta,valor_se_sim,valor_se_nao`) || [];
 
   // c) Respostas da avaliação
   const respostas = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${avaliacaoId}&select=versao_criterio_id,valor_numerico_livre,snapshot_opcao_valor_numerico,resposta_texto`) || [];
@@ -5321,6 +5355,9 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
     let val;
     if (c.tipo_resposta === 'escala') {
       val = r.snapshot_opcao_valor_numerico;
+    } else if (c.tipo_resposta === 'binario' && c.valor_se_sim != null) {
+      // binário com valor monetário: usa valor_se_sim se "sim", valor_se_nao (default 0) se "não"
+      val = r.resposta_texto === 'sim' ? c.valor_se_sim : (c.valor_se_nao ?? 0);
     } else {
       val = r.valor_numerico_livre;
     }
