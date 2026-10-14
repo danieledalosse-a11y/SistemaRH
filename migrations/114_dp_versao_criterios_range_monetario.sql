@@ -1,15 +1,19 @@
 -- 114_dp_versao_criterios_range_monetario.sql
 -- Fase 3: range configurável para critérios numéricos (nota_min, nota_max)
 -- Fase 4: valor monetário para critérios Sim/Não (valor_se_sim, valor_se_nao)
--- Opção B: resultado_bonus separado em dp_resultados
+-- Opção B: tabela separada dp_resultados_bonus com RLS rh/admin/diretoria
 -- Correção: constraint escala_obrigatoria e função dp_validar_versao Regra 3
+-- Semântica: DROP constraint resultado_tem_valor (permite avaliações puramente monetárias)
 --
 -- IMPORTANTE: Executar somente após autorização explícita do RH.
 -- Todas as novas colunas são nullable → comportamento atual preservado.
--- Resultados históricos já calculados em dp_resultados não são afetados.
+-- Nenhum UPDATE, DELETE ou TRUNCATE em nenhum bloco.
+-- Todos os ALTER TABLE usam IF NOT EXISTS; CREATE POLICY usa guarda IF NOT EXISTS.
+-- Resultados históricos não são afetados.
 
 -- ============================================================
 -- 1. Novas colunas em dp_versao_criterios
+--    Todas nullable: linhas existentes recebem NULL, sem recálculo.
 -- ============================================================
 
 ALTER TABLE dp_versao_criterios
@@ -18,16 +22,18 @@ ALTER TABLE dp_versao_criterios
   ADD COLUMN IF NOT EXISTS valor_se_sim  NUMERIC,
   ADD COLUMN IF NOT EXISTS valor_se_nao  NUMERIC DEFAULT 0;
 
-COMMENT ON COLUMN dp_versao_criterios.nota_min     IS 'Valor mínimo esperado para critérios numéricos (orientação e validação)';
-COMMENT ON COLUMN dp_versao_criterios.nota_max     IS 'Valor máximo esperado para critérios numéricos (orientação e validação)';
+COMMENT ON COLUMN dp_versao_criterios.nota_min     IS 'Valor mínimo de referência para critérios numéricos (orientação visual — não bloqueia o envio por padrão)';
+COMMENT ON COLUMN dp_versao_criterios.nota_max     IS 'Valor máximo de referência para critérios numéricos (orientação visual — não bloqueia o envio por padrão)';
 COMMENT ON COLUMN dp_versao_criterios.valor_se_sim IS 'Valor monetário atribuído quando resposta binária = sim';
 COMMENT ON COLUMN dp_versao_criterios.valor_se_nao IS 'Valor monetário atribuído quando resposta binária = não (padrão: 0)';
 
 -- ============================================================
--- 2. Corrigir constraint escala_obrigatoria
---    Antes: binario E escala exigiam escala_id
---    Depois: apenas escala exige escala_id
---            (binário com valor_se_sim não precisa de escala_id)
+-- 2. Corrigir constraint escala_obrigatoria em dp_versao_criterios
+--    Antes (migration 065): tipo_resposta NOT IN ('binario','escala') OR escala_id IS NOT NULL
+--    → exigia escala_id tanto para 'escala' quanto para 'binario'
+--    Depois: apenas tipo_resposta = 'escala' exige escala_id
+--    → critérios binários com valor_se_sim não precisam de escala
+--    Linhas existentes: satisfazem a nova regra (binários existentes têm escala_id=NULL e agora estão corretos)
 -- ============================================================
 
 ALTER TABLE dp_versao_criterios
@@ -39,10 +45,11 @@ ALTER TABLE dp_versao_criterios
   );
 
 -- ============================================================
--- 3. Atualizar dp_validar_versao — Regra 3
---    Remover 'binario' do grupo que exige valor_numerico nas opções
---    (binário com valor_se_sim usa os campos da própria versao_criterios)
---    Todas as demais regras preservadas exatamente como em migration 068.
+-- 3. Atualizar dp_validar_versao — apenas Regra 3 modificada
+--    Regras 1, 2, 4, 5a, 5b: idênticas à migration 068.
+--    Regra 3 antes: tipo_resposta IN ('binario','escala') exigia valor_numerico nas opções
+--    Regra 3 depois: apenas tipo_resposta = 'escala' exige valor_numerico nas opções
+--    (critérios binários com valor_se_sim usam campos da própria dp_versao_criterios)
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION dp_validar_versao(p_versao_id UUID)
@@ -75,8 +82,8 @@ BEGIN
     v_erros := v_erros || jsonb_build_object('regra', 2, 'mensagem', 'Conversao para conceito ativada sem tabela de conceito selecionada.');
   END IF;
 
-  -- Regra 3: critérios calculáveis do tipo escala precisam de valor_numerico em todas as opções
-  --          (binário com valor_se_sim usa campos próprios — não precisa de escala_id nem valor_numerico)
+  -- Regra 3: critérios calculáveis do tipo ESCALA precisam de valor_numerico em todas as opções
+  --          Critérios BINÁRIOS com valor_se_sim usam campos próprios — não exigem escala_id
   IF v_versao.tipo_calculo != 'qualitativo' THEN
     SELECT COUNT(DISTINCT vc.id) INTO v_escala_inv
     FROM dp_versao_criterios vc
@@ -125,29 +132,31 @@ END;
 $$;
 
 -- ============================================================
--- 4. Tabela dp_resultados_bonus (Opção B com segurança por banco)
---    Armazena o resultado financeiro de critérios binários Sim/Não.
---    Separada de dp_resultados para que gestores não acessem via API.
---    FK para dp_resultados.id: o resultado base deve existir primeiro.
+-- 4. Tabela dp_resultados_bonus
+--    Armazena o bônus financeiro de critérios binários Sim/Não separado
+--    de dp_resultados, garantindo que gestores não acessem via API.
+--    snapshot_criterios: rastreabilidade dos valores vigentes no cálculo.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS dp_resultados_bonus (
-  id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  resultado_id   UUID        NOT NULL UNIQUE REFERENCES dp_resultados(id) ON DELETE CASCADE,
-  valor_bonus    NUMERIC     NOT NULL CHECK (valor_bonus >= 0),
-  calculado_em   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  calculado_por  UUID        REFERENCES auth.users(id)
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  resultado_id        UUID        NOT NULL UNIQUE REFERENCES dp_resultados(id) ON DELETE CASCADE,
+  valor_bonus         NUMERIC     NOT NULL CHECK (valor_bonus >= 0),
+  snapshot_criterios  JSONB,
+  calculado_em        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  calculado_por       UUID        REFERENCES auth.users(id)
 );
 
-COMMENT ON TABLE  dp_resultados_bonus                  IS 'Resultado financeiro de critérios binários Sim/Não (Opção B). Separado de dp_resultados para controle de acesso por perfil.';
-COMMENT ON COLUMN dp_resultados_bonus.valor_bonus      IS 'Soma dos valores monetários das respostas válidas (sim/não) com valor_se_sim ou valor_se_nao configurado.';
-COMMENT ON COLUMN dp_resultados_bonus.resultado_id     IS 'FK para dp_resultados — registro base da avaliação calculada. Exclusão em cascata.';
+COMMENT ON TABLE  dp_resultados_bonus                       IS 'Resultado financeiro de critérios binários Sim/Não (Opção B). Separado de dp_resultados para controle de acesso: gestor e colaborador não acessam.';
+COMMENT ON COLUMN dp_resultados_bonus.valor_bonus           IS 'Soma dos valores monetários das respostas válidas (sim/não) com valor_se_sim ou valor_se_nao configurado.';
+COMMENT ON COLUMN dp_resultados_bonus.snapshot_criterios    IS 'Snapshot dos critérios e valores vigentes no momento do cálculo. Imutável após criação — preserva rastreabilidade se a parametrização for alterada depois.';
+COMMENT ON COLUMN dp_resultados_bonus.resultado_id          IS 'FK para dp_resultados — resultado base da avaliação. Exclusão em cascata.';
 
 -- ============================================================
 -- 5. RLS em dp_resultados_bonus
---    Apenas rh, admin e diretoria podem ler.
---    Gestor e colaborador: sem acesso por design.
---    INSERT/UPDATE/DELETE: rh e admin apenas.
+--    SELECT: rh, admin, diretoria.
+--    INSERT/UPDATE/DELETE: rh, admin.
+--    Gestor e colaborador: sem política = negado pelo RLS (retorna array vazio, não erro).
 -- ============================================================
 
 ALTER TABLE dp_resultados_bonus ENABLE ROW LEVEL SECURITY;
@@ -188,3 +197,61 @@ DO $$ BEGIN
       USING (auth_perfil() IN ('admin','rh'));
   END IF;
 END $$;
+
+-- ============================================================
+-- 5b. Remover constraint resultado_tem_valor de dp_resultados
+--     Antes: CHECK (nota_final IS NOT NULL OR conceito IS NOT NULL)
+--     Problema: impede avaliações exclusivamente monetárias
+--     (nota_final=NULL e conceito=NULL são válidos quando só há critérios binários)
+--
+--     Proteção equivalente mantida por:
+--     a) Guard no frontend: dpCalcularAvaliacao retorna cedo se nota=null
+--        AND conceito=null AND bonusTotal=null — nunca cria linha vazia
+--     b) UNIQUE em dp_resultados(avaliacao_id) impede linhas duplicadas
+--     c) Futura função RPC transacional (proposta abaixo) centralizará
+--        a validação no banco
+--
+--     Dados históricos: sem impacto — todas as linhas existentes têm
+--     nota_final ou conceito preenchidos e continuam válidas.
+-- ============================================================
+
+ALTER TABLE dp_resultados
+  DROP CONSTRAINT IF EXISTS resultado_tem_valor;
+
+-- ============================================================
+-- PROPOSTA — Função RPC transacional dp_salvar_resultado (NÃO EXECUTAR NESTA MIGRATION)
+-- Centraliza o salvamento de dp_resultados + dp_resultados_bonus em uma única transação,
+-- garantindo consistência mesmo se o cliente falhar entre os dois INSERTs.
+-- Requer autorização separada para ser implementada como migration 115.
+--
+-- CREATE OR REPLACE FUNCTION dp_salvar_resultado(
+--   p_avaliacao_id    UUID,
+--   p_nota_final      NUMERIC,
+--   p_conceito        TEXT,
+--   p_bonus_total     NUMERIC,
+--   p_snapshot        JSONB
+-- ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+-- DECLARE
+--   v_resultado_id UUID;
+-- BEGIN
+--   -- Validação: pelo menos um campo de resultado presente
+--   IF p_nota_final IS NULL AND p_conceito IS NULL AND p_bonus_total IS NULL THEN
+--     RETURN jsonb_build_object('erro', 'Sem dados suficientes para calcular resultado.');
+--   END IF;
+--   -- Upsert dp_resultados
+--   INSERT INTO dp_resultados (avaliacao_id, nota_final, conceito, calculado_em, calculado_por)
+--     VALUES (p_avaliacao_id, p_nota_final, p_conceito, now(), auth.uid())
+--   ON CONFLICT (avaliacao_id)
+--     DO UPDATE SET nota_final=EXCLUDED.nota_final, conceito=EXCLUDED.conceito, calculado_em=now(), calculado_por=auth.uid()
+--   RETURNING id INTO v_resultado_id;
+--   -- Upsert dp_resultados_bonus (apenas se há bônus)
+--   IF p_bonus_total IS NOT NULL THEN
+--     INSERT INTO dp_resultados_bonus (resultado_id, valor_bonus, snapshot_criterios, calculado_em, calculado_por)
+--       VALUES (v_resultado_id, p_bonus_total, p_snapshot, now(), auth.uid())
+--     ON CONFLICT (resultado_id)
+--       DO UPDATE SET valor_bonus=EXCLUDED.valor_bonus, snapshot_criterios=EXCLUDED.snapshot_criterios, calculado_em=now(), calculado_por=auth.uid();
+--   END IF;
+--   RETURN jsonb_build_object('ok', true, 'resultado_id', v_resultado_id);
+-- END;
+-- $$;
+-- ============================================================

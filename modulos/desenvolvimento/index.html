@@ -5453,23 +5453,19 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
     }
   }
 
-  // nota_final=0 para modelos puramente monetários — satisfaz constraint sem misturar valores financeiros
   if (nota == null && conceito == null && bonusTotal == null) { toast('Sem dados suficientes para calcular.', true); return; }
 
   // f) Salvar em dp_resultados
+  // nota_final permanece null quando o modelo tem apenas critérios monetários (sem confundir com nota zero).
+  // A constraint resultado_tem_valor será removida na migration 114 (bloco 5b) para permitir esse cenário.
   const existing = _dpResultados.find(r => r.avaliacao_id === avaliacaoId);
-  const payload = {
-    nota_final: nota ?? 0,  // 0 quando apenas critérios monetários (satisfaz constraint resultado_tem_valor)
-    conceito,
-    calculado_em: new Date().toISOString()
-  };
+  const payload = { nota_final: nota, conceito, calculado_em: new Date().toISOString() };
   let resultadoId;
   if (existing) {
     const res = await sbPatch(`/rest/v1/dp_resultados?id=eq.${existing.id}`, payload);
     if (!res) { toast('Erro ao salvar resultado: ' + sbErrMsg(), true); return; }
     resultadoId = existing.id;
   } else {
-    // sbPost usa HDR com Prefer: return=representation — retorna array com o objeto criado
     const res = await sbPost('/rest/v1/dp_resultados', { avaliacao_id: avaliacaoId, ...payload });
     if (!res || !res[0]?.id) { toast('Erro ao salvar resultado: ' + sbErrMsg(), true); return; }
     resultadoId = res[0].id;
@@ -5477,12 +5473,34 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
 
   // g) Salvar bônus monetário em tabela separada (apenas se houver critérios binários com valor)
   if (bonusTotal != null && resultadoId) {
-    const bonusPayload = { resultado_id: resultadoId, valor_bonus: bonusTotal, calculado_em: new Date().toISOString() };
+    // Snapshot dos critérios e valores vigentes no momento do cálculo — rastreabilidade histórica.
+    const snapshotCriterios = critsBonus.map(c => ({
+      criterio_id: c.id,
+      nome: c.dp_criterios?.nome || c.criterio_nome_snapshot || '',
+      valor_se_sim: c.valor_se_sim,
+      valor_se_nao: c.valor_se_nao ?? 0,
+      resposta: c.resposta_texto,
+      valor_apurado: c.valor
+    }));
+    const bonusPayload = {
+      resultado_id: resultadoId,
+      valor_bonus: bonusTotal,
+      snapshot_criterios: snapshotCriterios,
+      calculado_em: new Date().toISOString()
+    };
     const existingBonus = _dpResultadosBonus.find(b => b.resultado_id === resultadoId);
+    let bonusOk;
     if (existingBonus) {
-      await sbPatch(`/rest/v1/dp_resultados_bonus?id=eq.${existingBonus.id}`, bonusPayload);
+      bonusOk = await sbPatch(`/rest/v1/dp_resultados_bonus?id=eq.${existingBonus.id}`, bonusPayload);
     } else {
-      await sbPost('/rest/v1/dp_resultados_bonus', bonusPayload);
+      bonusOk = await sbPost('/rest/v1/dp_resultados_bonus', bonusPayload);
+    }
+    if (!bonusOk) {
+      // dp_resultados foi salvo mas dp_resultados_bonus falhou — informa sem esconder o problema.
+      // Recalcular corrige a inconsistência (guard existingBonus faz PATCH na segunda tentativa).
+      toast('Nota salva, mas bônus não pôde ser registrado. Recalcule para corrigir.', true);
+      if (rerender) await dpLoadResultados(_dpCicloAtual.id);
+      return;
     }
   }
 
