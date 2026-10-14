@@ -3705,16 +3705,20 @@ async function dpAbrirModalCiclo() {
     opt.textContent = s.nome;
     selSet.appendChild(opt);
   });
-  // Popular gestores no select de elegibilidade
+  // Popular gestores no select de elegibilidade (fonte: Parâmetros Gerais)
   const selGest = document.getElementById('dpCicloElegGestor');
-  const gestores = [...new Set(_colaboradores.map(c => c.gestor).filter(Boolean))].sort();
   selGest.innerHTML = '<option value="">— Selecione o gestor —</option>';
-  gestores.forEach(g => {
-    const opt = document.createElement('option');
-    opt.value = g;
-    opt.textContent = g;
-    selGest.appendChild(opt);
-  });
+  try {
+    const gestoresParam = await sbGet('/rest/v1/usuarios_perfil?perfil=ilike.gestor&ativo=eq.true&select=nome&order=nome.asc');
+    (gestoresParam || []).forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.nome;
+      opt.textContent = g.nome;
+      selGest.appendChild(opt);
+    });
+  } catch(e) {
+    selGest.innerHTML = '<option value="">— Erro ao carregar gestores —</option>';
+  }
   // Popular usuários com perfil gestor no select de avaliador responsável
   const selAvResp = document.getElementById('dpCicloAvaliadorResp');
   selAvResp.innerHTML = '<option value="">— Carregando... —</option>';
