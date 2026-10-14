@@ -1327,6 +1327,7 @@
         <option value="todos">Todos os colaboradores ativos</option>
         <option value="por_setor">Por setor</option>
         <option value="por_cargo">Por cargo</option>
+        <option value="por_gestor">Por gestor / equipe</option>
         <option value="por_colaborador">Colaboradores específicos</option>
       </select>
     </div>
@@ -1340,6 +1341,12 @@
       <div class="form-group" id="dpCicloElegCargoGrp" style="display:none">
         <label class="form-label">Cargo</label>
         <input class="form-input" id="dpCicloElegCargo" placeholder="Digite o cargo exato (ex: Auxiliar de Estoque)">
+      </div>
+      <div class="form-group" id="dpCicloElegGestorGrp" style="display:none">
+        <label class="form-label">Gestor</label>
+        <select class="form-input" id="dpCicloElegGestor">
+          <option value="">— Selecione o gestor —</option>
+        </select>
       </div>
       <div id="dpCicloElegColabGrp" style="display:none">
         <label class="form-label">Colaboradores</label>
@@ -1474,6 +1481,7 @@ let _dpElegColabSel    = new Set(); // ids selecionados no picker de colaborador
 let _dpAvaliacoes          = [];
 let _dpResultados          = [];
 let _dpResultadosBonus     = [];
+let _dpHistoricoCriterios  = {};
 let _dpAvaliacaoAtual      = null;
 let _dpRespostasAtual      = [];
 let _dpVersaoCritsParaForm = [];
@@ -3615,6 +3623,16 @@ function dpAbrirModalCiclo() {
     opt.textContent = s.nome;
     selSet.appendChild(opt);
   });
+  // Popular gestores no select de elegibilidade
+  const selGest = document.getElementById('dpCicloElegGestor');
+  const gestores = [...new Set(_colaboradores.map(c => c.gestor).filter(Boolean))].sort();
+  selGest.innerHTML = '<option value="">— Selecione o gestor —</option>';
+  gestores.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g;
+    opt.textContent = g;
+    selGest.appendChild(opt);
+  });
   // Limpar campos
   document.getElementById('dpCicloNome').value = '';
   document.getElementById('dpCicloInicio').value = '';
@@ -3634,11 +3652,13 @@ function dpAtualizarElegibilidade() {
   const grp = document.getElementById('dpCicloElegValorGrp');
   document.getElementById('dpCicloElegSetorGrp').style.display = 'none';
   document.getElementById('dpCicloElegCargoGrp').style.display = 'none';
+  document.getElementById('dpCicloElegGestorGrp').style.display = 'none';
   document.getElementById('dpCicloElegColabGrp').style.display = 'none';
   if (tipo === 'todos') { grp.style.display = 'none'; return; }
   grp.style.display = '';
   if (tipo === 'por_setor')        document.getElementById('dpCicloElegSetorGrp').style.display = '';
   else if (tipo === 'por_cargo')   document.getElementById('dpCicloElegCargoGrp').style.display = '';
+  else if (tipo === 'por_gestor')  document.getElementById('dpCicloElegGestorGrp').style.display = '';
   else if (tipo === 'por_colaborador') {
     document.getElementById('dpCicloElegColabGrp').style.display = '';
     dpRenderColabElegLista('');
@@ -3685,13 +3705,24 @@ async function dpSalvarCiclo() {
   const fim    = document.getElementById('dpCicloFim').value    || null;
   _dpCicloElegSetorTemp = document.getElementById('dpCicloElegSetor').value;
   _dpCicloElegCargoTemp = document.getElementById('dpCicloElegCargo').value;
+  let elegIds = null;
+  if (elegTipo === 'por_setor' && _dpCicloElegSetorTemp) {
+    elegIds = [_dpCicloElegSetorTemp];
+  } else if (elegTipo === 'por_cargo' && _dpCicloElegCargoTemp) {
+    elegIds = [_dpCicloElegCargoTemp];
+  } else if (elegTipo === 'por_gestor') {
+    const g = document.getElementById('dpCicloElegGestor').value;
+    if (g) elegIds = [g];
+  } else if (elegTipo === 'por_colaborador' && _dpElegColabSel.size) {
+    elegIds = [..._dpElegColabSel].map(String);
+  }
   const payload = {
     nome,
     versao_id: versaoId,
     tipo_avaliador_id: avaliadorId,
     status: 'rascunho',
     tipo_elegibilidade: elegTipo,
-    elegibilidade_ids: null,
+    elegibilidade_ids: elegIds,
     data_inicio: inicio,
     data_fim: fim
   };
@@ -3820,11 +3851,17 @@ async function dpGerarPreviewParticipantes() {
   if (!ciclo) return;
   const el = document.getElementById('dpParticipantesBody');
   el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
-  let colabs = await sbGet('/rest/v1/colaboradores?situacao=eq.ativo&select=id,matricula,nome,cargo,setor,empresa,unidade&order=nome.asc') || [];
-  if (ciclo.tipo_elegibilidade === 'por_setor' && _dpCicloElegSetorTemp) {
-    colabs = colabs.filter(c => (c.setor||'').toLowerCase().includes(_dpCicloElegSetorTemp.toLowerCase()));
-  } else if (ciclo.tipo_elegibilidade === 'por_cargo' && _dpCicloElegCargoTemp) {
-    colabs = colabs.filter(c => (c.cargo||'').toLowerCase().includes(_dpCicloElegCargoTemp.toLowerCase()));
+  let colabs = await sbGet('/rest/v1/colaboradores?situacao=eq.ativo&select=id,matricula,nome,cargo,setor,empresa,unidade,gestor&order=nome.asc') || [];
+  const eleg0 = (ciclo.elegibilidade_ids || [])[0] || '';
+  if (ciclo.tipo_elegibilidade === 'por_setor' && eleg0) {
+    colabs = colabs.filter(c => (c.setor||'').toLowerCase().includes(eleg0.toLowerCase()));
+  } else if (ciclo.tipo_elegibilidade === 'por_cargo' && eleg0) {
+    colabs = colabs.filter(c => (c.cargo||'').toLowerCase().includes(eleg0.toLowerCase()));
+  } else if (ciclo.tipo_elegibilidade === 'por_gestor' && eleg0) {
+    colabs = colabs.filter(c => (c.gestor||'').toLowerCase() === eleg0.toLowerCase());
+  } else if (ciclo.tipo_elegibilidade === 'por_colaborador' && (ciclo.elegibilidade_ids||[]).length) {
+    const ids = new Set((ciclo.elegibilidade_ids).map(Number));
+    colabs = colabs.filter(c => ids.has(c.id));
   }
   const jaIds = new Set(_dpParticipantes.map(p => p.colaborador_id));
   const novos = colabs.filter(c => !jaIds.has(c.id));
@@ -5025,6 +5062,23 @@ async function dpAbrirFormAvaliacao(participanteId) {
   const resps = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`);
   _dpRespostasAtual = resps || [];
 
+  // Buscar histórico da última avaliação por critério
+  _dpHistoricoCriterios = {};
+  const versaoData = await sbGet(`/rest/v1/dp_versoes?id=eq.${versaoId}&select=modelo_id`);
+  const modeloId = versaoData?.[0]?.modelo_id;
+  if (modeloId && part.colaborador_id) {
+    await Promise.all(_dpVersaoCritsParaForm.map(vc =>
+      sbRpc('dp_fn_historico_criterio', {
+        p_colaborador_id: part.colaborador_id,
+        p_criterio_id:    vc.criterio_id,
+        p_ciclo_atual_id: _dpCicloAtual.id,
+        p_modelo_id:      modeloId,
+        p_escala_id:      vc.escala_id || null,
+        p_tipo_resposta:  vc.tipo_resposta
+      }).then(r => { if (r) _dpHistoricoCriterios[vc.id] = r; }).catch(() => {})
+    ));
+  }
+
   // Preencher header
   document.getElementById('formAvalTitulo').textContent = snap.nome || '—';
   document.getElementById('formAvalSub').textContent = `${snap.cargo || '—'} · ${snap.setor || '—'}`;
@@ -5110,11 +5164,33 @@ function dpRenderFormAvaliacao() {
     }
 
     const obrig = vc.obrigatorio ? '<span style="color:var(--red);margin-left:2px">*</span>' : '';
+
+    // Histórico da última avaliação
+    const hist = _dpHistoricoCriterios[vc.id];
+    let histHtml = '';
+    if (hist) {
+      if (hist.comparavel === false) {
+        histHtml = `<div style="margin-top:6px;font-size:11px;color:var(--text-ter);font-style:italic">Sem avaliação anterior comparável</div>`;
+      } else {
+        let valorAnterior = '';
+        if (tipo === 'escala') valorAnterior = hist.escala_opcao_label != null ? `${hist.escala_opcao_label}${hist.escala_opcao_valor != null ? ` (${hist.escala_opcao_valor})` : ''}` : '';
+        else if (tipo === 'numerico' || tipo === 'numerico_com_meta') valorAnterior = hist.valor_numerico_livre != null ? `${hist.valor_numerico_livre}` : '';
+        else if (tipo === 'conceito' || tipo === 'binario') valorAnterior = hist.conceito_selecionado || '';
+        histHtml = `<div style="margin-top:8px;padding:6px 10px;background:var(--bg);border-left:2px solid var(--border);border-radius:0 6px 6px 0;font-size:11px;color:var(--text-sec)">
+          <span style="color:var(--text-ter)">Última avaliação (${hist.ciclo_nome || '—'}):</span>
+          ${valorAnterior ? ` <b>${valorAnterior}</b>` : ''}
+          ${hist.nota_final != null ? ` · nota: <b>${Number(hist.nota_final).toFixed(2)}</b>` : ''}
+          ${hist.conceito_resultado ? ` · conceito: <b>${hist.conceito_resultado}</b>` : ''}
+        </div>`;
+      }
+    }
+
     return `<div style="padding:16px 0;border-bottom:1px solid var(--border-light)">
       <div style="font-size:13px;font-weight:600;color:var(--text)">${crit.nome || '—'}${obrig}</div>
       ${crit.descricao ? `<div style="font-size:12px;color:var(--text-sec);margin-top:3px">${crit.descricao}</div>` : ''}
       ${crit.referencia ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px;font-style:italic">Esperado: ${crit.referencia}</div>` : ''}
       ${inputHtml}
+      ${histHtml}
     </div>`;
   }).join('');
 

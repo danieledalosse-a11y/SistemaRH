@@ -207,10 +207,18 @@ obrigatorio BOOLEAN DEFAULT true
 contribui_calculo BOOLEAN DEFAULT true
 obs_obrigatoria BOOLEAN DEFAULT false
 ordem INTEGER DEFAULT 1
+nota_min NUMERIC (nullable)  — orientação visual: valor mínimo de referência (migration 114)
+nota_max NUMERIC (nullable)  — orientação visual: valor máximo de referência (migration 114)
+valor_se_sim NUMERIC (nullable) — bônus monetário quando resposta = "sim" (binário; migration 114)
+valor_se_nao NUMERIC DEFAULT 0  — bônus monetário quando resposta = "não" (binário; migration 114)
 UNIQUE(versao_id, criterio_id)
+CONSTRAINT escala_obrigatoria CHECK (tipo_resposta != 'escala' OR escala_id IS NOT NULL)
 ```
 - `criterio_nome_snapshot` populado pelo trigger `trg_versao_snapshot_criterios` ao publicar
 - Bloqueado quando versao.em_uso = true (trigger)
+- `escala_obrigatoria` exige `escala_id` apenas para `tipo_resposta='escala'` — binário não precisa (migration 114)
+- `nota_min`/`nota_max` são orientação visual (borda laranja + toast não-bloqueante), sem bloquear salvamento
+- `valor_se_sim`/`valor_se_nao` + `tipo_resposta='binario'` → critério produz `resultado_bonus`, não `nota_final`
 
 ### `dp_ciclos` — ciclos de avaliação
 ```
@@ -253,10 +261,22 @@ UNIQUE(avaliacao_id, versao_criterio_id)
 
 ### `dp_resultados`
 ```
-id UUID PK, avaliacao_id UNIQUE FK, nota_final NUMERIC, conceito TEXT,
+id UUID PK, avaliacao_id UNIQUE FK, nota_final NUMERIC (nullable), conceito TEXT,
 calculado_em, calculado_por
-CHECK(nota_final IS NOT NULL OR conceito IS NOT NULL)
 ```
+- Constraint `resultado_tem_valor` **DROPADA** na migration 114 — `nota_final=NULL` é correto para modelos exclusivamente monetários
+- `nota_final=NULL + conceito=NULL` só ocorre em modelos puramente monetários (protegido pelo RPC)
+
+### `dp_resultados_bonus` — bônus monetário por critérios binários (migration 114)
+```
+id UUID PK
+resultado_id UUID UNIQUE REFERENCES dp_resultados(id) ON DELETE CASCADE
+valor_bonus NUMERIC NOT NULL CHECK (valor_bonus >= 0)
+snapshot_criterios JSONB  — [{criterio_id, nome, valor_se_sim, valor_se_nao, resposta, valor_apurado}]
+calculado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+calculado_por UUID REFERENCES auth.users(id)
+```
+**RLS:** SELECT restrito a rh/admin/diretoria; INSERT/UPDATE restrito a rh/admin. Gestor não acessa.
 
 ### Camada financeira (criada, sem UI)
 ```
@@ -284,7 +304,7 @@ detalhe JSONB, usuario_id UUID, criado_em
 | `dp_tipo_elegibilidade` | `todos`, `por_setor`, `por_cargo`, `por_colaborador` |
 | `dp_tipo_regra_financeira` | `percentual_salario`, `valor_fixo`, `por_criterio` |
 | `dp_status_resultado_financeiro` | `calculado`, `ajustado`, `aprovado`, `pago` |
-| `dp_evento_historico` | `ciclo_aberto`, `ciclo_fechado`, `avaliacao_publicada`, `resultado_calculado`, `resultado_ajustado` |
+| `dp_evento_historico` | `ciclo_aberto`, `ciclo_fechado`, `avaliacao_publicada`, `resultado_calculado`, `resultado_ajustado`, `resultado_recalculado` |
 
 **Nota:** `dp_tipo_avaliador` ENUM foi DROPADO na migration 067 — substituído pela tabela `dp_tipos_avaliador`.
 
@@ -299,10 +319,20 @@ Valida versão antes de publicar. **Regra 2 (migration 068):** verifica `tabela_
 |---|---|
 | 1 | Não-qualitativo precisa de ≥1 critério com `contribui_calculo=true` |
 | 2 | `converte_para_conceito=true` exige `tabela_conceito_id` preenchido |
-| 3 | Critérios calculáveis com escala precisam de `valor_numerico` nas opções |
+| 3 | Critérios calculáveis com **`tipo_resposta='escala'`** precisam de `valor_numerico` nas opções (migration 114: binário excluído dessa verificação) |
 | 4 | `media_ponderada` exige `peso > 0` em todos calculáveis |
 | 5a | `percentual_atingimento` exige `tipo_resposta='numerico_com_meta'` em todos calculáveis |
 | 5b | `qualitativo` proíbe `contribui_calculo=true` |
+
+### `dp_salvar_resultado(p_avaliacao_id, p_nota_final, p_conceito, p_bonus_total, p_snapshot, p_motivo_recalculo)` → JSONB (migration 114)
+RPC `SECURITY DEFINER` — único ponto de entrada para salvar resultados. Garante atomicidade.
+
+- **Acesso:** apenas `rh` e `admin` — retorna erro JSON se outro perfil chamar
+- **Upsert `dp_resultados`:** atualiza se já existe para `avaliacao_id`, insere se não
+- **Upsert `dp_resultados_bonus`:** só executa quando `p_bonus_total IS NOT NULL`
+- **Recálculo:** ao sobrescrever `dp_resultados_bonus` existente, registra snapshot anterior em `dp_historico_eventos` com `tipo='resultado_recalculado'` antes do UPDATE
+- **Validação:** rejeita quando `p_nota_final`, `p_conceito` e `p_bonus_total` são todos NULL
+- **Frontend:** chamado via `sbRpc('dp_salvar_resultado', { p_avaliacao_id, p_nota_final, p_conceito, p_bonus_total, p_snapshot, p_motivo_recalculo })`
 
 ### Triggers de imutabilidade
 - `trg_eo_proteger_em_uso` — dp_escala_opcoes
@@ -421,7 +451,7 @@ async function sbGet(path)        { ... }
 async function sbPost(path,body)  { ... }
 async function sbPatch(path,body) { ... }
 async function sbDelete(path)     { ... }
-// RPC: POST /rest/v1/rpc/<nome>
+async function sbRpc(fn, params={}) { ... }  // POST /rest/v1/rpc/<fn> — retorna null em erro, popula _sbLastError
 ```
 
 ---
@@ -609,6 +639,7 @@ CSS base (mesmo padrão nos dois):
 | `071_dp_criterios_remover_meta.sql` | DROP meta_valor, meta_unidade; DROP TABLE dp_meta_unidades | Executado |
 | `112_dp_rls.sql` | Habilita RLS nas 21 tabelas dp_*; políticas por perfil: RH/admin CRUD, diretoria SELECT, gestor sem acesso (fase 2), histórico append-only | Executado |
 | `113_dp_rls_gestor.sql` | Fase 2 RLS: função `auth_gestor_equipe_ids()` SECURITY DEFINER + 21 políticas gestor por equipe (SELECT config, CRUD operacional restrito, INSERT histórico) | Executado |
+| `114_dp_versao_criterios_range_monetario.sql` | 7 blocos + 5b: ADD colunas range/monetário em `dp_versao_criterios`; corrige `escala_obrigatoria` e `dp_validar_versao`; cria `dp_resultados_bonus` com RLS; DROP `resultado_tem_valor` em `dp_resultados`; ADD ENUM `resultado_recalculado`; cria RPC `dp_salvar_resultado` | **Executado** |
 
 ---
 
@@ -664,6 +695,7 @@ let _dpVersaoCritsParaForm  // critérios da versão para o formulário
 
 // Resultados (Etapa 3)
 let _dpResultados       // [{ id, avaliacao_id, nota_final, conceito, calculado_em }]
+let _dpResultadosBonus  // [{ id, resultado_id, valor_bonus, snapshot_criterios, calculado_em }] — rh/admin/diretoria only
 ```
 
 ## Funções novas — Etapas 2, 3, 5, 6
@@ -684,12 +716,17 @@ let _dpResultados       // [{ id, avaliacao_id, nota_final, conceito, calculado_
 ### Etapa 3 — Cálculo
 | Função | O que faz |
 |---|---|
-| `dpLoadResultados(cicloId)` | GET dp_resultados filtrando pelos ids das avaliações do ciclo |
-| `dpRenderResultados()` | Toolbar com contador + botões; card por participante com badge + nota + conceito |
+| `dpLoadResultados(cicloId)` | GET `dp_resultados` filtrando pelos ids das avaliações do ciclo; GET `dp_resultados_bonus` filtrando pelos resultado_ids obtidos |
+| `dpRenderResultados()` | Toolbar com contador + botões; card por participante com badge + nota (quando `nota_final != null`) + conceito + bônus (de `_dpResultadosBonus`) |
 | `dpCalcularTodos()` | Promise.all de dpCalcularAvaliacao para todas concluídas sem resultado |
-| `dpCalcularAvaliacao(avaliacaoId)` | Busca versão+critérios+respostas; aplica tipo_calculo; converte conceito; POST/PATCH dp_resultados |
+| `dpCalcularAvaliacao(avaliacaoId)` | Busca versão+critérios+respostas; separa critsNota e critsBonus (Opção B); aplica tipo_calculo nos critsNota; salva via RPC `dp_salvar_resultado` |
 
-**Lógica de tipo_calculo:** soma · media · media_ponderada (usa `peso`) · percentual_atingimento (media simples — meta removida em 071) · qualitativo (nota=null, conceito da resposta de texto)
+**Lógica de tipo_calculo:** soma · media · media_ponderada (usa `peso`) · percentual_atingimento · qualitativo (nota=null)
+
+**Opção B — separação critérios binários monetários:**
+- `critsBonus`: `tipo_resposta='binario' AND valor_se_sim IS NOT NULL` → `bonusTotal`, gravado em `dp_resultados_bonus`
+- `critsNota`: todos os demais → `nota_final` (null quando só há critsBonus)
+- Os dois resultados são independentes — sem soma automática entre nota e bônus
 
 ### Etapa 5 — Análise e Fechamento
 | Função | O que faz |
@@ -753,12 +790,25 @@ Div `id="dvStatusBar"` posicionada entre metadados do header e as abas do drawer
 
 | Item | Prioridade | Detalhe |
 |---|---|---|
-| **Primeiro ciclo real** | Alta | RH deve: (1) publicar v1 do modelo; (2) criar ciclo em Ciclos; (3) adicionar participantes da equipe Oriel no drawer; (4) mudar status para "aberto" |
-| Testes funcionais Gestor (Oriel) | Alta | Depende do primeiro ciclo real estar aberto com participantes |
+| **Primeiro ciclo real** | Alta | RH deve: (1) publicar v1 do modelo; (2) criar ciclo em Ciclos; (3) adicionar participantes; (4) mudar status para "aberto" |
+| Testes funcionais com dados reais | Alta | Depende do primeiro ciclo real estar aberto com participantes |
 | `param_setor` populado | Média | Pré-requisito para elegibilidade por setor |
-| Camada financeira UI (Etapa 4) | Baixa | dp_regras_financeiras — pulada |
+| **Histórico de avaliações — Caminho 1** | Média | Aba "Histórico por Colaborador" no D&P (entre ciclos) — frontend only, sem migration |
+| **Histórico de avaliações — Caminho 2** | Média | Registro em `historico_eventos` do cadastro; exige novo `tipo_evento` + ajuste no RPC; decisões A/B/C pendentes de aprovação |
+| `nota_range_obrigatorio` toggle | Baixa | Futura migration para bloqueio obrigatório de range (hoje é apenas orientativo) |
+| Camada financeira UI (Etapa 4 / Fase 5) | Baixa | dp_regras_financeiras por faixas — arquitetura planejada, não iniciada |
 | PDI V2 vinculado a dp_ciclo_participantes | Baixa | Fase futura |
 | DROP tabelas dev_* | Baixa | Pós-migração completa |
+
+## Decisões abertas — Histórico de avaliações na Ficha do Colaborador
+
+Antes de implementar o Caminho 2 (integração com `historico_eventos`), confirmar:
+
+| # | Questão | Impacto |
+|---|---|---|
+| **A** | A ficha deve mostrar apenas "avaliação concluída" (evento simples) ou também nota/conceito? | Define `titulo`/`resumo` gravados em `historico_eventos` |
+| **B** | Gestor consegue ver o evento de avaliação na ficha do colaborador (Cadastro)? | Define RLS de SELECT em `historico_eventos` para esse tipo |
+| **C** | Recálculo gera novo evento na ficha ("Avaliação D&P recalculada") ou só o evento original permanece? | Define se o RPC grava segundo evento em recálculos |
 
 ---
 
