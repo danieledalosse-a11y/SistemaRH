@@ -1030,8 +1030,9 @@
   </div>
   <div class="drawer-tabs">
     <button class="drawer-tab active" onclick="showDvTab('criterios',this)">Critérios</button>
-    <button class="drawer-tab" onclick="showDvTab('configs',this)">Configurações</button>
+    <button class="drawer-tab" onclick="showDvTab('configs',this)">Configurações de cálculo</button>
   </div>
+  <div id="dvStatusBar" style="display:none;margin:0 0 0 0;padding:10px 14px;font-size:13px;border-left-width:3px;border-left-style:solid"></div>
   <div class="drawer-body">
     <div id="dvtab-criterios" class="drawer-sec active">
       <div id="dvCriteriosBody"><div class="loader"><div class="spinner"></div></div></div>
@@ -1042,6 +1043,7 @@
   </div>
   <div class="drawer-footer">
     <div id="dvValidacaoInline" style="flex:1;min-width:0;"></div>
+    <span id="dvPublicarHint" style="font-size:11px;color:var(--text-ter)">Após publicar, a versão não poderá ser editada.</span>
     <button class="btn btn-primary" id="btnDvVerificarPublicar" onclick="verificarEPublicar()">Verificar e publicar →</button>
     <button class="btn btn-secondary" onclick="fecharDrawerVersao()">Fechar</button>
   </div>
@@ -2765,15 +2767,16 @@ async function renderModelos() {
           const statusBadge = pub
             ? `<span class="sbadge sbadge-green"><span class="sbadge-dot"></span>Publicada</span>`
             : `<span class="sbadge sbadge-gray"><span class="sbadge-dot"></span>Rascunho</span>`;
+          const rascunhoHint = !pub ? ` <span style="font-size:11px;color:var(--text-ter)">— configure os critérios antes de publicar</span>` : '';
           const btns = pub
             ? `<button class="btn btn-secondary btn-sm" onclick="abrirDrawerVersao('${v.id}',true)">Ver</button>
                <button class="btn btn-secondary btn-sm" onclick="novaVersaoBaseada('${v.id}')">Nova versão</button>`
             : `<button class="btn btn-secondary btn-sm" onclick="abrirDrawerVersao('${v.id}',false)">Configurar</button>
-               <button class="btn btn-primary btn-sm" onclick="publicarVersaoDirecto('${v.id}')">Publicar</button>`;
+               <button class="btn btn-secondary btn-sm" onclick="publicarVersaoDirecto('${v.id}')">Publicar</button>`;
           return `<div class="row-version-item">
             <span class="row-version-num">v${v.numero||'?'}</span>
-            <span class="row-version-meta">${CALC_LABEL[v.tipo_calculo]||v.tipo_calculo||'—'}</span>
-            ${statusBadge}
+            <span class="row-version-meta">Cálculo: ${CALC_LABEL[v.tipo_calculo]||v.tipo_calculo||'—'}</span>
+            ${statusBadge}${rascunhoHint}
             <div class="row-version-actions">${btns}</div>
           </div>`;
         }).join('')
@@ -2793,7 +2796,15 @@ async function renderModelos() {
   }
   const ativos = visíveis.filter(m => m.ativo);
   const inativos = visíveis.filter(m => !m.ativo);
+  const todasVersoesList = Object.values(_dpVersoes).flat();
+  const temPublicada = todasVersoesList.some(v => v.em_uso);
   let html = '';
+  if (!temPublicada && todasVersoesList.length > 0) {
+    html += `<div style="background:var(--amber-bg,#FFFBEB);border:1px solid rgba(247,144,9,0.3);border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400E">
+      <strong>Sequência para colocar o modelo em uso:</strong>&nbsp;&nbsp;
+      ① Criar o modelo &nbsp;② Configurar critérios e cálculo &nbsp;③ Verificar e publicar
+    </div>`;
+  }
   if (ativos.length) {
     html += `<div class="section-header"><span class="section-title">Ativos</span><span class="section-count">${ativos.length}</span></div>`;
     html += ativos.map(renderModelo).join('');
@@ -2920,6 +2931,7 @@ async function abrirDrawerVersao(versaoId, readonly) {
   document.querySelectorAll('#drawerVersao .drawer-sec').forEach((s,i) => s.classList.toggle('active', i===0));
   renderVersaoCriterios();
   renderVersaoConfigs();
+  atualizarStatusBarVersao();
   document.getElementById('drawerVersaoOverlay').classList.add('open');
   document.getElementById('drawerVersao').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -2965,7 +2977,7 @@ function renderVersaoCriterios() {
     return `<tr data-crit-id="${c.id}">
       <td style="font-size:13px;font-weight:500;min-width:140px">${nome}</td>
       <td>${tipoSelect}</td>
-      <td>${escalaSelect}</td>
+      <td class="col-escala">${escalaSelect}</td>
       <td ${showPeso?'':'style="display:none"'}><input class="crit-input-sm" type="number" min="0" step="0.1" value="${c.peso!=null?c.peso:1}" ${readonly?'disabled':''} onchange="setCritField('${c.id}','peso',parseFloat(this.value)||1)"></td>
       <td style="text-align:center"><input type="checkbox" class="crit-cb" ${c.obrigatorio?'checked':''} ${readonly?'disabled':''} onchange="setCritField('${c.id}','obrigatorio',this.checked)"></td>
       <td style="text-align:center"><input type="checkbox" class="crit-cb" ${(c.contribui_calculo&&!noCalc)?'checked':''} ${(readonly||noCalc)?'disabled':''} onchange="setCritField('${c.id}','contribui_calculo',this.checked)"></td>
@@ -2977,7 +2989,7 @@ function renderVersaoCriterios() {
     if (!crits.length) return `<div style="font-size:12px;color:var(--text-ter);padding:12px 0">Nenhum critério neste bloco.</div>`;
     return `<div style="overflow-x:auto"><table class="crit-table">
       <thead><tr>
-        <th>Critério</th><th>Como avaliar</th><th>Escala de notas</th>
+        <th>Critério</th><th>Como avaliar</th><th class="col-escala">Escala de notas</th>
         <th ${showPeso?'':'style="display:none"'}>Peso</th>
         <th>Obrigatório</th><th>Conta na nota</th><th></th>
       </tr></thead>
@@ -3012,8 +3024,42 @@ function renderVersaoCriterios() {
       ${!readonly?`<div style="margin-top:10px"><button class="btn btn-secondary btn-sm" onclick="abrirModalCriterio(null)">+ Adicionar critério</button></div>`:''}
     </div>`;
   }
-  if (!readonly) html += `<div style="margin-top:16px"><button class="btn btn-secondary btn-sm" onclick="adicionarBloco()">+ Novo bloco</button></div>`;
+  if (!readonly) html += `<div style="margin-top:16px"><button class="btn btn-secondary btn-sm" onclick="adicionarBloco()">+ Novo bloco <span style="font-size:11px;color:var(--text-ter);font-weight:400">(agrupar critérios por tema)</span></button></div>`;
   el.innerHTML = html;
+  // Ocultar coluna Escala de notas se não houver critério do tipo escala
+  const hasEscala = (_dpVersaoCrits||[]).some(c => c.tipo_resposta === 'escala');
+  document.querySelectorAll('#drawerVersao .col-escala').forEach(el2 => el2.style.display = hasEscala ? '' : 'none');
+  atualizarStatusBarVersao();
+}
+
+function atualizarStatusBarVersao() {
+  const bar = document.getElementById('dvStatusBar');
+  const hint = document.getElementById('dvPublicarHint');
+  if (!bar || !_dpVersaoAtual) return;
+  const pub = _dpVersaoAtual.em_uso;
+  if (pub) {
+    bar.style.display = 'block';
+    bar.style.background = '#ECFDF3';
+    bar.style.borderLeftColor = 'var(--green)';
+    bar.style.color = '#065F46';
+    bar.innerHTML = 'Versão publicada. Para alterar, crie uma nova versão a partir desta.';
+    if (hint) hint.style.display = 'none';
+  } else {
+    const temCrits = (_dpVersaoCrits||[]).length > 0;
+    bar.style.display = 'block';
+    if (temCrits) {
+      bar.style.background = 'var(--amber-bg,#FFFBEB)';
+      bar.style.borderLeftColor = 'var(--amber)';
+      bar.style.color = '#92400E';
+      bar.innerHTML = 'Versão em rascunho. Confirme os critérios e as configurações e clique em <strong>Verificar e publicar</strong>.';
+    } else {
+      bar.style.background = '#FEF2F2';
+      bar.style.borderLeftColor = '#DC2626';
+      bar.style.color = '#991B1B';
+      bar.innerHTML = 'Adicione pelo menos um critério antes de publicar.';
+    }
+    if (hint) hint.style.display = '';
+  }
 }
 
 function renderVersaoConfigs() {
