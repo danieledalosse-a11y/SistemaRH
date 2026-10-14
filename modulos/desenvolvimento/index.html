@@ -1341,6 +1341,13 @@
         <option value="">— Selecione —</option>
       </select>
     </div>
+    <div class="form-group">
+      <label class="form-label">Avaliador responsável *</label>
+      <select class="form-input" id="dpCicloAvaliadorResp">
+        <option value="">— Selecione o gestor responsável —</option>
+      </select>
+      <div style="font-size:11px;color:var(--text-ter);margin-top:4px">Usuário do sistema que conduzirá as avaliações deste ciclo.</div>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Data início</label>
@@ -3667,7 +3674,7 @@ function _dpCicloModeloNome(versaoId) {
   return '—';
 }
 
-function dpAbrirModalCiclo() {
+async function dpAbrirModalCiclo() {
   // Popular versões publicadas
   const sel = document.getElementById('dpCicloVersao');
   sel.innerHTML = '<option value="">— Selecione uma versão publicada —</option>';
@@ -3708,6 +3715,21 @@ function dpAbrirModalCiclo() {
     opt.textContent = g;
     selGest.appendChild(opt);
   });
+  // Popular usuários com perfil gestor no select de avaliador responsável
+  const selAvResp = document.getElementById('dpCicloAvaliadorResp');
+  selAvResp.innerHTML = '<option value="">— Carregando... —</option>';
+  try {
+    const usuarios = await sbGet('/rest/v1/usuarios_perfil?perfil=eq.gestor&ativo=eq.true&select=user_id,nome&order=nome.asc');
+    selAvResp.innerHTML = '<option value="">— Selecione o gestor responsável —</option>';
+    (usuarios || []).forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.user_id;
+      opt.textContent = u.nome;
+      selAvResp.appendChild(opt);
+    });
+  } catch(e) {
+    selAvResp.innerHTML = '<option value="">— Erro ao carregar gestores —</option>';
+  }
   // Limpar campos
   document.getElementById('dpCicloNome').value = '';
   document.getElementById('dpCicloInicio').value = '';
@@ -3781,10 +3803,12 @@ let _dpCicloElegCargoTemp = '';
 async function dpSalvarCiclo() {
   const nome = document.getElementById('dpCicloNome').value.trim();
   const versaoId = document.getElementById('dpCicloVersao').value;
-  const avaliadorId = document.getElementById('dpCicloAvaliador').value;
-  if (!nome)       { toast('Informe o nome do ciclo.', true); return; }
-  if (!versaoId)   { toast('Selecione uma versão publicada.', true); return; }
-  if (!avaliadorId){ toast('Selecione o tipo de avaliador.', true); return; }
+  const avaliadorId     = document.getElementById('dpCicloAvaliador').value;
+  const avaliadorRespId = document.getElementById('dpCicloAvaliadorResp').value;
+  if (!nome)           { toast('Informe o nome do ciclo.', true); return; }
+  if (!versaoId)       { toast('Selecione uma versão publicada.', true); return; }
+  if (!avaliadorId)    { toast('Selecione o tipo de avaliador.', true); return; }
+  if (!avaliadorRespId){ toast('Selecione o avaliador responsável.', true); return; }
   const elegTipo = document.getElementById('dpCicloElegTipo').value;
   const inicio = document.getElementById('dpCicloInicio').value || null;
   const fim    = document.getElementById('dpCicloFim').value    || null;
@@ -3805,6 +3829,7 @@ async function dpSalvarCiclo() {
     nome,
     versao_id: versaoId,
     tipo_avaliador_id: avaliadorId,
+    avaliador_id: avaliadorRespId,
     status: 'rascunho',
     tipo_elegibilidade: elegTipo,
     elegibilidade_ids: elegIds,
@@ -5125,11 +5150,12 @@ async function dpAbrirFormAvaliacao(participanteId) {
   let aval = _dpAvaliacoes.find(a => a.participante_id === part.id || a.colaborador_id === part.colaborador_id);
   if (!aval) {
     const res = await sbPost('/rest/v1/dp_avaliacoes', {
-      ciclo_id:         _dpCicloAtual.id,
-      participante_id:  part.id,
-      colaborador_id:   part.colaborador_id,
+      ciclo_id:          _dpCicloAtual.id,
+      participante_id:   part.id,
+      colaborador_id:    part.colaborador_id,
       tipo_avaliador_id: _dpCicloAtual.tipo_avaliador_id,
-      status:           'nao_iniciada'
+      avaliador_id:      _dpCicloAtual.avaliador_id || null,
+      status:            'nao_iniciada'
     });
     if (!res || !res[0]) { toast('Erro ao criar avaliação: ' + sbErrMsg(), true); return; }
     aval = res[0];
