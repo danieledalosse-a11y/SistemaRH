@@ -249,6 +249,8 @@
   .form-input:focus { outline: none; border-color: var(--accent); }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .modal-overlay.dragging { align-items: flex-start; justify-content: flex-start; }
+  .modal-overlay.dragging > .modal { position: absolute; }
 
   /* ── loader ── */
   .loader { display: flex; align-items: center; justify-content: center; padding: 48px; }
@@ -1230,8 +1232,8 @@
 
 <!-- ══ MODAL: SELECIONAR CRITÉRIO ══ -->
 <div class="modal-overlay" id="modalSelecionarCriterio">
-  <div class="modal">
-    <div class="modal-title">Adicionar Critério</div>
+  <div class="modal" id="modalSelecionarCriterioPanel">
+    <div class="modal-title" id="modalSelecionarCriterioHandle" style="cursor:move;user-select:none;">Adicionar Critério</div>
     <div class="modal-sub">Selecione da biblioteca para adicionar à versão.</div>
     <div class="search-box" style="margin-bottom:12px;max-width:100%">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -3157,8 +3159,48 @@ function abrirModalCriterio(blocoId) {
   _dpBlocoAlvoId = blocoId;
   document.getElementById('criterioSearchInput').value = '';
   renderCriterioPickerList();
-  document.getElementById('modalSelecionarCriterio').classList.add('open');
+  const overlay = document.getElementById('modalSelecionarCriterio');
+  const panel = document.getElementById('modalSelecionarCriterioPanel');
+  overlay.classList.remove('dragging');
+  panel.style.left = '';
+  panel.style.top = '';
+  overlay.classList.add('open');
 }
+
+(function initCriterioModalDrag() {
+  let dragging = false, startX, startY, origLeft, origTop;
+  document.addEventListener('DOMContentLoaded', () => {
+    const handle  = document.getElementById('modalSelecionarCriterioHandle');
+    const overlay = document.getElementById('modalSelecionarCriterio');
+    const panel   = document.getElementById('modalSelecionarCriterioPanel');
+    if (!handle) return;
+    handle.addEventListener('mousedown', e => {
+      if (!overlay.classList.contains('open')) return;
+      if (!overlay.classList.contains('dragging')) {
+        const r = panel.getBoundingClientRect();
+        overlay.classList.add('dragging');
+        panel.style.left = r.left + 'px';
+        panel.style.top  = r.top  + 'px';
+      }
+      dragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      origLeft = parseFloat(panel.style.left) || 0;
+      origTop  = parseFloat(panel.style.top)  || 0;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const maxL = window.innerWidth  - panel.offsetWidth;
+      const maxT = window.innerHeight - panel.offsetHeight;
+      panel.style.left = Math.min(Math.max(0, origLeft + dx), maxL) + 'px';
+      panel.style.top  = Math.min(Math.max(0, origTop  + dy), maxT) + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+  });
+})();
 
 function renderCriterioPickerList() {
   const q = (document.getElementById('criterioSearchInput').value||'').toLowerCase();
