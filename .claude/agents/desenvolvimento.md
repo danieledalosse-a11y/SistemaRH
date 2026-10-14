@@ -603,14 +603,13 @@ CSS base (mesmo padrão nos dois):
 | `065_desenvolvimento_performance_v1.sql` | Motor D&P completo + migração dev_competencias → dp_criterios | Executado |
 | `066_dp_desabilitar_rls.sql` | Desabilitar RLS nas tabelas dp_* | Executado |
 | `067_dp_parametrizacao_v1.sql` | dp_tipos_avaliador, dp_tipos_calculo_config, dp_tabelas_conceito, dp_faixas_conceito, criterio_nome_snapshot, elegibilidade → dp_ciclos, DROP ENUM dp_tipo_avaliador | Executado |
-| `068_dp_corrigir_validar_versao.sql` | Corrige dp_validar_versao regra 2: tabela_conceito_id IS NULL | **PENDENTE** |
+| `068_dp_corrigir_validar_versao.sql` | Corrige dp_validar_versao regra 2: tabela_conceito_id IS NULL | Executado |
 | `069_dp_criterios_na_biblioteca.sql` | ADD COLUMN na_biblioteca BOOLEAN; UPDATE seed → false | Executado |
 | `070_dp_criterios_referencia_meta.sql` | ADD COLUMN referencia, meta_valor, meta_unidade; CREATE dp_meta_unidades | Executado (revertido em 071) |
 | `071_dp_criterios_remover_meta.sql` | DROP meta_valor, meta_unidade; DROP TABLE dp_meta_unidades | Executado |
+| `112_dp_rls.sql` | Habilita RLS nas 21 tabelas dp_*; políticas por perfil: RH/admin CRUD, diretoria SELECT, gestor sem acesso (fase 2), histórico append-only | Executado |
 
-**Próxima migration:** `072_dp_...`
-
-**Migration 068 pendente:** SQL pronto em `migrations/068_dp_corrigir_validar_versao.sql`. Executar antes de usar `converte_para_conceito` na UI.
+**Próxima migration:** `113_dp_...`
 
 ---
 
@@ -716,10 +715,8 @@ let _dpResultados       // [{ id, avaliacao_id, nota_final, conceito, calculado_
 
 | Item | Prioridade | Detalhe |
 |---|---|---|
-| **Executar migration 068** | Alta | Corrige `dp_validar_versao` regra 2 — necessário antes de usar `converte_para_conceito` |
 | **`param_setor` populado** | Alta | Pré-requisito para testar elegibilidade por setor no ciclo |
-| RLS nas tabelas dp_* | Alta | Obrigatório antes de abrir visão do gestor |
-| Visão do gestor — "meu ciclo" | Alta | Fase futura |
+| Visão do gestor — "meu ciclo" | Alta | Fase futura — RLS já preparado (migration 112); adicionar políticas por equipe via `colaboradores.gestor` |
 | Camada financeira UI (Etapa 4) | Baixa | dp_regras_financeiras — pulada |
 | PDI V2 vinculado a dp_ciclo_participantes | Baixa | Fase futura |
 | DROP tabelas dev_* | Baixa | Pós-migração completa |

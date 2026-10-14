@@ -650,12 +650,13 @@
 
 <!-- Tabs -->
 <div class="mod-tabs">
-  <button class="mod-tab active" onclick="showSec('colaboradores',this)">Colaboradores</button>
-  <button class="mod-tab" onclick="showSec('ciclos',this)">Ciclos de Avaliação</button>
-  <button class="mod-tab" onclick="showSec('avaliacoes',this)">Avaliações</button>
-  <button class="mod-tab" onclick="showSec('modelos',this)">Modelos</button>
-  <button class="mod-tab" onclick="showSec('competencias',this)">Competências</button>
-  <button class="mod-tab" onclick="showSec('configuracoes',this)">Configurações D&amp;P</button>
+  <button class="mod-tab active" onclick="showSec('colaboradores',this)" data-rh-only>Colaboradores</button>
+  <button class="mod-tab" onclick="showSec('ciclos',this)" data-rh-only>Ciclos de Avaliação</button>
+  <button class="mod-tab" onclick="showSec('avaliacoes',this)" data-rh-only>Avaliações</button>
+  <button class="mod-tab" onclick="showSec('modelos',this)" data-rh-only>Modelos</button>
+  <button class="mod-tab" onclick="showSec('competencias',this)" data-rh-only>Competências</button>
+  <button class="mod-tab" onclick="showSec('configuracoes',this)" data-rh-only>Configurações D&amp;P</button>
+  <button class="mod-tab" id="tabGestorDP" onclick="showSec('gestor-dp',this)" style="display:none">Minha Equipe</button>
 </div>
 
 <div class="container">
@@ -915,7 +916,41 @@
     </div>
   </div>
 
+  <!-- ══ SEC: GESTOR D&P ══ -->
+  <div id="sec-gestor-dp" class="sec">
+    <div class="toolbar">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:600;margin-bottom:2px">Minha Equipe — Avaliações</div>
+        <div style="font-size:13px;color:var(--text-sec)">Ciclos disponibilizados pelo RH para sua equipe.</div>
+      </div>
+    </div>
+    <div id="gestorDpBody"><div class="loader"><div class="spinner"></div></div></div>
+  </div>
+
 </div><!-- /container -->
+
+<!-- ══ DRAWER: GESTOR D&P ══ -->
+<div class="wiz-overlay" id="gestorDpDrawerOverlay" onclick="if(event.target===this)gestorDpFecharDrawer()">
+  <div class="wiz-container" id="gestorDpDrawerPanel" style="width:820px;max-width:96vw">
+    <div class="wiz-header">
+      <div class="wiz-header-left">
+        <div class="wiz-step-title" id="gestorDpDrawerTitulo"></div>
+        <div class="wiz-step-sub" id="gestorDpDrawerSub"></div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="gestorDpFecharDrawer()" style="margin-left:16px;flex-shrink:0">Fechar</button>
+    </div>
+    <div class="drawer-tabs" style="padding:0 24px;border-bottom:1px solid var(--border);display:flex;gap:4px">
+      <button class="drawer-tab active" id="gdptab-btn-participantes" onclick="gestorDpShowTab('participantes',this)">Participantes</button>
+      <button class="drawer-tab" id="gdptab-btn-avaliacoes" onclick="gestorDpShowTab('avaliacoes',this)">Avaliações</button>
+      <button class="drawer-tab" id="gdptab-btn-resultados" onclick="gestorDpShowTab('resultados',this)">Resultados</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:20px 24px">
+      <div id="gdptab-participantes"></div>
+      <div id="gdptab-avaliacoes" style="display:none"></div>
+      <div id="gdptab-resultados" style="display:none"></div>
+    </div>
+  </div>
+</div>
 
 <!-- ══ DRAWER: COLABORADOR ══ -->
 <div class="drawer-overlay" id="drawerOverlay" onclick="fecharDrawer()"></div>
@@ -1445,6 +1480,7 @@ function showSec(id, btn) {
   if (id === 'modelos')         renderModelos();
   if (id === 'configuracoes')   renderConfiguracoes();
   if (id === 'avaliacoes')      dpRenderCiclos();
+  if (id === 'gestor-dp')      gestorDpLoadCiclos();
 }
 function showDrawerTab(id, btn) {
   document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
@@ -1462,6 +1498,27 @@ function showDrawerTab(id, btn) {
 ───────────────────────────────────────────── */
 async function init() {
   initAuth();
+
+  const isGestor = _perfil === 'gestor';
+
+  // Tabs visíveis por perfil
+  document.querySelectorAll('[data-rh-only]').forEach(el => {
+    el.style.display = isGestor ? 'none' : '';
+  });
+  const tabGestor = document.getElementById('tabGestorDP');
+  if (tabGestor) tabGestor.style.display = isGestor ? '' : 'none';
+
+  if (isGestor) {
+    // Gestor: carrega somente o necessário para a visão da equipe
+    await initDpGestor();
+    // Ativa a aba "Minha Equipe" e esconde as demais seções
+    document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+    const secGestor = document.getElementById('sec-gestor-dp');
+    if (secGestor) secGestor.classList.add('active');
+    if (tabGestor) tabGestor.classList.add('active');
+    return;
+  }
+
   await Promise.all([
     loadColaboradores(),
     loadCiclos(),
@@ -5416,6 +5473,217 @@ init();
     </div>
   </div>
 </div>
+
+<!-- ══ GESTOR D&P: FUNÇÕES ══ -->
+<script>
+/* ─── estado gestor D&P ─────────────────────────────────────── */
+let _gdpCicloAtual      = null;
+let _gdpParticipantes   = [];
+let _gdpAvaliacoes      = [];
+let _gdpResultados      = [];
+let _gdpTipoGestorId    = null; // id de dp_tipos_avaliador onde codigo='gestor_direto'
+
+/* ─── init ──────────────────────────────────────────────────── */
+async function initDpGestor() {
+  // Resolve o id do tipo avaliador gestor_direto uma vez
+  if (!_gdpTipoGestorId) {
+    const tipos = _dpTiposAvaliador.length ? _dpTiposAvaliador
+      : (await sbGet('/rest/v1/dp_tipos_avaliador?select=id,codigo') || []);
+    const t = tipos.find(x => x.codigo === 'gestor_direto');
+    _gdpTipoGestorId = t?.id || null;
+  }
+  await gestorDpLoadCiclos();
+}
+
+/* ─── carregar ciclos da equipe ─────────────────────────────── */
+async function gestorDpLoadCiclos() {
+  const body = document.getElementById('gestorDpBody');
+  if (body) body.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  try {
+    const ciclos = await sbGet('/rest/v1/dp_ciclos?status=in.(aberto,em_andamento)&order=criado_em.desc&select=*,dp_versoes(id,versao,tipo_calculo,converte_para_conceito,tabela_conceito_id,tipo_avaliador_id),dp_ciclo_participantes(id,colaborador_id)');
+    gestorDpRenderCiclos(ciclos || []);
+  } catch(e) {
+    if (body) body.innerHTML = '<div class="empty-state"><p>Erro ao carregar ciclos.</p></div>';
+  }
+}
+
+/* ─── renderizar lista de ciclos ────────────────────────────── */
+function gestorDpRenderCiclos(ciclos) {
+  const body = document.getElementById('gestorDpBody');
+  if (!body) return;
+  if (!ciclos.length) {
+    body.innerHTML = '<div class="empty-state"><p>Nenhum ciclo de avaliação aberto para sua equipe no momento.</p></div>';
+    return;
+  }
+  body.innerHTML = ciclos.map(c => {
+    const versaoLabel = c.dp_versoes ? `Versão ${c.dp_versoes.versao}` : '—';
+    const partCount = (c.dp_ciclo_participantes || []).length;
+    const statusLabel = c.status === 'aberto' ? 'Aberto' : 'Em andamento';
+    const cor = c.status === 'aberto' ? '#2563EB' : '#D97706';
+    return `
+      <div class="row-card" style="cursor:pointer;margin-bottom:8px" onclick="gestorDpAbrirDrawer('${c.id}')">
+        <div class="row-icon" style="background:${cor}22;color:${cor}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+        </div>
+        <div class="row-info" style="flex:1">
+          <div class="row-name">${c.nome}</div>
+          <div class="row-meta">${versaoLabel} · ${partCount} participante${partCount!==1?'s':''} da equipe</div>
+        </div>
+        <div><span class="sbadge ${c.status==='aberto'?'sbadge-blue':'sbadge-amber'}">${statusLabel}</span></div>
+      </div>`;
+  }).join('');
+}
+
+/* ─── abrir drawer do ciclo ─────────────────────────────────── */
+async function gestorDpAbrirDrawer(cicloId) {
+  const ciclo = await sbGet(`/rest/v1/dp_ciclos?id=eq.${cicloId}&select=*,dp_versoes(*)`);
+  if (!ciclo || !ciclo[0]) { toast('Ciclo não encontrado.', true); return; }
+  _gdpCicloAtual = { ...ciclo[0], versao: ciclo[0].dp_versoes };
+
+  document.getElementById('gestorDpDrawerTitulo').textContent = _gdpCicloAtual.nome;
+  document.getElementById('gestorDpDrawerSub').textContent =
+    `Versão ${_gdpCicloAtual.versao?.versao || '—'} · ${_gdpCicloAtual.status}`;
+
+  // Pré-carrega participantes e avaliações
+  _gdpParticipantes = await sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=eq.${cicloId}&select=*`) || [];
+  _gdpAvaliacoes    = await sbGet(`/rest/v1/dp_avaliacoes?ciclo_id=eq.${cicloId}&select=*`) || [];
+  _gdpResultados    = [];
+
+  // Seta _dpCicloAtual para o motor de avaliação reutilizável
+  _dpCicloAtual      = _gdpCicloAtual;
+  _dpParticipantes   = _gdpParticipantes;
+  _dpAvaliacoes      = _gdpAvaliacoes;
+
+  gestorDpShowTab('participantes', document.getElementById('gdptab-btn-participantes'));
+  document.getElementById('gestorDpDrawerOverlay').classList.add('open');
+}
+
+function gestorDpFecharDrawer() {
+  document.getElementById('gestorDpDrawerOverlay').classList.remove('open');
+  _gdpCicloAtual    = null;
+  _dpCicloAtual     = null;
+  _dpParticipantes  = [];
+  _dpAvaliacoes     = [];
+}
+
+/* ─── trocar aba do drawer ──────────────────────────────────── */
+function gestorDpShowTab(id, btn) {
+  ['participantes','avaliacoes','resultados'].forEach(t => {
+    document.getElementById('gdptab-'+t).style.display = t===id ? '' : 'none';
+    const b = document.getElementById('gdptab-btn-'+t);
+    if (b) b.classList.toggle('active', t===id);
+  });
+  if (id === 'participantes') gestorDpRenderParticipantes();
+  if (id === 'avaliacoes')    gestorDpRenderAvaliacoes();
+  if (id === 'resultados')    gestorDpLoadResultados();
+}
+
+/* ─── aba Participantes (somente leitura) ───────────────────── */
+function gestorDpRenderParticipantes() {
+  const el = document.getElementById('gdptab-participantes');
+  if (!el) return;
+  if (!_gdpParticipantes.length) {
+    el.innerHTML = '<div class="empty-state"><p>Nenhum participante da sua equipe neste ciclo.</p></div>';
+    return;
+  }
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:1px solid var(--border)">
+        <th style="text-align:left;padding:6px 8px;color:var(--text-sec);font-weight:500">Nome</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--text-sec);font-weight:500">Cargo</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--text-sec);font-weight:500">Setor</th>
+      </tr></thead>
+      <tbody>${_gdpParticipantes.map(p => {
+        const s = p.snapshot || {};
+        return `<tr style="border-bottom:1px solid var(--border-light)">
+          <td style="padding:8px">${s.nome||'—'}</td>
+          <td style="padding:8px;color:var(--text-sec)">${s.cargo||'—'}</td>
+          <td style="padding:8px;color:var(--text-sec)">${s.setor||'—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+/* ─── aba Avaliações ────────────────────────────────────────── */
+function gestorDpRenderAvaliacoes() {
+  const el = document.getElementById('gdptab-avaliacoes');
+  if (!el) return;
+  if (!_gdpParticipantes.length) {
+    el.innerHTML = '<div class="empty-state"><p>Nenhum participante da sua equipe neste ciclo.</p></div>';
+    return;
+  }
+  const statusLabel = { nao_iniciada:'Não iniciada', em_andamento:'Em andamento', concluida:'Concluída', publicada:'Publicada' };
+  const statusBadge = { nao_iniciada:'sbadge-gray', em_andamento:'sbadge-amber', concluida:'sbadge-green', publicada:'sbadge-blue' };
+  el.innerHTML = _gdpParticipantes.map(p => {
+    const s    = p.snapshot || {};
+    const aval = _gdpAvaliacoes.find(a => a.participante_id === p.id && a.tipo_avaliador_id === _gdpTipoGestorId);
+    const st   = aval?.status || 'nao_iniciada';
+    const podeAvaliar = _gdpCicloAtual?.status !== 'encerrado' && st !== 'concluida' && st !== 'publicada';
+    return `
+      <div class="row-card" style="margin-bottom:8px">
+        <div class="row-info" style="flex:1">
+          <div class="row-name">${s.nome||'—'}</div>
+          <div class="row-meta">${s.cargo||'—'} · ${s.setor||'—'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="sbadge ${statusBadge[st]||'sbadge-gray'}">${statusLabel[st]||st}</span>
+          ${podeAvaliar ? `<button class="btn btn-primary btn-sm" onclick="gestorDpAbrirFormAvaliacao('${p.id}')">Avaliar</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ─── abrir formulário de avaliação (reusa motor existente) ─── */
+async function gestorDpAbrirFormAvaliacao(participanteId) {
+  // Cria cópia para não corromper _gdpCicloAtual e injeta tipo_avaliador_id correto
+  _dpCicloAtual = { ..._gdpCicloAtual, tipo_avaliador_id: _gdpTipoGestorId || _gdpCicloAtual?.tipo_avaliador_id };
+  _dpParticipantes = _gdpParticipantes;
+  _dpAvaliacoes    = _gdpAvaliacoes;
+  await dpAbrirFormAvaliacao(participanteId);
+}
+
+/* ─── aba Resultados (somente leitura) ──────────────────────── */
+async function gestorDpLoadResultados() {
+  const el = document.getElementById('gdptab-resultados');
+  if (!el) return;
+  el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  const avalIds = _gdpAvaliacoes.filter(a => a.tipo_avaliador_id === _gdpTipoGestorId).map(a => a.id);
+  if (!avalIds.length) {
+    el.innerHTML = '<div class="empty-state"><p>Nenhuma avaliação encontrada para a equipe.</p></div>';
+    return;
+  }
+  const res = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${avalIds.join(',')})&select=*`) || [];
+  _gdpResultados = res;
+  gestorDpRenderResultados();
+}
+
+function gestorDpRenderResultados() {
+  const el = document.getElementById('gdptab-resultados');
+  if (!el) return;
+  if (!_gdpParticipantes.length) { el.innerHTML = '<div class="empty-state"><p>Sem participantes.</p></div>'; return; }
+  el.innerHTML = _gdpParticipantes.map(p => {
+    const s    = p.snapshot || {};
+    const aval = _gdpAvaliacoes.find(a => a.participante_id === p.id && a.tipo_avaliador_id === _gdpTipoGestorId);
+    const res  = aval ? _gdpResultados.find(r => r.avaliacao_id === aval.id) : null;
+    return `
+      <div class="row-card" style="margin-bottom:8px">
+        <div class="row-info" style="flex:1">
+          <div class="row-name">${s.nome||'—'}</div>
+          <div class="row-meta">${s.cargo||'—'} · ${s.setor||'—'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;font-size:13px">
+          ${res ? `
+            ${res.nota_final != null ? `<span style="font-weight:600;color:var(--accent)">${Number(res.nota_final).toFixed(2)}</span>` : ''}
+            ${res.conceito ? `<span class="sbadge sbadge-blue">${res.conceito}</span>` : ''}
+          ` : `<span style="color:var(--text-ter);font-size:12px">Aguardando cálculo</span>`}
+        </div>
+      </div>`;
+  }).join('');
+}
+</script>
 
 <!-- ══ OVERLAY: FORMULÁRIO DE AVALIAÇÃO ══ -->
 <div class="wiz-overlay" id="formAvalOverlay" onclick="if(event.target===this)fecharFormAval()">
