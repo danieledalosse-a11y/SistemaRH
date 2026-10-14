@@ -711,12 +711,22 @@ let _dpResultados       // [{ id, avaliacao_id, nota_final, conceito, calculado_
 |---|---|
 | `dpExportarResultados()` | Gera .xls (HTML-as-XLS com mso-conditionals) com todos os participantes; colunas: matrícula, nome, cargo, setor, unidade, status avaliação, nota final, conceito |
 
+## Correções entregues (2026-10-14)
+
+| Commit | Correção |
+|---|---|
+| `9137cdc` | Removido `obs_obrigatoria` de todos os INSERTs em `dp_versao_criterios` (campo inexistente → PGRST204) |
+| `9137cdc` | Default `tipo_resposta` trocado de `'escala'` para `'numerico'` (constraint `escala_obrigatoria` exige `escala_id` não-nulo quando escala) |
+| `9137cdc` | Label "v?" no drawer corrigido: `_dpVersaoAtual.versao` → `_dpVersaoAtual.numero` |
+| `9137cdc` | Checkbox `obs_obrigatoria` e header "Obs." removidos da tabela de critérios (campo não existe) |
+| `bbc29f4` | Modal "Adicionar Critério" arrastável pelo título; reset ao reabrir |
+
 ## Pendências técnicas
 
 | Item | Prioridade | Detalhe |
 |---|---|---|
 | **`param_setor` populado** | Alta | Pré-requisito para testar elegibilidade por setor no ciclo |
-| Testes funcionais Gestor | Alta | Aguardando RH criar primeiro ciclo com `dp_ciclos` não vazio para validar fluxo real |
+| Testes funcionais Gestor | Alta | Aguardando RH parametrizar versão v1 (critérios + configs), publicar e criar primeiro ciclo real |
 | Camada financeira UI (Etapa 4) | Baixa | dp_regras_financeiras — pulada |
 | PDI V2 vinculado a dp_ciclo_participantes | Baixa | Fase futura |
 | DROP tabelas dev_* | Baixa | Pós-migração completa |
@@ -825,6 +835,29 @@ function gestorDpFecharDrawer() {
 - **Grupo 3 — histórico:** INSERT restrito a `avaliacao_iniciada/concluida` de `entidade='dp_avaliacoes'` vinculadas à equipe
 - Total: 21 políticas aditivas (não altera policies de RH da migration 112)
 - Idempotente via consulta a `pg_policies` (PostgreSQL não tem `CREATE POLICY IF NOT EXISTS`)
+
+---
+
+## Modal "Adicionar Critério" — arrastável (commit bbc29f4, 2026-10-14)
+
+**Elemento:** `#modalSelecionarCriterio` (`.modal-overlay`) / `#modalSelecionarCriterioPanel` (`.modal` interno).
+
+**Handle:** `#modalSelecionarCriterioHandle` (o `.modal-title`) — `cursor:move; user-select:none`.
+
+**Mecanismo CSS:**
+```css
+.modal-overlay.dragging { align-items: flex-start; justify-content: flex-start; }
+.modal-overlay.dragging > .modal { position: absolute; }
+```
+Na primeira drag, a overlay recebe `.dragging` e o painel recebe `left`/`top` fixos em pixels, convertendo de flex-centrado para posição absoluta.
+
+**Mecanismo JS — IIFE `initCriterioModalDrag()`:**
+- `mousedown` no handle: se não tem `.dragging`, captura o `getBoundingClientRect()` do painel antes de adicionar a classe; depois registra `startX/Y` e `origLeft/Top`
+- `mousemove` no `document`: aplica `left/top` clampados entre 0 e os limites da viewport
+- `mouseup` no `document`: para o drag
+- Não afeta outros modais
+
+**Reset:** `abrirModalCriterio` remove `.dragging` e limpa `left/top` antes de abrir — modal sempre reabre centrado.
 
 ---
 
