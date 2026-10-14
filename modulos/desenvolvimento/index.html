@@ -729,10 +729,16 @@
         <div style="font-size:15px;font-weight:600;margin-bottom:2px">Ciclos de Avaliação</div>
         <div style="font-size:13px;color:var(--text-sec)">Gerencie os ciclos de avaliação de desempenho.</div>
       </div>
-      <button class="btn btn-primary" onclick="dpAbrirModalCiclo()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Novo ciclo
-      </button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="dpAbrirModalCicloIndividual()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          Avaliação individual
+        </button>
+        <button class="btn btn-primary" onclick="dpAbrirModalCiclo()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo ciclo
+        </button>
+      </div>
     </div>
     <div class="content-area">
       <div class="list-col">
@@ -3647,6 +3653,16 @@ function dpFecharModalCiclo() {
   document.getElementById('modalDpCiclo').classList.remove('open');
 }
 
+function dpAbrirModalCicloIndividual() {
+  dpAbrirModalCiclo();
+  // Pré-configurar para avaliação individual
+  const sel = document.getElementById('dpCicloElegTipo');
+  sel.value = 'por_colaborador';
+  dpAtualizarElegibilidade();
+  // Sugestão de nome
+  document.getElementById('dpCicloNome').placeholder = 'Ex: Avaliação de Experiência — João Silva';
+}
+
 function dpAtualizarElegibilidade() {
   const tipo = document.getElementById('dpCicloElegTipo').value;
   const grp = document.getElementById('dpCicloElegValorGrp');
@@ -5175,7 +5191,8 @@ function dpRenderFormAvaliacao() {
         let valorAnterior = '';
         if (tipo === 'escala') valorAnterior = hist.escala_opcao_label != null ? `${hist.escala_opcao_label}${hist.escala_opcao_valor != null ? ` (${hist.escala_opcao_valor})` : ''}` : '';
         else if (tipo === 'numerico' || tipo === 'numerico_com_meta') valorAnterior = hist.valor_numerico_livre != null ? `${hist.valor_numerico_livre}` : '';
-        else if (tipo === 'conceito' || tipo === 'binario') valorAnterior = hist.conceito_selecionado || '';
+        else if (tipo === 'binario') valorAnterior = hist.resposta_texto ? (hist.resposta_texto === 'sim' ? 'Sim' : 'Não') : (hist.conceito_selecionado || '');
+        else if (tipo === 'conceito') valorAnterior = hist.conceito_selecionado || '';
         histHtml = `<div style="margin-top:8px;padding:6px 10px;background:var(--bg);border-left:2px solid var(--border);border-radius:0 6px 6px 0;font-size:11px;color:var(--text-sec)">
           <span style="color:var(--text-ter)">Última avaliação (${hist.ciclo_nome || '—'}):</span>
           ${valorAnterior ? ` <b>${valorAnterior}</b>` : ''}
