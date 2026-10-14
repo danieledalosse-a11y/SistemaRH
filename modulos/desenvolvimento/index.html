@@ -5086,13 +5086,12 @@ function dpRenderFormAvaliacao() {
       const vNum = resp ? (resp.valor_numerico_livre != null ? resp.valor_numerico_livre : '') : '';
       const vMeta = resp ? (resp.meta != null ? resp.meta : '') : '';
       const temRange = vc.nota_min != null && vc.nota_max != null;
-      const minAttr  = temRange ? `min="${vc.nota_min}"` : '';
-      const maxAttr  = temRange ? `max="${vc.nota_max}"` : '';
-      const rangeHint = temRange ? `<div style="font-size:11px;color:var(--text-ter);margin-top:3px">Digite um valor de ${vc.nota_min} a ${vc.nota_max}</div>` : '';
+      // nota_min/nota_max são orientação — sem atributos min/max HTML para não bloquear o navegador
+      const rangeHint = temRange ? `<div style="font-size:11px;color:var(--text-ter);margin-top:3px">Referência: ${vc.nota_min} a ${vc.nota_max}</div>` : '';
       inputHtml = `<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
         <div>
           <label style="font-size:11px;color:var(--text-ter)">Realizado</label>
-          <input type="number" id="resp_${vc.id}" data-tipo="${tipo}" step="any" ${minAttr} ${maxAttr}
+          <input type="number" id="resp_${vc.id}" data-tipo="${tipo}" step="any"
             style="display:block;margin-top:4px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:140px"
             value="${vNum}" placeholder="${temRange?vc.nota_min:'0'}">
           ${rangeHint}
@@ -5188,18 +5187,21 @@ async function salvarAvaliacao(status) {
     payloads.push({ existente, body });
   }
 
-  // Validar ranges numéricos antes de salvar
+  // Orientação de range: destaca campos fora do intervalo sem bloquear o envio.
+  // Quando nota_range_obrigatorio for implementado (migration futura), este bloco
+  // passará a bloquear somente quando esse campo for true.
   for (const vc of _dpVersaoCritsParaForm) {
     const isNumerico = ['numerico', 'numerico_com_meta'].includes(vc.tipo_resposta);
-    if (!isNumerico) continue;
-    if (vc.nota_min == null || vc.nota_max == null) continue;
+    if (!isNumerico || vc.nota_min == null || vc.nota_max == null) continue;
     const el = document.getElementById(`resp_${vc.id}`);
     if (!el || el.value === '') continue;
     const val = Number(el.value);
     if (val < vc.nota_min || val > vc.nota_max) {
+      el.style.borderColor = 'var(--warning, #f59e0b)';
       const label = vc.dp_criterios?.nome || vc.criterio_nome_snapshot || 'Critério';
-      toast(`"${label}" deve estar entre ${vc.nota_min} e ${vc.nota_max}.`, true);
-      return;
+      toast(`Atenção: "${label}" está fora da referência (${vc.nota_min}–${vc.nota_max}). O valor será salvo mesmo assim.`, false);
+    } else {
+      el.style.borderColor = '';
     }
   }
 
