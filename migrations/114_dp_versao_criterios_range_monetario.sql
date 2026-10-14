@@ -134,3 +134,22 @@ ALTER TABLE dp_resultados
   ADD COLUMN IF NOT EXISTS resultado_bonus NUMERIC;
 
 COMMENT ON COLUMN dp_resultados.resultado_bonus IS 'Soma dos valores monetários de critérios binários (Opção B — independente da nota_final)';
+
+-- ============================================================
+-- 5. Atualizar constraint resultado_tem_valor em dp_resultados
+--    Antes: nota_final IS NOT NULL OR conceito IS NOT NULL
+--    Depois: inclui resultado_bonus como terceira opção válida
+--    → modelos com APENAS critérios monetários podem ter
+--      nota_final=null e conceito=null, desde que resultado_bonus
+--      seja preenchido.
+--    Resultados históricos: todos têm nota_final ou conceito
+--    preenchidos, portanto passam na nova constraint sem alteração.
+-- ============================================================
+
+ALTER TABLE dp_resultados
+  DROP CONSTRAINT IF EXISTS resultado_tem_valor;
+
+ALTER TABLE dp_resultados
+  ADD CONSTRAINT resultado_tem_valor CHECK (
+    nota_final IS NOT NULL OR conceito IS NOT NULL OR resultado_bonus IS NOT NULL
+  );
