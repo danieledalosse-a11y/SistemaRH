@@ -3431,6 +3431,16 @@ const ativoResolvido = diasAtras <= (FERIAS_CONFIG.dias_resposta_visivel ?? 7);
 
 **Configurável em:** Parâmetros Gerais → seção "Configurações de Férias" → campo "Dias visível na Atividade Recente". PATCH em `param_ferias_config?id=eq.1`.
 
+**Valor atual em produção (verificado out/2026):** `dias_resposta_visivel = 10`.
+
+### `FERIAS_HISTORICO` — carregamento único por sessão (regra crítica)
+
+`FERIAS_HISTORICO` é populado **uma única vez** em `initGestor` (ou `carregarDoSupabase` para RH). `renderGestorAtividade` **não recarrega** o array do banco — apenas relê o que está em memória.
+
+**Consequência:** se a sessão do Gestor estava aberta *antes* de um evento ser gravado no banco (ex: RH aprovou enquanto o Gestor estava com a página aberta), o evento não aparecerá na Atividade Recente até um **F5 completo**. Isso não é um bug — é comportamento esperado de sessão stale.
+
+**Diagnóstico confirmado (out/2026):** Marcelo Danilo Pazin (1682) e Francisco de Aquino Rodrigues (1710) desapareceram da Atividade Recente do Oriel porque a sessão estava aberta antes das aprovações (ids 16/17, gravadas em 10/10 às 13h11). Após F5, ambos reapareceram corretamente com botão "Ciente".
+
 ---
 
 ## Visual — itens rejeitados na Atividade Recente (set/2026 · unificado out/2026)
