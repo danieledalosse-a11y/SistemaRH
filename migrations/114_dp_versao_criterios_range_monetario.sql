@@ -219,39 +219,111 @@ ALTER TABLE dp_resultados
   DROP CONSTRAINT IF EXISTS resultado_tem_valor;
 
 -- ============================================================
--- PROPOSTA — Função RPC transacional dp_salvar_resultado (NÃO EXECUTAR NESTA MIGRATION)
--- Centraliza o salvamento de dp_resultados + dp_resultados_bonus em uma única transação,
--- garantindo consistência mesmo se o cliente falhar entre os dois INSERTs.
--- Requer autorização separada para ser implementada como migration 115.
---
--- CREATE OR REPLACE FUNCTION dp_salvar_resultado(
---   p_avaliacao_id    UUID,
---   p_nota_final      NUMERIC,
---   p_conceito        TEXT,
---   p_bonus_total     NUMERIC,
---   p_snapshot        JSONB
--- ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
--- DECLARE
---   v_resultado_id UUID;
--- BEGIN
---   -- Validação: pelo menos um campo de resultado presente
---   IF p_nota_final IS NULL AND p_conceito IS NULL AND p_bonus_total IS NULL THEN
---     RETURN jsonb_build_object('erro', 'Sem dados suficientes para calcular resultado.');
---   END IF;
---   -- Upsert dp_resultados
---   INSERT INTO dp_resultados (avaliacao_id, nota_final, conceito, calculado_em, calculado_por)
---     VALUES (p_avaliacao_id, p_nota_final, p_conceito, now(), auth.uid())
---   ON CONFLICT (avaliacao_id)
---     DO UPDATE SET nota_final=EXCLUDED.nota_final, conceito=EXCLUDED.conceito, calculado_em=now(), calculado_por=auth.uid()
---   RETURNING id INTO v_resultado_id;
---   -- Upsert dp_resultados_bonus (apenas se há bônus)
---   IF p_bonus_total IS NOT NULL THEN
---     INSERT INTO dp_resultados_bonus (resultado_id, valor_bonus, snapshot_criterios, calculado_em, calculado_por)
---       VALUES (v_resultado_id, p_bonus_total, p_snapshot, now(), auth.uid())
---     ON CONFLICT (resultado_id)
---       DO UPDATE SET valor_bonus=EXCLUDED.valor_bonus, snapshot_criterios=EXCLUDED.snapshot_criterios, calculado_em=now(), calculado_por=auth.uid();
---   END IF;
---   RETURN jsonb_build_object('ok', true, 'resultado_id', v_resultado_id);
--- END;
--- $$;
+-- 6. Estender ENUM dp_evento_historico com novo valor resultado_recalculado
+--    Necessário para a função dp_salvar_resultado registrar histórico de recálculo.
+--    ADD VALUE IF NOT EXISTS: idempotente — não falha se já existir.
+-- ============================================================
+
+ALTER TYPE dp_evento_historico ADD VALUE IF NOT EXISTS 'resultado_recalculado';
+
+-- ============================================================
+-- 7. Função RPC transacional dp_salvar_resultado
+--    Centraliza o salvamento de dp_resultados + dp_resultados_bonus em uma única
+--    transação: ou ambos persistem, ou nenhum (rollback automático).
+--    SECURITY DEFINER + SET search_path = public: previne search_path injection.
+--    O controle de acesso (perfil rh/admin) está dentro da função —
+--    não depende de RLS nem de verificação no frontend.
+--    dp_historico_eventos é append-only (sem UPDATE/DELETE policies na migration 112)
+--    portanto o snapshot de recálculo não pode ser alterado após registro.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION dp_salvar_resultado(
+  p_avaliacao_id      UUID,
+  p_nota_final        NUMERIC,
+  p_conceito          TEXT,
+  p_bonus_total       NUMERIC,
+  p_snapshot          JSONB,
+  p_motivo_recalculo  TEXT DEFAULT NULL
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_resultado_id    UUID;
+  v_existing_id     UUID;
+  v_existing_bonus  RECORD;
+  v_perfil          TEXT;
+BEGIN
+  -- 1. Controle de acesso: apenas rh e admin podem salvar resultados
+  v_perfil := auth_perfil();
+  IF v_perfil NOT IN ('rh', 'admin') THEN
+    RETURN jsonb_build_object('erro', 'Acesso negado. Apenas RH e administrador podem calcular resultados.');
+  END IF;
+
+  -- 2. Validação: pelo menos um campo de resultado deve estar presente
+  IF p_nota_final IS NULL AND p_conceito IS NULL AND p_bonus_total IS NULL THEN
+    RETURN jsonb_build_object('erro', 'Resultado vazio não permitido: nota, conceito e bônus estão ausentes.');
+  END IF;
+
+  -- 3. Upsert em dp_resultados (atômico — dentro desta transação)
+  SELECT id INTO v_existing_id FROM dp_resultados WHERE avaliacao_id = p_avaliacao_id;
+  IF v_existing_id IS NOT NULL THEN
+    UPDATE dp_resultados
+      SET nota_final    = p_nota_final,
+          conceito      = p_conceito,
+          calculado_em  = now(),
+          calculado_por = auth.uid()
+    WHERE id = v_existing_id;
+    v_resultado_id := v_existing_id;
+  ELSE
+    INSERT INTO dp_resultados (avaliacao_id, nota_final, conceito, calculado_em, calculado_por)
+      VALUES (p_avaliacao_id, p_nota_final, p_conceito, now(), auth.uid())
+    RETURNING id INTO v_resultado_id;
+  END IF;
+
+  -- 4. Bônus: apenas se houver valor monetário configurado
+  IF p_bonus_total IS NOT NULL THEN
+    -- Preservar snapshot anterior antes de sobrescrever (rastreabilidade de recálculo)
+    SELECT * INTO v_existing_bonus FROM dp_resultados_bonus WHERE resultado_id = v_resultado_id;
+    IF v_existing_bonus.id IS NOT NULL THEN
+      -- Registrar histórico do recálculo (snapshot anterior + motivo)
+      INSERT INTO dp_historico_eventos (tipo, entidade, entidade_id, detalhe)
+        VALUES (
+          'resultado_recalculado',
+          'dp_resultados_bonus',
+          v_existing_bonus.id,
+          jsonb_build_object(
+            'valor_bonus_anterior',        v_existing_bonus.valor_bonus,
+            'snapshot_criterios_anterior', v_existing_bonus.snapshot_criterios,
+            'calculado_em_anterior',       v_existing_bonus.calculado_em,
+            'motivo_recalculo',            COALESCE(p_motivo_recalculo, 'Recálculo manual'),
+            'recalculado_por',             auth.uid()
+          )
+        );
+      -- Atualizar bônus com novo valor e snapshot
+      UPDATE dp_resultados_bonus
+        SET valor_bonus        = p_bonus_total,
+            snapshot_criterios = p_snapshot,
+            calculado_em       = now(),
+            calculado_por      = auth.uid()
+      WHERE id = v_existing_bonus.id;
+    ELSE
+      INSERT INTO dp_resultados_bonus (resultado_id, valor_bonus, snapshot_criterios, calculado_em, calculado_por)
+        VALUES (v_resultado_id, p_bonus_total, p_snapshot, now(), auth.uid());
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object('ok', true, 'resultado_id', v_resultado_id);
+END;
+$$;
+
+-- Permissões de execução da RPC
+-- SECURITY DEFINER: a função roda com os privilégios do owner (postgres),
+-- não do caller — portanto pode fazer DML em dp_resultados e dp_resultados_bonus
+-- mesmo que o caller (authenticated) não tenha permissão direta de INSERT/UPDATE.
+-- O controle de acesso está dentro da função (v_perfil check).
+-- anon não tem EXECUTE → sem acesso para não-autenticados.
+REVOKE EXECUTE ON FUNCTION dp_salvar_resultado(UUID, NUMERIC, TEXT, NUMERIC, JSONB, TEXT) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION dp_salvar_resultado(UUID, NUMERIC, TEXT, NUMERIC, JSONB, TEXT) TO authenticated;
 -- ============================================================

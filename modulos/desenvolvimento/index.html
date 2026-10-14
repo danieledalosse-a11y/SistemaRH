@@ -1392,6 +1392,7 @@ async function sbGet(path)          { const r = await fetch(SB_URL+path,{headers
 async function sbPost(path,body)    { const r = await fetch(SB_URL+path,{method:'POST',  headers:HDR,body:JSON.stringify(body)}); if (r.ok) return r.json(); _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; return null; }
 async function sbPatch(path,body)   { const r = await fetch(SB_URL+path,{method:'PATCH', headers:HDR,body:JSON.stringify(body)}); if (r.ok) return r.json(); _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; return null; }
 async function sbDelete(path)       { const r = await fetch(SB_URL+path,{method:'DELETE',headers:{...HDR,Prefer:'return=minimal'}}); if (!r.ok) { _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; } return r.ok; }
+async function sbRpc(fn, params={}) { try { const r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`,{method:'POST',headers:{...HDR,'Content-Type':'application/json'},body:JSON.stringify(params)}); if (r.ok) return r.json(); _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; return null; } catch(e) { _sbLastError = {message: e.message, _status: 0}; return null; } }
 let _sbLastError = null;
 function sbErrMsg() { const e = _sbLastError; _sbLastError = null; if (!e) return 'Erro desconhecido'; return `[HTTP ${e._status}] ${e.message || e.details || e.hint || JSON.stringify(e)}`; }
 
@@ -5455,53 +5456,30 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
 
   if (nota == null && conceito == null && bonusTotal == null) { toast('Sem dados suficientes para calcular.', true); return; }
 
-  // f) Salvar em dp_resultados
-  // nota_final permanece null quando o modelo tem apenas critérios monetários (sem confundir com nota zero).
-  // A constraint resultado_tem_valor será removida na migration 114 (bloco 5b) para permitir esse cenário.
-  const existing = _dpResultados.find(r => r.avaliacao_id === avaliacaoId);
-  const payload = { nota_final: nota, conceito, calculado_em: new Date().toISOString() };
-  let resultadoId;
-  if (existing) {
-    const res = await sbPatch(`/rest/v1/dp_resultados?id=eq.${existing.id}`, payload);
-    if (!res) { toast('Erro ao salvar resultado: ' + sbErrMsg(), true); return; }
-    resultadoId = existing.id;
-  } else {
-    const res = await sbPost('/rest/v1/dp_resultados', { avaliacao_id: avaliacaoId, ...payload });
-    if (!res || !res[0]?.id) { toast('Erro ao salvar resultado: ' + sbErrMsg(), true); return; }
-    resultadoId = res[0].id;
-  }
+  // f+g) Salvar resultado e bônus via RPC transacional
+  // dp_salvar_resultado garante atomicidade: ou ambos persistem, ou nenhum (rollback automático).
+  // O banco valida perfil (rh/admin) e resultado vazio internamente — sem dependência do frontend.
+  const snapshotCriterios = critsBonus.length ? critsBonus.map(c => ({
+    criterio_id: c.id,
+    nome: c.dp_criterios?.nome || c.criterio_nome_snapshot || '',
+    valor_se_sim: c.valor_se_sim,
+    valor_se_nao: c.valor_se_nao ?? 0,
+    resposta: c.resposta_texto,
+    valor_apurado: c.valor
+  })) : null;
 
-  // g) Salvar bônus monetário em tabela separada (apenas se houver critérios binários com valor)
-  if (bonusTotal != null && resultadoId) {
-    // Snapshot dos critérios e valores vigentes no momento do cálculo — rastreabilidade histórica.
-    const snapshotCriterios = critsBonus.map(c => ({
-      criterio_id: c.id,
-      nome: c.dp_criterios?.nome || c.criterio_nome_snapshot || '',
-      valor_se_sim: c.valor_se_sim,
-      valor_se_nao: c.valor_se_nao ?? 0,
-      resposta: c.resposta_texto,
-      valor_apurado: c.valor
-    }));
-    const bonusPayload = {
-      resultado_id: resultadoId,
-      valor_bonus: bonusTotal,
-      snapshot_criterios: snapshotCriterios,
-      calculado_em: new Date().toISOString()
-    };
-    const existingBonus = _dpResultadosBonus.find(b => b.resultado_id === resultadoId);
-    let bonusOk;
-    if (existingBonus) {
-      bonusOk = await sbPatch(`/rest/v1/dp_resultados_bonus?id=eq.${existingBonus.id}`, bonusPayload);
-    } else {
-      bonusOk = await sbPost('/rest/v1/dp_resultados_bonus', bonusPayload);
-    }
-    if (!bonusOk) {
-      // dp_resultados foi salvo mas dp_resultados_bonus falhou — informa sem esconder o problema.
-      // Recalcular corrige a inconsistência (guard existingBonus faz PATCH na segunda tentativa).
-      toast('Nota salva, mas bônus não pôde ser registrado. Recalcule para corrigir.', true);
-      if (rerender) await dpLoadResultados(_dpCicloAtual.id);
-      return;
-    }
+  const rpcRes = await sbRpc('dp_salvar_resultado', {
+    p_avaliacao_id:     avaliacaoId,
+    p_nota_final:       nota,
+    p_conceito:         conceito,
+    p_bonus_total:      bonusTotal,
+    p_snapshot:         snapshotCriterios,
+    p_motivo_recalculo: null
+  });
+
+  if (!rpcRes || rpcRes.erro) {
+    toast('Erro ao salvar resultado: ' + (rpcRes?.erro || sbErrMsg()), true);
+    return;
   }
 
   if (rerender) {
