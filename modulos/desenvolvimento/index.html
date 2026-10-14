@@ -89,9 +89,12 @@
   .ciclo-select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface); cursor: pointer; }
   .ciclo-select:focus { outline: none; border-color: var(--accent); }
   .ciclo-badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .ciclo-badge.aberto    { background: #ECFDF3; color: var(--green); }
-  .ciclo-badge.fechado   { background: var(--border-light); color: var(--text-ter); }
-  .ciclo-badge.rascunho  { background: var(--amber-bg); color: var(--amber); }
+  .ciclo-badge.aberto       { background: #ECFDF3; color: var(--green); }
+  .ciclo-badge.em_andamento { background: #ECFDF3; color: var(--green); }
+  .ciclo-badge.fechado      { background: var(--border-light); color: var(--text-ter); }
+  .ciclo-badge.encerrado    { background: var(--border-light); color: var(--text-ter); }
+  .ciclo-badge.cancelado    { background: var(--border-light); color: var(--text-ter); }
+  .ciclo-badge.rascunho     { background: var(--amber-bg); color: var(--amber); }
 
   /* ── toolbar ── */
   .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -726,7 +729,7 @@
         <div style="font-size:15px;font-weight:600;margin-bottom:2px">Ciclos de Avaliação</div>
         <div style="font-size:13px;color:var(--text-sec)">Gerencie os ciclos de avaliação de desempenho.</div>
       </div>
-      <button class="btn btn-primary" onclick="abrirModalCiclo()">
+      <button class="btn btn-primary" onclick="dpAbrirModalCiclo()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Novo ciclo
       </button>
@@ -1483,7 +1486,7 @@ function showSec(id, btn) {
   if (id === 'competencias')    renderBiblioteca();
   if (id === 'modelos')         renderModelos();
   if (id === 'configuracoes')   renderConfiguracoes();
-  if (id === 'avaliacoes')      dpRenderCiclos();
+  if (id === 'avaliacoes')      renderColabList();
   if (id === 'gestor-dp')      gestorDpLoadCiclos();
 }
 function showDrawerTab(id, btn) {
@@ -2010,40 +2013,34 @@ async function renderHistorico() {
    CICLOS — RENDER
 ───────────────────────────────────────────── */
 async function renderCiclos() {
-  await loadCiclos();
+  await dpLoadCiclos();
   const el = document.getElementById('ciclosList');
-  if (!_ciclos.length) {
+  if (!_dpCiclos.length) {
     el.innerHTML = `<div class="empty-state"><p>Nenhum ciclo cadastrado. Crie o primeiro ciclo de avaliação.</p></div>`;
+    const stats = document.getElementById('cicloSidebarStats');
+    if (stats) stats.innerHTML = `<div style="font-size:12px;color:var(--text-ter)">Nenhum ciclo ativo.</div>`;
     return;
   }
-  const STATUS_LABEL = { aberto:'Ativo', fechado:'Encerrado', rascunho:'Rascunho' };
-  const STATUS_BADGE = { aberto:'sbadge-green', fechado:'sbadge-gray', rascunho:'sbadge-amber' };
-  const CICLO_ICON_BG = { aberto:'#DBEAFE', fechado:'#F1F5F9', rascunho:'#FEF3C7' };
-  const CICLO_ICON_COLOR = { aberto:'#2563EB', fechado:'#64748B', rascunho:'#D97706' };
-  const CAL_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
-  const EDIT_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 
-  const ativo = _ciclos.find(c => c.status === 'aberto');
-  const rascunhos = _ciclos.filter(c => c.status === 'rascunho');
-  const anteriores = _ciclos.filter(c => c.status === 'fechado');
+  const ativo     = _dpCiclos.find(c => c.status === 'aberto' || c.status === 'em_andamento');
+  const rascunhos = _dpCiclos.filter(c => c.status === 'rascunho');
+  const anteriores = _dpCiclos.filter(c => c.status === 'encerrado' || c.status === 'cancelado');
 
   let html = '';
 
-  // Banner do ciclo ativo
   if (ativo) {
-    const dtBanner = [ativo.periodo_inicio, ativo.periodo_fim].filter(Boolean).map(formatDate).join(' a ');
+    const dtBanner = [ativo.data_inicio, ativo.data_fim].filter(Boolean).map(formatDate).join(' a ');
     html += `<div class="ciclo-banner">
       <div class="ciclo-banner-title">${ativo.nome} — Em andamento</div>
       <div class="ciclo-banner-sub">${dtBanner || 'Período não definido'}</div>
       <div class="ciclo-banner-progress"><div class="ciclo-banner-fill" style="width:0%"></div></div>
     </div>`;
-    // atualiza sidebar
     const stats = document.getElementById('cicloSidebarStats');
     if (stats) {
       const dtSub = dtBanner ? `<div style="font-size:11px;color:var(--text-ter);margin-bottom:8px">${dtBanner}</div>` : '';
       stats.innerHTML = `${dtSub}
-        <div class="stat-row"><span class="stat-label">Encerrar em</span><span class="stat-value">${ativo.periodo_fim ? formatDate(ativo.periodo_fim) : '—'}</span></div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="mudarStatusCiclo(${ativo.id},'fechado')">Encerrar ciclo</button>`;
+        <div class="stat-row"><span class="stat-label">Encerrar em</span><span class="stat-value">${ativo.data_fim ? formatDate(ativo.data_fim) : '—'}</span></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="dpMudarStatus('${ativo.id}','encerrado')">Encerrar ciclo</button>`;
     }
   } else {
     const stats = document.getElementById('cicloSidebarStats');
@@ -2051,18 +2048,20 @@ async function renderCiclos() {
   }
 
   function renderCicloCard(c) {
-    const dt = [c.periodo_inicio, c.periodo_fim].filter(Boolean).map(formatDate).join(' → ');
-    const desc = [dt || 'Período não definido', c.prazo_auto_avaliacao ? 'Auto-avaliação até ' + formatDate(c.prazo_auto_avaliacao) : ''].filter(Boolean).join(' · ');
-    return `<div class="row-card">
-      <div class="row-icon" style="background:${CICLO_ICON_BG[c.status]||'#F1F5F9'};color:${CICLO_ICON_COLOR[c.status]||'#64748B'}">${CAL_SVG}</div>
-      <div class="row-body">
-        <div class="row-name">${c.nome}</div>
-        <div class="row-desc">${desc}</div>
+    const modelo = _dpCicloModeloNome(c.versao_id);
+    const dt = [c.data_inicio, c.data_fim].filter(Boolean).map(formatDate).join(' → ');
+    const desc = [modelo, dt || 'Período não definido'].filter(Boolean).join(' · ');
+    const st = c.status || 'rascunho';
+    const STATUS_LABEL = { aberto:'Ativo', em_andamento:'Em andamento', encerrado:'Encerrado', rascunho:'Rascunho', cancelado:'Cancelado' };
+    return `<div class="ciclo-card" style="cursor:pointer" onclick="dpAbrirDrawerCiclo('${c.id}')">
+      <div class="ciclo-info">
+        <div class="ciclo-nome">${c.nome}</div>
+        <div class="ciclo-meta">${desc}</div>
       </div>
-      <div class="row-meta">
-        <span class="sbadge ${STATUS_BADGE[c.status]||'sbadge-gray'}">${STATUS_LABEL[c.status]||c.status}</span>
-        ${c.status === 'rascunho' ? `<button class="btn btn-secondary btn-sm" onclick="mudarStatusCiclo(${c.id},'aberto')">Ativar</button>` : ''}
-        <div class="row-actions"><button class="icon-btn" title="Editar" onclick="editarCiclo(${c.id})">${EDIT_SVG}</button></div>
+      <div class="ciclo-actions">
+        <span class="ciclo-badge ${st}">${STATUS_LABEL[st]||st}</span>
+        ${st === 'rascunho' ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();dpMudarStatus('${c.id}','aberto')">Abrir</button>` : ''}
+        ${st === 'aberto' || st === 'em_andamento' ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();dpMudarStatus('${c.id}','encerrado')">Encerrar</button>` : ''}
       </div>
     </div>`;
   }
@@ -3614,8 +3613,7 @@ async function dpSalvarCiclo() {
   if (!res || !res[0]) { toast('Erro ao criar ciclo: ' + sbErrMsg(), true); return; }
   toast('Ciclo criado com sucesso.');
   dpFecharModalCiclo();
-  await dpLoadCiclos();
-  dpRenderCiclos();
+  await renderCiclos();
   // Abre o drawer para o RH definir os participantes
   dpAbrirDrawerCiclo(res[0].id);
 }
@@ -3635,8 +3633,7 @@ async function dpMudarStatus(id, status) {
   toast(`Ciclo ${status === 'aberto' ? 'aberto' : 'encerrado'}.`);
   if (status === 'aberto')    await dpRegistrarEvento('ciclo_aberto',    'dp_ciclos', id, { nome: cicloNome });
   if (status === 'encerrado') await dpRegistrarEvento('ciclo_encerrado', 'dp_ciclos', id, { nome: cicloNome });
-  await dpLoadCiclos();
-  dpRenderCiclos();
+  await renderCiclos();
   if (_dpCicloAtual && _dpCicloAtual.id === id) {
     _dpCicloAtual = _dpCiclos.find(c => c.id === id) || _dpCicloAtual;
     dpRenderInfoCiclo();
@@ -4591,8 +4588,7 @@ async function wizardPublicar() {
 
     toast('Avaliação criada com sucesso!');
     wizardFechar();
-    await dpLoadCiclos();
-    dpRenderCiclos();
+    await renderCiclos();
 
   } catch(e) {
     toast(e.message || 'Erro ao publicar. Tente novamente.', true);
