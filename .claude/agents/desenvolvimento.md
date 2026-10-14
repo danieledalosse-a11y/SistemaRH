@@ -103,6 +103,9 @@ dp_historico_eventos
 `dp_fn_historico_criterio` retorna `{comparavel: false}` quando não encontra avaliação anterior **do mesmo**:
 - `modelo_id`, `criterio_id`, `escala_id`, `tipo_resposta`, status `publicada`
 
+**Campos retornados (pós-migration 115):**
+`comparavel`, `ciclo_nome`, `ciclo_encerrado_em`, `escala_opcao_label`, `escala_opcao_valor`, `valor_numerico_livre`, `meta`, `realizado`, `conceito_selecionado`, `resposta_texto` *(novo — Sim/Não para binários)*, `nota_final`, `conceito_resultado`
+
 ---
 
 ## Tabelas: Motor D&P (dp_*)
@@ -301,7 +304,7 @@ detalhe JSONB, usuario_id UUID, criado_em
 | `dp_tipo_calculo` | `soma`, `media`, `media_ponderada`, `percentual_atingimento`, `qualitativo` |
 | `dp_status_ciclo` | `rascunho`, `aberto`, `em_andamento`, `encerrado`, `cancelado` |
 | `dp_status_avaliacao` | `nao_iniciada`, `em_andamento`, `concluida`, `publicada` |
-| `dp_tipo_elegibilidade` | `todos`, `por_setor`, `por_cargo`, `por_colaborador` |
+| `dp_tipo_elegibilidade` | `todos`, `por_setor`, `por_cargo`, `por_gestor`, `por_colaborador` |
 | `dp_tipo_regra_financeira` | `percentual_salario`, `valor_fixo`, `por_criterio` |
 | `dp_status_resultado_financeiro` | `calculado`, `ajustado`, `aprovado`, `pago` |
 | `dp_evento_historico` | `ciclo_aberto`, `ciclo_fechado`, `avaliacao_publicada`, `resultado_calculado`, `resultado_ajustado`, `resultado_recalculado` |
@@ -640,6 +643,7 @@ CSS base (mesmo padrão nos dois):
 | `112_dp_rls.sql` | Habilita RLS nas 21 tabelas dp_*; políticas por perfil: RH/admin CRUD, diretoria SELECT, gestor sem acesso (fase 2), histórico append-only | Executado |
 | `113_dp_rls_gestor.sql` | Fase 2 RLS: função `auth_gestor_equipe_ids()` SECURITY DEFINER + 21 políticas gestor por equipe (SELECT config, CRUD operacional restrito, INSERT histórico) | Executado |
 | `114_dp_versao_criterios_range_monetario.sql` | 7 blocos + 5b: ADD colunas range/monetário em `dp_versao_criterios`; corrige `escala_obrigatoria` e `dp_validar_versao`; cria `dp_resultados_bonus` com RLS; DROP `resultado_tem_valor` em `dp_resultados`; ADD ENUM `resultado_recalculado`; cria RPC `dp_salvar_resultado` | **Executado** |
+| `115_dp_fn_historico_criterio_resposta_texto.sql` | `CREATE OR REPLACE` em `dp_fn_historico_criterio` — adiciona `'resposta_texto', r.resposta_texto` ao `jsonb_build_object`; mesma assinatura, sem alteração de tabelas | **Executado** |
 
 ---
 
@@ -696,6 +700,9 @@ let _dpVersaoCritsParaForm  // critérios da versão para o formulário
 // Resultados (Etapa 3)
 let _dpResultados       // [{ id, avaliacao_id, nota_final, conceito, calculado_em }]
 let _dpResultadosBonus  // [{ id, resultado_id, valor_bonus, snapshot_criterios, calculado_em }] — rh/admin/diretoria only
+
+// Histórico por critério (Etapa 2 — formulário de avaliação)
+let _dpHistoricoCriterios = {}  // { versao_criterio_id: JSONB retornado por dp_fn_historico_criterio }
 ```
 
 ## Funções novas — Etapas 2, 3, 5, 6
@@ -705,10 +712,18 @@ let _dpResultadosBonus  // [{ id, resultado_id, valor_bonus, snapshot_criterios,
 |---|---|
 | `dpLoadAvaliacoes(cicloId)` | GET dp_avaliacoes; chama dpRenderAvaliacoes |
 | `dpRenderAvaliacoes()` | Card por participante cruzando _dpAvaliacoes; badge por status |
-| `dpAbrirFormAvaliacao(participanteId)` | Busca/cria dp_avaliacao; carrega critérios+respostas; abre formAvalOverlay |
-| `dpRenderFormAvaliacao()` | Bloco por critério com input adaptado ao tipo_resposta |
+| `dpAbrirFormAvaliacao(participanteId)` | Busca/cria dp_avaliacao; carrega critérios+respostas; busca histórico por critério via `sbRpc('dp_fn_historico_criterio',...)` em paralelo → `_dpHistoricoCriterios`; abre formAvalOverlay |
+| `dpRenderFormAvaliacao()` | Bloco por critério com input adaptado ao `tipo_resposta` + bloco read-only de histórico abaixo de cada campo (ciclo anterior, valor/conceito, nota_final) |
 | `salvarAvaliacao(status)` | Coleta resp_*; PATCH/POST dp_respostas; PATCH dp_avaliacoes; registra evento |
 | `fecharFormAval()` | Fecha overlay; limpa estado |
+
+**Histórico por critério no formulário:**
+- Carregado em `dpAbrirFormAvaliacao` via `Promise.all` — uma chamada RPC por critério
+- Requer `modelo_id` da versão (GET `dp_versoes?id=eq.${versaoId}&select=modelo_id`)
+- `_dpHistoricoCriterios[vc.id]` → JSONB com campos acima; `null` = sem histórico (não exibido)
+- `comparavel: false` → exibe "Sem avaliação anterior comparável" em itálico
+- Critérios **binários**: exibe `resposta_texto` (Sim/Não) quando disponível; fallback `conceito_selecionado`
+- Critérios **escala**: `escala_opcao_label (valor)` | **numérico**: `valor_numerico_livre` | **conceito**: `conceito_selecionado`
 
 **Overlay:** `#formAvalOverlay` / `#formAvalPanel` — right-side drawer (`.wiz-overlay` pattern, largura 680px)
 **IDs dos inputs de resposta:** `resp_${versaoCriterioId}`
@@ -786,11 +801,35 @@ Div `id="dvStatusBar"` posicionada entre metadados do header e as abas do drawer
 - Versão com critérios, rascunho: fundo âmbar, texto "Versão em rascunho. Confirme e clique em Verificar e publicar."
 - Versão publicada: fundo verde, texto "Versão publicada. Para alterar, crie uma nova versão a partir desta."
 
+## Avaliação Individual (commit 62efde4, 2026-10-14)
+
+Não há estrutura paralela — um ciclo com 1 participante é uma avaliação individual.
+
+**Botão "Avaliação individual"** (secundário, ao lado de "Novo ciclo"):
+- Chama `dpAbrirModalCicloIndividual()` → `dpAbrirModalCiclo()` + pré-define `tipo_elegibilidade='por_colaborador'` + chama `dpAtualizarElegibilidade()` + define placeholder de nome
+- O RH seleciona 1 colaborador no picker, nomeia (ex: "Avaliação de Experiência — João Silva"), escolhe versão e segue o fluxo normal
+- Histórico comparável garantido: ciclos futuros do mesmo colaborador com mesmo modelo retornam o resultado desse ciclo individual via `dp_fn_historico_criterio`
+
+## Elegibilidade de ciclos (commit d81f2a0, 2026-10-14)
+
+| Tipo | Filtro aplicado em `dpGerarPreviewParticipantes` | `elegibilidade_ids` salvo |
+|---|---|---|
+| `todos` | sem filtro | `null` |
+| `por_setor` | `c.setor.includes(eleg0)` | `[nome_setor]` |
+| `por_cargo` | `c.cargo.includes(eleg0)` | `[nome_cargo]` |
+| `por_gestor` | `c.gestor === eleg0` (igualdade exata) | `[apelido_gestor]` |
+| `por_colaborador` | `ids.has(c.id)` | `[id1, id2, ...]` (strings) |
+
+- `elegIds` computado em `dpSalvarCiclo` antes de enviar ao banco — nunca mais `null` indevidamente
+- `dpGerarPreviewParticipantes` lê sempre de `ciclo.elegibilidade_ids`, não de variáveis temporárias
+- Select de gestores populado dinamicamente de `_colaboradores.gestor` (valores únicos)
+
 ## Pendências técnicas
 
 | Item | Prioridade | Detalhe |
 |---|---|---|
-| **Primeiro ciclo real** | Alta | RH deve: (1) publicar v1 do modelo; (2) criar ciclo em Ciclos; (3) adicionar participantes; (4) mudar status para "aberto" |
+| **Primeiro ciclo real** | Alta | Falta: (1) criar escala; (2) adicionar critérios ao modelo existente + publicar v1; (3) criar ciclo; (4) adicionar participantes; (5) abrir |
+| Escalas | Alta | `dp_escalas` vazia — nenhuma criada ainda; bloqueia critérios do tipo `escala` |
 | Testes funcionais com dados reais | Alta | Depende do primeiro ciclo real estar aberto com participantes |
 | `param_setor` populado | Média | Pré-requisito para elegibilidade por setor |
 | **Histórico de avaliações — Caminho 1** | Média | Aba "Histórico por Colaborador" no D&P (entre ciclos) — frontend only, sem migration |
@@ -799,6 +838,18 @@ Div `id="dvStatusBar"` posicionada entre metadados do header e as abas do drawer
 | Camada financeira UI (Etapa 4 / Fase 5) | Baixa | dp_regras_financeiras por faixas — arquitetura planejada, não iniciada |
 | PDI V2 vinculado a dp_ciclo_participantes | Baixa | Fase futura |
 | DROP tabelas dev_* | Baixa | Pós-migração completa |
+
+## Estado atual do banco — D&P (verificado 2026-10-14)
+
+| Item | Qtd / Estado |
+|---|---|
+| `dp_escalas` | **0** — nenhuma criada |
+| `dp_tabelas_conceito` | **0** |
+| `dp_criterios` (biblioteca) | **49** critérios ativos (comportamentais + técnicos) |
+| `dp_modelos` | **1** — "Avaliação Mensal Produtividade CD" |
+| `dp_versoes` | **1** — V1 do modelo acima; `em_uso=false`; sem critérios adicionados |
+| `dp_ciclos` | **0** |
+| `dp_tipos_avaliador` | **4** — Gestor, RH, Auto-avaliação, Avaliador específico |
 
 ## Decisões abertas — Histórico de avaliações na Ficha do Colaborador
 
