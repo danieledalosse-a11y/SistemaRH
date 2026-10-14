@@ -397,6 +397,20 @@
   .tabela-conceito-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
   .faixas-preview { display: flex; flex-wrap: wrap; gap: 6px; }
   .faixa-chip { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--border-light); }
+  .cfg-sec-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-ter); margin-bottom: 10px; }
+  .cfg-sec-desc { font-size: 12px; color: var(--text-sec); margin: -4px 0 14px; line-height: 1.5; }
+  .cfg-card { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+  .cfg-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .cfg-card-title { font-size: 13px; font-weight: 600; color: var(--accent); }
+  .cfg-card-subtitle { font-size: 12px; color: var(--text-sec); padding: 10px 16px 0; }
+  .cfg-card-body { padding: 12px 16px 14px; }
+  .cfg-empty-hint { border: 1.5px dashed var(--border); border-radius: 8px; padding: 16px; text-align: center; font-size: 12px; color: var(--text-sec); line-height: 1.5; }
+  .cfg-empty-hint .btn { margin-top: 10px; }
+  .cfg-seq-panel { background: #EFF6FF; border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+  .cfg-seq-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #1D4ED8; margin-bottom: 8px; }
+  .cfg-seq-list { list-style: none; padding: 0; margin: 0; counter-reset: seq; }
+  .cfg-seq-list li { counter-increment: seq; font-size: 12px; color: #1e40af; line-height: 1.5; padding: 3px 0 3px 22px; position: relative; }
+  .cfg-seq-list li::before { content: counter(seq); position: absolute; left: 0; top: 3px; width: 16px; height: 16px; background: #BFDBFE; border-radius: 50%; font-size: 10px; font-weight: 700; color: #1D4ED8; display: flex; align-items: center; justify-content: center; }
 
   /* ── wizard (Nova Avaliação) — drawer lateral ── */
   .wizard-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.22s; }
@@ -912,7 +926,7 @@
     <div class="toolbar">
       <div style="flex:1">
         <div style="font-size:15px;font-weight:600;margin-bottom:2px">Configurações D&amp;P</div>
-        <div style="font-size:13px;color:var(--text-sec)">Parâmetros globais do módulo de Desenvolvimento &amp; Performance.</div>
+        <div style="font-size:13px;color:var(--text-sec)">Recursos reutilizáveis nos modelos de avaliação e configurações gerais do módulo.</div>
       </div>
     </div>
     <div class="content-area" style="align-items:flex-start">
@@ -922,9 +936,19 @@
       <div class="sidebar-col">
         <div class="sidebar-panel">
           <div class="panel-title">Resumo</div>
+          <div class="stat-row"><span class="stat-label">Escalas</span><span class="stat-value" id="sideConfEscalas">—</span></div>
           <div class="stat-row"><span class="stat-label">Tabelas de conceito</span><span class="stat-value" id="sideConfTabelas">—</span></div>
-          <div class="stat-row"><span class="stat-label">Escalas cadastradas</span><span class="stat-value" id="sideConfEscalas">—</span></div>
-          <div class="stat-row"><span class="stat-label">Avaliadores ativos</span><span class="stat-value" id="sideConfAvaliadores">—</span></div>
+          <div class="stat-row"><span class="stat-label">Métodos ativos</span><span class="stat-value accent" id="sideConfMetodos">—</span></div>
+          <div class="stat-row"><span class="stat-label">Perfis de avaliador</span><span class="stat-value" id="sideConfAvaliadores">—</span></div>
+        </div>
+        <div class="cfg-seq-panel">
+          <div class="cfg-seq-title">Sequência de uso</div>
+          <ol class="cfg-seq-list">
+            <li>Configure escalas e tabelas (se necessário)</li>
+            <li>Crie critérios na biblioteca</li>
+            <li>Monte um modelo e publique</li>
+            <li>Crie um ciclo e avalie</li>
+          </ol>
         </div>
       </div>
     </div>
@@ -2511,6 +2535,7 @@ async function renderConfiguracoes() {
   const el = document.getElementById('confBody');
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
   await Promise.all([loadDpTiposCalculo(), loadDpTiposAvaliador(), loadDpTabelasConceito()]);
+
   // atualiza sidebar com contadores reais
   const sideAvs = document.getElementById('sideConfAvaliadores');
   if (sideAvs) sideAvs.textContent = _dpTiposAvaliador.filter(a => a.ativo).length || '0';
@@ -2518,37 +2543,81 @@ async function renderConfiguracoes() {
   if (sideTab) sideTab.textContent = _dpTabelasConceito.length || '0';
   const sideEsc = document.getElementById('sideConfEscalas');
   if (sideEsc) sideEsc.textContent = _dpEscalas.length || '0';
+  const sideMet = document.getElementById('sideConfMetodos');
+  if (sideMet) sideMet.textContent = _dpTiposCalculo.filter(t => t.ativo).length || '0';
+
+  const escalaVazio = !_dpEscalas.length
+    ? `<div class="cfg-empty-hint">
+        Cadastre uma escala para usar em critérios qualitativos. Se seus critérios usam nota numérica livre ou Sim/Não, você pode pular esta seção por enquanto.
+        <br><button class="btn btn-secondary btn-sm" onclick="abrirModalEscala(null)">Criar primeira escala</button>
+      </div>`
+    : renderEscalasConf();
+
+  const tabelaVazio = !_dpTabelasConceito.length
+    ? `<div class="cfg-empty-hint">
+        Crie uma tabela para usar conversão de conceito. Se seus modelos exibem apenas nota numérica, não é necessário cadastrar nenhuma tabela por enquanto.
+        <br><button class="btn btn-secondary btn-sm" onclick="abrirModalNovaTabela()">Criar primeira tabela</button>
+      </div>`
+    : renderTabelasConceito();
 
   el.innerHTML = `
-    <!-- 1. Resultado da avaliação (Tabelas de Conceito) -->
-    <div class="section-header" style="justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="section-title">Resultado da avaliação</span><span class="section-count">${_dpTabelasConceito.length}</span>
+    <!-- GRUPO 1: Recursos para modelos de avaliação -->
+    <div class="cfg-sec-label">Recursos para modelos de avaliação</div>
+    <div class="cfg-sec-desc">Crie esses itens antes de configurar um modelo. Você os seleciona ao adicionar critérios ou ao ativar conversão de conceito.</div>
+
+    <!-- Card: Escalas de resposta -->
+    <div class="cfg-card">
+      <div class="cfg-card-header">
+        <div>
+          <div class="cfg-card-title">Escalas de resposta</div>
+          <div style="font-size:12px;color:var(--text-sec);margin-top:2px">Opções pré-definidas para critérios qualitativos — ex: Nunca / Às vezes / Sempre. Cada opção pode ter um valor numérico para cálculo automático.</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="flex-shrink:0;margin-left:12px" onclick="abrirModalEscala(null)">+ Nova escala</button>
       </div>
-      <button class="btn btn-secondary btn-sm" onclick="abrirModalNovaTabela()">+ Nova tabela</button>
-    </div>
-    <div style="font-size:12px;color:var(--text-sec);margin:-4px 0 10px">Converte a nota final em um rótulo — ex: 0 a 4 = Precisa Desenvolver, 5 a 7 = Bom, 8 a 10 = Referência. Configure aqui antes de ativar a opção "Exibir conceito" em um modelo.</div>
-    <div id="confTabelasConceito">${renderTabelasConceito()}</div>
-
-    <!-- 2. Métodos de avaliação disponíveis (Tipos de Cálculo) -->
-    <div class="section-header" style="margin-top:24px"><span class="section-title">Métodos de avaliação disponíveis</span><span class="section-count">${_dpTiposCalculo.length}</span></div>
-    <div style="font-size:12px;color:var(--text-sec);margin:-4px 0 10px">Controla quais opções de cálculo aparecem ao criar um modelo. Desativar um método o remove da lista de escolhas.</div>
-    <div id="confCalculo">${renderTiposCalculo()}</div>
-
-    <!-- 3. Perfis de avaliador (Tipos de Avaliador) -->
-    <div class="section-header" style="margin-top:24px"><span class="section-title">Perfis de avaliador</span><span class="section-count">${_dpTiposAvaliador.length}</span></div>
-    <div style="font-size:12px;color:var(--text-sec);margin:-4px 0 10px">Define quem pode avaliar em um ciclo — Gestor Direto, Autoavaliação, Avaliação por Par. Vêm pré-cadastrados; ative ou desative conforme a política da empresa.</div>
-    <div id="confAvaliadores">${renderAvaliadores()}</div>
-
-    <!-- 4. Escalas de resposta qualitativas -->
-    <div class="section-header" style="margin-top:24px;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="section-title">Escalas de resposta qualitativas</span><span class="section-count">${_dpEscalas.length}</span>
+      <div class="cfg-card-body">
+        <div id="confEscalas">${escalaVazio}</div>
       </div>
-      <button class="btn btn-secondary btn-sm" onclick="abrirModalEscala(null)">+ Nova escala</button>
     </div>
-    <div style="font-size:12px;color:var(--text-sec);margin:-4px 0 10px">Opções pré-definidas usadas em critérios do tipo "Escala" — ex: Nunca / Às vezes / Sempre. Se seus critérios usam nota numérica, esta seção pode ser ignorada.</div>
-    <div id="confEscalas">${renderEscalasConf()}</div>
+
+    <!-- Card: Tabelas de conceito -->
+    <div class="cfg-card">
+      <div class="cfg-card-header">
+        <div>
+          <div class="cfg-card-title">Tabelas de conceito</div>
+          <div style="font-size:12px;color:var(--text-sec);margin-top:2px">Converte a nota final em um rótulo — ex: 0 a 4 = Precisa desenvolver, 5 a 7 = Bom, 8 a 10 = Referência. Necessário se você quiser que o resultado apareça como conceito em vez de número.</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="flex-shrink:0;margin-left:12px" onclick="abrirModalNovaTabela()">+ Nova tabela</button>
+      </div>
+      <div class="cfg-card-body">
+        <div id="confTabelasConceito">${tabelaVazio}</div>
+      </div>
+    </div>
+
+    <!-- GRUPO 2: Configurações gerais do módulo -->
+    <div class="cfg-sec-label" style="margin-top:8px">Configurações gerais do módulo</div>
+    <div class="cfg-sec-desc">Controla o que fica disponível ao criar modelos. Ativar ou desativar uma opção afeta todos os usuários do módulo.</div>
+
+    <!-- Card: Métodos de cálculo disponíveis -->
+    <div class="cfg-card">
+      <div class="cfg-card-header">
+        <div class="cfg-card-title">Métodos de cálculo disponíveis</div>
+      </div>
+      <div class="cfg-card-subtitle">Desativar um método o remove da lista ao criar um modelo. Modelos já criados com esse método não são afetados.</div>
+      <div class="cfg-card-body">
+        <div id="confCalculo">${renderTiposCalculo()}</div>
+      </div>
+    </div>
+
+    <!-- Card: Perfis de avaliador -->
+    <div class="cfg-card">
+      <div class="cfg-card-header">
+        <div class="cfg-card-title">Perfis de avaliador</div>
+      </div>
+      <div class="cfg-card-subtitle">Define quem pode avaliar em um ciclo. Ative apenas os perfis que a empresa utiliza.</div>
+      <div class="cfg-card-body">
+        <div id="confAvaliadores">${renderAvaliadores()}</div>
+      </div>
+    </div>
   `;
 }
 
