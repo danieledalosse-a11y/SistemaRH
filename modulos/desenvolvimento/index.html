@@ -1596,7 +1596,7 @@ async function init() {
 }
 
 async function loadColaboradores() {
-  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo&ativo=eq.true&order=nome.asc');
+  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia&ativo=eq.true&order=nome.asc');
   _colaboradores = _colaboradores || [];
 }
 
@@ -3950,9 +3950,13 @@ function dpRenderParticipantes() {
     html += `<div style="font-size:12px;color:var(--text-ter);margin-bottom:8px">${_dpParticipantes.length} participante(s)</div>`;
     html += _dpParticipantes.map(p => {
       const snap = p.snapshot || {};
-      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border-light);font-size:13px">
-        <div style="flex:1">
-          <div style="font-weight:500">${snap.nome || '—'}</div>
+      const exp = snap.em_experiencia;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border-light);font-size:13px${exp ? ';background:rgba(245,158,11,0.06)' : ''}">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:500;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${snap.nome || '—'}
+            ${exp ? '<span style="font-size:10px;font-weight:600;color:#b45309;background:rgba(245,158,11,0.15);border:1px solid rgba(180,83,9,0.3);border-radius:4px;padding:1px 5px;white-space:nowrap">⏱ Em experiência</span>' : ''}
+          </div>
           <div style="color:var(--text-ter);font-size:12px">${snap.cargo || '—'} · ${snap.setor || '—'}</div>
         </div>
         <div style="color:var(--text-ter);font-size:12px">${snap.matricula || '—'}</div>
@@ -3968,7 +3972,7 @@ async function dpGerarPreviewParticipantes() {
   if (!ciclo) return;
   const el = document.getElementById('dpParticipantesBody');
   el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
-  let colabs = await sbGet('/rest/v1/colaboradores?ativo=eq.true&select=id,matricula,nome,cargo,setor,empresa_atuacao,gestor&order=nome.asc') || [];
+  let colabs = await sbGet('/rest/v1/colaboradores?ativo=eq.true&select=id,matricula,nome,cargo,setor,empresa_atuacao,gestor,em_experiencia&order=nome.asc') || [];
   const eleg0 = (ciclo.elegibilidade_ids || [])[0] || '';
   if (ciclo.tipo_elegibilidade === 'por_setor' && eleg0) {
     colabs = colabs.filter(c => (c.setor||'').toLowerCase().includes(eleg0.toLowerCase()));
@@ -4014,12 +4018,13 @@ async function dpAdicionarColaboradores(colabs) {
   let erros = 0;
   for (const c of colabs) {
     const snap = {
-      nome:      c.nome      || '',
-      matricula: c.matricula || '',
-      empresa:   c.empresa_atuacao || '',
-      setor:     c.setor     || '',
-      cargo:     c.cargo     || '',
-      unidade:   c.unidade   || ''
+      nome:          c.nome          || '',
+      matricula:     c.matricula     || '',
+      empresa:       c.empresa_atuacao || '',
+      setor:         c.setor         || '',
+      cargo:         c.cargo         || '',
+      unidade:       c.unidade       || '',
+      em_experiencia: !!c.em_experiencia
     };
     const res = await sbPost('/rest/v1/dp_ciclo_participantes', {
       ciclo_id:       _dpCicloAtual.id,
@@ -4081,9 +4086,12 @@ function dpFiltrarPicker() {
   if (!el) return;
   if (!lista.length) { el.innerHTML = '<div style="padding:8px 12px;font-size:13px;color:var(--text-ter)">Nenhum resultado.</div>'; return; }
   el.innerHTML = lista.slice(0, 30).map(c =>
-    `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--border-light)">
-      <span style="flex:1">${c.nome}</span>
-      <span style="color:var(--text-ter);font-size:12px">${c.setor||'—'}</span>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--border-light)${c.em_experiencia ? ';background:rgba(245,158,11,0.06)' : ''}">
+      <div style="flex:1;min-width:0">
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+        ${c.em_experiencia ? '<div style="font-size:11px;color:#b45309;font-weight:500;margin-top:1px">⏱ Em período de experiência</div>' : ''}
+      </div>
+      <span style="color:var(--text-ter);font-size:12px;white-space:nowrap">${c.setor||'—'}</span>
       <button class="btn btn-primary btn-sm" onclick="dpAdicionarUm(${c.id})" style="padding:3px 10px">+</button>
     </div>`
   ).join('');
