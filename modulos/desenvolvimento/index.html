@@ -1581,13 +1581,18 @@ async function init() {
   if (tabGestor) tabGestor.style.display = isGestor ? '' : 'none';
 
   if (isGestor) {
-    // Gestor: carrega somente o necessário para a visão da equipe
-    await initDpGestor();
-    // Ativa a aba "Minha Equipe" e esconde as demais seções
+    // Ativa sec-gestor-dp imediatamente — antes de qualquer await
+    // Garante que o gestor nunca veja seções exclusivas do RH, mesmo em caso de falha
     document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
     const secGestor = document.getElementById('sec-gestor-dp');
     if (secGestor) secGestor.classList.add('active');
     if (tabGestor) tabGestor.classList.add('active');
+    try {
+      await initDpGestor();
+    } catch (e) {
+      const body = document.getElementById('gestorDpBody');
+      if (body) body.innerHTML = `<div class="empty-state"><p>${e.message || 'Erro ao carregar avaliações. Tente recarregar a página.'}</p></div>`;
+    }
     return;
   }
 
@@ -6250,6 +6255,10 @@ async function initDpGestor() {
     const t = tipos.find(x => x.codigo === 'gestor_direto');
     _gdpTipoGestorId = t?.id || null;
   }
+  // Bloqueia se o tipo não estiver configurado — impede criação de registros incompletos
+  if (!_gdpTipoGestorId) {
+    throw new Error('Tipo de avaliador "gestor_direto" não encontrado. Verifique a configuração com o RH.');
+  }
   await gestorDpLoadCiclos();
 }
 
@@ -6396,8 +6405,13 @@ function gestorDpRenderAvaliacoes() {
 
 /* ─── abrir formulário de avaliação (reusa motor existente) ─── */
 async function gestorDpAbrirFormAvaliacao(participanteId) {
-  // Cria cópia para não corromper _gdpCicloAtual e injeta tipo_avaliador_id correto
-  _dpCicloAtual = { ..._gdpCicloAtual, tipo_avaliador_id: _gdpTipoGestorId || _gdpCicloAtual?.tipo_avaliador_id };
+  // Segunda verificação: impede avaliação se o tipo de avaliador não estiver resolvido
+  if (!_gdpTipoGestorId) {
+    toast('Configuração incompleta: tipo de avaliador "gestor_direto" não encontrado. Contate o RH.', true);
+    return;
+  }
+  // Injeta tipo_avaliador_id correto sem corromper _gdpCicloAtual
+  _dpCicloAtual = { ..._gdpCicloAtual, tipo_avaliador_id: _gdpTipoGestorId };
   _dpParticipantes = _gdpParticipantes;
   _dpAvaliacoes    = _gdpAvaliacoes;
   await dpAbrirFormAvaliacao(participanteId);
