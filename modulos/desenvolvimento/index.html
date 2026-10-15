@@ -4042,20 +4042,33 @@ async function dpAdicionarColaboradores(colabs) {
 let _dpPickerColabs = [];
 async function dpAbrirPickerParticipante() {
   const el = document.getElementById('dpParticipantesBody');
-  const jaIds = new Set(_dpParticipantes.map(p => p.colaborador_id));
-  _dpPickerColabs = _colaboradores.filter(c => !jaIds.has(c.id));
-  const picker = document.createElement('div');
-  picker.id = 'dpPickerInline';
-  picker.style.cssText = 'border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;background:var(--bg)';
-  picker.innerHTML = `<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-sec)">Adicionar participante</div>
-    <div class="search-box" style="margin-bottom:8px">
+  el.innerHTML = `<div id="dpPickerInline">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--border-light);margin-bottom:14px">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">Adicionar participante</div>
+        <div style="font-size:12px;color:var(--text-ter);margin-top:2px">Colaboradores elegíveis para este ciclo</div>
+      </div>
+      <button onclick="dpFecharPicker()" title="Fechar" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-ter);line-height:0;border-radius:4px" onmouseover="this.style.background='var(--border-light)'" onmouseout="this.style.background='none'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="search-box" style="margin-bottom:10px">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       <input type="text" id="dpPickerSearch" placeholder="Buscar por nome ou setor..." oninput="dpFiltrarPicker()" autofocus>
     </div>
-    <div id="dpPickerResultados" style="max-height:200px;overflow-y:auto"></div>
-    <div style="margin-top:8px;text-align:right"><button class="btn btn-secondary btn-sm" onclick="document.getElementById('dpPickerInline').remove()">Fechar busca</button></div>`;
-  el.prepend(picker);
+    <div style="display:flex;align-items:center;padding:5px 10px;font-size:10px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.6px;border-top:1px solid var(--border-light);border-bottom:1px solid var(--border-light);background:var(--bg)">
+      <span style="flex:1">Nome</span>
+      <span style="width:120px">Setor</span>
+      <span style="width:32px"></span>
+    </div>
+    <div id="dpPickerResultados" style="max-height:280px;overflow-y:auto"></div>
+    <div id="dpPickerCount" style="padding:6px 10px;font-size:11px;color:var(--text-ter);border-top:1px solid var(--border-light)"></div>
+  </div>`;
   dpFiltrarPicker();
+}
+
+function dpFecharPicker() {
+  dpRenderParticipantes();
 }
 
 function dpIsElegivel(c) {
@@ -4084,15 +4097,24 @@ function dpFiltrarPicker() {
   );
   const el = document.getElementById('dpPickerResultados');
   if (!el) return;
-  if (!lista.length) { el.innerHTML = '<div style="padding:8px 12px;font-size:13px;color:var(--text-ter)">Nenhum resultado.</div>'; return; }
+  const countEl = document.getElementById('dpPickerCount');
+  if (!lista.length) {
+    el.innerHTML = '<div style="padding:20px 10px;font-size:13px;color:var(--text-ter);text-align:center">Nenhum resultado para essa busca.</div>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+  const exibindo = Math.min(lista.length, 30);
+  if (countEl) countEl.textContent = lista.length > 30
+    ? `Exibindo 30 de ${lista.length} — refine a busca para ver mais`
+    : `${lista.length} colaborador(es) encontrado(s)`;
   el.innerHTML = lista.slice(0, 30).map(c =>
-    `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--border-light)${c.em_experiencia ? ';background:rgba(245,158,11,0.06)' : ''}">
+    `<div style="display:flex;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border-light);font-size:13px${c.em_experiencia ? ';background:rgba(245,158,11,0.06)' : ''}">
       <div style="flex:1;min-width:0">
         <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
         ${c.em_experiencia ? '<div style="font-size:11px;color:#b45309;font-weight:500;margin-top:1px">⏱ Em período de experiência</div>' : ''}
       </div>
-      <span style="color:var(--text-ter);font-size:12px;white-space:nowrap">${c.setor||'—'}</span>
-      <button class="btn btn-primary btn-sm" onclick="dpAdicionarUm(${c.id})" style="padding:3px 10px">+</button>
+      <span style="width:120px;flex-shrink:0;color:var(--text-ter);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px">${c.setor||'—'}</span>
+      <button class="btn btn-primary btn-sm" onclick="dpAdicionarUm(${c.id})" style="padding:3px 10px;width:32px;flex-shrink:0">+</button>
     </div>`
   ).join('');
 }
