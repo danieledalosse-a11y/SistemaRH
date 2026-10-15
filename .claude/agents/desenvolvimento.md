@@ -741,7 +741,7 @@ let _dpHistoricoCriterios = {}  // { versao_criterio_id: JSONB retornado por dp_
 - Critérios **binários**: exibe `resposta_texto` (Sim/Não) quando disponível; fallback `conceito_selecionado`
 - Critérios **escala**: `escala_opcao_label (valor)` | **numérico**: `valor_numerico_livre` | **conceito**: `conceito_selecionado`
 
-**Overlay:** `#formAvalOverlay` / `#formAvalPanel` — right-side drawer (`.wiz-overlay` pattern, largura 680px)
+**Overlay:** `#formAvalOverlay` / `#formAvalPanel` — **modal centralizado** (`.modal-aval-overlay` pattern, `position:fixed; display:flex; align-items:center; justify-content:center; z-index:9100`); **não** usa `.wiz-overlay` (que é right-side drawer z-index 9000).
 **IDs dos inputs de resposta:** `resp_${versaoCriterioId}`
 
 ### Etapa 3 — Cálculo
@@ -1119,13 +1119,13 @@ let _gdpTipoGestorId  = null;   // UUID de dp_tipos_avaliador WHERE codigo='gest
 | Função | O que faz |
 |---|---|
 | `initDpGestor()` | Resolve `_gdpTipoGestorId` (fallback GET se `_dpTiposAvaliador` vazio) |
-| `gestorDpLoadCiclos()` | GET `dp_ciclos?status=in.(aberto,em_andamento)` com joins; renderiza cards |
-| `gestorDpRenderCiclos(ciclos)` | Renderiza lista de ciclos; clique → `gestorDpAbrirDrawer` |
-| `gestorDpAbrirDrawer(cicloId)` | Busca dados completos do ciclo; pre-carrega participantes + avaliações; abre overlay |
+| `gestorDpLoadCiclos()` | **3 queries separadas** (dp_ciclos → dp_versoes → dp_ciclo_participantes) — sem INNER JOIN implícito; monta objeto enriquecido em JS; renderiza cards |
+| `gestorDpRenderCiclos(ciclos)` | Renderiza lista de ciclos; card exibe nome + "Período avaliado DD/MM a DD/MM" + "N participantes"; clique → `gestorDpAbrirDrawer` |
+| `gestorDpAbrirDrawer(cicloId)` | **2 queries separadas** (dp_ciclos → dp_versoes por versao_id) — sem INNER JOIN implícito; pre-carrega participantes + avaliações; abre overlay |
 | `gestorDpFecharDrawer()` | Fecha overlay; limpa `_gdpCicloAtual` e as 3 variáveis compartilhadas |
 | `gestorDpShowTab(id, btn)` | Troca aba ativa no drawer |
 | `gestorDpRenderParticipantes()` | Tabela read-only de `_gdpParticipantes` |
-| `gestorDpRenderAvaliacoes()` | Cards por participante; botão Avaliar → `gestorDpAbrirFormAvaliacao` |
+| `gestorDpRenderAvaliacoes()` | Cards por participante; filtros inline (busca nome + select cargo); botão Avaliar → `gestorDpAbrirFormAvaliacao` |
 | `gestorDpAbrirFormAvaliacao(participanteId)` | **Usa spread** para não mutar cache: `_dpCicloAtual = { ..._gdpCicloAtual, tipo_avaliador_id: _gdpTipoGestorId }` ; chama `dpAbrirFormAvaliacao` do motor RH |
 | `gestorDpLoadResultados()` | Filtra resultados por `tipo_avaliador_id === _gdpTipoGestorId` |
 | `gestorDpRenderResultados()` | Exibe nota_final + conceito por participante |
@@ -1212,3 +1212,85 @@ Na primeira drag, a overlay recebe `.dragging` e o painel recebe `left`/`top` fi
 - **`colaboradores.id` é INTEGER** — FKs para colaboradores usam `INTEGER`, nunca UUID
 - **`dev_competencias.id` é BIGINT** — não confundir com UUID de dp_criterios
 - **`dev_competencias.tipo`** usa `'tecnica'` (feminino); `dp_tipo_criterio` usa `'tecnico'`
+
+---
+
+## INNER JOIN implícito no PostgREST — armadilha crítica RLS
+
+### O problema
+
+PostgREST usa **INNER JOIN** automaticamente quando uma FK é `NOT NULL` e o recurso relacionado é embutido via `select=*,tabela_relacionada(*)`. Com RLS ativa, se a policy da tabela relacionada não retornar linhas para o perfil do usuário autenticado no contexto do embed, o INNER JOIN **zera toda a query pai** — sem erro, sem aviso, resultado vazio silencioso.
+
+### Onde ocorre no D&P
+
+| Query | FK NOT NULL | Impacto |
+|---|---|---|
+| `gestorDpLoadCiclos`: `dp_ciclos?select=*,dp_versoes(*)` | `versao_id NOT NULL` | Lista de ciclos vazia para gestor |
+| `gestorDpAbrirDrawer`: `dp_ciclos?select=*,dp_versoes(*)` | `versao_id NOT NULL` | Drawer abre sem dados de versão; `_gdpCicloAtual.dp_versoes` null |
+| `dpAbrirFormAvaliacao`: `dp_versao_criterios?select=*,dp_criterios(...),dp_escalas(...)` | `criterio_id NOT NULL` | Formulário abre sem critérios ("Nenhum critério configurado") |
+
+### Fix padrão — separar queries e montar em JS
+
+```js
+// NUNCA (para perfil gestor):
+const ciclos = await sbGet('/rest/v1/dp_ciclos?select=*,dp_versoes(*)');
+
+// SEMPRE:
+const ciclos = await sbGet('/rest/v1/dp_ciclos?select=*');
+const versaoIds = [...new Set(ciclos.map(c => c.versao_id).filter(Boolean))];
+const versoes = versaoIds.length ? await sbGet(`/rest/v1/dp_versoes?id=in.(${versaoIds.join(',')})&select=...`) : [];
+const versaoMap = Object.fromEntries(versoes.map(v => [v.id, v]));
+const enriquecidos = ciclos.map(c => ({ ...c, dp_versoes: versaoMap[c.versao_id] || null }));
+```
+
+**Regra:** sempre que uma tabela relacionada tem RLS ativa com policies diferentes do perfil atual, usar queries separadas + montagem manual em JS.
+
+### Correções aplicadas
+
+| Função | Commit | Fix |
+|---|---|---|
+| `gestorDpLoadCiclos` | `89effd2` | 3 queries: dp_ciclos → dp_versoes → dp_ciclo_participantes |
+| `gestorDpAbrirDrawer` | `f3de5d9` | 2 queries: dp_ciclos → dp_versoes |
+| `dpAbrirFormAvaliacao` (critérios) | `5bf1b9f` | Promise.all: dp_versao_criterios → dp_criterios + dp_escalas + dp_escala_opcoes |
+
+---
+
+## Correções entregues (2026-10-15) — visão Gestor funcional
+
+### Bugs corrigidos
+
+| Commit | Problema | Causa raiz | Fix |
+|---|---|---|---|
+| `e3bd216` | `ReferenceError: initDpGestor is not defined` ao inicializar com perfil gestor | `init()` chamado no primeiro `<script>` antes do segundo `<script>` (que define `initDpGestor`) ser parseado | Removida chamada `init()` do primeiro script; adicionada ao final do segundo script |
+| `89effd2` | Token de sessão sempre avaliado como "não expirado" | `sess.expires_at` é em UNIX **segundos**; `Date.now()` é em **milissegundos** → comparação direta sempre falsa | Corrigido para `sess.expires_at * 1000 < Date.now()` |
+| `89effd2` | Requisições com token expirado retornam 401 silencioso → array vazio | `sbGet` retornava `[]` em qualquer erro HTTP | `sbGet` detecta `r.status === 401` → chama `logout()` |
+| `89effd2` | Gestor não via nenhum ciclo ("Nenhum ciclo aberto") | `versao_id NOT NULL` → PostgREST INNER JOIN → RLS zerando resultado | `gestorDpLoadCiclos` separado em 3 queries |
+| `f3de5d9` | `dp_versoes` nulo no drawer (exibia "—" onde deveria ser versão) | Mesmo INNER JOIN em `gestorDpAbrirDrawer` | Separado em 2 queries |
+| `5bf1b9f` | Botão "Avaliar" não fazia nada (formulário abria vazio) | `criterio_id NOT NULL` em `dp_versao_criterios` → INNER JOIN zerando critérios para gestor | `dpAbrirFormAvaliacao` separado em Promise.all de 3 queries |
+
+### UX gestor — melhorias entregues (commit `f3de5d9`)
+
+| Melhoria | Detalhe |
+|---|---|
+| **Modal centralizado** | `formAvalOverlay` migrado de `.wiz-overlay` (right-side, z-index 9000) para `.modal-aval-overlay` (centered, z-index 9100). CSS: `position:fixed; inset:0; display:flex; align-items:center; justify-content:center`. Painel com `border-radius:12px; max-width:900px; max-height:90vh` |
+| **Indicador de progresso** | Header do modal exibe barra azul + label "X de Y critérios respondidos"; atualizado ao abrir e ao salvar rascunho via `dpAtualizarProgressoAval()` |
+| **Filtros na aba Avaliações** | Input busca por nome (tempo real) + select cargo (populado dos participantes). Estados: `_gdpAvalFiltroNome` / `_gdpAvalFiltroCargo`; resetados ao abrir/fechar drawer |
+
+### Paridade visual RH × Gestor — card de ciclo (commits b062ba1, f1e3395)
+
+Card do gestor (`gestorDpRenderCiclos`) alinhado ao padrão do RH:
+- Período exibido em linha própria abaixo do nome: `"Período avaliado DD/MM/AAAA a DD/MM/AAAA"` (separador `" a "`, não `" → "`)
+- Meta-info em `12px`, cor `var(--text-sec)`, `justify-content:flex-start` (`.row-meta` tem `flex-end` global)
+- Participantes na mesma linha secundária: `"Período avaliado DD/MM a DD/MM · N participantes"`
+- **Causa da regressão anterior:** `.row-meta` tem `justify-content:flex-end` no CSS global → todo conteúdo ia para a direita. Fix: `style="justify-content:flex-start"` inline.
+
+---
+
+## Estado atual — ciclos em produção (2026-10-15)
+
+| Ciclo | Status | Avaliador | Participantes |
+|---|---|---|---|
+| Gratificação CD - Setembro/2026 | **aberto** | Oriel | 82 da equipe |
+| Gratificação CD - Outubro/2026 | rascunho | Oriel | 88 (elegíveis) |
+
+**Pendência:** validar fluxo completo com Oriel (abrir → Avaliar → salvar rascunho → concluir) sem criar avaliações reais durante os testes; outubro permanece em rascunho até aprovação.
