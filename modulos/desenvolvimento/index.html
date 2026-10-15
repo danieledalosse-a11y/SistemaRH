@@ -4063,8 +4063,10 @@ async function dpAbrirPickerParticipante() {
     </div>
     <div id="dpPickerResultados" style="max-height:280px;overflow-y:auto"></div>
     <div id="dpPickerCount" style="padding:6px 10px;font-size:11px;color:var(--text-ter);border-top:1px solid var(--border-light)"></div>
+    <div style="padding:10px 10px 4px;border-top:1px solid var(--border-light);text-align:center">
+      <button onclick="dpFecharPicker();dpGerarPreviewParticipantes()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-ter);text-decoration:underline;padding:0" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--text-ter)'">Prefere adicionar todos automaticamente? → Gerar sugestão</button>
+    </div>
   </div>`;
-  dpFiltrarPicker();
 }
 
 function dpFecharPicker() {
@@ -4089,15 +4091,20 @@ function dpIsElegivel(c) {
 
 function dpFiltrarPicker() {
   const q = (document.getElementById('dpPickerSearch').value || '').toLowerCase();
+  const el = document.getElementById('dpPickerResultados');
+  if (!el) return;
+  const countEl = document.getElementById('dpPickerCount');
+  if (!q) {
+    el.innerHTML = '<div style="padding:28px 10px;font-size:13px;color:var(--text-ter);text-align:center">Digite um nome ou setor para buscar</div>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
   const jaIds = new Set(_dpParticipantes.map(p => p.colaborador_id));
   const lista = _colaboradores.filter(c =>
     !jaIds.has(c.id) &&
     (_dpCicloAtual?.tipo_elegibilidade === 'todos' || dpIsElegivel(c)) &&
-    (!q || c.nome.toLowerCase().includes(q) || (c.setor||'').toLowerCase().includes(q))
+    (c.nome.toLowerCase().includes(q) || (c.setor||'').toLowerCase().includes(q))
   );
-  const el = document.getElementById('dpPickerResultados');
-  if (!el) return;
-  const countEl = document.getElementById('dpPickerCount');
   if (!lista.length) {
     el.innerHTML = '<div style="padding:20px 10px;font-size:13px;color:var(--text-ter);text-align:center">Nenhum resultado para essa busca.</div>';
     if (countEl) countEl.textContent = '';
