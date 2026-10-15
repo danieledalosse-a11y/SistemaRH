@@ -616,16 +616,16 @@ Implementado na seção Modelos (`id="modelosSearchInput"`). Filtra em tempo rea
 </div>
 ```
 
-### Drawers — padrão right-side
+### Drawers — dois padrões
 
-Ambos os wizards do módulo usam right-side drawer (não modal centrado):
+**Wizards de configuração (right-side):**
 
 | Overlay class | Panel class | Abertura | Fechamento |
 |---|---|---|---|
 | `.wiz-overlay` | `.wiz-panel` | `abrirWizard()` | `fecharWizard()` |
 | `.wizard-overlay` | `.wizard-panel` | `wizardAbrir()` | `wizardFechar()` |
 
-CSS base (mesmo padrão nos dois):
+CSS base (right-side):
 ```css
 .wizard-panel {
   position: absolute; top: 0; right: 0; bottom: 0;
@@ -634,6 +634,36 @@ CSS base (mesmo padrão nos dois):
   transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
 }
 .wizard-overlay.open .wizard-panel { transform: translateX(0); }
+```
+
+**Drawers de ciclo e avaliação (modal centrado) — `.wiz-overlay--center`:**
+
+O modificador `.wiz-overlay--center` converte qualquer `.wiz-overlay` + `.wiz-container` de right-side para modal centrado:
+
+```css
+.wiz-overlay--center { display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 9100; }
+.wiz-overlay--center .wiz-container { position: static; width: 900px; max-width: 96vw; max-height: 90vh; border-radius: 16px; transform: scale(0.96) translateY(10px); }
+.wiz-overlay--center.open .wiz-container { transform: scale(1) translateY(0); }
+```
+
+Elementos que usam modal centrado:
+
+| Elemento | Overlay ID | Classes |
+|---|---|---|
+| Drawer ciclo RH | `drawerDpCicloOverlay` | `wiz-overlay wiz-overlay--center` |
+| Panel ciclo RH | `drawerDpCiclo` | `wiz-container` (filho do overlay) |
+| Drawer ciclo Gestor | `gestorDpDrawerOverlay` | `wiz-overlay wiz-overlay--center` |
+| Panel ciclo Gestor | `gestorDpDrawerPanel` | `wiz-container` (filho do overlay) |
+| Overlay formulário avaliação | `formAvalOverlay` | `wiz-overlay wiz-overlay--center` |
+| Panel formulário avaliação | `formAvalPanel` | `wiz-container modal-aval-panel` |
+
+**Regra JS para drawers centrados:** togglear `.open` somente no overlay pai — o painel recebe a animação via CSS (`.wiz-overlay.open .wiz-container`). Não adicionar/remover `.open` no painel separadamente.
+
+```js
+// Abrir:
+document.getElementById('drawerDpCicloOverlay').classList.add('open');
+// Fechar:
+document.getElementById('drawerDpCicloOverlay').classList.remove('open');
 ```
 
 ---
@@ -727,7 +757,7 @@ let _dpHistoricoCriterios = {}  // { versao_criterio_id: JSONB retornado por dp_
 | Função | O que faz |
 |---|---|
 | `dpLoadAvaliacoes(cicloId)` | GET dp_avaliacoes; chama dpRenderAvaliacoes |
-| `dpRenderAvaliacoes()` | Card por participante cruzando _dpAvaliacoes; badge por status |
+| `dpRenderAvaliacoes(opts={})` | Card por participante cruzando _dpAvaliacoes; badge por status. Opts: `containerId` (default `dpAvaliacoesBody`), `onAvaliarFn` (default `dpAbrirFormAvaliacao`), `participants` (default `_dpParticipantes`), `prefixHtml` (HTML antes da lista), `hideAvaliarWhenDone` (boolean — se `true`, oculta botão Avaliar para status `concluida`/`publicada`) |
 | `dpAbrirFormAvaliacao(participanteId)` | Busca/cria dp_avaliacao; carrega critérios+respostas; busca histórico por critério via `sbRpc('dp_fn_historico_criterio',...)` em paralelo → `_dpHistoricoCriterios`; abre formAvalOverlay |
 | `dpRenderFormAvaliacao()` | Bloco por critério com input adaptado ao `tipo_resposta` + bloco read-only de histórico abaixo de cada campo (ciclo anterior, valor/conceito, nota_final) |
 | `salvarAvaliacao(status)` | Coleta resp_*; PATCH/POST dp_respostas; PATCH dp_avaliacoes; registra evento |
@@ -1124,11 +1154,38 @@ let _gdpTipoGestorId  = null;   // UUID de dp_tipos_avaliador WHERE codigo='gest
 | `gestorDpAbrirDrawer(cicloId)` | **2 queries separadas** (dp_ciclos → dp_versoes por versao_id) — sem INNER JOIN implícito; pre-carrega participantes + avaliações; abre overlay |
 | `gestorDpFecharDrawer()` | Fecha overlay; limpa `_gdpCicloAtual` e as 3 variáveis compartilhadas |
 | `gestorDpShowTab(id, btn)` | Troca aba ativa no drawer |
-| `gestorDpRenderParticipantes()` | Tabela read-only de `_gdpParticipantes` |
-| `gestorDpRenderAvaliacoes()` | Cards por participante; filtros inline (busca nome + select cargo); botão Avaliar → `gestorDpAbrirFormAvaliacao` |
 | `gestorDpAbrirFormAvaliacao(participanteId)` | **Usa spread** para não mutar cache: `_dpCicloAtual = { ..._gdpCicloAtual, tipo_avaliador_id: _gdpTipoGestorId }` ; chama `dpAbrirFormAvaliacao` do motor RH |
-| `gestorDpLoadResultados()` | Filtra resultados por `tipo_avaliador_id === _gdpTipoGestorId` |
-| `gestorDpRenderResultados()` | Exibe nota_final + conceito por participante |
+| `gestorDpLoadResultados()` | Filtra resultados por `tipo_avaliador_id === _gdpTipoGestorId`; chama `dpRenderResultados({containerId:'gdptab-resultados', readonly:true})` |
+| `gestorDpShowTab(id, btn)` | Troca aba ativa; chama funções **compartilhadas** do motor RH com `opts` — ver seção abaixo |
+
+### Funções de renderização compartilhadas RH × Gestor (commit 0a36c67)
+
+**Premissa:** RH e Gestor reutilizam **as mesmas três funções** de renderização — diferenças controladas por `opts`:
+
+| Função | Chamada pelo RH | Chamada pelo Gestor (via `gestorDpShowTab`) |
+|---|---|---|
+| `dpRenderParticipantes(opts)` | `dpRenderParticipantes()` — botões visíveis, editável em rascunho | `dpRenderParticipantes({containerId:'gdptab-participantes', readonly:true})` |
+| `dpRenderAvaliacoes(opts)` | `dpRenderAvaliacoes()` — botão Avaliar sempre visível | `dpRenderAvaliacoes({containerId:'gdptab-avaliacoes', onAvaliarFn:'gestorDpAbrirFormAvaliacao', prefixHtml:_gdpFiltrosHtml(), participants:filtered, hideAvaliarWhenDone:true})` |
+| `dpRenderResultados(opts)` | `dpRenderResultados()` — toolbar + botões recalcular/ajustar/encerrar visíveis | `dpRenderResultados({containerId:'gdptab-resultados', readonly:true})` — toolbar e botões omitidos |
+
+**`opts` disponíveis por função:**
+
+`dpRenderParticipantes(opts)`:
+- `containerId` — ID do container (default: `dpParticipantesBody`)
+- `readonly` — boolean; se `true`, oculta botões de edição e container `#dpParticipantesBotoes` (default: baseado em `ciclo.status !== 'rascunho'`)
+
+`dpRenderAvaliacoes(opts)`:
+- `containerId` — ID do container (default: `dpAvaliacoesBody`)
+- `onAvaliarFn` — nome da função JS chamada pelo botão Avaliar (default: `dpAbrirFormAvaliacao`)
+- `participants` — array de participantes a renderizar (default: `_dpParticipantes`)
+- `prefixHtml` — HTML inserido antes da lista (ex: filtros do gestor)
+- `hideAvaliarWhenDone` — se `true`, oculta botão Avaliar para `status=concluida` ou `publicada`
+
+`dpRenderResultados(opts)`:
+- `containerId` — ID do container (default: `dpResultadosBody`)
+- `readonly` — se `true`, omite toolbar (Calcular todos/Exportar/Encerrar) e botões por card (Recalcular/Ajustar)
+
+**Estado compartilhado:** `gestorDpAbrirDrawer` (linha 6449 do index.html) seta `_dpAvaliacoes = _gdpAvaliacoes` antes de chamar `gestorDpShowTab` — garante que o lookup de status na `dpRenderAvaliacoes` funciona corretamente para o gestor.
 
 ### Regra crítica: spread no `gestorDpAbrirFormAvaliacao`
 
@@ -1285,6 +1342,14 @@ Card do gestor (`gestorDpRenderCiclos`) alinhado ao padrão do RH:
 - **Causa da regressão anterior:** `.row-meta` tem `justify-content:flex-end` no CSS global → todo conteúdo ia para a direita. Fix: `style="justify-content:flex-start"` inline.
 
 ---
+
+## Melhorias entregues (2026-10-15) — unificação visual RH × Gestor
+
+| Commit | O que foi feito |
+|---|---|
+| `0a36c67` | Refatoração arquitetural: 3 funções de render duplicadas do Gestor (`gestorDpRenderParticipantes`, `gestorDpRenderAvaliacoes`, `gestorDpRenderResultados`) eliminadas. Substituídas por chamadas às funções compartilhadas do motor RH com `opts` parametrizados. Sem alteração de lógica ou comportamento — apenas fonte única de código. |
+| `cfb4846` | Drawer de ciclo do RH (`#drawerDpCicloOverlay` + `#drawerDpCiclo`) convertido de right-side para modal centrado. Classes `drawer-overlay`/`drawer-versao` substituídas por `wiz-overlay wiz-overlay--center`/`wiz-container` (mesmo padrão do drawer gestor). Painel agora é filho do overlay. JS simplificado: `dpAbrirDrawerCiclo` e `dpFecharDrawerCiclo` toggleiam apenas o overlay. |
+| `63c3a60` | Parâmetro `hideAvaliarWhenDone: true` adicionado a `dpRenderAvaliacoes`. Gestor passa `true` → botão Avaliar oculto para avaliações `concluida`/`publicada`. RH não passa (default `false`) → comportamento inalterado. Interface reflete corretamente as permissões sem duplicar lógica de renderização. |
 
 ## Estado atual — ciclos em produção (2026-10-15)
 
