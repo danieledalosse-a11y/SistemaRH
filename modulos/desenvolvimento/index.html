@@ -744,11 +744,11 @@
         <div style="font-size:13px;color:var(--text-sec)">Gerencie os ciclos de avaliação de desempenho.</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary" onclick="dpAbrirModalCicloIndividual()">
+        <button class="btn btn-secondary" data-rh-only onclick="dpAbrirModalCicloIndividual()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
           Avaliação individual
         </button>
-        <button class="btn btn-primary" onclick="dpAbrirModalCiclo()">
+        <button class="btn btn-primary" data-rh-only onclick="dpAbrirModalCiclo()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Novo ciclo
         </button>
@@ -1571,11 +1571,12 @@ function showDrawerTab(id, btn) {
 async function init() {
   initAuth();
 
-  const isGestor = _perfil === 'gestor';
+  const isGestor    = _perfil === 'gestor';
+  const isDiretoria = _perfil === 'diretoria';
 
   // Tabs visíveis por perfil
   document.querySelectorAll('[data-rh-only]').forEach(el => {
-    el.style.display = isGestor ? 'none' : '';
+    el.style.display = (isGestor || isDiretoria) ? 'none' : '';
   });
   const tabGestor = document.getElementById('tabGestorDP');
   if (tabGestor) tabGestor.style.display = isGestor ? '' : 'none';
@@ -2209,8 +2210,8 @@ async function renderCiclos() {
       </div>
       <div class="ciclo-actions">
         <span class="ciclo-badge ${st}">${STATUS_LABEL[st]||st}</span>
-        ${st === 'rascunho' ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();dpMudarStatus('${c.id}','aberto')">Abrir</button>` : ''}
-        ${st === 'aberto' || st === 'em_andamento' ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();dpMudarStatus('${c.id}','encerrado')">Encerrar</button>` : ''}
+        ${st === 'rascunho' && _perfil !== 'diretoria' ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();dpMudarStatus('${c.id}','aberto')">Abrir</button>` : ''}
+        ${(st === 'aberto' || st === 'em_andamento') && _perfil !== 'diretoria' ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();dpMudarStatus('${c.id}','encerrado')">Encerrar</button>` : ''}
       </div>
     </div>`;
   }
@@ -4353,13 +4354,13 @@ function dpRenderInfoCiclo() {
       <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Criado em</div>
         <div>${formatDate(c.criado_em ? c.criado_em.split('T')[0] : null)}</div></div>
     </div>
-    ${_perfil !== 'gestor' ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+    ${_perfil !== 'gestor' && _perfil !== 'diretoria' ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
       <button class="btn btn-secondary btn-sm" onclick="dpAbrirModalCiclo('${c.id}')">Editar ciclo</button>
     </div>` : ''}
-    ${c.status === 'rascunho' ? `<div style="margin-top:10px;display:flex;gap:8px">
+    ${c.status === 'rascunho' && _perfil !== 'diretoria' ? `<div style="margin-top:10px;display:flex;gap:8px">
       <button class="btn btn-primary btn-sm" onclick="dpMudarStatus('${c.id}','aberto')">Abrir ciclo</button>
     </div>` : ''}
-    ${c.status === 'aberto' ? `<div style="margin-top:10px">
+    ${c.status === 'aberto' && _perfil !== 'diretoria' ? `<div style="margin-top:10px">
       <button class="btn btn-secondary btn-sm" onclick="dpMudarStatus('${c.id}','encerrado')">Encerrar ciclo</button>
     </div>` : ''}`;
 }
@@ -5830,7 +5831,7 @@ function dpRenderResultados() {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       ${aguardando.length ? `<button class="btn btn-secondary btn-sm" onclick="dpCalcularTodos()" style="font-size:12px">Calcular resultados (${aguardando.length})</button>` : ''}
       <button class="btn btn-secondary btn-sm" onclick="dpExportarResultados()" style="font-size:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:-2px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Exportar Excel</button>
-      ${podeEncerrar ? `<button class="btn btn-primary btn-sm" id="btnEncerrarCiclo" onclick="dpEncerrarCiclo()" style="font-size:12px">Encerrar ciclo</button>` : ''}
+      ${podeEncerrar && _perfil !== 'diretoria' ? `<button class="btn btn-primary btn-sm" id="btnEncerrarCiclo" onclick="dpEncerrarCiclo()" style="font-size:12px">Encerrar ciclo</button>` : ''}
     </div>
   </div>`;
 
