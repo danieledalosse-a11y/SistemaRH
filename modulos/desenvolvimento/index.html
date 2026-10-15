@@ -615,6 +615,54 @@
     align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0;
     background: var(--bg);
   }
+  .modal-aval-header-info {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 6px; margin-bottom: 14px;
+  }
+  .aval-valor-badge {
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    background: var(--surface); border: 1px solid var(--border-light);
+    padding: 2px 10px; border-radius: 20px; white-space: nowrap;
+  }
+  .aval-card {
+    background: var(--surface); border: 1px solid var(--border-light);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .aval-card-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+  .aval-card-icon {
+    width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg); border: 1px solid var(--border-light); color: var(--accent);
+  }
+  .aval-card-num { font-size: 10px; font-weight: 700; color: var(--text-ter); letter-spacing: 0.5px; margin-bottom: 2px; }
+  .aval-card-nome { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .aval-card-desc { font-size: 12px; color: var(--text-sec); margin-top: 4px; line-height: 1.4; }
+  .aval-card-ref { font-size: 11px; color: var(--text-ter); font-style: italic; margin-top: 2px; }
+  .aval-bin-btns { display: flex; gap: 8px; margin-top: 10px; }
+  .aval-btn-bin {
+    padding: 7px 22px; border-radius: 8px; border: 1.5px solid var(--border);
+    cursor: pointer; font-size: 13px; font-weight: 500; background: var(--bg);
+    color: var(--text-sec); display: flex; align-items: center; gap: 5px;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .aval-btn-bin--sim.active { background: var(--green); color: #fff; border-color: var(--green); }
+  .aval-btn-bin--nao.active { background: var(--red);   color: #fff; border-color: var(--red); }
+  .aval-obs-wrap { margin-top: 8px; }
+  .aval-obs-label { font-size: 11px; color: var(--text-ter); margin-bottom: 3px; }
+  .aval-obs-label--nao { color: #b45309; }
+  .aval-obs {
+    width: 100%; padding: 7px 10px; border: 1px solid var(--border-light);
+    border-radius: 8px; font-size: 12px; resize: vertical; min-height: 52px;
+    box-sizing: border-box; font-family: inherit; color: var(--text);
+    background: var(--bg); transition: border-color 0.2s;
+  }
+  .aval-obs:focus { outline: none; border-color: var(--accent); }
+  .aval-obs--nao { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.04); }
+  .aval-hist {
+    margin-top: 8px; padding: 6px 10px; background: var(--bg);
+    border-left: 2px solid var(--border); border-radius: 0 6px 6px 0;
+    font-size: 11px; color: var(--text-sec);
+  }
   /* filtros na aba Avaliações do drawer gestor */
   .gdp-aval-filtros {
     display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
@@ -5637,15 +5685,75 @@ async function dpAbrirFormAvaliacao(participanteId) {
 function dpAtualizarProgressoAval() {
   const total = _dpVersaoCritsParaForm.length;
   if (!total) return;
-  // Conta critérios com resposta já preenchida (de _dpRespostasAtual ou inputs no DOM)
-  const respondidos = _dpRespostasAtual.filter(r =>
-    _dpVersaoCritsParaForm.some(vc => vc.id === r.versao_criterio_id)
-  ).length;
+  let respondidos = 0;
+  let valorAcumulado = 0;
+  let temModeloMonetario = false;
+  for (const vc of _dpVersaoCritsParaForm) {
+    if (vc.valor_se_sim != null) temModeloMonetario = true;
+    const tipo = vc.tipo_resposta;
+    if (tipo === 'binario') {
+      const el = document.getElementById(`resp_${vc.id}`);
+      const val = el ? el.value : (_dpRespostasAtual.find(r => r.versao_criterio_id === vc.id)?.resposta_texto || '');
+      if (val === 'sim' || val === 'nao') {
+        respondidos++;
+        if (val === 'sim' && vc.valor_se_sim != null) valorAcumulado += Number(vc.valor_se_sim);
+      }
+    } else if (tipo === 'escala') {
+      const checked = document.querySelector(`input[name="resp_${vc.id}"]:checked`);
+      const fromDb  = _dpRespostasAtual.find(r => r.versao_criterio_id === vc.id);
+      if (checked || (fromDb && fromDb.escala_opcao_id)) respondidos++;
+    } else {
+      const el     = document.getElementById(`resp_${vc.id}`);
+      const fromDb = _dpRespostasAtual.find(r => r.versao_criterio_id === vc.id);
+      if ((el && el.value !== '') || (fromDb && fromDb.resposta_texto)) respondidos++;
+    }
+  }
   const pct = Math.round((respondidos / total) * 100);
-  const fill = document.getElementById('formAvalProgressFill');
-  const label = document.getElementById('formAvalProgressLabel');
+  const fill    = document.getElementById('formAvalProgressFill');
+  const label   = document.getElementById('formAvalProgressLabel');
+  const valorEl = document.getElementById('formAvalValorAcumulado');
   if (fill)  fill.style.width = pct + '%';
   if (label) label.textContent = `${respondidos} de ${total} critério${total!==1?'s':''} respondido${respondidos!==1?'s':''}`;
+  if (valorEl) {
+    if (temModeloMonetario) {
+      valorEl.style.display = '';
+      valorEl.textContent = `R$ ${valorAcumulado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+    } else {
+      valorEl.style.display = 'none';
+    }
+  }
+}
+
+function _dpIconeCriterio(nome) {
+  const n = (nome || '').toLowerCase();
+  const mapa = [
+    [['apresent','uniforme','aparência','vestuário','barba','maquiagem','semblante'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2l-4 4-4-4-4.38 1.46A2 2 0 006 5.36V20a2 2 0 002 2h8a2 2 0 002-2V5.36a2 2 0 00-1.62-1.9z"/></svg>'],
+    [['atendimento','cliente','relacionamento','simpatia','cordialidade','negocia'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>'],
+    [['assiduidade','falta','afastamento','ausência','atestado'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'],
+    [['pontualidade','horário','atraso'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'],
+    [['qualidade','precisão','erro','exatidão'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'],
+    [['produtividade','meta','resultado','produção','desempenho'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'],
+    [['limpeza','organização','ordem','conservação','higiene'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>'],
+    [['segurança','epi','acidente','proteção','risco'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'],
+    [['cooperação','equipe','colaboração','time'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>'],
+    [['vale','gás','vt','benefício','ticket'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>'],
+    [['treinamento','capacitação','aprendizado','curso'],
+     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>'],
+  ];
+  for (const [keywords, svg] of mapa) {
+    if (keywords.some(k => n.includes(k))) return svg;
+  }
+  return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="11" y2="16"/></svg>';
 }
 
 function dpRenderFormAvaliacao() {
@@ -5660,17 +5768,19 @@ function dpRenderFormAvaliacao() {
     const crit = vc.dp_criterios || {};
     const resp = _dpRespostasAtual.find(r => r.versao_criterio_id === vc.id);
     const tipo = vc.tipo_resposta;
+    const num  = String(idx + 1).padStart(2, '0');
+    const icon = _dpIconeCriterio(crit.nome);
     let inputHtml = '';
 
     if (tipo === 'escala') {
       const escala = vc.dp_escalas || {};
       const opcoes = (escala.dp_escala_opcoes || []).slice().sort((a,b) => (a.ordem||0)-(b.ordem||0));
       if (opcoes.length) {
-        inputHtml = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">` +
+        inputHtml = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">` +
           opcoes.map(op => {
             const sel = resp && resp.escala_opcao_id === op.id;
-            return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;${sel?'background:var(--accent);color:#fff;border-color:var(--accent)':''}">
-              <input type="radio" name="resp_${vc.id}" id="resp_${vc.id}" value="${op.id}" data-tipo="escala" ${sel?'checked':''} onchange="dpAvalRadioChange(this)" style="display:none">
+            return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;${sel?'background:var(--accent);color:#fff;border-color:var(--accent)':'background:var(--bg)'}">
+              <input type="radio" name="resp_${vc.id}" id="resp_${vc.id}" value="${op.id}" data-tipo="escala" ${sel?'checked':''} onchange="dpAvalRadioChange(this);dpAtualizarProgressoAval()" style="display:none">
               ${op.rotulo}${op.valor_numerico != null ? ` <span style="font-size:11px;opacity:0.75">(${op.valor_numerico})</span>` : ''}
             </label>`;
           }).join('') +
@@ -5679,24 +5789,28 @@ function dpRenderFormAvaliacao() {
         inputHtml = `<div style="font-size:12px;color:var(--text-ter);margin-top:6px">Escala sem opções configuradas.</div>`;
       }
     } else if (tipo === 'binario') {
-      const val = resp ? resp.resposta_texto : null;
-      const temValMon = vc.valor_se_sim != null;
-      const valSimFmt = temValMon ? `R$ ${Number(vc.valor_se_sim).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null;
-      const valNaoFmt = temValMon ? `R$ ${Number(vc.valor_se_nao||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null;
-      inputHtml = `<div style="margin-top:8px">
-        <div style="display:flex;gap:8px">
-          <button type="button" id="resp_${vc.id}_sim" data-tipo="binario" data-campo="resp_${vc.id}"
-            onclick="dpAvalBinario('${vc.id}','sim')"
-            style="padding:6px 18px;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:13px;${val==='sim'?'background:var(--green);color:#fff;border-color:var(--green)':'background:var(--surface)'}">Sim${temValMon?` · ${valSimFmt}`:''}</button>
-          <button type="button" id="resp_${vc.id}_nao" data-tipo="binario" data-campo="resp_${vc.id}"
-            onclick="dpAvalBinario('${vc.id}','nao')"
-            style="padding:6px 18px;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:13px;${val==='nao'?'background:var(--red);color:#fff;border-color:var(--red)':'background:var(--surface)'}">Não${temValMon?` · ${valNaoFmt}`:''}</button>
-        </div>
+      const val    = resp ? resp.resposta_texto : null;
+      const obsVal = resp ? (resp.observacao || '') : '';
+      const obsNao = val === 'nao';
+      inputHtml = `<div class="aval-bin-btns">
+        <button type="button" id="resp_${vc.id}_sim" onclick="dpAvalBinario('${vc.id}','sim')"
+          class="aval-btn-bin aval-btn-bin--sim${val==='sim'?' active':''}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Sim
+        </button>
+        <button type="button" id="resp_${vc.id}_nao" onclick="dpAvalBinario('${vc.id}','nao')"
+          class="aval-btn-bin aval-btn-bin--nao${val==='nao'?' active':''}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Não
+        </button>
         <input type="hidden" id="resp_${vc.id}" data-tipo="binario" value="${val||''}">
+      </div>
+      <div class="aval-obs-wrap">
+        <div class="aval-obs-label${obsNao?' aval-obs-label--nao':''}" id="obs_label_${vc.id}">${obsNao?'⚠ Justificativa (recomendado)':'Observação'}</div>
+        <textarea id="obs_${vc.id}" class="aval-obs${obsNao?' aval-obs--nao':''}"
+          placeholder="Registre o motivo ou exemplo…">${obsVal}</textarea>
       </div>`;
     } else if (tipo === 'texto') {
       inputHtml = `<textarea id="resp_${vc.id}" data-tipo="texto"
-        style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;min-height:80px;box-sizing:border-box"
+        style="width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;min-height:80px;box-sizing:border-box;font-family:inherit"
         placeholder="Digite a observação...">${resp ? (resp.resposta_texto || '') : ''}</textarea>`;
     } else if (tipo === 'numerico' || tipo === 'numerico_com_meta') {
       const vNum = resp ? (resp.valor_numerico_livre != null ? resp.valor_numerico_livre : '') : '';
@@ -5704,12 +5818,13 @@ function dpRenderFormAvaliacao() {
       const temRange = vc.nota_min != null && vc.nota_max != null;
       // nota_min/nota_max são orientação — sem atributos min/max HTML para não bloquear o navegador
       const rangeHint = temRange ? `<div style="font-size:11px;color:var(--text-ter);margin-top:3px">Referência: ${vc.nota_min} a ${vc.nota_max}</div>` : '';
-      inputHtml = `<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
+      inputHtml = `<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">
         <div>
           <label style="font-size:11px;color:var(--text-ter)">Realizado</label>
           <input type="number" id="resp_${vc.id}" data-tipo="${tipo}" step="any"
             style="display:block;margin-top:4px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:140px"
-            value="${vNum}" placeholder="${temRange?vc.nota_min:'0'}">
+            value="${vNum}" placeholder="${temRange?vc.nota_min:'0'}"
+            oninput="dpAtualizarProgressoAval()">
           ${rangeHint}
         </div>
         ${tipo==='numerico_com_meta' ? `<div>
@@ -5723,22 +5838,20 @@ function dpRenderFormAvaliacao() {
       inputHtml = `<div style="font-size:12px;color:var(--text-ter);margin-top:6px">Tipo de resposta não suportado: ${tipo}</div>`;
     }
 
-    const obrig = vc.obrigatorio ? '<span style="color:var(--red);margin-left:2px">*</span>' : '';
-
     // Histórico da última avaliação
     const hist = _dpHistoricoCriterios[vc.id];
     let histHtml = '';
     if (hist) {
       if (hist.comparavel === false) {
-        histHtml = `<div style="margin-top:6px;font-size:11px;color:var(--text-ter);font-style:italic">Sem avaliação anterior comparável</div>`;
+        histHtml = `<div class="aval-hist" style="font-style:italic">Sem avaliação anterior comparável</div>`;
       } else {
         let valorAnterior = '';
         if (tipo === 'escala') valorAnterior = hist.escala_opcao_label != null ? `${hist.escala_opcao_label}${hist.escala_opcao_valor != null ? ` (${hist.escala_opcao_valor})` : ''}` : '';
         else if (tipo === 'numerico' || tipo === 'numerico_com_meta') valorAnterior = hist.valor_numerico_livre != null ? `${hist.valor_numerico_livre}` : '';
         else if (tipo === 'binario') valorAnterior = hist.resposta_texto ? (hist.resposta_texto === 'sim' ? 'Sim' : 'Não') : (hist.conceito_selecionado || '');
         else if (tipo === 'conceito') valorAnterior = hist.conceito_selecionado || '';
-        histHtml = `<div style="margin-top:8px;padding:6px 10px;background:var(--bg);border-left:2px solid var(--border);border-radius:0 6px 6px 0;font-size:11px;color:var(--text-sec)">
-          <span style="color:var(--text-ter)">Última avaliação (${hist.ciclo_nome || '—'}):</span>
+        histHtml = `<div class="aval-hist">
+          <span style="color:var(--text-ter)">Última (${hist.ciclo_nome || '—'}):</span>
           ${valorAnterior ? ` <b>${valorAnterior}</b>` : ''}
           ${hist.nota_final != null ? ` · nota: <b>${Number(hist.nota_final).toFixed(2)}</b>` : ''}
           ${hist.conceito_resultado ? ` · conceito: <b>${hist.conceito_resultado}</b>` : ''}
@@ -5746,10 +5859,16 @@ function dpRenderFormAvaliacao() {
       }
     }
 
-    return `<div style="padding:16px 0;border-bottom:1px solid var(--border-light)">
-      <div style="font-size:13px;font-weight:600;color:var(--text)">${crit.nome || '—'}${obrig}</div>
-      ${crit.descricao ? `<div style="font-size:12px;color:var(--text-sec);margin-top:3px">${crit.descricao}</div>` : ''}
-      ${crit.referencia ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px;font-style:italic">Esperado: ${crit.referencia}</div>` : ''}
+    return `<div class="aval-card">
+      <div class="aval-card-header">
+        <div class="aval-card-icon">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div class="aval-card-num">${num}${vc.obrigatorio?'<span style="color:var(--red);margin-left:2px">*</span>':''}</div>
+          <div class="aval-card-nome">${crit.nome || '—'}</div>
+        </div>
+      </div>
+      ${crit.descricao ? `<div class="aval-card-desc">${crit.descricao}</div>` : ''}
+      ${crit.referencia ? `<div class="aval-card-ref">Esperado: ${crit.referencia}</div>` : ''}
       ${inputHtml}
       ${histHtml}
     </div>`;
@@ -5781,16 +5900,19 @@ function dpAvalBinario(vcId, val) {
   document.getElementById(`resp_${vcId}`).value = val;
   const btnSim = document.getElementById(`resp_${vcId}_sim`);
   const btnNao = document.getElementById(`resp_${vcId}_nao`);
-  if (btnSim) {
-    btnSim.style.background = val === 'sim' ? 'var(--green)' : 'var(--surface)';
-    btnSim.style.color = val === 'sim' ? '#fff' : '';
-    btnSim.style.borderColor = val === 'sim' ? 'var(--green)' : 'var(--border)';
+  if (btnSim) btnSim.classList.toggle('active', val === 'sim');
+  if (btnNao) btnNao.classList.toggle('active', val === 'nao');
+  // Destaque do campo de observação quando resposta = Não (não apaga o texto existente)
+  const obsEl    = document.getElementById(`obs_${vcId}`);
+  const obsLabel = document.getElementById(`obs_label_${vcId}`);
+  if (obsEl) {
+    obsEl.classList.toggle('aval-obs--nao', val === 'nao');
+    if (obsLabel) {
+      obsLabel.className = val === 'nao' ? 'aval-obs-label aval-obs-label--nao' : 'aval-obs-label';
+      obsLabel.textContent = val === 'nao' ? '⚠ Justificativa (recomendado)' : 'Observação';
+    }
   }
-  if (btnNao) {
-    btnNao.style.background = val === 'nao' ? 'var(--red)' : 'var(--surface)';
-    btnNao.style.color = val === 'nao' ? '#fff' : '';
-    btnNao.style.borderColor = val === 'nao' ? 'var(--red)' : 'var(--border)';
-  }
+  dpAtualizarProgressoAval();
 }
 
 async function salvarAvaliacao(status) {
@@ -5822,6 +5944,9 @@ async function salvarAvaliacao(status) {
         if (meta && meta.value !== '') body.meta = parseFloat(meta.value);
       }
     }
+    // Observação por critério (presente apenas em tipo binário, nulo para os demais)
+    const obsEl = document.getElementById(`obs_${vc.id}`);
+    if (obsEl) body.observacao = obsEl.value || null;
 
     payloads.push({ existente, body });
   }
@@ -6559,7 +6684,10 @@ init();
         <button class="btn btn-secondary btn-sm" onclick="fecharFormAval()" style="flex-shrink:0;margin-left:16px">Fechar</button>
       </div>
       <div class="modal-aval-progress"><div class="modal-aval-progress-fill" id="formAvalProgressFill" style="width:0%"></div></div>
-      <div class="modal-aval-progress-label" id="formAvalProgressLabel"></div>
+      <div class="modal-aval-header-info">
+        <div class="modal-aval-progress-label" id="formAvalProgressLabel"></div>
+        <div class="aval-valor-badge" id="formAvalValorAcumulado" style="display:none"></div>
+      </div>
     </div>
     <div class="modal-aval-body" id="formAvalBody"></div>
     <div class="modal-aval-footer">
