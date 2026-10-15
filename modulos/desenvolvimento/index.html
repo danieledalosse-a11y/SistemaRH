@@ -1444,7 +1444,7 @@ const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
 const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
 let HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
 
-async function sbGet(path)          { const r = await fetch(SB_URL+path,{headers:HDR}); return r.ok ? r.json() : []; }
+async function sbGet(path)          { const r = await fetch(SB_URL+path,{headers:HDR}); if (r.status === 401) { logout(); return []; } return r.ok ? r.json() : []; }
 async function sbPost(path,body)    { const r = await fetch(SB_URL+path,{method:'POST',  headers:HDR,body:JSON.stringify(body)}); if (r.ok) return r.json(); _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; return null; }
 async function sbPatch(path,body)   { const r = await fetch(SB_URL+path,{method:'PATCH', headers:HDR,body:JSON.stringify(body)}); if (r.ok) return r.json(); _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; return null; }
 async function sbDelete(path)       { const r = await fetch(SB_URL+path,{method:'DELETE',headers:{...HDR,Prefer:'return=minimal'}}); if (!r.ok) { _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; } return r.ok; }
@@ -1462,7 +1462,7 @@ function getSession() {
     const sess = JSON.parse(localStorage.getItem('sb_session') || 'null');
     const perf = JSON.parse(localStorage.getItem('sb_perfil') || 'null');
     if (!sess) return null;
-    if (sess.expires_at < Date.now()) { localStorage.clear(); return null; }
+    if (sess.expires_at * 1000 < Date.now()) { localStorage.clear(); return null; }
     return { ...sess, ...(perf || {}) };
   } catch { return null; }
 }
@@ -6263,8 +6263,27 @@ async function gestorDpLoadCiclos() {
   const body = document.getElementById('gestorDpBody');
   if (body) body.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
   try {
-    const ciclos = await sbGet('/rest/v1/dp_ciclos?status=in.(aberto,em_andamento)&order=criado_em.desc&select=*,dp_versoes(id,versao,tipo_calculo,converte_para_conceito,tabela_conceito_id,tipo_avaliador_id),dp_ciclo_participantes(id,colaborador_id)');
-    gestorDpRenderCiclos(ciclos || []);
+    // Queries separadas para evitar INNER JOIN implícito (versao_id NOT NULL)
+    // que faz o PostgREST zerar resultados ao cruzar RLS de dp_ciclos + dp_versoes
+    const ciclos = await sbGet('/rest/v1/dp_ciclos?status=in.(aberto,em_andamento)&order=criado_em.desc&select=*') || [];
+    if (!ciclos.length) { gestorDpRenderCiclos([]); return; }
+
+    const versaoIds = [...new Set(ciclos.map(c => c.versao_id).filter(Boolean))];
+    const versoes = versaoIds.length
+      ? await sbGet(`/rest/v1/dp_versoes?id=in.(${versaoIds.join(',')})&select=id,versao,tipo_calculo,converte_para_conceito,tabela_conceito_id,tipo_avaliador_id`) || []
+      : [];
+    const versaoMap = Object.fromEntries(versoes.map(v => [v.id, v]));
+
+    const participantes = await sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=in.(${ciclos.map(c=>c.id).join(',')})&select=id,ciclo_id,colaborador_id`) || [];
+    const partMap = {};
+    participantes.forEach(p => { (partMap[p.ciclo_id] = partMap[p.ciclo_id] || []).push(p); });
+
+    const enriquecidos = ciclos.map(c => ({
+      ...c,
+      dp_versoes: versaoMap[c.versao_id] || null,
+      dp_ciclo_participantes: partMap[c.id] || []
+    }));
+    gestorDpRenderCiclos(enriquecidos);
   } catch(e) {
     if (body) body.innerHTML = '<div class="empty-state"><p>Erro ao carregar ciclos.</p></div>';
   }
