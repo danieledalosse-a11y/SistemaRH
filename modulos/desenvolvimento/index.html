@@ -5571,10 +5571,28 @@ async function dpAbrirFormAvaliacao(participanteId) {
   }
   _dpAvaliacaoAtual = aval;
 
-  // Buscar critérios da versão com escala e opções
+  // Buscar critérios da versão — queries separadas para evitar INNER JOIN implícito
+  // (criterio_id NOT NULL → PostgREST faz INNER JOIN que zera resultados ao cruzar RLS para gestor)
   const versaoId = _dpCicloAtual.versao_id;
-  const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&order=ordem.asc&select=*,dp_criterios(nome,descricao,referencia,tipo),dp_escalas(id,nome,dp_escala_opcoes(*))`);
-  _dpVersaoCritsParaForm = crits || [];
+  const vc = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&order=ordem.asc&select=*`) || [];
+
+  const criterioIds = [...new Set(vc.map(c => c.criterio_id).filter(Boolean))];
+  const escalaIds   = [...new Set(vc.map(c => c.escala_id).filter(Boolean))];
+  const [criteriosData, escalasData, opcoesData] = await Promise.all([
+    criterioIds.length ? sbGet(`/rest/v1/dp_criterios?id=in.(${criterioIds.join(',')})&select=id,nome,descricao,referencia,tipo`) : Promise.resolve([]),
+    escalaIds.length   ? sbGet(`/rest/v1/dp_escalas?id=in.(${escalaIds.join(',')})&select=id,nome`) : Promise.resolve([]),
+    escalaIds.length   ? sbGet(`/rest/v1/dp_escala_opcoes?escala_id=in.(${escalaIds.join(',')})&select=*&order=ordem.asc`) : Promise.resolve([])
+  ]);
+  const criterioMap = Object.fromEntries((criteriosData||[]).map(c => [c.id, c]));
+  const escalaMap   = Object.fromEntries((escalasData||[]).map(e => [e.id, {
+    ...e,
+    dp_escala_opcoes: (opcoesData||[]).filter(o => o.escala_id === e.id)
+  }]));
+  _dpVersaoCritsParaForm = vc.map(c => ({
+    ...c,
+    dp_criterios: criterioMap[c.criterio_id] || null,
+    dp_escalas:   c.escala_id ? (escalaMap[c.escala_id] || null) : null
+  }));
 
   // Buscar respostas existentes
   const resps = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`);
