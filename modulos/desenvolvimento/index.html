@@ -3987,9 +3987,27 @@ async function dpGerarPreviewParticipantes() {
     toast('Nenhum colaborador novo encontrado para essa elegibilidade.');
     return;
   }
-  const confirmar = confirm(`Foram encontrados ${novos.length} colaborador(es). Deseja adicioná-los ao ciclo?`);
-  if (!confirmar) { dpRenderParticipantes(); return; }
-  await dpAdicionarColaboradores(novos);
+  dpRenderParticipantes();
+  // Modal de confirmação inline — substitui o confirm() nativo do browser
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:var(--bg);border-radius:12px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18);font-family:inherit">
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px">Adicionar participantes</div>
+      <div style="font-size:13px;color:var(--text-sec);margin-bottom:24px">
+        Foram encontrados <strong>${novos.length}</strong> colaborador(es) elegíveis para este ciclo.<br>
+        Deseja adicioná-los agora?
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button id="_dpConfirmCancel" class="btn btn-secondary btn-sm" style="padding:7px 18px">Cancelar</button>
+        <button id="_dpConfirmOk" class="btn btn-primary btn-sm" style="padding:7px 18px">Confirmar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  await new Promise(resolve => {
+    overlay.querySelector('#_dpConfirmOk').onclick    = () => { document.body.removeChild(overlay); resolve(true); };
+    overlay.querySelector('#_dpConfirmCancel').onclick = () => { document.body.removeChild(overlay); resolve(false); };
+  }).then(async ok => { if (ok) await dpAdicionarColaboradores(novos); });
 }
 
 async function dpAdicionarColaboradores(colabs) {
