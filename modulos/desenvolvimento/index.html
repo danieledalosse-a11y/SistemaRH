@@ -1477,6 +1477,7 @@ function initAuth() {
    ESTADO GLOBAL
 ───────────────────────────────────────────── */
 let _colaboradores = [];
+let _dpParamGestores = [];   // [{apelido, nome}] — para exibição no drawer de ciclo
 let _ciclos        = [];
 let _cicloAtivo    = null;
 let _avaliacoes    = {};   // matricula -> avaliacao record
@@ -1586,7 +1587,8 @@ async function init() {
     loadDpTiposAvaliador(),
     loadDpTabelasConceito(),
     loadParamSetores(),
-    dpLoadCiclos()
+    dpLoadCiclos(),
+    sbGet('/rest/v1/param_gestor?ativo=eq.true&select=apelido,nome&order=apelido.asc').then(r => { _dpParamGestores = r || []; })
   ]);
   populateSetorFilter();
   renderColabList();
@@ -4033,6 +4035,22 @@ async function dpAbrirPickerParticipante() {
   dpFiltrarPicker();
 }
 
+function dpIsElegivel(c) {
+  const ciclo = _dpCicloAtual;
+  if (!ciclo) return false;
+  const eleg0 = (ciclo.elegibilidade_ids||[])[0] || '';
+  if (ciclo.tipo_elegibilidade === 'todos') return true;
+  if (ciclo.tipo_elegibilidade === 'por_gestor' && eleg0)
+    return (c.gestor||'').toLowerCase() === eleg0.toLowerCase();
+  if (ciclo.tipo_elegibilidade === 'por_setor' && eleg0)
+    return (c.setor||'').toLowerCase().includes(eleg0.toLowerCase());
+  if (ciclo.tipo_elegibilidade === 'por_cargo' && eleg0)
+    return (c.cargo||'').toLowerCase().includes(eleg0.toLowerCase());
+  if (ciclo.tipo_elegibilidade === 'por_colaborador')
+    return (ciclo.elegibilidade_ids||[]).map(Number).includes(c.id);
+  return false;
+}
+
 function dpFiltrarPicker() {
   const q = (document.getElementById('dpPickerSearch').value || '').toLowerCase();
   const jaIds = new Set(_dpParticipantes.map(p => p.colaborador_id));
@@ -4040,13 +4058,16 @@ function dpFiltrarPicker() {
   const el = document.getElementById('dpPickerResultados');
   if (!el) return;
   if (!lista.length) { el.innerHTML = '<div style="padding:8px 12px;font-size:13px;color:var(--text-ter)">Nenhum resultado.</div>'; return; }
-  el.innerHTML = lista.slice(0, 30).map(c =>
-    `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--border-light)">
+  el.innerHTML = lista.slice(0, 30).map(c => {
+    const elegivel = dpIsElegivel(c);
+    const badge = elegivel ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--primary-light,#e8f0fe);color:var(--primary,#1a6bfa);font-weight:600;white-space:nowrap">Equipe</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--border-light)">
       <span style="flex:1">${c.nome}</span>
+      ${badge}
       <span style="color:var(--text-ter);font-size:12px">${c.setor||'—'}</span>
       <button class="btn btn-primary btn-sm" onclick="dpAdicionarUm(${c.id})" style="padding:3px 10px">+</button>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
 }
 
 async function dpAdicionarUm(colaboradorId) {
@@ -4070,7 +4091,19 @@ function dpRenderInfoCiclo() {
   const c = _dpCicloAtual;
   const STATUS = { rascunho:'Rascunho', aberto:'Aberto', em_andamento:'Em andamento', encerrado:'Encerrado', cancelado:'Cancelado' };
   const avaliador = (_dpTiposAvaliador.find(a => a.id === c.tipo_avaliador_id) || {}).label || '—';
-  const ELEG = { todos:'Todos os colaboradores ativos', por_setor:'Por setor', por_cargo:'Por cargo', por_colaborador:'Colaboradores específicos' };
+  const ELEG = { todos:'Todos os colaboradores ativos', por_setor:'Por setor', por_cargo:'Por cargo', por_gestor:'Por gestor', por_colaborador:'Colaboradores específicos' };
+  const eleg0 = (c.elegibilidade_ids||[])[0] || '';
+  let elegLabel = ELEG[c.tipo_elegibilidade] || c.tipo_elegibilidade || '—';
+  if (c.tipo_elegibilidade === 'por_gestor' && eleg0) {
+    const pg = _dpParamGestores.find(g => g.apelido.toLowerCase() === eleg0.toLowerCase());
+    elegLabel += ' — ' + (pg ? pg.nome : eleg0);
+  } else if (c.tipo_elegibilidade === 'por_setor' && eleg0) {
+    elegLabel += ' — ' + eleg0;
+  } else if (c.tipo_elegibilidade === 'por_cargo' && eleg0) {
+    elegLabel += ' — ' + eleg0;
+  } else if (c.tipo_elegibilidade === 'por_colaborador' && (c.elegibilidade_ids||[]).length) {
+    elegLabel += ` — ${c.elegibilidade_ids.length} colaborador(es)`;
+  }
   el.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:14px;font-size:13px">
       <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Status</div>
@@ -4082,7 +4115,7 @@ function dpRenderInfoCiclo() {
       <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Período</div>
         <div>${formatDate(c.data_inicio)} → ${formatDate(c.data_fim)}</div></div>
       <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Elegibilidade</div>
-        <div>${ELEG[c.tipo_elegibilidade]||c.tipo_elegibilidade||'—'}</div></div>
+        <div>${elegLabel}</div></div>
       <div><div style="color:var(--text-ter);font-size:12px;margin-bottom:3px">Criado em</div>
         <div>${formatDate(c.criado_em ? c.criado_em.split('T')[0] : null)}</div></div>
     </div>
