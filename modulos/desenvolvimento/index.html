@@ -638,7 +638,20 @@
   .aval-card-nome { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.3; }
   .aval-card-desc { font-size: 12px; color: var(--text-sec); margin-top: 4px; line-height: 1.4; }
   .aval-card-ref { font-size: 11px; color: var(--text-ter); font-style: italic; margin-top: 2px; }
-  .aval-bin-btns { display: flex; gap: 8px; margin-top: 10px; }
+  .aval-info {
+    display: none; margin: 6px 0 8px; padding: 8px 10px;
+    background: var(--bg); border-radius: 6px; border: 1px solid var(--border-light);
+  }
+  .aval-info.open { display: block; }
+  .aval-info-btn {
+    width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-light);
+    background: var(--bg); color: var(--text-ter); font-size: 11px; font-weight: 700;
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, color 0.15s; padding: 0;
+  }
+  .aval-info-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .aval-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .aval-bin-btns-wrap { display: flex; gap: 8px; flex-shrink: 0; }
   .aval-btn-bin {
     padding: 7px 22px; border-radius: 8px; border: 1.5px solid var(--border);
     cursor: pointer; font-size: 13px; font-weight: 500; background: var(--bg);
@@ -647,17 +660,19 @@
   }
   .aval-btn-bin--sim.active { background: var(--green); color: #fff; border-color: var(--green); }
   .aval-btn-bin--nao.active { background: var(--red);   color: #fff; border-color: var(--red); }
-  .aval-obs-wrap { margin-top: 8px; }
-  .aval-obs-label { font-size: 11px; color: var(--text-ter); margin-bottom: 3px; }
-  .aval-obs-label--nao { color: #b45309; }
-  .aval-obs {
-    width: 100%; padding: 7px 10px; border: 1px solid var(--border-light);
-    border-radius: 8px; font-size: 12px; resize: vertical; min-height: 52px;
-    box-sizing: border-box; font-family: inherit; color: var(--text);
-    background: var(--bg); transition: border-color 0.2s;
+  .aval-obs-input {
+    flex: 1; min-width: 180px; padding: 6px 10px;
+    border: 1px solid var(--border-light); border-radius: 8px;
+    font-size: 12px; font-family: inherit; color: var(--text); background: var(--bg);
+    resize: none; height: 32px; overflow: hidden;
+    transition: height 0.2s ease, border-color 0.2s; line-height: 1.5;
   }
-  .aval-obs:focus { outline: none; border-color: var(--accent); }
-  .aval-obs--nao { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.04); }
+  .aval-obs-input.expanded { height: 80px; overflow: auto; resize: vertical; }
+  .aval-obs-input:focus { outline: none; border-color: var(--accent); }
+  .aval-obs-input.aval-obs--nao { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.04); }
+  @media (max-width: 480px) {
+    .aval-obs-input { min-width: 0; width: 100%; flex-basis: 100%; }
+  }
   .aval-hist {
     margin-top: 8px; padding: 6px 10px; background: var(--bg);
     border-left: 2px solid var(--border); border-radius: 0 6px 6px 0;
@@ -5724,6 +5739,19 @@ function dpAtualizarProgressoAval() {
   }
 }
 
+function dpToggleInfo(vcId) {
+  const el = document.getElementById(`info_${vcId}`);
+  if (el) el.classList.toggle('open');
+}
+function dpAvalObsFocus(vcId) {
+  const el = document.getElementById(`obs_${vcId}`);
+  if (el) el.classList.add('expanded');
+}
+function dpAvalObsBlur(vcId) {
+  const el = document.getElementById(`obs_${vcId}`);
+  if (el && !el.value) el.classList.remove('expanded');
+}
+
 function _dpIconeCriterio(nome) {
   const n = (nome || '').toLowerCase();
   const mapa = [
@@ -5792,21 +5820,24 @@ function dpRenderFormAvaliacao() {
       const val    = resp ? resp.resposta_texto : null;
       const obsVal = resp ? (resp.observacao || '') : '';
       const obsNao = val === 'nao';
-      inputHtml = `<div class="aval-bin-btns">
-        <button type="button" id="resp_${vc.id}_sim" onclick="dpAvalBinario('${vc.id}','sim')"
-          class="aval-btn-bin aval-btn-bin--sim${val==='sim'?' active':''}">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Sim
-        </button>
-        <button type="button" id="resp_${vc.id}_nao" onclick="dpAvalBinario('${vc.id}','nao')"
-          class="aval-btn-bin aval-btn-bin--nao${val==='nao'?' active':''}">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Não
-        </button>
-        <input type="hidden" id="resp_${vc.id}" data-tipo="binario" value="${val||''}">
-      </div>
-      <div class="aval-obs-wrap">
-        <div class="aval-obs-label${obsNao?' aval-obs-label--nao':''}" id="obs_label_${vc.id}">${obsNao?'⚠ Justificativa (recomendado)':'Observação'}</div>
-        <textarea id="obs_${vc.id}" class="aval-obs${obsNao?' aval-obs--nao':''}"
-          placeholder="Registre o motivo ou exemplo…">${obsVal}</textarea>
+      inputHtml = `<div class="aval-row">
+        <div class="aval-bin-btns-wrap">
+          <button type="button" id="resp_${vc.id}_sim" onclick="dpAvalBinario('${vc.id}','sim')"
+            class="aval-btn-bin aval-btn-bin--sim${val==='sim'?' active':''}">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Sim
+          </button>
+          <button type="button" id="resp_${vc.id}_nao" onclick="dpAvalBinario('${vc.id}','nao')"
+            class="aval-btn-bin aval-btn-bin--nao${val==='nao'?' active':''}">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Não
+          </button>
+          <input type="hidden" id="resp_${vc.id}" data-tipo="binario" value="${val||''}">
+        </div>
+        <textarea id="obs_${vc.id}"
+          class="aval-obs-input${obsNao?' aval-obs--nao':''}${obsVal?' expanded':''}"
+          onfocus="dpAvalObsFocus('${vc.id}')"
+          onblur="dpAvalObsBlur('${vc.id}')"
+          placeholder="${obsNao?'⚠ Justificativa (recomendado)…':'Observação…'}"
+          rows="1">${obsVal}</textarea>
       </div>`;
     } else if (tipo === 'texto') {
       inputHtml = `<textarea id="resp_${vc.id}" data-tipo="texto"
@@ -5859,6 +5890,13 @@ function dpRenderFormAvaliacao() {
       }
     }
 
+    const hasInfo  = !!(crit.descricao || crit.referencia);
+    const infoBtn  = hasInfo ? `<button type="button" class="aval-info-btn" onclick="dpToggleInfo('${vc.id}')" title="Ver descrição">ℹ</button>` : '';
+    const infoBlock = hasInfo ? `<div class="aval-info" id="info_${vc.id}">
+      ${crit.descricao ? `<div class="aval-card-desc">${crit.descricao}</div>` : ''}
+      ${crit.referencia ? `<div class="aval-card-ref">Esperado: ${crit.referencia}</div>` : ''}
+    </div>` : '';
+
     return `<div class="aval-card">
       <div class="aval-card-header">
         <div class="aval-card-icon">${icon}</div>
@@ -5866,9 +5904,9 @@ function dpRenderFormAvaliacao() {
           <div class="aval-card-num">${num}${vc.obrigatorio?'<span style="color:var(--red);margin-left:2px">*</span>':''}</div>
           <div class="aval-card-nome">${crit.nome || '—'}</div>
         </div>
+        ${infoBtn}
       </div>
-      ${crit.descricao ? `<div class="aval-card-desc">${crit.descricao}</div>` : ''}
-      ${crit.referencia ? `<div class="aval-card-ref">Esperado: ${crit.referencia}</div>` : ''}
+      ${infoBlock}
       ${inputHtml}
       ${histHtml}
     </div>`;
@@ -5903,14 +5941,10 @@ function dpAvalBinario(vcId, val) {
   if (btnSim) btnSim.classList.toggle('active', val === 'sim');
   if (btnNao) btnNao.classList.toggle('active', val === 'nao');
   // Destaque do campo de observação quando resposta = Não (não apaga o texto existente)
-  const obsEl    = document.getElementById(`obs_${vcId}`);
-  const obsLabel = document.getElementById(`obs_label_${vcId}`);
+  const obsEl = document.getElementById(`obs_${vcId}`);
   if (obsEl) {
     obsEl.classList.toggle('aval-obs--nao', val === 'nao');
-    if (obsLabel) {
-      obsLabel.className = val === 'nao' ? 'aval-obs-label aval-obs-label--nao' : 'aval-obs-label';
-      obsLabel.textContent = val === 'nao' ? '⚠ Justificativa (recomendado)' : 'Observação';
-    }
+    obsEl.placeholder = val === 'nao' ? '⚠ Justificativa (recomendado)…' : 'Observação…';
   }
   dpAtualizarProgressoAval();
 }
