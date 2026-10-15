@@ -1603,7 +1603,7 @@ async function init() {
 }
 
 async function loadColaboradores() {
-  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia&ativo=eq.true&order=nome.asc');
+  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao&ativo=eq.true&order=nome.asc');
   _colaboradores = _colaboradores || [];
 }
 
@@ -3958,8 +3958,9 @@ function dpRenderParticipantes() {
             ${exp ? '<span style="font-size:10px;font-weight:600;color:#b45309;background:rgba(245,158,11,0.15);border:1px solid rgba(180,83,9,0.3);border-radius:4px;padding:1px 5px;white-space:nowrap">⏱ Em experiência</span>' : ''}
           </div>
           <div style="color:var(--text-ter);font-size:12px">${snap.cargo || '—'} · ${snap.setor || '—'}</div>
+          ${snap.data_admissao ? `<div style="color:var(--text-ter);font-size:11px;margin-top:1px">Admissão: ${snap.data_admissao.split('-').reverse().join('/')}</div>` : ''}
         </div>
-        <div style="color:var(--text-ter);font-size:12px">${snap.matricula || '—'}</div>
+        <div style="color:var(--text-ter);font-size:12px;white-space:nowrap">${snap.matricula ? `Mat. ${snap.matricula}` : '—'}</div>
         ${!readonly ? `<button class="btn btn-secondary btn-sm" onclick="dpRemoverParticipante('${p.id}')" title="Remover" style="padding:3px 8px">✕</button>` : ''}
       </div>`;
     }).join('');
@@ -4024,7 +4025,8 @@ async function dpAdicionarColaboradores(colabs) {
       setor:         c.setor         || '',
       cargo:         c.cargo         || '',
       unidade:       c.unidade       || '',
-      em_experiencia: !!c.em_experiencia
+      em_experiencia:  !!c.em_experiencia,
+      data_admissao:   c.data_admissao || ''
     };
     const res = await sbPost('/rest/v1/dp_ciclo_participantes', {
       ciclo_id:       _dpCicloAtual.id,
