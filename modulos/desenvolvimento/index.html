@@ -1603,7 +1603,7 @@ async function init() {
 }
 
 async function loadColaboradores() {
-  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao&ativo=eq.true&order=nome.asc');
+  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.true&order=nome.asc');
   _colaboradores = _colaboradores || [];
 }
 
@@ -3900,6 +3900,16 @@ async function dpAbrirDrawerCiclo(cicloId) {
   const btnHist = document.getElementById('dptabBtn-historico');
   if (btnHist) btnHist.style.display = '';
   dpShowDcTab('participantes', document.querySelector('#drawerDpCiclo .drawer-tab'));
+  // Para ciclos retroativos: inclui colaboradores inativos que estavam ativos no período
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const fimCiclo = _dpCicloAtual.data_fim ? new Date(_dpCicloAtual.data_fim) : null;
+  if (fimCiclo && fimCiclo < hoje) {
+    const inicos = await sbGet(
+      `/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.false&data_demissao=gte.${_dpCicloAtual.data_inicio}&order=nome.asc`
+    ) || [];
+    const idsExistentes = new Set(_colaboradores.map(c => c.id));
+    inicos.forEach(c => { if (!idsExistentes.has(c.id)) _colaboradores.push(c); });
+  }
   await dpLoadParticipantes(cicloId);
   dpRenderParticipantes();
   if (aberto || encerrado) {
@@ -3973,7 +3983,8 @@ async function dpGerarPreviewParticipantes() {
   if (!ciclo) return;
   const el = document.getElementById('dpParticipantesBody');
   el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
-  let colabs = await sbGet('/rest/v1/colaboradores?ativo=eq.true&select=id,matricula,nome,cargo,setor,empresa_atuacao,gestor,em_experiencia&order=nome.asc') || [];
+  // Usa _colaboradores (já inclui inativos retroativos mesclados em dpAbrirDrawerCiclo)
+  let colabs = (_colaboradores || []).filter(c => dpIsElegivelPeriodo(c, ciclo));
   const eleg0 = (ciclo.elegibilidade_ids || [])[0] || '';
   if (ciclo.tipo_elegibilidade === 'por_setor' && eleg0) {
     colabs = colabs.filter(c => (c.setor||'').toLowerCase().includes(eleg0.toLowerCase()));
@@ -4072,9 +4083,28 @@ function dpFecharPicker() {
   dpRenderParticipantes();
 }
 
+// Verifica se o colaborador estava ativo durante o período do ciclo.
+// Retorna true quando o ciclo não tem datas definidas (sem restrição).
+function dpIsElegivelPeriodo(c, ciclo) {
+  if (!ciclo) return false;
+  const inicio = ciclo.data_inicio ? new Date(ciclo.data_inicio) : null;
+  const fim    = ciclo.data_fim    ? new Date(ciclo.data_fim)    : null;
+  if (!inicio && !fim) return true; // ciclo sem período = sem filtro de data
+  const admissao = c.data_admissao ? new Date(c.data_admissao) : null;
+  const demissao = c.data_demissao ? new Date(c.data_demissao) : null;
+  // Sem data_admissao e ciclo com data_fim definida: não inclui automaticamente
+  if (!admissao && fim) return false;
+  // Admitido após o término do período
+  if (admissao && fim && admissao > fim) return false;
+  // Desligado antes do início do período
+  if (demissao && inicio && demissao < inicio) return false;
+  return true;
+}
+
 function dpIsElegivel(c) {
   const ciclo = _dpCicloAtual;
   if (!ciclo) return false;
+  if (!dpIsElegivelPeriodo(c, ciclo)) return false;
   const eleg0 = (ciclo.elegibilidade_ids||[])[0] || '';
   if (ciclo.tipo_elegibilidade === 'todos') return true;
   if (ciclo.tipo_elegibilidade === 'por_gestor' && eleg0)
