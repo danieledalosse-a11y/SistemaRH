@@ -51,7 +51,7 @@ Se for a segunda opção, parar e ajustar a abordagem.
 |---|---|---|
 | Setores | `param_setor.descricao` (remove prefixo `"2148 - "` para exibição e busca) | Hardcodar nome de setor |
 | Cargos | `param_cargo` | Hardcodar cargo |
-| Gestores/equipes | `colaboradores.gestor` | Criar escopo paralelo ao de Férias |
+| Gestores/equipes | `param_gestor.apelido → colaboradores.gestor ilike apelido` (mesma cadeia do Férias) | Criar escopo paralelo; usar `colaboradores.gestor` diretamente sem passar por `param_gestor` |
 | Tipos de avaliador | `dp_tipos_avaliador` | ENUM no código |
 | Tipos de cálculo | `dp_tipos_calculo_config` | `if tipo === 'soma'` espalhado |
 
@@ -232,6 +232,7 @@ status dp_status_ciclo DEFAULT 'rascunho'
 tipo_avaliador_id UUID REFERENCES dp_tipos_avaliador  — migrado de ENUM
 tipo_elegibilidade dp_tipo_elegibilidade DEFAULT 'todos'  — movido de dp_versoes
 elegibilidade_ids UUID[]   — movido de dp_versoes
+avaliador_id UUID REFERENCES auth.users(id)  — migration 116: gestor designado como avaliador responsável
 data_inicio DATE, data_fim DATE
 aberto_por UUID, aberto_em, encerrado_em, criado_em
 ```
@@ -239,18 +240,23 @@ aberto_por UUID, aberto_em, encerrado_em, criado_em
 ### `dp_ciclo_participantes`
 ```
 id UUID PK, ciclo_id FK, colaborador_id INTEGER REFERENCES colaboradores(id),
-snapshot JSONB NOT NULL  — {nome, matricula, empresa, setor, cargo, unidade}
+snapshot JSONB NOT NULL  — {nome, matricula, empresa, setor, cargo, unidade, em_experiencia, data_admissao}
 adicionado_em, UNIQUE(ciclo_id, colaborador_id)
 ```
 `colaboradores.id` é INTEGER, não UUID — nunca declarar FK como UUID.
 
+`em_experiencia` (boolean) gravado no snapshot desde commit f49e176 — exibe destaque mesmo após recarregar ciclo.
+`data_admissao` (string `'YYYY-MM-DD'`) gravado no snapshot desde commit 8b10116 — exibido nos cards como "Admissão: dd/mm/aaaa".
+
 ### `dp_avaliacoes`
 ```
 id UUID PK, ciclo_id FK, participante_id FK, tipo_avaliador_id UUID FK,
-avaliador_id UUID, status dp_status_avaliacao DEFAULT 'nao_iniciada',
+avaliador_id UUID  — auth.users.id do gestor responsável (propagado de dp_ciclos.avaliador_id ao criar avaliação),
+status dp_status_avaliacao DEFAULT 'nao_iniciada',
 iniciada_em, concluida_em, publicada_em, publicada_por
 UNIQUE(ciclo_id, participante_id, tipo_avaliador_id)
 ```
+**`avaliador_id` propagado em `dpAbrirFormAvaliacao`:** `avaliador_id: _dpCicloAtual.avaliador_id || null`
 
 ### `dp_respostas`
 ```
@@ -279,7 +285,7 @@ snapshot_criterios JSONB  — [{criterio_id, nome, valor_se_sim, valor_se_nao, r
 calculado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 calculado_por UUID REFERENCES auth.users(id)
 ```
-**RLS:** SELECT restrito a rh/admin/diretoria; INSERT/UPDATE restrito a rh/admin. Gestor não acessa.
+**RLS (pós-migration 116):** SELECT: rh/admin/diretoria (irrestrito) **OU** gestor com `resultado_id` vinculado a avaliação onde `avaliador_id = auth.uid()`. INSERT/UPDATE: restrito a rh/admin. O gestor vê apenas o bônus das avaliações que ele conduz — para fins de transparência e feedback.
 
 ### Camada financeira (criada, sem UI)
 ```
@@ -644,6 +650,9 @@ CSS base (mesmo padrão nos dois):
 | `113_dp_rls_gestor.sql` | Fase 2 RLS: função `auth_gestor_equipe_ids()` SECURITY DEFINER + 21 políticas gestor por equipe (SELECT config, CRUD operacional restrito, INSERT histórico) | Executado |
 | `114_dp_versao_criterios_range_monetario.sql` | 7 blocos + 5b: ADD colunas range/monetário em `dp_versao_criterios`; corrige `escala_obrigatoria` e `dp_validar_versao`; cria `dp_resultados_bonus` com RLS; DROP `resultado_tem_valor` em `dp_resultados`; ADD ENUM `resultado_recalculado`; cria RPC `dp_salvar_resultado` | **Executado** |
 | `115_dp_fn_historico_criterio_resposta_texto.sql` | `CREATE OR REPLACE` em `dp_fn_historico_criterio` — adiciona `'resposta_texto', r.resposta_texto` ao `jsonb_build_object`; mesma assinatura, sem alteração de tabelas | **Executado** |
+| `116_dp_trigger_fix_e_rls_gestor.sql` | **Bloco 1:** ADD COLUMN `dp_ciclos.avaliador_id UUID` (nullable, FK auth.users). **Bloco 2:** Corrige `dp_fn_versao_proteger_em_uso` — permite EXCLUSIVAMENTE transição `criterio_nome_snapshot: NULL→valor` sem alterar nenhum campo estrutural (fix do conflito entre triggers `trg_versao_snapshot_criterios` AFTER e `trg_vc_proteger_em_uso` BEFORE). Todos os 14 campos estruturais verificados com `IS NOT DISTINCT FROM`. **Bloco 3:** 9 policies RLS (sufixo `_avaliador_*`) — gestor acessa ciclos/participantes/avaliações/respostas/resultados/bônus onde `avaliador_id = auth.uid()`; coexiste com migration 113 via OR | **Executado** (commit c0c65e8, 2026-10-14) |
+| `117_dp_rls_fix_recursao_ciclo_participantes.sql` | Cria `auth_avaliador_ciclo_ids()` SECURITY DEFINER que lê `dp_ciclos` sem RLS; reescreve `dp_ciclo_participantes_avaliador_sel` para usar `ciclo_id = ANY(SELECT auth_avaliador_ciclo_ids())` em vez de subquery direta — quebra a recursão estrutural PostgreSQL entre `dp_ciclos_gestor_sel` (migration 113) e `dp_ciclo_participantes_avaliador_sel` (migration 116) | **Executado** (commit b1e6e82, 2026-10-14) |
+| `118_dp_tipo_elegibilidade_atualizar_enum.sql` | DROP + RECREATE do ENUM `dp_tipo_elegibilidade` com valores corretos (`todos`, `por_setor`, `por_cargo`, `por_gestor`, `por_colaborador`); DROP + ADD COLUMN `dp_ciclos.tipo_elegibilidade`. Safe — nenhum ciclo existia. Corrige HTTP 400 "invalid input value for enum" ao salvar ciclo | **Executado** (commit f07750f, 2026-10-14) |
 
 ---
 
@@ -689,7 +698,10 @@ let _dpCicloElegSetorTemp, _dpCicloElegCargoTemp
 let _dpElegColabSel, _dpPickerColabs
 
 // Participantes
-let _dpParticipantes    // [{ id, ciclo_id, colaborador_id, snapshot:{nome,matricula,empresa,setor,cargo,unidade} }]
+let _dpParticipantes    // [{ id, ciclo_id, colaborador_id, snapshot:{nome,matricula,empresa,setor,cargo,unidade,em_experiencia,data_admissao} }]
+
+// Gestores (param_gestor) — para exibição no drawer de ciclo
+let _dpParamGestores    // [{apelido, nome}] — carregado no init() junto com outros dados
 
 // Avaliações (Etapa 2)
 let _dpAvaliacoes       // [{ id, ciclo_id, colaborador_id, tipo_avaliador_id, status }]
@@ -763,6 +775,35 @@ let _dpHistoricoCriterios = {}  // { versao_criterio_id: JSONB retornado por dp_
 |---|---|
 | `dpExportarResultados()` | Gera .xls (HTML-as-XLS com mso-conditionals) com todos os participantes; colunas: matrícula, nome, cargo, setor, unidade, status avaliação, nota final, conceito |
 
+## Correções e melhorias entregues (2026-10-15) — primeiro ciclo D&P
+
+| Commit | O que foi feito |
+|---|---|
+| `3125ee8` | Fix dropdown elegibilidade "Por gestor": usa `param_gestor?ativo=eq.true&select=apelido,nome`; `opt.value = g.apelido` (antes: `usuarios_perfil.nome` → mismatch com `colaboradores.gestor`) |
+| `5a48b78` | Fix `dpGerarPreviewParticipantes`: coluna `empresa` → `empresa_atuacao`, removida coluna `unidade` (inexistentes → HTTP 400 → array vazio silencioso) |
+| `6791ef1` | Fix `loadColaboradores`: mesma correção de colunas — era fonte de picker vazio |
+| `117215b` | Fix adicional de colunas após recarregamento do módulo |
+| `57848b4` | Modal inline substituiu `confirm()` nativo do browser — usa CSS vars, fundo overlay, botões Cancelar/Confirmar estilizados |
+| `dd10432` | Picker aplica `dpIsElegivel(c)` como filtro rígido para ciclos não-`todos`; badge "Equipe" removido |
+| `a38c159` | `dpRenderInfoCiclo`: exibe "Por gestor — ORIEL LEITE RODRIGUES" em vez de `"por_gestor"` raw; usa `_dpParamGestores` |
+| `f49e176` | `em_experiencia` adicionado ao select de `loadColaboradores` e `dpGerarPreviewParticipantes`; gravado no snapshot; picker e lista de participantes exibem badge âmbar "⏱ Em período de experiência" / "⏱ Em experiência" |
+| `8993586` | Redesign visual do picker: cabeçalho + lupa + colunas alinhadas; `dpFecharPicker()` criado como helper que chama `dpRenderParticipantes()` |
+| `690c32c` | UX picker: abre com estado vazio ("Digite um nome ou setor para buscar"); lista só aparece após digitar ≥1 caractere — elimina poluição visual de 88 itens ao abrir |
+| `73e8ce8` | Botões "Gerar sugestão automática" e "+ Adicionar manualmente" movidos para `#dpParticipantesBotoes` (container fixo acima de `#dpParticipantesBody`); permanecem visíveis quando picker está aberto; `dpRenderParticipantes` controla `display` desse container via `botoes.style.display = readonly ? 'none' : 'flex'` |
+| `8b10116` | `data_admissao` adicionado ao select de `loadColaboradores` e ao snapshot em `dpAdicionarColaboradores`; exibido nos cards como "Admissão: dd/mm/aaaa"; matrícula agora exibida como "Mat. 205" |
+
+**Correção de dado no banco (2026-10-15):** `dp_ciclos` id `3462b8f0` — `elegibilidade_ids` atualizado para `["ORIEL"]` via PATCH com secret key (antes estava com nome completo "Oriel Capoia", incompatível com `colaboradores.gestor`).
+
+**SQL executado em produção (2026-10-15):** snapshots dos 88 participantes já cadastrados atualizados com `data_admissao` via:
+```sql
+UPDATE dp_ciclo_participantes dcp
+SET snapshot = dcp.snapshot || jsonb_build_object('data_admissao', c.data_admissao::text)
+FROM colaboradores c
+WHERE dcp.colaborador_id = c.id
+  AND c.data_admissao IS NOT NULL
+  AND (dcp.snapshot->>'data_admissao' IS NULL OR dcp.snapshot->>'data_admissao' = '');
+```
+
 ## Correções e melhorias entregues (2026-10-14)
 
 | Commit | O que foi feito |
@@ -817,19 +858,70 @@ Não há estrutura paralela — um ciclo com 1 participante é uma avaliação i
 | `todos` | sem filtro | `null` |
 | `por_setor` | `c.setor.includes(eleg0)` | `[nome_setor]` |
 | `por_cargo` | `c.cargo.includes(eleg0)` | `[nome_cargo]` |
-| `por_gestor` | `c.gestor === eleg0` (igualdade exata) | `[apelido_gestor]` |
+| `por_gestor` | `(c.gestor\|\|'').toLowerCase() === eleg0.toLowerCase()` (case-insensitive) | `[apelido_gestor]` |
 | `por_colaborador` | `ids.has(c.id)` | `[id1, id2, ...]` (strings) |
 
 - `elegIds` computado em `dpSalvarCiclo` antes de enviar ao banco — nunca mais `null` indevidamente
 - `dpGerarPreviewParticipantes` lê sempre de `ciclo.elegibilidade_ids`, não de variáveis temporárias
-- Select de gestores populado dinamicamente de `_colaboradores.gestor` (valores únicos)
+- Select "Por gestor" populado de `param_gestor?ativo=eq.true&select=apelido,nome` (commit 3125ee8). `opt.value = g.apelido` (chave canônica), `opt.textContent = g.nome`. Cadeia completa: `dropdown → apelido salvo em elegibilidade_ids[0] → filtro compara com colaboradores.gestor ilike apelido`.
+- `_colaboradores` carregado com `ativo=eq.true` e campos válidos confirmados: `id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao`. Colunas **inexistentes** (causam HTTP 400 silenciado → array vazio): `situacao`, `empresa`, `unidade`. (commits ff6b380, 5a48b78, 6791ef1, 117215b, f49e176, 8b10116)
+- **`elegibilidade_ids`** é `TEXT[]` (não `UUID[]`) — alterado via SQL inline `ALTER TABLE dp_ciclos ALTER COLUMN elegibilidade_ids TYPE TEXT[] USING elegibilidade_ids::TEXT[]`. Armazena: apelido do gestor, nome do setor/cargo, IDs inteiros de colaboradores como string.
+- **Dropdown Avaliador Responsável** usa `sbRpc('fn_get_usuarios_perfil')` (SECURITY DEFINER, JOINa auth.users) + filtro JS `u.perfil === 'gestor'`. `opt.value = u.user_id` (UUID). Não usar `usuarios_perfil.id` (BIGINT serial) nem `select=user_id` direto (pode retornar null para usuários sem auth vinculado). (commit 0c1536b, 2026-10-14)
+
+**Armadilha HTML — valor de `<option>`:** Se `opt.value = null` ou `opt.value = undefined`, o HTML não seta o atributo `value` e o valor do option cai para `textContent` (o nome da pessoa). Sempre garantir que `u.user_id` é UUID válido antes de atribuir.
+
+**Normalização de dados executada (2026-10-14, Fase 1):** 11 registros em `colaboradores.gestor` corrigidos para bater com `param_gestor.apelido` — Evandro (+4), Flávio (+2), Jander (+2), Juninho (+3). `Robson (R)` → CAPOIA: pendente confirmação.
+
+**Bug corrigido (2026-10-14, commit dc9cb2b):** `dpGerarPreviewParticipantes` usava `situacao=eq.ativo` (coluna inexistente → 400 silencioso). Corrigido para `ativo=eq.true`.
+
+## Funções auxiliares — Etapa 1 (ciclos/participantes)
+
+### `dpIsElegivel(c)` — verifica se colaborador é elegível para o ciclo atual
+```js
+function dpIsElegivel(c) {
+  const ciclo = _dpCicloAtual;
+  if (!ciclo) return false;
+  const eleg0 = (ciclo.elegibilidade_ids||[])[0] || '';
+  if (ciclo.tipo_elegibilidade === 'todos') return true;
+  if (ciclo.tipo_elegibilidade === 'por_gestor' && eleg0)
+    return (c.gestor||'').toLowerCase() === eleg0.toLowerCase();
+  if (ciclo.tipo_elegibilidade === 'por_setor' && eleg0)
+    return (c.setor||'').toLowerCase().includes(eleg0.toLowerCase());
+  if (ciclo.tipo_elegibilidade === 'por_cargo' && eleg0)
+    return (c.cargo||'').toLowerCase().includes(eleg0.toLowerCase());
+  if (ciclo.tipo_elegibilidade === 'por_colaborador')
+    return (ciclo.elegibilidade_ids||[]).map(Number).includes(c.id);
+  return false;
+}
+```
+Aplicado como **filtro rígido** em `dpFiltrarPicker()` para ciclos não-`todos`. Garante que o picker manual só lista colaboradores elegíveis — adição por exceção não existe.
+
+### Destaque visual `em_experiencia` (commit f49e176)
+
+- **Picker:** fundo âmbar suave `rgba(245,158,11,0.06)` + texto `#b45309` "⏱ Em período de experiência" abaixo do nome
+- **Lista de participantes:** badge compacto `#b45309`/`rgba(245,158,11,0.15)` "⏱ Em experiência" ao lado do nome + fundo âmbar suave na linha
+- **Regra:** colaboradores com `em_experiencia=true` são incluídos normalmente — o destaque é visual, não filtrante
+- **Na equipe do Oriel:** 20 colaboradores com `em_experiencia=true` (verificado 2026-10-15)
+
+### `_dpParamGestores` e exibição de elegibilidade
+
+```js
+let _dpParamGestores = [];  // [{apelido, nome}] — carregado no init()
+```
+Carregado junto com outros dados no `init()`:
+```js
+sbGet('/rest/v1/param_gestor?ativo=eq.true&select=apelido,nome&order=apelido.asc')
+  .then(r => { _dpParamGestores = r || []; })
+```
+Usado em `dpRenderInfoCiclo` para exibir "Por gestor — ORIEL LEITE RODRIGUES" em vez de `"por_gestor"`.
 
 ## Pendências técnicas
 
 | Item | Prioridade | Detalhe |
 |---|---|---|
-| **Primeiro ciclo real** | Alta | Falta: (1) criar escala; (2) adicionar critérios ao modelo existente + publicar v1; (3) criar ciclo; (4) adicionar participantes; (5) abrir |
-| Escalas | Alta | `dp_escalas` vazia — nenhuma criada ainda; bloqueia critérios do tipo `escala` |
+| **Primeiro ciclo real** | Alta | Ciclo "Gratificação CD - Outubro/2026" criado (`rascunho`), 88 participantes adicionados. Falta: (1) abrir o ciclo; (2) validar interface com perfis RH e ORIEL. |
+| **Validação funcional** | Alta | 7 pontos definidos — testar com perfis reais RH e ORIEL (gestor CD) no sistema em produção |
+| Escalas | Média | `dp_escalas` vazia — só bloqueia critérios do tipo `escala`; V1 usa apenas `binario`, então não bloqueia o primeiro ciclo |
 | Testes funcionais com dados reais | Alta | Depende do primeiro ciclo real estar aberto com participantes |
 | `param_setor` populado | Média | Pré-requisito para elegibilidade por setor |
 | **Histórico de avaliações — Caminho 1** | Média | Aba "Histórico por Colaborador" no D&P (entre ciclos) — frontend only, sem migration |
@@ -839,7 +931,7 @@ Não há estrutura paralela — um ciclo com 1 participante é uma avaliação i
 | PDI V2 vinculado a dp_ciclo_participantes | Baixa | Fase futura |
 | DROP tabelas dev_* | Baixa | Pós-migração completa |
 
-## Estado atual do banco — D&P (verificado 2026-10-14)
+## Estado atual do banco — D&P (verificado 2026-10-15)
 
 | Item | Qtd / Estado |
 |---|---|
@@ -847,9 +939,17 @@ Não há estrutura paralela — um ciclo com 1 participante é uma avaliação i
 | `dp_tabelas_conceito` | **0** |
 | `dp_criterios` (biblioteca) | **49** critérios ativos (comportamentais + técnicos) |
 | `dp_modelos` | **1** — "Avaliação Mensal Produtividade CD" |
-| `dp_versoes` | **1** — V1 do modelo acima; `em_uso=false`; sem critérios adicionados |
-| `dp_ciclos` | **0** |
+| `dp_versoes` | **1** — V1, `em_uso=true` (publicada 2026-10-14T18:43:02), `converte_para_conceito=false` · 10 critérios binários monetários (`tipo_resposta='binario'`, `valor_se_sim=40`) |
+| `dp_ciclos` | **1** — "Gratificação CD - Outubro/2026", `status='rascunho'`, `tipo_elegibilidade='por_gestor'`, `elegibilidade_ids=["ORIEL"]`, `avaliador_id=UUID do Oriel` |
+| `dp_ciclo_participantes` | **88** — todos os colaboradores elegíveis da equipe do Oriel adicionados via sugestão automática (2026-10-15); snapshots incluem `data_admissao` |
 | `dp_tipos_avaliador` | **4** — Gestor, RH, Auto-avaliação, Avaliador específico |
+
+### V1 — detalhes (publicada)
+- **Modelo:** "Avaliação Mensal Produtividade CD"
+- **Tipo de cálculo:** `soma` · **Conversão para conceito:** não
+- **Critérios:** 10 critérios binários, cada um vale R$40 se Sim / R$0 se Não → máximo R$400
+- **Motor verificado:** dp_validar_versao → `{erros: [], valida: true}`
+- **Trigger de imutabilidade corrigido** (migration 116) — V1 não pode mais ser alterada acidentalmente
 
 ## Decisões abertas — Histórico de avaliações na Ficha do Colaborador
 
@@ -958,13 +1058,20 @@ function gestorDpFecharDrawer() {
 }
 ```
 
-### RLS (migration 113)
+### RLS — dois mecanismos que coexistem via OR
 
-- **Grupo 1 — config (11 tabelas):** SELECT para `auth_perfil()='gestor'`
-- **Grupo 2 — operacional:** SELECT por equipe; INSERT/UPDATE com guarda `gestor_direto` + ciclo `aberto/em_andamento` + status `NOT IN ('concluida','publicada')`
+**Migration 113 — equipe-based (via `auth_gestor_equipe_ids()`):**
+- **Grupo 1 — config (11 tabelas):** SELECT para `auth_perfil()='gestor'` (irrestrito — qualquer gestor lê config)
+- **Grupo 2 — operacional:** SELECT por equipe (`colaboradores.gestor ILIKE param_gestor.apelido`); INSERT/UPDATE com guarda `gestor_direto` + ciclo `aberto/em_andamento` + status `NOT IN ('concluida','publicada')`
 - **Grupo 3 — histórico:** INSERT restrito a `avaliacao_iniciada/concluida` de `entidade='dp_avaliacoes'` vinculadas à equipe
 - Total: 21 políticas aditivas (não altera policies de RH da migration 112)
 - Idempotente via consulta a `pg_policies` (PostgreSQL não tem `CREATE POLICY IF NOT EXISTS`)
+
+**Migration 116 — avaliador_id-based (`dp_ciclos.avaliador_id = auth.uid()`):**
+- 9 policies com sufixo `_avaliador_*` — sem conflito com `_gestor_*` da migration 113
+- Âncora: `avaliador_id = auth.uid()` em dp_ciclos → propaga para participantes, avaliações, respostas, resultados, bônus
+- `dp_ciclos_avaliador_sel`, `dp_ciclo_participantes_avaliador_sel`, `dp_avaliacoes_avaliador_sel/ins/upd`, `dp_respostas_avaliador_sel/ins/upd`, `dp_resultados_avaliador_sel`, `dp_resultados_bonus_sel` (substituída — OR com admin/rh/diretoria)
+- Gestor de outro ciclo não vê dados: âncora é o UUID do auth.uid(), não o nome
 
 ---
 
