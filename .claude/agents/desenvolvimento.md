@@ -234,8 +234,11 @@ tipo_elegibilidade dp_tipo_elegibilidade DEFAULT 'todos'  — movido de dp_verso
 elegibilidade_ids UUID[]   — movido de dp_versoes
 avaliador_id UUID REFERENCES auth.users(id)  — migration 116: gestor designado como avaliador responsável
 data_inicio DATE, data_fim DATE
+prazo_avaliacao DATE nullable  — prazo para os gestores concluírem avaliações (≠ data_fim); opcional
 aberto_por UUID, aberto_em, encerrado_em, criado_em
 ```
+
+**`prazo_avaliacao`** é o prazo que o RH define para gestores concluírem avaliações. Difere de `data_fim` (fim do período avaliado). Campo opcional — ciclos sem prazo não exibem alerta. Migration: `ALTER TABLE dp_ciclos ADD COLUMN IF NOT EXISTS prazo_avaliacao DATE` (executada em produção 2026-10-15).
 
 ### `dp_ciclo_participantes`
 ```
@@ -775,6 +778,47 @@ let _dpHistoricoCriterios = {}  // { versao_criterio_id: JSONB retornado por dp_
 |---|---|
 | `dpExportarResultados()` | Gera .xls (HTML-as-XLS com mso-conditionals) com todos os participantes; colunas: matrícula, nome, cargo, setor, unidade, status avaliação, nota final, conceito |
 
+## Melhorias entregues (2026-10-15) — prazo_avaliacao e edição de ciclos
+
+| Commit | O que foi feito |
+|---|---|
+| `c0f3a93` | Campo `prazo_avaliacao DATE NULL` em `dp_ciclos`; modal criação/edição com campo "Prazo para avaliações"; `dpSalvarCiclo` envia `prazo_avaliacao: null` quando vazio; `dpLoadCiclos` usa `select=*` (inclui campo automaticamente) |
+| `068abb9` | Remove nota âmbar "Período avaliado encerrado" do card sidebar (era baseada em `data_fim < hoje` — substituída pelo sistema de prazo) |
+| `ae1a530` | Bloco "Período avaliado" no card sidebar com borda lateral azul e fundo suave para diferenciar das demais informações |
+| `56b2480` | Rótulo "Período avaliado" no banner azul do ciclo ativo (antes da data) |
+| `aef45cf` | Ajuste de estilo: rótulo em minúsculas, mesma cor da data |
+| `737e631` | `dpAbrirModalCiclo(cicloId?)`: modo edição carrega dados do ciclo, título muda para "Editar Ciclo D&P", botão "Salvar alterações"; `dpSalvarCiclo` faz PATCH quando `_dpCicloEditandoId` presente; botão "Editar ciclo" na aba Informações, visível apenas para RH (`_perfil !== 'gestor'`); `_dpCicloEditandoId = null` declarado junto às demais variáveis de ciclo |
+
+### Card sidebar — 4 estados do `prazo_avaliacao`
+
+| Situação | Condição | Apresentação |
+|---|---|---|
+| **Concluído** | `pendentes === 0` (qualquer) | Verde: "Todas as avaliações concluídas" |
+| **Prazo vencido** | `prazo_avaliacao < hoje` + pendentes > 0 | Âmbar: "Prazo de avaliações vencido" |
+| **Dentro do prazo** | `prazo_avaliacao >= hoje` + pendentes > 0 | Cinza discreto: "Prazo: DD/MM/AAAA" |
+| **Sem prazo** | `prazo_avaliacao` null | Silêncio — sem nota |
+
+### Lista de ciclos — `prazo_avaliacao`
+- Com prazo futuro: linha discreta "Prazo: DD/MM/AAAA" em `--text-ter`
+- Com prazo vencido (ciclo ativo): âmbar com ícone "Prazo vencido: DD/MM/AAAA"
+- Sem prazo: silêncio
+
+### Aba Informações — `prazo_avaliacao`
+Linha "Prazo para avaliações": data formatada ou "Não definido" em `--text-ter` quando null.
+
+### Edição de ciclos — `_dpCicloEditandoId`
+
+```js
+let _dpCicloEditandoId = null;  // null = modo criação; UUID = modo edição
+```
+
+- `dpAbrirModalCiclo()` → modo criação (limpa campos, título "Novo Ciclo D&P")
+- `dpAbrirModalCiclo(cicloId)` → modo edição (carrega dados, título "Editar Ciclo D&P")
+- `dpFecharModalCiclo()` zera `_dpCicloEditandoId`
+- Botão "Editar ciclo" na `dpRenderInfoCiclo()` — oculto quando `_perfil === 'gestor'`
+
+---
+
 ## Correções e melhorias entregues (2026-10-15) — primeiro ciclo D&P
 
 | Commit | O que foi feito |
@@ -791,6 +835,7 @@ let _dpHistoricoCriterios = {}  // { versao_criterio_id: JSONB retornado por dp_
 | `690c32c` | UX picker: abre com estado vazio ("Digite um nome ou setor para buscar"); lista só aparece após digitar ≥1 caractere — elimina poluição visual de 88 itens ao abrir |
 | `73e8ce8` | Botões "Gerar sugestão automática" e "+ Adicionar manualmente" movidos para `#dpParticipantesBotoes` (container fixo acima de `#dpParticipantesBody`); permanecem visíveis quando picker está aberto; `dpRenderParticipantes` controla `display` desse container via `botoes.style.display = readonly ? 'none' : 'flex'` |
 | `8b10116` | `data_admissao` adicionado ao select de `loadColaboradores` e ao snapshot em `dpAdicionarColaboradores`; exibido nos cards como "Admissão: dd/mm/aaaa"; matrícula agora exibida como "Mat. 205" |
+| `bd7f700` | Filtro por período do ciclo: `dpIsElegivelPeriodo` criado; aplicado em `dpIsElegivel` (picker) e `dpGerarPreviewParticipantes` (sugestão); `loadColaboradores` inclui `data_demissao`; merge retroativo de inativos em `dpAbrirDrawerCiclo`; sem `data_admissao` + ciclo com `data_fim` → bloqueado |
 
 **Correção de dado no banco (2026-10-15):** `dp_ciclos` id `3462b8f0` — `elegibilidade_ids` atualizado para `["ORIEL"]` via PATCH com secret key (antes estava com nome completo "Oriel Capoia", incompatível com `colaboradores.gestor`).
 
@@ -864,7 +909,8 @@ Não há estrutura paralela — um ciclo com 1 participante é uma avaliação i
 - `elegIds` computado em `dpSalvarCiclo` antes de enviar ao banco — nunca mais `null` indevidamente
 - `dpGerarPreviewParticipantes` lê sempre de `ciclo.elegibilidade_ids`, não de variáveis temporárias
 - Select "Por gestor" populado de `param_gestor?ativo=eq.true&select=apelido,nome` (commit 3125ee8). `opt.value = g.apelido` (chave canônica), `opt.textContent = g.nome`. Cadeia completa: `dropdown → apelido salvo em elegibilidade_ids[0] → filtro compara com colaboradores.gestor ilike apelido`.
-- `_colaboradores` carregado com `ativo=eq.true` e campos válidos confirmados: `id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao`. Colunas **inexistentes** (causam HTTP 400 silenciado → array vazio): `situacao`, `empresa`, `unidade`. (commits ff6b380, 5a48b78, 6791ef1, 117215b, f49e176, 8b10116)
+- `_colaboradores` carregado com `ativo=eq.true` e campos válidos confirmados: `id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao`. Colunas **inexistentes** (causam HTTP 400 silenciado → array vazio): `situacao`, `empresa`, `unidade`. (commits ff6b380, 5a48b78, 6791ef1, 117215b, f49e176, 8b10116, bd7f700)
+- Para ciclos retroativos (`data_fim < hoje`), `dpAbrirDrawerCiclo` faz GET adicional `ativo=eq.false&data_demissao=gte.data_inicio` e mescla inativos não-duplicados em `_colaboradores`. A sugestão automática (`dpGerarPreviewParticipantes`) usa `_colaboradores` diretamente e inclui esses inativos retroativos automaticamente.
 - **`elegibilidade_ids`** é `TEXT[]` (não `UUID[]`) — alterado via SQL inline `ALTER TABLE dp_ciclos ALTER COLUMN elegibilidade_ids TYPE TEXT[] USING elegibilidade_ids::TEXT[]`. Armazena: apelido do gestor, nome do setor/cargo, IDs inteiros de colaboradores como string.
 - **Dropdown Avaliador Responsável** usa `sbRpc('fn_get_usuarios_perfil')` (SECURITY DEFINER, JOINa auth.users) + filtro JS `u.perfil === 'gestor'`. `opt.value = u.user_id` (UUID). Não usar `usuarios_perfil.id` (BIGINT serial) nem `select=user_id` direto (pode retornar null para usuários sem auth vinculado). (commit 0c1536b, 2026-10-14)
 
@@ -876,11 +922,42 @@ Não há estrutura paralela — um ciclo com 1 participante é uma avaliação i
 
 ## Funções auxiliares — Etapa 1 (ciclos/participantes)
 
+### `dpIsElegivelPeriodo(c, ciclo)` — filtro por período do ciclo (commit bd7f700, 2026-10-15)
+
+```js
+function dpIsElegivelPeriodo(c, ciclo) {
+  if (!ciclo) return false;
+  const inicio = ciclo.data_inicio ? new Date(ciclo.data_inicio) : null;
+  const fim    = ciclo.data_fim    ? new Date(ciclo.data_fim)    : null;
+  if (!inicio && !fim) return true; // ciclo sem período = sem filtro de data
+  const admissao = c.data_admissao ? new Date(c.data_admissao) : null;
+  const demissao = c.data_demissao ? new Date(c.data_demissao) : null;
+  // Sem data_admissao e ciclo com data_fim definida: não inclui automaticamente
+  if (!admissao && fim) return false;
+  // Admitido após o término do período
+  if (admissao && fim && admissao > fim) return false;
+  // Desligado antes do início do período
+  if (demissao && inicio && demissao < inicio) return false;
+  return true;
+}
+```
+
+**Regras:**
+- Colaborador sem `data_admissao` é **bloqueado** quando o ciclo tem `data_fim` (precisa ser adicionado manualmente com aprovação explícita)
+- Limites **inclusivos**: admitido no último dia (`admissao === fim`) e desligado no primeiro dia (`demissao === inicio`) são elegíveis
+- Ciclo sem `data_inicio` e sem `data_fim` não aplica filtro temporal
+
+**Onde é chamada:**
+- `dpIsElegivel(c)` — primeiro guard antes de qualquer filtro de tipo de elegibilidade (picker manual)
+- `dpGerarPreviewParticipantes` — filtro aplicado em `_colaboradores` antes dos filtros de tipo (sugestão automática)
+- Tanto picker quanto sugestão automática aplicam **exatamente a mesma regra** — sem divergência
+
 ### `dpIsElegivel(c)` — verifica se colaborador é elegível para o ciclo atual
 ```js
 function dpIsElegivel(c) {
   const ciclo = _dpCicloAtual;
   if (!ciclo) return false;
+  if (!dpIsElegivelPeriodo(c, ciclo)) return false; // ← filtro de período aplicado primeiro
   const eleg0 = (ciclo.elegibilidade_ids||[])[0] || '';
   if (ciclo.tipo_elegibilidade === 'todos') return true;
   if (ciclo.tipo_elegibilidade === 'por_gestor' && eleg0)
@@ -894,7 +971,7 @@ function dpIsElegivel(c) {
   return false;
 }
 ```
-Aplicado como **filtro rígido** em `dpFiltrarPicker()` para ciclos não-`todos`. Garante que o picker manual só lista colaboradores elegíveis — adição por exceção não existe.
+Aplicado como **filtro rígido** em `dpFiltrarPicker()` para ciclos não-`todos`. Garante que o picker manual só lista colaboradores elegíveis dentro do período — adição por exceção não existe.
 
 ### Destaque visual `em_experiencia` (commit f49e176)
 
