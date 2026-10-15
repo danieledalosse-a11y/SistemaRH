@@ -4054,20 +4054,21 @@ function dpIsElegivel(c) {
 function dpFiltrarPicker() {
   const q = (document.getElementById('dpPickerSearch').value || '').toLowerCase();
   const jaIds = new Set(_dpParticipantes.map(p => p.colaborador_id));
-  const lista = _colaboradores.filter(c => !jaIds.has(c.id) && (!q || c.nome.toLowerCase().includes(q) || (c.setor||'').toLowerCase().includes(q)));
+  const lista = _colaboradores.filter(c =>
+    !jaIds.has(c.id) &&
+    (_dpCicloAtual?.tipo_elegibilidade === 'todos' || dpIsElegivel(c)) &&
+    (!q || c.nome.toLowerCase().includes(q) || (c.setor||'').toLowerCase().includes(q))
+  );
   const el = document.getElementById('dpPickerResultados');
   if (!el) return;
   if (!lista.length) { el.innerHTML = '<div style="padding:8px 12px;font-size:13px;color:var(--text-ter)">Nenhum resultado.</div>'; return; }
-  el.innerHTML = lista.slice(0, 30).map(c => {
-    const elegivel = dpIsElegivel(c);
-    const badge = elegivel ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--primary-light,#e8f0fe);color:var(--primary,#1a6bfa);font-weight:600;white-space:nowrap">Equipe</span>` : '';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--border-light)">
+  el.innerHTML = lista.slice(0, 30).map(c =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--border-light)">
       <span style="flex:1">${c.nome}</span>
-      ${badge}
       <span style="color:var(--text-ter);font-size:12px">${c.setor||'—'}</span>
       <button class="btn btn-primary btn-sm" onclick="dpAdicionarUm(${c.id})" style="padding:3px 10px">+</button>
-    </div>`;
-  }).join('');
+    </div>`
+  ).join('');
 }
 
 async function dpAdicionarUm(colaboradorId) {
