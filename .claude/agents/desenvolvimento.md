@@ -656,6 +656,7 @@ CSS base (mesmo padrão nos dois):
 | `116_dp_trigger_fix_e_rls_gestor.sql` | **Bloco 1:** ADD COLUMN `dp_ciclos.avaliador_id UUID` (nullable, FK auth.users). **Bloco 2:** Corrige `dp_fn_versao_proteger_em_uso` — permite EXCLUSIVAMENTE transição `criterio_nome_snapshot: NULL→valor` sem alterar nenhum campo estrutural (fix do conflito entre triggers `trg_versao_snapshot_criterios` AFTER e `trg_vc_proteger_em_uso` BEFORE). Todos os 14 campos estruturais verificados com `IS NOT DISTINCT FROM`. **Bloco 3:** 9 policies RLS (sufixo `_avaliador_*`) — gestor acessa ciclos/participantes/avaliações/respostas/resultados/bônus onde `avaliador_id = auth.uid()`; coexiste com migration 113 via OR | **Executado** (commit c0c65e8, 2026-10-14) |
 | `117_dp_rls_fix_recursao_ciclo_participantes.sql` | Cria `auth_avaliador_ciclo_ids()` SECURITY DEFINER que lê `dp_ciclos` sem RLS; reescreve `dp_ciclo_participantes_avaliador_sel` para usar `ciclo_id = ANY(SELECT auth_avaliador_ciclo_ids())` em vez de subquery direta — quebra a recursão estrutural PostgreSQL entre `dp_ciclos_gestor_sel` (migration 113) e `dp_ciclo_participantes_avaliador_sel` (migration 116) | **Executado** (commit b1e6e82, 2026-10-14) |
 | `118_dp_tipo_elegibilidade_atualizar_enum.sql` | DROP + RECREATE do ENUM `dp_tipo_elegibilidade` com valores corretos (`todos`, `por_setor`, `por_cargo`, `por_gestor`, `por_colaborador`); DROP + ADD COLUMN `dp_ciclos.tipo_elegibilidade`. Safe — nenhum ciclo existia. Corrige HTTP 400 "invalid input value for enum" ao salvar ciclo | **Executado** (commit f07750f, 2026-10-14) |
+| `119_dp_rls_historico_gestor_sel.sql` | Adiciona SELECT em `dp_historico_eventos` para perfil `gestor` — completa migration 113 (que só criou INSERT). Âncora dupla: `entidade='dp_ciclos' AND entidade_id = ANY(auth_avaliador_ciclo_ids())` OU `entidade='dp_avaliacoes' AND entidade_id IN (SELECT id FROM dp_avaliacoes WHERE avaliador_id=auth.uid())`. Usa `auth_avaliador_ciclo_ids()` (migration 117) para evitar recursão. Idempotente. | **Executado** (commit a78b661, 2026-10-15) |
 
 ---
 
@@ -992,12 +993,21 @@ sbGet('/rest/v1/param_gestor?ativo=eq.true&select=apelido,nome&order=apelido.asc
 ```
 Usado em `dpRenderInfoCiclo` para exibir "Por gestor — ORIEL LEITE RODRIGUES" em vez de `"por_gestor"`.
 
+## Correções entregues (2026-10-15) — segurança e acesso gestor/diretoria
+
+| Commit | O que foi feito |
+|---|---|
+| `3b5a0fb` | Correção 1: `init()` — seção `sec-gestor-dp` ativada ANTES de qualquer `await`; gestor nunca vê seções RH mesmo em caso de falha assíncrona |
+| `3b5a0fb` | Correção 3: `initDpGestor()` lança erro explícito se `gestor_direto` não encontrado em `dp_tipos_avaliador`; `gestorDpAbrirFormAvaliacao` tem segunda guarda antes de criar avaliações |
+| `a78b661` | Migration 119: SELECT em `dp_historico_eventos` para gestor (ciclos + avaliações próprias) |
+| `a78b661` | Interface diretoria — `isDiretoria` adicionada ao `init()`; 5 pontos ocultam botões de ação para diretoria |
+
 ## Pendências técnicas
 
 | Item | Prioridade | Detalhe |
 |---|---|---|
-| **Primeiro ciclo real** | Alta | Ciclo "Gratificação CD - Outubro/2026" criado (`rascunho`), 88 participantes adicionados. Falta: (1) abrir o ciclo; (2) validar interface com perfis RH e ORIEL. |
-| **Validação funcional** | Alta | 7 pontos definidos — testar com perfis reais RH e ORIEL (gestor CD) no sistema em produção |
+| **Primeiro ciclo real** | Alta | Ciclo "Gratificação CD - Outubro/2026" criado (`rascunho`), 88 participantes adicionados. Falta: (1) validar interface com Oriel; (2) abrir o ciclo após validação. |
+| **Validação funcional** | Alta | Testar com perfis reais: RH (todas as abas), ORIEL (gestor — seção Minha Equipe), Diretoria (somente leitura) |
 | Escalas | Média | `dp_escalas` vazia — só bloqueia critérios do tipo `escala`; V1 usa apenas `binario`, então não bloqueia o primeiro ciclo |
 | Testes funcionais com dados reais | Alta | Depende do primeiro ciclo real estar aberto com participantes |
 | `param_setor` populado | Média | Pré-requisito para elegibilidade por setor |
@@ -1053,9 +1063,11 @@ Antes de implementar o Caminho 2 (integração com `historico_eventos`), confirm
 ### Separação de perfis no `init()`
 
 ```js
-const isGestor = _perfil === 'gestor';
+const isGestor    = _perfil === 'gestor';
+const isDiretoria = _perfil === 'diretoria';
+
 document.querySelectorAll('[data-rh-only]').forEach(el => {
-  el.style.display = isGestor ? 'none' : '';
+  el.style.display = (isGestor || isDiretoria) ? 'none' : '';
 });
 const tabGestor = document.getElementById('tabGestorDP');
 if (tabGestor) tabGestor.style.display = isGestor ? '' : 'none';
@@ -1066,7 +1078,14 @@ if (isGestor) {
 }
 ```
 
-Todas as 6 abas de RH têm `data-rh-only` no HTML. O `init()` RH continua após o `return`.
+Todas as 6 abas de RH têm `data-rh-only` no HTML — ocultam também para `diretoria`. O `init()` RH continua após o `return` para gestor.
+
+**Botões de ação — diretoria vê somente leitura (commit a78b661, 2026-10-15):**
+- `data-rh-only` adicionado nos botões "Novo ciclo" e "Avaliação individual" do header
+- Condição `&& _perfil !== 'diretoria'` adicionada nos botões Abrir/Encerrar da lista de ciclos
+- Condição `&& _perfil !== 'diretoria'` adicionada nos botões Editar/Abrir ciclo/Encerrar ciclo do drawer
+- Condição `&& _perfil !== 'diretoria'` adicionada no botão "Encerrar ciclo" da aba Resultados
+- Escrita via API continua bloqueada pela RLS (migration 112) — UI é proteção extra
 
 ### IDs HTML da visão Gestor
 
@@ -1137,10 +1156,17 @@ function gestorDpFecharDrawer() {
 
 ### RLS — dois mecanismos que coexistem via OR
 
+**Migration 112 — base RLS (21 tabelas):**
+- Config (11): SELECT para rh/admin/diretoria; INSERT/UPDATE/DELETE para rh/admin
+- Operacional (5 — dp_ciclos, dp_ciclo_participantes, dp_avaliacoes, dp_respostas, dp_resultados): SELECT para rh/admin/diretoria; escrita só rh/admin
+- Histórico: SELECT para rh/admin/diretoria; INSERT para rh/admin; UPDATE/DELETE bloqueados
+- Financeiro (4 — dp_regras_financeiras, dp_regra_financeira_opcoes, dp_regra_financeira_faixas, dp_resultados_financeiros): somente rh/admin — diretoria e gestor sem acesso
+- Sem `anon_all`: todas as queries D&P usam `access_token`; role anon bloqueado por padrão
+
 **Migration 113 — equipe-based (via `auth_gestor_equipe_ids()`):**
 - **Grupo 1 — config (11 tabelas):** SELECT para `auth_perfil()='gestor'` (irrestrito — qualquer gestor lê config)
 - **Grupo 2 — operacional:** SELECT por equipe (`colaboradores.gestor ILIKE param_gestor.apelido`); INSERT/UPDATE com guarda `gestor_direto` + ciclo `aberto/em_andamento` + status `NOT IN ('concluida','publicada')`
-- **Grupo 3 — histórico:** INSERT restrito a `avaliacao_iniciada/concluida` de `entidade='dp_avaliacoes'` vinculadas à equipe
+- **Grupo 3 — histórico:** INSERT restrito a `avaliacao_iniciada/concluida` de `entidade='dp_avaliacoes'` vinculadas à equipe; **SELECT ausente nesta migration** (adicionado na 119)
 - Total: 21 políticas aditivas (não altera policies de RH da migration 112)
 - Idempotente via consulta a `pg_policies` (PostgreSQL não tem `CREATE POLICY IF NOT EXISTS`)
 
@@ -1149,6 +1175,12 @@ function gestorDpFecharDrawer() {
 - Âncora: `avaliador_id = auth.uid()` em dp_ciclos → propaga para participantes, avaliações, respostas, resultados, bônus
 - `dp_ciclos_avaliador_sel`, `dp_ciclo_participantes_avaliador_sel`, `dp_avaliacoes_avaliador_sel/ins/upd`, `dp_respostas_avaliador_sel/ins/upd`, `dp_resultados_avaliador_sel`, `dp_resultados_bonus_sel` (substituída — OR com admin/rh/diretoria)
 - Gestor de outro ciclo não vê dados: âncora é o UUID do auth.uid(), não o nome
+
+**Migration 119 — SELECT histórico para gestor:**
+- Complementa migration 113 que só criou INSERT para gestor
+- Policy `dp_historico_gestor_sel`: `entidade='dp_ciclos' AND entidade_id = ANY(auth_avaliador_ciclo_ids())` OR `entidade='dp_avaliacoes' AND entidade_id IN (dp_avaliacoes WHERE avaliador_id=auth.uid())`
+- Usa `auth_avaliador_ciclo_ids()` (migration 117) para evitar recursão entre dp_ciclos e dp_ciclo_participantes
+- `dp_fn_historico_criterio` é SECURITY INVOKER: RLS do gestor filtra automaticamente avaliações acessíveis
 
 ---
 
