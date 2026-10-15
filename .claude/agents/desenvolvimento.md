@@ -687,6 +687,11 @@ document.getElementById('drawerDpCicloOverlay').classList.remove('open');
 | `117_dp_rls_fix_recursao_ciclo_participantes.sql` | Cria `auth_avaliador_ciclo_ids()` SECURITY DEFINER que lê `dp_ciclos` sem RLS; reescreve `dp_ciclo_participantes_avaliador_sel` para usar `ciclo_id = ANY(SELECT auth_avaliador_ciclo_ids())` em vez de subquery direta — quebra a recursão estrutural PostgreSQL entre `dp_ciclos_gestor_sel` (migration 113) e `dp_ciclo_participantes_avaliador_sel` (migration 116) | **Executado** (commit b1e6e82, 2026-10-14) |
 | `118_dp_tipo_elegibilidade_atualizar_enum.sql` | DROP + RECREATE do ENUM `dp_tipo_elegibilidade` com valores corretos (`todos`, `por_setor`, `por_cargo`, `por_gestor`, `por_colaborador`); DROP + ADD COLUMN `dp_ciclos.tipo_elegibilidade`. Safe — nenhum ciclo existia. Corrige HTTP 400 "invalid input value for enum" ao salvar ciclo | **Executado** (commit f07750f, 2026-10-14) |
 | `119_dp_rls_historico_gestor_sel.sql` | Adiciona SELECT em `dp_historico_eventos` para perfil `gestor` — completa migration 113 (que só criou INSERT). Âncora dupla: `entidade='dp_ciclos' AND entidade_id = ANY(auth_avaliador_ciclo_ids())` OU `entidade='dp_avaliacoes' AND entidade_id IN (SELECT id FROM dp_avaliacoes WHERE avaliador_id=auth.uid())`. Usa `auth_avaliador_ciclo_ids()` (migration 117) para evitar recursão. Idempotente. | **Executado** (commit a78b661, 2026-10-15) |
+| `120_dp_param_motivos_nao_participacao.sql` | Cria tabela `dp_param_motivos_nao_participacao` (id UUID PK, descricao TEXT, ativo BOOLEAN, criado_em). RLS: RH/admin CRUD; gestor/diretoria SELECT ativo=TRUE. 4 motivos seed: "Demissão prevista", "Afastamento médico", "Licença", "Outro". | **Executado** (commit de05db4, 2026-10-15) |
+| `121_dp_ciclo_participantes_nao_participa.sql` | ADD 6 colunas em `dp_ciclo_participantes`: `nao_participa BOOLEAN NOT NULL DEFAULT FALSE`, `nao_participa_motivo_id UUID FK`, `nao_participa_motivo TEXT` (snapshot), `nao_participa_obs TEXT`, `nao_participa_em TIMESTAMPTZ`, `nao_participa_por UUID FK auth.users`. CHECK: motivo obrigatório quando `nao_participa=TRUE`. | **Executado** (commit de05db4, 2026-10-15) |
+| `122_dp_trg_bloqueia_aval_nao_participa.sql` | Trigger `BEFORE INSERT` em `dp_avaliacoes` (`WHEN NEW.participante_id IS NOT NULL`) — função `dp_fn_bloqueia_aval_nao_participa()` bloqueia INSERT para participante com `nao_participa=TRUE`. **Apenas INSERT**: UPDATE de avaliações existentes é livre. | **Executado** (commit de05db4, 2026-10-15) |
+| `123_dp_rls_nao_participa_update.sql` | Policy UPDATE em `dp_ciclo_participantes` para o flag `nao_participa`: RH/admin irrestrito; gestor apenas em ciclos onde `ciclo_id = ANY(auth_avaliador_ciclo_ids())`. Idempotente. | **Executado** (commit de05db4, 2026-10-15) |
+| `124_dp_fn_marcar_reverter_nao_participa.sql` | Funções `SECURITY DEFINER` atômicas: `dp_fn_marcar_nao_participa(p_participante_id, p_motivo_id, p_motivo_texto, p_obs)` e `dp_fn_reverter_nao_participa(p_participante_id)`. Cada uma: (1) valida permissão (rh/admin ou gestor do ciclo via `auth_avaliador_ciclo_ids()`); (2) UPDATE `dp_ciclo_participantes`; (3) INSERT `dp_historico_eventos` (`nao_participa_marcado` / `nao_participa_revertido`). Atomicidade garante que histórico nunca fica dessincronizado. | **Executado** (commit de05db4, 2026-10-15) |
 
 ---
 
@@ -1031,6 +1036,77 @@ Usado em `dpRenderInfoCiclo` para exibir "Por gestor — ORIEL LEITE RODRIGUES" 
 | `3b5a0fb` | Correção 3: `initDpGestor()` lança erro explícito se `gestor_direto` não encontrado em `dp_tipos_avaliador`; `gestorDpAbrirFormAvaliacao` tem segunda guarda antes de criar avaliações |
 | `a78b661` | Migration 119: SELECT em `dp_historico_eventos` para gestor (ciclos + avaliações próprias) |
 | `a78b661` | Interface diretoria — `isDiretoria` adicionada ao `init()`; 5 pontos ocultam botões de ação para diretoria |
+
+## Feature: "Não participa deste ciclo" (commit de05db4, 2026-10-15)
+
+### Visão geral
+
+Permite marcar um participante como não participante em um ciclo D&P (afastamento, demissão prevista etc.), com motivo obrigatório, histórico rastreável e reversível. O participante marcado é **excluído** de todos os cálculos (pendentes, médias, resultados, exportação, encerramento), sem deletar avaliações existentes.
+
+### Regras de negócio
+
+- **Gestor**: só para participantes de ciclos sob sua responsabilidade (`auth_avaliador_ciclo_ids()`)
+- **Motivo**: obrigatório; selecionado de `dp_param_motivos_nao_participacao`; snapshot do texto salvo em `nao_participa_motivo` (imutável mesmo se motivo for inativado)
+- **Avaliações existentes**: preservadas no banco (trigger só bloqueia INSERT novo)
+- **Sem nota zero**: participante não entra em nenhum cálculo, médio ou pendência
+- **Reversível**: `dp_fn_reverter_nao_participa` limpa os 6 campos; histórico anterior preservado
+- **Rastreabilidade**: todo marcação/reversão registrada em `dp_historico_eventos` (`nao_participa_marcado` / `nao_participa_revertido`) com motivo, observação, quem e quando
+
+### Tabela `dp_param_motivos_nao_participacao`
+
+```sql
+id          UUID PK
+descricao   TEXT NOT NULL
+ativo       BOOLEAN NOT NULL DEFAULT TRUE
+criado_em   TIMESTAMPTZ DEFAULT NOW()
+```
+
+4 seeds: "Demissão prevista", "Afastamento médico", "Licença", "Outro". Inativação via toggle (nunca DELETE físico).
+
+### Variável de estado
+
+```js
+let _dpMotivosNaoParticipa = [];  // carregado em dpAbrirDrawerCiclo e renderConfiguracoes
+```
+
+### Funções JS
+
+| Função | O que faz |
+|---|---|
+| `loadDpMotivosNaoParticipa()` | GET `dp_param_motivos_nao_participacao?order=criado_em.asc&select=*` → `_dpMotivosNaoParticipa` |
+| `dpAbrirModalNaoParticipa(participanteId)` | Cria overlay modal com select de motivos (ativos) + textarea observação |
+| `dpConfirmarNaoParticipa(participanteId)` | Lê motivo selecionado (id + snapshot de texto); chama `sbRpc('dp_fn_marcar_nao_participa', {...})`; atualiza `_dpParticipantes` em memória; chama `dpRenderAvaliacoes()` |
+| `dpReverterNaoParticipa(participanteId)` | Chama `sbRpc('dp_fn_reverter_nao_participa', {...})`; limpa campos no `_dpParticipantes` em memória; chama `dpRenderAvaliacoes()` |
+| `renderMotivosNaoParticipa()` | Card CRUD de motivos na aba Configurações (toggle ativo/inativo + adicionar novo) |
+| `dpSalvarMotivoNaoParticipa(id, campo, valor)` | sbPatch para atualizar motivo no banco + array local |
+| `dpAdicionarMotivoNaoParticipa()` | sbPost para criar novo motivo + push no array + rerender |
+
+### Impacto em funções existentes
+
+| Função | Alteração |
+|---|---|
+| `dpRenderAvaliacoes(opts)` | Separa `_ativos` e `_naoParticipa`; filtra `_avalsAtivas` excluindo npIds; renderiza seção inferior "Não participam deste ciclo" com botão Reverter; botão ⊘ em cada ativo para marcar |
+| `_dpSidebarAvalCounts` (sidebar) | 2 queries paralelas (`dp_avaliacoes` + `dp_ciclo_participantes`) → filtra npIds antes de contar pendentes |
+| `dpRenderResultados()` | `_partAtivos` e `_partNP` separados; cálculos usam só `_partAtivos`; seção informativa no final para NP |
+| `dpCalcularTodos()` | Filtra `npIds` antes de processar pendentes |
+| `dpExportarResultados()` | NP recebem `npRow:true` → linha cinza itálico com "Não participou" + motivo como conceito |
+| `dpAbrirFormAvaliacao` | Guard: se `part.nao_participa` → toast + return (não abre formulário) |
+| `dpAbrirDrawerCiclo` | Chama `loadDpMotivosNaoParticipa()` se `_dpMotivosNaoParticipa.length === 0` |
+| `renderConfiguracoes()` | `loadDpMotivosNaoParticipa()` no `Promise.all`; novo card "Motivos de não participação" |
+
+### CSS adicionado
+
+```css
+.dp-np-row { display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-light);background:rgba(107,114,128,0.05); }
+.dp-np-badge { font-size:10px;font-weight:600;color:#6B7280;background:rgba(107,114,128,0.12);border:1px solid rgba(107,114,128,0.25);border-radius:4px;padding:1px 5px;white-space:nowrap;flex-shrink:0; }
+.dp-np-section-header { font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;padding:10px 12px 4px;border-top:1px solid var(--border); }
+```
+
+### Novos tipos em `dp_evento_historico` ENUM
+
+`nao_participa_marcado` e `nao_participa_revertido` — adicionados ao ENUM antes das funções da migration 124. Se recriar o ENUM, incluir esses dois valores.
+
+---
 
 ## Pendências técnicas
 
