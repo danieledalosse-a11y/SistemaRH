@@ -1427,6 +1427,50 @@ Card do gestor (`gestorDpRenderCiclos`) alinhado ao padrão do RH:
 | `cfb4846` | Drawer de ciclo do RH (`#drawerDpCicloOverlay` + `#drawerDpCiclo`) convertido de right-side para modal centrado. Classes `drawer-overlay`/`drawer-versao` substituídas por `wiz-overlay wiz-overlay--center`/`wiz-container` (mesmo padrão do drawer gestor). Painel agora é filho do overlay. JS simplificado: `dpAbrirDrawerCiclo` e `dpFecharDrawerCiclo` toggleiam apenas o overlay. |
 | `63c3a60` | Parâmetro `hideAvaliarWhenDone: true` adicionado a `dpRenderAvaliacoes`. Gestor passa `true` → botão Avaliar oculto para avaliações `concluida`/`publicada`. RH não passa (default `false`) → comportamento inalterado. Interface reflete corretamente as permissões sem duplicar lógica de renderização. |
 
+## Redesign formulário de avaliação — layout compacto (commit 3d88bc0, 2026-10-15)
+
+### Antes × depois
+
+| Aspecto | Antes | Depois |
+|---|---|---|
+| Estrutura por critério | Card com borda, sombra, ícone decorativo, histórico como bloco separado | Linha compacta: num \| nome \| [i] \| [Sim][Não] \| obs \| chip histórico |
+| Espaço vertical (10 critérios) | ~700px de conteúdo | ~440px — cabe na viewport sem scroll |
+| Ícone decorativo | `.aval-card-icon` (30×30px, SVG) | Removido |
+| Info block | Bloco abaixo do cabeçalho do card | Popup absoluto (`.aval-info-wrap { position:relative }`) |
+| Histórico anterior | `<div class="aval-hist">` block com borda esquerda | Chip inline `border-radius:20px` à direita da obs |
+
+### Mudanças CSS (classes afetadas)
+
+| Classe | Mudança |
+|---|---|
+| `.aval-card` | `display:flex; align-items:center; gap:10px` — flex row, `padding:8px 16px`, sem border/shadow individual, `border-bottom` entre critérios |
+| `.aval-card-header` | `display:none` |
+| `.aval-card-icon` | `display:none` |
+| `.aval-card-num` | `width:22px; text-align:right; flex-shrink:0` |
+| `.aval-nome-info` (nova) | `flex:1; display:flex; align-items:center; gap:5px; overflow:hidden` — contém nome + info-wrap |
+| `.aval-card-nome` | `white-space:nowrap; overflow:hidden; text-overflow:ellipsis` |
+| `.aval-info-wrap` (nova) | `position:relative; flex-shrink:0` — âncora do popup |
+| `.aval-info` | `position:absolute; z-index:200; left:0; top:calc(100%+4px); width:260px; box-shadow:…` — popup dropdown |
+| `.aval-info-btn` | Reduzido para 17×17px |
+| `.aval-row` | `display:contents` — botões e obs fluem diretamente no flex do `.aval-card` |
+| `.aval-btn-bin` | `padding:5px 14px; font-size:12px` (era 7px 22px 13px) |
+| `.aval-obs-input` | `height:28px; max-width:240px; font-size:11px` |
+| `.aval-hist` | `display:inline-flex; border-radius:20px; padding:2px 8px` — chip inline com ícone SVG de relógio |
+| Responsivo | `@media (max-width:600px)` — `flex-wrap:wrap`, obs e hist em `flex-basis:100%` |
+
+### Mudança no template `dpRenderFormAvaliacao`
+
+- Removido `<div class="aval-card-icon">${icon}</div>` e `<div class="aval-card-header">`
+- Introduzido `.aval-nome-info` com `.aval-card-nome` + `.aval-info-wrap` (info-btn + popup inline)
+- `histHtml` simplificado: ícone relógio SVG + label curto (nome do ciclo sem prefixo "Gratificação CD -") + valor em bold
+- `modal-aval-header-info` substituído por `modal-aval-progress-label` com `display:flex; justify-content:space-between` — badge valor e contagem de progresso na mesma linha
+
+### O que não mudou
+
+Toda lógica JS preservada: `dpAvalBinario`, `dpAvalObsFocus/Blur`, `dpAvalRadioChange`, `dpToggleInfo`, `dpAtualizarProgressoAval`, `salvarAvaliacao`. IDs de inputs inalterados (`resp_${vc.id}`, `obs_${vc.id}`, `info_${vc.id}`). RH e Gestor usam o mesmo formulário via `dpRenderFormAvaliacao` — sem impacto.
+
+---
+
 ## Estado atual — ciclos em produção (2026-10-15)
 
 | Ciclo | Status | Avaliador | Participantes |
