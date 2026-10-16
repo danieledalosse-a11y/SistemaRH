@@ -4479,30 +4479,60 @@ function dpRenderParticipantes(opts = {}) {
   const el = document.getElementById(opts.containerId || 'dpParticipantesBody');
   if (!el) return;
   const ciclo = _dpCicloAtual;
-  const readonly = opts.readonly ?? (ciclo && ciclo.status !== 'rascunho');
+  const s = ciclo?.status;
+  const readonly = opts.readonly ?? (ciclo && s !== 'rascunho');
   const botoes = document.getElementById('dpParticipantesBotoes');
   if (botoes) botoes.style.display = readonly ? 'none' : 'flex';
+
+  // NP controls: disponível no ciclo aberto/em_andamento, apenas para RH/admin, nunca na visão do gestor
+  const podeNP = opts.readonly !== true &&
+                 (s === 'aberto' || s === 'em_andamento') &&
+                 (_perfil === 'rh' || _perfil === 'admin');
+
   let html = '';
   if (!_dpParticipantes.length) {
     html += `<div style="text-align:center;padding:32px;color:var(--text-ter);font-size:13px">
       ${readonly ? 'Nenhum participante neste ciclo.' : 'Nenhum participante ainda. Use "Gerar sugestão automática" ou adicione manualmente.'}
     </div>`;
   } else {
-    html += `<div style="font-size:12px;color:var(--text-ter);margin-bottom:8px">${_dpParticipantes.length} participante(s)</div>`;
+    const total = _dpParticipantes.length;
+    const npCount = _dpParticipantes.filter(p => p.nao_participa).length;
+    const ativos = total - npCount;
+    html += `<div style="font-size:12px;color:var(--text-ter);margin-bottom:8px">${ativos} participante(s) ativo(s)${npCount ? ` · ${npCount} não participam` : ''}</div>`;
     html += _dpParticipantes.map(p => {
       const snap = p.snapshot || {};
-      const exp = snap.em_experiencia;
-      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border-light);font-size:13px${exp ? ';background:rgba(245,158,11,0.06)' : ''}">
+      const exp  = snap.em_experiencia;
+      const np   = !!p.nao_participa;
+      const rowBg = np ? 'background:rgba(156,163,175,0.07)' : (exp ? 'background:rgba(245,158,11,0.06)' : '');
+
+      const npBadge = np
+        ? `<span style="font-size:10px;font-weight:600;color:#6B7280;background:rgba(107,114,128,0.12);border:1px solid rgba(107,114,128,0.25);border-radius:4px;padding:1px 6px;white-space:nowrap" title="${p.nao_participa_motivo || ''}">⊘ Não participa</span>`
+        : '';
+      const expBadge = (!np && exp)
+        ? '<span style="font-size:10px;font-weight:600;color:#b45309;background:rgba(245,158,11,0.15);border:1px solid rgba(180,83,9,0.3);border-radius:4px;padding:1px 5px;white-space:nowrap">⏱ Em experiência</span>'
+        : '';
+
+      const npObs = np && p.nao_participa_obs
+        ? `<div style="font-size:11px;color:var(--text-ter);margin-top:1px;font-style:italic">"${p.nao_participa_obs}"</div>`
+        : '';
+
+      const acoes = [];
+      if (!readonly) acoes.push(`<button class="btn btn-secondary btn-sm" onclick="dpRemoverParticipante('${p.id}')" title="Remover participante" style="padding:3px 8px">✕</button>`);
+      if (podeNP && !np) acoes.push(`<button style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;color:var(--text-ter);font-size:15px;transition:background .15s" title="Marcar como não participante" onclick="dpAbrirModalNaoParticipa('${p.id}')">⊘</button>`);
+      if (podeNP && np)  acoes.push(`<button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px;color:var(--text-sec)" title="Reverter — colaborador voltará à lista de avaliações" onclick="dpReverterNaoParticipa('${p.id}')">Reverter</button>`);
+
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border-light);font-size:13px;${rowBg}${np ? ';opacity:0.7' : ''}">
         <div style="flex:1;min-width:0">
           <div style="font-weight:500;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            ${snap.nome || '—'}
-            ${exp ? '<span style="font-size:10px;font-weight:600;color:#b45309;background:rgba(245,158,11,0.15);border:1px solid rgba(180,83,9,0.3);border-radius:4px;padding:1px 5px;white-space:nowrap">⏱ Em experiência</span>' : ''}
+            <span${np ? ' style="color:var(--text-sec)"' : ''}>${snap.nome || '—'}</span>
+            ${npBadge}${expBadge}
           </div>
           <div style="color:var(--text-ter);font-size:12px">${snap.cargo || '—'} · ${snap.setor || '—'}</div>
           ${snap.data_admissao ? `<div style="color:var(--text-ter);font-size:11px;margin-top:1px">Admissão: ${snap.data_admissao.split('-').reverse().join('/')}</div>` : ''}
+          ${npObs}
         </div>
         <div style="color:var(--text-ter);font-size:12px;white-space:nowrap">${snap.matricula ? `Mat. ${snap.matricula}` : '—'}</div>
-        ${!readonly ? `<button class="btn btn-secondary btn-sm" onclick="dpRemoverParticipante('${p.id}')" title="Remover" style="padding:3px 8px">✕</button>` : ''}
+        ${acoes.length ? `<div style="display:flex;gap:4px;align-items:center">${acoes.join('')}</div>` : ''}
       </div>`;
     }).join('');
   }
@@ -7341,6 +7371,7 @@ async function dpConfirmarNaoParticipa(participanteId) {
     }
   });
   _dpRenderAvaliacoesComFiltro();
+  dpRenderParticipantes();
   const gdpBtn = document.getElementById('gdptab-btn-avaliacoes');
   if (gdpBtn && _gdpParticipantes.some(p => p.id === participanteId)) gestorDpShowTab('avaliacoes', gdpBtn);
   toast('Colaborador marcado como não participante.');
@@ -7362,6 +7393,7 @@ async function dpReverterNaoParticipa(participanteId) {
     }
   });
   _dpRenderAvaliacoesComFiltro();
+  dpRenderParticipantes();
   const gdpBtn = document.getElementById('gdptab-btn-avaliacoes');
   if (gdpBtn && _gdpParticipantes.some(p => p.id === participanteId)) gestorDpShowTab('avaliacoes', gdpBtn);
   toast('Não participação revertida.');
