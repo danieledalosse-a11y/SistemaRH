@@ -6022,20 +6022,31 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   const resps = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`);
   _dpRespostasAtual = resps || [];
 
-  // Grupo B: histórico via RPC batch (requer migration 128)
-  // Se a função batch não existir no banco (migration não executada), _dpHistoricoCriterios ficará vazio
+  // Grupo B: histórico via RPC batch (migration 128) com fallback individual
   _dpHistoricoCriterios = {};
   if (modeloId && part.colaborador_id) {
+    // Tenta batch (migration 128) — retorna null se função inexistente no banco
     const batch = await sbRpc('dp_fn_historico_criterio_batch', {
       p_versao_id:      versaoId,
       p_colaborador_id: part.colaborador_id,
       p_ciclo_atual_id: _dpCicloAtual.id
     });
     if (batch && Array.isArray(batch)) {
+      // Migration 128 disponível: um único round-trip para todos os critérios
       batch.forEach(row => { _dpHistoricoCriterios[row.versao_criterio_id] = row.resultado; });
+    } else {
+      // Fallback: N RPCs individuais (migration 128 ainda não executada no banco)
+      await Promise.all(_dpVersaoCritsParaForm.map(vc =>
+        sbRpc('dp_fn_historico_criterio', {
+          p_colaborador_id: part.colaborador_id,
+          p_criterio_id:    vc.criterio_id,
+          p_ciclo_atual_id: _dpCicloAtual.id,
+          p_modelo_id:      modeloId,
+          p_escala_id:      vc.escala_id || null,
+          p_tipo_resposta:  vc.tipo_resposta
+        }).then(r => { if (r) _dpHistoricoCriterios[vc.id] = r; }).catch(() => {})
+      ));
     }
-    // Nota: se batch retornar null (função inexistente — migration 128 não executada),
-    // histórico simplesmente não será exibido. Executar migration 128 para ativar.
   }
 
   // Preencher header
@@ -6560,14 +6571,11 @@ async function dpLoadResultados(cicloId) {
   if (!cicloId) { _dpResultados = []; _dpResultadosBonus = []; dpRenderResultados(); return; }
   const ids = _dpAvaliacoes.map(a => a.id);
   if (!ids.length) { _dpResultados = []; _dpResultadosBonus = []; dpRenderResultados(); return; }
-  _dpResultados = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${ids.join(',')})&select=*`) || [];
-  // Carrega bônus financeiros (tabela separada — RLS restringe a rh/admin/diretoria)
-  const resultadoIds = _dpResultados.map(r => r.id);
-  if (resultadoIds.length) {
-    _dpResultadosBonus = await sbGet(`/rest/v1/dp_resultados_bonus?resultado_id=in.(${resultadoIds.join(',')})`) || [];
-  } else {
-    _dpResultadosBonus = [];
-  }
+  // Busca resultados com bônus embutidos em uma única requisição (FK resultado_id → dp_resultados.id)
+  const resultadosRaw = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${ids.join(',')})&select=*,dp_resultados_bonus(*)`) || [];
+  // Separar: _dpResultados sem o campo embutido; _dpResultadosBonus lista plana
+  _dpResultados = resultadosRaw.map(r => { const { dp_resultados_bonus: _, ...rest } = r; return rest; });
+  _dpResultadosBonus = resultadosRaw.flatMap(r => r.dp_resultados_bonus || []);
   _dpResultadosCicloId = cicloId; // Grupo D: marcar como carregado para este ciclo
   dpRenderResultados();
 }
@@ -7326,6 +7334,7 @@ let _gdpParticipantes   = [];
 let _gdpAvaliacoes      = [];
 let _gdpResultados      = [];
 let _gdpTipoGestorId    = null; // id de dp_tipos_avaliador onde codigo='gestor_direto'
+let _gdpCiclosCarregados = []; // ciclos enriquecidos carregados em gestorDpLoadCiclos
 let _gdpAvalFiltroNome   = '';        // filtro de busca por nome na aba Avaliações
 let _gdpAvalFiltroCargos = new Set(); // cargos selecionados (multi-select) — Gestor
 let _gdpAvalFiltroStatus = '';        // chip de status ativo: ''|'nao_iniciada'|'em_andamento'|'concluida'
@@ -7371,6 +7380,7 @@ async function gestorDpLoadCiclos() {
       dp_versoes: versaoMap[c.versao_id] || null,
       dp_ciclo_participantes: partMap[c.id] || []
     }));
+    _gdpCiclosCarregados = enriquecidos;
     gestorDpRenderCiclos(enriquecidos);
   } catch(e) {
     if (body) body.innerHTML = '<div class="empty-state"><p>Erro ao carregar ciclos.</p></div>';
@@ -7410,15 +7420,22 @@ function gestorDpRenderCiclos(ciclos) {
 
 /* ─── abrir drawer do ciclo ─────────────────────────────────── */
 async function gestorDpAbrirDrawer(cicloId) {
-  // Queries separadas para evitar INNER JOIN implícito do PostgREST (versao_id NOT NULL)
-  const ciclo = await sbGet(`/rest/v1/dp_ciclos?id=eq.${cicloId}&select=*`);
-  if (!ciclo || !ciclo[0]) { toast('Ciclo não encontrado.', true); return; }
-  let versao = null;
-  if (ciclo[0].versao_id) {
-    const vData = await sbGet(`/rest/v1/dp_versoes?id=eq.${ciclo[0].versao_id}&select=*`);
-    versao = vData?.[0] || null;
+  // Usar ciclo já em memória (carregado em gestorDpLoadCiclos) para evitar round-trips desnecessários
+  const cicloCache = _gdpCiclosCarregados.find(c => c.id === cicloId);
+  if (cicloCache) {
+    // Cache hit: monta _gdpCicloAtual normalizando dp_versoes → versao (campo usado pelo motor)
+    _gdpCicloAtual = { ...cicloCache, versao: cicloCache.versao || cicloCache.dp_versoes || null };
+  } else {
+    // Fallback (anomalia: cache vazio ou ciclo não estava na lista) — buscar do banco
+    const ciclo = await sbGet(`/rest/v1/dp_ciclos?id=eq.${cicloId}&select=*`);
+    if (!ciclo || !ciclo[0]) { toast('Ciclo não encontrado.', true); return; }
+    let versao = null;
+    if (ciclo[0].versao_id) {
+      const vData = await sbGet(`/rest/v1/dp_versoes?id=eq.${ciclo[0].versao_id}&select=*`);
+      versao = vData?.[0] || null;
+    }
+    _gdpCicloAtual = { ...ciclo[0], versao };
   }
-  _gdpCicloAtual = { ...ciclo[0], versao };
 
   document.getElementById('gestorDpDrawerTitulo').textContent = _gdpCicloAtual.nome;
   document.getElementById('gestorDpDrawerSub').textContent =
@@ -7438,14 +7455,12 @@ async function gestorDpAbrirDrawer(cicloId) {
 
   // Resultados e bônus dependem de _gdpAvaliacoes — carregar após
   _gdpResultados = [];
-  { // carrega resultados e bônus da equipe para exibição na aba Avaliações
+  { // carrega resultados e bônus da equipe em uma única requisição (FK embutida)
     const avalIds = _gdpAvaliacoes.map(a => a.id);
     if (avalIds.length) {
-      _dpResultados = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${avalIds.join(',')})&select=*`) || [];
-      const resIds = _dpResultados.map(r => r.id);
-      _dpResultadosBonus = resIds.length
-        ? (await sbGet(`/rest/v1/dp_resultados_bonus?resultado_id=in.(${resIds.join(',')})`) || [])
-        : [];
+      const resultadosRaw = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${avalIds.join(',')})&select=*,dp_resultados_bonus(*)`) || [];
+      _dpResultados      = resultadosRaw.map(r => { const { dp_resultados_bonus: _, ...rest } = r; return rest; });
+      _dpResultadosBonus = resultadosRaw.flatMap(r => r.dp_resultados_bonus || []);
     } else {
       _dpResultados = []; _dpResultadosBonus = [];
     }
