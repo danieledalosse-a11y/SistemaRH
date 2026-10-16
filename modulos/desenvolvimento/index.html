@@ -1697,6 +1697,8 @@ let _dpRespostasAtual      = [];
 let _dpVersaoCritsParaForm = [];
 let _dpFormNavList         = [];
 let _dpFormNavIdx          = -1;
+let _dpAvalFiltroNome      = '';   // filtro de busca por nome na aba Avaliações (RH)
+let _dpAvalFiltroCargo     = '';   // filtro por cargo na aba Avaliações (RH)
 
 /* ─────────────────────────────────────────────
    NAVEGAÇÃO
@@ -4274,7 +4276,7 @@ async function dpAbrirDrawerCiclo(cicloId, abaInicial) {
     await dpLoadResultados(cicloId);
   }
   // Se a aba inicial é avaliações, renderizar agora (após load)
-  if (tabAlvo === 'avaliacoes') dpRenderAvaliacoes();
+  if (tabAlvo === 'avaliacoes') _dpRenderAvaliacoesComFiltro();
 }
 
 function dpFecharDrawerCiclo() {
@@ -4285,6 +4287,8 @@ function dpFecharDrawerCiclo() {
   _dpAvaliacoes     = [];
   _dpResultados     = [];
   _dpEncerrarPendente = false;
+  _dpAvalFiltroNome   = '';
+  _dpAvalFiltroCargo  = '';
 }
 
 function dpShowDcTab(id, btn) {
@@ -4293,7 +4297,7 @@ function dpShowDcTab(id, btn) {
   if (btn) btn.classList.add('active');
   document.getElementById(`dptab-${id}`).classList.add('active');
   if (id === 'info') dpRenderInfoCiclo();
-  if (id === 'avaliacoes') dpRenderAvaliacoes();
+  if (id === 'avaliacoes') _dpRenderAvaliacoesComFiltro();
   if (id === 'resultados') dpLoadResultados(_dpCicloAtual ? _dpCicloAtual.id : null);
   if (id === 'historico') dpLoadHistorico(_dpCicloAtual ? _dpCicloAtual.id : null);
 }
@@ -5600,7 +5604,18 @@ async function salvarWizard() {
 async function dpLoadAvaliacoes(cicloId) {
   const rows = await sbGet(`/rest/v1/dp_avaliacoes?ciclo_id=eq.${cicloId}&select=*`);
   _dpAvaliacoes = rows || [];
-  dpRenderAvaliacoes();
+  _dpRenderAvaliacoesComFiltro();
+}
+
+function _dpRenderAvaliacoesComFiltro() {
+  const nomeFiltro = _dpAvalFiltroNome.toLowerCase().trim();
+  const filtered = _dpParticipantes.filter(p => {
+    const s = p.snapshot || {};
+    if (nomeFiltro && !(s.nome||'').toLowerCase().includes(nomeFiltro)) return false;
+    if (_dpAvalFiltroCargo && s.cargo !== _dpAvalFiltroCargo) return false;
+    return true;
+  });
+  dpRenderAvaliacoes({ prefixHtml: _dpFiltrosHtml(), participants: filtered, hideAvaliarWhenDone: true });
 }
 
 function dpRenderAvaliacoes(opts = {}) {
@@ -6829,7 +6844,7 @@ async function dpConfirmarNaoParticipa(participanteId) {
     part.nao_participa_obs       = obsVal;
     part.nao_participa_em        = new Date().toISOString();
   }
-  dpRenderAvaliacoes();
+  _dpRenderAvaliacoesComFiltro();
   toast('Colaborador marcado como não participante.');
 }
 
@@ -6846,7 +6861,7 @@ async function dpReverterNaoParticipa(participanteId) {
     part.nao_participa_obs       = null;
     part.nao_participa_em        = null;
   }
-  dpRenderAvaliacoes();
+  _dpRenderAvaliacoesComFiltro();
   toast('Não participação revertida.');
 }
 
@@ -7016,6 +7031,20 @@ function gestorDpFecharDrawer() {
   _dpAvaliacoes       = [];
   _gdpAvalFiltroNome  = '';
   _gdpAvalFiltroCargo = '';
+}
+
+/* ─── filtros da aba Avaliações (RH) ────────────────────────── */
+function _dpFiltrosHtml() {
+  const cargos = [...new Set(_dpParticipantes.map(p => (p.snapshot||{}).cargo).filter(Boolean))].sort();
+  return `<div class="gdp-aval-filtros">
+    <input class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
+      value="${_dpAvalFiltroNome.replace(/"/g,'&quot;')}"
+      oninput="_dpAvalFiltroNome=this.value;_dpRenderAvaliacoesComFiltro()">
+    <select class="gdp-aval-select" onchange="_dpAvalFiltroCargo=this.value;_dpRenderAvaliacoesComFiltro()">
+      <option value="">Todos os cargos</option>
+      ${cargos.map(c => `<option value="${c}" ${_dpAvalFiltroCargo===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+  </div>`;
 }
 
 /* ─── filtros da aba Avaliações (gestor) ────────────────────── */
