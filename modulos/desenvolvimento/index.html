@@ -318,6 +318,11 @@
   .crit-input-sm { width: 70px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: inherit; color: var(--text); background: var(--surface); }
   .crit-input-sm:focus { outline: none; border-color: var(--accent); }
   .crit-cb { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+  .crit-drag-handle { cursor: grab; color: var(--text-ter); font-size: 15px; padding: 0 6px 0 2px; user-select: none; line-height: 1; }
+  .crit-drag-handle:hover { color: var(--text-sec); }
+  .crit-drag-handle:active { cursor: grabbing; }
+  .crit-row-dragging { opacity: 0.35; }
+  .crit-row-dragover td { background: var(--accent-bg, #EEF2FF); }
   .bloco-accordion { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
   .bloco-head { padding: 12px 16px; background: var(--bg); display: flex; align-items: center; gap: 10px; cursor: pointer; flex-wrap: wrap; }
   .bloco-head-nome { font-size: 13px; font-weight: 600; flex: 1; }
@@ -3470,7 +3475,13 @@ function renderVersaoCriterios() {
     const tipoSelect = `<div><select class="crit-select" ${readonly?'disabled':''} onchange="setCritField('${c.id}','tipo_resposta',this.value)">
       ${RESP_OPTS.map(o=>`<option value="${o.v}" ${c.tipo_resposta===o.v?'selected':''}>${o.l}</option>`).join('')}
     </select>${rangeHtml}${monetarioHtml}</div>`;
-    return `<tr data-crit-id="${c.id}">
+    return `<tr data-crit-id="${c.id}" draggable="true"
+      ondragstart="dpCritDragStart('${c.id}',event)"
+      ondragover="dpCritDragOver(event,'${c.id}')"
+      ondragleave="dpCritDragLeave(event)"
+      ondrop="dpCritDrop('${c.id}',event)"
+      ondragend="dpCritDragEnd(event)">
+      <td class="crit-drag-handle" title="Arrastar para reordenar">⠿</td>
       <td style="font-size:13px;font-weight:500;min-width:140px">${nome}</td>
       <td>${tipoSelect}</td>
       <td class="col-escala">${escalaSelect}</td>
@@ -3485,6 +3496,7 @@ function renderVersaoCriterios() {
     if (!crits.length) return `<div style="font-size:12px;color:var(--text-ter);padding:12px 0">Nenhum critério neste bloco.</div>`;
     return `<div style="overflow-x:auto"><table class="crit-table">
       <thead><tr>
+        <th style="width:28px"></th>
         <th>Critério</th><th>Como avaliar</th><th class="col-escala">Escala de notas</th>
         <th ${showPeso?'':'style="display:none"'}>Peso</th>
         <th>Obrigatório</th><th>Conta na nota</th><th></th>
@@ -3640,17 +3652,57 @@ async function setCritField(critId, field, value) {
   renderVersaoCriterios();
 }
 
+async function _salvarOrdemCrits() {
+  for (let i = 0; i < _dpVersaoCrits.length; i++) {
+    _dpVersaoCrits[i].ordem = i + 1;
+    await sbPatch(`/rest/v1/dp_versao_criterios?id=eq.${_dpVersaoCrits[i].id}`, { ordem: i + 1 });
+  }
+}
+
 async function moverCrit(critId, dir) {
   const idx = _dpVersaoCrits.findIndex(c => c.id === critId);
   if (idx === -1) return;
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= _dpVersaoCrits.length) return;
   [_dpVersaoCrits[idx], _dpVersaoCrits[newIdx]] = [_dpVersaoCrits[newIdx], _dpVersaoCrits[idx]];
-  for (let i = 0; i < _dpVersaoCrits.length; i++) {
-    _dpVersaoCrits[i].ordem = i + 1;
-    await sbPatch(`/rest/v1/dp_versao_criterios?id=eq.${_dpVersaoCrits[i].id}`, { ordem: i+1 });
-  }
+  await _salvarOrdemCrits();
   renderVersaoCriterios();
+}
+
+let _dpDragSrcId = null;
+
+function dpCritDragStart(id, event) {
+  _dpDragSrcId = id;
+  event.dataTransfer.effectAllowed = 'move';
+  event.currentTarget.classList.add('crit-row-dragging');
+}
+
+function dpCritDragOver(event, id) {
+  if (!_dpDragSrcId || _dpDragSrcId === id) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  event.currentTarget.classList.add('crit-row-dragover');
+}
+
+function dpCritDragLeave(event) {
+  event.currentTarget.classList.remove('crit-row-dragover');
+}
+
+async function dpCritDrop(id, event) {
+  event.currentTarget.classList.remove('crit-row-dragover');
+  if (!_dpDragSrcId || _dpDragSrcId === id) return;
+  const srcIdx = _dpVersaoCrits.findIndex(c => c.id === _dpDragSrcId);
+  const tgtIdx = _dpVersaoCrits.findIndex(c => c.id === id);
+  if (srcIdx === -1 || tgtIdx === -1) return;
+  const [item] = _dpVersaoCrits.splice(srcIdx, 1);
+  _dpVersaoCrits.splice(tgtIdx, 0, item);
+  await _salvarOrdemCrits();
+  renderVersaoCriterios();
+}
+
+function dpCritDragEnd(event) {
+  _dpDragSrcId = null;
+  event.currentTarget?.classList.remove('crit-row-dragging');
 }
 
 async function removerCrit(critId) {
