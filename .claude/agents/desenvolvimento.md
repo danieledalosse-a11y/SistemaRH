@@ -312,7 +312,7 @@ detalhe JSONB, usuario_id UUID, criado_em
 | `dp_tipo_resposta` | `binario`, `escala`, `numerico`, `numerico_com_meta`, `conceito`, `texto` |
 | `dp_tipo_calculo` | `soma`, `media`, `media_ponderada`, `percentual_atingimento`, `qualitativo` |
 | `dp_status_ciclo` | `rascunho`, `aberto`, `em_andamento`, `encerrado`, `cancelado` |
-| `dp_status_avaliacao` | `nao_iniciada`, `em_andamento`, `concluida`, `publicada` |
+| `dp_status_avaliacao` | `nao_iniciada`, `em_andamento`, `respondida`, `concluida`, `publicada` |
 | `dp_tipo_elegibilidade` | `todos`, `por_setor`, `por_cargo`, `por_gestor`, `por_colaborador` |
 | `dp_tipo_regra_financeira` | `percentual_salario`, `valor_fixo`, `por_criterio` |
 | `dp_status_resultado_financeiro` | `calculado`, `ajustado`, `aprovado`, `pago` |
@@ -696,6 +696,9 @@ document.getElementById('drawerDpCicloOverlay').classList.remove('open');
 | `126_dp_bloquear_aval_concluida.sql` | Dois triggers: (1) `trg_bloquear_resp_aval_concluida` — BEFORE INSERT/UPDATE em `dp_respostas` verifica se avaliação pai tem `status IN ('concluida','publicada')` e bloqueia com EXCEPTION; (2) `trg_bloquear_reverter_conclusao` — BEFORE UPDATE em `dp_avaliacoes` impede reversão de `concluida`/`publicada` para outro status. | **Executado** (commit 7149edb, 2026-10-16) |
 | `127_dp_rls_bonus_gestor.sql` | Policy SELECT em `dp_resultados_bonus` para perfil `gestor`: cadeia `bonus → resultado → avaliacao → participante → equipe` via `auth_gestor_equipe_ids()`. Pré-requisito para o gestor usar o embed PostgREST `dp_resultados?select=*,dp_resultados_bonus(*)`. Segue padrão da migration 113. Idempotente. | **Executado** (2026-10-16) |
 | `128_dp_historico_batch.sql` | `dp_fn_historico_criterio_batch(p_versao_id uuid, p_colaborador_id bigint, p_ciclo_atual_id uuid)` — retorna `TABLE(versao_criterio_id uuid, resultado jsonb)`. Itera os critérios da versão server-side e chama `dp_fn_historico_criterio` para cada um; substitui N RPCs paralelas por 1 chamada HTTP. `SECURITY INVOKER`. `GRANT EXECUTE TO authenticated`. | **Executado em produção** (2026-10-16) |
+| `130_dp_respondida_enum.sql` | `ALTER TYPE dp_status_avaliacao ADD VALUE IF NOT EXISTS 'respondida' BEFORE 'concluida'` — adiciona status intermediário entre `em_andamento` e `concluida`. **Deve ser executado e committed ANTES da migration 131** (restrição PostgreSQL: ADD VALUE não pode estar na mesma transação que código usando o novo valor). | **Executado em produção** (2026-10-16) |
+| `131_dp_validar_conclusao.sql` | Função `dp_fn_validar_conclusao()` + trigger `trg_validar_conclusao` BEFORE UPDATE em `dp_avaliacoes`. Bloqueia transição `status → concluida` quando há critérios `obrigatorio=true` sem resposta preenchida. Obtém `versao_id` via `dp_ciclos`. Não interfere em saves `em_andamento` ou `respondida`. `SECURITY DEFINER`. | **Executado em produção** (2026-10-16) |
+| `132_dp_corrigir_respondidas.sql` | Correção de dados: UPDATE `dp_avaliacoes SET status='respondida'` para registros com `status='em_andamento'` que já tinham todos os critérios obrigatórios respondidos (criados antes da migration 130). Corrigiu 9 avaliações do ciclo Gratificação CD - Setembro/2026. 1 avaliação permaneceu `em_andamento` (9/10 critérios — incompleta). | **Executado em produção** (2026-10-16) |
 
 ---
 
@@ -1817,3 +1820,127 @@ Botão vermelho sutil no rodapé esquerdo do formulário — visível apenas qua
 7. Toast "Avaliação limpa." — formulário **permanece aberto** (não chama `fecharFormAval()`)
 
 **Proteção de backend:** trigger `trg_bloquear_reverter_conclusao` (migration 126) impede que `status` seja revertido de `concluida`/`publicada` para outro valor via API direta. O front adiciona guard anterior, mas o banco é a proteção real.
+
+---
+
+## Status "Respondida" — implementação completa (2026-10-16, commits 6a9cdb6, fe1463d, 618fd69)
+
+### Conceito
+
+`respondida` = todos os critérios obrigatórios preenchidos, aguardando conclusão formal. Fica entre `em_andamento` e `concluida` no ENUM.
+
+| Status | Significado |
+|---|---|
+| `nao_iniciada` | Avaliação não aberta |
+| `em_andamento` | Aberta, ao menos 1 critério respondido, falta completar |
+| `respondida` | Todos os critérios obrigatórios preenchidos — aguarda conclusão |
+| `concluida` | Formalmente concluída pelo RH/gestor |
+| `publicada` | Publicada para o colaborador |
+
+### Auto-detecção em `salvarAvaliacao(status)`
+
+Quando `status='em_andamento'`, antes do PATCH verifica:
+```js
+const totalCrits   = _dpVersaoCritsParaForm.length;
+const respondidos  = _dpRespostasAtual.filter(r =>
+  r.resposta_texto != null || r.escala_opcao_id != null || r.valor_numerico_livre != null
+).length;
+if (totalCrits > 0 && respondidos >= totalCrits) statusEfetivo = 'respondida';
+```
+
+### Auto-detecção em `_dpSalvarParaNavegar()`
+
+Usa `payloads` (estado atual do formulário, não `_dpRespostasAtual` que é pré-form):
+```js
+const _statusNav = (_totalCritsNav > 0 && _respondidosNav >= _totalCritsNav) ? 'respondida' : 'em_andamento';
+```
+
+### Guards de conclusão
+
+- **Frontend** (`dpConcluirAvaliacaoIndividual`): bloqueia se `aval.status !== 'respondida'` com toast
+- **Backend** (`trg_validar_conclusao`): BEFORE UPDATE, conta critérios obrigatórios vs. respostas e lança EXCEPTION se incompleto
+- `dpConcluirTodasAvaliacoes` inclui `respondida` no lote (além de `em_andamento`)
+
+### Variáveis e constantes adicionadas
+
+```js
+const STATUS_LABEL = { nao_iniciada: '...', em_andamento: '...', respondida: 'Respondida', concluida: '...', publicada: '...' };
+const STATUS_BADGE = { ..., respondida: 'purple', ... };  // sbadge-purple
+const _dpAvatarColors = ['#1849A9','#0E7490','#6D28D9','...'];  // cores determinísticas por nome
+const _dpAvatarColor  = n => { ... };  // hash do nome → cor
+```
+
+CSS: `.sbadge-purple { background: var(--purple-bg); color: var(--purple); }`
+
+### Banner home (visão gestor)
+
+`emAndamento` no banner inclui `respondida`:
+```js
+const emAndamento = avals.filter(a => a.status === 'em_andamento' || a.status === 'respondida').length;
+```
+
+---
+
+## Redesign visual da aba Avaliações (2026-10-16, commits c4f13b0, 0684f76, 5e08f7a, f2698e1, e7d1dfb, 1a5fe90)
+
+### Layout de cada linha
+
+```
+[avatar+dot] [flex:1 info] [120px badge] [valor bonus?] [120px botões justify-end]
+```
+
+Cada bloco é filho **direto** do flex row com tamanho fixo — garante alinhamento vertical independente do nome ou do número de botões.
+
+### Avatar com foto e bolinha de status
+
+```js
+const _colab   = (_colaboradores||[]).find(c => String(c.id) === String(p.colaborador_id));
+const _fotoUrl = _colab?.foto_url || null;
+// fallback: iniciais com cor determinística via _dpAvatarColor(nome)
+// bolinha de status: position:absolute, bottom:0, right:0, 11px, border:2px solid var(--surface)
+```
+
+Cores da bolinha por status:
+| Status | Cor |
+|---|---|
+| `nao_iniciada` | `#9CA3AF` |
+| `em_andamento` | `#F59E0B` |
+| `respondida` | `#7C3AED` |
+| `concluida` | `#10B981` |
+| `publicada` | `#3B82F6` |
+
+### Badge de status — sempre visível
+
+Badge exibido para **todos** os status (antes só aparecia para `concluida`/`publicada`). Usa `.sbadge-dot` para o ponto colorido inline. Container com `width:120px` garante a coluna alinhada.
+
+### Botões ícone-only (30×30px)
+
+| Ação | SVG | Visível quando | Tooltip |
+|---|---|---|---|
+| **Avaliar** | Clipboard com linhas | `!concluido` | "Avaliar" |
+| **Visualizar** | Olho | `concluido` | "Visualizar avaliação" |
+| **Concluir** | Check-circle verde (`#10B981`) | `respondida` + ciclo aberto | "Concluir avaliação" |
+| **Editar RH** | Lápis | `concluida` + perfil rh/admin | "Editar avaliação (RH)" |
+| **Não participa** | ⊘ | `!concluido` + `_podeMarcarNP` | "Marcar como não participante" |
+
+Estilo base (`_ib`): `display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border:1px solid var(--border); border-radius:6px; background:transparent; cursor:pointer; color:var(--text-sec); transition:background .15s`
+
+"Concluir" usa `border-color:#10B981; color:#10B981` para destaque discreto sem ser chamativo.
+
+### KPI cards — fundos preenchidos
+
+4 cards (Não iniciada / Em andamento / Respondida / Concluída) com:
+- Fundo sempre colorido (`bgOff` = cor suave quando inativo, `bgOn` = mais saturado quando ativo)
+- Borda `ring` colorida + `box-shadow` quando filtro ativo
+- Grid `repeat(4, 1fr)` fixo
+
+### Barra de progresso
+
+Conta `respondida + concluida` (não só `concluida`):
+```js
+const respondidas = (counts.respondida || 0) + counts.concluida;
+const pct = total > 0 ? Math.round((respondidas / total) * 100) : 0;
+// texto: "X respondidas · Y%"
+```
+
+Valor monetário (`valorStr`) aparece à direita da barra quando `valorBonus != null` — calculado via `_dpSomaBonus` sobre `dp_resultados_bonus`.
