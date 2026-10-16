@@ -708,9 +708,9 @@
   }
   .aval-hist b { color: var(--text-sec); font-weight: 600; }
   /* ── não participante ── */
-  .dp-np-row { display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-light);background:rgba(107,114,128,0.05); }
-  .dp-np-badge { font-size:10px;font-weight:600;color:#6B7280;background:rgba(107,114,128,0.12);border:1px solid rgba(107,114,128,0.25);border-radius:4px;padding:1px 5px;white-space:nowrap;flex-shrink:0; }
-  .dp-np-section-header { font-size:11px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.5px;padding:10px 12px 4px;border-top:1px solid var(--border); }
+  .dp-np-row { display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #FECACA;background:#FFF5F5;border-left:3px solid #EF4444; }
+  .dp-np-badge { font-size:10px;font-weight:700;color:#DC2626;background:#FEE2E2;border:1px solid #FECACA;border-radius:4px;padding:2px 7px;white-space:nowrap;flex-shrink:0;letter-spacing:.02em; }
+  .dp-np-section-header { font-size:11px;font-weight:700;color:#B91C1C;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px 6px;border-top:2px solid #FECACA;background:#FFF5F5;margin-top:4px; }
   @media (max-width: 600px) {
     .aval-card { flex-wrap: wrap; padding: 10px 12px; min-height: auto; gap: 8px; }
     .aval-nome-info { min-width: 100px; }
@@ -6966,15 +6966,20 @@ async function dpConfirmarNaoParticipa(participanteId) {
   });
   if (_sbLastError) { toast('Erro ao marcar: ' + sbErrMsg(), true); return; }
 
-  const part = _dpParticipantes.find(p => p.id === participanteId);
-  if (part) {
-    part.nao_participa           = true;
-    part.nao_participa_motivo    = motivoTexto;
-    part.nao_participa_motivo_id = motivoId;
-    part.nao_participa_obs       = obsVal;
-    part.nao_participa_em        = new Date().toISOString();
-  }
+  const agora = new Date().toISOString();
+  [_dpParticipantes, _gdpParticipantes].forEach(arr => {
+    const p = arr.find(x => x.id === participanteId);
+    if (p) {
+      p.nao_participa           = true;
+      p.nao_participa_motivo    = motivoTexto;
+      p.nao_participa_motivo_id = motivoId;
+      p.nao_participa_obs       = obsVal;
+      p.nao_participa_em        = agora;
+    }
+  });
   _dpRenderAvaliacoesComFiltro();
+  const gdpBtn = document.getElementById('gdptab-btn-avaliacoes');
+  if (gdpBtn && _gdpParticipantes.some(p => p.id === participanteId)) gestorDpShowTab('avaliacoes', gdpBtn);
   toast('Colaborador marcado como não participante.');
 }
 
@@ -6983,15 +6988,19 @@ async function dpReverterNaoParticipa(participanteId) {
   await sbRpc('dp_fn_reverter_nao_participa', { p_participante_id: participanteId });
   if (_sbLastError) { toast('Erro ao reverter: ' + sbErrMsg(), true); return; }
 
-  const part = _dpParticipantes.find(p => p.id === participanteId);
-  if (part) {
-    part.nao_participa           = false;
-    part.nao_participa_motivo    = null;
-    part.nao_participa_motivo_id = null;
-    part.nao_participa_obs       = null;
-    part.nao_participa_em        = null;
-  }
+  [_dpParticipantes, _gdpParticipantes].forEach(arr => {
+    const p = arr.find(x => x.id === participanteId);
+    if (p) {
+      p.nao_participa           = false;
+      p.nao_participa_motivo    = null;
+      p.nao_participa_motivo_id = null;
+      p.nao_participa_obs       = null;
+      p.nao_participa_em        = null;
+    }
+  });
   _dpRenderAvaliacoesComFiltro();
+  const gdpBtn = document.getElementById('gdptab-btn-avaliacoes');
+  if (gdpBtn && _gdpParticipantes.some(p => p.id === participanteId)) gestorDpShowTab('avaliacoes', gdpBtn);
   toast('Não participação revertida.');
 }
 
