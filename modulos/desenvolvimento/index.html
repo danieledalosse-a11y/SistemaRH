@@ -6959,11 +6959,44 @@ function dpAvalFormSetReadonly(readonly, concluida_em) {
       : '';
     footer.innerHTML = `<div class="form-aval-readonly-banner">✓ Avaliação concluída${dataStr} — não é possível alterar</div>`;
   } else {
-    footer.innerHTML = `<button class="btn btn-secondary btn-sm" onclick="salvarAvaliacao('em_andamento')">Salvar</button>`;
+    footer.innerHTML = `
+      <button class="btn btn-sm" style="color:var(--red);border:1px solid var(--red);background:transparent;padding:6px 14px" onclick="dpLimparAvaliacao()">Limpar avaliação</button>
+      <button class="btn btn-secondary btn-sm" onclick="salvarAvaliacao('em_andamento')">Salvar</button>`;
   }
 }
 
 // Conclui avaliação individual diretamente da lista (sem abrir o formulário)
+async function dpLimparAvaliacao() {
+  if (!_dpAvaliacaoAtual) return;
+  const avalId = _dpAvaliacaoAtual.id;
+  if (_dpAvaliacaoAtual.status === 'concluida' || _dpAvaliacaoAtual.status === 'publicada') {
+    toast('Avaliação concluída não pode ser limpa.', true);
+    return;
+  }
+  const ok = await dpConfirmDialog(
+    'Limpar avaliação',
+    'Todas as respostas serão apagadas permanentemente e a avaliação voltará ao estado "Não iniciada". Esta ação não pode ser desfeita.',
+    'Limpar'
+  );
+  if (!ok) return;
+  try {
+    const ok1 = await sbDelete(`/rest/v1/dp_respostas?avaliacao_id=eq.${avalId}`);
+    if (!ok1) throw new Error(sbErrMsg());
+    const ok2 = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, { status: 'nao_iniciada', concluida_em: null });
+    if (!ok2) throw new Error(sbErrMsg());
+    _dpRespostasAtual = [];
+    _dpAvaliacaoAtual.status = 'nao_iniciada';
+    _dpAvaliacaoAtual.concluida_em = null;
+    const avalIdx = _dpAvaliacoes.findIndex(a => a.id === avalId);
+    if (avalIdx >= 0) { _dpAvaliacoes[avalIdx].status = 'nao_iniciada'; _dpAvaliacoes[avalIdx].concluida_em = null; }
+    dpRenderFormAvaliacao();
+    dpAvalFormSetReadonly(false);
+    toast('Avaliação limpa.');
+  } catch (e) {
+    toast('Erro ao limpar avaliação: ' + e.message, true);
+  }
+}
+
 async function dpConcluirAvaliacaoIndividual(participanteId) {
   const part = _dpParticipantes.find(p => p.id === participanteId)
              || _gdpParticipantes.find(p => p.id === participanteId);
@@ -7556,6 +7589,7 @@ init();
     </div>
     <div class="modal-aval-body" id="formAvalBody"></div>
     <div class="modal-aval-footer" id="formAvalFooter">
+      <button class="btn btn-sm" style="color:var(--red);border:1px solid var(--red);background:transparent;padding:6px 14px" onclick="dpLimparAvaliacao()">Limpar avaliação</button>
       <button class="btn btn-secondary btn-sm" onclick="salvarAvaliacao('em_andamento')">Salvar</button>
     </div>
   </div>
