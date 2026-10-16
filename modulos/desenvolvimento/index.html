@@ -711,6 +711,7 @@
   .dp-np-row { display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #FECACA;background:#FFF5F5;border-left:3px solid #EF4444; }
   .dp-np-badge { font-size:10px;font-weight:700;color:#DC2626;background:#FEE2E2;border:1px solid #FECACA;border-radius:4px;padding:2px 7px;white-space:nowrap;flex-shrink:0;letter-spacing:.02em; }
   .dp-np-section-header { font-size:11px;font-weight:700;color:#B91C1C;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px 6px;border-top:2px solid #FECACA;background:#FFF5F5;margin-top:4px; }
+  .form-aval-readonly-banner { display:flex;align-items:center;gap:8px;padding:9px 16px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;font-size:13px;color:#15803D;font-weight:600; }
   @media (max-width: 600px) {
     .aval-card { flex-wrap: wrap; padding: 10px 12px; min-height: auto; gap: 8px; }
     .aval-nome-info { min-width: 100px; }
@@ -5778,6 +5779,7 @@ function dpRenderAvaliacoes(opts = {}) {
           <span class="sbadge sbadge-${STATUS_BADGE[st] || 'gray'}" style="font-size:11px">${STATUS_LABEL[st] || st}</span>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
             ${(opts.hideAvaliarWhenDone && (st === 'concluida' || st === 'publicada')) ? '' : `<button class="btn btn-secondary btn-sm" onclick="${_onAvaliarFn}('${p.id}')" style="font-size:12px">Avaliar</button>`}
+            ${(st === 'em_andamento' && _cicloAberto) ? `<button class="btn btn-primary btn-sm" style="font-size:12px" onclick="dpConcluirAvaliacaoIndividual('${p.id}')">Concluir</button>` : ''}
             ${_podeMarcarNP ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;color:var(--text-ter)" onclick="dpAbrirModalNaoParticipa('${p.id}')" title="Marcar como não participante">⊘</button>` : ''}
           </div>
         </div>`;
@@ -5978,6 +5980,10 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
 
   dpRenderFormAvaliacao();
   dpAtualizarProgressoAval();
+  dpAvalFormSetReadonly(
+    aval.status === 'concluida' || aval.status === 'publicada',
+    aval.concluida_em || null
+  );
   document.getElementById('formAvalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -6357,6 +6363,10 @@ function dpAvalBinario(vcId, val) {
 
 async function salvarAvaliacao(status) {
   if (!_dpAvaliacaoAtual) return;
+  if (_dpAvaliacaoAtual.status === 'concluida' || _dpAvaliacaoAtual.status === 'publicada') {
+    toast('Esta avaliação já foi concluída e não pode ser alterada.', true);
+    return;
+  }
   const avalId = _dpAvaliacaoAtual.id;
   const partId = _dpAvaliacaoAtual.participante_id;
 
@@ -6911,6 +6921,143 @@ function dpRenderHistorico(eventos) {
 }
 
 /* ─────────────────────────────────────────────
+   CONCLUSÃO DE AVALIAÇÕES
+───────────────────────────────────────────── */
+
+// Helper reutilizável: diálogo de confirmação com Promise<boolean>
+function dpConfirmDialog(titulo, corpo, btnLabel = 'Confirmar', somenteOk = false) {
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px';
+    el.innerHTML = `
+      <div style="background:var(--bg);border-radius:12px;padding:24px 28px;max-width:440px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.2);font-family:inherit">
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px">${titulo}</div>
+        <div style="font-size:13px;color:var(--text-sec);margin-bottom:24px;line-height:1.55">${corpo}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          ${!somenteOk ? '<button class="btn btn-secondary btn-sm" id="_dpCancelBtn" style="padding:7px 18px">Cancelar</button>' : ''}
+          <button class="btn btn-primary btn-sm" id="_dpConfirmBtn" style="padding:7px 18px">${btnLabel}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    el.querySelector('#_dpConfirmBtn').onclick = () => { document.body.removeChild(el); resolve(true); };
+    if (!somenteOk) el.querySelector('#_dpCancelBtn').onclick = () => { document.body.removeChild(el); resolve(false); };
+  });
+}
+
+// Aplica / remove modo leitura no formulário de avaliação
+function dpAvalFormSetReadonly(readonly, concluida_em) {
+  const body   = document.getElementById('formAvalBody');
+  const footer = document.getElementById('formAvalFooter');
+  if (!body || !footer) return;
+  body.querySelectorAll('input, select, textarea, button').forEach(el => { el.disabled = readonly; });
+  if (readonly) {
+    const dataStr = concluida_em
+      ? ' em ' + new Date(concluida_em).toLocaleDateString('pt-BR')
+      : '';
+    footer.innerHTML = `<div class="form-aval-readonly-banner">✓ Avaliação concluída${dataStr} — não é possível alterar</div>`;
+  } else {
+    footer.innerHTML = `<button class="btn btn-secondary btn-sm" onclick="salvarAvaliacao('em_andamento')">Salvar</button>`;
+  }
+}
+
+// Conclui avaliação individual diretamente da lista (sem abrir o formulário)
+async function dpConcluirAvaliacaoIndividual(participanteId) {
+  const part = _dpParticipantes.find(p => p.id === participanteId)
+             || _gdpParticipantes.find(p => p.id === participanteId);
+  const nome = (part?.snapshot?.nome) || '—';
+  const aval = _dpAvaliacoes.find(a => a.participante_id === participanteId)
+             || _gdpAvaliacoes.find(a => a.participante_id === participanteId);
+  if (!aval) return;
+
+  const ok = await dpConfirmDialog(
+    `Concluir avaliação de ${nome}?`,
+    'Após concluir, <strong>não será possível alterar</strong> esta avaliação. Esta ação é definitiva.',
+    'Concluir avaliação'
+  );
+  if (!ok) return;
+
+  const agora = new Date().toISOString();
+  const res = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${aval.id}`, { status: 'concluida', concluida_em: agora });
+  if (!res) { toast('Erro ao concluir: ' + sbErrMsg(), true); return; }
+
+  [_dpAvaliacoes, _gdpAvaliacoes].forEach(arr => {
+    const a = arr.find(x => x.id === aval.id);
+    if (a) { a.status = 'concluida'; a.concluida_em = agora; }
+  });
+  await dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', aval.id, { colaborador: nome });
+  toast('Avaliação concluída.');
+  _dpRenderAvaliacoesComFiltro();
+  const gdpBtn = document.getElementById('gdptab-btn-avaliacoes');
+  if (gdpBtn) gestorDpShowTab('avaliacoes', gdpBtn);
+}
+
+// Conclui todas as avaliações em lote (RH = ciclo inteiro, Gestor = equipe)
+async function dpConcluirTodasAvaliacoes(escopo) {
+  const parts = escopo === 'gestor' ? _gdpParticipantes : _dpParticipantes;
+  const avals = escopo === 'gestor' ? _gdpAvaliacoes    : _dpAvaliacoes;
+
+  // Pendentes = não nao_participa E (sem avaliação ou status nao_iniciada)
+  const pendentes = parts.filter(p => {
+    if (p.nao_participa) return false;
+    const a = avals.find(x => x.participante_id === p.id);
+    return !a || a.status === 'nao_iniciada';
+  });
+
+  if (pendentes.length) {
+    const nomes = pendentes.map(p => (p.snapshot||{}).nome || '—').slice(0, 5).join('<br>• ');
+    const extra = pendentes.length > 5 ? `<br>… e mais ${pendentes.length - 5}` : '';
+    await dpConfirmDialog(
+      `${pendentes.length} colaborador${pendentes.length !== 1 ? 'es' : ''} pendente${pendentes.length !== 1 ? 's' : ''}`,
+      `Realize a avaliação ou registre a não participação para cada pendência antes de concluir:<br><br>• ${nomes}${extra}`,
+      'Entendido',
+      true /* somenteOk */
+    );
+    return;
+  }
+
+  const emAndamento = parts.filter(p => {
+    if (p.nao_participa) return false;
+    const a = avals.find(x => x.participante_id === p.id);
+    return a && a.status === 'em_andamento';
+  });
+
+  if (!emAndamento.length) {
+    toast('Todas as avaliações já estão concluídas.');
+    return;
+  }
+
+  const ok = await dpConfirmDialog(
+    `Concluir ${emAndamento.length} avaliação${emAndamento.length !== 1 ? 'ões' : ''}?`,
+    'Após concluir, <strong>não será possível alterar</strong> as avaliações. Esta ação é definitiva.',
+    'Confirmar conclusão'
+  );
+  if (!ok) return;
+
+  const agora = new Date().toISOString();
+  let erros = 0;
+  for (const p of emAndamento) {
+    const a = avals.find(x => x.participante_id === p.id);
+    const res = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${a.id}`, { status: 'concluida', concluida_em: agora });
+    if (res) {
+      [_dpAvaliacoes, _gdpAvaliacoes].forEach(arr => {
+        const x = arr.find(y => y.id === a.id);
+        if (x) { x.status = 'concluida'; x.concluida_em = agora; }
+      });
+      await dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', a.id, { colaborador: (p.snapshot||{}).nome });
+    } else {
+      erros++;
+    }
+  }
+
+  if (erros) toast(`${emAndamento.length - erros} concluídas. ${erros} com erro.`, true);
+  else toast(`${emAndamento.length} avaliação${emAndamento.length !== 1 ? 'ões' : ''} concluída${emAndamento.length !== 1 ? 's' : ''}.`);
+
+  _dpRenderAvaliacoesComFiltro();
+  const gdpBtn = document.getElementById('gdptab-btn-avaliacoes');
+  if (gdpBtn) gestorDpShowTab('avaliacoes', gdpBtn);
+}
+
+/* ─────────────────────────────────────────────
    NÃO PARTICIPA — modal e ações
 ───────────────────────────────────────────── */
 
@@ -7282,14 +7429,20 @@ function _dpCargoBusca(ddId, q) {
 function _dpFiltrosHtml() {
   const cargos = [...new Set(_dpParticipantes.map(p => (p.snapshot||{}).cargo).filter(Boolean))].sort();
   const hasNome = _dpAvalFiltroNome.length > 0;
-  return `<div class="gdp-aval-filtros">
-    <div class="gdp-aval-search-wrap">
-      <input id="dpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
-        value="${_dpAvalFiltroNome.replace(/"/g,'&quot;')}"
-        oninput="_dpAvalFiltroNome=this.value;_dpRenderAvaliacoesComFiltro()">
-      <span class="gdp-aval-search-clear" onclick="_dpAvalFiltroNome='';_dpRenderAvaliacoesComFiltro()" style="${hasNome?'display:block':''}">✕</span>
+  const cicloAberto = _dpCicloAtual && (_dpCicloAtual.status === 'aberto' || _dpCicloAtual.status === 'em_andamento');
+  return `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px">
+    <div class="gdp-aval-filtros">
+      <div class="gdp-aval-search-wrap">
+        <input id="dpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
+          value="${_dpAvalFiltroNome.replace(/"/g,'&quot;')}"
+          oninput="_dpAvalFiltroNome=this.value;_dpRenderAvaliacoesComFiltro()">
+        <span class="gdp-aval-search-clear" onclick="_dpAvalFiltroNome='';_dpRenderAvaliacoesComFiltro()" style="${hasNome?'display:block':''}">✕</span>
+      </div>
+      ${_dpCargoDropdownHtml('dpCargoDd', cargos, _dpAvalFiltroCargos)}
     </div>
-    ${_dpCargoDropdownHtml('dpCargoDd', cargos, _dpAvalFiltroCargos)}
+    ${cicloAberto ? `<div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-primary btn-sm" style="font-size:12px" onclick="dpConcluirTodasAvaliacoes('rh')">Concluir todas</button>
+    </div>` : ''}
   </div>`;
 }
 
@@ -7297,14 +7450,20 @@ function _dpFiltrosHtml() {
 function _gdpFiltrosHtml() {
   const cargos = [...new Set(_gdpParticipantes.map(p => (p.snapshot||{}).cargo).filter(Boolean))].sort();
   const hasNome = _gdpAvalFiltroNome.length > 0;
-  return `<div class="gdp-aval-filtros">
-    <div class="gdp-aval-search-wrap">
-      <input id="gdpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
-        value="${_gdpAvalFiltroNome.replace(/"/g,'&quot;')}"
-        oninput="_gdpAvalFiltroNome=this.value;gestorDpShowTab('avaliacoes',document.getElementById('gdptab-btn-avaliacoes'))">
-      <span class="gdp-aval-search-clear" onclick="_gdpAvalFiltroNome='';gestorDpShowTab('avaliacoes',document.getElementById('gdptab-btn-avaliacoes'))" style="${hasNome?'display:block':''}">✕</span>
+  const cicloAberto = _gdpCicloAtual && (_gdpCicloAtual.status === 'aberto' || _gdpCicloAtual.status === 'em_andamento');
+  return `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px">
+    <div class="gdp-aval-filtros">
+      <div class="gdp-aval-search-wrap">
+        <input id="gdpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
+          value="${_gdpAvalFiltroNome.replace(/"/g,'&quot;')}"
+          oninput="_gdpAvalFiltroNome=this.value;gestorDpShowTab('avaliacoes',document.getElementById('gdptab-btn-avaliacoes'))">
+        <span class="gdp-aval-search-clear" onclick="_gdpAvalFiltroNome='';gestorDpShowTab('avaliacoes',document.getElementById('gdptab-btn-avaliacoes'))" style="${hasNome?'display:block':''}">✕</span>
+      </div>
+      ${_dpCargoDropdownHtml('gdpCargoDd', cargos, _gdpAvalFiltroCargos)}
     </div>
-    ${_dpCargoDropdownHtml('gdpCargoDd', cargos, _gdpAvalFiltroCargos)}
+    ${cicloAberto ? `<div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-primary btn-sm" style="font-size:12px" onclick="dpConcluirTodasAvaliacoes('gestor')">Concluir equipe</button>
+    </div>` : ''}
   </div>`;
 }
 
@@ -7393,9 +7552,8 @@ init();
       </div>
     </div>
     <div class="modal-aval-body" id="formAvalBody"></div>
-    <div class="modal-aval-footer">
-      <button class="btn btn-secondary btn-sm" onclick="salvarAvaliacao('em_andamento')">Salvar rascunho</button>
-      <button class="btn btn-primary btn-sm" onclick="salvarAvaliacao('concluida')">Concluir avaliação</button>
+    <div class="modal-aval-footer" id="formAvalFooter">
+      <button class="btn btn-secondary btn-sm" onclick="salvarAvaliacao('em_andamento')">Salvar</button>
     </div>
   </div>
 </div>
