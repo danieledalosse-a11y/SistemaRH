@@ -611,10 +611,7 @@
     align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0;
     background: var(--bg);
   }
-  .modal-aval-header-info {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-top: 4px; margin-bottom: 10px;
-  }
+  /* .modal-aval-header-info redefinida junto aos estilos de nav/avatar abaixo */
   .aval-valor-badge {
     display: inline-flex; align-items: center; gap: 5px;
     font-size: 12px; font-weight: 700; color: #1D4ED8;
@@ -5827,13 +5824,12 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   // Preencher header
   document.getElementById('formAvalTitulo').textContent = snap.nome || '—';
   document.getElementById('formAvalSub').textContent = `${snap.cargo || '—'} · ${snap.setor || '—'}`;
-  _dpRenderAvalAvatar(null, snap.nome); // fallback imediato; foto carrega async
   _dpAtualizarNavBtns();
-  if (part.colaborador_id) {
-    sbGet(`/rest/v1/_colaboradores?id=eq.${part.colaborador_id}&select=foto_url`)
-      .then(r => { if (r?.[0]?.foto_url) _dpRenderAvalAvatar(r[0].foto_url, snap.nome); })
-      .catch(() => {});
-  }
+  // Foto: busca em memória (_colaboradores já carregado), fallback para iniciais
+  const _colabMem = part.colaborador_id && Array.isArray(_colaboradores)
+    ? _colaboradores.find(c => c.id === part.colaborador_id)
+    : null;
+  _dpRenderAvalAvatar(_colabMem?.foto_url || null, snap.nome);
 
   dpRenderFormAvaliacao();
   dpAtualizarProgressoAval();
