@@ -716,14 +716,22 @@
   .gdp-aval-filtros {
     display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
   }
+  .gdp-aval-search-wrap {
+    position: relative; flex: 1; min-width: 140px; display: flex; align-items: center;
+  }
   .gdp-aval-search {
-    flex: 1; min-width: 160px; padding: 7px 10px; border: 1px solid var(--border);
+    width: 100%; padding: 7px 28px 7px 10px; border: 1px solid var(--border);
     border-radius: 8px; font-size: 13px; font-family: inherit; color: var(--text);
     background: var(--surface);
   }
   .gdp-aval-search:focus { outline: none; border-color: var(--accent); }
+  .gdp-aval-search-clear {
+    position: absolute; right: 8px; font-size: 14px; color: var(--text-ter);
+    cursor: pointer; line-height: 1; padding: 2px; display: none;
+  }
+  .gdp-aval-search-clear:hover { color: var(--text); }
   /* ── dropdown multi-select de cargos ── */
-  .gdp-cargo-dd { position: relative; flex-shrink: 0; }
+  .gdp-cargo-dd { position: relative; flex-shrink: 0; min-width: 190px; }
   .gdp-cargo-btn {
     display: flex; align-items: center; gap: 6px; padding: 7px 10px;
     border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
@@ -753,6 +761,11 @@
     margin-top: 2px;
   }
   .gdp-cargo-clear:hover { text-decoration: underline; }
+  .gdp-cargo-x {
+    margin-left: 4px; font-size: 13px; color: var(--text-ter); line-height: 1;
+    padding: 0 2px; border-radius: 3px;
+  }
+  .gdp-cargo-x:hover { color: var(--text); background: var(--border-light); }
   .wiz-header {
     padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
     display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
@@ -5721,9 +5734,15 @@ function dpRenderAvaliacoes(opts = {}) {
       </div>`;
     }).join('')}` : '';
 
+  const _prevFocusId  = document.activeElement?.id;
+  const _prevSelStart = document.activeElement?.selectionStart ?? -1;
   el.innerHTML = (opts.prefixHtml || '') + bannerEncerrar
     + `<div style="font-size:12px;color:var(--text-ter);margin-bottom:8px;padding:0 2px">${_ativos.length} participante(s)${_naoParticipa.length ? ` · ${_naoParticipa.length} não participam` : ''}</div>`
     + htmlAtivos + htmlNaoParticipa;
+  if (_prevFocusId) {
+    const fe = document.getElementById(_prevFocusId);
+    if (fe) { fe.focus(); try { if (_prevSelStart >= 0) fe.setSelectionRange(_prevSelStart, _prevSelStart); } catch(e){} }
+  }
 }
 
 // Chamado pelo sidebar quando há pendentes: abre drawer na aba Avaliações com banner
@@ -7091,10 +7110,12 @@ function _dpCargoDropdownHtml(ddId, cargos, selecionados) {
   }).join('');
   const clearHtml = nSel > 0
     ? `<div class="gdp-cargo-clear" onclick="_dpCargoClear('${ddId}')">Limpar seleção</div>` : '';
+  const xBtn = nSel > 0
+    ? ` <span class="gdp-cargo-x" onclick="event.stopPropagation();_dpCargoClear('${ddId}')" title="Limpar">✕</span>` : '';
   return `<div class="gdp-cargo-dd" id="${ddId}">
     <button type="button" class="gdp-cargo-btn${nSel>0?' active':''}"
       onclick="_dpCargoToggleDd('${ddId}')">
-      ${label} <span class="gdp-cargo-arrow">▾</span>
+      ${label}${xBtn} <span class="gdp-cargo-arrow">▾</span>
     </button>
     <div class="gdp-cargo-menu">${items}${clearHtml}</div>
   </div>`;
@@ -7130,10 +7151,14 @@ function _dpCargoClear(ddId) {
 /* ─── filtros da aba Avaliações (RH) ────────────────────────── */
 function _dpFiltrosHtml() {
   const cargos = [...new Set(_dpParticipantes.map(p => (p.snapshot||{}).cargo).filter(Boolean))].sort();
+  const hasNome = _dpAvalFiltroNome.length > 0;
   return `<div class="gdp-aval-filtros">
-    <input class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
-      value="${_dpAvalFiltroNome.replace(/"/g,'&quot;')}"
-      oninput="_dpAvalFiltroNome=this.value;_dpRenderAvaliacoesComFiltro()">
+    <div class="gdp-aval-search-wrap">
+      <input id="dpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
+        value="${_dpAvalFiltroNome.replace(/"/g,'&quot;')}"
+        oninput="_dpAvalFiltroNome=this.value;_dpRenderAvaliacoesComFiltro()">
+      <span class="gdp-aval-search-clear" onclick="_dpAvalFiltroNome='';_dpRenderAvaliacoesComFiltro()" style="${hasNome?'display:block':''}">✕</span>
+    </div>
     ${_dpCargoDropdownHtml('dpCargoDd', cargos, _dpAvalFiltroCargos)}
   </div>`;
 }
@@ -7141,10 +7166,14 @@ function _dpFiltrosHtml() {
 /* ─── filtros da aba Avaliações (gestor) ────────────────────── */
 function _gdpFiltrosHtml() {
   const cargos = [...new Set(_gdpParticipantes.map(p => (p.snapshot||{}).cargo).filter(Boolean))].sort();
+  const hasNome = _gdpAvalFiltroNome.length > 0;
   return `<div class="gdp-aval-filtros">
-    <input class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
-      value="${_gdpAvalFiltroNome.replace(/"/g,'&quot;')}"
-      oninput="_gdpAvalFiltroNome=this.value;gestorDpShowTab('avaliacoes',document.getElementById('gdptab-btn-avaliacoes'))">
+    <div class="gdp-aval-search-wrap">
+      <input id="gdpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
+        value="${_gdpAvalFiltroNome.replace(/"/g,'&quot;')}"
+        oninput="_gdpAvalFiltroNome=this.value;gestorDpShowTab('avaliacoes',document.getElementById('gdptab-btn-avaliacoes'))">
+      <span class="gdp-aval-search-clear" onclick="_gdpAvalFiltroNome='';gestorDpShowTab('avaliacoes',document.getElementById('gdptab-btn-avaliacoes'))" style="${hasNome?'display:block':''}">✕</span>
+    </div>
     ${_dpCargoDropdownHtml('gdpCargoDd', cargos, _gdpAvalFiltroCargos)}
   </div>`;
 }
