@@ -1761,6 +1761,7 @@ let _dpFormNavList         = [];
 let _dpFormNavIdx          = -1;
 let _dpAvalFiltroNome      = '';        // filtro de busca por nome na aba Avaliações (RH)
 let _dpAvalFiltroCargos    = new Set(); // cargos selecionados (multi-select) — RH
+let _dpAvalFiltroStatus    = '';        // chip de status ativo: ''|'nao_iniciada'|'em_andamento'|'concluida'
 
 /* ─────────────────────────────────────────────
    NAVEGAÇÃO
@@ -4398,6 +4399,7 @@ function dpFecharDrawerCiclo() {
   _dpEncerrarPendente = false;
   _dpAvalFiltroNome    = '';
   _dpAvalFiltroCargos  = new Set();
+  _dpAvalFiltroStatus  = '';
 }
 
 function dpShowDcTab(id, btn) {
@@ -5726,8 +5728,25 @@ function _dpFiltrarParticipantes(lista, nome, cargos) {
   });
 }
 
+function _dpFiltrarPorStatus(lista, status, avaliacoes) {
+  if (!status) return lista;
+  return lista.filter(p => {
+    if (p.nao_participa) return false; // seção separada, nunca filtrada por status
+    const aval = avaliacoes.find(a => a.participante_id === p.id);
+    const st = aval ? aval.status : 'nao_iniciada';
+    if (status === 'concluida') return st === 'concluida' || st === 'publicada';
+    return st === status;
+  });
+}
+
 function _dpRenderAvaliacoesComFiltro() {
-  const filtered = _dpFiltrarParticipantes(_dpParticipantes, _dpAvalFiltroNome, _dpAvalFiltroCargos);
+  let filtered = _dpFiltrarParticipantes(_dpParticipantes, _dpAvalFiltroNome, _dpAvalFiltroCargos);
+  if (_dpAvalFiltroStatus) {
+    const npIds = new Set(_dpParticipantes.filter(p => p.nao_participa).map(p => p.id));
+    const ativos = filtered.filter(p => !p.nao_participa);
+    const naoParticipa = filtered.filter(p => p.nao_participa);
+    filtered = _dpFiltrarPorStatus(ativos, _dpAvalFiltroStatus, _dpAvaliacoes).concat(naoParticipa);
+  }
   dpRenderAvaliacoes({ prefixHtml: _dpFiltrosHtml(), participants: filtered, hideAvaliarWhenDone: true });
 }
 
@@ -7237,6 +7256,7 @@ let _gdpResultados      = [];
 let _gdpTipoGestorId    = null; // id de dp_tipos_avaliador onde codigo='gestor_direto'
 let _gdpAvalFiltroNome   = '';        // filtro de busca por nome na aba Avaliações
 let _gdpAvalFiltroCargos = new Set(); // cargos selecionados (multi-select) — Gestor
+let _gdpAvalFiltroStatus = '';        // chip de status ativo: ''|'nao_iniciada'|'em_andamento'|'concluida'
 
 /* ─── init ──────────────────────────────────────────────────── */
 async function initDpGestor() {
@@ -7358,6 +7378,7 @@ function gestorDpFecharDrawer() {
   _dpAvaliacoes       = [];
   _gdpAvalFiltroNome   = '';
   _gdpAvalFiltroCargos = new Set();
+  _gdpAvalFiltroStatus = '';
 }
 
 /* ─── componente compartilhado: dropdown multi-select de cargos ── */
@@ -7464,12 +7485,63 @@ function _dpCargoBusca(ddId, q) {
   });
 }
 
+/* ─── contagem por status (para chips) ──────────────────────── */
+function _dpStatusCounts(participantes, avaliacoes) {
+  const ativos = participantes.filter(p => !p.nao_participa);
+  const counts = { nao_iniciada: 0, em_andamento: 0, concluida: 0 };
+  ativos.forEach(p => {
+    const aval = avaliacoes.find(a => a.participante_id === p.id);
+    const st = aval ? aval.status : 'nao_iniciada';
+    if (st === 'concluida' || st === 'publicada') counts.concluida++;
+    else if (st === 'em_andamento') counts.em_andamento++;
+    else counts.nao_iniciada++;
+  });
+  return counts;
+}
+
+/* ─── Cards KPI clicáveis de status ─────────────────────────── */
+function _dpStatusChipsHtml(counts, statusAtivo, toggleFn) {
+  const cards = [
+    { key: 'nao_iniciada', label: 'Não iniciada', colorOn: '#4B5563', colorOff: '#6B7280', bgOn: '#F3F4F6', accent: '#9CA3AF' },
+    { key: 'em_andamento', label: 'Em andamento', colorOn: '#92400E', colorOff: '#B45309', bgOn: '#FFFBEB', accent: '#F59E0B' },
+    { key: 'concluida',    label: 'Concluída',    colorOn: '#065F46', colorOff: '#047857', bgOn: '#ECFDF5', accent: '#10B981' },
+  ];
+  return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px">
+    ${cards.map(c => {
+      const ativo = statusAtivo === c.key;
+      const borderColor = ativo ? c.accent : 'var(--border,#E5E7EB)';
+      const bg = ativo ? c.bgOn : 'var(--card-bg,#fff)';
+      const numColor = ativo ? c.colorOn : c.colorOff;
+      const shadow = ativo ? `box-shadow:0 0 0 2px ${c.accent}40` : 'box-shadow:none';
+      return `<button onclick="${toggleFn}('${c.key}')"
+        style="display:flex;flex-direction:column;align-items:center;padding:10px 6px 8px;border-radius:8px;border:1.5px solid ${borderColor};background:${bg};cursor:pointer;transition:all .15s;${shadow}">
+        <span style="font-size:22px;font-weight:700;line-height:1;color:${numColor}">${counts[c.key]}</span>
+        <span style="font-size:10px;font-weight:500;color:var(--text-sec,#4B5563);margin-top:3px;white-space:nowrap">${c.label}</span>
+        ${ativo ? `<span style="width:18px;height:2px;border-radius:2px;background:${c.accent};margin-top:5px;display:block"></span>` : ''}
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+
+/* ─── toggle chip status ─────────────────────────────────────── */
+function _dpToggleFiltroStatus(status) {
+  _dpAvalFiltroStatus = _dpAvalFiltroStatus === status ? '' : status;
+  _dpRenderAvaliacoesComFiltro();
+}
+function _gdpToggleFiltroStatus(status) {
+  _gdpAvalFiltroStatus = _gdpAvalFiltroStatus === status ? '' : status;
+  gestorDpShowTab('avaliacoes', document.getElementById('gdptab-btn-avaliacoes'));
+}
+
 /* ─── filtros da aba Avaliações (RH) ────────────────────────── */
 function _dpFiltrosHtml() {
   const cargos = [...new Set(_dpParticipantes.map(p => (p.snapshot||{}).cargo).filter(Boolean))].sort();
   const hasNome = _dpAvalFiltroNome.length > 0;
   const cicloAberto = _dpCicloAtual && (_dpCicloAtual.status === 'aberto' || _dpCicloAtual.status === 'em_andamento');
+  const baseFiltered = _dpFiltrarParticipantes(_dpParticipantes, _dpAvalFiltroNome, _dpAvalFiltroCargos);
+  const counts = _dpStatusCounts(baseFiltered, _dpAvaliacoes);
   return `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px">
+    ${_dpStatusChipsHtml(counts, _dpAvalFiltroStatus, '_dpToggleFiltroStatus')}
     <div class="gdp-aval-filtros">
       <div class="gdp-aval-search-wrap">
         <input id="dpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
@@ -7490,7 +7562,10 @@ function _gdpFiltrosHtml() {
   const cargos = [...new Set(_gdpParticipantes.map(p => (p.snapshot||{}).cargo).filter(Boolean))].sort();
   const hasNome = _gdpAvalFiltroNome.length > 0;
   const cicloAberto = _gdpCicloAtual && (_gdpCicloAtual.status === 'aberto' || _gdpCicloAtual.status === 'em_andamento');
+  const baseFiltered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
+  const counts = _dpStatusCounts(baseFiltered, _gdpAvaliacoes);
   return `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px">
+    ${_dpStatusChipsHtml(counts, _gdpAvalFiltroStatus, '_gdpToggleFiltroStatus')}
     <div class="gdp-aval-filtros">
       <div class="gdp-aval-search-wrap">
         <input id="gdpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
@@ -7517,7 +7592,12 @@ function gestorDpShowTab(id, btn) {
     dpRenderParticipantes({ containerId: 'gdptab-participantes', readonly: true });
   }
   if (id === 'avaliacoes') {
-    const filtered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
+    let filtered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
+    if (_gdpAvalFiltroStatus) {
+      const ativos = filtered.filter(p => !p.nao_participa);
+      const naoParticipa = filtered.filter(p => p.nao_participa);
+      filtered = _dpFiltrarPorStatus(ativos, _gdpAvalFiltroStatus, _gdpAvaliacoes).concat(naoParticipa);
+    }
     dpRenderAvaliacoes({
       containerId:        'gdptab-avaliacoes',
       onAvaliarFn:        'gestorDpAbrirFormAvaliacao',
