@@ -5787,7 +5787,16 @@ function dpRenderAvaliacoes(opts = {}) {
         const aval = _dpAvaliacoes.find(a => a.colaborador_id === p.colaborador_id || a.participante_id === p.id);
         const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
         const badgeLeft  = st === 'em_andamento' ? `<span class="sbadge sbadge-amber" style="font-size:10px;padding:1px 6px">Em andamento</span>` : '';
-        const badgeRight = (st === 'concluida' || st === 'publicada') ? `<span class="sbadge sbadge-${STATUS_BADGE[st]}" style="font-size:12px;padding:5px 14px;white-space:nowrap">${STATUS_LABEL[st]}</span>` : '';
+        const concluido  = st === 'concluida' || st === 'publicada';
+        const resultado  = aval ? _dpResultados.find(r => r.avaliacao_id === aval.id) : null;
+        const bonusObj   = resultado ? _dpResultadosBonus.find(b => b.resultado_id === resultado.id) : null;
+        const bonusValor = bonusObj?.valor_bonus != null ? Number(bonusObj.valor_bonus) : null;
+        const valorHtml  = (concluido && bonusValor != null)
+          ? `<span style="font-size:11px;font-weight:600;color:#047857;white-space:nowrap">R$ ${bonusValor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
+          : '';
+        const badgeRight = concluido ? `<span class="sbadge sbadge-${STATUS_BADGE[st]}" style="font-size:12px;padding:5px 14px;white-space:nowrap">${STATUS_LABEL[st]}</span>` : '';
+        const olhoBtn    = concluido ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;padding:5px 10px" onclick="dpAbrirFormAvaliacaoReadonly('${p.id}')" title="Visualizar avaliação">👁</button>` : '';
+        const avaliarBtn = (!concluido) ? `<button class="btn btn-secondary btn-sm" onclick="${_onAvaliarFn}('${p.id}')" style="font-size:12px">Avaliar</button>` : (_perfil === 'rh' || _perfil === 'admin') ? `<button class="btn btn-secondary btn-sm" onclick="${_onAvaliarFn}('${p.id}')" style="font-size:12px">Avaliar</button>` : '';
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-light)${exp ? ';background:rgba(245,158,11,0.06)' : ''}">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -5798,11 +5807,13 @@ function dpRenderAvaliacoes(opts = {}) {
             <div style="font-size:11px;color:var(--text-ter);margin-top:2px">${snap.cargo || '—'} · ${snap.setor || '—'}</div>
             ${snap.data_admissao ? `<div style="font-size:11px;color:var(--text-ter);margin-top:1px">Admissão: ${snap.data_admissao.split('-').reverse().join('/')}</div>` : ''}
           </div>
+          ${valorHtml}
           ${badgeRight}
           <div style="display:flex;gap:4px;flex-wrap:wrap">
-            ${(opts.hideAvaliarWhenDone && (st === 'concluida' || st === 'publicada')) ? '' : `<button class="btn btn-secondary btn-sm" onclick="${_onAvaliarFn}('${p.id}')" style="font-size:12px">Avaliar</button>`}
+            ${avaliarBtn}
+            ${olhoBtn}
             ${(st === 'em_andamento' && _cicloAberto) ? `<button class="btn btn-primary btn-sm" style="font-size:12px" onclick="dpConcluirAvaliacaoIndividual('${p.id}')">Concluir</button>` : ''}
-            ${_podeMarcarNP ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;color:var(--text-ter)" onclick="dpAbrirModalNaoParticipa('${p.id}')" title="Marcar como não participante">⊘</button>` : ''}
+            ${(_podeMarcarNP && !concluido) ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;color:var(--text-ter)" onclick="dpAbrirModalNaoParticipa('${p.id}')" title="Marcar como não participante">⊘</button>` : ''}
           </div>
         </div>`;
       }).join('')
@@ -6002,12 +6013,18 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
 
   dpRenderFormAvaliacao();
   dpAtualizarProgressoAval();
-  dpAvalFormSetReadonly(
-    aval.status === 'concluida' || aval.status === 'publicada',
-    aval.concluida_em || null
-  );
+  // RH/admin pode editar avaliações concluídas; publicada é sempre readonly para todos
+  const _forceReadonly = aval.status === 'publicada'
+    || (aval.status === 'concluida' && _perfil !== 'rh' && _perfil !== 'admin');
+  dpAvalFormSetReadonly(_forceReadonly, aval.concluida_em || null);
   document.getElementById('formAvalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+// Abre o formulário sempre em modo somente leitura (olho — qualquer perfil)
+async function dpAbrirFormAvaliacaoReadonly(participanteId) {
+  await dpAbrirFormAvaliacao(participanteId);
+  dpAvalFormSetReadonly(true, _dpAvaliacaoAtual?.concluida_em || null);
 }
 
 function dpAtualizarProgressoAval() {
@@ -7352,12 +7369,24 @@ async function gestorDpAbrirDrawer(cicloId) {
   document.getElementById('gestorDpDrawerSub').textContent =
     `Versão ${_gdpCicloAtual.versao?.versao || '—'} · ${_gdpCicloAtual.status}`;
 
-  // Pré-carrega participantes, avaliações e motivos de não participação
+  // Pré-carrega participantes, avaliações, resultados e bônus
   if (!_dpMotivosNaoParticipa.length) await loadDpMotivosNaoParticipa();
   _gdpParticipantes = await sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=eq.${cicloId}&select=*`) || [];
   _gdpParticipantes.sort((a, b) => ((a.snapshot||{}).nome||'').localeCompare((b.snapshot||{}).nome||'', 'pt-BR'));
   _gdpAvaliacoes    = await sbGet(`/rest/v1/dp_avaliacoes?ciclo_id=eq.${cicloId}&select=*`) || [];
   _gdpResultados    = [];
+  { // carrega resultados e bônus da equipe para exibição na aba Avaliações
+    const avalIds = _gdpAvaliacoes.map(a => a.id);
+    if (avalIds.length) {
+      _dpResultados = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${avalIds.join(',')})&select=*`) || [];
+      const resIds = _dpResultados.map(r => r.id);
+      _dpResultadosBonus = resIds.length
+        ? (await sbGet(`/rest/v1/dp_resultados_bonus?resultado_id=in.(${resIds.join(',')})`) || [])
+        : [];
+    } else {
+      _dpResultados = []; _dpResultadosBonus = [];
+    }
+  }
 
   // Seta _dpCicloAtual para o motor de avaliação reutilizável
   _dpCicloAtual      = _gdpCicloAtual;
@@ -7372,10 +7401,13 @@ async function gestorDpAbrirDrawer(cicloId) {
 
 function gestorDpFecharDrawer() {
   document.getElementById('gestorDpDrawerOverlay').classList.remove('open');
-  _gdpCicloAtual      = null;
-  _dpCicloAtual       = null;
-  _dpParticipantes    = [];
-  _dpAvaliacoes       = [];
+  _gdpCicloAtual       = null;
+  _dpCicloAtual        = null;
+  _dpParticipantes     = [];
+  _dpAvaliacoes        = [];
+  _dpResultados        = [];
+  _dpResultadosBonus   = [];
+  _gdpResultados       = [];
   _gdpAvalFiltroNome   = '';
   _gdpAvalFiltroCargos = new Set();
   _gdpAvalFiltroStatus = '';
@@ -7600,8 +7632,9 @@ function _gdpFiltrosHtml() {
   const baseFiltered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
   const counts = _dpStatusCounts(baseFiltered, _gdpAvaliacoes);
   const concluirBtn = cicloAberto ? `<button class="btn btn-primary btn-sm" style="font-size:12px;white-space:nowrap" onclick="dpConcluirTodasAvaliacoes('gestor')">Concluir equipe</button>` : '';
+  const valorBonus  = _dpSomaBonus(_gdpAvaliacoes, _dpResultados, _dpResultadosBonus, _gdpParticipantes);
   return `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px">
-    ${_dpStatusChipsHtml(counts, _gdpAvalFiltroStatus, '_gdpToggleFiltroStatus', concluirBtn, null)}
+    ${_dpStatusChipsHtml(counts, _gdpAvalFiltroStatus, '_gdpToggleFiltroStatus', concluirBtn, valorBonus)}
     <div class="gdp-aval-filtros">
       <div class="gdp-aval-search-wrap">
         <input id="gdpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
@@ -7670,9 +7703,9 @@ async function gestorDpLoadResultados() {
     return;
   }
   const res = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${avalIds.join(',')})&select=*`) || [];
-  _dpResultados = res;
+  _dpResultados  = res;
   _gdpResultados = res;
-  _dpResultadosBonus = [];
+  // _dpResultadosBonus já carregado na abertura do ciclo — não zerar aqui
   dpRenderResultados({ containerId: 'gdptab-resultados', readonly: true });
 }
 
