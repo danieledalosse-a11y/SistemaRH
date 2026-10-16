@@ -5787,7 +5787,7 @@ function dpRenderAvaliacoes(opts = {}) {
         const aval = _dpAvaliacoes.find(a => a.colaborador_id === p.colaborador_id || a.participante_id === p.id);
         const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
         const badgeLeft  = st === 'em_andamento' ? `<span class="sbadge sbadge-amber" style="font-size:10px;padding:1px 6px">Em andamento</span>` : '';
-        const badgeRight = (st === 'concluida' || st === 'publicada') ? `<span class="sbadge sbadge-${STATUS_BADGE[st]}" style="font-size:11px">${STATUS_LABEL[st]}</span>` : '';
+        const badgeRight = (st === 'concluida' || st === 'publicada') ? `<span class="sbadge sbadge-${STATUS_BADGE[st]}" style="font-size:12px;padding:5px 14px;white-space:nowrap">${STATUS_LABEL[st]}</span>` : '';
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-light)${exp ? ';background:rgba(245,158,11,0.06)' : ''}">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -7500,26 +7500,41 @@ function _dpStatusCounts(participantes, avaliacoes) {
 }
 
 /* ─── Cards KPI clicáveis de status ─────────────────────────── */
-function _dpStatusChipsHtml(counts, statusAtivo, toggleFn) {
+function _dpStatusChipsHtml(counts, statusAtivo, toggleFn, concluirBtn) {
   const cards = [
     { key: 'nao_iniciada', label: 'Não iniciada', colorOn: '#4B5563', colorOff: '#6B7280', bgOn: '#F3F4F6', accent: '#9CA3AF' },
     { key: 'em_andamento', label: 'Em andamento', colorOn: '#92400E', colorOff: '#B45309', bgOn: '#FFFBEB', accent: '#F59E0B' },
     { key: 'concluida',    label: 'Concluída',    colorOn: '#065F46', colorOff: '#047857', bgOn: '#ECFDF5', accent: '#10B981' },
   ];
-  return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px">
-    ${cards.map(c => {
-      const ativo = statusAtivo === c.key;
-      const borderColor = ativo ? c.accent : 'var(--border,#E5E7EB)';
-      const bg = ativo ? c.bgOn : 'var(--card-bg,#fff)';
-      const numColor = ativo ? c.colorOn : c.colorOff;
-      const shadow = ativo ? `box-shadow:0 0 0 2px ${c.accent}40` : 'box-shadow:none';
-      return `<button onclick="${toggleFn}('${c.key}')"
-        style="display:flex;flex-direction:column;align-items:center;padding:10px 6px 8px;border-radius:8px;border:1.5px solid ${borderColor};background:${bg};cursor:pointer;transition:all .15s;${shadow}">
-        <span style="font-size:22px;font-weight:700;line-height:1;color:${numColor}">${counts[c.key]}</span>
-        <span style="font-size:10px;font-weight:500;color:var(--text-sec,#4B5563);margin-top:3px;white-space:nowrap">${c.label}</span>
-        ${ativo ? `<span style="width:18px;height:2px;border-radius:2px;background:${c.accent};margin-top:5px;display:block"></span>` : ''}
-      </button>`;
-    }).join('')}
+  const total = counts.nao_iniciada + counts.em_andamento + counts.concluida;
+  const pct   = total > 0 ? Math.round((counts.concluida / total) * 100) : 0;
+  const cardsHtml = cards.map(c => {
+    const ativo = statusAtivo === c.key;
+    const borderColor = ativo ? c.accent : 'var(--border,#E5E7EB)';
+    const bg = ativo ? c.bgOn : 'var(--card-bg,#fff)';
+    const numColor = ativo ? c.colorOn : c.colorOff;
+    const shadow = ativo ? `box-shadow:0 0 0 2px ${c.accent}40` : 'box-shadow:none';
+    return `<button onclick="${toggleFn}('${c.key}')"
+      style="display:flex;flex-direction:column;align-items:center;padding:10px 6px 8px;border-radius:8px;border:1.5px solid ${borderColor};background:${bg};cursor:pointer;transition:all .15s;${shadow}">
+      <span style="font-size:22px;font-weight:700;line-height:1;color:${numColor}">${counts[c.key]}</span>
+      <span style="font-size:10px;font-weight:500;color:var(--text-sec,#4B5563);margin-top:3px;white-space:nowrap">${c.label}</span>
+      ${ativo ? `<span style="width:18px;height:2px;border-radius:2px;background:${c.accent};margin-top:5px;display:block"></span>` : ''}
+    </button>`;
+  }).join('');
+  return `<div style="display:flex;align-items:stretch;gap:8px;margin-bottom:4px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:1">
+      ${cardsHtml}
+    </div>
+    ${concluirBtn ? `<div style="display:flex;align-items:center">${concluirBtn}</div>` : ''}
+  </div>
+  <div style="margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-size:11px;color:var(--text-ter)">Progresso da avaliação</span>
+      <span style="font-size:11px;font-weight:600;color:${pct===100?'#047857':'var(--text-sec)'}">${counts.concluida} de ${total} · ${pct}%</span>
+    </div>
+    <div style="height:5px;border-radius:999px;background:var(--border,#E5E7EB);overflow:hidden">
+      <div style="height:100%;width:${pct}%;border-radius:999px;background:${pct===100?'#10B981':'#3B82F6'};transition:width .4s"></div>
+    </div>
   </div>`;
 }
 
@@ -7540,8 +7555,9 @@ function _dpFiltrosHtml() {
   const cicloAberto = _dpCicloAtual && (_dpCicloAtual.status === 'aberto' || _dpCicloAtual.status === 'em_andamento');
   const baseFiltered = _dpFiltrarParticipantes(_dpParticipantes, _dpAvalFiltroNome, _dpAvalFiltroCargos);
   const counts = _dpStatusCounts(baseFiltered, _dpAvaliacoes);
+  const concluirBtn = cicloAberto ? `<button class="btn btn-primary btn-sm" style="font-size:12px;white-space:nowrap" onclick="dpConcluirTodasAvaliacoes('rh')">Concluir todas</button>` : '';
   return `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px">
-    ${_dpStatusChipsHtml(counts, _dpAvalFiltroStatus, '_dpToggleFiltroStatus')}
+    ${_dpStatusChipsHtml(counts, _dpAvalFiltroStatus, '_dpToggleFiltroStatus', concluirBtn)}
     <div class="gdp-aval-filtros">
       <div class="gdp-aval-search-wrap">
         <input id="dpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
@@ -7551,9 +7567,6 @@ function _dpFiltrosHtml() {
       </div>
       ${_dpCargoDropdownHtml('dpCargoDd', cargos, _dpAvalFiltroCargos)}
     </div>
-    ${cicloAberto ? `<div style="display:flex;justify-content:flex-end">
-      <button class="btn btn-primary btn-sm" style="font-size:12px" onclick="dpConcluirTodasAvaliacoes('rh')">Concluir todas</button>
-    </div>` : ''}
   </div>`;
 }
 
@@ -7564,8 +7577,9 @@ function _gdpFiltrosHtml() {
   const cicloAberto = _gdpCicloAtual && (_gdpCicloAtual.status === 'aberto' || _gdpCicloAtual.status === 'em_andamento');
   const baseFiltered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
   const counts = _dpStatusCounts(baseFiltered, _gdpAvaliacoes);
+  const concluirBtn = cicloAberto ? `<button class="btn btn-primary btn-sm" style="font-size:12px;white-space:nowrap" onclick="dpConcluirTodasAvaliacoes('gestor')">Concluir equipe</button>` : '';
   return `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px">
-    ${_dpStatusChipsHtml(counts, _gdpAvalFiltroStatus, '_gdpToggleFiltroStatus')}
+    ${_dpStatusChipsHtml(counts, _gdpAvalFiltroStatus, '_gdpToggleFiltroStatus', concluirBtn)}
     <div class="gdp-aval-filtros">
       <div class="gdp-aval-search-wrap">
         <input id="gdpNomeBusca" class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
@@ -7575,9 +7589,6 @@ function _gdpFiltrosHtml() {
       </div>
       ${_dpCargoDropdownHtml('gdpCargoDd', cargos, _gdpAvalFiltroCargos)}
     </div>
-    ${cicloAberto ? `<div style="display:flex;justify-content:flex-end">
-      <button class="btn btn-primary btn-sm" style="font-size:12px" onclick="dpConcluirTodasAvaliacoes('gestor')">Concluir equipe</button>
-    </div>` : ''}
   </div>`;
 }
 
