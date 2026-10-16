@@ -1,0 +1,8 @@
+-- SUBSTITUÍDA: Esta migration foi dividida em duas para evitar risco de
+-- uso de valor de ENUM novo na mesma transação que o adicionou (PostgreSQL).
+--
+-- Use em sequência:
+--   1. 130_dp_respondida_enum.sql  — ADD VALUE no ENUM (commit obrigatório antes do próximo)
+--   2. 131_dp_validar_conclusao.sql — função + trigger de validação de completude
+--
+-- NÃO executar este arquivo.

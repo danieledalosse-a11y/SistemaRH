@@ -694,6 +694,8 @@ document.getElementById('drawerDpCicloOverlay').classList.remove('open');
 | `124_dp_fn_marcar_reverter_nao_participa.sql` | Funções `SECURITY DEFINER` atômicas: `dp_fn_marcar_nao_participa(p_participante_id, p_motivo_id, p_motivo_texto, p_obs)` e `dp_fn_reverter_nao_participa(p_participante_id)`. Cada uma: (1) valida permissão (rh/admin ou gestor do ciclo via `auth_avaliador_ciclo_ids()`); (2) UPDATE `dp_ciclo_participantes`; (3) INSERT `dp_historico_eventos` (`nao_participa_marcado` / `nao_participa_revertido`). Atomicidade garante que histórico nunca fica dessincronizado. | **Executado** (commit de05db4, 2026-10-15) |
 | `125_dp_enum_nao_participa.sql` | `ALTER TYPE dp_evento_historico ADD VALUE IF NOT EXISTS 'nao_participa_marcado'` e `'nao_participa_revertido'`. Corrige HTTP 400 ao marcar não participante — migration 124 usava esses valores nas RPCs mas nunca os adicionou ao ENUM. | **Executado** (commit 432ae11, 2026-10-16) |
 | `126_dp_bloquear_aval_concluida.sql` | Dois triggers: (1) `trg_bloquear_resp_aval_concluida` — BEFORE INSERT/UPDATE em `dp_respostas` verifica se avaliação pai tem `status IN ('concluida','publicada')` e bloqueia com EXCEPTION; (2) `trg_bloquear_reverter_conclusao` — BEFORE UPDATE em `dp_avaliacoes` impede reversão de `concluida`/`publicada` para outro status. | **Executado** (commit 7149edb, 2026-10-16) |
+| `127_dp_rls_bonus_gestor.sql` | Policy SELECT em `dp_resultados_bonus` para perfil `gestor`: cadeia `bonus → resultado → avaliacao → participante → equipe` via `auth_gestor_equipe_ids()`. Pré-requisito para o gestor usar o embed PostgREST `dp_resultados?select=*,dp_resultados_bonus(*)`. Segue padrão da migration 113. Idempotente. | **Executado** (2026-10-16) |
+| `128_dp_historico_batch.sql` | `dp_fn_historico_criterio_batch(p_versao_id uuid, p_colaborador_id bigint, p_ciclo_atual_id uuid)` — retorna `TABLE(versao_criterio_id uuid, resultado jsonb)`. Itera os critérios da versão server-side e chama `dp_fn_historico_criterio` para cada um; substitui N RPCs paralelas por 1 chamada HTTP. `SECURITY INVOKER`. `GRANT EXECUTE TO authenticated`. | **Executado em produção** (2026-10-16) |
 
 ---
 
@@ -758,6 +760,12 @@ let _dpResultadosBonus  // [{ id, resultado_id, valor_bonus, snapshot_criterios,
 
 // Histórico por critério (Etapa 2 — formulário de avaliação)
 let _dpHistoricoCriterios = {}  // { versao_criterio_id: JSONB retornado por dp_fn_historico_criterio }
+
+// Cache de performance (2026-10-16)
+let _dpFormCache            = {}    // { [versaoId]: { versaoCrits, modeloId } } — dados estáticos da versão; invalida ao fechar drawer
+let _dpResultadosCicloId    = null  // cicloId dos resultados já carregados na aba Resultados
+let _dpHistoricoCarregadoCicloId = null // cicloId do histórico já carregado na aba Histórico
+let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos (cache para gestorDpAbrirDrawer)
 ```
 
 ## Funções novas — Etapas 2, 3, 5, 6
@@ -1227,6 +1235,148 @@ Resetados em `dpFecharDrawerCiclo()` (RH) e `gestorDpFecharDrawer()` (Gestor) vi
 ### Navegação respeita filtros
 
 `dpAbrirFormAvaliacao` (auto-build RH) e `gestorDpAbrirFormAvaliacao` constroem a navList chamando `_dpFiltrarParticipantes` com os filtros ativos no momento da abertura. Se o resultado for vazio, fallback para todos os participantes ativos (garante que o colaborador clicado sempre esteja na navList).
+
+---
+
+## Arquitetura de Performance (2026-10-16, commits fca3346 / a96bea9 / 4671245)
+
+### Contexto
+
+O módulo D&P apresentava latência perceptível em múltiplas interações (abertura do drawer, abertura do formulário de avaliação, navegação entre colaboradores). Diagnóstico completo e otimizações aplicadas em sessão de 2026-10-16.
+
+### Padrão 1 — Cache de dados estáticos do formulário (`_dpFormCache`)
+
+`dpAbrirFormAvaliacao` buscava `dp_versao_criterios`, `dp_criterios`, `dp_escalas`, `dp_escala_opcoes` e `dp_versoes` a cada colaborador aberto, mesmo sendo dados imutáveis (versão publicada não muda).
+
+**Fix:** na primeira abertura de cada `versaoId`, os dados são armazenados em `_dpFormCache[versaoId]`. Nas aberturas seguintes, o cache é usado sem round-trip. **Invalidação:** `_dpFormCache = {}` em `dpFecharDrawerCiclo()` e `gestorDpFecharDrawer()`.
+
+**Cache miss — queries em paralelo:**
+```js
+const [vc, respsEarly] = await Promise.all([
+  sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&order=ordem.asc&select=*`),
+  sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`)
+]);
+_dpRespostasAtual = respsEarly || [];
+_respostasJaBuscadas = true; // flag local para não re-buscar respostas adiante
+// dp_criterios + dp_escalas + dp_escala_opcoes + dp_versoes em Promise.all
+_dpFormCache[versaoId] = { versaoCrits: _dpVersaoCritsParaForm, modeloId };
+```
+
+### Padrão 2 — RPC em lote para histórico (`dp_fn_historico_criterio_batch`)
+
+Antes: N chamadas paralelas `sbRpc('dp_fn_historico_criterio', {...})` — 1 round-trip por critério (10 critérios = 10 requisições simultâneas).
+
+**Fix (migration 128):** `dp_fn_historico_criterio_batch` executa o loop server-side e retorna todos os históricos em uma única chamada HTTP. **Fallback automático:** se a RPC retornar `null` (migration não executada), cai nas N chamadas individuais.
+
+```js
+const [resps, batch] = await Promise.all([
+  _respostasJaBuscadas ? Promise.resolve(_dpRespostasAtual) : sbGet(...dp_respostas...),
+  (modeloId && part.colaborador_id)
+    ? sbRpc('dp_fn_historico_criterio_batch', {
+        p_versao_id: versaoId, p_colaborador_id: part.colaborador_id, p_ciclo_atual_id: _dpCicloAtual.id
+      })
+    : Promise.resolve(null)
+]);
+if (batch && Array.isArray(batch)) {
+  batch.forEach(row => { _dpHistoricoCriterios[row.versao_criterio_id] = row.resultado; });
+} else if (modeloId && part.colaborador_id) {
+  // fallback: N chamadas individuais
+}
+```
+
+### Padrão 3 — Guards para recarregamento de abas
+
+`dpShowDcTab` chamava a função de carregamento a cada troca de aba, mesmo que os dados já estivessem carregados.
+
+**Fix:** guards por `cicloId` — só recarrega se o ciclo mudou:
+```js
+if (id === 'resultados' && _dpResultadosCicloId !== cicloId) dpLoadResultados(cicloId);
+if (id === 'historico'  && _dpHistoricoCarregadoCicloId !== cicloId) dpLoadHistorico(cicloId);
+```
+`dpLoadResultados` e `dpLoadHistorico` atualizam `_dpResultadosCicloId` e `_dpHistoricoCarregadoCicloId` ao concluir. Invalidados em `dpFecharDrawerCiclo()` e `gestorDpFecharDrawer()`.
+
+### Padrão 4 — Cache de ciclos do Gestor (`_gdpCiclosCarregados`)
+
+`gestorDpAbrirDrawer` buscava ciclo + versão no banco mesmo quando `gestorDpLoadCiclos` já tinha esses dados em memória.
+
+**Fix:** `gestorDpRenderCiclos` salva `_gdpCiclosCarregados = enriquecidos`. Em `gestorDpAbrirDrawer`:
+```js
+const cicloCache = _gdpCiclosCarregados.find(c => c.id === cicloId);
+if (cicloCache) {
+  // Normalização: gestorDpLoadCiclos salva como .dp_versoes; motor usa .versao
+  _gdpCicloAtual = { ...cicloCache, versao: cicloCache.dp_versoes || cicloCache.versao };
+} else {
+  // fallback: busca no banco
+}
+```
+
+### Padrão 5 — PostgREST embedding para resultados + bônus
+
+`dpLoadResultados` / `gestorDpLoadResultados` faziam 2 queries sequenciais (`dp_resultados` → `dp_resultados_bonus`).
+
+**Fix (pré-requisito: migration 127):** query única com embed:
+```js
+const resultadosRaw = await sbGet(
+  `/rest/v1/dp_resultados?avaliacao_id=in.(${ids.join(',')})&select=*,dp_resultados_bonus(*)`
+) || [];
+_dpResultados      = resultadosRaw.map(r => { const { dp_resultados_bonus: _, ...rest } = r; return rest; });
+_dpResultadosBonus = resultadosRaw.flatMap(r => r.dp_resultados_bonus || []);
+```
+
+### Padrão 6 — Maps O(1) em `dpRenderAvaliacoes`
+
+O loop de renderização usava `.find()` O(n) para cada participante → O(n²) no total.
+
+**Fix:** Maps construídos uma vez antes do loop:
+```js
+const _avalByPartId  = new Map(_dpAvaliacoes.map(a => [a.participante_id, a]));
+const _avalByColabId = new Map(_dpAvaliacoes.map(a => [a.colaborador_id, a]));
+const _resByAvalId   = new Map(_dpResultados.map(r => [r.avaliacao_id, r]));
+const _bonusByResId  = new Map(_dpResultadosBonus.map(b => [b.resultado_id, b]));
+const aval = _avalByPartId.get(p.id) || _avalByColabId.get(p.colaborador_id);
+```
+
+### Padrão 7 — Fire-and-forget para `dpRegistrarEvento`
+
+`dpRegistrarEvento` era chamado com `await` na criação de avaliação, bloqueando a abertura do formulário.
+
+**Fix:** chamada sem `await` para eventos de auditoria que não afetam o estado da tela:
+```js
+dpRegistrarEvento('avaliacao_iniciada', 'dp_avaliacoes', aval.id, { colaborador: snap.nome }); // fire-and-forget
+```
+
+**Limitação:** falhas de log passam silenciosas. Aplicar **apenas** para eventos de auditoria — nunca para operações que afetam estado visível.
+
+### Padrão 8 — `gestorDpLoadCiclos` paralelo
+
+Versões e participantes eram buscados sequencialmente após carregar ciclos.
+
+**Fix:**
+```js
+const [versoes, participantes] = await Promise.all([
+  versaoIds.length ? sbGet(`/rest/v1/dp_versoes?id=in.(${versaoIds.join(',')})&select=...`) || [] : Promise.resolve([]),
+  sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=in.(${cicloIds.join(',')})&select=id,ciclo_id,colaborador_id`) || []
+]);
+```
+
+### Tabela resumo de otimizações
+
+| Gargalo identificado | Fix aplicado | Status |
+|---|---|---|
+| Critérios/escalas/versão re-buscados a cada colaborador | `_dpFormCache` | ✅ |
+| N RPCs de histórico (1 por critério) | `dp_fn_historico_criterio_batch` (migration 128) | ✅ |
+| `dp_respostas` e batch histórico em sequência | `Promise.all` no cache miss | ✅ |
+| Aba Resultados recarrega a cada visita | Guard `_dpResultadosCicloId` | ✅ |
+| Aba Histórico recarrega a cada visita | Guard `_dpHistoricoCarregadoCicloId` | ✅ |
+| Ciclo + versão re-buscados no drawer Gestor | `_gdpCiclosCarregados` | ✅ |
+| 2 queries para resultados + bônus | PostgREST embed `dp_resultados_bonus(*)` | ✅ |
+| `.find()` O(n²) no render loop | Maps O(1) | ✅ |
+| `dpRegistrarEvento` bloqueando abertura | Fire-and-forget | ✅ |
+| `gestorDpLoadCiclos` sequencial | `Promise.all` versoes + participantes | ✅ |
+
+### Diagnóstico restante
+
+Se a lentidão persistir: medir no DevTools (Network tab) o tempo real de `dp_fn_historico_criterio_batch`. A função executa N queries server-side em loop PL/pgSQL — se o banco estiver lento, o overhead de I/O domina e otimizações JS não ajudam. Próximo passo: reescrever a função com JOIN em vez de loop imperativo.
 
 ---
 

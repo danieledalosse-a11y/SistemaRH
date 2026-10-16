@@ -133,6 +133,7 @@
   .sbadge-blue   { background: var(--blue-bg);  color: var(--blue); }
   .sbadge-red    { background: var(--red-bg);   color: var(--red); }
   .sbadge-gray   { background: var(--bg);       color: var(--text-ter); border: 1px solid var(--border); }
+  .sbadge-purple { background: var(--purple-bg); color: var(--purple); }
   .sbadge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
   /* ── empty ── */
@@ -2354,7 +2355,7 @@ async function renderCiclos() {
         const npIds = new Set((parts||[]).filter(p => p.nao_participa).map(p => p.id));
         const avals = avalsRaw.filter(a => !npIds.has(a.participante_id));
         const concluidas   = avals.filter(a => a.status === 'concluida' || a.status === 'publicada').length;
-        const emAndamento  = avals.filter(a => a.status === 'em_andamento').length;
+        const emAndamento  = avals.filter(a => a.status === 'em_andamento' || a.status === 'respondida').length;
         const naoIniciadas = avals.filter(a => !a.status || a.status === 'nao_iniciada').length;
         const total        = avals.length;
         const pct = total ? Math.round(concluidas / total * 100) : 0;
@@ -5815,8 +5816,8 @@ function dpRenderAvaliacoes(opts = {}) {
     el.innerHTML = (opts.prefixHtml || '') + `<div style="text-align:center;padding:32px;color:var(--text-ter);font-size:13px">Nenhum participante neste ciclo.</div>`;
     return;
   }
-  const STATUS_LABEL = { nao_iniciada: 'Não iniciada', em_andamento: 'Em andamento', concluida: 'Concluída', publicada: 'Publicada' };
-  const STATUS_BADGE = { nao_iniciada: 'gray', em_andamento: 'amber', concluida: 'green', publicada: 'blue' };
+  const STATUS_LABEL = { nao_iniciada: 'Não iniciada', em_andamento: 'Em andamento', respondida: 'Respondida', concluida: 'Concluída', publicada: 'Publicada' };
+  const STATUS_BADGE = { nao_iniciada: 'gray', em_andamento: 'amber', respondida: 'purple', concluida: 'green', publicada: 'blue' };
   const _ativos       = _participantes.filter(p => !p.nao_participa);
   const _naoParticipa = _participantes.filter(p => p.nao_participa);
   const _npIds        = new Set(_naoParticipa.map(p => p.id));
@@ -5847,7 +5848,9 @@ function dpRenderAvaliacoes(opts = {}) {
         const exp  = snap.em_experiencia;
         const aval = _avalByPartId.get(p.id) || _avalByColabId.get(p.colaborador_id);
         const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
-        const badgeLeft  = st === 'em_andamento' ? `<span class="sbadge sbadge-amber" style="font-size:10px;padding:1px 6px">Em andamento</span>` : '';
+        const badgeLeft  = (st === 'em_andamento' || st === 'respondida')
+          ? `<span class="sbadge sbadge-${STATUS_BADGE[st]}" style="font-size:10px;padding:1px 6px">${STATUS_LABEL[st]}</span>`
+          : '';
         const concluido  = st === 'concluida' || st === 'publicada';
         const resultado  = aval ? _resByAvalId.get(aval.id) : null;
         const bonusObj   = resultado ? _bonusByResId.get(resultado.id) : null;
@@ -5856,8 +5859,16 @@ function dpRenderAvaliacoes(opts = {}) {
           ? `<span style="font-size:11px;font-weight:600;color:#047857;white-space:nowrap">R$ ${bonusValor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
           : '';
         const badgeRight = concluido ? `<span class="sbadge sbadge-${STATUS_BADGE[st]}" style="font-size:12px;padding:5px 14px;white-space:nowrap">${STATUS_LABEL[st]}</span>` : '';
-        const olhoBtn    = concluido ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;padding:5px 10px" onclick="dpAbrirFormAvaliacaoReadonly('${p.id}')" title="Visualizar avaliação">👁</button>` : '';
-        const avaliarBtn = (!concluido) ? `<button class="btn btn-secondary btn-sm" onclick="${_onAvaliarFn}('${p.id}')" style="font-size:12px">Avaliar</button>` : (_perfil === 'rh' || _perfil === 'admin') ? `<button class="btn btn-secondary btn-sm" onclick="${_onAvaliarFn}('${p.id}')" style="font-size:12px">Avaliar</button>` : '';
+        const svgOlho    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+        const visualizarBtn = concluido
+          ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;display:inline-flex;align-items:center;gap:5px" onclick="dpAbrirFormAvaliacaoReadonly('${p.id}')">${svgOlho} Visualizar</button>`
+          : '';
+        const editarBtn  = (concluido && st === 'concluida' && (_perfil === 'rh' || _perfil === 'admin'))
+          ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;color:var(--text-ter);border-color:var(--border)" onclick="${_onAvaliarFn}('${p.id}')" title="Editar avaliação concluída (admin)">Editar</button>`
+          : '';
+        const avaliarBtn = !concluido
+          ? `<button class="btn btn-secondary btn-sm" onclick="${_onAvaliarFn}('${p.id}')" style="font-size:12px">Avaliar</button>`
+          : '';
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-light)${exp ? ';background:rgba(245,158,11,0.06)' : ''}">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -5872,8 +5883,9 @@ function dpRenderAvaliacoes(opts = {}) {
           ${badgeRight}
           <div style="display:flex;gap:4px;flex-wrap:wrap">
             ${avaliarBtn}
-            ${olhoBtn}
-            ${(st === 'em_andamento' && _cicloAberto) ? `<button class="btn btn-primary btn-sm" style="font-size:12px" onclick="dpConcluirAvaliacaoIndividual('${p.id}')">Concluir</button>` : ''}
+            ${visualizarBtn}
+            ${editarBtn}
+            ${(st === 'respondida' && _cicloAberto) ? `<button class="btn btn-primary btn-sm" style="font-size:12px" onclick="dpConcluirAvaliacaoIndividual('${p.id}')">Concluir</button>` : ''}
             ${(_podeMarcarNP && !concluido) ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;color:var(--text-ter)" onclick="dpAbrirModalNaoParticipa('${p.id}')" title="Marcar como não participante">⊘</button>` : ''}
           </div>
         </div>`;
@@ -6259,7 +6271,13 @@ async function _dpSalvarParaNavegar() {
     if (!res) erros++;
   }
 
-  const patchAval = { status: 'em_andamento', iniciada_em: _dpAvaliacaoAtual.iniciada_em || new Date().toISOString() };
+  // Detecta completude usando payloads salvos (refletem o estado atual do formulário)
+  const _totalCritsNav = _dpVersaoCritsParaForm.length;
+  const _respondidosNav = payloads.filter(({ body }) =>
+    body.resposta_texto != null || body.escala_opcao_id != null || body.valor_numerico_livre != null
+  ).length;
+  const _statusNav = (_totalCritsNav > 0 && _respondidosNav >= _totalCritsNav) ? 'respondida' : 'em_andamento';
+  const patchAval = { status: _statusNav, iniciada_em: _dpAvaliacaoAtual.iniciada_em || new Date().toISOString() };
   const resAval   = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
   if (erros || !resAval) {
     toast('Erro ao salvar antes de navegar. Permanecendo na avaliação atual.', true);
@@ -6560,9 +6578,18 @@ async function salvarAvaliacao(status) {
   }
 
   // ── 4. Atualizar status da avaliação ─────────────────────────────
-  const patchAval = { status };
-  if (status === 'concluida')    patchAval.concluida_em  = new Date().toISOString();
-  else if (status === 'em_andamento') patchAval.iniciada_em = _dpAvaliacaoAtual.iniciada_em || new Date().toISOString();
+  // Detecta completude: se 'em_andamento' e todos os critérios respondidos → 'respondida'
+  let statusEfetivo = status;
+  if (status === 'em_andamento') {
+    const totalCrits = _dpVersaoCritsParaForm.length;
+    const respondidos = _dpRespostasAtual.filter(r =>
+      r.resposta_texto != null || r.escala_opcao_id != null || r.valor_numerico_livre != null
+    ).length;
+    if (totalCrits > 0 && respondidos >= totalCrits) statusEfetivo = 'respondida';
+  }
+  const patchAval = { status: statusEfetivo };
+  if (statusEfetivo === 'concluida') patchAval.concluida_em = new Date().toISOString();
+  else patchAval.iniciada_em = _dpAvaliacaoAtual.iniciada_em || new Date().toISOString();
   const resAval = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
   if (!resAval) {
     toast('Erro ao atualizar status da avaliação: ' + sbErrMsg(), true);
@@ -6574,10 +6601,10 @@ async function salvarAvaliacao(status) {
   const avalIdx = _dpAvaliacoes.findIndex(a => a.id === avalId);
   if (avalIdx >= 0) Object.assign(_dpAvaliacoes[avalIdx], patchAval);
 
-  toast(status === 'concluida' ? 'Avaliação concluída.' : 'Avaliação salva.');
+  toast(statusEfetivo === 'concluida' ? 'Avaliação concluída.' : 'Avaliação salva.');
 
   // ── 6. Registro de evento (fire-and-forget — não bloqueia navegação) ─
-  if (status === 'concluida') {
+  if (statusEfetivo === 'concluida') {
     const partSnap = (_dpParticipantes.find(p => p.id === _dpAvaliacaoAtual.participante_id) || {}).snapshot || {};
     dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', avalId, { colaborador: partSnap.nome });
   }
@@ -6932,7 +6959,7 @@ async function dpExportarResultados() {
       setor:    snap.setor     || '—',
       unidade:  snap.unidade   || '—',
       mat:      snap.matricula || '—',
-      status:   { nao_iniciada: 'Não iniciada', em_andamento: 'Em andamento', concluida: 'Concluída' }[aval?.status] || '—',
+      status:   { nao_iniciada: 'Não iniciada', em_andamento: 'Em andamento', respondida: 'Respondida', concluida: 'Concluída', publicada: 'Publicada' }[aval?.status] || '—',
       nota:     res?.nota_final != null ? Number(res.nota_final).toFixed(2).replace('.', ',') : '—',
       conceito: res?.conceito || '—',
       npRow:    false,
@@ -7139,6 +7166,11 @@ async function dpConcluirAvaliacaoIndividual(participanteId) {
              || _gdpAvaliacoes.find(a => a.participante_id === participanteId);
   if (!aval) return;
 
+  if (aval.status !== 'respondida') {
+    toast('Responda todos os critérios antes de concluir a avaliação.', true);
+    return;
+  }
+
   const ok = await dpConfirmDialog(
     `Concluir avaliação de ${nome}?`,
     'Após concluir, <strong>não será possível alterar</strong> esta avaliação. Esta ação é definitiva.',
@@ -7188,7 +7220,7 @@ async function dpConcluirTodasAvaliacoes(escopo) {
   const emAndamento = parts.filter(p => {
     if (p.nao_participa) return false;
     const a = avals.find(x => x.participante_id === p.id);
-    return a && a.status === 'em_andamento';
+    return a && (a.status === 'em_andamento' || a.status === 'respondida');
   });
 
   if (!emAndamento.length) {
@@ -7654,11 +7686,12 @@ function _dpSomaBonus(avaliacoes, resultados, bonuses, participantes) {
 /* ─── contagem por status (para chips) ──────────────────────── */
 function _dpStatusCounts(participantes, avaliacoes) {
   const ativos = participantes.filter(p => !p.nao_participa);
-  const counts = { nao_iniciada: 0, em_andamento: 0, concluida: 0 };
+  const counts = { nao_iniciada: 0, em_andamento: 0, respondida: 0, concluida: 0 };
   ativos.forEach(p => {
     const aval = avaliacoes.find(a => a.participante_id === p.id);
     const st = aval ? aval.status : 'nao_iniciada';
     if (st === 'concluida' || st === 'publicada') counts.concluida++;
+    else if (st === 'respondida') counts.respondida++;
     else if (st === 'em_andamento') counts.em_andamento++;
     else counts.nao_iniciada++;
   });
@@ -7670,9 +7703,10 @@ function _dpStatusChipsHtml(counts, statusAtivo, toggleFn, concluirBtn, valorBon
   const cards = [
     { key: 'nao_iniciada', label: 'Não iniciada', colorOn: '#4B5563', colorOff: '#6B7280', bgOn: '#F3F4F6', accent: '#9CA3AF' },
     { key: 'em_andamento', label: 'Em andamento', colorOn: '#92400E', colorOff: '#B45309', bgOn: '#FFFBEB', accent: '#F59E0B' },
+    { key: 'respondida',   label: 'Respondida',   colorOn: '#4C1D95', colorOff: '#5B21B6', bgOn: '#F4F3FF', accent: '#5925DC' },
     { key: 'concluida',    label: 'Concluída',    colorOn: '#065F46', colorOff: '#047857', bgOn: '#ECFDF5', accent: '#10B981' },
   ];
-  const total = counts.nao_iniciada + counts.em_andamento + counts.concluida;
+  const total = counts.nao_iniciada + counts.em_andamento + (counts.respondida || 0) + counts.concluida;
   const pct   = total > 0 ? Math.round((counts.concluida / total) * 100) : 0;
   const cardsHtml = cards.map(c => {
     const ativo = statusAtivo === c.key;
@@ -7691,7 +7725,7 @@ function _dpStatusChipsHtml(counts, statusAtivo, toggleFn, concluirBtn, valorBon
     ? `R$ ${valorBonus.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : null;
   return `<div style="display:flex;align-items:stretch;gap:8px;margin-bottom:4px">
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:1">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:1">
       ${cardsHtml}
     </div>
     ${concluirBtn ? `<div style="display:flex;align-items:center">${concluirBtn}</div>` : ''}
