@@ -594,9 +594,7 @@
   .modal-aval-header {
     padding: 16px 20px 0; border-bottom: 1px solid var(--border); flex-shrink: 0;
   }
-  .modal-aval-header-row {
-    display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
-  }
+  /* .modal-aval-header-row redefinida junto aos estilos de nav/avatar abaixo */
   .modal-aval-progress {
     height: 3px; background: var(--border-light); border-radius: 2px; overflow: hidden;
   }
@@ -645,14 +643,8 @@
   }
   .aval-card-desc { font-size: 12px; color: var(--text-sec); line-height: 1.4; }
   .aval-card-ref { font-size: 11px; color: var(--text-ter); font-style: italic; margin-top: 3px; }
-  .aval-info-wrap { position: relative; flex-shrink: 0; }
-  .aval-info {
-    display: none; position: absolute; z-index: 200; left: 0; top: calc(100% + 4px);
-    width: 260px; padding: 10px 12px; background: var(--surface);
-    border-radius: 8px; border: 1px solid var(--border-light);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.10);
-  }
-  .aval-info.open { display: block; }
+  /* ── botão de info inline ── */
+  .aval-info-wrap { flex-shrink: 0; }
   .aval-info-btn {
     width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--border-light);
     background: var(--bg); color: var(--text-ter); font-size: 10px; font-weight: 700;
@@ -660,6 +652,30 @@
     transition: border-color 0.15s, color 0.15s; padding: 0;
   }
   .aval-info-btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* bloco expandível inline — irmão do .aval-card, sem overflow:hidden */
+  .aval-info-expand {
+    display: none; padding: 8px 16px 10px 50px;
+    background: var(--bg); border-bottom: 1px solid var(--border-light);
+  }
+  .aval-info-expand.open { display: block; }
+  /* ── avatar + navegação no header ── */
+  .modal-aval-header-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: nowrap; }
+  .modal-aval-nav-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text-sec); font-size: 18px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, color 0.15s; flex-shrink: 0; padding: 0;
+  }
+  .modal-aval-nav-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .modal-aval-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .modal-aval-header-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+  .modal-aval-avatar {
+    width: 40px; height: 40px; border-radius: 50%; background: var(--accent);
+    color: #fff; font-size: 14px; font-weight: 700; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .modal-aval-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .modal-aval-nav-counter { font-size: 11px; color: var(--text-ter); white-space: nowrap; flex-shrink: 0; }
   /* .aval-row torna-se transparente no flex do card */
   .aval-row { display: contents; }
   .aval-bin-btns-wrap { display: flex; gap: 6px; flex-shrink: 0; }
@@ -1682,6 +1698,8 @@ let _dpHistoricoCriterios  = {};
 let _dpAvaliacaoAtual      = null;
 let _dpRespostasAtual      = [];
 let _dpVersaoCritsParaForm = [];
+let _dpFormNavList         = [];
+let _dpFormNavIdx          = -1;
 
 /* ─────────────────────────────────────────────
    NAVEGAÇÃO
@@ -5726,10 +5744,23 @@ async function dpConcluirEncerramento(pendentes) {
   });
 }
 
-async function dpAbrirFormAvaliacao(participanteId) {
+async function dpAbrirFormAvaliacao(participanteId, navList) {
   const part = _dpParticipantes.find(p => p.id === participanteId);
   if (!part || !_dpCicloAtual) return;
   if (part.nao_participa) { toast('Este colaborador está marcado como não participante neste ciclo.', true); return; }
+
+  // Configura lista de navegação
+  if (navList !== undefined) {
+    _dpFormNavList = navList;
+    _dpFormNavIdx  = navList.indexOf(participanteId);
+  } else if (_dpFormNavList.length === 0 || !_dpFormNavList.includes(participanteId)) {
+    // Primeira abertura via botão RH sem lista explícita — auto-constrói da lista ativa
+    _dpFormNavList = _dpParticipantes.filter(p => !p.nao_participa).map(p => p.id);
+    _dpFormNavIdx  = _dpFormNavList.indexOf(participanteId);
+  } else {
+    // Navegando: apenas atualiza índice
+    _dpFormNavIdx = _dpFormNavList.indexOf(participanteId);
+  }
   const snap = part.snapshot || {};
 
   // Buscar ou criar dp_avaliacao
@@ -5796,6 +5827,13 @@ async function dpAbrirFormAvaliacao(participanteId) {
   // Preencher header
   document.getElementById('formAvalTitulo').textContent = snap.nome || '—';
   document.getElementById('formAvalSub').textContent = `${snap.cargo || '—'} · ${snap.setor || '—'}`;
+  _dpRenderAvalAvatar(null, snap.nome); // fallback imediato; foto carrega async
+  _dpAtualizarNavBtns();
+  if (part.colaborador_id) {
+    sbGet(`/rest/v1/_colaboradores?id=eq.${part.colaborador_id}&select=foto_url`)
+      .then(r => { if (r?.[0]?.foto_url) _dpRenderAvalAvatar(r[0].foto_url, snap.nome); })
+      .catch(() => {});
+  }
 
   dpRenderFormAvaliacao();
   dpAtualizarProgressoAval();
@@ -5846,8 +5884,132 @@ function dpAtualizarProgressoAval() {
 }
 
 function dpToggleInfo(vcId) {
-  const el = document.getElementById(`info_${vcId}`);
+  const el = document.getElementById(`info_exp_${vcId}`);
   if (el) el.classList.toggle('open');
+}
+
+/* ── helpers de header: avatar, nav ── */
+function _dpAvalIniciais(nome) {
+  const partes = (nome || '').trim().split(/\s+/);
+  const ini = partes.length >= 2
+    ? (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
+    : (partes[0] || '?')[0].toUpperCase();
+  return `<span>${ini}</span>`;
+}
+
+function _dpRenderAvalAvatar(fotoUrl, nome) {
+  const el = document.getElementById('formAvalAvatar');
+  if (!el) return;
+  const nomeEsc = (nome || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  if (fotoUrl) {
+    el.innerHTML = `<img src="${fotoUrl}" alt="${nomeEsc}" onerror="this.parentElement.innerHTML=_dpAvalIniciais('${nomeEsc}')">`;
+  } else {
+    el.innerHTML = _dpAvalIniciais(nome);
+  }
+}
+
+function _dpAtualizarNavBtns() {
+  const prevBtn = document.getElementById('formAvalPrev');
+  const nextBtn = document.getElementById('formAvalNext');
+  const counter = document.getElementById('formAvalCounter');
+  const hasNav  = _dpFormNavList.length > 1;
+  if (prevBtn) { prevBtn.style.display = hasNav ? '' : 'none'; prevBtn.disabled = _dpFormNavIdx <= 0; }
+  if (nextBtn) { nextBtn.style.display = hasNav ? '' : 'none'; nextBtn.disabled = _dpFormNavIdx >= _dpFormNavList.length - 1; }
+  if (counter) {
+    counter.style.display = hasNav ? '' : 'none';
+    if (hasNav) counter.textContent = `${_dpFormNavIdx + 1} / ${_dpFormNavList.length}`;
+  }
+}
+
+/* Detecta se o formulário tem alterações não salvas vs. _dpRespostasAtual */
+function _dpFormTemAlteracoes() {
+  for (const vc of _dpVersaoCritsParaForm) {
+    const tipo = vc.tipo_resposta;
+    const existente = _dpRespostasAtual.find(r => r.versao_criterio_id === vc.id);
+    if (tipo === 'escala') {
+      const checked  = document.querySelector(`input[name="resp_${vc.id}"]:checked`);
+      const salvo    = existente?.escala_opcao_id || null;
+      if ((checked?.value || null) !== salvo) return true;
+    } else {
+      const el    = document.getElementById(`resp_${vc.id}`);
+      const curV  = el ? (el.value || null) : null;
+      const salvo = tipo === 'binario' || tipo === 'texto' ? (existente?.resposta_texto || null)
+                  : (existente?.valor_numerico_livre != null ? String(existente.valor_numerico_livre) : null);
+      if (curV !== salvo) return true;
+    }
+    const obsEl  = document.getElementById(`obs_${vc.id}`);
+    const curObs = obsEl ? (obsEl.value || null) : null;
+    if (curObs !== (existente?.observacao || null)) return true;
+  }
+  return false;
+}
+
+/* Salva rascunho antes de navegar; retorna true em sucesso */
+async function _dpSalvarParaNavegar() {
+  if (!_dpAvaliacaoAtual) return true;
+  const st = _dpAvaliacaoAtual.status;
+  if (st === 'concluida' || st === 'publicada') return true; // protegida, sem necessidade de salvar
+
+  const avalId   = _dpAvaliacaoAtual.id;
+  const payloads = [];
+  for (const vc of _dpVersaoCritsParaForm) {
+    const tipo      = vc.tipo_resposta;
+    const el        = document.getElementById(`resp_${vc.id}`);
+    if (!el) continue;
+    const existente = _dpRespostasAtual.find(r => r.versao_criterio_id === vc.id);
+    const body      = { avaliacao_id: avalId, versao_criterio_id: vc.id };
+    if (tipo === 'escala') {
+      const checked = document.querySelector(`input[name="resp_${vc.id}"]:checked`);
+      if (checked) body.escala_opcao_id = checked.value;
+    } else if (tipo === 'binario' || tipo === 'texto') {
+      body.resposta_texto = el.value || null;
+    } else if (tipo === 'numerico' || tipo === 'numerico_com_meta') {
+      body.valor_numerico_livre = el.value !== '' ? parseFloat(el.value) : null;
+      if (tipo === 'numerico_com_meta') {
+        const meta = document.getElementById(`resp_${vc.id}_meta`);
+        if (meta && meta.value !== '') body.meta = parseFloat(meta.value);
+      }
+    }
+    const obsEl = document.getElementById(`obs_${vc.id}`);
+    if (obsEl) body.observacao = obsEl.value || null;
+    payloads.push({ existente, body });
+  }
+
+  let erros = 0;
+  for (const { existente, body } of payloads) {
+    const res = existente
+      ? await sbPatch(`/rest/v1/dp_respostas?id=eq.${existente.id}`, body)
+      : await sbPost('/rest/v1/dp_respostas', body);
+    if (!res) erros++;
+  }
+
+  const patchAval = { status: 'em_andamento', iniciada_em: _dpAvaliacaoAtual.iniciada_em || new Date().toISOString() };
+  const resAval   = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
+  if (erros || !resAval) {
+    toast('Erro ao salvar antes de navegar. Permanecendo na avaliação atual.', true);
+    return false;
+  }
+  // Atualiza respostas em memória
+  const respsAtualizadas = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${avalId}&select=*`);
+  if (respsAtualizadas) _dpRespostasAtual = respsAtualizadas;
+  return true;
+}
+
+/* Navega para próximo/anterior colaborador da lista */
+async function dpNavForm(delta) {
+  if (!_dpFormNavList.length) return;
+  const nextIdx = _dpFormNavIdx + delta;
+  if (nextIdx < 0 || nextIdx >= _dpFormNavList.length) return;
+
+  const hasChanges = _dpFormTemAlteracoes();
+  if (hasChanges) {
+    const ok = await _dpSalvarParaNavegar();
+    if (!ok) return;
+  }
+
+  await dpLoadAvaliacoes(_dpCicloAtual.id);
+  const nextId = _dpFormNavList[nextIdx];
+  await dpAbrirFormAvaliacao(nextId); // reutiliza _dpFormNavList atual, atualiza índice
 }
 function dpAvalObsFocus(vcId) {
   const el = document.getElementById(`obs_${vcId}`);
@@ -5995,24 +6157,24 @@ function dpRenderFormAvaliacao() {
       }
     }
 
-    const hasInfo  = !!(crit.descricao || crit.referencia);
-    const infoWrap = hasInfo ? `<div class="aval-info-wrap">
+    const hasInfo   = !!(crit.descricao || crit.referencia);
+    const infoBtn   = hasInfo ? `<div class="aval-info-wrap">
       <button type="button" class="aval-info-btn" onclick="dpToggleInfo('${vc.id}')" title="Ver descrição">i</button>
-      <div class="aval-info" id="info_${vc.id}">
-        ${crit.descricao ? `<div class="aval-card-desc">${crit.descricao}</div>` : ''}
-        ${crit.referencia ? `<div class="aval-card-ref">Esperado: ${crit.referencia}</div>` : ''}
-      </div>
+    </div>` : '';
+    const infoExpand = hasInfo ? `<div class="aval-info-expand" id="info_exp_${vc.id}">
+      ${crit.descricao ? `<div class="aval-card-desc">${crit.descricao}</div>` : ''}
+      ${crit.referencia ? `<div class="aval-card-ref">Esperado: ${crit.referencia}</div>` : ''}
     </div>` : '';
 
     return `<div class="aval-card">
       <div class="aval-card-num">${num}${vc.obrigatorio?'<span style="color:var(--red)">*</span>':''}</div>
       <div class="aval-nome-info">
         <div class="aval-card-nome" title="${(crit.nome||'—').replace(/"/g,'&quot;')}">${crit.nome || '—'}</div>
-        ${infoWrap}
+        ${infoBtn}
       </div>
       ${inputHtml}
       ${histHtml}
-    </div>`;
+    </div>${infoExpand}`;
   }).join('');
 
   el.innerHTML = html;
@@ -6148,6 +6310,8 @@ function fecharFormAval() {
   _dpAvaliacaoAtual = null;
   _dpRespostasAtual = [];
   _dpVersaoCritsParaForm = [];
+  _dpFormNavList = [];
+  _dpFormNavIdx  = -1;
 }
 
 /* ─────────────────────────────────────────────
@@ -6912,7 +7076,8 @@ async function gestorDpAbrirFormAvaliacao(participanteId) {
   _dpCicloAtual = { ..._gdpCicloAtual, tipo_avaliador_id: _gdpTipoGestorId };
   _dpParticipantes = _gdpParticipantes;
   _dpAvaliacoes    = _gdpAvaliacoes;
-  await dpAbrirFormAvaliacao(participanteId);
+  const navList = _gdpParticipantes.filter(p => !p.nao_participa).map(p => p.id);
+  await dpAbrirFormAvaliacao(participanteId, navList);
 }
 
 /* ─── aba Resultados (somente leitura) ──────────────────────── */
@@ -6941,11 +7106,17 @@ init();
   <div class="wiz-container modal-aval-panel" id="formAvalPanel">
     <div class="modal-aval-header">
       <div class="modal-aval-header-row">
-        <div>
-          <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:3px" id="formAvalTitulo"></div>
-          <div style="font-size:13px;color:var(--text-sec)" id="formAvalSub"></div>
+        <button class="modal-aval-nav-btn" id="formAvalPrev" onclick="dpNavForm(-1)" title="Colaborador anterior" style="display:none" disabled>&#8249;</button>
+        <div class="modal-aval-header-info">
+          <div class="modal-aval-avatar" id="formAvalAvatar"></div>
+          <div style="min-width:0">
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="formAvalTitulo"></div>
+            <div style="font-size:12px;color:var(--text-sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="formAvalSub"></div>
+          </div>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="fecharFormAval()" style="flex-shrink:0;margin-left:16px">Fechar</button>
+        <span class="modal-aval-nav-counter" id="formAvalCounter" style="display:none"></span>
+        <button class="modal-aval-nav-btn" id="formAvalNext" onclick="dpNavForm(1)" title="Próximo colaborador" style="display:none" disabled>&#8250;</button>
+        <button class="btn btn-secondary btn-sm" onclick="fecharFormAval()" style="flex-shrink:0;margin-left:4px">Fechar</button>
       </div>
       <div class="modal-aval-progress"><div class="modal-aval-progress-fill" id="formAvalProgressFill" style="width:0%"></div></div>
       <div class="modal-aval-progress-label" style="margin-top:5px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
