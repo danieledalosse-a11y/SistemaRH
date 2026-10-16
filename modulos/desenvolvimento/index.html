@@ -722,11 +722,37 @@
     background: var(--surface);
   }
   .gdp-aval-search:focus { outline: none; border-color: var(--accent); }
-  .gdp-aval-select {
-    padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px;
-    font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface); cursor: pointer;
+  /* ── dropdown multi-select de cargos ── */
+  .gdp-cargo-dd { position: relative; flex-shrink: 0; }
+  .gdp-cargo-btn {
+    display: flex; align-items: center; gap: 6px; padding: 7px 10px;
+    border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
+    font-family: inherit; color: var(--text); background: var(--surface);
+    cursor: pointer; white-space: nowrap; user-select: none;
   }
-  .gdp-aval-select:focus { outline: none; border-color: var(--accent); }
+  .gdp-cargo-btn:hover { border-color: var(--accent); }
+  .gdp-cargo-btn.active { border-color: var(--accent); background: var(--accent-bg, #EEF2FF); }
+  .gdp-cargo-btn .gdp-cargo-arrow { font-size: 10px; color: var(--text-ter); transition: transform .15s; }
+  .gdp-cargo-dd.open .gdp-cargo-arrow { transform: rotate(180deg); }
+  .gdp-cargo-menu {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 500;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(15,23,42,.14); min-width: 220px; max-height: 260px;
+    overflow-y: auto; padding: 6px 0;
+  }
+  .gdp-cargo-dd.open .gdp-cargo-menu { display: block; }
+  .gdp-cargo-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 14px;
+    font-size: 13px; cursor: pointer; user-select: none; color: var(--text);
+  }
+  .gdp-cargo-item:hover { background: var(--bg); }
+  .gdp-cargo-item input[type="checkbox"] { accent-color: var(--accent); flex-shrink: 0; }
+  .gdp-cargo-clear {
+    display: flex; align-items: center; padding: 6px 14px;
+    font-size: 12px; color: var(--accent); cursor: pointer; border-top: 1px solid var(--border-light);
+    margin-top: 2px;
+  }
+  .gdp-cargo-clear:hover { text-decoration: underline; }
   .wiz-header {
     padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
     display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
@@ -1697,8 +1723,8 @@ let _dpRespostasAtual      = [];
 let _dpVersaoCritsParaForm = [];
 let _dpFormNavList         = [];
 let _dpFormNavIdx          = -1;
-let _dpAvalFiltroNome      = '';   // filtro de busca por nome na aba Avaliações (RH)
-let _dpAvalFiltroCargo     = '';   // filtro por cargo na aba Avaliações (RH)
+let _dpAvalFiltroNome      = '';        // filtro de busca por nome na aba Avaliações (RH)
+let _dpAvalFiltroCargos    = new Set(); // cargos selecionados (multi-select) — RH
 
 /* ─────────────────────────────────────────────
    NAVEGAÇÃO
@@ -4287,8 +4313,8 @@ function dpFecharDrawerCiclo() {
   _dpAvaliacoes     = [];
   _dpResultados     = [];
   _dpEncerrarPendente = false;
-  _dpAvalFiltroNome   = '';
-  _dpAvalFiltroCargo  = '';
+  _dpAvalFiltroNome    = '';
+  _dpAvalFiltroCargos  = new Set();
 }
 
 function dpShowDcTab(id, btn) {
@@ -5607,14 +5633,18 @@ async function dpLoadAvaliacoes(cicloId) {
   _dpRenderAvaliacoesComFiltro();
 }
 
-function _dpRenderAvaliacoesComFiltro() {
-  const nomeFiltro = _dpAvalFiltroNome.toLowerCase().trim();
-  const filtered = _dpParticipantes.filter(p => {
+function _dpFiltrarParticipantes(lista, nome, cargos) {
+  const nomeFiltro = nome.toLowerCase().trim();
+  return lista.filter(p => {
     const s = p.snapshot || {};
     if (nomeFiltro && !(s.nome||'').toLowerCase().includes(nomeFiltro)) return false;
-    if (_dpAvalFiltroCargo && s.cargo !== _dpAvalFiltroCargo) return false;
+    if (cargos.size > 0 && !cargos.has(s.cargo)) return false;
     return true;
   });
+}
+
+function _dpRenderAvaliacoesComFiltro() {
+  const filtered = _dpFiltrarParticipantes(_dpParticipantes, _dpAvalFiltroNome, _dpAvalFiltroCargos);
   dpRenderAvaliacoes({ prefixHtml: _dpFiltrosHtml(), participants: filtered, hideAvaliarWhenDone: true });
 }
 
@@ -5766,8 +5796,10 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
     _dpFormNavList = navList;
     _dpFormNavIdx  = navList.indexOf(participanteId);
   } else if (_dpFormNavList.length === 0 || !_dpFormNavList.includes(participanteId)) {
-    // Primeira abertura via botão RH sem lista explícita — auto-constrói da lista ativa
-    _dpFormNavList = _dpParticipantes.filter(p => !p.nao_participa).map(p => p.id);
+    // Primeira abertura via botão RH sem lista explícita — auto-constrói respeitando filtros ativos
+    const base = _dpFiltrarParticipantes(_dpParticipantes, _dpAvalFiltroNome, _dpAvalFiltroCargos)
+      .filter(p => !p.nao_participa);
+    _dpFormNavList = base.length ? base.map(p => p.id) : _dpParticipantes.filter(p => !p.nao_participa).map(p => p.id);
     _dpFormNavIdx  = _dpFormNavList.indexOf(participanteId);
   } else {
     // Navegando: apenas atualiza índice
@@ -6920,8 +6952,8 @@ let _gdpParticipantes   = [];
 let _gdpAvaliacoes      = [];
 let _gdpResultados      = [];
 let _gdpTipoGestorId    = null; // id de dp_tipos_avaliador onde codigo='gestor_direto'
-let _gdpAvalFiltroNome  = '';   // filtro de busca por nome na aba Avaliações
-let _gdpAvalFiltroCargo = '';   // filtro por cargo na aba Avaliações
+let _gdpAvalFiltroNome   = '';        // filtro de busca por nome na aba Avaliações
+let _gdpAvalFiltroCargos = new Set(); // cargos selecionados (multi-select) — Gestor
 
 /* ─── init ──────────────────────────────────────────────────── */
 async function initDpGestor() {
@@ -7027,8 +7059,8 @@ async function gestorDpAbrirDrawer(cicloId) {
   _dpParticipantes   = _gdpParticipantes;
   _dpAvaliacoes      = _gdpAvaliacoes;
 
-  _gdpAvalFiltroNome  = '';
-  _gdpAvalFiltroCargo = '';
+  _gdpAvalFiltroNome   = '';
+  _gdpAvalFiltroCargos = new Set();
   gestorDpShowTab('participantes', document.getElementById('gdptab-btn-participantes'));
   document.getElementById('gestorDpDrawerOverlay').classList.add('open');
 }
@@ -7039,8 +7071,60 @@ function gestorDpFecharDrawer() {
   _dpCicloAtual       = null;
   _dpParticipantes    = [];
   _dpAvaliacoes       = [];
-  _gdpAvalFiltroNome  = '';
-  _gdpAvalFiltroCargo = '';
+  _gdpAvalFiltroNome   = '';
+  _gdpAvalFiltroCargos = new Set();
+}
+
+/* ─── componente compartilhado: dropdown multi-select de cargos ── */
+function _dpCargoDropdownHtml(ddId, cargos, selecionados) {
+  const nSel = selecionados.size;
+  const label = nSel === 0 ? 'Todos os cargos'
+    : nSel === 1 ? [...selecionados][0]
+    : `${nSel} cargos`;
+  const items = cargos.map(c => {
+    const chk = selecionados.has(c) ? 'checked' : '';
+    const esc = c.replace(/"/g,'&quot;');
+    return `<label class="gdp-cargo-item">
+      <input type="checkbox" ${chk} onchange="_dpCargoToggle('${ddId}','${esc}',this.checked)">
+      ${esc}
+    </label>`;
+  }).join('');
+  const clearHtml = nSel > 0
+    ? `<div class="gdp-cargo-clear" onclick="_dpCargoClear('${ddId}')">Limpar seleção</div>` : '';
+  return `<div class="gdp-cargo-dd" id="${ddId}">
+    <button type="button" class="gdp-cargo-btn${nSel>0?' active':''}"
+      onclick="_dpCargoToggleDd('${ddId}')">
+      ${label} <span class="gdp-cargo-arrow">▾</span>
+    </button>
+    <div class="gdp-cargo-menu">${items}${clearHtml}</div>
+  </div>`;
+}
+
+function _dpCargoToggleDd(ddId) {
+  const el = document.getElementById(ddId);
+  if (!el) return;
+  const isOpen = el.classList.toggle('open');
+  if (isOpen) {
+    // Fecha ao clicar fora
+    const close = e => { if (!el.contains(e.target)) { el.classList.remove('open'); document.removeEventListener('click', close, true); } };
+    setTimeout(() => document.addEventListener('click', close, true), 0);
+  }
+}
+
+function _dpCargoToggle(ddId, cargo, checked) {
+  const isRh = ddId === 'dpCargoDd';
+  const set  = isRh ? _dpAvalFiltroCargos : _gdpAvalFiltroCargos;
+  if (checked) set.add(cargo); else set.delete(cargo);
+  if (isRh) _dpRenderAvaliacoesComFiltro();
+  else gestorDpShowTab('avaliacoes', document.getElementById('gdptab-btn-avaliacoes'));
+}
+
+function _dpCargoClear(ddId) {
+  const isRh = ddId === 'dpCargoDd';
+  if (isRh) _dpAvalFiltroCargos = new Set();
+  else      _gdpAvalFiltroCargos = new Set();
+  if (isRh) _dpRenderAvaliacoesComFiltro();
+  else gestorDpShowTab('avaliacoes', document.getElementById('gdptab-btn-avaliacoes'));
 }
 
 /* ─── filtros da aba Avaliações (RH) ────────────────────────── */
@@ -7050,10 +7134,7 @@ function _dpFiltrosHtml() {
     <input class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
       value="${_dpAvalFiltroNome.replace(/"/g,'&quot;')}"
       oninput="_dpAvalFiltroNome=this.value;_dpRenderAvaliacoesComFiltro()">
-    <select class="gdp-aval-select" onchange="_dpAvalFiltroCargo=this.value;_dpRenderAvaliacoesComFiltro()">
-      <option value="">Todos os cargos</option>
-      ${cargos.map(c => `<option value="${c}" ${_dpAvalFiltroCargo===c?'selected':''}>${c}</option>`).join('')}
-    </select>
+    ${_dpCargoDropdownHtml('dpCargoDd', cargos, _dpAvalFiltroCargos)}
   </div>`;
 }
 
@@ -7064,10 +7145,7 @@ function _gdpFiltrosHtml() {
     <input class="gdp-aval-search" type="text" placeholder="Buscar por nome..."
       value="${_gdpAvalFiltroNome.replace(/"/g,'&quot;')}"
       oninput="_gdpAvalFiltroNome=this.value;gestorDpShowTab('avaliacoes',document.getElementById('gdptab-btn-avaliacoes'))">
-    <select class="gdp-aval-select" onchange="_gdpAvalFiltroCargo=this.value;gestorDpShowTab('avaliacoes',document.getElementById('gdptab-btn-avaliacoes'))">
-      <option value="">Todos os cargos</option>
-      ${cargos.map(c => `<option value="${c}" ${_gdpAvalFiltroCargo===c?'selected':''}>${c}</option>`).join('')}
-    </select>
+    ${_dpCargoDropdownHtml('gdpCargoDd', cargos, _gdpAvalFiltroCargos)}
   </div>`;
 }
 
@@ -7082,13 +7160,7 @@ function gestorDpShowTab(id, btn) {
     dpRenderParticipantes({ containerId: 'gdptab-participantes', readonly: true });
   }
   if (id === 'avaliacoes') {
-    const nomeFiltro = _gdpAvalFiltroNome.toLowerCase().trim();
-    const filtered = _gdpParticipantes.filter(p => {
-      const s = p.snapshot || {};
-      if (nomeFiltro && !(s.nome||'').toLowerCase().includes(nomeFiltro)) return false;
-      if (_gdpAvalFiltroCargo && s.cargo !== _gdpAvalFiltroCargo) return false;
-      return true;
-    });
+    const filtered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
     dpRenderAvaliacoes({
       containerId:        'gdptab-avaliacoes',
       onAvaliarFn:        'gestorDpAbrirFormAvaliacao',
@@ -7111,7 +7183,9 @@ async function gestorDpAbrirFormAvaliacao(participanteId) {
   _dpCicloAtual = { ..._gdpCicloAtual, tipo_avaliador_id: _gdpTipoGestorId };
   _dpParticipantes = _gdpParticipantes;
   _dpAvaliacoes    = _gdpAvaliacoes;
-  const navList = _gdpParticipantes.filter(p => !p.nao_participa).map(p => p.id);
+  const navBase = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos)
+    .filter(p => !p.nao_participa);
+  const navList = navBase.length ? navBase.map(p => p.id) : _gdpParticipantes.filter(p => !p.nao_participa).map(p => p.id);
   await dpAbrirFormAvaliacao(participanteId, navList);
 }
 
