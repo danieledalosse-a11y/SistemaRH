@@ -5980,7 +5980,7 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
     if (!res || !res[0]) { toast('Erro ao criar avaliação: ' + sbErrMsg(), true); return; }
     aval = res[0];
     _dpAvaliacoes.push(aval);
-    await dpRegistrarEvento('avaliacao_iniciada', 'dp_avaliacoes', aval.id, { colaborador: snap.nome });
+    dpRegistrarEvento('avaliacao_iniciada', 'dp_avaliacoes', aval.id, { colaborador: snap.nome }); // fire-and-forget: log de auditoria não bloqueia abertura do formulário
   }
   _dpAvaliacaoAtual = aval;
 
@@ -5989,15 +5989,21 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   // Grupo A: dados estáticos da versão são imutáveis — usar cache por versaoId
   const versaoId = _dpCicloAtual.versao_id;
   let modeloId;
+  let _respostasJaBuscadas = false;
   if (_dpFormCache[versaoId]) {
     // Cache hit: reutilizar dados imutáveis da versão
     _dpVersaoCritsParaForm = _dpFormCache[versaoId].versaoCrits;
     modeloId               = _dpFormCache[versaoId].modeloId;
   } else {
-    // Cache miss: buscar do banco e armazenar
-    const vc = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&order=ordem.asc&select=*`) || [];
-    const criterioIds = [...new Set(vc.map(c => c.criterio_id).filter(Boolean))];
-    const escalaIds   = [...new Set(vc.map(c => c.escala_id).filter(Boolean))];
+    // Cache miss: dp_versao_criterios e dp_respostas em paralelo (Ponto 3)
+    const [vc, respsEarly] = await Promise.all([
+      sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&order=ordem.asc&select=*`),
+      sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`)
+    ]);
+    _dpRespostasAtual = respsEarly || [];
+    _respostasJaBuscadas = true;
+    const criterioIds = [...new Set((vc||[]).map(c => c.criterio_id).filter(Boolean))];
+    const escalaIds   = [...new Set((vc||[]).map(c => c.escala_id).filter(Boolean))];
     const [criteriosData, escalasData, opcoesData, versaoData] = await Promise.all([
       criterioIds.length ? sbGet(`/rest/v1/dp_criterios?id=in.(${criterioIds.join(',')})&select=id,nome,descricao,referencia,tipo`) : Promise.resolve([]),
       escalaIds.length   ? sbGet(`/rest/v1/dp_escalas?id=in.(${escalaIds.join(',')})&select=id,nome`) : Promise.resolve([]),
@@ -6009,7 +6015,7 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
       ...e,
       dp_escala_opcoes: (opcoesData||[]).filter(o => o.escala_id === e.id)
     }]));
-    _dpVersaoCritsParaForm = vc.map(c => ({
+    _dpVersaoCritsParaForm = (vc||[]).map(c => ({
       ...c,
       dp_criterios: criterioMap[c.criterio_id] || null,
       dp_escalas:   c.escala_id ? (escalaMap[c.escala_id] || null) : null
@@ -6018,35 +6024,37 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
     _dpFormCache[versaoId] = { versaoCrits: _dpVersaoCritsParaForm, modeloId };
   }
 
-  // Buscar respostas existentes (sempre do banco — mutável por avaliação)
-  const resps = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`);
-  _dpRespostasAtual = resps || [];
-
-  // Grupo B: histórico via RPC batch (migration 128) com fallback individual
+  // Ponto 1: respostas (cache hit) e histórico batch em paralelo
+  // No cache miss as respostas já foram buscadas acima — reutilizar sem novo round-trip
   _dpHistoricoCriterios = {};
-  if (modeloId && part.colaborador_id) {
-    // Tenta batch (migration 128) — retorna null se função inexistente no banco
-    const batch = await sbRpc('dp_fn_historico_criterio_batch', {
-      p_versao_id:      versaoId,
-      p_colaborador_id: part.colaborador_id,
-      p_ciclo_atual_id: _dpCicloAtual.id
-    });
-    if (batch && Array.isArray(batch)) {
-      // Migration 128 disponível: um único round-trip para todos os critérios
-      batch.forEach(row => { _dpHistoricoCriterios[row.versao_criterio_id] = row.resultado; });
-    } else {
-      // Fallback: N RPCs individuais (migration 128 ainda não executada no banco)
-      await Promise.all(_dpVersaoCritsParaForm.map(vc =>
-        sbRpc('dp_fn_historico_criterio', {
+  const [resps, batch] = await Promise.all([
+    _respostasJaBuscadas
+      ? Promise.resolve(_dpRespostasAtual)
+      : sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`),
+    (modeloId && part.colaborador_id)
+      ? sbRpc('dp_fn_historico_criterio_batch', {
+          p_versao_id:      versaoId,
           p_colaborador_id: part.colaborador_id,
-          p_criterio_id:    vc.criterio_id,
-          p_ciclo_atual_id: _dpCicloAtual.id,
-          p_modelo_id:      modeloId,
-          p_escala_id:      vc.escala_id || null,
-          p_tipo_resposta:  vc.tipo_resposta
-        }).then(r => { if (r) _dpHistoricoCriterios[vc.id] = r; }).catch(() => {})
-      ));
-    }
+          p_ciclo_atual_id: _dpCicloAtual.id
+        })
+      : Promise.resolve(null)
+  ]);
+  if (!_respostasJaBuscadas) _dpRespostasAtual = resps || [];
+  if (batch && Array.isArray(batch)) {
+    // Migration 128 disponível: um único round-trip para todos os critérios
+    batch.forEach(row => { _dpHistoricoCriterios[row.versao_criterio_id] = row.resultado; });
+  } else if (modeloId && part.colaborador_id) {
+    // Fallback: N RPCs individuais (migration 128 ainda não executada no banco)
+    await Promise.all(_dpVersaoCritsParaForm.map(vc =>
+      sbRpc('dp_fn_historico_criterio', {
+        p_colaborador_id: part.colaborador_id,
+        p_criterio_id:    vc.criterio_id,
+        p_ciclo_atual_id: _dpCicloAtual.id,
+        p_modelo_id:      modeloId,
+        p_escala_id:      vc.escala_id || null,
+        p_tipo_resposta:  vc.tipo_resposta
+      }).then(r => { if (r) _dpHistoricoCriterios[vc.id] = r; }).catch(() => {})
+    ));
   }
 
   // Preencher header
@@ -7366,12 +7374,15 @@ async function gestorDpLoadCiclos() {
     if (!ciclos.length) { gestorDpRenderCiclos([]); return; }
 
     const versaoIds = [...new Set(ciclos.map(c => c.versao_id).filter(Boolean))];
-    const versoes = versaoIds.length
-      ? await sbGet(`/rest/v1/dp_versoes?id=in.(${versaoIds.join(',')})&select=id,versao,tipo_calculo,converte_para_conceito,tabela_conceito_id,tipo_avaliador_id`) || []
-      : [];
-    const versaoMap = Object.fromEntries(versoes.map(v => [v.id, v]));
-
-    const participantes = await sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=in.(${ciclos.map(c=>c.id).join(',')})&select=id,ciclo_id,colaborador_id`) || [];
+    const cicloIds  = ciclos.map(c => c.id);
+    // Ponto 4: versoes e participantes em paralelo — ambos dependem apenas de cicloIds/versaoIds já disponíveis
+    const [versoes, participantes] = await Promise.all([
+      versaoIds.length
+        ? sbGet(`/rest/v1/dp_versoes?id=in.(${versaoIds.join(',')})&select=id,versao,tipo_calculo,converte_para_conceito,tabela_conceito_id,tipo_avaliador_id`) || []
+        : Promise.resolve([]),
+      sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=in.(${cicloIds.join(',')})&select=id,ciclo_id,colaborador_id`) || []
+    ]);
+    const versaoMap = Object.fromEntries((versoes||[]).map(v => [v.id, v]));
     const partMap = {};
     participantes.forEach(p => { (partMap[p.ciclo_id] = partMap[p.ciclo_id] || []).push(p); });
 
