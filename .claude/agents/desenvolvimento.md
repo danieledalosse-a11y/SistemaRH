@@ -692,6 +692,8 @@ document.getElementById('drawerDpCicloOverlay').classList.remove('open');
 | `122_dp_trg_bloqueia_aval_nao_participa.sql` | Trigger `BEFORE INSERT` em `dp_avaliacoes` (`WHEN NEW.participante_id IS NOT NULL`) — função `dp_fn_bloqueia_aval_nao_participa()` bloqueia INSERT para participante com `nao_participa=TRUE`. **Apenas INSERT**: UPDATE de avaliações existentes é livre. | **Executado** (commit de05db4, 2026-10-15) |
 | `123_dp_rls_nao_participa_update.sql` | Policy UPDATE em `dp_ciclo_participantes` para o flag `nao_participa`: RH/admin irrestrito; gestor apenas em ciclos onde `ciclo_id = ANY(auth_avaliador_ciclo_ids())`. Idempotente. | **Executado** (commit de05db4, 2026-10-15) |
 | `124_dp_fn_marcar_reverter_nao_participa.sql` | Funções `SECURITY DEFINER` atômicas: `dp_fn_marcar_nao_participa(p_participante_id, p_motivo_id, p_motivo_texto, p_obs)` e `dp_fn_reverter_nao_participa(p_participante_id)`. Cada uma: (1) valida permissão (rh/admin ou gestor do ciclo via `auth_avaliador_ciclo_ids()`); (2) UPDATE `dp_ciclo_participantes`; (3) INSERT `dp_historico_eventos` (`nao_participa_marcado` / `nao_participa_revertido`). Atomicidade garante que histórico nunca fica dessincronizado. | **Executado** (commit de05db4, 2026-10-15) |
+| `125_dp_enum_nao_participa.sql` | `ALTER TYPE dp_evento_historico ADD VALUE IF NOT EXISTS 'nao_participa_marcado'` e `'nao_participa_revertido'`. Corrige HTTP 400 ao marcar não participante — migration 124 usava esses valores nas RPCs mas nunca os adicionou ao ENUM. | **Executado** (commit 432ae11, 2026-10-16) |
+| `126_dp_bloquear_aval_concluida.sql` | Dois triggers: (1) `trg_bloquear_resp_aval_concluida` — BEFORE INSERT/UPDATE em `dp_respostas` verifica se avaliação pai tem `status IN ('concluida','publicada')` e bloqueia com EXCEPTION; (2) `trg_bloquear_reverter_conclusao` — BEFORE UPDATE em `dp_avaliacoes` impede reversão de `concluida`/`publicada` para outro status. | **Executado** (commit 7149edb, 2026-10-16) |
 
 ---
 
@@ -747,6 +749,8 @@ let _dpAvaliacoes       // [{ id, ciclo_id, colaborador_id, tipo_avaliador_id, s
 let _dpAvaliacaoAtual   // avaliação aberta no formulário
 let _dpRespostasAtual   // respostas da avaliação aberta
 let _dpVersaoCritsParaForm  // critérios da versão para o formulário
+let _dpFormNavList = [] // IDs de participantes navegáveis no formAvalOverlay
+let _dpFormNavIdx  = -1 // posição atual na lista de navegação
 
 // Resultados (Etapa 3)
 let _dpResultados       // [{ id, avaliacao_id, nota_final, conceito, calculado_em }]
@@ -763,10 +767,16 @@ let _dpHistoricoCriterios = {}  // { versao_criterio_id: JSONB retornado por dp_
 |---|---|
 | `dpLoadAvaliacoes(cicloId)` | GET dp_avaliacoes; chama dpRenderAvaliacoes |
 | `dpRenderAvaliacoes(opts={})` | Card por participante cruzando _dpAvaliacoes; badge por status. Opts: `containerId` (default `dpAvaliacoesBody`), `onAvaliarFn` (default `dpAbrirFormAvaliacao`), `participants` (default `_dpParticipantes`), `prefixHtml` (HTML antes da lista), `hideAvaliarWhenDone` (boolean — se `true`, oculta botão Avaliar para status `concluida`/`publicada`) |
-| `dpAbrirFormAvaliacao(participanteId)` | Busca/cria dp_avaliacao; carrega critérios+respostas; busca histórico por critério via `sbRpc('dp_fn_historico_criterio',...)` em paralelo → `_dpHistoricoCriterios`; abre formAvalOverlay |
-| `dpRenderFormAvaliacao()` | Bloco por critério com input adaptado ao `tipo_resposta` + bloco read-only de histórico abaixo de cada campo (ciclo anterior, valor/conceito, nota_final) |
-| `salvarAvaliacao(status)` | Coleta resp_*; PATCH/POST dp_respostas; PATCH dp_avaliacoes; registra evento |
-| `fecharFormAval()` | Fecha overlay; limpa estado |
+| `dpAbrirFormAvaliacao(participanteId, navList?)` | Busca/cria dp_avaliacao; carrega critérios+respostas; busca histórico por critério via `sbRpc('dp_fn_historico_criterio',...)` em paralelo → `_dpHistoricoCriterios`; configura nav state (`_dpFormNavList`/`_dpFormNavIdx`); busca `foto_url` de `_colaboradores` async; atualiza avatar e botões de nav; abre formAvalOverlay. `navList` opcional: se passado, seta a lista; se omitido e lista já existir, mantém; se omitido e lista vazia, auto-constrói de `_dpParticipantes` ativos. |
+| `dpRenderFormAvaliacao()` | Linha compacta por critério (num, nome, botão ℹ, Sim/Não, obs, histórico); bloco expandível `.aval-info-expand` como irmão do `.aval-card` (substitui popup absoluto que era clipado pelo overflow) |
+| `salvarAvaliacao(status)` | Coleta resp_*; PATCH/POST dp_respostas; PATCH dp_avaliacoes; registra evento; retorna `undefined` (navegação usa `_dpSalvarParaNavegar` separadamente) |
+| `fecharFormAval()` | Fecha overlay; limpa estado (`_dpAvaliacaoAtual`, `_dpRespostasAtual`, `_dpVersaoCritsParaForm`); zera `_dpFormNavList` e `_dpFormNavIdx` |
+| `dpNavForm(delta)` | Navega ±1 na `_dpFormNavList`; detecta alterações via `_dpFormTemAlteracoes()`; salva rascunho via `_dpSalvarParaNavegar()` se houver mudanças; bloqueia navegação se save falhar; chama `dpLoadAvaliacoes` + `dpAbrirFormAvaliacao(nextId)` |
+| `_dpSalvarParaNavegar()` | Versão silenciosa de save (sem toast de sucesso); retorna `true/false`; apenas para status `em_andamento` — `concluida`/`publicada` retornam `true` sem salvar |
+| `_dpFormTemAlteracoes()` | Compara valores atuais do DOM com `_dpRespostasAtual`; detecta alterações em respostas e observações |
+| `_dpRenderAvalAvatar(fotoUrl, nome)` | Atualiza `#formAvalAvatar` com `<img>` + onerror fallback para iniciais |
+| `_dpAvalIniciais(nome)` | Retorna `<span>XY</span>` com as iniciais do nome |
+| `_dpAtualizarNavBtns()` | Atualiza `disabled` e `display` dos botões `#formAvalPrev`/`#formAvalNext` e contador `#formAvalCounter` |
 
 **Histórico por critério no formulário:**
 - Carregado em `dpAbrirFormAvaliacao` via `Promise.all` — uma chamada RPC por critério
@@ -1104,7 +1114,119 @@ let _dpMotivosNaoParticipa = [];  // carregado em dpAbrirDrawerCiclo e renderCon
 
 ### Novos tipos em `dp_evento_historico` ENUM
 
-`nao_participa_marcado` e `nao_participa_revertido` — adicionados ao ENUM antes das funções da migration 124. Se recriar o ENUM, incluir esses dois valores.
+`nao_participa_marcado` e `nao_participa_revertido` — adicionados via **migration 125** (`ALTER TYPE dp_evento_historico ADD VALUE IF NOT EXISTS`). A migration 124 usava esses valores nas RPCs mas esqueceu de adicioná-los ao ENUM — causava HTTP 400. Se recriar o ENUM, incluir esses dois valores.
+
+---
+
+## Melhorias no formulário de avaliação (commit bd11018, 2026-10-16)
+
+### 1. Foto do colaborador no header
+
+- Avatar circular 40px (`#formAvalAvatar`, classe `.modal-aval-avatar`) exibido ao lado esquerdo das setas
+- `.modal-aval-header-info`: `justify-content:flex-start` + `text-align:left` no container de nome/cargo — explícitos para evitar herança acidental
+- Iniciais como fallback imediato; foto carregada async sem bloquear abertura
+- Helper `_dpRenderAvalAvatar(fotoUrl, nome)` — se `fotoUrl` presente insere `<img>` com `onerror` fallback; senão, insere `_dpAvalIniciais(nome)`
+- **Fonte da foto (commit 85cc945):** busca primeiro em memória (`_colaboradores`, populada na init RH); se vazio (visão Gestor) faz fetch de `/rest/v1/colaboradores?id=eq.${colabId}&select=foto_url`; comparação usa `Number()` em ambos os lados para evitar mismatch int/string
+- **Atenção:** `_colaboradores` só é populada no path RH (não em `initDpGestor`); o fallback async REST garante foto no Gestor também
+
+### 2. Setas de navegação entre colaboradores
+
+- `_dpFormNavList` e `_dpFormNavIdx` — estado de navegação limpo em `fecharFormAval()`
+- RH: auto-constrói lista respeitando filtros ativos (`_dpFiltrarParticipantes`); fallback para todos os ativos se resultado vazio
+- Gestor: `gestorDpAbrirFormAvaliacao` constrói navList filtrada por `_gdpAvalFiltroNome` + `_gdpAvalFiltroCargos`; fallback para todos os ativos se resultado vazio
+- Setas `#formAvalPrev` / `#formAvalNext` ocultas quando lista tem ≤1 item; primeira/última desabilitadas
+- Contador `#formAvalCounter` mostra `"N / total"` quando navegação ativa
+- `dpNavForm(delta)` — antes de navegar: detecta mudanças (`_dpFormTemAlteracoes`); se houver, salva via `_dpSalvarParaNavegar()`; se save falhar, permanece na avaliação atual (toast de erro); só então chama `dpAbrirFormAvaliacao(nextId)` reusando `_dpFormNavList`
+
+### 3. Info ícone — bloco inline (corrige clipping)
+
+**Problema:** `.aval-info { position:absolute }` dentro de `.modal-aval-body { overflow-y:auto }` — o popup era clipado invisível.
+
+**Solução:** bloco `.aval-info-expand` como **irmão** do `.aval-card` no DOM (não filho), fora do contexto `overflow:auto`. `dpToggleInfo(vcId)` agora usa `id="info_exp_${vcId}"` (era `info_${vcId}`).
+
+```css
+.aval-info-expand { display:none; padding:8px 16px 10px 50px; background:var(--bg); border-bottom:1px solid var(--border-light); }
+.aval-info-expand.open { display:block; }
+```
+
+### CSS do header — classes novas
+
+```css
+.modal-aval-nav-btn        /* botões < > — 28px, hover accent, disabled opacity 0.3 */
+.modal-aval-header-info    /* flex 1, avatar + texto */
+.modal-aval-avatar         /* 40px circular, background accent, overflow:hidden */
+.modal-aval-nav-counter    /* "N / total", 11px, text-ter */
+```
+
+### HTML do header (overlay `#formAvalOverlay`)
+
+```html
+<div class="modal-aval-header-row">
+  <button id="formAvalPrev" class="modal-aval-nav-btn" onclick="dpNavForm(-1)">‹</button>
+  <div class="modal-aval-header-info">
+    <div id="formAvalAvatar" class="modal-aval-avatar"></div>
+    <div><div id="formAvalTitulo">…</div><div id="formAvalSub">…</div></div>
+  </div>
+  <span id="formAvalCounter" class="modal-aval-nav-counter"></span>
+  <button id="formAvalNext" class="modal-aval-nav-btn" onclick="dpNavForm(1)">›</button>
+  <button class="btn btn-secondary btn-sm" onclick="fecharFormAval()">Fechar</button>
+</div>
+```
+
+---
+
+## Filtros da aba Avaliações (commits 1dc4d94, 191f100, 432ae11 — 2026-10-16)
+
+### Arquitetura
+
+**Princípio:** RH e Gestor compartilham a mesma função de renderização (`dpRenderAvaliacoes`) e o mesmo componente de dropdown. Diferenças controladas por variáveis de estado isoladas por perfil.
+
+### Estado
+
+| Variável | Perfil | Tipo | Descrição |
+|---|---|---|---|
+| `_dpAvalFiltroNome` | RH | string | Filtro de busca por nome |
+| `_dpAvalFiltroCargos` | RH | Set | Cargos selecionados no multi-select |
+| `_gdpAvalFiltroNome` | Gestor | string | Filtro de busca por nome |
+| `_gdpAvalFiltroCargos` | Gestor | Set | Cargos selecionados no multi-select |
+
+Resetados em `dpFecharDrawerCiclo()` (RH) e `gestorDpFecharDrawer()` (Gestor) via `new Set()`.
+
+### Funções
+
+| Função | Descrição |
+|---|---|
+| `_dpFiltrarParticipantes(lista, nome, cargos)` | Utilitária compartilhada — filtra por nome (substring) e `Set.has(cargo)` |
+| `_dpRenderAvaliacoesComFiltro()` | RH: aplica filtros e chama `dpRenderAvaliacoes` com `prefixHtml + participants + hideAvaliarWhenDone:true` |
+| `_dpCargoDropdownHtml(ddId, cargos, selecionados)` | Gera HTML do dropdown multi-select; label dinâmico: "Todos os cargos" / cargo único / "N cargos"; ✕ inline no botão quando há seleção (`stopPropagation` para não abrir menu); "Limpar seleção" no rodapé do menu |
+| `_dpCargoToggleDd(ddId)` | Abre/fecha dropdown; fecha ao clicar fora via listener no `document` |
+| `_dpCargoToggle(ddId, cargo, checked)` | Toggle checkbox: atualiza Set (RH ou Gestor por `ddId`) e re-renderiza |
+| `_dpCargoClear(ddId)` | Limpa Set e re-renderiza |
+| `_dpFiltrosHtml()` | RH: input em `.gdp-aval-search-wrap` com ✕ (`.gdp-aval-search-clear`, `id=dpNomeBusca`) + dropdown (ddId `dpCargoDd`) |
+| `_gdpFiltrosHtml()` | Gestor: mesma estrutura (input `id=gdpNomeBusca`, ddId `gdpCargoDd`) |
+
+### CSS — classes dos filtros
+
+| Classe | Descrição |
+|---|---|
+| `.gdp-aval-filtros` | Flex wrapper da barra de filtros; `gap:8px; flex-wrap:wrap` |
+| `.gdp-aval-search-wrap` | Wrapper relativo do input; `flex:1; min-width:140px` |
+| `.gdp-aval-search` | Input de busca; padding direito para o ✕ |
+| `.gdp-aval-search-clear` | ✕ absoluto à direita; `display:none` por padrão; exibido inline quando há texto via `style="display:block"` |
+| `.gdp-cargo-dd` | Wrapper relativo; `min-width:190px; flex-shrink:0`; `.open` controla visibilidade do menu |
+| `.gdp-cargo-btn` | Botão disparador; `.active` quando há seleção |
+| `.gdp-cargo-x` | ✕ inline no botão disparador; visível só quando `nSel > 0` |
+| `.gdp-cargo-menu` | `display:none` → `display:block` quando `.open`; `max-height:260px; overflow-y:auto` |
+| `.gdp-cargo-item` | `<label>` com checkbox; `hover: background var(--bg)` |
+| `.gdp-cargo-clear` | Link "Limpar seleção" no rodapé do menu |
+
+### Foco restaurado no input (commit 432ae11)
+
+`dpRenderAvaliacoes` salva `document.activeElement.id` e `selectionStart` antes de substituir `el.innerHTML`. Após a substituição, localiza o elemento pelo id salvo e chama `focus()` + `setSelectionRange()`. Evita que o cursor suma a cada letra digitada na busca por nome.
+
+### Navegação respeita filtros
+
+`dpAbrirFormAvaliacao` (auto-build RH) e `gestorDpAbrirFormAvaliacao` constroem a navList chamando `_dpFiltrarParticipantes` com os filtros ativos no momento da abertura. Se o resultado for vazio, fallback para todos os participantes ativos (garante que o colaborador clicado sempre esteja na navList).
 
 ---
 
@@ -1241,7 +1363,7 @@ let _gdpTipoGestorId  = null;   // UUID de dp_tipos_avaliador WHERE codigo='gest
 | Função | Chamada pelo RH | Chamada pelo Gestor (via `gestorDpShowTab`) |
 |---|---|---|
 | `dpRenderParticipantes(opts)` | `dpRenderParticipantes()` — botões visíveis, editável em rascunho | `dpRenderParticipantes({containerId:'gdptab-participantes', readonly:true})` |
-| `dpRenderAvaliacoes(opts)` | `dpRenderAvaliacoes()` — botão Avaliar sempre visível | `dpRenderAvaliacoes({containerId:'gdptab-avaliacoes', onAvaliarFn:'gestorDpAbrirFormAvaliacao', prefixHtml:_gdpFiltrosHtml(), participants:filtered, hideAvaliarWhenDone:true})` |
+| `dpRenderAvaliacoes(opts)` | `_dpRenderAvaliacoesComFiltro()` — aplica `_dpAvalFiltroNome` + `_dpAvalFiltroCargos`, passa `prefixHtml:_dpFiltrosHtml()` | `gestorDpShowTab('avaliacoes')` — aplica `_gdpAvalFiltroNome` + `_gdpAvalFiltroCargos`, passa `prefixHtml:_gdpFiltrosHtml()` |
 | `dpRenderResultados(opts)` | `dpRenderResultados()` — toolbar + botões recalcular/ajustar/encerrar visíveis | `dpRenderResultados({containerId:'gdptab-resultados', readonly:true})` — toolbar e botões omitidos |
 
 **`opts` disponíveis por função:**
@@ -1479,3 +1601,69 @@ Toda lógica JS preservada: `dpAvalBinario`, `dpAvalObsFocus/Blur`, `dpAvalRadio
 | Gratificação CD - Outubro/2026 | rascunho | Oriel | 88 (elegíveis) |
 
 **Pendência:** validar fluxo completo com Oriel (abrir → Avaliar → salvar rascunho → concluir) sem criar avaliações reais durante os testes; outubro permanece em rascunho até aprovação.
+
+---
+
+## Fluxo de conclusão de avaliações (2026-10-16, commits 65ce27f + 7149edb)
+
+### Separação Salvar × Concluir
+
+| Ação | Onde | O que faz |
+|---|---|---|
+| **Salvar** | Footer do formulário | `salvarAvaliacao('em_andamento')` — salva respostas, mantém editável |
+| **Concluir** (individual) | Botão por linha na lista (visível quando `st === 'em_andamento'`) | `dpConcluirAvaliacaoIndividual(participanteId)` — confirma + PATCH `status→concluida` |
+| **Concluir equipe** (Gestor) | Botão no cabeçalho da aba Avaliações (só quando ciclo aberto) | `dpConcluirTodasAvaliacoes('gestor')` — bloqueado se pendentes; confirma; PATCH em lote |
+| **Concluir todas** (RH) | Botão no cabeçalho da aba Avaliações (só quando ciclo aberto) | `dpConcluirTodasAvaliacoes('rh')` — mesma lógica, escopo ciclo inteiro |
+| **Encerrar ciclo** | Sidebar (já existia via `dpEncerrarCicloSidebar`) | `dpMudarStatus('encerrado')` — ação exclusiva RH |
+
+### Regra de bloqueio em "Concluir equipe/todas"
+
+- **Pendente** = participante `nao_participa=false` E (sem avaliação OU `status='nao_iniciada'`)
+- Se houver pendentes: modal informativo com lista de nomes — botão apenas "Entendido"
+- Se nenhum pendente: confirmação → conclui todas `em_andamento` em lote
+- Participantes com `status='concluida'` ou `nao_participa=true` são ignorados silenciosamente
+
+### Avaliação concluída — modo leitura
+
+- `dpAbrirFormAvaliacao` chama `dpAvalFormSetReadonly(true, concluida_em)` quando `aval.status ∈ ['concluida','publicada']`
+- Todos os inputs desabilitados; footer substitui botão Salvar por banner verde "✓ Avaliação concluída em DD/MM/AAAA"
+- `salvarAvaliacao()` recusa no topo se `_dpAvaliacaoAtual.status ∈ ['concluida','publicada']`
+
+### Backend (migration 126)
+
+- Trigger `trg_bloquear_resp_aval_concluida` em `dp_respostas` — BEFORE INSERT/UPDATE
+- Trigger `trg_bloquear_reverter_conclusao` em `dp_avaliacoes` — BEFORE UPDATE
+- Ambos lançam EXCEPTION — o front exibe o erro via `sbErrMsg()`
+
+### Helpers novos
+
+```js
+dpConfirmDialog(titulo, corpo, btnLabel, somenteOk) → Promise<boolean>
+dpAvalFormSetReadonly(readonly, concluida_em)
+dpConcluirAvaliacaoIndividual(participanteId)
+dpConcluirTodasAvaliacoes(escopo) // 'rh' | 'gestor'
+dpLimparAvaliacao()
+```
+
+### Comportamentos do formulário (commit f72308a, 2026-10-16)
+
+| Comportamento | Detalhe |
+|---|---|
+| **Salvar fecha o formulário** | `salvarAvaliacao('em_andamento')` chama `fecharFormAval()` ao final — retorna à lista após salvar |
+| **Auto-save na navegação** | `dpNavForm(delta)` detecta mudanças via `_dpFormTemAlteracoes()`; se houver, chama `_dpSalvarParaNavegar()` antes de navegar; exibe toast "Salvo automaticamente ✓" em caso de sucesso |
+| **Footer dinâmico** | `dpAvalFormSetReadonly(false)` injeta dois botões no `#formAvalFooter`: "Limpar avaliação" (vermelho sutil, esquerda) + "Salvar" (direita). `dpAvalFormSetReadonly(true)` substitui por banner verde "✓ Avaliação concluída em DD/MM/AAAA" |
+
+### "Limpar avaliação" (commit f72308a, 2026-10-16)
+
+Botão vermelho sutil no rodapé esquerdo do formulário — visível apenas quando avaliação está editável.
+
+**Fluxo:**
+1. `dpLimparAvaliacao()` verifica `_dpAvaliacaoAtual.status` — aborta com toast se concluída/publicada
+2. `dpConfirmDialog('Limpar avaliação', …, 'Limpar')` — confirmação obrigatória
+3. `sbDelete('/rest/v1/dp_respostas?avaliacao_id=eq.${avalId}')` — apaga todas as respostas
+4. `sbPatch('/rest/v1/dp_avaliacoes?id=eq.${avalId}', { status: 'nao_iniciada', concluida_em: null })` — reverte status
+5. Atualiza `_dpRespostasAtual = []`, `_dpAvaliacaoAtual.status` e `_dpAvaliacoes` em memória
+6. Chama `dpRenderFormAvaliacao()` + `dpAvalFormSetReadonly(false)` — re-renderiza formulário vazio
+7. Toast "Avaliação limpa." — formulário **permanece aberto** (não chama `fecharFormAval()`)
+
+**Proteção de backend:** trigger `trg_bloquear_reverter_conclusao` (migration 126) impede que `status` seja revertido de `concluida`/`publicada` para outro valor via API direta. O front adiciona guard anterior, mas o banco é a proteção real.
