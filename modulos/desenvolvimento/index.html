@@ -5848,9 +5848,6 @@ function dpRenderAvaliacoes(opts = {}) {
         const exp  = snap.em_experiencia;
         const aval = _avalByPartId.get(p.id) || _avalByColabId.get(p.colaborador_id);
         const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
-        const badgeLeft  = (st === 'em_andamento' || st === 'respondida')
-          ? `<span class="sbadge sbadge-${STATUS_BADGE[st]}" style="font-size:10px;padding:1px 6px">${STATUS_LABEL[st]}</span>`
-          : '';
         const concluido  = st === 'concluida' || st === 'publicada';
         const resultado  = aval ? _resByAvalId.get(aval.id) : null;
         const bonusObj   = resultado ? _bonusByResId.get(resultado.id) : null;
@@ -5858,18 +5855,20 @@ function dpRenderAvaliacoes(opts = {}) {
         const valorHtml  = (concluido && bonusValor != null)
           ? `<span style="font-size:11px;font-weight:600;color:#047857;white-space:nowrap">R$ ${bonusValor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
           : '';
-        const badgeRight = concluido ? `<span class="sbadge sbadge-${STATUS_BADGE[st]}" style="font-size:12px;padding:5px 14px;white-space:nowrap">${STATUS_LABEL[st]}</span>` : '';
-        const svgOlho    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+        const badgeRight = concluido ? `<span class="sbadge sbadge-${STATUS_BADGE[st]}" style="font-size:11px;padding:4px 10px;white-space:nowrap">${STATUS_LABEL[st]}</span>` : '';
+        const _leftBorderColor = st === 'em_andamento' ? '#F59E0B' : st === 'respondida' ? '#5925DC' : 'transparent';
+        const svgOlho    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+        const svgLapis   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
         const visualizarBtn = concluido
-          ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;display:inline-flex;align-items:center;gap:5px" onclick="dpAbrirFormAvaliacaoReadonly('${p.id}')">${svgOlho} Visualizar</button>`
+          ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;padding:5px 9px;display:inline-flex;align-items:center" title="Visualizar avaliação" onclick="dpAbrirFormAvaliacaoReadonly('${p.id}')">${svgOlho}</button>`
           : '';
         const editarBtn  = (concluido && st === 'concluida' && (_perfil === 'rh' || _perfil === 'admin'))
-          ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;color:var(--text-ter);border-color:var(--border)" onclick="${_onAvaliarFn}('${p.id}')" title="Editar avaliação concluída (admin)">Editar</button>`
+          ? `<button class="btn btn-secondary btn-sm" style="font-size:12px;padding:5px 9px;display:inline-flex;align-items:center;color:var(--text-ter);border-color:var(--border)" title="Editar avaliação (admin)" onclick="${_onAvaliarFn}('${p.id}')">${svgLapis}</button>`
           : '';
         const avaliarBtn = !concluido
           ? `<button class="btn btn-secondary btn-sm" onclick="${_onAvaliarFn}('${p.id}')" style="font-size:12px">Avaliar</button>`
           : '';
-        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-light)${exp ? ';background:rgba(245,158,11,0.06)' : ''}">
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px 10px 9px;border-bottom:1px solid var(--border-light);border-left:3px solid ${_leftBorderColor}${exp ? ';background:rgba(245,158,11,0.06)' : ''}">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               ${snap.nome || '—'}
@@ -7701,24 +7700,23 @@ function _dpStatusCounts(participantes, avaliacoes) {
 /* ─── Cards KPI clicáveis de status ─────────────────────────── */
 function _dpStatusChipsHtml(counts, statusAtivo, toggleFn, concluirBtn, valorBonus) {
   const cards = [
-    { key: 'nao_iniciada', label: 'Não iniciada', colorOn: '#4B5563', colorOff: '#6B7280', bgOn: '#F3F4F6', accent: '#9CA3AF' },
-    { key: 'em_andamento', label: 'Em andamento', colorOn: '#92400E', colorOff: '#B45309', bgOn: '#FFFBEB', accent: '#F59E0B' },
-    { key: 'respondida',   label: 'Respondida',   colorOn: '#4C1D95', colorOff: '#5B21B6', bgOn: '#F4F3FF', accent: '#5925DC' },
-    { key: 'concluida',    label: 'Concluída',    colorOn: '#065F46', colorOff: '#047857', bgOn: '#ECFDF5', accent: '#10B981' },
+    { key: 'nao_iniciada', label: 'Não iniciada', bgOff: '#F9FAFB', bgOn: '#F3F4F6', numOff: '#9CA3AF', numOn: '#374151', ring: '#9CA3AF' },
+    { key: 'em_andamento', label: 'Em andamento', bgOff: '#FFFBEB', bgOn: '#FEF3C7', numOff: '#D97706', numOn: '#92400E', ring: '#F59E0B' },
+    { key: 'respondida',   label: 'Respondida',   bgOff: '#F5F3FF', bgOn: '#EDE9FE', numOff: '#7C3AED', numOn: '#4C1D95', ring: '#5925DC' },
+    { key: 'concluida',    label: 'Concluída',    bgOff: '#F0FDF4', bgOn: '#DCFCE7', numOff: '#16A34A', numOn: '#065F46', ring: '#10B981' },
   ];
   const total = counts.nao_iniciada + counts.em_andamento + (counts.respondida || 0) + counts.concluida;
   const pct   = total > 0 ? Math.round((counts.concluida / total) * 100) : 0;
   const cardsHtml = cards.map(c => {
     const ativo = statusAtivo === c.key;
-    const borderColor = ativo ? c.accent : 'var(--border,#E5E7EB)';
-    const bg = ativo ? c.bgOn : 'var(--card-bg,#fff)';
-    const numColor = ativo ? c.colorOn : c.colorOff;
-    const shadow = ativo ? `box-shadow:0 0 0 2px ${c.accent}40` : 'box-shadow:none';
-    return `<button onclick="${toggleFn}('${c.key}')"
-      style="display:flex;flex-direction:column;align-items:center;padding:10px 6px 8px;border-radius:8px;border:1.5px solid ${borderColor};background:${bg};cursor:pointer;transition:all .15s;${shadow}">
-      <span style="font-size:22px;font-weight:700;line-height:1;color:${numColor}">${counts[c.key]}</span>
+    return `<button onclick="${toggleFn}('${c.key}')" title="Filtrar: ${c.label}"
+      style="display:flex;flex-direction:column;align-items:center;padding:10px 6px 9px;border-radius:8px;
+             border:1.5px solid ${ativo ? c.ring : 'transparent'};
+             background:${ativo ? c.bgOn : c.bgOff};
+             cursor:pointer;transition:all .15s;
+             box-shadow:${ativo ? `0 0 0 3px ${c.ring}25` : 'none'}">
+      <span style="font-size:22px;font-weight:700;line-height:1;color:${ativo ? c.numOn : c.numOff}">${counts[c.key] || 0}</span>
       <span style="font-size:10px;font-weight:500;color:var(--text-sec,#4B5563);margin-top:3px;white-space:nowrap">${c.label}</span>
-      ${ativo ? `<span style="width:18px;height:2px;border-radius:2px;background:${c.accent};margin-top:5px;display:block"></span>` : ''}
     </button>`;
   }).join('');
   const valorStr = valorBonus != null
