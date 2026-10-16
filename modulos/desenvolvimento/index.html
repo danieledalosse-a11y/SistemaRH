@@ -665,7 +665,7 @@
   }
   .modal-aval-nav-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
   .modal-aval-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-  .modal-aval-header-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+  .modal-aval-header-info { display: flex; align-items: center; justify-content: flex-start; gap: 10px; flex: 1; min-width: 0; }
   .modal-aval-avatar {
     width: 40px; height: 40px; border-radius: 50%; background: var(--accent);
     color: #fff; font-size: 14px; font-weight: 700; flex-shrink: 0;
@@ -5840,11 +5840,21 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   document.getElementById('formAvalTitulo').textContent = snap.nome || '—';
   document.getElementById('formAvalSub').textContent = `${snap.cargo || '—'} · ${snap.setor || '—'}`;
   _dpAtualizarNavBtns();
-  // Foto: busca em memória (_colaboradores já carregado), fallback para iniciais
-  const _colabMem = part.colaborador_id && Array.isArray(_colaboradores)
-    ? _colaboradores.find(c => c.id === part.colaborador_id)
-    : null;
-  _dpRenderAvalAvatar(_colabMem?.foto_url || null, snap.nome);
+  // Foto: iniciais imediato; busca foto async (memória ou REST)
+  _dpRenderAvalAvatar(null, snap.nome);
+  if (part.colaborador_id) {
+    const colabId = Number(part.colaborador_id);
+    const memFoto = Array.isArray(_colaboradores) && _colaboradores.length
+      ? (_colaboradores.find(c => Number(c.id) === colabId) || {}).foto_url
+      : undefined;
+    if (memFoto) {
+      _dpRenderAvalAvatar(memFoto, snap.nome);
+    } else {
+      sbGet(`/rest/v1/colaboradores?id=eq.${colabId}&select=foto_url`)
+        .then(r => { if (r?.[0]?.foto_url) _dpRenderAvalAvatar(r[0].foto_url, snap.nome); })
+        .catch(() => {});
+    }
+  }
 
   dpRenderFormAvaliacao();
   dpAtualizarProgressoAval();
@@ -7134,7 +7144,7 @@ init();
         <button class="modal-aval-nav-btn" id="formAvalPrev" onclick="dpNavForm(-1)" title="Colaborador anterior" style="display:none" disabled>&#8249;</button>
         <div class="modal-aval-header-info">
           <div class="modal-aval-avatar" id="formAvalAvatar"></div>
-          <div style="min-width:0">
+          <div style="min-width:0;text-align:left">
             <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="formAvalTitulo"></div>
             <div style="font-size:12px;color:var(--text-sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="formAvalSub"></div>
           </div>
