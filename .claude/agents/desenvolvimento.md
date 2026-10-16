@@ -1058,6 +1058,45 @@ Usado em `dpRenderInfoCiclo` para exibir "Por gestor — ORIEL LEITE RODRIGUES" 
 | `a78b661` | Migration 119: SELECT em `dp_historico_eventos` para gestor (ciclos + avaliações próprias) |
 | `a78b661` | Interface diretoria — `isDiretoria` adicionada ao `init()`; 5 pontos ocultam botões de ação para diretoria |
 
+## Melhoria: "Não participará" direto na aba Participantes (commit c30e31e, 2026-10-16)
+
+### O que foi adicionado
+
+`dpRenderParticipantes` passou a exibir controles de não participação diretamente na aba Participantes do drawer RH, reutilizando toda a infraestrutura existente (modal, RPCs, permissões).
+
+### Regra de exibição
+
+```js
+const podeNP = opts.readonly !== true &&
+               (s === 'aberto' || s === 'em_andamento') &&
+               (_perfil === 'rh' || _perfil === 'admin');
+```
+
+- `opts.readonly !== true` → exclui visão do gestor (que passa `readonly: true` explicitamente)
+- Ciclos em `rascunho` não exibem os controles (a elegibilidade está sendo montada)
+- Gestor não tem acesso pelos Participantes — continua podendo marcar pela aba Avaliações (⊘) quando `_podeMarcarNP` permite
+
+### Visual por estado
+
+| Estado do participante | O que aparece na linha |
+|---|---|
+| Ativo | Botão ⊘ (28×28px, tooltip "Marcar como não participante") |
+| Marcado como NP | Badge cinza "⊘ Não participa" + observação em itálico + botão "Reverter" |
+
+### Contador de cabeçalho
+
+`"X participante(s) ativo(s) · Y não participam"` substituiu o simples `"N participante(s)"`.
+
+### Sincronização entre abas
+
+`dpConfirmarNaoParticipa` e `dpReverterNaoParticipa` agora chamam `dpRenderParticipantes()` após concluir — ambas as abas ficam consistentes sem recarregar o drawer.
+
+### Sem alterações na aba Avaliações
+
+Todo o comportamento existente foi preservado: `_ativos`, `_naoParticipa`, `_avalsAtivas`, seção "Não participam deste ciclo", contagens de pendentes, encerramento — nada foi modificado.
+
+---
+
 ## Feature: "Não participa deste ciclo" (commit de05db4, 2026-10-15)
 
 ### Visão geral
