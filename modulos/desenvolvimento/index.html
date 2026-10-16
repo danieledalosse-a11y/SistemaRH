@@ -3663,11 +3663,26 @@ async function setCritField(critId, field, value) {
   renderVersaoCriterios();
 }
 
-async function _salvarOrdemCrits() {
-  for (let i = 0; i < _dpVersaoCrits.length; i++) {
-    _dpVersaoCrits[i].ordem = i + 1;
-    await sbPatch(`/rest/v1/dp_versao_criterios?id=eq.${_dpVersaoCrits[i].id}`, { ordem: i + 1 });
+// Retorna true se todos os PATCHes foram bem-sucedidos.
+// Em caso de falha, restaura a ordem original em _dpVersaoCrits e retorna false.
+async function _salvarOrdemCrits(ordemOriginal) {
+  const updates = _dpVersaoCrits.map((c, i) => ({ id: c.id, ordem: i + 1 }));
+  for (const u of updates) {
+    const ok = await sbPatch(`/rest/v1/dp_versao_criterios?id=eq.${u.id}`, { ordem: u.ordem });
+    if (!ok) {
+      // Rollback: restaura ordem original em memória
+      if (ordemOriginal) {
+        const mapa = Object.fromEntries(ordemOriginal.map(o => [o.id, o.ordem]));
+        _dpVersaoCrits.forEach(c => { c.ordem = mapa[c.id] ?? c.ordem; });
+        _dpVersaoCrits.sort((a, b) => a.ordem - b.ordem);
+      }
+      return false;
+    }
+    // Atualiza memória só após confirmação do banco
+    const mem = _dpVersaoCrits.find(c => c.id === u.id);
+    if (mem) mem.ordem = u.ordem;
   }
+  return true;
 }
 
 async function moverCrit(critId, dir) {
@@ -3675,8 +3690,10 @@ async function moverCrit(critId, dir) {
   if (idx === -1) return;
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= _dpVersaoCrits.length) return;
+  const ordemOriginal = _dpVersaoCrits.map(c => ({ id: c.id, ordem: c.ordem }));
   [_dpVersaoCrits[idx], _dpVersaoCrits[newIdx]] = [_dpVersaoCrits[newIdx], _dpVersaoCrits[idx]];
-  await _salvarOrdemCrits();
+  const ok = await _salvarOrdemCrits(ordemOriginal);
+  if (!ok) toast('Erro ao salvar a ordem. Tente novamente.', true);
   renderVersaoCriterios();
 }
 
@@ -3705,10 +3722,17 @@ async function dpCritDrop(id, event) {
   const srcIdx = _dpVersaoCrits.findIndex(c => c.id === _dpDragSrcId);
   const tgtIdx = _dpVersaoCrits.findIndex(c => c.id === id);
   if (srcIdx === -1 || tgtIdx === -1) return;
+  // Salva snapshot da ordem atual para rollback em caso de falha
+  const ordemOriginal = _dpVersaoCrits.map(c => ({ id: c.id, ordem: c.ordem }));
+  // Muta em memória para exibição imediata
   const [item] = _dpVersaoCrits.splice(srcIdx, 1);
   _dpVersaoCrits.splice(tgtIdx, 0, item);
-  await _salvarOrdemCrits();
-  renderVersaoCriterios();
+  renderVersaoCriterios(); // exibe nova ordem otimisticamente
+  const ok = await _salvarOrdemCrits(ordemOriginal);
+  if (!ok) {
+    toast('Erro ao salvar a ordem. Verifique sua conexão e tente novamente.', true);
+    renderVersaoCriterios(); // re-renderiza com ordem restaurada pelo rollback
+  }
 }
 
 function dpCritDragEnd(event) {
