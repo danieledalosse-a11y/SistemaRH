@@ -1765,6 +1765,13 @@ let _dpAvalFiltroNome      = '';        // filtro de busca por nome na aba Avali
 let _dpAvalFiltroCargos    = new Set(); // cargos selecionados (multi-select) — RH
 let _dpAvalFiltroStatus    = '';        // chip de status ativo: ''|'nao_iniciada'|'em_andamento'|'concluida'
 
+/* ─── Cache de performance ─── */
+// Grupo A: cache de dados estáticos do formulário (imutáveis por versão)
+let _dpFormCache            = {};    // { [versaoId]: { versaoCrits, modeloId } }
+// Grupo D: guardas de recarregamento por ciclo
+let _dpResultadosCicloId    = null;  // cicloId dos resultados já carregados
+let _dpHistoricoCarregadoCicloId = null; // cicloId do histórico já carregado
+
 /* ─────────────────────────────────────────────
    NAVEGAÇÃO
 ───────────────────────────────────────────── */
@@ -4370,20 +4377,25 @@ async function dpAbrirDrawerCiclo(cicloId, abaInicial) {
     ? document.querySelector('#drawerDpCiclo .drawer-tab')
     : document.getElementById(`dptabBtn-${tabAlvo}`);
   dpShowDcTab(tabAlvo, tabBtn || document.querySelector('#drawerDpCiclo .drawer-tab'));
-  // Para ciclos retroativos: inclui colaboradores inativos que estavam ativos no período
+  // Grupo C: carregar dados iniciais em paralelo quando independentes
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   const fimCiclo = _dpCicloAtual.data_fim ? new Date(_dpCicloAtual.data_fim) : null;
+  const loadsIniciais = [dpLoadParticipantes(cicloId)];
+  // Retroativos (ciclos antigos) e motivos são independentes dos participantes — paralelo
   if (fimCiclo && fimCiclo < hoje) {
-    const inicos = await sbGet(
-      `/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.false&data_demissao=gte.${_dpCicloAtual.data_inicio}&order=nome.asc`
-    ) || [];
-    const idsExistentes = new Set(_colaboradores.map(c => c.id));
-    inicos.forEach(c => { if (!idsExistentes.has(c.id)) _colaboradores.push(c); });
+    loadsIniciais.push(
+      sbGet(`/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.false&data_demissao=gte.${_dpCicloAtual.data_inicio}&order=nome.asc`)
+        .then(inicos => {
+          const idsExistentes = new Set(_colaboradores.map(c => c.id));
+          (inicos || []).forEach(c => { if (!idsExistentes.has(c.id)) _colaboradores.push(c); });
+        })
+    );
   }
-  if (!_dpMotivosNaoParticipa.length) await loadDpMotivosNaoParticipa();
-  await dpLoadParticipantes(cicloId);
+  if (!_dpMotivosNaoParticipa.length) loadsIniciais.push(loadDpMotivosNaoParticipa());
+  await Promise.all(loadsIniciais);
   dpRenderParticipantes();
   if (ativoOuEncerrado) {
+    // dpLoadResultados depende de _dpAvaliacoes — manter sequencial
     await dpLoadAvaliacoes(cicloId);
     await dpLoadResultados(cicloId);
   }
@@ -4402,6 +4414,11 @@ function dpFecharDrawerCiclo() {
   _dpAvalFiltroNome    = '';
   _dpAvalFiltroCargos  = new Set();
   _dpAvalFiltroStatus  = '';
+  // Grupo A: invalidar cache do formulário ao fechar drawer
+  _dpFormCache = {};
+  // Grupo D: invalidar guardas de recarregamento
+  _dpResultadosCicloId = null;
+  _dpHistoricoCarregadoCicloId = null;
 }
 
 function dpShowDcTab(id, btn) {
@@ -4411,8 +4428,21 @@ function dpShowDcTab(id, btn) {
   document.getElementById(`dptab-${id}`).classList.add('active');
   if (id === 'info') dpRenderInfoCiclo();
   if (id === 'avaliacoes') _dpRenderAvaliacoesComFiltro();
-  if (id === 'resultados') dpLoadResultados(_dpCicloAtual ? _dpCicloAtual.id : null);
-  if (id === 'historico') dpLoadHistorico(_dpCicloAtual ? _dpCicloAtual.id : null);
+  // Grupo D: guarda — só rebusca se ciclo mudou
+  if (id === 'resultados') {
+    const cicloId = _dpCicloAtual ? _dpCicloAtual.id : null;
+    if (_dpResultadosCicloId !== cicloId) {
+      dpLoadResultados(cicloId);
+    } else {
+      dpRenderResultados();
+    }
+  }
+  if (id === 'historico') {
+    const cicloId = _dpCicloAtual ? _dpCicloAtual.id : null;
+    if (_dpHistoricoCarregadoCicloId !== cicloId) {
+      dpLoadHistorico(cicloId);
+    }
+  }
 }
 
 async function dpLoadParticipantes(cicloId) {
@@ -5782,16 +5812,21 @@ function dpRenderAvaliacoes(opts = {}) {
     </div>` : '';
   const _cicloAberto = _dpCicloAtual && (_dpCicloAtual.status === 'aberto' || _dpCicloAtual.status === 'em_andamento');
   const _podeMarcarNP = _cicloAberto && (_perfil === 'rh' || _perfil === 'admin' || _perfil === 'gestor');
+  // Grupo E: índices O(1) para evitar O(n²) no loop de render
+  const _avalByPartId  = new Map(_dpAvaliacoes.map(a => [a.participante_id, a]));
+  const _avalByColabId = new Map(_dpAvaliacoes.map(a => [a.colaborador_id, a]));
+  const _resByAvalId   = new Map(_dpResultados.map(r => [r.avaliacao_id, r]));
+  const _bonusByResId  = new Map(_dpResultadosBonus.map(b => [b.resultado_id, b]));
   const htmlAtivos = _ativos.length
     ? _ativos.map(p => {
         const snap = p.snapshot || {};
         const exp  = snap.em_experiencia;
-        const aval = _dpAvaliacoes.find(a => a.colaborador_id === p.colaborador_id || a.participante_id === p.id);
+        const aval = _avalByPartId.get(p.id) || _avalByColabId.get(p.colaborador_id);
         const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
         const badgeLeft  = st === 'em_andamento' ? `<span class="sbadge sbadge-amber" style="font-size:10px;padding:1px 6px">Em andamento</span>` : '';
         const concluido  = st === 'concluida' || st === 'publicada';
-        const resultado  = aval ? _dpResultados.find(r => r.avaliacao_id === aval.id) : null;
-        const bonusObj   = resultado ? _dpResultadosBonus.find(b => b.resultado_id === resultado.id) : null;
+        const resultado  = aval ? _resByAvalId.get(aval.id) : null;
+        const bonusObj   = resultado ? _bonusByResId.get(resultado.id) : null;
         const bonusValor = bonusObj?.valor_bonus != null ? Number(bonusObj.valor_bonus) : null;
         const valorHtml  = (concluido && bonusValor != null)
           ? `<span style="font-size:11px;font-weight:600;color:#047857;white-space:nowrap">R$ ${bonusValor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
@@ -5951,46 +5986,56 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
 
   // Buscar critérios da versão — queries separadas para evitar INNER JOIN implícito
   // (criterio_id NOT NULL → PostgREST faz INNER JOIN que zera resultados ao cruzar RLS para gestor)
+  // Grupo A: dados estáticos da versão são imutáveis — usar cache por versaoId
   const versaoId = _dpCicloAtual.versao_id;
-  const vc = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&order=ordem.asc&select=*`) || [];
+  let modeloId;
+  if (_dpFormCache[versaoId]) {
+    // Cache hit: reutilizar dados imutáveis da versão
+    _dpVersaoCritsParaForm = _dpFormCache[versaoId].versaoCrits;
+    modeloId               = _dpFormCache[versaoId].modeloId;
+  } else {
+    // Cache miss: buscar do banco e armazenar
+    const vc = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&order=ordem.asc&select=*`) || [];
+    const criterioIds = [...new Set(vc.map(c => c.criterio_id).filter(Boolean))];
+    const escalaIds   = [...new Set(vc.map(c => c.escala_id).filter(Boolean))];
+    const [criteriosData, escalasData, opcoesData, versaoData] = await Promise.all([
+      criterioIds.length ? sbGet(`/rest/v1/dp_criterios?id=in.(${criterioIds.join(',')})&select=id,nome,descricao,referencia,tipo`) : Promise.resolve([]),
+      escalaIds.length   ? sbGet(`/rest/v1/dp_escalas?id=in.(${escalaIds.join(',')})&select=id,nome`) : Promise.resolve([]),
+      escalaIds.length   ? sbGet(`/rest/v1/dp_escala_opcoes?escala_id=in.(${escalaIds.join(',')})&select=*&order=ordem.asc`) : Promise.resolve([]),
+      sbGet(`/rest/v1/dp_versoes?id=eq.${versaoId}&select=modelo_id`)
+    ]);
+    const criterioMap = Object.fromEntries((criteriosData||[]).map(c => [c.id, c]));
+    const escalaMap   = Object.fromEntries((escalasData||[]).map(e => [e.id, {
+      ...e,
+      dp_escala_opcoes: (opcoesData||[]).filter(o => o.escala_id === e.id)
+    }]));
+    _dpVersaoCritsParaForm = vc.map(c => ({
+      ...c,
+      dp_criterios: criterioMap[c.criterio_id] || null,
+      dp_escalas:   c.escala_id ? (escalaMap[c.escala_id] || null) : null
+    }));
+    modeloId = versaoData?.[0]?.modelo_id;
+    _dpFormCache[versaoId] = { versaoCrits: _dpVersaoCritsParaForm, modeloId };
+  }
 
-  const criterioIds = [...new Set(vc.map(c => c.criterio_id).filter(Boolean))];
-  const escalaIds   = [...new Set(vc.map(c => c.escala_id).filter(Boolean))];
-  const [criteriosData, escalasData, opcoesData] = await Promise.all([
-    criterioIds.length ? sbGet(`/rest/v1/dp_criterios?id=in.(${criterioIds.join(',')})&select=id,nome,descricao,referencia,tipo`) : Promise.resolve([]),
-    escalaIds.length   ? sbGet(`/rest/v1/dp_escalas?id=in.(${escalaIds.join(',')})&select=id,nome`) : Promise.resolve([]),
-    escalaIds.length   ? sbGet(`/rest/v1/dp_escala_opcoes?escala_id=in.(${escalaIds.join(',')})&select=*&order=ordem.asc`) : Promise.resolve([])
-  ]);
-  const criterioMap = Object.fromEntries((criteriosData||[]).map(c => [c.id, c]));
-  const escalaMap   = Object.fromEntries((escalasData||[]).map(e => [e.id, {
-    ...e,
-    dp_escala_opcoes: (opcoesData||[]).filter(o => o.escala_id === e.id)
-  }]));
-  _dpVersaoCritsParaForm = vc.map(c => ({
-    ...c,
-    dp_criterios: criterioMap[c.criterio_id] || null,
-    dp_escalas:   c.escala_id ? (escalaMap[c.escala_id] || null) : null
-  }));
-
-  // Buscar respostas existentes
+  // Buscar respostas existentes (sempre do banco — mutável por avaliação)
   const resps = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`);
   _dpRespostasAtual = resps || [];
 
-  // Buscar histórico da última avaliação por critério
+  // Grupo B: histórico via RPC batch (requer migration 128)
+  // Se a função batch não existir no banco (migration não executada), _dpHistoricoCriterios ficará vazio
   _dpHistoricoCriterios = {};
-  const versaoData = await sbGet(`/rest/v1/dp_versoes?id=eq.${versaoId}&select=modelo_id`);
-  const modeloId = versaoData?.[0]?.modelo_id;
   if (modeloId && part.colaborador_id) {
-    await Promise.all(_dpVersaoCritsParaForm.map(vc =>
-      sbRpc('dp_fn_historico_criterio', {
-        p_colaborador_id: part.colaborador_id,
-        p_criterio_id:    vc.criterio_id,
-        p_ciclo_atual_id: _dpCicloAtual.id,
-        p_modelo_id:      modeloId,
-        p_escala_id:      vc.escala_id || null,
-        p_tipo_resposta:  vc.tipo_resposta
-      }).then(r => { if (r) _dpHistoricoCriterios[vc.id] = r; }).catch(() => {})
-    ));
+    const batch = await sbRpc('dp_fn_historico_criterio_batch', {
+      p_versao_id:      versaoId,
+      p_colaborador_id: part.colaborador_id,
+      p_ciclo_atual_id: _dpCicloAtual.id
+    });
+    if (batch && Array.isArray(batch)) {
+      batch.forEach(row => { _dpHistoricoCriterios[row.versao_criterio_id] = row.resultado; });
+    }
+    // Nota: se batch retornar null (função inexistente — migration 128 não executada),
+    // histórico simplesmente não será exibido. Executar migration 128 para ativar.
   }
 
   // Preencher header
@@ -6523,6 +6568,7 @@ async function dpLoadResultados(cicloId) {
   } else {
     _dpResultadosBonus = [];
   }
+  _dpResultadosCicloId = cicloId; // Grupo D: marcar como carregado para este ciclo
   dpRenderResultados();
 }
 
@@ -6538,11 +6584,19 @@ function dpRenderResultados(opts = {}) {
   const _partAtivos = _dpParticipantes.filter(p => !p.nao_participa);
   const _partNP     = _dpParticipantes.filter(p => p.nao_participa);
 
+  // Grupo E: índices O(1) para evitar O(n²) nos loops de render
+  const _rAvByPartId  = new Map(_dpAvaliacoes.map(a => [a.participante_id, a]));
+  const _rAvByColabId = new Map(_dpAvaliacoes.map(a => [a.colaborador_id, a]));
+  const _rAvById      = new Map(_dpAvaliacoes.map(a => [a.id, a]));
+  const _rResByAvalId = new Map(_dpResultados.map(r => [r.avaliacao_id, r]));
+  const _rPartByPartId = new Map(_dpParticipantes.map(p => [p.id, p]));
+  const _rPartByColabId = new Map(_dpParticipantes.map(p => [p.colaborador_id, p]));
+
   // Contar aguardando cálculo (apenas participantes ativos)
   const aguardando = _partAtivos.filter(p => {
-    const aval = _dpAvaliacoes.find(a => a.participante_id === p.id || a.colaborador_id === p.colaborador_id);
+    const aval = _rAvByPartId.get(p.id) || _rAvByColabId.get(p.colaborador_id);
     if (!aval || aval.status !== 'concluida') return false;
-    return !_dpResultados.find(r => r.avaliacao_id === aval.id);
+    return !_rResByAvalId.has(aval.id);
   });
 
   let html = '';
@@ -6550,9 +6604,9 @@ function dpRenderResultados(opts = {}) {
   // Toolbar (oculto para perfis readonly)
   const total = _partAtivos.length;
   const calculados = _dpResultados.filter(r => {
-    const aval = _dpAvaliacoes.find(a => a.id === r.avaliacao_id);
+    const aval = _rAvById.get(r.avaliacao_id);
     if (!aval) return true;
-    const part = _dpParticipantes.find(p => p.id === aval.participante_id || p.colaborador_id === aval.colaborador_id);
+    const part = _rPartByPartId.get(aval.participante_id) || _rPartByColabId.get(aval.colaborador_id);
     return !part || !part.nao_participa;
   }).length;
   const podeEncerrar = !_readonly && _dpCicloAtual && _dpCicloAtual.status === 'aberto' && calculados > 0;
@@ -6568,8 +6622,8 @@ function dpRenderResultados(opts = {}) {
   // Cards por participante (apenas ativos)
   html += _partAtivos.map(p => {
     const snap = p.snapshot || {};
-    const aval = _dpAvaliacoes.find(a => a.participante_id === p.id || a.colaborador_id === p.colaborador_id);
-    const resultado = aval ? _dpResultados.find(r => r.avaliacao_id === aval.id) : null;
+    const aval = _rAvByPartId.get(p.id) || _rAvByColabId.get(p.colaborador_id); // Grupo E: O(1)
+    const resultado = aval ? _rResByAvalId.get(aval.id) : null;
 
     let badge, btnHtml, ajusteHtml = '';
     if (resultado) {
@@ -6930,6 +6984,7 @@ async function dpLoadHistorico(cicloId) {
     avalEventos = await sbGet(`/rest/v1/dp_historico_eventos?entidade_id=in.(${avalIds.join(',')})&order=criado_em.desc&select=*`) || [];
   }
   const todos = [...eventos, ...avalEventos].sort((a, b) => b.criado_em.localeCompare(a.criado_em));
+  _dpHistoricoCarregadoCicloId = cicloId; // Grupo D: marcar como carregado para este ciclo
   dpRenderHistorico(todos);
 }
 
@@ -7369,12 +7424,20 @@ async function gestorDpAbrirDrawer(cicloId) {
   document.getElementById('gestorDpDrawerSub').textContent =
     `Versão ${_gdpCicloAtual.versao?.versao || '—'} · ${_gdpCicloAtual.status}`;
 
-  // Pré-carrega participantes, avaliações, resultados e bônus
-  if (!_dpMotivosNaoParticipa.length) await loadDpMotivosNaoParticipa();
-  _gdpParticipantes = await sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=eq.${cicloId}&select=*`) || [];
-  _gdpParticipantes.sort((a, b) => ((a.snapshot||{}).nome||'').localeCompare((b.snapshot||{}).nome||'', 'pt-BR'));
-  _gdpAvaliacoes    = await sbGet(`/rest/v1/dp_avaliacoes?ciclo_id=eq.${cicloId}&select=*`) || [];
-  _gdpResultados    = [];
+  // Grupo C: participantes e avaliações são independentes entre si — carregar em paralelo
+  const loadsGestor = [
+    sbGet(`/rest/v1/dp_ciclo_participantes?ciclo_id=eq.${cicloId}&select=*`).then(r => {
+      _gdpParticipantes = (r || []).sort((a, b) => ((a.snapshot||{}).nome||'').localeCompare((b.snapshot||{}).nome||'', 'pt-BR'));
+    }),
+    sbGet(`/rest/v1/dp_avaliacoes?ciclo_id=eq.${cicloId}&select=*`).then(r => {
+      _gdpAvaliacoes = r || [];
+    })
+  ];
+  if (!_dpMotivosNaoParticipa.length) loadsGestor.push(loadDpMotivosNaoParticipa());
+  await Promise.all(loadsGestor);
+
+  // Resultados e bônus dependem de _gdpAvaliacoes — carregar após
+  _gdpResultados = [];
   { // carrega resultados e bônus da equipe para exibição na aba Avaliações
     const avalIds = _gdpAvaliacoes.map(a => a.id);
     if (avalIds.length) {
@@ -7411,6 +7474,11 @@ function gestorDpFecharDrawer() {
   _gdpAvalFiltroNome   = '';
   _gdpAvalFiltroCargos = new Set();
   _gdpAvalFiltroStatus = '';
+  // Grupo A: invalidar cache do formulário ao fechar drawer
+  _dpFormCache = {};
+  // Grupo D: invalidar guardas de recarregamento
+  _dpResultadosCicloId = null;
+  _dpHistoricoCarregadoCicloId = null;
 }
 
 /* ─── componente compartilhado: dropdown multi-select de cargos ── */
