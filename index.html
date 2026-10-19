@@ -705,13 +705,11 @@ async function renderHomeGestor(p) {
     }
   }
 
-  // Busca apelido e id em param_gestor
-  const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
-  const uid  = _jwtSub(sess.access_token || '');
+  // Busca apelido e id em param_gestor via colaborador_id do perfil de sessão
   let apelido = null;
   let pgGestorId = null; // param_gestor.id (integer) — usado para param_escopo_home
-  if (uid) {
-    const pg = await _hdGet('param_gestor', `gestor_id=eq.${uid}&select=id,apelido`);
+  if (p.colaborador_id) {
+    const pg = await _hdGet('param_gestor', `colaborador_id=eq.${p.colaborador_id}&select=id,apelido`).catch(() => []);
     if (pg.length) { apelido = pg[0].apelido; pgGestorId = pg[0].id; }
   }
   if (!apelido) apelido = primeiroNome;
