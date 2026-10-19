@@ -633,8 +633,17 @@ async function _resolverEscoposHome(gestorId, modulo, idsBase, colSelect) {
           `gestor=ilike.${encodeURIComponent(refNome)}&data_demissao=is.null&${colSelect}&order=nome`
         ).catch(() => []);
       }
+    } else if (esc.tipo === 'colaborador' && esc.valor) {
+      rows = await _hdGet('colaboradores',
+        `id=eq.${encodeURIComponent(esc.valor)}&data_demissao=is.null&${colSelect}`
+      ).catch(() => []);
     }
-    extra.push(...rows.filter(_isCLT));
+    // tipo=colaborador: pessoa selecionada explicitamente, sem filtro CLT
+    if (esc.tipo === 'colaborador') {
+      extra.push(...rows);
+    } else {
+      extra.push(...rows.filter(_isCLT));
+    }
   }
 
   // Dedup: remove ids já presentes na equipe base

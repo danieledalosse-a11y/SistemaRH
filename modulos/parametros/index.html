@@ -948,6 +948,8 @@ let setoresMap  = {};
 let cbosMap     = {};   // id → "codigo — titulo"
 let cbosRaw     = [];   // [{id, codigo, titulo, grupo}] para select agrupado
 let empresasAtuacaoList = []; // distinct stripNum(empresa_atuacao) dos colaboradores ativos
+let colaboradoresEscopoMap = {}; // id (string) → nome — para exibição no _valorDisplay de tipo=colaborador
+let colaboradoresEscopoList = []; // [{id, nome, cargo}] — para o dropdown de tipo=colaborador
 
 async function carregarEmpresas() {
   try {
@@ -965,6 +967,15 @@ async function carregarGestores() {
     rows.forEach(r => { gestoresMap[r.id] = r.apelido || r.nome; });
     return rows;
   } catch(_) { return []; }
+}
+
+async function carregarColaboradoresParaEscopo() {
+  try {
+    const rows = await sbGet('colaboradores', 'select=id,nome,cargo&data_demissao=is.null&order=nome');
+    colaboradoresEscopoList = rows.map(r => ({ id: r.id, nome: r.nome, cargo: r.cargo || '' }));
+    colaboradoresEscopoMap = {};
+    rows.forEach(r => { colaboradoresEscopoMap[String(r.id)] = r.nome; });
+  } catch(_) { colaboradoresEscopoList = []; }
 }
 
 async function carregarSetores() {
@@ -1270,7 +1281,7 @@ async function carregar() {
     } else if (currentCat === 'escopo_ferias') {
       await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao()]);
     } else if (currentCat === 'escopo_home') {
-      await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao()]);
+      await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao(), carregarColaboradoresParaEscopo()]);
     } else if (currentCat === 'cargo') {
       await carregarCbos();
     }
@@ -1395,11 +1406,13 @@ function renderTabela(rows) {
       html += `<td style="font-size:12px;color:var(--text-sec)">${row.cnpj || '—'}</td>`;
       html += `<td style="font-size:12px;font-weight:600">${row.nome_simplificado || '—'}</td>`;
     } else if (currentCat === 'escopo_home') {
-      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor' };
+      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor', colaborador: 'Colaborador específico' };
       const _MOD_L  = { aniversarios: 'Aniversariantes / Tempo de casa' };
       const _valorDisplay = row.tipo === 'gestor'
         ? (gestoresMap[row.gestor_ref_id] || '—')
-        : (row.valor || (row.tipo === 'todos' ? '(sem restrição)' : '—'));
+        : row.tipo === 'colaborador'
+          ? (colaboradoresEscopoMap[row.valor] || row.valor || '—')
+          : (row.valor || (row.tipo === 'todos' ? '(sem restrição)' : '—'));
       html += `<td style="font-weight:600">${gestoresMap[row.gestor_id] || '—'}</td>`;
       html += `<td style="font-size:12px;color:var(--text-sec)">${_MOD_L[row.modulo] || row.modulo || '—'}</td>`;
       html += `<td>${_TIPO_L[row.tipo] || row.tipo || '—'}</td>`;
@@ -1546,6 +1559,7 @@ function abrirModal(row) {
         { v: 'gestor',          l: 'Equipe de gestor' },
         { v: 'empresa_atuacao', l: 'Empresa de atuação' },
         { v: 'setor',           l: 'Setor' },
+        { v: 'colaborador',     l: 'Colaborador específico' },
         { v: 'todos',           l: 'Todos os colaboradores CLT ativos' },
       ];
       const opts = _TIPO_OPTS.map(o => `<option value="${o.v}"${val===o.v?' selected':''}>${o.l}</option>`).join('');
@@ -1674,6 +1688,11 @@ function _escopoPopularValor(tipo, valorAtual) {
     opts += nomes.map(s =>
       `<option value="${s}"${valorAtual === s ? ' selected' : ''}>${s}</option>`
     ).join('');
+  } else if (tipo === 'colaborador') {
+    if (label) label.textContent = 'Colaborador';
+    opts += colaboradoresEscopoList.map(c =>
+      `<option value="${c.id}"${valorAtual === String(c.id) ? ' selected' : ''}>${c.nome}${c.cargo ? ' · ' + c.cargo : ''}</option>`
+    ).join('');
   }
   sel.innerHTML = opts;
 }
@@ -1731,6 +1750,9 @@ async function salvar() {
     if (body.tipo === 'gestor') {
       body.gestor_ref_id = body.valor ? parseInt(body.valor) : null;
       body.valor = null;
+    } else if (body.tipo === 'colaborador') {
+      body.valor = body.valor ? String(body.valor) : null;
+      body.gestor_ref_id = null;
     } else if (body.tipo === 'todos') {
       body.valor = null;
       body.gestor_ref_id = null;
