@@ -593,6 +593,54 @@ function _jwtSub(token) {
   catch(_) { return null; }
 }
 
+// Resolve escopos adicionais da Home (param_escopo_home) para um módulo específico.
+// Retorna array de colaboradores extras (sem duplicar os da equipe base).
+// Segue a mesma lógica de _carregarEquipeGestor em ferias, mas isolada e sem globals de Férias.
+async function _resolverEscoposHome(gestorId, modulo, idsBase, colSelect) {
+  if (!gestorId) return [];
+  const escopos = await _hdGet('param_escopo_home',
+    `gestor_id=eq.${gestorId}&modulo=eq.${modulo}&ativo=eq.true&select=tipo,valor,gestor_ref_id`
+  ).catch(() => []);
+  if (!escopos.length) return [];
+
+  const _norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  const _isCLT = c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt';
+  const extra = [];
+
+  // Pré-carrega nomes dos gestores referenciados (tipo = 'gestor')
+  const refIds = [...new Set(escopos.filter(e => e.tipo === 'gestor' && e.gestor_ref_id).map(e => e.gestor_ref_id))];
+  let refNomeMap = {};
+  if (refIds.length) {
+    const refRows = await _hdGet('param_gestor', `id=in.(${refIds.join(',')})&select=id,apelido,nome`).catch(() => []);
+    refNomeMap = Object.fromEntries(refRows.map(r => [r.id, r.apelido || r.nome]));
+  }
+
+  for (const esc of escopos) {
+    let rows = [];
+    if (esc.tipo === 'todos') {
+      rows = await _hdGet('colaboradores', `data_demissao=is.null&${colSelect}&order=nome`).catch(() => []);
+    } else if (esc.tipo === 'empresa_atuacao' && esc.valor) {
+      const all = await _hdGet('colaboradores', `data_demissao=is.null&${colSelect}&order=nome`).catch(() => []);
+      rows = all.filter(c => _norm((c.empresa_atuacao || '').replace(/^\d+\s*[-–]\s*/, '')) === _norm(esc.valor));
+    } else if (esc.tipo === 'setor' && esc.valor) {
+      rows = await _hdGet('colaboradores',
+        `setor=ilike.*${encodeURIComponent(esc.valor)}&data_demissao=is.null&${colSelect}&order=nome`
+      ).catch(() => []);
+    } else if (esc.tipo === 'gestor' && esc.gestor_ref_id) {
+      const refNome = refNomeMap[esc.gestor_ref_id];
+      if (refNome) {
+        rows = await _hdGet('colaboradores',
+          `gestor=ilike.${encodeURIComponent(refNome)}&data_demissao=is.null&${colSelect}&order=nome`
+        ).catch(() => []);
+      }
+    }
+    extra.push(...rows.filter(_isCLT));
+  }
+
+  // Dedup: remove ids já presentes na equipe base
+  return extra.filter(c => !idsBase.has(c.id));
+}
+
 // Helpers de avatar
 function _avColor(name) {
   let h = 0;
@@ -657,27 +705,36 @@ async function renderHomeGestor(p) {
     }
   }
 
-  // Busca apelido em param_gestor
+  // Busca apelido e id em param_gestor
   const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
   const uid  = _jwtSub(sess.access_token || '');
   let apelido = null;
+  let pgGestorId = null; // param_gestor.id (integer) — usado para param_escopo_home
   if (uid) {
-    const pg = await _hdGet('param_gestor', `gestor_id=eq.${uid}&select=apelido`);
-    if (pg.length) apelido = pg[0].apelido;
+    const pg = await _hdGet('param_gestor', `gestor_id=eq.${uid}&select=id,apelido`);
+    if (pg.length) { apelido = pg[0].apelido; pgGestorId = pg[0].id; }
   }
   if (!apelido) apelido = primeiroNome;
 
-  // Equipe (com foto_url)
+  // Equipe base (com foto_url + empresa_atuacao para resolução de escopos)
+  const _colSelectHome = 'select=id,nome,cargo,setor,data_nascimento,data_admissao,foto_url,tipo_vinculo,empresa_atuacao';
   const team = await _hdGet('colaboradores',
-    `gestor=ilike.${encodeURIComponent(apelido)}&data_demissao=is.null` +
-    `&select=id,nome,cargo,setor,data_nascimento,data_admissao,foto_url&order=nome`
+    `gestor=ilike.${encodeURIComponent(apelido)}&data_demissao=is.null&${_colSelectHome}&order=nome`
   );
   const teamIds = team.map(c => c.id);
+
+  // Escopo adicional — aniversariantes (não bloqueia; fallback = equipe base)
+  const _idsBase = new Set(teamIds);
+  const _extraAniv = pgGestorId
+    ? await _resolverEscoposHome(pgGestorId, 'aniversarios', _idsBase, _colSelectHome).catch(() => [])
+    : [];
+  // teamAniversarios = equipe base + extras deduplizados — usado SOMENTE em _renderEventos
+  const teamAniversarios = _extraAniv.length ? [...team, ..._extraAniv] : team;
 
   // Phase 2 — bell de pendências (não bloqueia o carregamento)
   if (teamIds.length) _loadPendencias(teamIds, team).catch(() => {});
 
-  // Meta do gestor + mini-avatares da equipe
+  // Meta do gestor + mini-avatares da equipe (equipe base — não alterado)
   const unidade = (p.unidade || p.empresa || 'Grupo Revest').trim();
   document.getElementById('hd-greeting-meta').textContent =
     `${unidade} · ${team.length} colaborador${team.length !== 1 ? 'es' : ''} · Gestor`;
@@ -691,7 +748,7 @@ async function renderHomeGestor(p) {
 
   // (label de eventos removido — títulos agora ficam dentro de cada card)
 
-  // Férias e atividades em paralelo
+  // Férias e atividades em paralelo (baseados em teamIds — equipe base, inalterado)
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const [feriasData, eventsData, marcosRows] = await Promise.all([
     teamIds.length ? _hdGet('ferias',
@@ -740,7 +797,7 @@ async function renderHomeGestor(p) {
   const emGozoIds = new Set(emGozoRaw.map(p => p.colaborador_id));
   const emGozo = [...emGozoIds].map(cid => emGozoRaw.find(p => p.colaborador_id === cid));
 
-  _renderEventos(team, hoje, marcosGestor);
+  _renderEventos(teamAniversarios, hoje, marcosGestor); // escopo ampliado via param_escopo_home
   _renderFerias(feriasData, periodosList, emGozo, hoje, colabMap);
   _renderAtividades(eventsData, colabMap, hoje);
 }

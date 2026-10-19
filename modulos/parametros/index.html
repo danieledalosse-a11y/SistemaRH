@@ -875,6 +875,22 @@ const CATS = {
     icon: '<circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>',
     desc: 'Parâmetros globais do módulo de Férias.',
   },
+  escopo_home: {
+    label: 'Escopo de Visualização — Home', section: 'Home do Gestor', sectionOrder: 10, order: 0, noAuditCols: true,
+    icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>',
+    desc: 'Escopo adicional de colaboradores visíveis na Home do Gestor. O gestor continua vendo sua equipe normal e, adicionalmente, os colaboradores abrangidos por este escopo. Efeito atual: aniversariantes e tempo de casa.',
+    table: 'param_escopo_home',
+    noOrdem: true,
+    orderBy: 'criado_em.desc',
+    cols: ['gestor_id', 'modulo', 'tipo', 'valor'],
+    fields: [
+      { key: 'gestor_id', label: 'Gestor',         type: 'select', source: 'gestores',     width: 3, required: true },
+      { key: 'modulo',    label: 'Funcionalidade',  type: 'select', source: 'home_modulo',  width: 2, required: true },
+      { key: 'tipo',      label: 'Tipo de escopo',  type: 'select', source: 'escopo_tipo',  width: 2, required: true },
+      { key: 'valor',     label: 'Valor',            type: 'select', source: 'escopo_valor', width: 3 },
+    ],
+    headers: ['Gestor', 'Funcionalidade', 'Tipo de escopo', 'Valor', 'Situação', ''],
+  },
   escopo_ferias: {
     label: 'Escopo de Gestão — Férias', section: 'Férias', sectionOrder: 2, order: 1, noAuditCols: true,
     icon: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/>',
@@ -1376,6 +1392,16 @@ function renderTabela(rows) {
       html += `<td>${row.razao_social || '—'}</td>`;
       html += `<td style="font-size:12px;color:var(--text-sec)">${row.cnpj || '—'}</td>`;
       html += `<td style="font-size:12px;font-weight:600">${row.nome_simplificado || '—'}</td>`;
+    } else if (currentCat === 'escopo_home') {
+      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor' };
+      const _MOD_L  = { aniversarios: 'Aniversariantes / Tempo de casa' };
+      const _valorDisplay = row.tipo === 'gestor'
+        ? (gestoresMap[row.gestor_ref_id] || '—')
+        : (row.valor || (row.tipo === 'todos' ? '(sem restrição)' : '—'));
+      html += `<td style="font-weight:600">${gestoresMap[row.gestor_id] || '—'}</td>`;
+      html += `<td style="font-size:12px;color:var(--text-sec)">${_MOD_L[row.modulo] || row.modulo || '—'}</td>`;
+      html += `<td>${_TIPO_L[row.tipo] || row.tipo || '—'}</td>`;
+      html += `<td style="color:var(--text-sec)">${_valorDisplay}</td>`;
     } else if (currentCat === 'escopo_ferias') {
       const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor' };
       const _valorDisplay = row.tipo === 'gestor'
@@ -1504,6 +1530,14 @@ function abrirModal(row) {
       html += `<div class="field"><label>${f.label}</label>
         <select id="field_${f.key}" style="font-size:13px;">${opts}</select>
         <small style="color:var(--text-sec);font-size:11px;">Fonte: MTE — mtecbo.gov.br</small>
+      </div>`;
+    } else if (f.type === 'select' && f.source === 'home_modulo') {
+      const _MOD_OPTS = [
+        { v: 'aniversarios', l: 'Aniversariantes / Tempo de casa' },
+      ];
+      const opts = _MOD_OPTS.map(o => `<option value="${o.v}"${val===o.v?' selected':''}>${o.l}</option>`).join('');
+      html += `<div class="field"${fieldStyle}><label>${f.label} *</label>
+        <select id="field_${f.key}">${opts}</select>
       </div>`;
     } else if (f.type === 'select' && f.source === 'escopo_tipo') {
       const _TIPO_OPTS = [
@@ -1687,6 +1721,25 @@ async function salvar() {
     if (cboRow) body.cbo_codigo = cboRow.codigo;
   } else if (currentCat === 'cargo' && !body.cbo_id) {
     body.cbo_codigo = null;
+  }
+
+  // escopo_home: mesma lógica de escopo_ferias + campo modulo
+  if (currentCat === 'escopo_home') {
+    body.gestor_id = body.gestor_id ? parseInt(body.gestor_id) : null;
+    if (body.tipo === 'gestor') {
+      body.gestor_ref_id = body.valor ? parseInt(body.valor) : null;
+      body.valor = null;
+    } else if (body.tipo === 'todos') {
+      body.valor = null;
+      body.gestor_ref_id = null;
+    } else {
+      body.gestor_ref_id = null;
+    }
+    if (!body.gestor_id) { showToast('Selecione um gestor.', 'error'); return; }
+    if (!body.modulo)    { showToast('Selecione a funcionalidade.', 'error'); return; }
+    if (!body.tipo)      { showToast('Selecione o tipo de escopo.', 'error'); return; }
+    if (body.tipo === 'gestor' && !body.gestor_ref_id) { showToast('Selecione o gestor incluído.', 'error'); return; }
+    if (body.tipo !== 'todos' && body.tipo !== 'gestor' && !body.valor) { showToast('Selecione o valor do escopo.', 'error'); return; }
   }
 
   // escopo_ferias: gestor_id e gestor_ref_id são inteiros; mapeamento por tipo
