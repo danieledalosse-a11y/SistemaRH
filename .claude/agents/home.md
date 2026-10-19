@@ -175,8 +175,9 @@ Exemplo: `"+8% · set/2026 · cargo mantido"`
 | Dado | Tabela/View | Filtro principal |
 |---|---|---|
 | Foto do gestor | `colaboradores` | `id=eq.${p.colaborador_id}&select=foto_url` |
-| Apelido | `param_gestor` | `gestor_id=eq.${uid}&select=apelido` |
-| Equipe | `colaboradores` | `gestor=ilike.${apelido}&data_demissao=is.null&select=id,nome,cargo,setor,data_nascimento,data_admissao,foto_url` |
+| Apelido + pgGestorId | `param_gestor` | `colaborador_id=eq.${p.colaborador_id}&select=id,apelido` — `param_gestor` NÃO tem coluna `gestor_id`; usar `colaborador_id` (FK real, preenchida em todos os gestores ativos) |
+| Equipe | `colaboradores` | `gestor=ilike.${apelido}&data_demissao=is.null&select=id,nome,cargo,setor,data_nascimento,data_admissao,foto_url,tipo_vinculo,empresa_atuacao` |
+| Escopos extras (aniversários) | `param_escopo_home` | `gestor_id=eq.${pgGestorId}&modulo=eq.aniversarios&ativo=eq.true` — via `_resolverEscoposHome` |
 | Férias | `ferias` | `colaborador_id=in.(${teamIds})&select=colaborador_id,status,periodos,periodo1_inicio,periodo1_fim,periodo2_inicio,periodo2_fim` |
 | Atividades | `v_historico_eventos_home` | `colaborador_id=in.(${teamIds})&order=id.desc&limit=5` |
 | Marcos de tempo de casa | `param_marco_tempo_casa` | `select=anos&ativo=eq.true&order=anos` — `.catch(() => [])` independente; falha → `marcosGestor=[]`, sem troféus, Home continua funcionando |
@@ -185,12 +186,37 @@ A Home **nunca escreve** no banco. Toda query é GET via `_hdGet`.
 
 ---
 
+## param_escopo_home — escopo adicional de aniversariantes (migration 133, out/2026)
+
+Tabela `param_escopo_home`: expande colaboradores visíveis nos blocos Aniversários e Tempo de Casa sem alterar a equipe base.
+
+**Campos:** `gestor_id INTEGER` (FK → `param_gestor.id`), `modulo TEXT` (`'aniversarios'` agora; extensível), `tipo TEXT` (gestor/empresa_atuacao/setor/todos), `valor TEXT`, `gestor_ref_id BIGINT` (FK → `param_gestor.id`), `ativo BOOLEAN`. Sem RLS própria — mesmo padrão de `param_escopo_ferias`.
+
+**Função `_resolverEscoposHome(gestorId, modulo, idsBase, colSelect)`:**
+- Busca escopos ativos do gestor para o módulo
+- `tipo='gestor'`: usa `gestor_ref_id` para buscar apelido em `param_gestor`, então `colaboradores?gestor=ilike.{apelido}`
+- `tipo='empresa_atuacao'`: filtra por `empresa_atuacao` normalizada
+- `tipo='setor'`: filtra por setor
+- `tipo='todos'`: todos os CLT ativos
+- Dedup: remove ids já em `idsBase` (equipe própria)
+- Falha silenciosa: `.catch(() => [])` — Home continua com `team` base
+
+**Separação de escopos no render:**
+- `team` = equipe base (usada em mini-avatares, férias, atividades, bell)
+- `teamAniversarios` = `team` + extras — usada **somente em `_renderEventos`**
+- Nunca ampliar outros blocos sem intenção explícita
+
+**Parâmetros Gerais:** seção "Home do Gestor" → "Escopo de Visualização — Home". Inicialização requer `escopo_home` no bloco `if/else if` que chama `carregarGestores()` + `carregarSetores()` + `carregarEmpresasAtuacao()` (commit `f1f5f46`).
+
+**Evolução:** para adicionar novo módulo (ex: `ferias`), basta adicionar opção no dropdown `home_modulo` (Parâmetros) e bloco correspondente em `_resolverEscoposHome`. Tabela e migration não precisam mudar.
+
+---
+
 ## Erros esperados / conhecidos
 
 | Endpoint | Código | Motivo |
 |---|---|---|
-| `param_gestor?gestor_id=...` | 400 | Tabela sem RLS para gestor ou coluna inexistente — não impede funcionamento |
-| `param_gestor?gestor_id=...` | 400 | Tabela sem RLS correta — não impede funcionamento |
+| `param_gestor?colaborador_id=...` | resultado vazio | gestor sem `colaborador_id` — fallback `apelido = primeiroNome` (nome do JWT); Home continua |
 
 ---
 
