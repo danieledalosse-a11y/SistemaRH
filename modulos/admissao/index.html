@@ -471,6 +471,17 @@ guardModulo('admissao');
   </div>
 </div>
 
+<!-- Lightbox visualizador de imagens com rotação -->
+<div id="imgLightbox" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.88);align-items:center;justify-content:center;flex-direction:column;gap:12px;" onclick="if(event.target===this)closeLightbox()">
+  <div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:860px;padding:0 16px;box-sizing:border-box;">
+    <span id="imgLightboxLabel" style="color:#fff;font-size:14px;font-weight:600;opacity:.85;"></span>
+    <button onclick="closeLightbox()" style="background:rgba(255,255,255,0.12);border:none;color:#fff;border-radius:8px;padding:7px 18px;font-size:13px;font-weight:600;cursor:pointer;">Fechar</button>
+  </div>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%;overflow:hidden;padding:0 16px;box-sizing:border-box;">
+    <img id="imgLightboxImg" src="" alt="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;box-shadow:0 4px 32px rgba(0,0,0,0.5);">
+  </div>
+</div>
+
 <!-- Slide-in Panel Revisão -->
 <div class="panel-overlay" id="panelOverlay">
   <div class="panel" id="reviewPanel">
@@ -951,6 +962,28 @@ function _closeRotPreview() {
   const modal = document.getElementById('rotPreviewModal');
   if (modal) modal.style.display = 'none';
   _rotPreview = null;
+}
+
+function viewDocRotated(url, rot, label) {
+  const lb = document.getElementById('imgLightbox');
+  const img = document.getElementById('imgLightboxImg');
+  const lbl = document.getElementById('imgLightboxLabel');
+  if (!lb || !img) return;
+  img.src = url;
+  lbl.textContent = label || '';
+  // Aplica rotação: para 90°/270° troca dimensões para evitar corte
+  const needsSwap = rot === 90 || rot === 270;
+  img.style.transform = rot ? `rotate(${rot}deg)` : '';
+  img.style.maxWidth  = needsSwap ? 'calc(min(100vh - 80px, 100vw - 32px))' : '100%';
+  img.style.maxHeight = needsSwap ? 'calc(min(100vw - 32px, 100vh - 80px))' : 'calc(100vh - 120px)';
+  lb.style.display = 'flex';
+}
+
+function closeLightbox() {
+  const lb = document.getElementById('imgLightbox');
+  if (lb) lb.style.display = 'none';
+  const img = document.getElementById('imgLightboxImg');
+  if (img) { img.src = ''; img.style.transform = ''; }
 }
 
 function rotateImageB64(b64, degrees) {
@@ -1665,7 +1698,9 @@ function renderPanelDocs(f) {
     const filename = has ? `${k}.${ext}` : '';
     const isImage = has && !path.toLowerCase().endsWith('.pdf');
     const rot = _docRotations[mapKey] || 0;
-    const viewBtn = has ? `<a href="${url}" target="_blank" title="Ver documento" style="color:var(--blue);display:flex;align-items:center;padding:4px 5px;border-radius:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${icoEye}</a>` : '';
+    const viewBtn = !has ? '' : isImage
+      ? `<button type="button" onclick="viewDocRotated('${url}',${rot},'${label.replace(/'/g, "\\'")}${byRH?' (RH)':''}')" title="Ver documento" style="background:none;border:none;cursor:pointer;color:var(--blue);display:flex;align-items:center;padding:4px 5px;border-radius:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${icoEye}</button>`
+      : `<a href="${url}" target="_blank" title="Ver documento (PDF)" style="color:var(--blue);display:flex;align-items:center;padding:4px 5px;border-radius:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${icoEye}</a>`;
     const dlBtn  = has ? iconBtn('Baixar documento', 'var(--blue)', icoDownload, `panelDownloadDoc('${url}','${filename}')`) : '';
     const uploadBtn = `<label title="${has?'Substituir anexo':'Adicionar anexo'}" style="cursor:pointer;color:var(--blue);display:flex;align-items:center;padding:4px 5px;border-radius:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${icoUpload}<input type="file" accept="image/*,application/pdf" style="display:none" onchange="panelUploadDoc('${k}',this)"></label>`;
     const delBtn = (!req && has) ? iconBtn('Excluir anexo', 'var(--red)', icoTrash, `panelDeleteDoc('${k}')`) : '';
