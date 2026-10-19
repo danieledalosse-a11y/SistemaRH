@@ -3190,19 +3190,40 @@ if (isAprovadoLanc && isFuturoLanc) {
 
 **Regra:** botões desabilitados (não ocultos) para dar feedback visual do estado — o Gestor sabe que há algo pendente sem precisar interpretar ausência de botões.
 
-### `acaoLabel` e `acaoCor` — entradas de cancelamento
+### `acaoLabel` e `acaoCor` — mapeamento completo (commits 36f2e77 + b5e47e4, out/2026)
 
+Duas ocorrências no arquivo: `renderDrawerAuditoria` (RH) e `_renderGsolHistoricoAuditoria` (Gestor). Devem estar sempre sincronizadas. Ao adicionar nova ação, atualizar as duas funções.
+
+**Ações presentes no banco e seus rótulos:**
+
+| Ação | Rótulo | Cor |
+|---|---|---|
+| `solicitado` | Solicitação enviada | `var(--blue)` |
+| `aprovado` | Aprovado pelo RH | `var(--green)` |
+| `rejeitado` | Recusado pelo RH | `#D92D20` |
+| `alteracao_solicitada` | Alteração solicitada | `#1570EF` |
+| `alteracao_aprovada` | Alteração aprovada | `#067647` |
+| `alteracao_recusada` | Alteração recusada | `#D92D20` |
+| `cancelamento_solicitado` | Cancelamento solicitado | `#B45309` |
+| `cancelamento_aprovado` | Cancelamento aprovado | `#D92D20` |
+| `cancelamento_recusado` | Cancelamento recusado | `#067647` |
+| `solicitacao_retirada` | Solicitação retirada | `#B45309` |
+| `solicitacao_datas_alteradas` | Datas da solicitação atualizadas | `#1570EF` |
+| `gozo_solicitado` | Gozo solicitado pelo gestor | `#1570EF` |
+| `lancado_rh` | Lançado pelo RH | `var(--green)` |
+| `editado_rh` | Editado pelo RH | `#B45309` |
+| `excluido_rh` | Excluído pelo RH | `#D92D20` |
+| `gestor_ciente` | Gestor ciente | `var(--green)` |
+
+**`perStr` — leitura de período unificada:**
 ```js
-// acaoLabel (duas ocorrências no arquivo — replace_all):
-cancelamento_solicitado: 'Cancelamento solicitado',
-cancelamento_aprovado:   'Cancelamento aprovado',
-cancelamento_recusado:   'Cancelamento recusado',
-
-// acaoCor:
-cancelamento_solicitado: '#B45309',  // âmbar
-cancelamento_aprovado:   '#D92D20',  // vermelho
-cancelamento_recusado:   '#067647',  // verde
+const ini  = det.inicio || det.saida || det.inicio_novo || '';
+const fim  = det.fim    || det.retorno || det.fim_novo  || '';
+const dias = det.dias   || det.dias_novo || '';
 ```
+Cobre todas as estruturas de `detalhe`: solicitação (`inicio/fim`), gozo (`saida/retorno`), edição RH (`inicio_novo/fim_novo`).
+
+**Footer do gsolDrawer (botão "+ Nova solicitação"):** visível somente na aba "Férias" (`isRH`). Nas abas Histórico o footer fica oculto.
 
 ---
 
@@ -3662,3 +3683,100 @@ Adicionadas em 3 locais no arquivo (`ferias_historico` rendering, Gestor ativida
 O PATCH condicional de `gestorExecutarRetirada` e o branch `_modoSolicitado` de `gestorEnviarAlteracao` protegem contra concorrência via `status=eq.Pendente` no filtro. `aprovarPendente` usa adicionalmente `atualizado_em=eq.{tsLido}`.
 
 **T4 não foi executado na aplicação real** — testaria duas sessões simultâneas. A proteção está implementada no código mas não foi validada em prática.
+
+---
+
+## Relatórios RH e Gestor — Regra de filtro por início + Acordos de Gozo (realizações) — out/2026, commit `b7c67dd`
+
+### Regra de filtro por data de início (implementada)
+
+Relatório RH (`_getDadosRelatorio`) e Gestor (`gestorGerarRelatorio`) incluem **apenas períodos cuja data de `inicio` esteja dentro do mês selecionado** — não basta sobreposição com o mês.
+
+- Filtro RH (lançamentos): `l.inicio >= mesInicio && l.inicio <= mesFim`
+- Filtro Gestor (já existente via `processGestorFerias`): mesmo critério aplicado em `GESTOR_LANCAMENTOS`
+- Gantt, Mapa Anual, drawer, saldos: **inalterados** — continuam usando sobreposição
+
+### Dois tipos de acordo de gozo — distinção crítica
+
+| Tipo | Como é salvo | Como aparece no relatório |
+|---|---|---|
+| **Madson-type** | Salvo como lançamento regular em `periodos[]` (tem `inicio` no mês) | Aparece naturalmente — código inalterado |
+| **Daniele-type** | Salvo em `reg.realizacoes` JSONB separado (lançamento pai tem `inicio` fora do mês) | Requeria código adicional — corrigido |
+
+### `_getDadosRelatorio` — bloco de realizações adicionado (RH)
+
+Após iterar `reg.lancamentos`, a função agora também percorre `reg.realizacoes`:
+
+```js
+const _realizSet = new Set(); // dedup por saida, escopo por colaborador
+// ...dentro do forEach de registros:
+if (reg.status === 'Aprovado' && chkAprov) {
+  (reg.realizacoes || []).forEach(rx => {
+    if (!rx.saida || !(Number(rx.dias) > 0)) return;
+    if (rx.saida < mesInicio || rx.saida > mesFim) return;          // saida no mês
+    const lancPai = reg.lancamentos[Number(rx.lancIdx ?? 0)];
+    if (lancPai && lancPai.inicio >= mesInicio && lancPai.inicio <= mesFim) return; // pai já no mês
+    if (_realizSet.has(rx.saida)) return;                            // dedup cross-PA
+    _realizSet.add(rx.saida);
+    linhas.push({ ..., inicio: rx.saida, fim: rx.retorno || rx.saida, dias: rx.dias, status: 'Aprovado' });
+  });
+}
+```
+
+**`lancIdx`**: campo de cada `realizacao` que aponta para o índice do lançamento pai em `reg.lancamentos[]`. `rx.lancIdx ?? 0` — fallback para índice 0 quando ausente.
+
+**`_realizSet` por colaborador**: previne que a mesma realização (mesma `saida`) registrada em dois PAs diferentes (Daniele pattern — rows 972 e 973) apareça duplicada.
+
+### `gestorGerarRelatorio` — deduplicação de realizações (Gestor)
+
+`processGestorFerias` já converte realizações em lançamentos com flag `_isRealizacao: true` dentro de `GESTOR_LANCAMENTOS`. O problema era deduplicação insuficiente. Bloco adicionado após o filtro existente:
+
+```js
+const _parentLancsPresentes = new Set(
+  lancs.filter(l => !l._isRealizacao).map(l => `${l.colaborador_id}|${l.periodo_id}`)
+);
+const _seenRealizacoes = new Set();
+lancs = lancs.filter(l => {
+  if (!l._isRealizacao) return true;
+  if (_parentLancsPresentes.has(`${l.colaborador_id}|${l.periodo_id}`)) return false; // pai já presente
+  const _k = `${l.colaborador_id}|${l.inicio}`;
+  if (_seenRealizacoes.has(_k)) return false;                        // dedup cross-PA
+  _seenRealizacoes.add(_k);
+  return true;
+});
+```
+
+**RH e Gestor usam a mesma regra de negócio.** A diferença é apenas de escopo: RH vê todos os colaboradores (conforme filtros/permissões); Gestor vê somente sua equipe.
+
+### Padrão de erro de dados — rows com `periodos=[]` e `periodo1_inicio` com data incorreta
+
+Registros históricos (PAs encerrados) com `periodos = []` usam o caminho de fallback em `supabaseParaModelo` e `processGestorFerias`: leem `periodo1_inicio`/`dias1` como fonte do lançamento. Se `periodo1_inicio` contiver uma data de ano errado (ex: `'2026-11-02'` em um PA encerrado em 2022), o fallback gera um lançamento fantasma que passa pelo filtro do mês correspondente.
+
+**Caso Anderson (row 1864):** PA 2022 (`pa_fim='2022-10-31'`) tinha `periodo1_inicio='2026-11-02'` — data incorreta. Gerava 20 dias fantasmas no relatório de novembro/2026. **Corrigido:** `PATCH ferias?id=eq.1864` com `{"periodo1_inicio": null}`. As 3 realizações históricas (gozo real de 2022/2023) foram preservadas intactas.
+
+**Caso Heloisa (row 1016):** PA 2025 com `periodo1_inicio='2026-01-26'`. **Mantido sem alteração** — pode ser agendamento válido de férias vencidas. Confirmar antes de corrigir.
+
+**Como investigar:** buscar `ferias?pa_fim=lt.2025-01-01&periodo1_inicio=not.is.null&periodos=eq.[]` para encontrar outros registros no mesmo padrão.
+
+### Correção adicional — `_getDadosEscalaGestor` (commit `549b8cc`)
+
+A função `_getDadosEscalaGestor` (usada por PDF e Excel do Gestor) usava filtro de **sobreposição**:
+```js
+// antes (errado):
+if ((l.inicio||'') > mesFim || (l.fim||'') < mesInicio) return;
+```
+Isso incluía colaboradores que saíram em outubro com retorno em novembro. Corrigido para o mesmo critério do RH:
+```js
+// depois (correto):
+if ((l.inicio||'') < mesInicio || (l.inicio||'') > mesFim) return;
+```
+PDF e Excel do Gestor compartilham `_getDadosEscalaGestor` — ambos corrigidos com uma linha.
+
+### Validação — testado em produção (19/10/2026)
+
+- RH: 12 registros em novembro, todos com `inicio` em novembro — correto
+- Gestor (PDF e Excel): Fagner, Francisco e Marcelo (inicio outubro) deixaram de aparecer — correto
+- Daniele: realização `saida='2026-11-10'` (10d) aparece uma vez em novembro — confirmado
+- Anderson: 20 dias fantasmas não aparecem mais (row 1864 corrigida); 4 dias legítimos (row 1856) permanecem
+- Lançamentos normais: inalterados
+- Gantt, Mapa Anual, drawer, saldos: sem alterações
