@@ -316,6 +316,54 @@ Botão **Gerar PDF** disponível no painel de revisão da ficha. Gera a ficha de
 
 **Fix aplicado (out/2026):** antes, `estado_naturalidade` era ignorado no PDF — apenas `f.naturalidade` (cidade) entrava na composição. Corrigido para incluir a UF após a cidade separada por ` / `.
 
+## Aba Anexos — Rotação de documentos (out/2026, commits 4f4c5d4, 816501c, 9888e2f)
+
+### Arquitetura
+
+Documentos enviados pelo candidato podem estar em orientação errada (deitados). O RH pode girar cada imagem na aba Anexos antes de efetivar.
+
+**Persistência:** rotação salva em `admissao_fichas.docs` JSONB como campos `_rot_<key>` (ex: `_rot_rg_frente: 270`). **Nunca** reescreve o arquivo original no Storage.
+
+**In-memory:** `_docRotations` — objeto global `{ "${fichaId}_${key}": degrees }`. Inicializado vazio; restaurado de `docs._rot_*` ao abrir `renderPanelDocs`.
+
+**Variável de autenticação:** usar sempre `SB_HEADERS` (contém o `access_token` do usuário logado, montado em login). Nunca usar `HDR` — essa variável não existe neste módulo.
+
+### Funções principais
+
+| Função | Descrição |
+|---|---|
+| `rotateDoc(fichaId, key, delta)` | Abre modal de preview com rotação aplicada via CSS |
+| `_adjustRotPreview(delta)` | Ajusta ±90° no preview sem confirmar |
+| `_confirmRotPreview()` (async) | Confirma: salva em `_docRotations`, chama `renderPanelDocs`, faz PATCH no banco |
+| `viewDocRotated(url, rot, label)` | Abre lightbox interno com `transform:rotate()` aplicado |
+| `closeLightbox()` | Fecha o lightbox |
+| `renderPanelDocs(f)` | Restaura `_docRotations` de `docs._rot_*` no início (linhas ~1616-1622) |
+
+### Lightbox (commit 9888e2f)
+
+HTML: `#imgLightbox` com `#imgLightboxImg` e `#imgLightboxLabel`. Inserido após os modais, antes do Slide-in Panel Revisão.
+
+**Imagens:** botão "Ver" chama `viewDocRotated(url, rot, label)` — aplica rotação via CSS. Para 90°/270°, dimensões são trocadas para evitar corte.
+
+**PDFs:** continuam abrindo em `<a href target="_blank">` — não passam pelo lightbox.
+
+### Geração do PDF da ficha
+
+`gerarPDFFicha` (linha ~2175) já aplica `_docRotations` a cada documento via `rotateImageB64(b64, rot)` — independente do lightbox.
+
+### PATCH no banco
+
+```js
+const patchDocs = Object.assign({}, currentFicha.docs || {}, { [`_rot_${key}`]: rotation || null });
+await fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${fichaId}`, {
+  method: 'PATCH',
+  headers: { ...SB_HEADERS, Prefer: 'return=representation' },
+  body: JSON.stringify({ docs: patchDocs })
+});
+```
+
+---
+
 ## Pendências conhecidas
 
 - Notificação por email ao candidato quando convite é criado
