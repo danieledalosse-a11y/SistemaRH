@@ -8025,12 +8025,25 @@ function _getDadosRelatorio() {
     if (empVal  && (c.empresaRegistro||c.unidade||'') !== empVal) return;
     if (setVal  && (c.setor||'') !== setVal) return;
     if (gestVal && normGestor(c.gestor) !== normGestor(gestVal)) return;
+    const _realizSet = new Set(); // dedup de realizações por saida, escopo por colaborador
     c.registros.forEach(reg => {
       const lans = reg.lancamentos.filter(l => l.inicio >= mesInicio && l.inicio <= mesFim);
       lans.forEach(l => {
         if (reg.status === 'Aprovado' && chkAprov) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Aprovado' });
         else if (reg.status === 'Pendente' && chkPend) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Pend. aprovação' });
       });
+      // Realizações (acordos de gozo): inclui quando a saída está no mês E o lançamento pai começa fora do mês
+      if (reg.status === 'Aprovado' && chkAprov) {
+        (reg.realizacoes || []).forEach(rx => {
+          if (!rx.saida || !(Number(rx.dias) > 0)) return;
+          if (rx.saida < mesInicio || rx.saida > mesFim) return;
+          const lancPai = reg.lancamentos[Number(rx.lancIdx ?? 0)];
+          if (lancPai && lancPai.inicio >= mesInicio && lancPai.inicio <= mesFim) return;
+          if (_realizSet.has(rx.saida)) return; // mesmo colaborador, mesma data em outro PA
+          _realizSet.add(rx.saida);
+          linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: rx.saida, fim: rx.retorno || rx.saida, dias: rx.dias, status: 'Aprovado' });
+        });
+      }
       if (chkRisco && isSemAgendado(c)) {
         if (!linhas.find(x => x.nome === c.nome)) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: '—', fim: '—', dias: '—', status: 'Sem agendamento' });
       }
@@ -10878,6 +10891,21 @@ function gestorGerarRelatorio() {
     if (de  && l.inicio < de)  return false;
     if (ate && l.inicio > ate) return false;
     if (statusFil && (l.status||'').toLowerCase() !== statusFil) return false;
+    return true;
+  });
+  // Dedup de realizações:
+  // 1. Se o lançamento pai (mesmo periodo_id) já aparece no filtro → realização suprimida (lançamento já cobre)
+  // 2. Mesma data de início para o mesmo colaborador em PAs diferentes → mantém a primeira
+  const _parentLancsPresentes = new Set(
+    lancs.filter(l => !l._isRealizacao).map(l => `${l.colaborador_id}|${l.periodo_id}`)
+  );
+  const _seenRealizacoes = new Set();
+  lancs = lancs.filter(l => {
+    if (!l._isRealizacao) return true;
+    if (_parentLancsPresentes.has(`${l.colaborador_id}|${l.periodo_id}`)) return false;
+    const _k = `${l.colaborador_id}|${l.inicio}`;
+    if (_seenRealizacoes.has(_k)) return false;
+    _seenRealizacoes.add(_k);
     return true;
   });
 
