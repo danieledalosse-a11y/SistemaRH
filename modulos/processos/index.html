@@ -210,8 +210,15 @@
   .checklist-item-main { flex: 1; display: flex; flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
   .checklist-item-text { font-size: 14px; color: var(--text); line-height: 1.4; }
   .checklist-item-text.done { color: var(--text-ter); }
-  .checklist-item-meta { font-size: 11.5px; color: var(--text-ter); white-space: nowrap; }
+  .checklist-item-meta { font-size: 11px; color: var(--text-ter); white-space: nowrap; cursor: default; }
   .checklist-item-meta.feito { color: var(--green); }
+  .checklist-item-meta.nao-utiliza { color: var(--text-ter); font-style: italic; }
+  .checklist-item-text.nao-utiliza { color: var(--text-ter); text-decoration: line-through; }
+  .btn-nao-utiliza { display: none; background: none; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text-ter); cursor: pointer; padding: 1px 6px; line-height: 1.5; flex-shrink: 0; margin-left: auto; transition: border-color 0.15s, color 0.15s; }
+  .checklist-item:hover .btn-nao-utiliza { display: inline-block; }
+  .btn-nao-utiliza:hover { border-color: var(--text-sec); color: var(--text-sec); }
+  .btn-reverter-nu { display: inline-block; background: none; border: none; font-size: 11px; color: var(--text-ter); cursor: pointer; padding: 0 2px; opacity: 0.6; transition: opacity 0.15s; }
+  .btn-reverter-nu:hover { opacity: 1; }
   .checklist-item-prazo { font-size: 12px; color: var(--text-ter); white-space: nowrap; padding-top: 2px; }
   .checklist-item-prazo.vencido { color: var(--red); font-weight: 600; }
   .checklist-item-prazo.hoje { color: var(--amber); font-weight: 600; }
@@ -758,7 +765,6 @@ const TIPOS_COM_PRAZO_REGULATORIO = new Set(['demissao']);
 
 const CHECKLISTS = {
   admissao: [
-    { item: 'Cadastro no sistema concluído', prazo_dias: 0 },
     { item: 'Enviar e-mail de contratação ao Escritório', prazo_dias: 1 },
     { item: 'Exame admissional realizado', prazo_dias: 1 },
     { item: 'Apresentação à equipe realizada', prazo_dias: 1 },
@@ -1222,12 +1228,16 @@ function progClass(pct) {
 }
 
 const GRUPOS_ADMISSAO = [
-  { label: '📋 Documentação & Comunicação', itens: ['Cadastro no sistema concluído', 'Enviar e-mail de contratação ao Escritório', 'Exame admissional realizado', 'Apresentação à equipe realizada'] },
+  { label: '📋 Documentação & Comunicação', itens: ['Enviar e-mail de contratação ao Escritório', 'Exame admissional realizado', 'Apresentação à equipe realizada'] },
   { label: '🖥️ Sistemas', itens: ['Cadastrar no Fronter', 'Solicitar criação de e-mail para TI', 'Cadastrar no Sênior'] },
-  { label: '💳 Benefícios', itens: ['Solicitar Vale Transporte ao Financeiro', 'Pedir cartão Alimentação', 'Inserir na tabela Vale Alimentação Mensal', 'Inserir no Vale Gás', 'Pedir cartão Alelo Pagamento'] },
-  { label: '🛡️ Planos & Seguros', itens: ['Incluir no Mixtra', 'Incluir no Wellhub', 'Incluir no Corplife', 'Inserir no Seguro de Vida'] },
+  { label: '💳 Benefícios', itens: ['Solicitar Vale Transporte ao Financeiro', 'Pedir cartão Alimentação', 'Inserir na tabela Vale Alimentação Mensal', 'Inserir no Vale Gás', 'Pedir cartão Alelo Pagamento'], naoUtilizavel: true },
+  { label: '🛡️ Planos & Seguros', itens: ['Incluir no Mixtra', 'Incluir no Wellhub', 'Incluir no Corplife', 'Inserir no Seguro de Vida'], naoUtilizavel: true },
   { label: '🪪 Uniforme & Crachá', itens: ['Uniforme entregue', 'Pedir crachá (Bulmarplac)'] },
 ];
+// Itens que aceitam marcação "Não utiliza" — derivado automaticamente da flag naoUtilizavel
+const ITENS_NAO_UTILIZAVEL = new Set(
+  GRUPOS_ADMISSAO.filter(g => g.naoUtilizavel).flatMap(g => g.itens)
+);
 
 const GRUPOS_DEMISSAO = [
   { label: '📋 Comunicação & Registro', itens: ['Aviso prévio registrado', 'Fechar cartão Ponto e imprimir', 'Arte de desligamento'] },
@@ -1246,18 +1256,26 @@ function buildChecklistHtml(checklist, criadoBase, processoId, tipo) {
     const prazoLabel = prazoDate && tipo === 'demissao'
       ? `<span class="checklist-item-prazo${ps && !c.concluido ? ' ' + ps : ''}">prazo: ${fmtData(prazoDate.toISOString().slice(0,10))}</span>`
       : '';
+    const isNaoUtiliza = c.concluido && c.observacao?.startsWith('N/A:');
     let metaHtml = '';
     if (c.concluido && c.concluido_em) {
-      const quem = c.concluido_por ? ` por ${c.concluido_por}` : '';
-      metaHtml = `<span class="checklist-item-meta feito">✓ Concluído em ${fmtDataHora(c.concluido_em)}${quem}</span>`;
+      const primeiroNome = (c.concluido_por || 'RH').split(' ')[0];
+      const tooltip = `Concluído em ${fmtDataHora(c.concluido_em)}${c.concluido_por ? ' por ' + c.concluido_por : ''}`;
+      if (isNaoUtiliza) {
+        metaHtml = `<span class="checklist-item-meta nao-utiliza" title="${tooltip}">⊘ Não utiliza</span><button class="btn-reverter-nu" title="Reverter" onclick="reverterNaoUtiliza(${c.id}, ${processoId})">↩</button>`;
+      } else {
+        metaHtml = `<span class="checklist-item-meta feito" title="${tooltip}">✓ ${primeiroNome}</span>`;
+      }
     }
+    const podeNaoUtilizar = ITENS_NAO_UTILIZAVEL.has(c.item) && !c.concluido;
+    const btnNaoUtiliza = podeNaoUtilizar ? `<button class="btn-nao-utiliza" onclick="marcarNaoUtiliza(${c.id}, ${processoId})">⊘ Não utiliza</button>` : '';
     return `<div class="checklist-item">
-      <input type="checkbox" data-clid="${c.id}" ${c.concluido ? 'checked' : ''} onchange="toggleItem(${c.id}, this.checked, ${processoId})">
+      <input type="checkbox" data-clid="${c.id}" ${c.concluido ? 'checked' : ''} ${isNaoUtiliza ? 'disabled' : ''} onchange="toggleItem(${c.id}, this.checked, ${processoId})">
       <div class="checklist-item-main">
-        <span class="checklist-item-text${c.concluido ? ' done' : ''}">${c.item}</span>
+        <span class="checklist-item-text${isNaoUtiliza ? ' nao-utiliza' : c.concluido ? ' done' : ''}">${c.item}</span>
         ${metaHtml}
       </div>
-      ${prazoLabel}
+      ${prazoLabel}${btnNaoUtiliza}
     </div>`;
   }
 
@@ -2203,15 +2221,19 @@ async function toggleItem(checklistId, concluido, processoId) {
     // Atualiza ou remove meta (feito por/em)
     let metaEl = itemEl?.querySelector('.checklist-item-meta');
     if (concluido) {
-      const quem = USUARIO_NOME ? ` por ${USUARIO_NOME}` : '';
+      const primeiroNome = (USUARIO_NOME || 'RH').split(' ')[0];
       const agora = new Date().toISOString();
+      const tooltip = `Concluído em ${fmtDataHora(agora)}${USUARIO_NOME ? ' por ' + USUARIO_NOME : ''}`;
       if (!metaEl) {
         metaEl = document.createElement('span');
         metaEl.className = 'checklist-item-meta feito';
         const mainEl = itemEl?.querySelector('.checklist-item-main');
         if (mainEl) mainEl.appendChild(metaEl);
       }
-      metaEl.textContent = `✓ Concluído em ${fmtDataHora(agora)}${quem}`;
+      metaEl.textContent = `✓ ${primeiroNome}`;
+      metaEl.title = tooltip;
+      // Oculta botão "Não utiliza" se estava visível
+      itemEl?.querySelector('.btn-nao-utiliza')?.remove();
     } else {
       metaEl?.remove();
     }
@@ -2224,6 +2246,70 @@ async function toggleItem(checklistId, concluido, processoId) {
   }).then(() => {
     // Se item VT foi concluído, refletir no cadastro do colaborador
     if (concluido) _aplicarEfeitoVT(checklistId, processoId);
+  }).catch(() => showToast('Erro ao salvar item', 'error'));
+}
+
+async function marcarNaoUtiliza(checklistId, processoId) {
+  const agora = new Date().toISOString();
+  const body = { concluido: true, concluido_por: USUARIO_NOME || 'RH', concluido_em: agora, observacao: 'N/A: não utiliza' };
+  const chkEl = document.querySelector(`input[data-clid="${checklistId}"]`);
+  if (chkEl) {
+    const itemEl = chkEl.closest('.checklist-item');
+    chkEl.checked = true;
+    chkEl.disabled = true;
+    const textEl = itemEl?.querySelector('.checklist-item-text');
+    if (textEl) { textEl.classList.remove('done'); textEl.classList.add('nao-utiliza'); }
+    let metaEl = itemEl?.querySelector('.checklist-item-meta');
+    const primeiroNome = (USUARIO_NOME || 'RH').split(' ')[0];
+    const tooltip = `Concluído em ${fmtDataHora(agora)}${USUARIO_NOME ? ' por ' + USUARIO_NOME : ''}`;
+    if (!metaEl) {
+      metaEl = document.createElement('span');
+      const mainEl = itemEl?.querySelector('.checklist-item-main');
+      if (mainEl) mainEl.appendChild(metaEl);
+    }
+    metaEl.className = 'checklist-item-meta nao-utiliza';
+    metaEl.textContent = '⊘ Não utiliza';
+    metaEl.title = tooltip;
+    // Adiciona botão reverter após o metaEl
+    const btnRev = document.createElement('button');
+    btnRev.className = 'btn-reverter-nu';
+    btnRev.title = 'Reverter';
+    btnRev.textContent = '↩';
+    btnRev.setAttribute('onclick', `reverterNaoUtiliza(${checklistId}, ${processoId})`);
+    metaEl.insertAdjacentElement('afterend', btnRev);
+    // Remove btn-nao-utiliza
+    itemEl?.querySelector('.btn-nao-utiliza')?.remove();
+  }
+  atualizarProgresso(processoId);
+  fetch(`${SB_URL}/rest/v1/processos_checklist?id=eq.${checklistId}`, {
+    method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(body)
+  }).catch(() => showToast('Erro ao salvar item', 'error'));
+}
+
+async function reverterNaoUtiliza(checklistId, processoId) {
+  const body = { concluido: false, concluido_por: null, concluido_em: null, observacao: null };
+  const chkEl = document.querySelector(`input[data-clid="${checklistId}"]`);
+  if (chkEl) {
+    const itemEl = chkEl.closest('.checklist-item');
+    chkEl.checked = false;
+    chkEl.disabled = false;
+    const textEl = itemEl?.querySelector('.checklist-item-text');
+    if (textEl) { textEl.classList.remove('nao-utiliza', 'done'); }
+    itemEl?.querySelector('.checklist-item-meta')?.remove();
+    itemEl?.querySelector('.btn-reverter-nu')?.remove();
+    // Reinsere btn-nao-utiliza se o item pertence ao grupo (verificar pelo texto)
+    const itemTexto = textEl?.textContent || '';
+    if (ITENS_NAO_UTILIZAVEL.has(itemTexto)) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-nao-utiliza';
+      btn.setAttribute('onclick', `marcarNaoUtiliza(${checklistId}, ${processoId})`);
+      btn.textContent = '⊘ Não utiliza';
+      itemEl?.appendChild(btn);
+    }
+  }
+  atualizarProgresso(processoId);
+  fetch(`${SB_URL}/rest/v1/processos_checklist?id=eq.${checklistId}`, {
+    method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(body)
   }).catch(() => showToast('Erro ao salvar item', 'error'));
 }
 
