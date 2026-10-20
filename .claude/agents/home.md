@@ -198,6 +198,9 @@ Tabela `param_escopo_home`: expande colaboradores visíveis nos blocos Aniversá
 - `tipo='empresa_atuacao'`: filtra por `empresa_atuacao` normalizada
 - `tipo='setor'`: filtra por setor
 - `tipo='todos'`: todos os CLT ativos
+- `tipo='colaborador'`: busca por `id=eq.{valor}` — sem filtro CLT
+- `tipo='tipo_vinculo'`: filtra `tipo_vinculo` do colaborador (lowercase); `valor2` opcional para filtrar também por `empresa_atuacao` (normalizada) — sem filtro CLT
+- `tipo='cargo'`: filtra `cargo` do colaborador (normalização lowercase+trim+NFD) — sem filtro CLT
 - Dedup: remove ids já em `idsBase` (equipe própria)
 - Falha silenciosa: `.catch(() => [])` — Home continua com `team` base
 
@@ -206,7 +209,11 @@ Tabela `param_escopo_home`: expande colaboradores visíveis nos blocos Aniversá
 - `teamAniversarios` = `team` + extras — usada **somente em `_renderEventos`**
 - Nunca ampliar outros blocos sem intenção explícita
 
-**Parâmetros Gerais:** seção "Home do Gestor" → "Escopo de Visualização — Home". Inicialização requer `escopo_home` no bloco `if/else if` que chama `carregarGestores()` + `carregarSetores()` + `carregarEmpresasAtuacao()` (commit `f1f5f46`).
+**Parâmetros Gerais:** seção "Home do Gestor" → "Escopo de Visualização — Home". Inicialização requer `escopo_home` no bloco `if/else if` que chama `carregarGestores()` + `carregarSetores()` + `carregarEmpresasAtuacao()` + `carregarColaboradoresParaEscopo()` + `carregarTiposVinculo()` + `carregarCargos()` (commit `f1f5f46`).
+
+**Tipos de escopo disponíveis:** `gestor`, `empresa_atuacao`, `setor`, `tipo_vinculo` (com `valor2` opcional para empresa), `cargo`, `colaborador`, `todos`.
+
+**`carregarCargos()`:** busca DISTINCT cargos ativos de `colaboradores` (campo `cargo`, `data_demissao=is.null`), ordenados alfabeticamente. Armazenado em `cargosList[]`.
 
 **Evolução:** para adicionar novo módulo (ex: `ferias`), basta adicionar opção no dropdown `home_modulo` (Parâmetros) e bloco correspondente em `_resolverEscoposHome`. Tabela e migration não precisam mudar.
 
