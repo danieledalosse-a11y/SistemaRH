@@ -222,10 +222,14 @@ async function _confirmarAprovar(f, temVT) {
 
 **Regra de negócio:** o checklist de admissão deve estar aberto *antes* da efetivação, para que o RH acompanhe os itens de onboarding (criação de usuário, VT, crachá, etc.) antecipadamente.
 
-**Implementação:** o botão "Efetivar" direto na lista de convites foi **removido**. Convites com `status='aprovado'` agora exibem apenas o botão **"Efetivar contratação"**, que abre o painel completo da ficha — onde o botão de efetivação real está disponível. A função `efetivarDireto` foi excluída.
+**Implementação:** convites com `status='aprovado'` exibem dois botões na lista (commit `4bc23c4`):
+- **"Ver ficha"** (secundário) — abre o painel para consultar dados e adicionar/substituir documentos, sem alterar o status nem efetivar
+- **"Efetivar contratação"** (verde) — também abre o mesmo painel; a efetivação real ocorre apenas ao clicar no botão **dentro** do painel e confirmar no modal
 
-**Antes (errado):** lista de convites tinha dois botões para `status='aprovado'`: "Efetivar" (direto, pulava o Aprovar Ficha) + "Ver ficha".  
-**Agora (correto):** apenas "Efetivar contratação" → abre painel → RH usa o botão dentro do painel.
+Abrir o painel por qualquer um dos dois botões **nunca efetiva a contratação automaticamente**. A função `efetivarDireto` foi excluída em sessão anterior.
+
+**Antes (errado):** botão "Efetivar" direto na lista pulava aprovação e abria o modal de efetivação sem passar pelo painel.
+**Agora (correto):** ambos os botões → painel → RH usa o botão de efetivação dentro do painel.
 
 **Consequência:** sem passar por `_confirmarAprovar`, nenhum processo de admissão é criado. `efetivarDireto` era o único caminho que permitia efetivar sem aprovação prévia.
 
