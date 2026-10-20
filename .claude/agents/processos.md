@@ -357,6 +357,8 @@ Para adicionar um tipo com prazo regulatório real no futuro: inserir seu nome e
 
 **Ordem do grupo Sistemas (commit `4b6442f`, out/2026):** Fronter → Sênior → Solicitar e-mail TI. Processos existentes corrigidos via UPDATE na coluna `ordem` do banco.
 
+**Grupo fallback "📌 Outros" — mantido intencionalmente:** itens do banco que não pertencem a nenhum grupo de `GRUPOS_ADMISSAO` aparecem neste grupo. Serve como rede de segurança para detectar inconsistências. Não remover.
+
 **Item Alelo em todas as admissões (commit `f60520a`, out/2026):** `'Pedir cartão Alelo Pagamento'` é incluído em **todos** os checklists de admissão, independente de cargo. A condição `if (/vendedor/.test(cargo))` foi removida — o `cargo` é sempre `null` no momento da criação (pré-efetivação). Colaboradores que não usam marcam "Não utiliza". Inserção logo após `'Inserir no Vale Gás'` via `findIndex + slice` em `criarProcesso`.
 
 **Meta de conclusão compacta:** exibe apenas `✓ [primeiro nome]` inline. Tooltip no hover mostra `Concluído em DD/MM/AAAA HH:MM por Nome Completo`. Consistente entre render inicial (`itemHtml`) e atualização DOM (`toggleItem`).
