@@ -1171,7 +1171,6 @@ function _filtrarAndamento() {
 }
 
 function _diasRestantesProcesso(p) {
-  if (!TIPOS_COM_PRAZO_REGULATORIO.has(p.tipo)) return 9999;
   const checklist = (p.processos_checklist || []).filter(c => !c.concluido);
   if (!checklist.length) return 9999;
   const base = new Date((p.tipo === 'demissao' && p.dados_extras?.data_demissao) ? p.dados_extras.data_demissao : p.criado_em);
@@ -1194,9 +1193,9 @@ function _renderAndamento(processos) {
     return;
   }
 
-  const atrasados = processos.filter(p => _diasRestantesProcesso(p) < 0);
-  const proximos  = processos.filter(p => { const d = _diasRestantesProcesso(p); return d >= 0 && d <= 7; });
-  const normais   = processos.filter(p => _diasRestantesProcesso(p) > 7);
+  const atrasados = processos.filter(p => TIPOS_COM_PRAZO_REGULATORIO.has(p.tipo) && _diasRestantesProcesso(p) < 0);
+  const proximos  = processos.filter(p => TIPOS_COM_PRAZO_REGULATORIO.has(p.tipo) && _diasRestantesProcesso(p) >= 0 && _diasRestantesProcesso(p) <= 7);
+  const normais   = processos.filter(p => !TIPOS_COM_PRAZO_REGULATORIO.has(p.tipo) || _diasRestantesProcesso(p) > 7);
 
   let html = '';
   if (atrasados.length) {
