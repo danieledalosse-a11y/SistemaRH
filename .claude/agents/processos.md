@@ -353,11 +353,11 @@ Para adicionar um tipo com prazo regulatório real no futuro: inserir seu nome e
 
 ### Checklist `admissao` — melhorias UX (commits `cf928bf`→`4e9dc97`, out/2026)
 
-**Item removido:** `'Cadastro no sistema concluído'` — retirado de `CHECKLISTS.admissao` e de `GRUPOS_ADMISSAO`. Processos já existentes mantêm o item no banco; novos processos não o terão.
+**Item removido:** `'Cadastro no sistema concluído'` — retirado de `CHECKLISTS.admissao` e de `GRUPOS_ADMISSAO`. Processos antigos que tinham o item no banco foram corrigidos via SQL DELETE (out/2026). Novos processos não o terão.
 
 **Ordem do grupo Sistemas (commit `4b6442f`, out/2026):** Fronter → Sênior → Solicitar e-mail TI. Processos existentes corrigidos via UPDATE na coluna `ordem` do banco.
 
-**Grupo fallback "📌 Outros" — mantido intencionalmente:** itens do banco que não pertencem a nenhum grupo de `GRUPOS_ADMISSAO` aparecem neste grupo. Serve como rede de segurança para detectar inconsistências. Não remover.
+**Grupo fallback "📌 Outros" — mantido intencionalmente:** itens do banco que não pertencem a nenhum grupo de `GRUPOS_ADMISSAO` aparecem neste grupo. Serve como rede de segurança para detectar inconsistências (ex: item legado sem grupo mapeado). **Não remover.**
 
 **Item Alelo em todas as admissões (commit `f60520a`, out/2026):** `'Pedir cartão Alelo Pagamento'` é incluído em **todos** os checklists de admissão, independente de cargo. A condição `if (/vendedor/.test(cargo))` foi removida — o `cargo` é sempre `null` no momento da criação (pré-efetivação). Colaboradores que não usam marcam "Não utiliza". Inserção logo após `'Inserir no Vale Gás'` via `findIndex + slice` em `criarProcesso`.
 
