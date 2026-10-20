@@ -637,9 +637,19 @@ async function _resolverEscoposHome(gestorId, modulo, idsBase, colSelect) {
       rows = await _hdGet('colaboradores',
         `id=eq.${encodeURIComponent(esc.valor)}&data_demissao=is.null&${colSelect}`
       ).catch(() => []);
+    } else if (esc.tipo === 'tipo_vinculo' && esc.valor) {
+      const all = await _hdGet('colaboradores', `data_demissao=is.null&${colSelect}&order=nome`).catch(() => []);
+      rows = all.filter(c => (c.tipo_vinculo || '').toLowerCase() === esc.valor.toLowerCase());
+      if (esc.valor2) {
+        const _normEmp = s => (s || '').replace(/^\d+\s*[-–]\s*/, '').trim().toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '');
+        const _v2 = _normEmp(esc.valor2);
+        rows = rows.filter(c => _normEmp(c.empresa_atuacao || '') === _v2);
+      }
     }
     // tipo=colaborador: pessoa selecionada explicitamente, sem filtro CLT
-    if (esc.tipo === 'colaborador') {
+    // tipo=tipo_vinculo: inclui todos os vínculos (promotoras, pró-labore, etc.), sem forçar CLT
+    if (esc.tipo === 'colaborador' || esc.tipo === 'tipo_vinculo') {
       extra.push(...rows);
     } else {
       extra.push(...rows.filter(_isCLT));

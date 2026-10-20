@@ -950,6 +950,7 @@ let cbosRaw     = [];   // [{id, codigo, titulo, grupo}] para select agrupado
 let empresasAtuacaoList = []; // distinct stripNum(empresa_atuacao) dos colaboradores ativos
 let colaboradoresEscopoMap = {}; // id (string) → nome — para exibição no _valorDisplay de tipo=colaborador
 let colaboradoresEscopoList = []; // [{id, nome, cargo}] — para o dropdown de tipo=colaborador
+let tiposVinculoList = []; // [{codigo, descricao}] — para dropdown de tipo_vinculo
 
 async function carregarEmpresas() {
   try {
@@ -976,6 +977,13 @@ async function carregarColaboradoresParaEscopo() {
     colaboradoresEscopoMap = {};
     rows.forEach(r => { colaboradoresEscopoMap[String(r.id)] = r.nome; });
   } catch(_) { colaboradoresEscopoList = []; }
+}
+
+async function carregarTiposVinculo() {
+  try {
+    const rows = await sbGet('param_tipo_vinculo', 'select=codigo,descricao&ativo=eq.true&order=ordem');
+    tiposVinculoList = rows.map(r => ({ codigo: r.codigo, descricao: r.descricao }));
+  } catch(_) { tiposVinculoList = []; }
 }
 
 async function carregarSetores() {
@@ -1281,7 +1289,7 @@ async function carregar() {
     } else if (currentCat === 'escopo_ferias') {
       await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao()]);
     } else if (currentCat === 'escopo_home') {
-      await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao(), carregarColaboradoresParaEscopo()]);
+      await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao(), carregarColaboradoresParaEscopo(), carregarTiposVinculo()]);
     } else if (currentCat === 'cargo') {
       await carregarCbos();
     }
@@ -1406,13 +1414,19 @@ function renderTabela(rows) {
       html += `<td style="font-size:12px;color:var(--text-sec)">${row.cnpj || '—'}</td>`;
       html += `<td style="font-size:12px;font-weight:600">${row.nome_simplificado || '—'}</td>`;
     } else if (currentCat === 'escopo_home') {
-      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor', colaborador: 'Colaborador específico' };
+      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor', colaborador: 'Colaborador específico', tipo_vinculo: 'Tipo de vínculo' };
       const _MOD_L  = { aniversarios: 'Aniversariantes / Tempo de casa' };
-      const _valorDisplay = row.tipo === 'gestor'
-        ? (gestoresMap[row.gestor_ref_id] || '—')
-        : row.tipo === 'colaborador'
-          ? (colaboradoresEscopoMap[row.valor] || row.valor || '—')
-          : (row.valor || (row.tipo === 'todos' ? '(sem restrição)' : '—'));
+      let _valorDisplay;
+      if (row.tipo === 'gestor') {
+        _valorDisplay = gestoresMap[row.gestor_ref_id] || '—';
+      } else if (row.tipo === 'colaborador') {
+        _valorDisplay = colaboradoresEscopoMap[row.valor] || row.valor || '—';
+      } else if (row.tipo === 'tipo_vinculo') {
+        const _tvDesc = tiposVinculoList.find(tv => tv.codigo === row.valor)?.descricao || row.valor || '—';
+        _valorDisplay = row.valor2 ? `${_tvDesc} · ${row.valor2}` : _tvDesc;
+      } else {
+        _valorDisplay = row.valor || (row.tipo === 'todos' ? '(sem restrição)' : '—');
+      }
       html += `<td style="font-weight:600">${gestoresMap[row.gestor_id] || '—'}</td>`;
       html += `<td style="font-size:12px;color:var(--text-sec)">${_MOD_L[row.modulo] || row.modulo || '—'}</td>`;
       html += `<td>${_TIPO_L[row.tipo] || row.tipo || '—'}</td>`;
@@ -1559,6 +1573,7 @@ function abrirModal(row) {
         { v: 'gestor',          l: 'Equipe de gestor' },
         { v: 'empresa_atuacao', l: 'Empresa de atuação' },
         { v: 'setor',           l: 'Setor' },
+        { v: 'tipo_vinculo',    l: 'Tipo de vínculo' },
         { v: 'colaborador',     l: 'Colaborador específico' },
         { v: 'todos',           l: 'Todos os colaboradores CLT ativos' },
       ];
@@ -1570,6 +1585,9 @@ function abrirModal(row) {
       // Conteúdo populado via _escopoPopularValor() após render
       html += `<div class="field" id="fieldWrap_valor"><label id="fieldLabel_valor">Valor</label>
         <select id="field_${f.key}"><option value="">Selecionar...</option></select>
+      </div>
+      <div class="field" id="fieldWrap_valor2" style="display:none"><label>Empresa de atuação <span style="font-weight:400;color:var(--text-sec)">(opcional)</span></label>
+        <select id="field_valor2"><option value="">Todas as empresas</option></select>
       </div>`;
     } else if (f.type === 'select' && f.options) {
       const opts = f.options.map(o =>
@@ -1611,6 +1629,16 @@ function abrirModal(row) {
       ? String(row?.gestor_ref_id || '')
       : (row?.valor || '');
     _escopoPopularValor(tipoVal, valorAtual);
+  }
+
+  // Escopo home: inicializa dropdown condicional de valor (inclui valor2 para tipo_vinculo)
+  if (currentCat === 'escopo_home') {
+    const tipoEl = document.getElementById('field_tipo');
+    const tipoVal = tipoEl ? tipoEl.value : '';
+    const valorAtual = tipoVal === 'gestor'
+      ? String(row?.gestor_ref_id || '')
+      : (row?.valor || '');
+    _escopoPopularValor(tipoVal, valorAtual, row?.valor2 || '');
   }
 
   // Campo de busca de colaborador substitui o campo Nome para gestores
@@ -1657,11 +1685,17 @@ function _escopoTipoChange(tipo) {
   _escopoPopularValor(tipo, '');
 }
 
-function _escopoPopularValor(tipo, valorAtual) {
-  const wrap  = document.getElementById('fieldWrap_valor');
-  const sel   = document.getElementById('field_valor');
-  const label = document.getElementById('fieldLabel_valor');
+function _escopoPopularValor(tipo, valorAtual, valor2Atual) {
+  const wrap   = document.getElementById('fieldWrap_valor');
+  const sel    = document.getElementById('field_valor');
+  const label  = document.getElementById('fieldLabel_valor');
+  const wrap2  = document.getElementById('fieldWrap_valor2');
+  const sel2   = document.getElementById('field_valor2');
   if (!wrap || !sel) return;
+
+  // Oculta campo valor2 por padrão; só aparece para tipo_vinculo
+  if (wrap2) wrap2.style.display = 'none';
+
   if (tipo === 'todos' || !tipo) {
     wrap.style.display = 'none';
     sel.innerHTML = '';
@@ -1693,6 +1727,20 @@ function _escopoPopularValor(tipo, valorAtual) {
     opts += colaboradoresEscopoList.map(c =>
       `<option value="${c.id}"${valorAtual === String(c.id) ? ' selected' : ''}>${c.nome}${c.cargo ? ' · ' + c.cargo : ''}</option>`
     ).join('');
+  } else if (tipo === 'tipo_vinculo') {
+    if (label) label.textContent = 'Tipo de vínculo';
+    opts += tiposVinculoList.map(tv =>
+      `<option value="${tv.codigo}"${valorAtual === tv.codigo ? ' selected' : ''}>${tv.descricao}</option>`
+    ).join('');
+    // Exibe campo de empresa opcional
+    if (wrap2 && sel2) {
+      wrap2.style.display = '';
+      let opts2 = '<option value="">Todas as empresas</option>';
+      opts2 += empresasAtuacaoList.map(e =>
+        `<option value="${e}"${(valor2Atual || '') === e ? ' selected' : ''}>${e}</option>`
+      ).join('');
+      sel2.innerHTML = opts2;
+    }
   }
   sel.innerHTML = opts;
 }
@@ -1744,9 +1792,12 @@ async function salvar() {
     body.cbo_codigo = null;
   }
 
-  // escopo_home: mesma lógica de escopo_ferias + campo modulo
+  // escopo_home: mesma lógica de escopo_ferias + campo modulo + valor2 para tipo_vinculo
   if (currentCat === 'escopo_home') {
     body.gestor_id = body.gestor_id ? parseInt(body.gestor_id) : null;
+    // Lê valor2 do campo extra (só existe para tipo_vinculo)
+    const _v2El = document.getElementById('field_valor2');
+    body.valor2 = (_v2El && body.tipo === 'tipo_vinculo') ? (_v2El.value || null) : null;
     if (body.tipo === 'gestor') {
       body.gestor_ref_id = body.valor ? parseInt(body.valor) : null;
       body.valor = null;
