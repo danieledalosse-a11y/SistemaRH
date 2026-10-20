@@ -753,6 +753,9 @@ const TIPO_CONFIG = {
   transferencia_cnpj:          { label: 'Transferência de CNPJ',         cor: 'blue',   icon: '🔄' },
 };
 
+// Tipos com prazo regulatório real (CLT/trabalhista) — apenas esses geram classificação "Atrasado"
+const TIPOS_COM_PRAZO_REGULATORIO = new Set(['demissao']);
+
 const CHECKLISTS = {
   admissao: [
     { item: 'Cadastro no sistema concluído', prazo_dias: 0 },
@@ -1168,6 +1171,7 @@ function _filtrarAndamento() {
 }
 
 function _diasRestantesProcesso(p) {
+  if (!TIPOS_COM_PRAZO_REGULATORIO.has(p.tipo)) return 9999;
   const checklist = (p.processos_checklist || []).filter(c => !c.concluido);
   if (!checklist.length) return 9999;
   const base = new Date((p.tipo === 'demissao' && p.dados_extras?.data_demissao) ? p.dados_extras.data_demissao : p.criado_em);
@@ -1239,13 +1243,10 @@ function buildChecklistHtml(checklist, criadoBase, processoId, tipo) {
   function itemHtml(c) {
     const prazoDate = c.prazo_dias != null ? calcularPrazoDesde(criadoBase, c.prazo_dias) : null;
     const ps = prazoDate ? prazoStatus(prazoDate.toISOString().slice(0,10)) : null;
-    // Para demissão mostramos apenas um indicador visual discreto nos itens atrasados (sem a data)
-    const mostrarData = tipo !== 'demissao';
-    const prazoLabel = prazoDate && mostrarData
+    // Datas de prazo visíveis apenas em demissões (obrigações legais); demais tipos usam prazo_dias só como referência interna
+    const prazoLabel = prazoDate && tipo === 'demissao'
       ? `<span class="checklist-item-prazo${ps && !c.concluido ? ' ' + ps : ''}">prazo: ${fmtData(prazoDate.toISOString().slice(0,10))}</span>`
-      : (prazoDate && !mostrarData && ps === 'vencido' && !c.concluido
-          ? `<span style="width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0;align-self:center;" title="Prazo interno vencido"></span>`
-          : '');
+      : '';
     let metaHtml = '';
     if (c.concluido && c.concluido_em) {
       const quem = c.concluido_por ? ` por ${c.concluido_por}` : '';
