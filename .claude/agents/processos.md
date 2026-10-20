@@ -333,6 +333,12 @@ Tipos `reajuste`, `vt_avulso`, `vt_alteracao` (todos os subtipos), `prorrogacao_
 
 **Fix colateral (out/2026):** ao salvar checklist no banco, linha corrigida de `prazo_dias: it.prazo_dias ?? 0` para `prazo_dias: it.prazo_dias ?? null`. O `?? 0` fazia itens sem prazo serem gravados com `prazo_dias=0` (= prazo "hoje"), gerando alertas "Vencido" no próximo acesso.
 
+### Badge de urgência — restrito a demissões (commit `9341113`, out/2026)
+
+Os badges `⚠ Prazo vencido` e `⏰ Vence hoje` em `buildCard` só são exibidos quando `p.tipo === 'demissao'`. Para admissão, VT e todos os demais tipos, o badge não é renderizado — apenas a barra de progresso continua visível.
+
+A ordenação em Atrasados/Próximos/Normal (`_diasRestantesProcesso`) permanece genérica para todos os tipos e não foi alterada.
+
 ### Checklist `reajuste` — itens atuais
 
 ```js
