@@ -951,6 +951,7 @@ let empresasAtuacaoList = []; // distinct stripNum(empresa_atuacao) dos colabora
 let colaboradoresEscopoMap = {}; // id (string) → nome — para exibição no _valorDisplay de tipo=colaborador
 let colaboradoresEscopoList = []; // [{id, nome, cargo}] — para o dropdown de tipo=colaborador
 let tiposVinculoList = []; // [{codigo, descricao}] — para dropdown de tipo_vinculo
+let cargosList = []; // [string] — distinct cargos ativos para dropdown de escopo tipo=cargo
 
 async function carregarEmpresas() {
   try {
@@ -984,6 +985,14 @@ async function carregarTiposVinculo() {
     const rows = await sbGet('param_tipo_vinculo', 'select=codigo,descricao&ativo=eq.true&order=ordem');
     tiposVinculoList = rows.map(r => ({ codigo: r.codigo, descricao: r.descricao }));
   } catch(_) { tiposVinculoList = []; }
+}
+
+async function carregarCargos() {
+  try {
+    const rows = await sbGet('colaboradores', 'select=cargo&data_demissao=is.null&cargo=not.is.null&order=cargo');
+    const distinct = [...new Set(rows.map(r => (r.cargo || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    cargosList = distinct;
+  } catch(_) { cargosList = []; }
 }
 
 async function carregarSetores() {
@@ -1289,7 +1298,7 @@ async function carregar() {
     } else if (currentCat === 'escopo_ferias') {
       await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao()]);
     } else if (currentCat === 'escopo_home') {
-      await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao(), carregarColaboradoresParaEscopo(), carregarTiposVinculo()]);
+      await Promise.all([carregarGestores(), carregarSetores(), carregarEmpresasAtuacao(), carregarColaboradoresParaEscopo(), carregarTiposVinculo(), carregarCargos()]);
     } else if (currentCat === 'cargo') {
       await carregarCbos();
     }
@@ -1414,7 +1423,7 @@ function renderTabela(rows) {
       html += `<td style="font-size:12px;color:var(--text-sec)">${row.cnpj || '—'}</td>`;
       html += `<td style="font-size:12px;font-weight:600">${row.nome_simplificado || '—'}</td>`;
     } else if (currentCat === 'escopo_home') {
-      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor', colaborador: 'Colaborador específico', tipo_vinculo: 'Tipo de vínculo' };
+      const _TIPO_L = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor', colaborador: 'Colaborador específico', tipo_vinculo: 'Tipo de vínculo', cargo: 'Cargo' };
       const _MOD_L  = { aniversarios: 'Aniversariantes / Tempo de casa' };
       let _valorDisplay;
       if (row.tipo === 'gestor') {
@@ -1574,6 +1583,7 @@ function abrirModal(row) {
         { v: 'empresa_atuacao', l: 'Empresa de atuação' },
         { v: 'setor',           l: 'Setor' },
         { v: 'tipo_vinculo',    l: 'Tipo de vínculo' },
+        { v: 'cargo',           l: 'Cargo' },
         { v: 'colaborador',     l: 'Colaborador específico' },
         { v: 'todos',           l: 'Todos os colaboradores CLT ativos' },
       ];
@@ -1726,6 +1736,11 @@ function _escopoPopularValor(tipo, valorAtual, valor2Atual) {
     if (label) label.textContent = 'Colaborador';
     opts += colaboradoresEscopoList.map(c =>
       `<option value="${c.id}"${valorAtual === String(c.id) ? ' selected' : ''}>${c.nome}${c.cargo ? ' · ' + c.cargo : ''}</option>`
+    ).join('');
+  } else if (tipo === 'cargo') {
+    if (label) label.textContent = 'Cargo';
+    opts += cargosList.map(c =>
+      `<option value="${c}"${valorAtual === c ? ' selected' : ''}>${c}</option>`
     ).join('');
   } else if (tipo === 'tipo_vinculo') {
     if (label) label.textContent = 'Tipo de vínculo';

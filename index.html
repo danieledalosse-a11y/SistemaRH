@@ -646,10 +646,14 @@ async function _resolverEscoposHome(gestorId, modulo, idsBase, colSelect) {
         const _v2 = _normEmp(esc.valor2);
         rows = rows.filter(c => _normEmp(c.empresa_atuacao || '') === _v2);
       }
+    } else if (esc.tipo === 'cargo' && esc.valor) {
+      const all = await _hdGet('colaboradores', `data_demissao=is.null&${colSelect}&order=nome`).catch(() => []);
+      const _norm = s => (s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      rows = all.filter(c => _norm(c.cargo || '') === _norm(esc.valor));
     }
     // tipo=colaborador: pessoa selecionada explicitamente, sem filtro CLT
-    // tipo=tipo_vinculo: inclui todos os vínculos (promotoras, pró-labore, etc.), sem forçar CLT
-    if (esc.tipo === 'colaborador' || esc.tipo === 'tipo_vinculo') {
+    // tipo=tipo_vinculo / tipo=cargo: inclui todos os vínculos, sem forçar CLT
+    if (esc.tipo === 'colaborador' || esc.tipo === 'tipo_vinculo' || esc.tipo === 'cargo') {
       extra.push(...rows);
     } else {
       extra.push(...rows.filter(_isCLT));
