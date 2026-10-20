@@ -351,6 +351,28 @@ Admissões, VT e demais tipos sempre caem em "Em andamento" diretamente. `_diasR
 
 Para adicionar um tipo com prazo regulatório real no futuro: inserir seu nome em `TIPOS_COM_PRAZO_REGULATORIO`.
 
+### Checklist `admissao` — melhorias UX (commits `cf928bf`→`4e9dc97`, out/2026)
+
+**Item removido:** `'Cadastro no sistema concluído'` — retirado de `CHECKLISTS.admissao` e de `GRUPOS_ADMISSAO`. Processos já existentes mantêm o item no banco; novos processos não o terão.
+
+**Meta de conclusão compacta:** exibe apenas `✓ [primeiro nome]` inline. Tooltip no hover mostra `Concluído em DD/MM/AAAA HH:MM por Nome Completo`. Consistente entre render inicial (`itemHtml`) e atualização DOM (`toggleItem`).
+
+**"Não utiliza" por item** — grupos `💳 Benefícios` e `🛡️ Planos & Seguros` têm flag `naoUtilizavel: true` em `GRUPOS_ADMISSAO`. `ITENS_NAO_UTILIZAVEL` é um Set derivado automaticamente:
+
+```js
+const ITENS_NAO_UTILIZAVEL = new Set(
+  GRUPOS_ADMISSAO.filter(g => g.naoUtilizavel).flatMap(g => g.itens)
+);
+```
+
+- Botão `⊘ Não utiliza` aparece no hover, posicionado **dentro de `.checklist-item-main` após o texto** (não no canto direito)
+- Clicar: `concluido=true`, `observacao='N/A: não utiliza'`, texto fica cinza, rótulo `⊘ Não utiliza` em **vermelho** (`var(--red)`)
+- Checkbox fica `disabled` no estado "não utiliza"
+- Botão ↩ permite reverter: limpa todos os campos, reinsere botão ⊘ após o texto
+- Barra de progresso e badge do grupo contam o item como concluído
+- Funções: `marcarNaoUtiliza(checklistId, processoId)` e `reverterNaoUtiliza(checklistId, processoId)`
+- Detecção do estado: `c.concluido && c.observacao?.startsWith('N/A:')`
+
 ### Checklist `reajuste` — itens atuais
 
 ```js
