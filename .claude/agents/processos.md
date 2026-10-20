@@ -337,7 +337,19 @@ Tipos `reajuste`, `vt_avulso`, `vt_alteracao` (todos os subtipos), `prorrogacao_
 
 Os badges `⚠ Prazo vencido` e `⏰ Vence hoje` em `buildCard` só são exibidos quando `p.tipo === 'demissao'`. Para admissão, VT e todos os demais tipos, o badge não é renderizado — apenas a barra de progresso continua visível.
 
-A ordenação em Atrasados/Próximos/Normal (`_diasRestantesProcesso`) permanece genérica para todos os tipos e não foi alterada.
+### Agrupamento "Atrasados / Próximos / Em andamento" — restrito a demissões (commit `e57fbe6`, out/2026)
+
+A constante `TIPOS_COM_PRAZO_REGULATORIO = new Set(['demissao'])` governa **tanto** os badges quanto o agrupamento em `_renderAndamento`:
+
+```js
+const atrasados = processos.filter(p => TIPOS_COM_PRAZO_REGULATORIO.has(p.tipo) && _diasRestantesProcesso(p) < 0);
+const proximos  = processos.filter(p => TIPOS_COM_PRAZO_REGULATORIO.has(p.tipo) && _diasRestantesProcesso(p) >= 0 && _diasRestantesProcesso(p) <= 7);
+const normais   = processos.filter(p => !TIPOS_COM_PRAZO_REGULATORIO.has(p.tipo) || _diasRestantesProcesso(p) > 7);
+```
+
+Admissões, VT e demais tipos sempre caem em "Em andamento" diretamente. `_diasRestantesProcesso` é um cálculo puro de dias restantes, sem lógica de negócio embutida — a regra de exclusão vive nas três linhas de agrupamento, não na função.
+
+Para adicionar um tipo com prazo regulatório real no futuro: inserir seu nome em `TIPOS_COM_PRAZO_REGULATORIO`.
 
 ### Checklist `reajuste` — itens atuais
 
