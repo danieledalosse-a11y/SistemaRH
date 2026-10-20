@@ -345,7 +345,9 @@ Documentos enviados pelo candidato podem estar em orientação errada (deitados)
 
 ### Lightbox (commit 9888e2f)
 
-HTML: `#imgLightbox` com `#imgLightboxImg` e `#imgLightboxLabel`. Inserido após os modais, antes do Slide-in Panel Revisão.
+HTML: `#imgLightbox` com `#imgLightboxImg` e `#imgLightboxLabel`. Inserido antes do Slide-in Panel Revisão.
+
+**Regra de ordem no DOM (commit `e6d13af`):** todos os modais (`modalPDF`, `modalEfetivar`, `modalAprovar`, `modalCancelamento`) devem ficar **depois** do `#panelOverlay` no HTML. O `panel-overlay` tem `position:fixed; z-index:300` e cria contexto de empilhamento próprio — modais declarados antes dele ficam atrás mesmo com `z-index:500`. Mover para depois do painel + `z-index:500` nos modais garante que apareçam na frente corretamente.
 
 **Imagens:** botão "Ver" chama `viewDocRotated(url, rot, label)` — aplica rotação via CSS. Para 90°/270°, dimensões são trocadas para evitar corte.
 
