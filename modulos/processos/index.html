@@ -214,7 +214,7 @@
   .checklist-item-meta.feito { color: var(--green); }
   .checklist-item-meta.nao-utiliza { color: var(--red); font-style: italic; }
   .checklist-item-text.nao-utiliza { color: var(--text-ter); }
-  .btn-nao-utiliza { display: none; background: none; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text-ter); cursor: pointer; padding: 1px 6px; line-height: 1.5; flex-shrink: 0; margin-left: auto; transition: border-color 0.15s, color 0.15s; }
+  .btn-nao-utiliza { display: none; background: none; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text-ter); cursor: pointer; padding: 1px 6px; line-height: 1.5; flex-shrink: 0; transition: border-color 0.15s, color 0.15s; }
   .checklist-item:hover .btn-nao-utiliza { display: inline-block; }
   .btn-nao-utiliza:hover { border-color: var(--text-sec); color: var(--text-sec); }
   .btn-reverter-nu { display: inline-block; background: none; border: none; font-size: 11px; color: var(--text-ter); cursor: pointer; padding: 0 2px; opacity: 0.6; transition: opacity 0.15s; }
@@ -1273,9 +1273,10 @@ function buildChecklistHtml(checklist, criadoBase, processoId, tipo) {
       <input type="checkbox" data-clid="${c.id}" ${c.concluido ? 'checked' : ''} ${isNaoUtiliza ? 'disabled' : ''} onchange="toggleItem(${c.id}, this.checked, ${processoId})">
       <div class="checklist-item-main">
         <span class="checklist-item-text${isNaoUtiliza ? ' nao-utiliza' : c.concluido ? ' done' : ''}">${c.item}</span>
+        ${btnNaoUtiliza}
         ${metaHtml}
       </div>
-      ${prazoLabel}${btnNaoUtiliza}
+      ${prazoLabel}
     </div>`;
   }
 
@@ -2304,7 +2305,8 @@ async function reverterNaoUtiliza(checklistId, processoId) {
       btn.className = 'btn-nao-utiliza';
       btn.setAttribute('onclick', `marcarNaoUtiliza(${checklistId}, ${processoId})`);
       btn.textContent = '⊘ Não utiliza';
-      itemEl?.appendChild(btn);
+      const mainEl = itemEl?.querySelector('.checklist-item-main');
+      if (mainEl) textEl ? textEl.insertAdjacentElement('afterend', btn) : mainEl.appendChild(btn);
     }
   }
   atualizarProgresso(processoId);
