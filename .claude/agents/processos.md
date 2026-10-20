@@ -355,6 +355,8 @@ Para adicionar um tipo com prazo regulatório real no futuro: inserir seu nome e
 
 **Item removido:** `'Cadastro no sistema concluído'` — retirado de `CHECKLISTS.admissao` e de `GRUPOS_ADMISSAO`. Processos já existentes mantêm o item no banco; novos processos não o terão.
 
+**Item Alelo em todas as admissões (commit `f60520a`, out/2026):** `'Pedir cartão Alelo Pagamento'` é incluído em **todos** os checklists de admissão, independente de cargo. A condição `if (/vendedor/.test(cargo))` foi removida — o `cargo` é sempre `null` no momento da criação (pré-efetivação). Colaboradores que não usam marcam "Não utiliza". Inserção logo após `'Inserir no Vale Gás'` via `findIndex + slice` em `criarProcesso`.
+
 **Meta de conclusão compacta:** exibe apenas `✓ [primeiro nome]` inline. Tooltip no hover mostra `Concluído em DD/MM/AAAA HH:MM por Nome Completo`. Consistente entre render inicial (`itemHtml`) e atualização DOM (`toggleItem`).
 
 **"Não utiliza" por item** — grupos `💳 Benefícios` e `🛡️ Planos & Seguros` têm flag `naoUtilizavel: true` em `GRUPOS_ADMISSAO`. `ITENS_NAO_UTILIZAVEL` é um Set derivado automaticamente:
