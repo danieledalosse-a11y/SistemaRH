@@ -2709,37 +2709,47 @@ function _avisoHomeInicializarDestinatarios(row) {
   const html = `
     <div class="field" style="grid-column:span 4;margin:0">
       <label>Destinatários *</label>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:400;cursor:pointer">
-            <input type="checkbox" class="av-perfil-cb" value="todos" id="avCbTodos" ${eTodos ? 'checked' : ''} onchange="avTodasChange(this)">
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;flex-wrap:wrap;gap:5px 12px;align-items:center">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="todos" id="avCbTodos" ${eTodos ? 'checked' : ''}>
             Todos os perfis
           </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:400;cursor:pointer">
-            <input type="checkbox" class="av-perfil-cb" value="gestor" id="avCbGestor" ${pubAtual.includes('gestor') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="gestor" id="avCbGestor" ${pubAtual.includes('gestor') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
             Gestores
           </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:400;cursor:pointer">
-            <input type="checkbox" class="av-perfil-cb" value="rh" id="avCbRh" ${pubAtual.includes('rh') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="rh" id="avCbRh" ${pubAtual.includes('rh') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
             RH
           </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:400;cursor:pointer">
-            <input type="checkbox" class="av-perfil-cb" value="diretoria" id="avCbDiretoria" ${pubAtual.includes('diretoria') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="diretoria" id="avCbDiretoria" ${pubAtual.includes('diretoria') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
             Diretoria
           </label>
         </div>
         <div id="avColabSection">
-          <div style="font-size:12px;color:var(--text-sec);margin-bottom:5px">Pessoas específicas (opcional)</div>
-          <div id="avColabChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+          <div style="font-size:11px;color:var(--text-sec);margin-bottom:4px">Pessoas específicas (opcional)</div>
+          <div id="avColabChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px"></div>
           <div style="position:relative">
             <input type="text" id="avColabBusca" placeholder="Buscar colaborador pelo nome..." autocomplete="off"
-              oninput="avBuscarColab()" style="width:100%">
+              style="width:100%;padding:7px 10px;font-size:12px">
             <div id="avColabDropdown" style="display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:200px;overflow-y:auto;z-index:9999"></div>
           </div>
         </div>
       </div>
     </div>`;
   document.getElementById('modalFields').insertAdjacentHTML('beforeend', html);
+
+  // Attach events via addEventListener (more reliable than inline onchange after insertAdjacentHTML)
+  const cbTodosEl = document.getElementById('avCbTodos');
+  if (cbTodosEl) cbTodosEl.addEventListener('change', function() { avTodasChange(this); });
+  ['avCbGestor', 'avCbRh', 'avCbDiretoria'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', avPerfilChange);
+  });
+  const buscaEl = document.getElementById('avColabBusca');
+  if (buscaEl) buscaEl.addEventListener('input', avBuscarColab);
 
   _avColabSelecionados = [];
   colabAtual.forEach(id => {
