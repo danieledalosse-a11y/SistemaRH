@@ -2258,6 +2258,7 @@ const AVATAR_COLORS = {
 // ─── PERFIS ──────────────────────────────────────────────────────────────────
 let allPerfis = [];
 let editingPerfilId = null;
+let _homeConfigDirty = false; // true quando admin tocou explicitamente no checkbox de Home Dashboard
 
 async function carregarPerfis() {
   document.getElementById('perfisGrid').innerHTML = '<div class="loading">Carregando...</div>';
@@ -2313,6 +2314,7 @@ function abrirPerfilModal(id) {
   document.getElementById('pSecAtividades').checked = !!(hc?.secoes?.includes('atividades'));
   document.getElementById('pSecEventos').checked   = !!(hc?.secoes?.includes('eventos'));
   document.getElementById('pHomeSecoesWrap').style.display = homeDash ? 'flex' : 'none';
+  _homeConfigDirty = false;
   const mods = p ? (Array.isArray(p.modulos) ? p.modulos : JSON.parse(p.modulos || '[]')) : [];
   document.getElementById('pModulosGrid').innerHTML = MODULOS_SISTEMA.map(m =>
     `<label class="modulo-check">
@@ -2472,6 +2474,7 @@ async function salvarFeriasConfig() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function toggleHomeSecoes() {
+  _homeConfigDirty = true;
   const enabled = document.getElementById('pHomeDashboard').checked;
   document.getElementById('pHomeSecoesWrap').style.display = enabled ? 'flex' : 'none';
 }
@@ -2504,7 +2507,7 @@ async function salvarPerfil() {
   // Evita gravar {"dashboard":false} por padrão e evita erro de coluna inexistente antes da migration
   const _hcColExists = allPerfis.length > 0 && Object.prototype.hasOwnProperty.call(allPerfis[0], 'home_config');
   const _hcExisting = editingPerfilId ? (allPerfis.find(x => x.id === editingPerfilId)?.home_config ?? null) : null;
-  if (_hcColExists && (homeDash || _hcExisting != null)) {
+  if (_hcColExists && (_homeConfigDirty || _hcExisting != null)) {
     body.home_config = { dashboard: homeDash, secoes: homeSecoes };
   }
   try {
