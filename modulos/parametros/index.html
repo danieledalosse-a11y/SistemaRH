@@ -891,6 +891,33 @@ const CATS = {
     ],
     headers: ['Gestor', 'Funcionalidade', 'Tipo de escopo', 'Valor', 'Situação', ''],
   },
+  aviso_home: {
+    label: 'Comunicados da Home', section: 'Home do Gestor', sectionOrder: 10, order: 1,
+    icon: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    desc: 'Avisos e comunicados exibidos na Home conforme o perfil do usuário e o período de validade. Aparecem abaixo dos módulos apenas quando há itens ativos.',
+    table: 'param_aviso_home',
+    noOrdem: true,
+    orderBy: 'criado_em.desc',
+    cols: ['titulo', 'tipo', 'publico', 'data_inicio', 'data_fim'],
+    fields: [
+      { key: 'titulo',      label: 'Título',               type: 'text',     width: 4, required: true, placeholder: 'Ex: Dissídio coletivo em vigor a partir de 01/11' },
+      { key: 'corpo',       label: 'Mensagem (opcional)',   type: 'textarea', width: 4 },
+      { key: 'tipo',        label: 'Tipo',                  type: 'select',   width: 2, required: true, options: [
+        { value: 'info',      label: 'Informativo' },
+        { value: 'lembrete',  label: 'Lembrete' },
+        { value: 'urgente',   label: 'Urgente' },
+      ]},
+      { key: 'publico',     label: 'Público',               type: 'select',   width: 2, required: true, options: [
+        { value: 'todos',     label: 'Todos os perfis' },
+        { value: 'gestor',    label: 'Gestores' },
+        { value: 'rh',        label: 'RH' },
+        { value: 'diretoria', label: 'Diretoria' },
+      ]},
+      { key: 'data_inicio', label: 'Data de início',        type: 'date',     width: 2, required: true },
+      { key: 'data_fim',    label: 'Data de fim (opcional)', type: 'date',     width: 2 },
+    ],
+    headers: ['Título', 'Tipo', 'Público', 'Início', 'Fim', 'Situação', ''],
+  },
   escopo_ferias: {
     label: 'Escopo de Gestão — Férias', section: 'Férias', sectionOrder: 2, order: 1, noAuditCols: true,
     icon: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/>',
@@ -1448,6 +1475,15 @@ function renderTabela(rows) {
       html += `<td style="font-weight:600">${gestoresMap[row.gestor_id] || '—'}</td>`;
       html += `<td>${_TIPO_L[row.tipo] || row.tipo || '—'}</td>`;
       html += `<td style="color:var(--text-sec)">${_valorDisplay}</td>`;
+    } else if (currentCat === 'aviso_home') {
+      const _TL = { urgente: 'Urgente', info: 'Informativo', lembrete: 'Lembrete' };
+      const _PL = { todos: 'Todos', gestor: 'Gestor', rh: 'RH', diretoria: 'Diretoria' };
+      const _TCA = { urgente: '#dc2626', info: 'var(--blue)', lembrete: 'var(--amber)' };
+      html += `<td style="font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.titulo || '—'}</td>`;
+      html += `<td><span style="font-size:11px;font-weight:600;color:${_TCA[row.tipo]||'var(--blue)'}">${_TL[row.tipo]||row.tipo||'—'}</span></td>`;
+      html += `<td style="font-size:12px;color:var(--text-sec)">${_PL[row.publico]||row.publico||'—'}</td>`;
+      html += `<td style="font-size:12px">${row.data_inicio||'—'}</td>`;
+      html += `<td style="font-size:12px;color:var(--text-sec)">${row.data_fim||'Sem fim'}</td>`;
     } else if (currentCat === 'marco_tempo_casa') {
       html += `<td style="font-weight:700;font-variant-numeric:tabular-nums">${row.anos != null ? row.anos + (row.anos === 1 ? ' ano' : ' anos') : '—'}</td>`;
     } else if (currentCat === 'tipo_vinculo') {
@@ -1605,6 +1641,11 @@ function abrirModal(row) {
       html += `<div class="field">
         <label>${f.label}</label>
         <select id="field_${f.key}" style="width:100%">${opts}</select>
+      </div>`;
+    } else if (f.type === 'textarea') {
+      html += `<div class="field"${fieldStyle}>
+        <label>${f.label}</label>
+        <textarea id="field_${f.key}" rows="3" placeholder="${f.placeholder || ''}" style="width:100%;resize:vertical;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)">${val || ''}</textarea>
       </div>`;
     } else {
       const stepAttr = f.step ? ` step="${f.step}"` : '';
@@ -1854,6 +1895,11 @@ async function salvar() {
   if (currentCat === 'bonus_indicacao') {
     body.valor = body.valor !== '' && body.valor != null ? parseFloat(body.valor) : null;
     if (!body.vigencia_fim) body.vigencia_fim = null;
+  }
+
+  // aviso_home: data_fim opcional — string vazia vira null
+  if (currentCat === 'aviso_home') {
+    if (!body.data_fim) body.data_fim = null;
   }
 
   const _perf = localStorage.getItem('sb_perfil');

@@ -196,6 +196,15 @@
   .hd-chip.blue  { background: var(--blue-bg);  color: var(--blue); border: 1px solid #BFDBFE; }
   .hd-chip.muted { background: var(--bg); color: var(--text-sec); border: 1px solid var(--border); }
 
+  /* Comunicados da Home */
+  .hd-avisos-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .hd-aviso { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 8px; border-left: 4px solid; font-size: 13px; }
+  .hd-aviso.urgente  { border-color: #dc2626; background: #fef2f2; }
+  .hd-aviso.info     { border-color: var(--blue); background: #eff6ff; }
+  .hd-aviso.lembrete { border-color: var(--amber); background: #fffbeb; }
+  .hd-aviso-titulo   { font-weight: 600; color: var(--text); }
+  .hd-aviso-corpo    { color: var(--text-sec); line-height: 1.45; }
+
   /* Atividades — badge por tipo, layout compacto */
   .hd-act-list { list-style: none; }
   .hd-act-item { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); }
@@ -456,6 +465,9 @@
     </div>
     <div class="hd-mod-row" id="hd-mod-row"></div>
 
+    <!-- 2b. Comunicados (condicional — só aparece quando há avisos ativos) -->
+    <div class="hd-avisos-wrap" id="hd-avisos-wrap" style="display:none"></div>
+
     <!-- 3. Eventos da equipe -->
     <div class="hd-evt-row">
       <div class="hd-card">
@@ -715,6 +727,7 @@ async function renderHomeGestor(p) {
 
   // Módulos (renderiza imediatamente com dados locais)
   _renderModules(p);
+  _renderAvisos((p.perfil || '').toLowerCase());
 
   // Foto do gestor — colaborador_id vem de sb_perfil (usuarios_perfil), fonte canônica
   if (p.colaborador_id) {
@@ -1041,6 +1054,26 @@ function _renderModules(p) {
          <div class="hd-mod-name">${m.nome}</div>
        </a>`)
     .join('');
+}
+
+async function _renderAvisos(perfil) {
+  const wrap = document.getElementById('hd-avisos-wrap');
+  if (!wrap) return;
+  const hoje = new Date().toISOString().slice(0, 10);
+  const rows = await _hdGet('param_aviso_home',
+    `ativo=eq.true&data_inicio=lte.${hoje}&select=id,titulo,corpo,tipo,publico,data_fim`
+  ).catch(() => []);
+  const avisos = rows.filter(r => {
+    if (r.data_fim && r.data_fim < hoje) return false;
+    return r.publico === 'todos' || r.publico === perfil;
+  });
+  if (!avisos.length) { wrap.style.display = 'none'; return; }
+  wrap.innerHTML = avisos.map(a => `
+    <div class="hd-aviso ${a.tipo || 'info'}">
+      <div class="hd-aviso-titulo">${a.titulo}</div>
+      ${a.corpo ? `<div class="hd-aviso-corpo">${a.corpo}</div>` : ''}
+    </div>`).join('');
+  wrap.style.display = '';
 }
 
 // Modal compartilhado — usado por _renderEventos (Aniversários/Tempo de Casa) e _renderFerias (Férias)
