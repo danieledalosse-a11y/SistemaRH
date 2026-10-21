@@ -298,3 +298,133 @@ Escopos devem ser **excluídos fisicamente** (DELETE), não apenas inativados. U
 | 062 | `migrations/062_param_escopo_ferias.sql` | Cria tabela com tipos empresa_atuacao/setor/todos |
 | 063 | `migrations/063_escopo_ferias_gestor_ref.sql` | Adiciona `gestor_ref_id` FK + tipo `'gestor'` |
 | 064 | `migrations/064_escopo_ferias_unique.sql` | Índices únicos parciais por tipo |
+
+---
+
+## Categoria `aviso_home` — Comunicados da Home (migrations 117/118, out/2026)
+
+Seção "Comunicados da Home" no CATS. Tabela: `param_aviso_home`.
+
+### Formulário — campos
+
+`titulo`, `tipo` (info/lembrete/urgente), `data_inicio`, `data_fim` (nullable), `ativo`, **Destinatários** (checkboxes de perfil + busca de colaboradores específicos).
+
+### Abas do modal (ao editar — commits `a4e9b97`, `7bbd099`)
+
+Ao **editar** um comunicado existente, o modal exibe duas abas:
+
+- **Formulário** (padrão): campos de edição limpos, sem informações de auditoria
+- **Histórico**: "Criado em / Última alteração" + accordion "Histórico de alterações"
+
+Ao **criar** novo: modal sem abas, apenas formulário.
+
+**CSS das abas:** `.modal-tabs` (oculto por padrão), `.modal-tabs.visible` (exibido), `.modal-tab`, `.modal-tab.active`, `.modal-tab-pane`, `.modal-tab-pane.active`.
+
+**Controle JS:** `avSwitchTab(tab)` — recebe `'formulario'` ou `'historico'`; ativa a aba e o painel correspondente. Chamada em `abrirModal` e `fecharModal`.
+
+**`abrirModal`:** quando `currentCat === 'aviso_home'`:
+- Adiciona `.modal--compact` e mostra `.modal-tabs` somente se `row` existir (edição)
+- Sempre chama `avSwitchTab('formulario')` ao abrir
+- Remove `.modal-tabs` e `.modal--compact` para outras categorias
+
+**`fecharModal`:** remove `.modal--compact`, `.modal-tabs.visible`, limpa `#avAuditBlock`.
+
+**`#avAuditBlock`:** `<div>` vazio na aba Histórico, populado por `_avisoHomeInicializarDestinatarios` com o `field-audit` (criado_em / updated_at) ao editar. Nunca injetado em `#modalFields`.
+
+**`#histSection`:** accordion reaproveitado, agora dentro de `#tabPaneHistorico` em vez de fora do `#modalFields`. Lógica `carregarHistorico`/`renderHistorico` inalterada.
+
+### Destinatários — checkboxes de perfil (commits `a4e9b97`, `496d1c6`, `1fa88c1`)
+
+**Regra "Todos":** exclusivo com perfis específicos. Ao marcar "Todos", os demais ficam `disabled` e a seção de gestores específicos recebe `opacity:0.4; pointer-events:none`.
+
+**Fix de interação (commit `1fa88c1`):** `onchange` inline e event delegation em `insertAdjacentHTML` não eram confiáveis em todos os browsers. Solução definitiva:
+- Labels usam atributo `for="avCbTodos"` etc. + estilos inline sobrescrevendo `.field label` (`text-transform:none; letter-spacing:0`)
+- Listeners adicionados programaticamente logo após o `insertAdjacentHTML`:
+```js
+const _cbTodos = document.getElementById('avCbTodos');
+if (_cbTodos) _cbTodos.addEventListener('change', function() { avTodasChange(this); });
+['avCbGestor','avCbRh','avCbDiretoria'].forEach(cbId => {
+  const _cb = document.getElementById(cbId);
+  if (_cb) _cb.addEventListener('change', avPerfilChange);
+});
+```
+
+**Funções de callback (ainda existem no arquivo — não remover):**
+```js
+function avTodasChange(cb)   // desabilita/habilita perfis; chama _avAtualizarColabSection()
+function avPerfilChange()     // desmarca avCbTodos; chama _avAtualizarColabSection()
+function avToggleTodos(e)    // legado — não chamado; não remover (pode ser reutilizado)
+function avTogglePerfil(p,e) // legado — não chamado; não remover
+```
+
+### Dropdown de gestores específicos — posicionamento (commit `1fa88c1`)
+
+O elemento `avColabDropdown` (`position:fixed; z-index:9999`) ficava preso no stacking context do modal — o footer do modal aparecia acima do dropdown mesmo com z-index alto.
+
+**Fix:** após `insertAdjacentHTML`, o dropdown é movido para `document.body`:
+```js
+const _avDd = document.getElementById('avColabDropdown');
+if (_avDd) document.body.appendChild(_avDd);
+```
+
+Em `fecharModal`, o dropdown é removido do body:
+```js
+const _avDdBody = document.getElementById('avColabDropdown');
+if (_avDdBody) _avDdBody.remove();
+```
+
+O `avBuscarGestor` usa `getBoundingClientRect()` para posicionamento — funciona corretamente com o elemento no body.
+
+### Busca de gestores específicos — `avBuscarGestor` (commit `496d1c6`)
+
+Substitui `avBuscarColab` (que buscava em `colaboradores`). Fonte oficial: `param_gestor`.
+
+```js
+async function avBuscarGestor() {
+  // query: param_gestor?ativo=eq.true&nome=ilike.*q*&select=id,nome,apelido,colaborador_id
+  // usa SB_HEADERS (JWT autenticado) — param_gestor tem RLS que bloqueia publishable key
+  // filtra: validos = list.filter(g => g.colaborador_id)
+  // armazena: _avGestorCache[g.colaborador_id] = { colaborador_id, nome: g.apelido || g.nome }
+}
+function avSelecionarGestor(colaboradorId) {
+  // push { id: colaboradorId, nome } em _avColabSelecionados
+}
+```
+
+**Importante:** `param_gestor.colaborador_id` deve estar preenchido para o gestor aparecer na busca. Gestores sem `colaborador_id` são filtrados por `validos = list.filter(g => g.colaborador_id)`.
+
+### Layout do formulário aviso_home (commit `7153908`)
+
+```
+[ Título                              ]  ← width 4
+[ Mensagem (opcional)                 ]  ← width 4
+[ Tipo                                ]  ← width 4 (era 2 — mudado para deixar datas lado a lado)
+[ Data de início   ][ Data de fim     ]  ← width 2 + 2
+[ Destinatários...                    ]  ← width 4 (injetado via _avisoHomeInicializarDestinatarios)
+```
+
+### Modal compacto `.modal--compact` (piloto visual)
+
+CSS no final do `<style>` com `!important` para garantir precedência. Aplica apenas quando `currentCat === 'aviso_home'`. Reduz padding, font-size e espaçamentos. Ver bloco CSS "Modal compacto — piloto do padrão visual".
+
+### `salvar()` — bloco aviso_home
+
+```js
+if (currentCat === 'aviso_home') {
+  if (!body.data_fim) body.data_fim = null;
+  const checkedPerfis = [...document.querySelectorAll('.av-perfil-cb:checked')].map(el => el.value);
+  body.publico = checkedPerfis.length ? checkedPerfis : ['todos'];
+  body.colaboradores_ids = _avColabSelecionados.length ? _avColabSelecionados.map(c => c.id) : null;
+}
+```
+
+### Título clicável na lista
+
+Coluna `titulo` renderizada com `cursor:pointer; color:var(--blue)` e `onclick="editarItem('${row.id}')"` — clicar abre o modal direto, sem precisar do botão editar.
+
+### Migrations
+
+| Nº | Conteúdo | Status |
+|---|---|---|
+| 117 | Cria `param_aviso_home` + RLS base | ✅ executada |
+| 118 | `publico TEXT[]`, `colaboradores_ids INTEGER[]`, recria policies com lógica array | ✅ executada |
