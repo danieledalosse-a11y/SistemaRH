@@ -2499,8 +2499,14 @@ async function salvarPerfil() {
         .filter(([id]) => document.getElementById(id)?.checked)
         .map(([,s]) => s)
     : [];
-  const body = { nome, descricao: descricao || null, modulos, requer_colaborador: document.getElementById('pRequerColab').checked,
-    home_config: { dashboard: homeDash, secoes: homeSecoes } };
+  const body = { nome, descricao: descricao || null, modulos, requer_colaborador: document.getElementById('pRequerColab').checked };
+  // Inclui home_config somente quando: coluna existe no banco E (dashboard habilitado OU já havia config salva)
+  // Evita gravar {"dashboard":false} por padrão e evita erro de coluna inexistente antes da migration
+  const _hcColExists = allPerfis.length > 0 && Object.prototype.hasOwnProperty.call(allPerfis[0], 'home_config');
+  const _hcExisting = editingPerfilId ? (allPerfis.find(x => x.id === editingPerfilId)?.home_config ?? null) : null;
+  if (_hcColExists && (homeDash || _hcExisting != null)) {
+    body.home_config = { dashboard: homeDash, secoes: homeSecoes };
+  }
   try {
     if (editingPerfilId) {
       await sbPatch('perfis', editingPerfilId, body);
