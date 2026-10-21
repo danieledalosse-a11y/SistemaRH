@@ -461,6 +461,31 @@
               Quando ativado, não será possível criar usuários com este perfil sem vincular um colaborador.
             </div>
           </div>
+          <div class="field" style="border-top:1px solid var(--border);padding-top:16px">
+            <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Home Dashboard</label>
+            <label class="modulo-check" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500">
+              <input type="checkbox" id="pHomeDashboard" style="width:16px;height:16px;cursor:pointer" onchange="toggleHomeSecoes()">
+              Habilitar Home Dashboard para este perfil
+            </label>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;padding-left:24px">
+              Quando ativo, este perfil vê o painel de dashboard ao entrar no sistema.
+            </div>
+            <div id="pHomeSecoesWrap" style="display:none;flex-direction:column;gap:8px;margin-top:12px;padding-left:24px">
+              <div style="font-size:11px;font-weight:600;color:var(--text-sec);letter-spacing:.04em;margin-bottom:2px">SEÇÕES VISÍVEIS</div>
+              <label class="modulo-check" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="pSecFerias" style="width:15px;height:15px;cursor:pointer">
+                Férias da equipe
+              </label>
+              <label class="modulo-check" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="pSecAtividades" style="width:15px;height:15px;cursor:pointer">
+                Últimas atividades
+              </label>
+              <label class="modulo-check" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="pSecEventos" style="width:15px;height:15px;cursor:pointer">
+                Aniversários &amp; Tempo de Casa
+              </label>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button id="perfilBtnToggle" class="btn" onclick="togglePerfilAtivo()" style="display:none">Inativar</button>
@@ -2281,6 +2306,13 @@ function abrirPerfilModal(id) {
   document.getElementById('pNome').value = p?.nome || '';
   document.getElementById('pDesc').value = p?.descricao || '';
   document.getElementById('pRequerColab').checked = !!(p?.requer_colaborador);
+  const hc = p?.home_config || null;
+  const homeDash = !!(hc?.dashboard);
+  document.getElementById('pHomeDashboard').checked = homeDash;
+  document.getElementById('pSecFerias').checked    = !!(hc?.secoes?.includes('ferias_equipe'));
+  document.getElementById('pSecAtividades').checked = !!(hc?.secoes?.includes('atividades'));
+  document.getElementById('pSecEventos').checked   = !!(hc?.secoes?.includes('eventos'));
+  document.getElementById('pHomeSecoesWrap').style.display = homeDash ? 'flex' : 'none';
   const mods = p ? (Array.isArray(p.modulos) ? p.modulos : JSON.parse(p.modulos || '[]')) : [];
   document.getElementById('pModulosGrid').innerHTML = MODULOS_SISTEMA.map(m =>
     `<label class="modulo-check">
@@ -2439,6 +2471,11 @@ async function salvarFeriasConfig() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+function toggleHomeSecoes() {
+  const enabled = document.getElementById('pHomeDashboard').checked;
+  document.getElementById('pHomeSecoesWrap').style.display = enabled ? 'flex' : 'none';
+}
+
 function fecharPerfilModal() {
   const ov = document.getElementById('perfilOverlay');
   ov.style.opacity = '0';
@@ -2456,7 +2493,14 @@ async function salvarPerfil() {
   if (!nome) { showToast('Nome é obrigatório.', 'error'); return; }
   const modulos = [...document.querySelectorAll('#pModulosGrid input:checked')].map(c => c.value);
   const descricao = document.getElementById('pDesc').value.trim();
-  const body = { nome, descricao: descricao || null, modulos, requer_colaborador: document.getElementById('pRequerColab').checked };
+  const homeDash = document.getElementById('pHomeDashboard').checked;
+  const homeSecoes = homeDash
+    ? [['pSecFerias','ferias_equipe'],['pSecAtividades','atividades'],['pSecEventos','eventos']]
+        .filter(([id]) => document.getElementById(id)?.checked)
+        .map(([,s]) => s)
+    : [];
+  const body = { nome, descricao: descricao || null, modulos, requer_colaborador: document.getElementById('pRequerColab').checked,
+    home_config: { dashboard: homeDash, secoes: homeSecoes } };
   try {
     if (editingPerfilId) {
       await sbPatch('perfis', editingPerfilId, body);
