@@ -793,26 +793,31 @@ function _avHtml(nome, fotoUrl, cls) {
   return `<div class="${cls}" style="background:${_avColor(nome)}">${_initials(nome)}</div>`;
 }
 
-// Dispatcher — adicionar renderHomeRH(p) e renderHomeDiretoria(p) aqui no futuro
 function routeHomePerfil(p) {
   const perfil = (p.perfil || '').toLowerCase();
-  if (perfil === 'gestor') {
-    document.querySelector('.container').style.display = 'none';
-    document.getElementById('container-home-dashboard').style.display = 'block';
-    renderHomeGestor(p).catch(e => console.error('[renderHomeGestor]', e));
-  }
+  const hc = p.home_config || null;
+  // hc.dashboard === true → mostra dashboard; fallback: somente 'gestor' (preserva comportamento atual)
+  const showDash = hc ? hc.dashboard === true : perfil === 'gestor';
+  if (!showDash) return;
+  document.querySelector('.container').style.display = 'none';
+  document.getElementById('container-home-dashboard').style.display = 'block';
+  const secoes = (hc && Array.isArray(hc.secoes)) ? hc.secoes
+    : (perfil === 'gestor' ? ['ferias_equipe', 'atividades', 'eventos'] : []);
+  renderHomeDashboard(p, secoes).catch(e => console.error('[renderHomeDashboard]', e));
 }
 
-async function renderHomeGestor(p) {
+async function renderHomeDashboard(p, secoes) {
   const nome = (p.nome || '').trim();
-  const primeiroNome = nome.split(/\s+/)[0] || 'Gestor';
+  const primeiroNome = nome.split(/\s+/)[0] || 'Usuário';
+  const perfil = (p.perfil || '').toLowerCase();
   const hora = new Date().getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const temEquipe = secoes.some(s => ['ferias_equipe', 'atividades', 'eventos'].includes(s));
 
-  // Phase 1 — topbar Gestor (branco, visual premium)
+  // Phase 1 — topbar dashboard (visual premium)
   document.querySelector('.topbar').classList.add('topbar-gestor');
   const bellWrap = document.getElementById('hd-bell-wrap');
-  if (bellWrap) bellWrap.style.display = 'flex';
+  if (bellWrap && perfil === 'gestor') bellWrap.style.display = 'flex';
 
   // Saudação imediata (com dados locais)
   document.getElementById('hd-greeting-title').textContent = `${saudacao}, ${primeiroNome}!`;
@@ -822,16 +827,16 @@ async function renderHomeGestor(p) {
   document.getElementById('hd-date-full').textContent =
     now.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  // Avatar do gestor (iniciais)
+  // Avatar (iniciais)
   const gestorAv = document.getElementById('hd-gestor-av');
   gestorAv.style.background = _avColor(nome);
   gestorAv.textContent = _initials(nome);
 
-  // Módulos (renderiza imediatamente com dados locais)
+  // Módulos e comunicados (universais)
   _renderModules(p);
-  _renderAvisos((p.perfil || '').toLowerCase());
+  _renderAvisos(perfil);
 
-  // Foto do gestor — colaborador_id vem de sb_perfil (usuarios_perfil), fonte canônica
+  // Foto do usuário — colaborador_id vem de sb_perfil (usuarios_perfil), fonte canônica
   if (p.colaborador_id) {
     const gc = await _hdGet('colaboradores', `id=eq.${p.colaborador_id}&select=foto_url`);
     if (gc.length && gc[0].foto_url) {
@@ -843,37 +848,62 @@ async function renderHomeGestor(p) {
     }
   }
 
-  // Busca apelido e id em param_gestor via colaborador_id do perfil de sessão
+  if (!temEquipe) {
+    // Sem seções de equipe — meta simples, oculta sidebar e cards de equipe
+    const unidade = (p.unidade || p.empresa || 'Grupo Revest').trim();
+    const perfilLabel = perfil.charAt(0).toUpperCase() + perfil.slice(1);
+    document.getElementById('hd-greeting-meta').textContent = `${unidade} · ${perfilLabel}`;
+    document.getElementById('hd-team-row').innerHTML = '';
+    const sidebar = document.querySelector('.hd-sidebar');
+    if (sidebar) sidebar.style.display = 'none';
+    const feriasCard = document.getElementById('hd-ferias-stats')?.closest('.hd-card');
+    if (feriasCard) feriasCard.style.display = 'none';
+    const atividadesCard = document.getElementById('hd-act-list')?.closest('.hd-card');
+    if (atividadesCard) atividadesCard.style.display = 'none';
+    return;
+  }
+
+  // --- Seções de equipe ---
+  // Gestor: busca pela equipe via param_gestor.apelido
+  // RH/Diretoria: todos os colaboradores ativos (RLS do Supabase controla o escopo real)
   let apelido = null;
   let pgGestorId = null; // param_gestor.id (integer) — usado para param_escopo_home
-  if (p.colaborador_id) {
-    const pg = await _hdGet('param_gestor', `colaborador_id=eq.${p.colaborador_id}&select=id,apelido`).catch(() => []);
-    if (pg.length) { apelido = pg[0].apelido; pgGestorId = pg[0].id; }
-  }
-  if (!apelido) apelido = primeiroNome;
-
-  // Equipe base (com foto_url + empresa_atuacao para resolução de escopos)
   const _colSelectHome = 'select=id,nome,cargo,setor,data_nascimento,data_admissao,data_ingresso_grupo,foto_url,tipo_vinculo,empresa_atuacao';
-  const team = await _hdGet('colaboradores',
-    `gestor=ilike.${encodeURIComponent(apelido)}&data_demissao=is.null&${_colSelectHome}&order=nome`
-  );
+  let team = [];
+
+  if (perfil === 'gestor') {
+    if (p.colaborador_id) {
+      const pg = await _hdGet('param_gestor', `colaborador_id=eq.${p.colaborador_id}&select=id,apelido`).catch(() => []);
+      if (pg.length) { apelido = pg[0].apelido; pgGestorId = pg[0].id; }
+    }
+    if (!apelido) apelido = primeiroNome;
+    team = await _hdGet('colaboradores',
+      `gestor=ilike.${encodeURIComponent(apelido)}&data_demissao=is.null&${_colSelectHome}&order=nome`
+    );
+  } else {
+    // rh / diretoria: todos os ativos — RLS do Supabase define o escopo real de acesso
+    team = await _hdGet('colaboradores',
+      `data_demissao=is.null&${_colSelectHome}&order=nome`
+    );
+  }
   const teamIds = team.map(c => c.id);
 
-  // Escopo adicional — aniversariantes (não bloqueia; fallback = equipe base)
+  // Escopo adicional — aniversariantes (apenas Gestor via param_escopo_home)
   const _idsBase = new Set(teamIds);
-  const _extraAniv = pgGestorId
+  const _extraAniv = (perfil === 'gestor' && pgGestorId)
     ? await _resolverEscoposHome(pgGestorId, 'aniversarios', _idsBase, _colSelectHome).catch(() => [])
     : [];
   // teamAniversarios = equipe base + extras deduplizados — usado SOMENTE em _renderEventos
   const teamAniversarios = _extraAniv.length ? [...team, ..._extraAniv] : team;
 
-  // Phase 2 — bell de pendências (não bloqueia o carregamento)
-  if (teamIds.length) _loadPendencias(teamIds, team).catch(() => {});
+  // Phase 2 — bell de pendências (apenas Gestor, não bloqueia o carregamento)
+  if (perfil === 'gestor' && teamIds.length) _loadPendencias(teamIds, team).catch(() => {});
 
-  // Meta do gestor + mini-avatares da equipe (equipe base — não alterado)
+  // Meta + mini-avatares da equipe (equipe base — não alterado)
   const unidade = (p.unidade || p.empresa || 'Grupo Revest').trim();
+  const perfilLabel = perfil === 'gestor' ? 'Gestor' : perfil.charAt(0).toUpperCase() + perfil.slice(1);
   document.getElementById('hd-greeting-meta').textContent =
-    `${unidade} · ${team.length} colaborador${team.length !== 1 ? 'es' : ''} · Gestor`;
+    `${unidade} · ${team.length} colaborador${team.length !== 1 ? 'es' : ''} · ${perfilLabel}`;
 
   const teamRow = document.getElementById('hd-team-row');
   const max = 5;
@@ -887,13 +917,13 @@ async function renderHomeGestor(p) {
   // Férias e atividades em paralelo (baseados em teamIds — equipe base, inalterado)
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const [feriasData, eventsData, marcosRows] = await Promise.all([
-    teamIds.length ? _hdGet('ferias',
+    (secoes.includes('ferias_equipe') && teamIds.length) ? _hdGet('ferias',
       `colaborador_id=in.(${teamIds.join(',')})&select=colaborador_id,status,periodos,periodo1_inicio,periodo1_fim,periodo2_inicio,periodo2_fim`
     ) : Promise.resolve([]),
-    teamIds.length ? _hdGet('v_historico_eventos_home',
+    (secoes.includes('atividades') && teamIds.length) ? _hdGet('v_historico_eventos_home',
       `colaborador_id=in.(${teamIds.join(',')})&select=id,colaborador_id,tipo,titulo,resumo_home,data_evento&order=id.desc&limit=5`
     ) : Promise.resolve([]),
-    _hdGet('param_marco_tempo_casa', 'select=anos&ativo=eq.true&order=anos').catch(() => []),
+    secoes.includes('eventos') ? _hdGet('param_marco_tempo_casa', 'select=anos&ativo=eq.true&order=anos').catch(() => []) : Promise.resolve([]),
   ]);
   const marcosGestor = marcosRows.map(r => r.anos);
 
@@ -933,9 +963,24 @@ async function renderHomeGestor(p) {
   const emGozoIds = new Set(emGozoRaw.map(p => p.colaborador_id));
   const emGozo = [...emGozoIds].map(cid => emGozoRaw.find(p => p.colaborador_id === cid));
 
-  _renderEventos(teamAniversarios, hoje, marcosGestor); // escopo ampliado via param_escopo_home
-  _renderFerias(feriasData, periodosList, emGozo, hoje, colabMap);
-  _renderAtividades(eventsData, colabMap, hoje);
+  if (secoes.includes('eventos')) {
+    _renderEventos(teamAniversarios, hoje, marcosGestor); // escopo ampliado via param_escopo_home
+  } else {
+    const sidebar = document.querySelector('.hd-sidebar');
+    if (sidebar) sidebar.style.display = 'none';
+  }
+  if (secoes.includes('ferias_equipe')) {
+    _renderFerias(feriasData, periodosList, emGozo, hoje, colabMap);
+  } else {
+    const feriasCard = document.getElementById('hd-ferias-stats')?.closest('.hd-card');
+    if (feriasCard) feriasCard.style.display = 'none';
+  }
+  if (secoes.includes('atividades')) {
+    _renderAtividades(eventsData, colabMap, hoje);
+  } else {
+    const atividadesCard = document.getElementById('hd-act-list')?.closest('.hd-card');
+    if (atividadesCard) atividadesCard.style.display = 'none';
+  }
 }
 
 // Phase 2 — bell: carrega pendências e monta painel suspenso

@@ -296,10 +296,15 @@ async function login(e) {
     try {
       const perfilId = perfil.perfil_id;
       if (perfilId) {
-        const perfisData = await sbFetch(`/rest/v1/perfis?id=eq.${perfilId}&select=permissoes`, {
+        const perfisData = await sbFetch(`/rest/v1/perfis?id=eq.${perfilId}&select=permissoes,home_config`, {
           headers: { 'Authorization': `Bearer ${data.access_token}` }
         });
         localStorage.setItem('sb_permissoes', JSON.stringify(perfisData?.[0]?.permissoes ?? {}));
+        if (perfisData?.[0]?.home_config != null) {
+          const pf = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+          pf.home_config = perfisData[0].home_config;
+          localStorage.setItem('sb_perfil', JSON.stringify(pf));
+        }
       } else {
         localStorage.setItem('sb_permissoes', JSON.stringify({}));
       }
