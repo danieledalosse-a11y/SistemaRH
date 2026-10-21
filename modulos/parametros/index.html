@@ -1870,6 +1870,8 @@ async function fecharModal(forcar = false) {
   document.getElementById('modalTabs').classList.remove('visible');
   const auditBlock = document.getElementById('avAuditBlock');
   if (auditBlock) auditBlock.innerHTML = '';
+  const _avDdBody = document.getElementById('avColabDropdown');
+  if (_avDdBody) _avDdBody.remove();
   const mf = document.getElementById('modalFields');
   if (mf._avHandler) {
     mf.removeEventListener('change', mf._avHandler);
@@ -2772,20 +2774,20 @@ function _avisoHomeInicializarDestinatarios(row) {
       <label>Destinatários *</label>
       <div style="display:flex;flex-direction:column;gap:7px">
         <div style="display:flex;flex-wrap:wrap;gap:5px 12px;align-items:center">
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
-            <input type="checkbox" class="av-perfil-cb" value="todos" id="avCbTodos" ${eTodos ? 'checked' : ''} onchange="avTodasChange(this)">
+          <label for="avCbTodos" style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)">
+            <input type="checkbox" class="av-perfil-cb" value="todos" id="avCbTodos" ${eTodos ? 'checked' : ''}>
             Todos os perfis
           </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
-            <input type="checkbox" class="av-perfil-cb" value="gestor" id="avCbGestor" ${pubAtual.includes('gestor') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
+          <label for="avCbGestor" style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)">
+            <input type="checkbox" class="av-perfil-cb" value="gestor" id="avCbGestor" ${pubAtual.includes('gestor') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
             Gestores
           </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
-            <input type="checkbox" class="av-perfil-cb" value="rh" id="avCbRh" ${pubAtual.includes('rh') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
+          <label for="avCbRh" style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)">
+            <input type="checkbox" class="av-perfil-cb" value="rh" id="avCbRh" ${pubAtual.includes('rh') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
             RH
           </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
-            <input type="checkbox" class="av-perfil-cb" value="diretoria" id="avCbDiretoria" ${pubAtual.includes('diretoria') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
+          <label for="avCbDiretoria" style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)">
+            <input type="checkbox" class="av-perfil-cb" value="diretoria" id="avCbDiretoria" ${pubAtual.includes('diretoria') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
             Diretoria
           </label>
         </div>
@@ -2801,6 +2803,18 @@ function _avisoHomeInicializarDestinatarios(row) {
       </div>
     </div>`;
   document.getElementById('modalFields').insertAdjacentHTML('beforeend', html);
+
+  // Bind checkbox events directly after DOM insertion (inline onchange is unreliable in insertAdjacentHTML)
+  const _cbTodos = document.getElementById('avCbTodos');
+  if (_cbTodos) _cbTodos.addEventListener('change', function() { avTodasChange(this); });
+  ['avCbGestor', 'avCbRh', 'avCbDiretoria'].forEach(cbId => {
+    const _cb = document.getElementById(cbId);
+    if (_cb) _cb.addEventListener('change', avPerfilChange);
+  });
+
+  // Move dropdown para document.body para escapar do stacking context do modal
+  const _avDd = document.getElementById('avColabDropdown');
+  if (_avDd) document.body.appendChild(_avDd);
 
   const mf = document.getElementById('modalFields');
   if (mf._avHandler) {
