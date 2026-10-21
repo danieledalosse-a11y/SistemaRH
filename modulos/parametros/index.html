@@ -2772,29 +2772,29 @@ function _avisoHomeInicializarDestinatarios(row) {
       <label>Destinatários *</label>
       <div style="display:flex;flex-direction:column;gap:7px">
         <div style="display:flex;flex-wrap:wrap;gap:5px 12px;align-items:center">
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer" onclick="avToggleTodos(event)">
-            <input type="checkbox" class="av-perfil-cb" value="todos" id="avCbTodos" ${eTodos ? 'checked' : ''}>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="todos" id="avCbTodos" ${eTodos ? 'checked' : ''} onchange="avTodasChange(this)">
             Todos os perfis
           </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer" onclick="avTogglePerfil('gestor',event)">
-            <input type="checkbox" class="av-perfil-cb" value="gestor" id="avCbGestor" ${pubAtual.includes('gestor') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="gestor" id="avCbGestor" ${pubAtual.includes('gestor') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
             Gestores
           </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer" onclick="avTogglePerfil('rh',event)">
-            <input type="checkbox" class="av-perfil-cb" value="rh" id="avCbRh" ${pubAtual.includes('rh') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="rh" id="avCbRh" ${pubAtual.includes('rh') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
             RH
           </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer" onclick="avTogglePerfil('diretoria',event)">
-            <input type="checkbox" class="av-perfil-cb" value="diretoria" id="avCbDiretoria" ${pubAtual.includes('diretoria') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="diretoria" id="avCbDiretoria" ${pubAtual.includes('diretoria') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
             Diretoria
           </label>
         </div>
         <div id="avColabSection">
-          <div style="font-size:11px;color:var(--text-sec);margin-bottom:4px">Pessoas específicas (opcional)</div>
+          <div style="font-size:11px;color:var(--text-sec);margin-bottom:4px">Gestores específicos (opcional)</div>
           <div id="avColabChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px"></div>
           <div style="position:relative">
-            <input type="text" id="avColabBusca" placeholder="Buscar colaborador pelo nome..." autocomplete="off"
-              oninput="avBuscarColab()" style="width:100%;padding:7px 10px;font-size:12px">
+            <input type="text" id="avColabBusca" placeholder="Buscar gestor pelo nome..." autocomplete="off"
+              oninput="avBuscarGestor()" style="width:100%;padding:7px 10px;font-size:12px">
             <div id="avColabDropdown" style="display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:200px;overflow-y:auto;z-index:9999"></div>
           </div>
         </div>
@@ -2917,7 +2917,10 @@ function avRemoverColab(id) {
   _avRenderChips();
 }
 
-async function avBuscarColab() {
+// Busca gestores em param_gestor (fonte oficial) — armazena colaborador_id para compatibilidade com RLS
+let _avGestorCache = {}; // key: colaborador_id → { colaborador_id, nome }
+
+async function avBuscarGestor() {
   const inp = document.getElementById('avColabBusca');
   const q = inp.value.trim();
   const dd = document.getElementById('avColabDropdown');
@@ -2929,37 +2932,39 @@ async function avBuscarColab() {
   });
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&data_demissao=is.null&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome&order=nome&limit=7`,
+      `${SB_URL}/rest/v1/param_gestor?ativo=eq.true&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome,apelido,colaborador_id&order=nome&limit=10`,
       { headers: SB_HEADERS }
     );
     const list = await r.json();
-    if (!list.length) {
-      dd.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text-ter)">Nenhum resultado</div>';
+    const validos = list.filter(g => g.colaborador_id);
+    if (!validos.length) {
+      dd.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text-ter)">Nenhum gestor encontrado</div>';
       dd.style.display = 'block'; return;
     }
-    list.forEach(c => { _avColabCache[c.id] = c; });
+    validos.forEach(g => { _avGestorCache[g.colaborador_id] = { colaborador_id: g.colaborador_id, nome: g.apelido || g.nome }; });
     const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(`(${esc})`, 'gi');
-    dd.innerHTML = list.map((c, i) =>
-      `<div onclick="avSelecionarColab(${c.id})"
-        style="padding:8px 14px;cursor:pointer;font-size:13px;color:var(--text);${i < list.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}"
+    const nomeFn = g => (g.apelido || g.nome);
+    dd.innerHTML = validos.map((g, i) =>
+      `<div onclick="avSelecionarGestor(${g.colaborador_id})"
+        style="padding:8px 14px;cursor:pointer;font-size:13px;color:var(--text);${i < validos.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}"
         onmouseover="this.style.background='var(--blue-bg)';this.style.color='var(--blue)'"
-        onmouseout="this.style.background='';this.style.color='var(--text)'">${c.nome.replace(re, '<strong>$1</strong>')}</div>`
+        onmouseout="this.style.background='';this.style.color='var(--text)'">${nomeFn(g).replace(re, '<strong>$1</strong>')}</div>`
     ).join('');
     dd.style.display = 'block';
   } catch(_) { dd.style.display = 'none'; }
 }
 
-function avSelecionarColab(id) {
-  const c = _avColabCache[id];
-  if (!c) return;
-  if (!_avColabSelecionados.find(x => x.id === id)) {
-    _avColabSelecionados.push({ id, nome: c.nome });
+function avSelecionarGestor(colaboradorId) {
+  const g = _avGestorCache[colaboradorId];
+  if (!g) return;
+  if (!_avColabSelecionados.find(x => x.id === colaboradorId)) {
+    _avColabSelecionados.push({ id: colaboradorId, nome: g.nome });
     _avRenderChips();
   }
   const inp = document.getElementById('avColabBusca');
   const dd = document.getElementById('avColabDropdown');
-  if (inp) { inp.value = ''; }
+  if (inp) inp.value = '';
   if (dd) dd.style.display = 'none';
 }
 
