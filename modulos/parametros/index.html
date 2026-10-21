@@ -305,6 +305,14 @@
   .btn-confirm-success { background: var(--green);  color: #fff; }
   .btn-confirm-info    { background: var(--blue);   color: #fff; }
 
+  /* Abas do modal aviso_home */
+  .modal-tabs { display: none; border-bottom: 1px solid var(--border); margin: 0; padding: 0 24px; gap: 0; }
+  .modal-tabs.visible { display: flex; }
+  .modal-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 10px 14px; font-size: 13px; font-weight: 500; color: var(--text-sec); cursor: pointer; margin-bottom: -1px; transition: color 0.12s, border-color 0.12s; }
+  .modal-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .modal-tab-pane { display: none; }
+  .modal-tab-pane.active { display: block; }
+
   /* Modal compacto — piloto do padrão visual (aviso_home) — bloco no final para garantir precedência */
   .modal--compact .modal-header { padding: 18px 24px 14px !important; }
   .modal--compact .modal-title  { font-size: 16px !important; margin-bottom: 4px !important; }
@@ -531,14 +539,23 @@
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    <div class="modal-tabs" id="modalTabs">
+      <button class="modal-tab active" id="tabFormulario" onclick="avSwitchTab('formulario')">Formulário</button>
+      <button class="modal-tab" id="tabHistorico" onclick="avSwitchTab('historico')">Histórico</button>
+    </div>
     <div class="modal-body">
-      <div id="modalFields"></div>
-      <div id="histSection" style="display:none" class="hist-section">
-        <button class="hist-section-toggle" id="histSectionToggle" onclick="toggleHistSection()">
-          <span>Histórico de alterações</span>
-          <svg viewBox="0 0 24 24" id="histSectionArrow"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div id="histList" style="display:none"></div>
+      <div class="modal-tab-pane active" id="tabPaneFormulario">
+        <div id="modalFields"></div>
+      </div>
+      <div class="modal-tab-pane" id="tabPaneHistorico">
+        <div id="avAuditBlock" style="padding:14px 0 4px"></div>
+        <div id="histSection" style="display:none" class="hist-section">
+          <button class="hist-section-toggle" id="histSectionToggle" onclick="toggleHistSection()">
+            <span>Histórico de alterações</span>
+            <svg viewBox="0 0 24 24" id="histSectionArrow"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="histList" style="display:none"></div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1576,12 +1593,22 @@ function abrirModal(row) {
 
   document.getElementById('overlay').classList.add('open');
 
-  // Modal compacto apenas para aviso_home (piloto do padrão visual)
+  // Modal compacto e abas apenas para aviso_home
   const modalEl = document.getElementById('modal');
+  const tabsEl  = document.getElementById('modalTabs');
   if (currentCat === 'aviso_home') {
     modalEl.classList.add('modal--compact');
+    if (row) {
+      tabsEl.classList.add('visible');
+      avSwitchTab('formulario');
+    } else {
+      tabsEl.classList.remove('visible');
+      avSwitchTab('formulario');
+    }
   } else {
     modalEl.classList.remove('modal--compact');
+    tabsEl.classList.remove('visible');
+    avSwitchTab('formulario');
   }
 
   const proximaOrdem = row ? null : (allRows.length ? Math.max(...allRows.map(r => r.ordem || 0)) + 1 : 1);
@@ -1840,6 +1867,9 @@ async function fecharModal(forcar = false) {
   }
   document.getElementById('overlay').classList.remove('open');
   document.getElementById('modal').classList.remove('modal--compact');
+  document.getElementById('modalTabs').classList.remove('visible');
+  const auditBlock = document.getElementById('avAuditBlock');
+  if (auditBlock) auditBlock.innerHTML = '';
   const mf = document.getElementById('modalFields');
   if (mf._avHandler) {
     mf.removeEventListener('change', mf._avHandler);
@@ -2799,20 +2829,31 @@ function _avisoHomeInicializarDestinatarios(row) {
   _avRenderChips();
   _avAtualizarColabSection();
 
-  // Injeta field-audit ao final (após destinatários) para aviso_home
-  if (row) {
-    const auditHtml = `<div class="field-audit">
-      <div class="field-audit-item">
-        <label>Criado em</label>
-        <span>${fmtDate(row.created_at)}${row.criado_por ? ` · ${row.criado_por}` : ''}</span>
-      </div>
-      <div class="field-audit-item">
-        <label>Última alteração</label>
-        <span>${row.updated_at && row.updated_at !== row.created_at ? fmtDate(row.updated_at) : '—'}${row.alterado_por ? ` · ${row.alterado_por}` : ''}</span>
-      </div>
-    </div>`;
-    document.getElementById('modalFields').insertAdjacentHTML('beforeend', auditHtml);
+  // Injeta field-audit na aba Histórico para aviso_home
+  const auditBlock = document.getElementById('avAuditBlock');
+  if (auditBlock) {
+    if (row) {
+      auditBlock.innerHTML = `<div class="field-audit">
+        <div class="field-audit-item">
+          <label>Criado em</label>
+          <span>${fmtDate(row.created_at)}${row.criado_por ? ` · ${row.criado_por}` : ''}</span>
+        </div>
+        <div class="field-audit-item">
+          <label>Última alteração</label>
+          <span>${row.updated_at && row.updated_at !== row.created_at ? fmtDate(row.updated_at) : '—'}${row.alterado_por ? ` · ${row.alterado_por}` : ''}</span>
+        </div>
+      </div>`;
+    } else {
+      auditBlock.innerHTML = '';
+    }
   }
+}
+
+function avSwitchTab(tab) {
+  ['formulario','historico'].forEach(t => {
+    document.getElementById('tabPane' + t.charAt(0).toUpperCase() + t.slice(1))?.classList.toggle('active', t === tab);
+    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1))?.classList.toggle('active', t === tab);
+  });
 }
 
 function avToggleTodos(e) {
