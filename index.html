@@ -853,7 +853,7 @@ async function renderHomeGestor(p) {
   if (!apelido) apelido = primeiroNome;
 
   // Equipe base (com foto_url + empresa_atuacao para resolução de escopos)
-  const _colSelectHome = 'select=id,nome,cargo,setor,data_nascimento,data_admissao,foto_url,tipo_vinculo,empresa_atuacao';
+  const _colSelectHome = 'select=id,nome,cargo,setor,data_nascimento,data_admissao,data_ingresso_grupo,foto_url,tipo_vinculo,empresa_atuacao';
   const team = await _hdGet('colaboradores',
     `gestor=ilike.${encodeURIComponent(apelido)}&data_demissao=is.null&${_colSelectHome}&order=nome`
   );
@@ -1358,8 +1358,9 @@ function _renderEventos(team, hoje, marcosGestor) {
       if (diff >= 0 && diff <= 60 * 86400000)
         anivs.push({ c, d, diff, day: d.getDate(), mon: mesesNum[d.getMonth()] });
     }
-    if (c.data_admissao) {
-      const d = new Date(c.data_admissao + 'T00:00:00');
+    const _refCasa = c.data_ingresso_grupo || c.data_admissao;
+    if (_refCasa) {
+      const d = new Date(_refCasa + 'T00:00:00');
       let thisYear = new Date(hoje.getFullYear(), d.getMonth(), d.getDate());
       if (thisYear < hoje) thisYear = new Date(hoje.getFullYear() + 1, d.getMonth(), d.getDate());
       const anos = thisYear.getFullYear() - d.getFullYear();
