@@ -907,12 +907,6 @@ const CATS = {
         { value: 'lembrete',  label: 'Lembrete' },
         { value: 'urgente',   label: 'Urgente' },
       ]},
-      { key: 'publico',     label: 'Público',               type: 'select',   width: 2, required: true, options: [
-        { value: 'todos',     label: 'Todos os perfis' },
-        { value: 'gestor',    label: 'Gestores' },
-        { value: 'rh',        label: 'RH' },
-        { value: 'diretoria', label: 'Diretoria' },
-      ]},
       { key: 'data_inicio', label: 'Data de início',        type: 'date',     width: 2, required: true },
       { key: 'data_fim',    label: 'Data de fim (opcional)', type: 'date',     width: 2 },
     ],
@@ -1479,9 +1473,13 @@ function renderTabela(rows) {
       const _TL = { urgente: 'Urgente', info: 'Informativo', lembrete: 'Lembrete' };
       const _PL = { todos: 'Todos', gestor: 'Gestor', rh: 'RH', diretoria: 'Diretoria' };
       const _TCA = { urgente: '#dc2626', info: 'var(--blue)', lembrete: 'var(--amber)' };
+      const pub = Array.isArray(row.publico) ? row.publico : (row.publico ? [row.publico] : []);
+      const pubLabel = pub.map(p => _PL[p] || p).join(', ') || '—';
+      const nColab = (row.colaboradores_ids || []).length;
+      const destinLabel = nColab ? `${pubLabel} · +${nColab} pessoa${nColab > 1 ? 's' : ''}` : pubLabel;
       html += `<td style="font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.titulo || '—'}</td>`;
       html += `<td><span style="font-size:11px;font-weight:600;color:${_TCA[row.tipo]||'var(--blue)'}">${_TL[row.tipo]||row.tipo||'—'}</span></td>`;
-      html += `<td style="font-size:12px;color:var(--text-sec)">${_PL[row.publico]||row.publico||'—'}</td>`;
+      html += `<td style="font-size:12px;color:var(--text-sec)">${destinLabel}</td>`;
       html += `<td style="font-size:12px">${row.data_inicio||'—'}</td>`;
       html += `<td style="font-size:12px;color:var(--text-sec)">${row.data_fim||'Sem fim'}</td>`;
     } else if (currentCat === 'marco_tempo_casa') {
@@ -1692,6 +1690,11 @@ function abrirModal(row) {
     _escopoPopularValor(tipoVal, valorAtual, row?.valor2 || '');
   }
 
+  // Aviso home: injeta seletor multi-perfil + busca de colaboradores específicos
+  if (currentCat === 'aviso_home') {
+    _avisoHomeInicializarDestinatarios(row);
+  }
+
   // Campo de busca de colaborador substitui o campo Nome para gestores
   if (currentCat === 'gestor') {
     const colabId   = row?.colaborador_id || '';
@@ -1897,9 +1900,12 @@ async function salvar() {
     if (!body.vigencia_fim) body.vigencia_fim = null;
   }
 
-  // aviso_home: data_fim opcional — string vazia vira null
+  // aviso_home: lê destinatários do seletor multi-perfil + colaboradores; data_fim vazio → null
   if (currentCat === 'aviso_home') {
     if (!body.data_fim) body.data_fim = null;
+    const checkedPerfis = [...document.querySelectorAll('.av-perfil-cb:checked')].map(el => el.value);
+    body.publico = checkedPerfis.length ? checkedPerfis : ['todos'];
+    body.colaboradores_ids = _avColabSelecionados.length ? _avColabSelecionados.map(c => c.id) : null;
   }
 
   const _perf = localStorage.getItem('sb_perfil');
@@ -2688,6 +2694,171 @@ function limparColaboradorGestor() {
   busca.focus();
   document.getElementById('gColaboradorDropdown').style.display = 'none';
 }
+
+// ── Aviso Home: seletor multi-perfil + colaboradores específicos ─────────────
+
+let _avColabSelecionados = []; // [{id, nome}]
+let _avColabCache = {};
+
+function _avisoHomeInicializarDestinatarios(row) {
+  const pubAtual = Array.isArray(row?.publico) ? row.publico
+                 : (row?.publico ? [row.publico] : ['todos']);
+  const colabAtual = row?.colaboradores_ids || [];
+
+  const eTodos = pubAtual.includes('todos');
+  const html = `
+    <div class="field" style="grid-column:span 4;margin:0">
+      <label>Destinatários *</label>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="todos" id="avCbTodos" ${eTodos ? 'checked' : ''} onchange="avTodasChange(this)">
+            Todos os perfis
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="gestor" id="avCbGestor" ${pubAtual.includes('gestor') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
+            Gestores
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="rh" id="avCbRh" ${pubAtual.includes('rh') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
+            RH
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:400;cursor:pointer">
+            <input type="checkbox" class="av-perfil-cb" value="diretoria" id="avCbDiretoria" ${pubAtual.includes('diretoria') ? 'checked' : ''} ${eTodos ? 'disabled' : ''} onchange="avPerfilChange()">
+            Diretoria
+          </label>
+        </div>
+        <div id="avColabSection">
+          <div style="font-size:12px;color:var(--text-sec);margin-bottom:5px">Pessoas específicas (opcional)</div>
+          <div id="avColabChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+          <div style="position:relative">
+            <input type="text" id="avColabBusca" placeholder="Buscar colaborador pelo nome..." autocomplete="off"
+              oninput="avBuscarColab()" style="width:100%">
+            <div id="avColabDropdown" style="display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:200px;overflow-y:auto;z-index:9999"></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalFields').insertAdjacentHTML('beforeend', html);
+
+  _avColabSelecionados = [];
+  colabAtual.forEach(id => {
+    const cached = _avColabCache[id];
+    if (cached) {
+      _avColabSelecionados.push({ id, nome: cached.nome });
+    } else {
+      _avColabSelecionados.push({ id, nome: '...' });
+      fetch(`${SB_URL}/rest/v1/colaboradores?id=eq.${id}&select=id,nome`, { headers: SB_HEADERS })
+        .then(r => r.json()).then(rows => {
+          if (rows[0]) {
+            _avColabCache[rows[0].id] = rows[0];
+            _avColabSelecionados = _avColabSelecionados.map(c => c.id === rows[0].id ? rows[0] : c);
+            _avRenderChips();
+          }
+        }).catch(() => {});
+    }
+  });
+  _avRenderChips();
+  _avAtualizarColabSection();
+}
+
+function avTodasChange(cb) {
+  const perfis = ['avCbGestor', 'avCbRh', 'avCbDiretoria'];
+  perfis.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.disabled = cb.checked; if (cb.checked) el.checked = false; }
+  });
+  _avAtualizarColabSection();
+}
+
+function avPerfilChange() {
+  const cb = document.getElementById('avCbTodos');
+  if (cb) cb.checked = false;
+  _avAtualizarColabSection();
+}
+
+function _avAtualizarColabSection() {
+  const cbTodos = document.getElementById('avCbTodos');
+  const sec = document.getElementById('avColabSection');
+  if (!sec) return;
+  if (cbTodos && cbTodos.checked) {
+    sec.style.opacity = '0.4';
+    sec.style.pointerEvents = 'none';
+  } else {
+    sec.style.opacity = '';
+    sec.style.pointerEvents = '';
+  }
+}
+
+function _avRenderChips() {
+  const wrap = document.getElementById('avColabChips');
+  if (!wrap) return;
+  wrap.innerHTML = _avColabSelecionados.map(c =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:20px;padding:3px 10px 3px 10px;font-size:12px;color:var(--blue);font-weight:500">
+      ${c.nome}
+      <button type="button" onclick="avRemoverColab(${c.id})" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:14px;line-height:1;padding:0 0 0 2px;margin:0">×</button>
+    </span>`
+  ).join('');
+}
+
+function avRemoverColab(id) {
+  _avColabSelecionados = _avColabSelecionados.filter(c => c.id !== id);
+  _avRenderChips();
+}
+
+async function avBuscarColab() {
+  const inp = document.getElementById('avColabBusca');
+  const q = inp.value.trim();
+  const dd = document.getElementById('avColabDropdown');
+  if (q.length < 2) { dd.style.display = 'none'; return; }
+  const rect = inp.getBoundingClientRect();
+  Object.assign(dd.style, {
+    top: (rect.bottom + 4) + 'px', left: rect.left + 'px',
+    width: rect.width + 'px',
+  });
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/colaboradores?ativo=eq.true&data_demissao=is.null&nome=ilike.*${encodeURIComponent(q)}*&select=id,nome&order=nome&limit=7`,
+      { headers: SB_HEADERS }
+    );
+    const list = await r.json();
+    if (!list.length) {
+      dd.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text-ter)">Nenhum resultado</div>';
+      dd.style.display = 'block'; return;
+    }
+    list.forEach(c => { _avColabCache[c.id] = c; });
+    const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(${esc})`, 'gi');
+    dd.innerHTML = list.map((c, i) =>
+      `<div onclick="avSelecionarColab(${c.id})"
+        style="padding:8px 14px;cursor:pointer;font-size:13px;color:var(--text);${i < list.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}"
+        onmouseover="this.style.background='var(--blue-bg)';this.style.color='var(--blue)'"
+        onmouseout="this.style.background='';this.style.color='var(--text)'">${c.nome.replace(re, '<strong>$1</strong>')}</div>`
+    ).join('');
+    dd.style.display = 'block';
+  } catch(_) { dd.style.display = 'none'; }
+}
+
+function avSelecionarColab(id) {
+  const c = _avColabCache[id];
+  if (!c) return;
+  if (!_avColabSelecionados.find(x => x.id === id)) {
+    _avColabSelecionados.push({ id, nome: c.nome });
+    _avRenderChips();
+  }
+  const inp = document.getElementById('avColabBusca');
+  const dd = document.getElementById('avColabDropdown');
+  if (inp) { inp.value = ''; }
+  if (dd) dd.style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('avColabDropdown');
+  const inp = document.getElementById('avColabBusca');
+  if (dd && inp && !dd.contains(e.target) && e.target !== inp) dd.style.display = 'none';
+});
+
+// ── fim aviso_home ────────────────────────────────────────────────────────────
 
 async function buscarColaboradorUser() {
   const q = document.getElementById('uColaboradorBusca').value.trim();

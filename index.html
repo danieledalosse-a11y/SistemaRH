@@ -1060,12 +1060,18 @@ async function _renderAvisos(perfil) {
   const wrap = document.getElementById('hd-avisos-wrap');
   if (!wrap) return;
   const hoje = new Date().toISOString().slice(0, 10);
+  const p = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  const meuColabId = p.colaborador_id || null;
   const rows = await _hdGet('param_aviso_home',
-    `ativo=eq.true&data_inicio=lte.${hoje}&select=id,titulo,corpo,tipo,publico,data_fim`
+    `ativo=eq.true&data_inicio=lte.${hoje}&select=id,titulo,corpo,tipo,publico,colaboradores_ids,data_fim`
   ).catch(() => []);
   const avisos = rows.filter(r => {
     if (r.data_fim && r.data_fim < hoje) return false;
-    return r.publico === 'todos' || r.publico === perfil;
+    const pub = Array.isArray(r.publico) ? r.publico : (r.publico ? [r.publico] : []);
+    if (pub.includes('todos')) return true;
+    if (pub.includes(perfil)) return true;
+    if (meuColabId && Array.isArray(r.colaboradores_ids) && r.colaboradores_ids.includes(meuColabId)) return true;
+    return false;
   });
   if (!avisos.length) { wrap.style.display = 'none'; return; }
   wrap.innerHTML = avisos.map(a => `
