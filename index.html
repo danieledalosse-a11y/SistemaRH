@@ -74,7 +74,9 @@
   .modules-grid { visibility: hidden; }
 
   /* ── Home Dashboard ──────────────────────────────────── */
-  .home-dash { max-width: 960px; margin: 0 auto; padding: 20px 24px 40px; display: flex; flex-direction: column; gap: 10px; }
+  .home-dash { max-width: 1100px; margin: 0 auto; padding: 20px 24px 40px; display: grid; grid-template-columns: 1fr 288px; gap: 16px; align-items: start; }
+  .hd-main   { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .hd-sidebar { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 20px; }
 
   /* Saudação — compactada */
   .hd-greeting { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 28px; box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
@@ -288,10 +290,38 @@
   .hd-act-sub    { font-size: 12px; color: var(--text-sec); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hd-act-time   { font-size: 11px; color: var(--text-ter); flex-shrink: 0; white-space: nowrap; }
 
+  /* Sidebar — lista vertical de pessoas */
+  .hd-sidebar .hd-person-grid { flex-direction: column; overflow-x: visible; gap: 2px; padding-bottom: 0; }
+  .hd-sidebar .hd-person-col  { flex-direction: row; align-items: center; gap: 10px; min-width: 0; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .hd-sidebar .hd-person-col:last-child { border-bottom: none; }
+  .hd-sidebar .hd-person-av-wrap { flex-shrink: 0; }
+  .hd-sidebar .hd-person-av   { width: 38px; height: 38px; font-size: 12px; border-color: var(--border); }
+  .hd-sidebar .hd-person-av.ring-today { border-color: var(--amber); }
+  .hd-sidebar .hd-person-av.ring-top   { border-color: var(--green); }
+  .hd-sidebar .hd-person-info { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+  .hd-sidebar .hd-person-name-sm { text-align: left; font-size: 13px; max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hd-sidebar .hd-person-date-sm { text-align: left; font-size: 12px; }
+  .hd-sidebar .hd-today-pill    { font-size: 11px; }
+  .hd-sidebar .hd-years-text    { font-size: 12px; }
+  .hd-sidebar .hd-marco-icon    { font-size: 10px; }
+  .hd-sidebar .hd-person-badge  { bottom: -2px; right: -2px; }
+
+  @media (max-width: 900px) {
+    .home-dash { grid-template-columns: 1fr; }
+    .hd-sidebar { position: static; }
+    /* sidebar vira linha horizontal de cards lado a lado */
+    .hd-sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    /* restaurar layout horizontal da lista de pessoas no sidebar colapsado */
+    .hd-sidebar .hd-person-grid { flex-direction: row; overflow-x: auto; gap: 8px; }
+    .hd-sidebar .hd-person-col  { flex-direction: column; align-items: center; min-width: 72px; padding: 0; border-bottom: none; }
+    .hd-sidebar .hd-person-info { display: contents; }
+    .hd-sidebar .hd-person-name-sm { text-align: center; font-size: 12px; max-width: 88px; }
+    .hd-sidebar .hd-person-date-sm { text-align: center; }
+  }
   @media (max-width: 700px) {
     .hd-mod-row  { grid-template-columns: repeat(3, 1fr); }
-    .hd-evt-row  { grid-template-columns: 1fr; }
     .home-dash   { padding: 14px 16px 36px; }
+    .hd-sidebar  { grid-template-columns: 1fr; }
     .hd-greeting { flex-direction: column; gap: 12px; }
     .hd-greeting-date { text-align: left; }
   }
@@ -505,45 +535,75 @@
 <div id="container-home-dashboard" style="display:none">
   <div class="home-dash">
 
-    <!-- 1. Saudação -->
-    <div class="hd-greeting">
-      <div class="hd-greeting-main">
-        <div class="hd-gestor-av" id="hd-gestor-av"></div>
-        <div class="hd-greeting-body">
-          <div class="hd-greeting-title" id="hd-greeting-title">Carregando…</div>
-          <div class="hd-greeting-meta"  id="hd-greeting-meta"></div>
-          <div class="hd-team-row" id="hd-team-row"></div>
+    <!-- Coluna principal -->
+    <div class="hd-main">
+
+      <!-- 1. Saudação -->
+      <div class="hd-greeting">
+        <div class="hd-greeting-main">
+          <div class="hd-gestor-av" id="hd-gestor-av"></div>
+          <div class="hd-greeting-body">
+            <div class="hd-greeting-title" id="hd-greeting-title">Carregando…</div>
+            <div class="hd-greeting-meta"  id="hd-greeting-meta"></div>
+            <div class="hd-team-row" id="hd-team-row"></div>
+          </div>
+        </div>
+        <div class="hd-greeting-date">
+          <div class="hd-date-weekday" id="hd-date-weekday"></div>
+          <div class="hd-date-full"    id="hd-date-full"></div>
         </div>
       </div>
-      <div class="hd-greeting-date">
-        <div class="hd-date-weekday" id="hd-date-weekday"></div>
-        <div class="hd-date-full"    id="hd-date-full"></div>
+
+      <!-- 2. Módulos -->
+      <div class="hd-sec-hd">
+        <span class="hd-sec-label">Módulos</span>
       </div>
-    </div>
+      <div class="hd-mod-row" id="hd-mod-row"></div>
 
-    <!-- 2. Módulos -->
-    <div class="hd-sec-hd">
-      <span class="hd-sec-label">Módulos</span>
-    </div>
-    <div class="hd-mod-row" id="hd-mod-row"></div>
+      <!-- 2b. Comunicados (condicional — só aparece quando há avisos ativos) -->
+      <div class="hd-avisos-wrap" id="hd-avisos-wrap" style="display:none"></div>
 
-    <!-- 2b. Comunicados (condicional — só aparece quando há avisos ativos) -->
-    <div class="hd-avisos-wrap" id="hd-avisos-wrap" style="display:none"></div>
+      <!-- 4. Férias da equipe -->
+      <div class="hd-card">
+        <div class="hd-ferias-inner">
+          <div class="hd-ferias-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8C8 10 5.9 16.17 3.82 22c4.9-3.5 9.63-5.5 15.18-3.5"/><path d="M22 2C12 2 6.5 10 6 18c2-4 4-8 10-10"/></svg>
+          </div>
+          <div class="hd-ferias-body">
+            <div class="hd-ferias-title">Férias da equipe</div>
+            <div class="hd-ferias-stats" id="hd-ferias-stats"><span class="hd-chip muted">Carregando…</span></div>
+          </div>
+        </div>
+      </div>
 
-    <!-- 3. Eventos da equipe -->
-    <div class="hd-evt-row">
+      <!-- 5. Últimas atividades -->
+      <div class="hd-card">
+        <div class="hd-card-hd" style="margin-bottom:12px">
+          <span class="hd-card-hd-left" style="font-size:13px;font-weight:600">Últimas atividades</span>
+        </div>
+        <ul class="hd-act-list" id="hd-act-list"><li class="hd-empty">Carregando…</li></ul>
+      </div>
+
+    </div><!-- /hd-main -->
+
+    <!-- Sidebar direita — Aniversários + Tempo de Casa -->
+    <div class="hd-sidebar">
+
+      <!-- Aniversariantes da equipe -->
       <div class="hd-card">
         <div class="hd-card-hd">
           <span class="hd-card-hd-left">
             <div class="hd-card-icon cake">
               <svg viewBox="0 0 24 24"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2 1 2 1"/><path d="M2 21h20"/><path d="M7 8v2"/><path d="M12 8v2"/><path d="M17 8v2"/></svg>
             </div>
-            Próximos aniversários
+            Aniversariantes
           </span>
           <button class="hd-ver-todos" id="hd-aniv-vertodos" style="display:none">Ver todos →</button>
         </div>
         <div id="hd-aniv-list"><div class="hd-empty">Carregando…</div></div>
       </div>
+
+      <!-- Tempo de Casa -->
       <div class="hd-card">
         <div class="hd-card-hd">
           <span class="hd-card-hd-left">
@@ -556,28 +616,8 @@
         </div>
         <div id="hd-casa-list"><div class="hd-empty">Carregando…</div></div>
       </div>
-    </div>
 
-    <!-- 4. Férias da equipe -->
-    <div class="hd-card">
-      <div class="hd-ferias-inner">
-        <div class="hd-ferias-ico">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8C8 10 5.9 16.17 3.82 22c4.9-3.5 9.63-5.5 15.18-3.5"/><path d="M22 2C12 2 6.5 10 6 18c2-4 4-8 10-10"/></svg>
-        </div>
-        <div class="hd-ferias-body">
-          <div class="hd-ferias-title">Férias da equipe</div>
-          <div class="hd-ferias-stats" id="hd-ferias-stats"><span class="hd-chip muted">Carregando…</span></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 5. Últimas atividades -->
-    <div class="hd-card">
-      <div class="hd-card-hd" style="margin-bottom:12px">
-        <span class="hd-card-hd-left" style="font-size:13px;font-weight:600">Últimas atividades</span>
-      </div>
-      <ul class="hd-act-list" id="hd-act-list"><li class="hd-empty">Carregando…</li></ul>
-    </div>
+    </div><!-- /hd-sidebar -->
 
   </div>
 </div>
@@ -1339,7 +1379,7 @@ function _renderEventos(team, hoje, marcosGestor) {
     return `<span class="hd-ev-badge soon">${d} dia${d>1?'s':''}</span>`;
   };
 
-  // Apresentação horizontal: avatar + nome + info em coluna
+  // Apresentação: avatar + nome + info (sidebar = lista vertical via CSS; main = horizontal)
   function _personColHtml(nome, fotoUrl, infoHtml, ringClass) {
     const primeiroNome = nome.split(' ').slice(0,2).join(' ');
     const av = fotoUrl && fotoUrl.startsWith('http')
@@ -1347,8 +1387,10 @@ function _renderEventos(team, hoje, marcosGestor) {
       : `<div class="hd-person-av${ringClass ? ' ' + ringClass : ''}" style="background:${_avColor(nome)}">${_initials(nome)}</div>`;
     return `<div class="hd-person-col">
       <div class="hd-person-av-wrap">${av}</div>
-      <div class="hd-person-name-sm">${primeiroNome}</div>
-      ${infoHtml}
+      <div class="hd-person-info">
+        <div class="hd-person-name-sm">${primeiroNome}</div>
+        ${infoHtml}
+      </div>
     </div>`;
   }
 
