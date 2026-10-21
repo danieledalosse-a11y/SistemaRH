@@ -198,22 +198,6 @@
   .field-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
   .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 18px 32px; border-top: 1px solid var(--border); align-items: center; flex-shrink: 0; background: var(--surface); }
 
-  /* Modal compacto — piloto do padrão visual (aviso_home) */
-  .modal--compact .modal-header { padding: 18px 24px 14px; }
-  .modal--compact .modal-title  { font-size: 16px; margin-bottom: 4px; }
-  .modal--compact .modal-body   { padding: 0 24px; }
-  .modal--compact .modal-footer { padding: 12px 24px; }
-  .modal--compact .field        { margin-bottom: 11px; }
-  .modal--compact .modal-body .field:first-child,
-  .modal--compact .modal-body > *:first-child { margin-top: 16px; }
-  .modal--compact .modal-body > *:last-child   { margin-bottom: 16px; }
-  .modal--compact .field label  { font-size: 10.5px; margin-bottom: 5px; }
-  .modal--compact .field input,
-  .modal--compact .field select,
-  .modal--compact .field textarea { padding: 8px 12px; font-size: 13px; }
-  .modal--compact .field-audit  { padding: 10px 14px; margin-bottom: 11px; }
-  .modal--compact .field-audit-item span { font-size: 12px; }
-
   /* Empty / Loading */
   .empty { text-align: center; padding: 56px 24px; color: var(--text-sec); }
   .empty svg { width: 44px; height: 44px; stroke: var(--text-ter); margin-bottom: 14px; }
@@ -320,6 +304,21 @@
   .btn-confirm-warning { background: #D97706;       color: #fff; }
   .btn-confirm-success { background: var(--green);  color: #fff; }
   .btn-confirm-info    { background: var(--blue);   color: #fff; }
+
+  /* Modal compacto — piloto do padrão visual (aviso_home) — bloco no final para garantir precedência */
+  .modal--compact .modal-header { padding: 18px 24px 14px !important; }
+  .modal--compact .modal-title  { font-size: 16px !important; margin-bottom: 4px !important; }
+  .modal--compact .modal-body   { padding: 0 24px !important; }
+  .modal--compact .modal-footer { padding: 12px 24px !important; }
+  .modal--compact .field        { margin-bottom: 11px !important; }
+  .modal--compact .modal-body > *:first-child { margin-top: 14px !important; }
+  .modal--compact .modal-body > *:last-child  { margin-bottom: 14px !important; }
+  .modal--compact .field label  { font-size: 10.5px !important; margin-bottom: 4px !important; }
+  .modal--compact .field input,
+  .modal--compact .field select,
+  .modal--compact .field textarea { padding: 8px 12px !important; font-size: 13px !important; }
+  .modal--compact .field-audit  { padding: 10px 14px !important; margin-bottom: 11px !important; }
+  .modal--compact .field-audit-item span { font-size: 12px !important; }
 </style>
 </head>
 <body>
@@ -1679,7 +1678,8 @@ function abrirModal(row) {
   });
   if (currentCat === 'bonus_indicacao') html += '</div>';
 
-  if (row) {
+  // aviso_home: field-audit é injetado ao final por _avisoHomeInicializarDestinatarios
+  if (row && currentCat !== 'aviso_home') {
     html += `<div class="field-audit">
       <div class="field-audit-item">
         <label>Criado em</label>
@@ -1840,6 +1840,12 @@ async function fecharModal(forcar = false) {
   }
   document.getElementById('overlay').classList.remove('open');
   document.getElementById('modal').classList.remove('modal--compact');
+  const mf = document.getElementById('modalFields');
+  if (mf._avHandler) {
+    mf.removeEventListener('change', mf._avHandler);
+    mf.removeEventListener('input',  mf._avHandler);
+    delete mf._avHandler;
+  }
   editingId = null;
 }
 
@@ -2766,15 +2772,18 @@ function _avisoHomeInicializarDestinatarios(row) {
     </div>`;
   document.getElementById('modalFields').insertAdjacentHTML('beforeend', html);
 
-  // Attach events via addEventListener (more reliable than inline onchange after insertAdjacentHTML)
-  const cbTodosEl = document.getElementById('avCbTodos');
-  if (cbTodosEl) cbTodosEl.addEventListener('change', function() { avTodasChange(this); });
-  ['avCbGestor', 'avCbRh', 'avCbDiretoria'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', avPerfilChange);
-  });
-  const buscaEl = document.getElementById('avColabBusca');
-  if (buscaEl) buscaEl.addEventListener('input', avBuscarColab);
+  // Event delegation: escuta mudanças nos checkboxes e input de busca a partir do modalFields
+  // (mais confiável que addEventListener direto em elementos recém-injetados)
+  const mf = document.getElementById('modalFields');
+  mf._avHandler = function(e) {
+    if (e.type === 'change' && e.target.classList.contains('av-perfil-cb')) {
+      if (e.target.id === 'avCbTodos') avTodasChange(e.target);
+      else avPerfilChange();
+    }
+    if (e.type === 'input' && e.target.id === 'avColabBusca') avBuscarColab();
+  };
+  mf.addEventListener('change', mf._avHandler);
+  mf.addEventListener('input',  mf._avHandler);
 
   _avColabSelecionados = [];
   colabAtual.forEach(id => {
@@ -2795,6 +2804,21 @@ function _avisoHomeInicializarDestinatarios(row) {
   });
   _avRenderChips();
   _avAtualizarColabSection();
+
+  // Injeta field-audit ao final (após destinatários) para aviso_home
+  if (row) {
+    const auditHtml = `<div class="field-audit">
+      <div class="field-audit-item">
+        <label>Criado em</label>
+        <span>${fmtDate(row.created_at)}${row.criado_por ? ` · ${row.criado_por}` : ''}</span>
+      </div>
+      <div class="field-audit-item">
+        <label>Última alteração</label>
+        <span>${row.updated_at && row.updated_at !== row.created_at ? fmtDate(row.updated_at) : '—'}${row.alterado_por ? ` · ${row.alterado_por}` : ''}</span>
+      </div>
+    </div>`;
+    document.getElementById('modalFields').insertAdjacentHTML('beforeend', auditHtml);
+  }
 }
 
 function avTodasChange(cb) {
