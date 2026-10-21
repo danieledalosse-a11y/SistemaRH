@@ -230,30 +230,53 @@ Tabela `param_escopo_home`: expande colaboradores visíveis nos blocos Aniversá
 
 ---
 
-## Estrutura visual da Home Gestor (UX revisado 2026-10-09)
+## Estrutura visual da Home Gestor (UX revisado out/2026)
 
-### Blocos e ordem (imutável)
+### Layout de duas colunas (commit `fd54464`)
 
-1. **Saudação** — avatar gestor + nome + meta + mini-avatares equipe + data
-2. **Módulos** — grid de tiles, ícone + nome apenas
-3. **Eventos** — grid 2 colunas: Próximos aniversários | Tempo de Casa
+```
+.home-dash  { display: grid; grid-template-columns: 1fr 288px; gap: 16px; max-width: 1100px }
+  .hd-main    ← coluna esquerda (flex-column, gap:10px)
+  .hd-sidebar ← coluna direita sticky, flex-column, gap:10px
+```
+
+**Coluna principal `.hd-main` — ordem imutável:**
+1. **Saudação** — avatar gestor + nome + meta + mini-avatares + data
+2. **Módulos** — grid de tiles
+3. **Comunicados** — carousel condicional
 4. **Férias da equipe**
 5. **Últimas Atividades**
 
-**Nunca reorganizar a ordem dos blocos.**
+**Sidebar `.hd-sidebar` — ordem imutável:**
+1. **Aniversariantes da equipe**
+2. **Tempo de Casa**
 
-### Cards de Eventos (Aniversários e Tempo de Casa)
+**Nunca reorganizar a ordem dos blocos nem mover sidebar para a coluna principal.**
 
+### Responsivo
+
+| Breakpoint | Comportamento |
+|---|---|
+| `>900px` | Grid 2 colunas, sidebar sticky |
+| `≤900px` | Grid 1 coluna; sidebar vira `grid 1fr 1fr` (cards lado a lado) |
+| `≤700px` | Grid 1 coluna; sidebar vira `grid 1fr` (empilhado) |
+
+### Cards de Eventos (Aniversários e Tempo de Casa) — sidebar
+
+- Ficam no `.hd-sidebar` (coluna direita), um abaixo do outro
 - Header do card: ícone colorido (36px, bolo = âmbar, relógio = verde) + título + botão "Ver todos →"
 - **Card exibe os 3 primeiros** registros mais próximos (limite visual para compactação)
-- Apresentação horizontal: `hd-person-grid` → colunas `hd-person-col`
-  - Avatar 46px com foto (`background-image`) ou iniciais (fallback)
-  - `ring-today` (amber) para aniversário hoje
-  - `ring-top` (verde) para maior tempo de casa
-  - Nome: 2 primeiros nomes completos, 10px bold, max-width 76px
-  - **Aniversários:** data em `hd-person-date-sm` (cinza, sem pill) ou `hd-today-pill` (âmbar, sem fundo)
-  - **Tempo de Casa:** anos em `hd-years-text` (verde, sem fundo) + data do aniversário em `hd-person-date-sm`
-  - **Marco de tempo de casa:** troféu 🏆 (`.hd-marco-icon`, 11px, `opacity:0.85`) aparece inline após os anos quando o colaborador atinge um marco ativo cadastrado em `param_marco_tempo_casa`. Mesmo indicador no modal "Ver todos" (campo `detalhe`)
+- **Apresentação no sidebar: lista vertical** — CSS override em `.hd-sidebar .hd-person-*`
+  - `.hd-person-grid`: `flex-direction:column` (era horizontal com scroll)
+  - `.hd-person-col`: `flex-direction:row; align-items:center; gap:10px` — avatar à esquerda + info à direita
+  - `.hd-person-info`: wrapper `div` que agrupa nome + detalhe (necessário para layout row) — gerado por `_personColHtml`
+  - Avatar 38px no sidebar; `ring-today` (amber) e `ring-top` (verde) preservados
+  - Nome: 2 primeiros nomes, 13px, text-overflow:ellipsis, alinhado à esquerda
+  - **Aniversários:** data em `hd-person-date-sm` ou `hd-today-pill` — alinhamento left
+  - **Tempo de Casa:** anos em `hd-years-text` + data em `hd-person-date-sm`
+  - **Marco de tempo de casa:** troféu 🏆 (`.hd-marco-icon`) inline após os anos — preservado
+- Linha divisória `border-bottom: 1px solid var(--border)` entre cada pessoa (exceto última)
+- No breakpoint ≤900px: layout horizontal é restaurado (CSS revert) pois sidebar vira 2 colunas
 
 ### Botão "Ver todos →"
 
@@ -321,24 +344,25 @@ Badge colorido por tipo antes do título:
 
 ## HTML da Home — IDs relevantes
 
-| ID | Elemento | Preenchido por |
-|---|---|---|
-| `hd-gestor-av` | Avatar do gestor | `renderHomeGestor` |
-| `hd-greeting-title` | "Boa tarde, Nome!" | `renderHomeGestor` |
-| `hd-greeting-meta` | "Grupo · N colabs · Perfil" | `renderHomeGestor` |
-| `hd-team-row` | Mini-avatares da equipe | `renderHomeGestor` |
-| `hd-date-weekday` / `hd-date-full` | Data | `renderHomeGestor` |
-| `hd-mod-row` | Grid de módulos | `_renderModules` |
-| `hd-aniv-list` | Container avatares aniversários | `_renderEventos` |
-| `hd-casa-list` | Container avatares tempo de casa | `_renderEventos` |
-| `hd-aniv-vertodos` | Botão "Ver todos" aniversários | `_renderEventos` |
-| `hd-casa-vertodos` | Botão "Ver todos" tempo de casa | `_renderEventos` |
-| `hd-ferias-stats` | Stats de férias | `_renderFerias` |
-| `hd-act-list` | Lista de atividades | `_renderAtividades` |
-| `hd-bell-wrap` | Wrapper do sino (oculto por padrão, mostrado por JS para Gestor) | `renderHomeGestor` |
-| `hd-bell-btn` | Botão do sino | `_toggleBellPanel` |
-| `hd-bell-badge` | Badge numérico vermelho do sino | `_loadPendencias` |
-| `hd-bell-panel` | Painel suspenso de pendências | `_toggleBellPanel` / `_bellExpandir` |
+| ID | Elemento | Container | Preenchido por |
+|---|---|---|---|
+| `hd-gestor-av` | Avatar do gestor | `.hd-main` | `renderHomeGestor` |
+| `hd-greeting-title` | "Boa tarde, Nome!" | `.hd-main` | `renderHomeGestor` |
+| `hd-greeting-meta` | "Grupo · N colabs · Perfil" | `.hd-main` | `renderHomeGestor` |
+| `hd-team-row` | Mini-avatares da equipe | `.hd-main` | `renderHomeGestor` |
+| `hd-date-weekday` / `hd-date-full` | Data | `.hd-main` | `renderHomeGestor` |
+| `hd-mod-row` | Grid de módulos | `.hd-main` | `_renderModules` |
+| `hd-avisos-wrap` | Wrapper carousel | `.hd-main` | `_renderAvisos` |
+| `hd-aniv-list` | Lista aniversários | `.hd-sidebar` | `_renderEventos` |
+| `hd-casa-list` | Lista tempo de casa | `.hd-sidebar` | `_renderEventos` |
+| `hd-aniv-vertodos` | Botão "Ver todos" aniversários | `.hd-sidebar` | `_renderEventos` |
+| `hd-casa-vertodos` | Botão "Ver todos" tempo de casa | `.hd-sidebar` | `_renderEventos` |
+| `hd-ferias-stats` | Stats de férias | `.hd-main` | `_renderFerias` |
+| `hd-act-list` | Lista de atividades | `.hd-main` | `_renderAtividades` |
+| `hd-bell-wrap` | Wrapper do sino | topbar | `renderHomeGestor` |
+| `hd-bell-btn` | Botão do sino | topbar | `_toggleBellPanel` |
+| `hd-bell-badge` | Badge numérico vermelho | topbar | `_loadPendencias` |
+| `hd-bell-panel` | Painel suspenso de pendências | topbar | `_toggleBellPanel` / `_bellExpandir` |
 
 ---
 
@@ -375,6 +399,45 @@ registro em `colaboradores`. Protegido pelo trigger `trg_check_colaborador_obrig
 
 Bloco condicional posicionado entre `#hd-mod-row` (módulos) e `#hd-evt-row` (eventos da equipe). Aparece **somente quando há avisos ativos** para o perfil do usuário; quando vazio, fica `display:none` sem ocupar espaço.
 
+### Carousel v2 (commits `fd8b9d2`, `bac3107`, `534f8be`, out/2026)
+
+**Layout HTML gerado por `_renderAvisos`:**
+
+```
+.hd-avisos-wrap [.single quando 1 aviso]
+  .hd-avisos-hd
+    .hd-avisos-hd-left
+      .hd-avisos-title-group  ← ícone megafone + título + badge count
+      .hd-avisos-subtitle     ← "Fique por dentro das novidades..."
+    button.hd-avisos-ver-todos
+  .hd-avisos-carousel  ← display:flex; align-items:center; gap:6px
+    [button.hd-avisos-arrow#hd-avisos-prev]  ← só quando multi
+    .hd-avisos-viewport  ← flex:1; overflow:hidden
+      .hd-avisos-track    ← display:flex; gap:12px; transform via JS
+        .hd-aviso-card.{tipo}  (× N cards)
+    [button.hd-avisos-arrow#hd-avisos-next]  ← só quando multi
+  [.hd-avisos-dots]  ← só quando multi, abaixo do carousel
+```
+
+**Card interno:**
+```
+.hd-aviso-card.{tipo}
+  .hd-aviso-card-top
+    .hd-aviso-badge-tipo.{tipo}   ← badge sólido escuro (urgente=#c53030, info=#2b6cb0, lembrete=#b7791f)
+    .hd-aviso-tipo-icon.{tipo}    ← círculo 42px com SVG
+  .hd-aviso-card-titulo
+  .hd-aviso-card-corpo            ← 3 linhas max, opcional
+  .hd-aviso-card-footer
+    .hd-aviso-card-footer-date    ← ícone calendário + "Publicado em DD/MM/AAAA"
+    .hd-aviso-card-footer-arrow   ← círculo 22px com seta
+```
+
+**Ícone da seção:** megafone (`<svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>`) — **não usar sino** (já existe sino de notificações na topbar).
+
+**Comportamento por quantidade:**
+- 1 aviso (`!multi`): wrap recebe classe `.single`; card expande `flex:0 0 100%`; setas e bolinhas não renderizadas
+- 2+ avisos: setas laterais + bolinhas abaixo; `_avisosSetIdx` calcula largura do card por `track.parentElement.offsetWidth`
+
 ### Função `_renderAvisos(perfil)`
 
 ```js
@@ -405,13 +468,11 @@ async function _renderAvisos(perfil) {
 | `data_fim` | DATE | Fim da exibição (NULL = sem limite) |
 | `ativo` | BOOLEAN | Liga/desliga imediato |
 
-**Migration 117** — cria tabela, habilita RLS.
-**Migration 118** — converte `publico TEXT → TEXT[]`, adiciona `colaboradores_ids INTEGER[]`, recria policies. **Pendente de execução manual.**
+**Migrations 117 e 118** — ambas executadas em produção.
 
 ### RLS (pós migration 118)
 
 ```sql
--- SELECT: perfis específicos + colaborador individual + admin/rh veem tudo
 USING (
   'todos' = ANY(publico)
   OR auth_perfil() = ANY(publico)
@@ -424,19 +485,27 @@ USING (
 USING (auth_perfil() IN ('admin', 'rh'))
 ```
 
-Sem policy `anon` — toda requisição legítima envia JWT (usuário logado; `index.html` redireciona sem `sb_session`).
-
-### Regra "Todos" exclusivo
-
-Selecionar `'todos'` no seletor de Parâmetros desabilita os checkboxes de perfis específicos e oculta o campo de colaboradores individuais. No banco, `publico = ['todos']`.
-
-### CSS
+### CSS principal
 
 ```css
-.hd-aviso          { flex-direction:column; gap:4px; padding:12px 14px; border-radius:8px; border-left:4px solid; font-size:13px }
-.hd-aviso.urgente  { border-color:#dc2626; background:#fef2f2 }
-.hd-aviso.info     { border-color:var(--blue); background:#eff6ff }
-.hd-aviso.lembrete { border-color:var(--amber); background:#fffbeb }
+.hd-avisos-wrap          { display:flex; flex-direction:column; gap:10px }
+.hd-avisos-carousel      { display:flex; align-items:center; gap:6px }
+.hd-avisos-viewport      { flex:1; overflow:hidden; min-width:0 }
+.hd-aviso-card           { flex:0 0 calc((100% - 24px)/3); padding:14px; gap:8px; border-radius:12px }
+.hd-avisos-wrap.single .hd-aviso-card { flex:0 0 100% }  /* card único preenche toda a largura */
+.hd-aviso-card.urgente   { background:#fff5f5; border-color:#fed7d7 }
+.hd-aviso-card.info      { background:#ebf4ff; border-color:#bee3f8 }
+.hd-aviso-card.lembrete  { background:#fffbeb; border-color:#fcd34d }
+.hd-aviso-badge-tipo.urgente   { background:#c53030; color:#fff }
+.hd-aviso-badge-tipo.info      { background:#2b6cb0; color:#fff }
+.hd-aviso-badge-tipo.lembrete  { background:#b7791f; color:#fff }
+.hd-aviso-tipo-icon      { width:42px; height:42px; border-radius:50% }
+```
+
+### Espaçamento global da Home (ajustado out/2026)
+
+```css
+.home-dash { gap:10px; padding:20px 24px 40px }  /* era gap:12px, padding:24px 24px 48px */
 ```
 
 ---
