@@ -124,6 +124,9 @@ p (sb_perfil do localStorage)
   ├─ await equipe (colaboradores)     ← gestor=ilike.${apelido}
   │   └─ mini-avatares na hd-team-row
   │
+  ├─ _renderModules(p)                  ← síncrono
+  ├─ _renderAvisos(perfil)              ← async, logo após módulos
+  │
   └─ await Promise.all([
         ferias da equipe,
         v_historico_eventos_home (atividades),
@@ -363,6 +366,78 @@ Badge colorido por tipo antes do título:
 O campo `colaborador_id` em `usuarios_perfil` é o vínculo oficial entre usuário Auth e
 registro em `colaboradores`. Protegido pelo trigger `trg_check_colaborador_obrigatorio`
 (migration 059) que exige preenchimento para perfis `Gestor` e `Colaborador`.
+
+---
+
+## Comunicados da Home (`_renderAvisos`)
+
+### Visão geral
+
+Bloco condicional posicionado entre `#hd-mod-row` (módulos) e `#hd-evt-row` (eventos da equipe). Aparece **somente quando há avisos ativos** para o perfil do usuário; quando vazio, fica `display:none` sem ocupar espaço.
+
+### Função `_renderAvisos(perfil)`
+
+```js
+async function _renderAvisos(perfil) {
+  // Chamada em renderHomeGestor após _renderModules(p)
+  // perfil = (p.perfil || '').toLowerCase()
+}
+```
+
+- Busca `param_aviso_home` com `ativo=eq.true&data_inicio=lte.${hoje}`
+- Campos selecionados: `id, titulo, corpo, tipo, publico, colaboradores_ids, data_fim`
+- Filtra no JS (segunda camada de segurança):
+  - Descarta `data_fim < hoje`
+  - Exibe se `publico.includes('todos')`, `publico.includes(perfil)` ou `colaboradores_ids.includes(p.colaborador_id)`
+- RLS já garante no banco que o usuário recebe apenas os avisos permitidos
+
+### Tabela `param_aviso_home`
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | SERIAL PK | — |
+| `titulo` | TEXT NOT NULL | Texto breve |
+| `corpo` | TEXT | Mensagem completa (opcional) |
+| `tipo` | TEXT | `'info'` \| `'lembrete'` \| `'urgente'` |
+| `publico` | TEXT[] | Perfis destinatários ex: `['gestor','rh']` ou `['todos']` |
+| `colaboradores_ids` | INTEGER[] | Pessoas específicas (nullable) |
+| `data_inicio` | DATE | Início da exibição |
+| `data_fim` | DATE | Fim da exibição (NULL = sem limite) |
+| `ativo` | BOOLEAN | Liga/desliga imediato |
+
+**Migration 117** — cria tabela, habilita RLS.
+**Migration 118** — converte `publico TEXT → TEXT[]`, adiciona `colaboradores_ids INTEGER[]`, recria policies. **Pendente de execução manual.**
+
+### RLS (pós migration 118)
+
+```sql
+-- SELECT: perfis específicos + colaborador individual + admin/rh veem tudo
+USING (
+  'todos' = ANY(publico)
+  OR auth_perfil() = ANY(publico)
+  OR (auth_colaborador_id() IS NOT NULL
+      AND colaboradores_ids IS NOT NULL
+      AND colaboradores_ids @> ARRAY[auth_colaborador_id()])
+  OR auth_perfil() IN ('admin', 'rh')
+);
+-- ALL (write): somente admin e rh
+USING (auth_perfil() IN ('admin', 'rh'))
+```
+
+Sem policy `anon` — toda requisição legítima envia JWT (usuário logado; `index.html` redireciona sem `sb_session`).
+
+### Regra "Todos" exclusivo
+
+Selecionar `'todos'` no seletor de Parâmetros desabilita os checkboxes de perfis específicos e oculta o campo de colaboradores individuais. No banco, `publico = ['todos']`.
+
+### CSS
+
+```css
+.hd-aviso          { flex-direction:column; gap:4px; padding:12px 14px; border-radius:8px; border-left:4px solid; font-size:13px }
+.hd-aviso.urgente  { border-color:#dc2626; background:#fef2f2 }
+.hd-aviso.info     { border-color:var(--blue); background:#eff6ff }
+.hd-aviso.lembrete { border-color:var(--amber); background:#fffbeb }
+```
 
 ---
 
