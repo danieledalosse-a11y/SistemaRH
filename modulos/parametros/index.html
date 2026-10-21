@@ -2742,19 +2742,19 @@ function _avisoHomeInicializarDestinatarios(row) {
       <label>Destinatários *</label>
       <div style="display:flex;flex-direction:column;gap:7px">
         <div style="display:flex;flex-wrap:wrap;gap:5px 12px;align-items:center">
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer" onclick="avToggleTodos(event)">
             <input type="checkbox" class="av-perfil-cb" value="todos" id="avCbTodos" ${eTodos ? 'checked' : ''}>
             Todos os perfis
           </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer" onclick="avTogglePerfil('gestor',event)">
             <input type="checkbox" class="av-perfil-cb" value="gestor" id="avCbGestor" ${pubAtual.includes('gestor') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
             Gestores
           </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer" onclick="avTogglePerfil('rh',event)">
             <input type="checkbox" class="av-perfil-cb" value="rh" id="avCbRh" ${pubAtual.includes('rh') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
             RH
           </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;cursor:pointer" onclick="avTogglePerfil('diretoria',event)">
             <input type="checkbox" class="av-perfil-cb" value="diretoria" id="avCbDiretoria" ${pubAtual.includes('diretoria') ? 'checked' : ''} ${eTodos ? 'disabled' : ''}>
             Diretoria
           </label>
@@ -2764,7 +2764,7 @@ function _avisoHomeInicializarDestinatarios(row) {
           <div id="avColabChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px"></div>
           <div style="position:relative">
             <input type="text" id="avColabBusca" placeholder="Buscar colaborador pelo nome..." autocomplete="off"
-              style="width:100%;padding:7px 10px;font-size:12px">
+              oninput="avBuscarColab()" style="width:100%;padding:7px 10px;font-size:12px">
             <div id="avColabDropdown" style="display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:200px;overflow-y:auto;z-index:9999"></div>
           </div>
         </div>
@@ -2772,18 +2772,12 @@ function _avisoHomeInicializarDestinatarios(row) {
     </div>`;
   document.getElementById('modalFields').insertAdjacentHTML('beforeend', html);
 
-  // Event delegation: escuta mudanças nos checkboxes e input de busca a partir do modalFields
-  // (mais confiável que addEventListener direto em elementos recém-injetados)
   const mf = document.getElementById('modalFields');
-  mf._avHandler = function(e) {
-    if (e.type === 'change' && e.target.classList.contains('av-perfil-cb')) {
-      if (e.target.id === 'avCbTodos') avTodasChange(e.target);
-      else avPerfilChange();
-    }
-    if (e.type === 'input' && e.target.id === 'avColabBusca') avBuscarColab();
-  };
-  mf.addEventListener('change', mf._avHandler);
-  mf.addEventListener('input',  mf._avHandler);
+  if (mf._avHandler) {
+    mf.removeEventListener('change', mf._avHandler);
+    mf.removeEventListener('input',  mf._avHandler);
+    delete mf._avHandler;
+  }
 
   _avColabSelecionados = [];
   colabAtual.forEach(id => {
@@ -2819,6 +2813,23 @@ function _avisoHomeInicializarDestinatarios(row) {
     </div>`;
     document.getElementById('modalFields').insertAdjacentHTML('beforeend', auditHtml);
   }
+}
+
+function avToggleTodos(e) {
+  e.preventDefault();
+  const cb = document.getElementById('avCbTodos');
+  if (!cb) return;
+  cb.checked = !cb.checked;
+  avTodasChange(cb);
+}
+
+function avTogglePerfil(perfil, e) {
+  e.preventDefault();
+  const ids = { gestor: 'avCbGestor', rh: 'avCbRh', diretoria: 'avCbDiretoria' };
+  const cb = document.getElementById(ids[perfil]);
+  if (!cb || cb.disabled) return;
+  cb.checked = !cb.checked;
+  avPerfilChange();
 }
 
 function avTodasChange(cb) {
