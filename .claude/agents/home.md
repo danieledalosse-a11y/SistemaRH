@@ -179,7 +179,7 @@ Exemplo: `"+8% · set/2026 · cargo mantido"`
 |---|---|---|
 | Foto do gestor | `colaboradores` | `id=eq.${p.colaborador_id}&select=foto_url` |
 | Apelido + pgGestorId | `param_gestor` | `colaborador_id=eq.${p.colaborador_id}&select=id,apelido` — `param_gestor` NÃO tem coluna `gestor_id`; usar `colaborador_id` (FK real, preenchida em todos os gestores ativos) |
-| Equipe | `colaboradores` | `gestor=ilike.${apelido}&data_demissao=is.null&select=id,nome,cargo,setor,data_nascimento,data_admissao,foto_url,tipo_vinculo,empresa_atuacao` |
+| Equipe | `colaboradores` | `gestor=ilike.${apelido}&data_demissao=is.null&select=id,nome,cargo,setor,data_nascimento,data_admissao,data_ingresso_grupo,foto_url,tipo_vinculo,empresa_atuacao` |
 | Escopos extras (aniversários) | `param_escopo_home` | `gestor_id=eq.${pgGestorId}&modulo=eq.aniversarios&ativo=eq.true` — via `_resolverEscoposHome` |
 | Férias | `ferias` | `colaborador_id=in.(${teamIds})&select=colaborador_id,status,periodos,periodo1_inicio,periodo1_fim,periodo2_inicio,periodo2_fim` |
 | Atividades | `v_historico_eventos_home` | `colaborador_id=in.(${teamIds})&order=id.desc&limit=5` |
@@ -275,6 +275,7 @@ Tabela `param_escopo_home`: expande colaboradores visíveis nos blocos Aniversá
   - **Aniversários:** data em `hd-person-date-sm` ou `hd-today-pill` — alinhamento left
   - **Tempo de Casa:** anos em `hd-years-text` + data em `hd-person-date-sm`
   - **Marco de tempo de casa:** troféu 🏆 (`.hd-marco-icon`) inline após os anos — preservado
+- **Regra de data para Tempo de Casa:** `_refCasa = c.data_ingresso_grupo || c.data_admissao` — mesma regra do Relatório Tempo de Casa e do Cadastro. **Nunca usar `c.data_admissao` direto** para calcular anos ou aniversário de empresa — colaboradores com ingresso anterior ao contrato atual ficariam com tempo incorreto (commit `25b3262`)
 - Linha divisória `border-bottom: 1px solid var(--border)` entre cada pessoa (exceto última)
 - No breakpoint ≤900px: layout horizontal é restaurado (CSS revert) pois sidebar vira 2 colunas
 
@@ -657,5 +658,6 @@ Nos módulos, carregado automaticamente via `permissoes.js` (injeção no `<head
 | Migration 111 | View expõe `resumo_home` sem dados salariais | Executada 2026-10-08, status: ✅ |
 | Fotos não apareciam no modal | Modal criava `<div>` de avatar manualmente em vez de usar `_avHtml` | Substituir por `_avHtml(r.nome, r.foto_url, 'hd-modal-av')` |
 | Botão "Ver todos" em Férias não abria modal | `_openModal` era `function` local dentro de `_renderEventos` — inacessível para `_renderFerias` | Mover `_openModal` para escopo global, antes de `_renderEventos` (commit `5f8a1be`) |
+| Leandro (e outros com ingresso anterior ao contrato) apareciam com tempo de casa errado | `_colSelectHome` não buscava `data_ingresso_grupo`; cálculo usava `c.data_admissao` direto | Adicionar `data_ingresso_grupo` na query e usar `_refCasa = c.data_ingresso_grupo \|\| c.data_admissao` (commit `25b3262`) |
 | Bell contava ações com nomes errados | `alteracao_rejeitada` / `cancelamento_rejeitado` não existem — nomes corretos são `alteracao_recusada` / `cancelamento_recusado` | Corrigir `ACOES_CIENTE` (commit `6542425`) |
 | Bell mostrava só 2 de 5 pendências | Solicitudes antigas sem entrada em `ferias_historico` (anteriores ao audit log) eram invisíveis ao bell | Fallback via tabela `ferias` com merge — espelha `renderGestorAtividade` (commit `92595b2`) |
