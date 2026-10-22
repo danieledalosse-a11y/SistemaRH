@@ -485,7 +485,12 @@ async function _renderAvisos(perfil) {
 - Campos selecionados: `id, titulo, corpo, tipo, publico, colaboradores_ids, data_fim`
 - Filtra no JS (segunda camada de segurança):
   - Descarta `data_fim < hoje`
-  - Exibe se `publico.includes('todos')`, `publico.includes(perfil)` ou `colaboradores_ids.includes(p.colaborador_id)`
+  - `publico.includes('todos')` → exibe para todos
+  - `publico.includes(perfil)` → exibe para o perfil, **com regra especial para gestor:**
+    - Se `colaboradores_ids` preenchido → exibe **somente** se `meuColabId` estiver na lista
+    - Se `colaboradores_ids` vazio/null → exibe para **todos** os gestores
+  - `colaboradores_ids.includes(meuColabId)` → exibe para pessoa específica (perfis não-gestor sem `publico`)
+  - RH, Admin e Diretoria não são afetados por `colaboradores_ids` — `return true` direto
 - RLS já garante no banco que o usuário recebe apenas os avisos permitidos
 
 ### Tabela `param_aviso_home`
