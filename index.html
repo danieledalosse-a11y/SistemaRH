@@ -223,7 +223,6 @@
   .hd-aviso-card { flex: 0 0 calc((100% - 24px) / 3); min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 12px; border: 1px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,.07); cursor: pointer; transition: box-shadow 0.15s, transform 0.12s; }
   .hd-aviso-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.13); transform: translateY(-1px); }
   .hd-avisos-wrap.single .hd-aviso-card { flex: 0 0 100%; }
-  .hd-avisos-wrap.count-2 .hd-aviso-card { flex: 0 0 calc((100% - 12px) / 2); }
   .hd-aviso-card.urgente  { background: #fff5f5; border-color: #fed7d7; }
   .hd-aviso-card.info     { background: #ebf4ff; border-color: #bee3f8; }
   .hd-aviso-card.lembrete { background: #fffbeb; border-color: #fcd34d; }
@@ -1209,7 +1208,8 @@ let _avisosData = [];
 let _avisosIdx  = 0;
 
 function _avisosCardsVisible() {
-  return window.innerWidth <= 600 ? 1 : 3;
+  if (window.innerWidth <= 600) return 1;
+  return Math.min(3, _avisosData.length);
 }
 
 function _avisosIconSvg(tipo) {
@@ -1241,6 +1241,7 @@ function _avisosSetIdx(idx) {
     const viewW = track.parentElement.offsetWidth;
     const gap = 12;
     const w = (viewW - gap * (vis - 1)) / vis;
+    track.querySelectorAll('.hd-aviso-card').forEach(c => { c.style.flexBasis = w + 'px'; c.style.minWidth = w + 'px'; });
     track.style.transform = `translateX(-${_avisosIdx * (w + gap)}px)`;
   }
   const prev = document.getElementById('hd-avisos-prev');
@@ -1337,8 +1338,8 @@ async function _renderAvisos(perfil) {
   if (!avisos.length) { wrap.style.display = 'none'; return; }
   _avisosData = avisos;
   _avisosIdx  = 0;
-  const multi = avisos.length > 1;
-  wrap.classList.toggle('single', !multi);
+  const multi = avisos.length >= 3;
+  wrap.classList.toggle('single', avisos.length === 1);
   wrap.classList.toggle('count-2', avisos.length === 2);
 
   const calSvg = '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
