@@ -1977,7 +1977,16 @@ function abrirModal(row) {
   if (currentCat === 'aviso_home') {
     // Popular editor rich text com o corpo existente
     const editorEl = document.getElementById('field_corpo_editor');
-    if (editorEl) editorEl.innerHTML = row?.corpo || '';
+    if (editorEl) {
+      editorEl.innerHTML = row?.corpo || '';
+      // Intercepta Enter para inserir <br> em vez de <div> (comportamento padrão do Chrome)
+      editorEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          document.execCommand('insertLineBreak');
+        }
+      });
+    }
     _avisoHomeInicializarDestinatarios(row);
   }
 
@@ -3309,10 +3318,15 @@ let _avColabCache = {};
 
 function _avSanitizarCorpo(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
+  // Converte <div> gerados pelo Chrome em <br> para preservar quebras de linha
+  doc.body.querySelectorAll('div').forEach(div => {
+    const br = doc.createElement('br');
+    div.replaceWith(br, ...div.childNodes);
+  });
   const ALLOWED = new Set(['B','STRONG','I','EM','SPAN','P','BR','#text']);
   function clean(node) {
     [...node.childNodes].forEach(child => {
-      if (child.nodeType === 3) return; // text node ok
+      if (child.nodeType === 3) return;
       if (!ALLOWED.has(child.nodeName)) { child.replaceWith(...child.childNodes); clean(node); return; }
       if (child.nodeName === 'SPAN') {
         const color = child.style.color;
