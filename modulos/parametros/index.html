@@ -164,6 +164,12 @@
   .eh-table tbody tr { border-bottom: 1px solid var(--border); }
   .eh-table tbody tr:last-child { border-bottom: none; }
   .eh-table tbody td { padding: 9px 14px; vertical-align: middle; }
+  /* ── Chip selector — Escopo Home ── */
+  .eh-chip-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .eh-chip-area { display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px; }
+  .eh-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--blue-bg); border: 1px solid var(--blue); border-radius: 20px; padding: 3px 10px; font-size: 12px; color: var(--blue); font-weight: 500; }
+  .eh-chip button { background: none; border: none; cursor: pointer; color: var(--blue); font-size: 14px; line-height: 1; padding: 0 0 0 2px; margin: 0; }
+  .eh-chip-empty { font-size: 12px; color: var(--text-ter); font-style: italic; align-self: center; }
 
   /* Modal */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
@@ -1891,14 +1897,26 @@ function abrirModal(row) {
     _escopoPopularValor(tipoVal, valorAtual);
   }
 
-  // Escopo home: inicializa dropdown condicional de valor (inclui valor2 para tipo_vinculo)
+  // Escopo home: chip selector multi-valor
   if (currentCat === 'escopo_home') {
     const tipoEl = document.getElementById('field_tipo');
     const tipoVal = tipoEl ? tipoEl.value : '';
-    const valorAtual = tipoVal === 'gestor'
-      ? String(row?.gestor_ref_id || '')
-      : (row?.valor || '');
-    _escopoPopularValor(tipoVal, valorAtual, row?.valor2 || '');
+    _ehTipoAtual = tipoVal;
+
+    // Editing: freeze gestor / modulo / tipo (group identity)
+    if (row) {
+      ['field_gestor_id','field_modulo','field_tipo'].forEach(fid => {
+        const el = document.getElementById(fid);
+        if (el) { el.setAttribute('disabled', 'disabled'); el.style.opacity = '0.7'; el.style.cursor = 'default'; }
+      });
+    } else {
+      // Creation: reset chips for clean state
+      _ehChips = [];
+      _ehGrupoLinhas = [];
+    }
+
+    // Replace escopo_valor select with chip selector
+    _ehInicializarChipSelector(tipoVal);
   }
 
   // Aviso home: injeta seletor multi-perfil + busca de colaboradores específicos
@@ -1943,11 +1961,31 @@ function abrirModal(row) {
 
 function editarItem(id) {
   const row = allRows.find(r => String(r.id) === String(id));
-  if (row) abrirModal(row);
+  if (!row) return;
+  if (currentCat === 'escopo_home') {
+    _ehGrupoLinhas = allRows.filter(r =>
+      r.ativo &&
+      String(r.gestor_id) === String(row.gestor_id) &&
+      r.modulo === row.modulo &&
+      r.tipo === row.tipo
+    );
+    _ehChips = _ehGrupoLinhas.map(r => _ehRowToChip(r));
+    _ehTipoAtual = row.tipo;
+  } else {
+    _ehGrupoLinhas = [];
+    _ehChips = [];
+  }
+  abrirModal(row);
 }
 
 function _escopoTipoChange(tipo) {
-  _escopoPopularValor(tipo, '');
+  if (currentCat === 'escopo_home') {
+    _ehTipoAtual = tipo;
+    _ehChips = [];
+    _ehInicializarChipSelector(tipo);
+  } else {
+    _escopoPopularValor(tipo, '');
+  }
 }
 
 function _escopoPopularValor(tipo, valorAtual, valor2Atual) {
@@ -2032,6 +2070,8 @@ async function fecharModal(forcar = false) {
   if (auditBlock) auditBlock.innerHTML = '';
   const _avDdBody = document.getElementById('avColabDropdown');
   if (_avDdBody) _avDdBody.remove();
+  const _ehDdBody = document.getElementById('ehDropdown');
+  if (_ehDdBody) _ehDdBody.remove();
   const mf = document.getElementById('modalFields');
   if (mf._avHandler) {
     mf.removeEventListener('change', mf._avHandler);
@@ -2074,29 +2114,75 @@ async function salvar() {
     body.cbo_codigo = null;
   }
 
-  // escopo_home: mesma lógica de escopo_ferias + campo modulo + valor2 para tipo_vinculo
+  // escopo_home: multi-row chip selector — save handled entirely here, returns early
   if (currentCat === 'escopo_home') {
-    body.gestor_id = body.gestor_id ? parseInt(body.gestor_id) : null;
-    // Lê valor2 do campo extra (só existe para tipo_vinculo)
-    const _v2El = document.getElementById('field_valor2');
-    body.valor2 = (_v2El && body.tipo === 'tipo_vinculo') ? (_v2El.value || null) : null;
-    if (body.tipo === 'gestor') {
-      body.gestor_ref_id = body.valor ? parseInt(body.valor) : null;
-      body.valor = null;
-    } else if (body.tipo === 'colaborador') {
-      body.valor = body.valor ? String(body.valor) : null;
-      body.gestor_ref_id = null;
-    } else if (body.tipo === 'todos') {
-      body.valor = null;
-      body.gestor_ref_id = null;
-    } else {
-      body.gestor_ref_id = null;
+    const gestorId = parseInt(document.getElementById('field_gestor_id')?.value) || null;
+    const modulo   = document.getElementById('field_modulo')?.value || '';
+    const tipo     = document.getElementById('field_tipo')?.value || '';
+    if (!gestorId) { showToast('Selecione um gestor.', 'error'); return; }
+    if (!modulo)   { showToast('Selecione a funcionalidade.', 'error'); return; }
+    if (!tipo)     { showToast('Selecione o tipo de escopo.', 'error'); return; }
+    if (tipo !== 'todos' && _ehChips.length === 0) { showToast('Adicione ao menos um valor ao escopo.', 'error'); return; }
+    try {
+      if (editingId) {
+        // Edição de grupo: diff chips atuais vs originais
+        for (const orig of _ehGrupoLinhas) {
+          const chaveOrig = orig.tipo === 'gestor' ? String(orig.gestor_ref_id) : String(orig.valor || '');
+          const ainda = _ehChips.find(c => {
+            const chave = orig.tipo === 'gestor' ? String(c.gestor_ref_id || '') : String(c.valor || '');
+            return chave === chaveOrig;
+          });
+          if (!ainda) {
+            await sbDelete(cat.table, orig.id);
+            await registrarAudit('excluído', orig.id, `Removido do grupo ${tipo}`);
+          }
+        }
+        for (const chip of _ehChips) {
+          const chaveChip = tipo === 'gestor' ? String(chip.gestor_ref_id || '') : String(chip.valor || '');
+          const jaExiste = _ehGrupoLinhas.find(orig => {
+            const chave = tipo === 'gestor' ? String(orig.gestor_ref_id || '') : String(orig.valor || '');
+            return chave === chaveChip;
+          });
+          if (jaExiste) continue;
+          const dup = await _ehVerificarDuplicata(gestorId, modulo, tipo, chip);
+          if (dup) continue;
+          const nb = _ehMontarBody(gestorId, modulo, tipo, chip);
+          nb.ativo = true;
+          const criado = await sbPost(cat.table, nb);
+          const novoId = Array.isArray(criado) ? criado[0]?.id : criado?.id;
+          if (novoId) await registrarAudit('criado', novoId, null);
+        }
+      } else {
+        // Criação
+        if (tipo === 'todos') {
+          const dup = await _ehVerificarDuplicata(gestorId, modulo, tipo, {valor: null, gestor_ref_id: null});
+          if (dup) { showToast('Este escopo já existe para este gestor.', 'error'); return; }
+          const nb = _ehMontarBody(gestorId, modulo, tipo, {valor: null, gestor_ref_id: null});
+          nb.ativo = true;
+          const criado = await sbPost(cat.table, nb);
+          const novoId = Array.isArray(criado) ? criado[0]?.id : criado?.id;
+          if (novoId) await registrarAudit('criado', novoId, null);
+        } else {
+          let inseridos = 0;
+          for (const chip of _ehChips) {
+            const dup = await _ehVerificarDuplicata(gestorId, modulo, tipo, chip);
+            if (dup) continue;
+            const nb = _ehMontarBody(gestorId, modulo, tipo, chip);
+            nb.ativo = true;
+            const criado = await sbPost(cat.table, nb);
+            const novoId = Array.isArray(criado) ? criado[0]?.id : criado?.id;
+            if (novoId) { await registrarAudit('criado', novoId, null); inseridos++; }
+          }
+          if (inseridos === 0) { showToast('Todos os valores já existem para este escopo.', 'error'); return; }
+        }
+      }
+      showToast(editingId ? 'Escopos atualizados!' : 'Escopos criados!', 'success');
+      fecharModal(true);
+      carregar();
+    } catch(e) {
+      showToast('Erro: ' + (e?.message || String(e)), 'error');
     }
-    if (!body.gestor_id) { showToast('Selecione um gestor.', 'error'); return; }
-    if (!body.modulo)    { showToast('Selecione a funcionalidade.', 'error'); return; }
-    if (!body.tipo)      { showToast('Selecione o tipo de escopo.', 'error'); return; }
-    if (body.tipo === 'gestor' && !body.gestor_ref_id) { showToast('Selecione o gestor incluído.', 'error'); return; }
-    if (body.tipo !== 'todos' && body.tipo !== 'gestor' && !body.valor) { showToast('Selecione o valor do escopo.', 'error'); return; }
+    return; // early return — skip generic save
   }
 
   // escopo_ferias: gestor_id e gestor_ref_id são inteiros; mapeamento por tipo
@@ -2960,6 +3046,203 @@ function limparColaboradorGestor() {
 }
 
 // ── Aviso Home: seletor multi-perfil + colaboradores específicos ─────────────
+
+// ─── Escopo Home — chip selector state ────────────────────────────────────────
+let _ehChips = [];       // [{valor, label, gestor_ref_id}]
+let _ehGrupoLinhas = []; // DB rows do grupo sendo editado (ativos)
+let _ehTipoAtual   = '';
+
+function _ehRowToChip(r) {
+  if (r.tipo === 'gestor') {
+    return { valor: null, label: gestoresMap[r.gestor_ref_id] || String(r.gestor_ref_id), gestor_ref_id: r.gestor_ref_id };
+  }
+  if (r.tipo === 'colaborador') {
+    return { valor: String(r.valor), label: colaboradoresEscopoMap[r.valor] || String(r.valor), gestor_ref_id: null };
+  }
+  if (r.tipo === 'tipo_vinculo') {
+    const desc = tiposVinculoList.find(tv => tv.codigo === r.valor)?.descricao || r.valor || '';
+    return { valor: r.valor, label: desc, gestor_ref_id: null };
+  }
+  return { valor: r.valor, label: r.valor, gestor_ref_id: null };
+}
+
+function _ehMontarBody(gestorId, modulo, tipo, chip) {
+  const b = { gestor_id: gestorId, modulo, tipo };
+  if (tipo === 'gestor') {
+    b.gestor_ref_id = chip.gestor_ref_id ? parseInt(chip.gestor_ref_id) : null;
+    b.valor = null;
+  } else if (tipo === 'colaborador') {
+    b.valor = chip.valor ? String(chip.valor) : null;
+    b.gestor_ref_id = null;
+  } else if (tipo === 'todos') {
+    b.valor = null;
+    b.gestor_ref_id = null;
+  } else {
+    b.valor = chip.valor || null;
+    b.gestor_ref_id = null;
+  }
+  return b;
+}
+
+async function _ehVerificarDuplicata(gestorId, modulo, tipo, chip) {
+  try {
+    let qs = `gestor_id=eq.${gestorId}&modulo=eq.${encodeURIComponent(modulo)}&tipo=eq.${encodeURIComponent(tipo)}&select=id`;
+    if (tipo === 'gestor') {
+      const gref = chip.gestor_ref_id ? parseInt(chip.gestor_ref_id) : null;
+      qs += gref ? `&gestor_ref_id=eq.${gref}` : `&gestor_ref_id=is.null`;
+    } else if (tipo === 'todos') {
+      qs += '&valor=is.null';
+    } else {
+      const v = chip.valor || null;
+      qs += v ? `&valor=eq.${encodeURIComponent(v)}` : '&valor=is.null';
+    }
+    const rows = await sbGet('param_escopo_home', qs);
+    return rows.length > 0;
+  } catch(_) { return false; }
+}
+
+function _ehInicializarChipSelector(tipo) {
+  const wrap = document.getElementById('fieldWrap_valor');
+  const wrap2 = document.getElementById('fieldWrap_valor2');
+  if (!wrap) return;
+  if (wrap2) wrap2.style.display = 'none';
+
+  if (tipo === 'todos' || !tipo) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+
+  const label = document.getElementById('fieldLabel_valor');
+  const tipoLabels = {
+    gestor: 'Gestores incluídos', colaborador: 'Colaboradores',
+    setor: 'Setores', empresa_atuacao: 'Empresas de atuação',
+    tipo_vinculo: 'Tipos de vínculo', cargo: 'Cargos'
+  };
+  if (label) label.textContent = tipoLabels[tipo] || 'Valores';
+
+  // Substituir o select pelo chip selector
+  const sel = document.getElementById('field_valor');
+  if (sel) sel.style.display = 'none';
+
+  // Remove chip selector anterior se houver
+  const old = document.getElementById('ehChipContainer');
+  if (old) old.remove();
+  const oldDd = document.getElementById('ehDropdown');
+  if (oldDd) oldDd.remove();
+
+  const placeholder = tipo === 'gestor' ? 'Buscar gestor...' :
+                      tipo === 'colaborador' ? 'Buscar colaborador...' :
+                      'Buscar e adicionar...';
+  const chipHtml = `<div id="ehChipContainer" class="eh-chip-wrap">
+    <div id="ehChips" class="eh-chip-area"></div>
+    <div style="position:relative">
+      <input type="text" id="ehBusca" placeholder="${placeholder}" autocomplete="off"
+        oninput="_ehBuscar()" style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit">
+    </div>
+  </div>`;
+  wrap.insertAdjacentHTML('beforeend', chipHtml);
+
+  // Dropdown fora do modal para evitar clipping
+  const ddHtml = `<div id="ehDropdown" style="display:none;position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:200px;overflow-y:auto;z-index:9999"></div>`;
+  document.body.insertAdjacentHTML('beforeend', ddHtml);
+
+  _ehRenderChips();
+}
+
+function _ehRenderChips() {
+  const wrap = document.getElementById('ehChips');
+  if (!wrap) return;
+  if (!_ehChips.length) {
+    wrap.innerHTML = '<span class="eh-chip-empty">Nenhum valor adicionado</span>';
+    return;
+  }
+  wrap.innerHTML = _ehChips.map((c, i) =>
+    `<span class="eh-chip">${c.label}<button type="button" onclick="_ehRemoverChip(${i})" title="Remover">×</button></span>`
+  ).join('');
+}
+
+function _ehRemoverChip(idx) {
+  _ehChips.splice(idx, 1);
+  _ehRenderChips();
+}
+
+function _ehAdicionarChip(valor, label, gestorRefId) {
+  const tipo = _ehTipoAtual;
+  const chave = tipo === 'gestor' ? String(gestorRefId || '') : String(valor || '');
+  const jaExiste = _ehChips.find(c => {
+    const ck = tipo === 'gestor' ? String(c.gestor_ref_id || '') : String(c.valor || '');
+    return ck === chave;
+  });
+  if (jaExiste) return;
+  _ehChips.push({ valor: tipo === 'gestor' ? null : valor, label, gestor_ref_id: gestorRefId || null });
+  _ehRenderChips();
+  const inp = document.getElementById('ehBusca');
+  const dd  = document.getElementById('ehDropdown');
+  if (inp) inp.value = '';
+  if (dd) dd.style.display = 'none';
+}
+
+function _ehBuscar() {
+  const inp = document.getElementById('ehBusca');
+  const dd  = document.getElementById('ehDropdown');
+  if (!inp || !dd) return;
+  const q = inp.value.trim().toLowerCase();
+  const tipo = _ehTipoAtual;
+
+  let opcoes = [];
+  if (tipo === 'gestor') {
+    const gestorAtualId = String(document.getElementById('field_gestor_id')?.value || '');
+    opcoes = Object.entries(gestoresMap)
+      .filter(([id]) => String(id) !== gestorAtualId)
+      .map(([id, nome]) => ({ valor: null, label: nome, gestor_ref_id: parseInt(id) }));
+  } else if (tipo === 'colaborador') {
+    opcoes = colaboradoresEscopoList.map(c => ({
+      valor: String(c.id), label: c.nome + (c.cargo ? ' · ' + c.cargo : ''), gestor_ref_id: null
+    }));
+  } else if (tipo === 'setor') {
+    const nomes = [...new Set(Object.values(setoresMap))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    opcoes = nomes.map(s => ({ valor: s, label: s, gestor_ref_id: null }));
+  } else if (tipo === 'empresa_atuacao') {
+    opcoes = empresasAtuacaoList.map(e => ({ valor: e, label: e, gestor_ref_id: null }));
+  } else if (tipo === 'tipo_vinculo') {
+    opcoes = tiposVinculoList.map(tv => ({ valor: tv.codigo, label: tv.descricao, gestor_ref_id: null }));
+  } else if (tipo === 'cargo') {
+    opcoes = cargosList.map(c => ({ valor: c, label: c, gestor_ref_id: null }));
+  }
+
+  const filtradas = q ? opcoes.filter(o => o.label.toLowerCase().includes(q)) : opcoes;
+  const limite = filtradas.slice(0, 15);
+
+  const rect = inp.getBoundingClientRect();
+  Object.assign(dd.style, { top: (rect.bottom + 4) + 'px', left: rect.left + 'px', width: rect.width + 'px' });
+
+  if (!limite.length) {
+    dd.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text-ter)">Nenhuma opção encontrada</div>';
+    dd.style.display = 'block';
+    return;
+  }
+  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re  = q ? new RegExp(`(${esc})`, 'gi') : null;
+  dd.innerHTML = limite.map((o, i) => {
+    const txt = re ? o.label.replace(re, '<strong>$1</strong>') : o.label;
+    const vJson = JSON.stringify(o.valor);
+    const gJson = JSON.stringify(o.gestor_ref_id);
+    return `<div onclick="_ehAdicionarChip(${vJson}, ${JSON.stringify(o.label)}, ${gJson})"
+      style="padding:8px 14px;cursor:pointer;font-size:13px;color:var(--text);${i < limite.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}"
+      onmouseover="this.style.background='var(--blue-bg)';this.style.color='var(--blue)'"
+      onmouseout="this.style.background='';this.style.color='var(--text)'">${txt}</div>`;
+  }).join('');
+  dd.style.display = 'block';
+}
+
+document.addEventListener('click', function(e_eh) {
+  const dd = document.getElementById('ehDropdown');
+  const inp = document.getElementById('ehBusca');
+  if (dd && inp && !dd.contains(e_eh.target) && e_eh.target !== inp) dd.style.display = 'none';
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 let _avColabSelecionados = []; // [{id, nome}]
 let _avColabCache = {};
