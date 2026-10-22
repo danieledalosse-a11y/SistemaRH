@@ -433,25 +433,25 @@ registro em `colaboradores`. Protegido pelo trigger `trg_check_colaborador_obrig
 
 Bloco condicional posicionado entre `#hd-mod-row` (módulos) e `#hd-evt-row` (eventos da equipe). Aparece **somente quando há avisos ativos** para o perfil do usuário; quando vazio, fica `display:none` sem ocupar espaço.
 
-### Carousel v2 (commits `fd8b9d2`, `bac3107`, `534f8be`, out/2026)
+### Carousel v2 (commits `fd8b9d2`, `bac3107`, `534f8be`, `61f4a75`, out/2026)
 
 **Layout HTML gerado por `_renderAvisos`:**
 
 ```
 .hd-avisos-wrap [.single quando 1 aviso]
   .hd-avisos-hd
-    .hd-avisos-hd-left
-      .hd-avisos-title-group  ← ícone megafone + título + badge count
-      .hd-avisos-subtitle     ← "Fique por dentro das novidades..."
+    .hd-avisos-title-group  ← ícone megafone (32px) + título "Comunicados importantes" + badge count
     button.hd-avisos-ver-todos
   .hd-avisos-carousel  ← display:flex; align-items:center; gap:6px
-    [button.hd-avisos-arrow#hd-avisos-prev]  ← só quando multi
+    [button.hd-avisos-arrow#hd-avisos-prev]  ← só quando multi (≥3 avisos)
     .hd-avisos-viewport  ← flex:1; overflow:hidden
       .hd-avisos-track    ← display:flex; gap:12px; transform via JS
         .hd-aviso-card.{tipo}  (× N cards)
     [button.hd-avisos-arrow#hd-avisos-next]  ← só quando multi
   [.hd-avisos-dots]  ← só quando multi, abaixo do carousel
 ```
+
+**Nota:** subtítulo "Fique por dentro das novidades..." foi removido (commit `61f4a75`). `.hd-avisos-hd-left` também foi removido — o `title-group` fica direto no `.hd-avisos-hd`.
 
 **Card interno:**
 ```
@@ -462,15 +462,27 @@ Bloco condicional posicionado entre `#hd-mod-row` (módulos) e `#hd-evt-row` (ev
   .hd-aviso-card-titulo
   .hd-aviso-card-corpo            ← 3 linhas max, opcional
   .hd-aviso-card-footer
-    .hd-aviso-card-footer-date    ← ícone calendário + "Publicado em DD/MM/AAAA"
+    .hd-aviso-card-footer-date    ← ícone calendário (_avisosCalSvg) + "Publicado em DD/MM/AAAA"
     .hd-aviso-card-footer-arrow   ← círculo 22px com seta
 ```
 
-**Ícone da seção:** megafone (`<svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>`) — **não usar sino** (já existe sino de notificações na topbar).
+**Ícone da seção:** megafone (`<svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>`) — **não usar sino** (já existe sino de notificações na topbar). Tamanho do container: 32px (era 30px), fundo `#dce8ff`.
+
+**Título da seção:** `.hd-avisos-title` em `font-size: 16px` (era 15px). `.hd-avisos-hd` com `align-items: center`.
 
 **Comportamento por quantidade:**
 - 1 aviso (`!multi`): wrap recebe classe `.single`; card expande `flex:0 0 100%`; setas e bolinhas não renderizadas
-- 2+ avisos: setas laterais + bolinhas abaixo; `_avisosSetIdx` calcula largura do card por `track.parentElement.offsetWidth`
+- 2 avisos: classe `.count-2`; sem setas/bolinhas; widths calculadas em pixels por `_avisosSetIdx`
+- 3+ avisos (`multi`): setas laterais + bolinhas abaixo; `_avisosSetIdx` calcula largura do card por `track.parentElement.offsetWidth`
+
+### Módulo-level constants (`index.html`, antes da IIFE)
+
+```js
+let _avisosFloatRect = null;  // rect original do card para animação de fechar
+const _avisosCalSvg = '<svg viewBox="0 0 24 24" ...>';  // ícone calendário reutilizado
+```
+
+**`_avisosCalSvg` é módulo-level** — não redeclare com `const calSvg` local. `_renderAvisos` usa `calSvg = _avisosCalSvg`.
 
 ### Função `_renderAvisos(perfil)`
 
@@ -492,6 +504,41 @@ async function _renderAvisos(perfil) {
   - `colaboradores_ids.includes(meuColabId)` → exibe para pessoa específica (perfis não-gestor sem `publico`)
   - RH, Admin e Diretoria não são afetados por `colaboradores_ids` — `return true` direto
 - RLS já garante no banco que o usuário recebe apenas os avisos permitidos
+
+### Float card — expansão ao clicar (commit `61f4a75`)
+
+Ao clicar em um card, ele se expande "para a frente" com efeito 3D suave — sem modal externo. O card mantém exatamente a identidade visual do original (cores, tipografia, badge, ícone).
+
+**Fluxo:**
+1. `_avisosVerCard(idx)` lê `getBoundingClientRect()` do card original
+2. Cria `#hd-aviso-float-overlay` (`position:fixed; z-index:1050`) com backdrop `.hd-aviso-float-bd` e `.hd-aviso-float-card.{tipo}`
+3. Posiciona o float card **sem transição** na posição exata do card original
+4. Força reflow (`floatCard.offsetHeight`)
+5. Em `requestAnimationFrame`: adiciona classe `.active` ao overlay (fundo semitransparente), anima `left/top/width/opacity` até posição central (max 460px)
+6. Fecha com botão ×, clique no fundo, ou tecla Esc
+
+**Funções:**
+- `_avisosVerCard(idx)` — abre o float card
+- `_avisosFecharCard()` — remove overlay com `setTimeout(300)` para completar transição de saída
+- `_avisosEscHandler(e)` — listener de Esc (adicionado/removido em cada open/close)
+
+**CSS novo:**
+```css
+#hd-aviso-float-overlay { position:fixed; inset:0; z-index:1050; pointer-events:none }
+#hd-aviso-float-overlay.active { pointer-events:all }
+.hd-aviso-float-bd { position:absolute; inset:0; background:rgba(0,0,0,0); transition:background 0.26s }
+#hd-aviso-float-overlay.active .hd-aviso-float-bd { background:rgba(0,0,0,0.14) }
+.hd-aviso-float-card { position:absolute; border-radius:12px; opacity:0;
+  transition: left/top/width/box-shadow 0.3s cubic-bezier(.4,0,.2,1), opacity 0.22s }
+#hd-aviso-float-overlay.active .hd-aviso-float-card { opacity:1; box-shadow:0 20px 56px rgba(0,0,0,.18) }
+.hd-aviso-float-card.urgente { background:#fff5f5; border-color:#fed7d7 }
+.hd-aviso-float-card.info    { background:#ebf4ff; border-color:#bee3f8 }
+.hd-aviso-float-card.lembrete{ background:#fffbeb; border-color:#fcd34d }
+.hd-aviso-float-titulo { font-size:15px; font-weight:700; padding-right:28px }
+.hd-aviso-float-corpo  { font-size:13px; color:var(--text-sec); line-height:1.65 }  /* sem line-clamp */
+```
+
+**Float card usa mesmos elementos que o card original:** `.hd-aviso-card-top`, `.hd-aviso-badge-tipo`, `.hd-aviso-tipo-icon`, `.hd-aviso-card-footer`, `_avisosLabel`, `_avisosIconSvg`, `_avisosCalSvg`.
 
 ### Tabela `param_aviso_home`
 
