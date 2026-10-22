@@ -1292,7 +1292,14 @@ async function _renderAvisos(perfil) {
     if (r.data_fim && r.data_fim < hoje) return false;
     const pub = Array.isArray(r.publico) ? r.publico : (r.publico ? [r.publico] : []);
     if (pub.includes('todos')) return true;
-    if (pub.includes(perfil)) return true;
+    if (pub.includes(perfil)) {
+      // Gestor com lista específica: só quem está na lista vê
+      if (perfil === 'gestor') {
+        const temEspecificos = Array.isArray(r.colaboradores_ids) && r.colaboradores_ids.length > 0;
+        if (temEspecificos) return !!(meuColabId && r.colaboradores_ids.includes(meuColabId));
+      }
+      return true;
+    }
     if (meuColabId && Array.isArray(r.colaboradores_ids) && r.colaboradores_ids.includes(meuColabId)) return true;
     return false;
   });
