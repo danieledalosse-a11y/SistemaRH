@@ -333,6 +333,18 @@
   .modal-tab-pane { display: none; }
   .modal-tab-pane.active { display: block; }
 
+  /* Rich Text Editor */
+  .rte-wrap { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surface); transition: border-color 0.12s, box-shadow 0.12s; }
+  .rte-wrap:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,78,216,0.1); }
+  .rte-toolbar { display: flex; align-items: center; gap: 2px; padding: 5px 8px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .rte-btn { background: none; border: 1px solid transparent; border-radius: 5px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; color: var(--text-sec); transition: background 0.1s, border-color 0.1s, color 0.1s; padding: 0; }
+  .rte-btn:hover { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+  .rte-sep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+  .rte-color-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; flex-shrink: 0; transition: transform 0.1s, box-shadow 0.1s; }
+  .rte-color-dot:hover { transform: scale(1.2); box-shadow: 0 0 0 2px rgba(0,0,0,0.15); }
+  .rte-editor { min-height: 72px; max-height: 180px; overflow-y: auto; padding: 10px 14px; font-size: 14px; font-family: inherit; color: var(--text); outline: none; line-height: 1.5; }
+  .rte-editor:empty::before { content: attr(placeholder); color: var(--text-ter); pointer-events: none; }
+
   /* Modal compacto — piloto do padrão visual (aviso_home) — bloco no final para garantir precedência */
   .modal--compact .modal-header { padding: 18px 24px 14px !important; }
   .modal--compact .modal-title  { font-size: 16px !important; margin-bottom: 4px !important; }
@@ -978,7 +990,7 @@ const CATS = {
     cols: ['titulo', 'tipo', 'publico', 'data_inicio', 'data_fim'],
     fields: [
       { key: 'titulo',      label: 'Título',               type: 'text',     width: 4, required: true, placeholder: 'Ex: Dissídio coletivo em vigor a partir de 01/11' },
-      { key: 'corpo',       label: 'Mensagem (opcional)',   type: 'textarea', width: 4 },
+      { key: 'corpo',       label: 'Mensagem (opcional)',   type: 'richtext', width: 4 },
       { key: 'tipo',        label: 'Tipo',                  type: 'select',   width: 4, required: true, options: [
         { value: 'info',      label: 'Informativo' },
         { value: 'lembrete',  label: 'Lembrete' },
@@ -1880,6 +1892,24 @@ function abrirModal(row) {
         <label>${f.label}</label>
         <select id="field_${f.key}" style="width:100%">${opts}</select>
       </div>`;
+    } else if (f.type === 'richtext') {
+      html += `<div class="field"${fieldStyle}>
+        <label>${f.label}</label>
+        <div class="rte-wrap">
+          <div class="rte-toolbar">
+            <button type="button" class="rte-btn" title="Negrito" onmousedown="event.preventDefault();document.execCommand('bold')"><b>N</b></button>
+            <button type="button" class="rte-btn" title="Itálico" onmousedown="event.preventDefault();document.execCommand('italic')"><i>I</i></button>
+            <div class="rte-sep"></div>
+            <button type="button" class="rte-color-dot" title="Preto" style="background:#1a1a2e" onmousedown="event.preventDefault();document.execCommand('foreColor',false,'#1a1a2e')"></button>
+            <button type="button" class="rte-color-dot" title="Cinza" style="background:#4B5565" onmousedown="event.preventDefault();document.execCommand('foreColor',false,'#4B5565')"></button>
+            <button type="button" class="rte-color-dot" title="Azul" style="background:#2563eb" onmousedown="event.preventDefault();document.execCommand('foreColor',false,'#2563eb')"></button>
+            <button type="button" class="rte-color-dot" title="Vermelho" style="background:#dc2626" onmousedown="event.preventDefault();document.execCommand('foreColor',false,'#dc2626')"></button>
+            <button type="button" class="rte-color-dot" title="Verde" style="background:#16a34a" onmousedown="event.preventDefault();document.execCommand('foreColor',false,'#16a34a')"></button>
+            <button type="button" class="rte-color-dot" title="Laranja" style="background:#ea580c" onmousedown="event.preventDefault();document.execCommand('foreColor',false,'#ea580c')"></button>
+          </div>
+          <div id="field_${f.key}_editor" contenteditable="true" class="rte-editor" placeholder="${f.placeholder || 'Digite a mensagem...'}"></div>
+        </div>
+      </div>`;
     } else if (f.type === 'textarea') {
       html += `<div class="field"${fieldStyle}>
         <label>${f.label}</label>
@@ -1945,6 +1975,9 @@ function abrirModal(row) {
 
   // Aviso home: injeta seletor multi-perfil + busca de colaboradores específicos
   if (currentCat === 'aviso_home') {
+    // Popular editor rich text com o corpo existente
+    const editorEl = document.getElementById('field_corpo_editor');
+    if (editorEl) editorEl.innerHTML = row?.corpo || '';
     _avisoHomeInicializarDestinatarios(row);
   }
 
@@ -2239,6 +2272,9 @@ async function salvar() {
     const checkedPerfis = [...document.querySelectorAll('.av-perfil-cb:checked')].map(el => el.value);
     body.publico = checkedPerfis.length ? checkedPerfis : ['todos'];
     body.colaboradores_ids = _avColabSelecionados.length ? _avColabSelecionados.map(c => c.id) : null;
+    // Lê e sanitiza o corpo do editor rich text
+    const _editorEl = document.getElementById('field_corpo_editor');
+    if (_editorEl) body.corpo = _avSanitizarCorpo(_editorEl.innerHTML);
   }
 
   const _perf = localStorage.getItem('sb_perfil');
@@ -3270,6 +3306,27 @@ document.addEventListener('click', function(e_eh) {
 
 let _avColabSelecionados = []; // [{id, nome}]
 let _avColabCache = {};
+
+function _avSanitizarCorpo(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const ALLOWED = new Set(['B','STRONG','I','EM','SPAN','P','BR','#text']);
+  function clean(node) {
+    [...node.childNodes].forEach(child => {
+      if (child.nodeType === 3) return; // text node ok
+      if (!ALLOWED.has(child.nodeName)) { child.replaceWith(...child.childNodes); clean(node); return; }
+      if (child.nodeName === 'SPAN') {
+        const color = child.style.color;
+        [...child.attributes].forEach(a => child.removeAttribute(a.name));
+        if (color) child.style.color = color;
+      } else {
+        [...child.attributes].forEach(a => child.removeAttribute(a.name));
+      }
+      clean(child);
+    });
+  }
+  clean(doc.body);
+  return doc.body.innerHTML;
+}
 
 function _avisoHomeInicializarDestinatarios(row) {
   const pubAtual = Array.isArray(row?.publico) ? row.publico
