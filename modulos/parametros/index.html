@@ -1197,6 +1197,24 @@ async function sbPatch(table, id, body) {
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
+async function _sbRefreshSession() {
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    if (!sess.refresh_token) return false;
+    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: sess.refresh_token }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    if (!data.access_token) return false;
+    const newSess = { ...sess, access_token: data.access_token, refresh_token: data.refresh_token || sess.refresh_token, expires_at: Date.now() + (data.expires_in || 3600) * 1000 };
+    localStorage.setItem('sb_session', JSON.stringify(newSess));
+    SB_HEADERS = { ...SB_HEADERS, Authorization: `Bearer ${data.access_token}` };
+    return true;
+  } catch { return false; }
+}
 
 function renderSidebar() {
   const groups = {};
@@ -2510,7 +2528,7 @@ async function salvarPerfil() {
   if (_hcColExists && (_homeConfigDirty || _hcExisting != null)) {
     body.home_config = { dashboard: homeDash, secoes: homeSecoes };
   }
-  try {
+  const _executarSalvar = async () => {
     if (editingPerfilId) {
       await sbPatch('perfis', editingPerfilId, body);
       showToast('Perfil atualizado!', 'success');
@@ -2518,10 +2536,23 @@ async function salvarPerfil() {
       await sbPost('perfis', { ...body, ativo: true });
       showToast('Perfil criado!', 'success');
     }
+  };
+  try {
+    await _executarSalvar();
     fecharPerfilModal();
     carregarPerfis();
   } catch(e) {
-    showToast('Erro: ' + e.message, 'error');
+    if ((e.message.includes('JWT expired') || e.message.includes('PGRST303')) && await _sbRefreshSession()) {
+      try {
+        await _executarSalvar();
+        fecharPerfilModal();
+        carregarPerfis();
+      } catch(e2) {
+        showToast('Erro ao salvar: ' + e2.message, 'error');
+      }
+    } else {
+      showToast('Erro: ' + e.message, 'error');
+    }
   }
 }
 
