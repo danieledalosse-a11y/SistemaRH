@@ -354,7 +354,23 @@ Seção **"Home"** no CATS (mesma renomeação aplicada). Tabela: `param_aviso_h
 
 ### Formulário — campos
 
-`titulo`, `tipo` (info/lembrete/urgente), `data_inicio`, `data_fim` (nullable), `ativo`, **Destinatários** (checkboxes de perfil + busca de colaboradores específicos).
+`titulo`, `corpo` (rich text — ver abaixo), `tipo` (info/lembrete/urgente), `data_inicio`, `data_fim` (nullable), `ativo`, **Destinatários** (checkboxes de perfil + busca de colaboradores específicos).
+
+### Editor rich text — campo `corpo` (commit `4eb027e`, out/2026)
+
+Campo `corpo` é `type: 'richtext'` no CATS. O renderer injeta um `<div contenteditable id="field_corpo_editor">` com barra de ferramentas compacta acima (`.rte-wrap > .rte-toolbar`).
+
+**Barra:** botões N/I via `execCommand('bold'/'italic')` + 6 bolinhas de cor (`.rte-color-dot`) via `execCommand('foreColor', false, hex)`. Todos os handlers usam `onmousedown + preventDefault` para não tirar o foco do editor.
+
+**Paleta:** `#1a1a2e` (preto) · `#4B5565` (cinza) · `#2563eb` (azul) · `#dc2626` (vermelho) · `#16a34a` (verde) · `#ea580c` (laranja).
+
+**`abrirModal`:** `editorEl.innerHTML = row?.corpo || ''` — texto puro renderiza como texto, HTML como formatado.
+
+**`salvar`:** lê `field_corpo_editor.innerHTML` e chama `_avSanitizarCorpo(html)` antes de gravar.
+
+**`_avSanitizarCorpo(html)`:** usa DOMParser; tags permitidas: `B`, `STRONG`, `I`, `EM`, `SPAN` (apenas `style.color`), `P`, `BR`. Demais tags: unwrap (filhos preservados). Atributos removidos exceto `style.color` em SPAN.
+
+**Home (`index.html`):** `_avisosTextoPlano(html)` extrai `textContent` para a prévia do card (sem tags). Float card usa `innerHTML` diretamente (exibe formatação completa). Comunicados existentes em texto puro: compatíveis sem alteração.
 
 ### Abas do modal (ao editar — commits `a4e9b97`, `7bbd099`)
 
