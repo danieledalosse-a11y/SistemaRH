@@ -150,6 +150,20 @@
   .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.7; flex-shrink: 0; }
   .badge-ativo { background: var(--green-bg); color: var(--green); }
   .badge-inativo { background: #fef2f2; color: #b91c1c; }
+  /* Escopo Home — vista agrupada por Gestor */
+  .eh-gestor-lista { display: flex; flex-direction: column; gap: 8px; padding: 4px 0; }
+  .eh-gestor-card { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .eh-gestor-hd { display: flex; align-items: center; gap: 12px; padding: 13px 16px; cursor: pointer; user-select: none; }
+  .eh-gestor-hd:hover { background: var(--hover); }
+  .eh-gestor-nome { font-size: 14px; font-weight: 700; color: var(--text); min-width: 120px; }
+  .eh-gestor-count { font-size: 12px; flex: 1; }
+  .eh-chevron { color: var(--text-ter); flex-shrink: 0; transition: transform 0.18s; }
+  .eh-gestor-body { border-top: 1px solid var(--border); }
+  .eh-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .eh-table thead th { padding: 8px 14px; font-size: 11px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: .05em; text-align: left; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .eh-table tbody tr { border-bottom: 1px solid var(--border); }
+  .eh-table tbody tr:last-child { border-bottom: none; }
+  .eh-table tbody td { padding: 9px 14px; vertical-align: middle; }
 
   /* Modal */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
@@ -933,7 +947,7 @@ const CATS = {
     desc: 'Parâmetros globais do módulo de Férias.',
   },
   escopo_home: {
-    label: 'Escopo de Visualização — Home', section: 'Home do Gestor', sectionOrder: 10, order: 0, noAuditCols: true,
+    label: 'Escopo de Visualização — Home', section: 'Home', sectionOrder: 10, order: 0, noAuditCols: true,
     icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>',
     desc: 'Escopo adicional de colaboradores visíveis na Home do Gestor. O gestor continua vendo sua equipe normal e, adicionalmente, os colaboradores abrangidos por este escopo. Efeito atual: aniversariantes e tempo de casa.',
     table: 'param_escopo_home',
@@ -949,7 +963,7 @@ const CATS = {
     headers: ['Gestor', 'Funcionalidade', 'Tipo de escopo', 'Valor', 'Situação', ''],
   },
   aviso_home: {
-    label: 'Comunicados da Home', section: 'Home do Gestor', sectionOrder: 10, order: 1,
+    label: 'Comunicados da Home', section: 'Home', sectionOrder: 10, order: 1,
     icon: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
     desc: 'Avisos e comunicados exibidos na Home conforme o perfil do usuário e o período de validade. Aparecem abaixo dos módulos apenas quando há itens ativos.',
     table: 'param_aviso_home',
@@ -1470,8 +1484,111 @@ function filtrarCbo() {
   document.getElementById('cboResultados').innerHTML = html;
 }
 
+// ── Escopo Home — vista agrupada por Gestor ───────────────────
+const _TIPO_L_EH = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor', colaborador: 'Colaborador específico', tipo_vinculo: 'Tipo de vínculo', cargo: 'Cargo' };
+const _MOD_L_EH  = { aniversarios: 'Aniversariantes / Tempo de casa' };
+
+function _ehValorDisplay(row) {
+  if (row.tipo === 'gestor')      return gestoresMap[row.gestor_ref_id] || '—';
+  if (row.tipo === 'colaborador') return colaboradoresEscopoMap[row.valor] || row.valor || '—';
+  if (row.tipo === 'tipo_vinculo') {
+    const desc = tiposVinculoList.find(tv => tv.codigo === row.valor)?.descricao || row.valor || '—';
+    return row.valor2 ? `${desc} · ${row.valor2}` : desc;
+  }
+  return row.valor || (row.tipo === 'todos' ? '(sem restrição)' : '—');
+}
+
+function renderEscopoHomeAgrupado(rows) {
+  const container = document.getElementById('tableBody');
+  if (!rows.length) {
+    container.innerHTML = '<div class="empty"><p>Nenhum item encontrado.</p></div>';
+    return;
+  }
+
+  // Agrupa por gestor_id preservando a ordem de aparição
+  const ordem = [];
+  const grupos = {};
+  rows.forEach(r => {
+    const gid = String(r.gestor_id);
+    if (!grupos[gid]) { grupos[gid] = []; ordem.push(gid); }
+    grupos[gid].push(r);
+  });
+
+  // Gestores sem escopos ainda (para o botão "+ Novo" criar sem gestor pré-selecionado)
+  const canEdit = isAdminLogado();
+
+  let html = '<div class="eh-gestor-lista">';
+  ordem.forEach(gid => {
+    const itens = grupos[gid];
+    const nomeGestor = gestoresMap[gid] || '—';
+    const ativos   = itens.filter(r => r.ativo).length;
+    const inativos = itens.filter(r => !r.ativo).length;
+    const countLabel = ativos
+      ? `<span style="color:var(--green);font-weight:600">${ativos} ativo${ativos > 1 ? 's' : ''}</span>${inativos ? ` <span style="color:var(--text-ter)">· ${inativos} inativo${inativos > 1 ? 's' : ''}</span>` : ''}`
+      : `<span style="color:var(--text-ter)">${inativos} inativo${inativos > 1 ? 's' : ''}</span>`;
+
+    html += `<div class="eh-gestor-card" id="ehg-${gid}">
+      <div class="eh-gestor-hd" onclick="_ehToggle('${gid}')">
+        <div class="eh-gestor-nome">${nomeGestor}</div>
+        <div class="eh-gestor-count">${countLabel}</div>
+        <svg class="eh-chevron" id="ehchev-${gid}" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="eh-gestor-body" id="ehbody-${gid}" style="display:none">
+        <table class="eh-table">
+          <thead><tr><th>Funcionalidade</th><th>Tipo de escopo</th><th>Valor</th><th>Situação</th>${canEdit ? '<th></th>' : ''}</tr></thead>
+          <tbody>`;
+
+    itens.forEach(r => {
+      const badge = r.ativo
+        ? `<span class="badge badge-ativo">Ativo</span>`
+        : `<span class="badge badge-inativo">Inativo</span>`;
+      html += `<tr>
+        <td style="font-size:12px;color:var(--text-sec)">${_MOD_L_EH[r.modulo] || r.modulo || '—'}</td>
+        <td>${_TIPO_L_EH[r.tipo] || r.tipo || '—'}</td>
+        <td style="color:var(--text-sec)">${_ehValorDisplay(r)}</td>
+        <td>${badge}</td>
+        ${canEdit ? `<td class="col-acoes"><button class="btn-icon" onclick="editarItem('${r.id}')" title="Editar"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></td>` : ''}
+      </tr>`;
+    });
+
+    html += `</tbody></table>`;
+    if (canEdit) {
+      html += `<div style="padding:10px 14px 12px">
+        <button class="btn-icon" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;color:var(--blue);border:1px solid var(--blue);background:var(--blue-bg)" onclick="_ehAdicionarParaGestor('${gid}')">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Adicionar escopo
+        </button>
+      </div>`;
+    }
+    html += `</div></div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function _ehToggle(gid) {
+  const body = document.getElementById(`ehbody-${gid}`);
+  const chev = document.getElementById(`ehchev-${gid}`);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+function _ehAdicionarParaGestor(gid) {
+  abrirModal(null);
+  // Pré-seleciona o gestor após o modal abrir (campos já injetados)
+  requestAnimationFrame(() => {
+    const el = document.getElementById('field_gestor_id');
+    if (el) { el.value = String(gid); el.dispatchEvent(new Event('change')); }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+
 function renderTabela(rows) {
   const cat = CATS[currentCat];
+  if (currentCat === 'escopo_home') { renderEscopoHomeAgrupado(rows); return; }
   if (!rows.length) {
     document.getElementById('tableBody').innerHTML = '<div class="empty"><p>Nenhum item encontrado.</p></div>';
     return;
