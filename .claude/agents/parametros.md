@@ -370,7 +370,7 @@ Campo `corpo` é `type: 'richtext'` no CATS. O renderer injeta um `<div contente
 
 **`_avSanitizarCorpo(html)`:** usa DOMParser; primeiro converte todos os `<div>` em `<br>` (compatibilidade com registros salvos antes do fix); tags permitidas: `B`, `STRONG`, `I`, `EM`, `SPAN` (apenas `style.color`), `P`, `BR`. Demais tags: unwrap. Atributos removidos exceto `style.color` em SPAN.
 
-**Home (`index.html`):** `_avisosTextoPlano(html)` extrai `textContent` para a prévia do card. Float card usa `innerHTML` + `white-space:pre-wrap` no `.hd-aviso-float-corpo` (exibe formatação e quebras de linha). Comunicados existentes em texto puro: compatíveis sem alteração.
+**Home (`index.html`):** card preview (`.hd-aviso-card-corpo`) usa `innerHTML` direto + `white-space:pre-wrap` — exibe negrito, itálico e quebras igual à visão expandida; truncamento visual via `-webkit-line-clamp:3` (commit `54e9b4b`). Float card (`.hd-aviso-float-corpo`) e modal "Ver todos" também usam `innerHTML`. Comunicados em texto puro: compatíveis.
 
 ### Abas do modal (ao editar — commits `a4e9b97`, `7bbd099`)
 
