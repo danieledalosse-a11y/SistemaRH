@@ -364,13 +364,13 @@ Campo `corpo` é `type: 'richtext'` no CATS. O renderer injeta um `<div contente
 
 **Paleta:** `#1a1a2e` (preto) · `#4B5565` (cinza) · `#2563eb` (azul) · `#dc2626` (vermelho) · `#16a34a` (verde) · `#ea580c` (laranja).
 
-**`abrirModal`:** `editorEl.innerHTML = row?.corpo || ''` — texto puro renderiza como texto, HTML como formatado.
+**`abrirModal`:** `editorEl.innerHTML = row?.corpo || ''` + listener `keydown Enter` → `execCommand('insertLineBreak')` (evita `<div>` gerado pelo Chrome).
 
 **`salvar`:** lê `field_corpo_editor.innerHTML` e chama `_avSanitizarCorpo(html)` antes de gravar.
 
-**`_avSanitizarCorpo(html)`:** usa DOMParser; tags permitidas: `B`, `STRONG`, `I`, `EM`, `SPAN` (apenas `style.color`), `P`, `BR`. Demais tags: unwrap (filhos preservados). Atributos removidos exceto `style.color` em SPAN.
+**`_avSanitizarCorpo(html)`:** usa DOMParser; primeiro converte todos os `<div>` em `<br>` (compatibilidade com registros salvos antes do fix); tags permitidas: `B`, `STRONG`, `I`, `EM`, `SPAN` (apenas `style.color`), `P`, `BR`. Demais tags: unwrap. Atributos removidos exceto `style.color` em SPAN.
 
-**Home (`index.html`):** `_avisosTextoPlano(html)` extrai `textContent` para a prévia do card (sem tags). Float card usa `innerHTML` diretamente (exibe formatação completa). Comunicados existentes em texto puro: compatíveis sem alteração.
+**Home (`index.html`):** `_avisosTextoPlano(html)` extrai `textContent` para a prévia do card. Float card usa `innerHTML` + `white-space:pre-wrap` no `.hd-aviso-float-corpo` (exibe formatação e quebras de linha). Comunicados existentes em texto puro: compatíveis sem alteração.
 
 ### Abas do modal (ao editar — commits `a4e9b97`, `7bbd099`)
 
