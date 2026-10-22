@@ -1527,11 +1527,13 @@ function renderEscopoHomeAgrupado(rows) {
   ordem.forEach(gid => {
     const itens = grupos[gid];
     const nomeGestor = gestoresMap[gid] || '—';
-    const ativos   = itens.filter(r => r.ativo).length;
-    const inativos = itens.filter(r => !r.ativo).length;
-    const countLabel = ativos
-      ? `<span style="color:var(--green);font-weight:600">${ativos} ativo${ativos > 1 ? 's' : ''}</span>${inativos ? ` <span style="color:var(--text-ter)">· ${inativos} inativo${inativos > 1 ? 's' : ''}</span>` : ''}`
-      : `<span style="color:var(--text-ter)">${inativos} inativo${inativos > 1 ? 's' : ''}</span>`;
+    // Conta grupos únicos (modulo+tipo) com ao menos 1 ativo / todos inativos
+    const subKeys = [...new Set(itens.map(r => `${r.modulo}||${r.tipo}`))];
+    const gruposAtivos   = subKeys.filter(sk => itens.filter(r => `${r.modulo}||${r.tipo}` === sk).some(r => r.ativo)).length;
+    const gruposInativos = subKeys.length - gruposAtivos;
+    const countLabel = gruposAtivos
+      ? `<span style="color:var(--green);font-weight:600">${gruposAtivos} escopo${gruposAtivos > 1 ? 's' : ''} ativo${gruposAtivos > 1 ? 's' : ''}</span>${gruposInativos ? ` <span style="color:var(--text-ter)">· ${gruposInativos} inativo${gruposInativos > 1 ? 's' : ''}</span>` : ''}`
+      : `<span style="color:var(--text-ter)">${gruposInativos} escopo${gruposInativos > 1 ? 's' : ''} inativo${gruposInativos > 1 ? 's' : ''}</span>`;
 
     html += `<div class="eh-gestor-card" id="ehg-${gid}">
       <div class="eh-gestor-hd" onclick="_ehToggle('${gid}')">
@@ -1541,19 +1543,41 @@ function renderEscopoHomeAgrupado(rows) {
       </div>
       <div class="eh-gestor-body" id="ehbody-${gid}" style="display:none">
         <table class="eh-table">
-          <thead><tr><th>Funcionalidade</th><th>Tipo de escopo</th><th>Valor</th><th>Situação</th>${canEdit ? '<th></th>' : ''}</tr></thead>
+          <thead><tr><th>Funcionalidade</th><th>Tipo de escopo</th><th>Valores</th><th>Situação</th>${canEdit ? '<th></th>' : ''}</tr></thead>
           <tbody>`;
 
+    // Agrupa por modulo+tipo para exibir uma linha por grupo com valores condensados
+    const subOrdem = [];
+    const subGrupos = {};
     itens.forEach(r => {
-      const badge = r.ativo
+      const sk = `${r.modulo}||${r.tipo}`;
+      if (!subGrupos[sk]) { subGrupos[sk] = []; subOrdem.push(sk); }
+      subGrupos[sk].push(r);
+    });
+
+    subOrdem.forEach(sk => {
+      const linhas = subGrupos[sk];
+      const rep = linhas[0];
+      const ativos = linhas.filter(r => r.ativo);
+      const inativos = linhas.filter(r => !r.ativo);
+      const temAtivo = ativos.length > 0;
+      const badge = temAtivo
         ? `<span class="badge badge-ativo">Ativo</span>`
         : `<span class="badge badge-inativo">Inativo</span>`;
+      let valorHtml;
+      if (rep.tipo === 'todos') {
+        valorHtml = '<span style="color:var(--text-ter);font-style:italic">sem restrição</span>';
+      } else {
+        const chips = ativos.map(r => `<span style="display:inline-block;background:var(--blue-bg);color:var(--blue);border-radius:5px;padding:1px 7px;font-size:11px;font-weight:600;margin:1px 2px">${_ehValorDisplay(r)}</span>`).join('');
+        const inatChips = inativos.map(r => `<span style="display:inline-block;background:#f1f5f9;color:var(--text-ter);border-radius:5px;padding:1px 7px;font-size:11px;margin:1px 2px;text-decoration:line-through">${_ehValorDisplay(r)}</span>`).join('');
+        valorHtml = chips + inatChips;
+      }
       html += `<tr>
-        <td style="font-size:12px;color:var(--text-sec)">${_MOD_L_EH[r.modulo] || r.modulo || '—'}</td>
-        <td>${_TIPO_L_EH[r.tipo] || r.tipo || '—'}</td>
-        <td style="color:var(--text-sec)">${_ehValorDisplay(r)}</td>
+        <td style="font-size:12px;color:var(--text-sec)">${_MOD_L_EH[rep.modulo] || rep.modulo || '—'}</td>
+        <td>${_TIPO_L_EH[rep.tipo] || rep.tipo || '—'}</td>
+        <td style="color:var(--text-sec)">${valorHtml}</td>
         <td>${badge}</td>
-        ${canEdit ? `<td class="col-acoes"><button class="btn-icon" onclick="editarItem('${r.id}')" title="Editar"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></td>` : ''}
+        ${canEdit ? `<td class="col-acoes"><button class="btn-icon" onclick="editarItem('${rep.id}')" title="Editar"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></td>` : ''}
       </tr>`;
     });
 
