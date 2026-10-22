@@ -2,7 +2,8 @@
 name: home
 description: >
   Especialista na Home Dashboard do SistemaRH (index.html) — arquitetura de roteamento por
-  perfil, renderização da visão Gestor, regras de TDZ, segurança salarial e view
+  perfil, renderHomeDashboard compartilhada (RH/Gestor/Diretoria), home_config JSONB em perfis,
+  configuração via Parâmetros Gerais, regras de TDZ, segurança salarial e view
   v_historico_eventos_home. Use este skill quando for implementar, depurar ou expandir
   qualquer coisa em index.html ou nas queries/views que a Home consome.
 tools:
@@ -28,30 +29,54 @@ tools:
 ### Fluxo de carga
 
 ```
-localStorage → sb_perfil → routeHomePerfil(p) → renderHome<Perfil>(p)
+localStorage → sb_perfil (com home_config) → routeHomePerfil(p) → renderHomeDashboard(p, secoes)
 ```
 
 O IIFE (bloco de script inline, ~linha 418) lê `sb_perfil` do localStorage e chama
-`routeHomePerfil(p)` **sincronamente**. `routeHomePerfil` despacha para a função de render
-correta conforme `p.perfil`:
+`routeHomePerfil(p)` **sincronamente**. `routeHomePerfil` lê `p.home_config` (gravado no
+login a partir da tabela `perfis`) e decide se exibe o dashboard:
 
 ```js
 function routeHomePerfil(p) {
   const perfil = (p.perfil || '').toLowerCase();
-  if (perfil === 'gestor') {
-    document.querySelector('.container').style.display = 'none';
-    document.getElementById('container-home-dashboard').style.display = 'block';
-    renderHomeGestor(p).catch(e => console.error('[renderHomeGestor]', e));
-  }
-  // futuro: else if (perfil === 'rh') renderHomeRH(p)
-  //         else if (perfil === 'diretoria') renderHomeDiretoria(p)
+  const hc = p.home_config || null;
+  // hc.dashboard === true → mostra dashboard; fallback: somente 'gestor' (preserva comportamento atual)
+  const showDash = hc ? hc.dashboard === true : perfil === 'gestor';
+  if (!showDash) return;
+  document.querySelector('.container').style.display = 'none';
+  document.getElementById('container-home-dashboard').style.display = 'block';
+  const secoes = (hc && Array.isArray(hc.secoes)) ? hc.secoes
+    : (perfil === 'gestor' ? ['ferias_equipe', 'atividades', 'eventos'] : []);
+  renderHomeDashboard(p, secoes).catch(e => console.error('[renderHomeDashboard]', e));
 }
 ```
 
-### Adição de novo perfil
+### `home_config` — estrutura JSONB
 
-Adicionar apenas um `else if` em `routeHomePerfil` e criar a função `renderHome<Perfil>(p)`.
-Nenhuma outra parte do código precisa mudar.
+Coluna `home_config JSONB DEFAULT NULL` na tabela `perfis` (migration 074).
+
+```json
+{ "dashboard": true, "secoes": ["ferias_equipe", "atividades", "eventos"] }
+```
+
+- `dashboard: true` → exibe o dashboard; `false` ou ausente → grade de módulos padrão
+- `secoes` → array com zero ou mais de: `"ferias_equipe"`, `"atividades"`, `"eventos"`
+- `null` (não configurado) → fallback: perfil `gestor` ativa dashboard com todas as 3 seções; demais → grade de módulos
+- Configurado via **Parâmetros Gerais → Perfis de Acesso** (modal de edição de perfil, seção "Home Dashboard")
+
+### Como o login.html grava o home_config
+
+```js
+// login.html ~linha 299
+const perfisData = await sbFetch(`/rest/v1/perfis?id=eq.${perfilId}&select=permissoes,home_config`, ...);
+if (perfisData?.[0]?.home_config != null) {
+  const pf = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  pf.home_config = perfisData[0].home_config;
+  localStorage.setItem('sb_perfil', JSON.stringify(pf));
+}
+```
+
+Apenas grava quando `home_config != null` — perfis sem configuração mantêm o comportamento de fallback.
 
 ---
 
@@ -106,42 +131,50 @@ Todos definidos como `function` declarations (hoisted) — sem risco de TDZ:
 
 ---
 
-## `renderHomeGestor(p)` — fluxo completo
+## `renderHomeDashboard(p, secoes)` — fluxo completo
+
+Função **única e compartilhada** para todos os perfis. Substitui `renderHomeGestor(p)`.
 
 ```
-p (sb_perfil do localStorage)
+renderHomeDashboard(p, secoes)
   │
   ├─ DOM síncronos:
   │   ├─ saudação + data
-  │   ├─ gestorAv: iniciais + cor (avatar temporário)
+  │   ├─ avatar: iniciais + cor (temporário)
   │   └─ _renderModules(p)            ← módulos do menu (síncrono)
   │
-  ├─ await foto do gestor             ← _hdGet colaboradores?id=eq.${p.colaborador_id}
-  │   └─ aplica backgroundImage no gestorAv se foto_url existir
+  ├─ temEquipe = secoes.some(s => ['ferias_equipe','atividades','eventos'].includes(s))
   │
-  ├─ await apelido (param_gestor)     ← 400 esperado enquanto tabela não tiver RLS correta
+  ├─ Bell: exibido SOMENTE para perfil === 'gestor'
   │
-  ├─ await equipe (colaboradores)     ← gestor=ilike.${apelido}
-  │   └─ mini-avatares na hd-team-row
+  ├─ await foto do usuário             ← _hdGet colaboradores?id=eq.${p.colaborador_id}
+  ├─ _renderModules(p)
+  ├─ _renderAvisos(perfil)
   │
-  ├─ _renderModules(p)                  ← síncrono
-  ├─ _renderAvisos(perfil)              ← async, logo após módulos
+  ├─ if (!temEquipe) → oculta sidebar + cards de equipe; return
+  │
+  ├─ Busca de equipe — dependente do perfil:
+  │   ├─ perfil === 'gestor' → param_gestor.apelido → colaboradores?gestor=ilike.${apelido}
+  │   └─ rh / diretoria → todos os colaboradores ativos (RLS no Supabase controla acesso real)
+  │
+  ├─ _extraAniv: escopo adicional de aniversários — SOMENTE para gestor (param_escopo_home)
+  ├─ Bell pendências (_loadPendencias) — SOMENTE para gestor
   │
   └─ await Promise.all([
-        ferias da equipe,
-        v_historico_eventos_home (atividades),
-        param_marco_tempo_casa (marcos de tempo de casa) ← .catch(()=>[]) independente
+        ferias_equipe incluída em secoes → _hdGet ferias
+        atividades incluída em secoes   → _hdGet v_historico_eventos_home
+        eventos incluída em secoes      → _hdGet param_marco_tempo_casa
      ])
-      └─ _renderEventos(team, hoje, marcosGestor) / _renderFerias / _renderAtividades
+      └─ renders condicionais: _renderEventos / _renderFerias / _renderAtividades
+         (cada bloco oculta seu card quando não está em secoes)
 ```
 
-### Foto do Gestor
+### Foto do usuário
 
-- **Fonte do `colaborador_id`:** `sb_perfil.colaborador_id` — gravado em `login.html` via
-  `SELECT usuarios_perfil?...&select=nome,perfil,perfil_id,acesso_modulos,colaborador_id`
+- **Fonte do `colaborador_id`:** `sb_perfil.colaborador_id`
 - **Query:** `_hdGet('colaboradores', 'id=eq.${p.colaborador_id}&select=foto_url')`
 - **Aplicação:** `gestorAv.style.backgroundImage = url('...')` + `backgroundSize:cover`
-- **Guard:** `if (p.colaborador_id)` — sem `colaborador_id` no `sb_perfil`, bloco ignorado
+- **Guard:** `if (p.colaborador_id)` — sem `colaborador_id`, bloco ignorado
 
 ### Módulos (`_renderModules`)
 
@@ -636,16 +669,62 @@ Nos módulos, carregado automaticamente via `permissoes.js` (injeção no `<head
 
 ---
 
+## Configuração da Home via Parâmetros Gerais
+
+### Onde configurar
+
+Parâmetros Gerais → **Perfis de Acesso** → abrir perfil → seção "Home Dashboard" (ao final do modal).
+
+### Campos do modal (parametros/index.html)
+
+| Controle | ID | Função |
+|---|---|---|
+| Checkbox "Habilitar Home Dashboard" | `pHomeDashboard` | Liga/desliga dashboard para o perfil |
+| Wrap de seções | `pHomeSecoesWrap` | Visível apenas quando dashboard ativo |
+| Checkbox "Férias da equipe" | `pSecFerias` | Inclui `ferias_equipe` em `secoes` |
+| Checkbox "Últimas atividades" | `pSecAtividades` | Inclui `atividades` em `secoes` |
+| Checkbox "Aniversários & Tempo de Casa" | `pSecEventos` | Inclui `eventos` em `secoes` |
+
+### Flag `_homeConfigDirty`
+
+Variável `let _homeConfigDirty = false` em `parametros/index.html`. Ativada pela função
+`toggleHomeSecoes()` (chamada no `onchange` de `pHomeDashboard`). Resetada em `abrirPerfilModal`.
+
+**Por que existe:** sem a flag, desabilitar dashboard de um perfil com `home_config = null`
+(nunca configurado) não gravaria nada no banco — `homeDash=false` e `_hcExisting=null` seriam
+ambos falsy. A flag captura a intenção explícita do admin.
+
+### Condição de salvamento (`salvarPerfil`)
+
+```js
+const _hcColExists = allPerfis.length > 0 &&
+  Object.prototype.hasOwnProperty.call(allPerfis[0], 'home_config');
+const _hcExisting = editingPerfilId
+  ? (allPerfis.find(x => x.id === editingPerfilId)?.home_config ?? null)
+  : null;
+if (_hcColExists && (_homeConfigDirty || _hcExisting != null)) {
+  body.home_config = { dashboard: homeDash, secoes: homeSecoes };
+}
+```
+
+- `_hcColExists`: verifica via API se a coluna existe (guard pré-migration)
+- `_hcExisting`: config já salva; se não nula, re-salva mesmo sem o admin ter tocado
+- `_homeConfigDirty`: garante que "desabilitar" de estado null ainda seja gravado
+
+---
+
 ## Regras de expansão futura
 
-1. **RH e Diretoria:** NÃO implementar ainda. Validar Home do Gestor em produção primeiro.
-2. **Nova view/query:** sempre verificar se não expõe dados salariais.
-3. **Nova constante usada na Home:** colocar no bloco de constantes antes da IIFE.
-4. **Novo módulo no menu:** adicionar entrada no array `ALL_MODS` dentro de `_renderModules`.
-5. **A Home é somente leitura:** nenhuma operação de escrita deve ser adicionada a ela.
-6. **Modal de consulta:** sempre usar `_avHtml` — nunca recriar lógica de avatar.
-7. **Cargo e setor no modal:** já disponíveis na query de equipe — não adicionar nova query.
-8. **Novo módulo no sino:** ver seção "Extensão para novos módulos" acima.
+1. **Nova seção na Home:** adicionar chave em `secoes[]`, checkbox em Parâmetros, bloco condicional em `renderHomeDashboard`.
+2. **Novo perfil com dashboard:** ir em Parâmetros → Perfis de Acesso → habilitar dashboard e escolher seções. Nenhuma mudança de código necessária.
+3. **Nova view/query:** sempre verificar se não expõe dados salariais.
+4. **Nova constante usada na Home:** colocar no bloco de constantes antes da IIFE.
+5. **Novo módulo no menu:** adicionar entrada no array `ALL_MODS` dentro de `_renderModules`.
+6. **A Home é somente leitura:** nenhuma operação de escrita deve ser adicionada a ela.
+7. **Modal de consulta:** sempre usar `_avHtml` — nunca recriar lógica de avatar.
+8. **Cargo e setor no modal:** já disponíveis na query de equipe — não adicionar nova query.
+9. **Novo módulo no sino:** ver seção "Extensão para novos módulos" acima.
+10. **Bell e pendências:** exclusivos do perfil `gestor` — não ampliar para outros perfis sem decisão explícita.
 
 ---
 
