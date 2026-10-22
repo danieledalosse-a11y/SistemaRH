@@ -301,9 +301,44 @@ Escopos devem ser **excluídos fisicamente** (DELETE), não apenas inativados. U
 
 ---
 
+## Categoria `escopo_home` — Escopo de Visualização da Home (commit `1e83e0b`, out/2026)
+
+Seção **"Home"** no CATS (renomeada de "Home do Gestor" em out/2026 — Comunicados afeta todos os perfis). Tabela: `param_escopo_home`.
+
+### Renderização agrupada por gestor
+
+`renderTabela` é interceptado para `escopo_home` e chama `renderEscopoHomeAgrupado(rows)` em vez da tabela flat padrão. `allRows` permanece o array flat original — apenas a UI muda.
+
+**Estrutura visual:** um card colapsável por gestor (`.eh-gestor-card`). O header mostra nome do gestor + contagem de escopos ativos/inativos. O body expande para uma `.eh-table` com as colunas: Funcionalidade, Tipo de escopo, Valor, Situação, (ações).
+
+**Botão "+ Adicionar escopo"** dentro de cada card expandido → `_ehAdicionarParaGestor(gid)` → abre modal + pré-seleciona o gestor via `requestAnimationFrame`.
+
+**Editar/Desativar:** botão de lápis por linha chama `editarItem(r.id)` (busca em `allRows` por `id` — inalterado). O modal exibe `btnToggleAtivo` para ativar/inativar.
+
+### Helpers para exibição
+
+```js
+const _TIPO_L_EH  = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor', colaborador: 'Colaborador específico', tipo_vinculo: 'Tipo de vínculo', cargo: 'Cargo' };
+const _MOD_L_EH   = { aniversarios: 'Aniversariantes / Tempo de casa' };
+function _ehValorDisplay(row) { /* gestor → gestoresMap, colaborador → colaboradoresEscopoMap, tipo_vinculo → tiposVinculoList, demais → row.valor */ }
+```
+
+### Toggle accordion
+
+```js
+function _ehToggle(gid)          // expande/colapsa card por gestor_id
+function _ehAdicionarParaGestor(gid)  // abre modal e pré-seleciona gestor_id
+```
+
+### Comportamento após salvar
+
+Após `salvar()`, `carregar()` re-renderiza — todos os cards voltam ao estado colapsado (comportamento esperado, não é bug).
+
+---
+
 ## Categoria `aviso_home` — Comunicados da Home (migrations 117/118, out/2026)
 
-Seção "Comunicados da Home" no CATS. Tabela: `param_aviso_home`.
+Seção **"Home"** no CATS (mesma renomeação aplicada). Tabela: `param_aviso_home`.
 
 ### Formulário — campos
 
