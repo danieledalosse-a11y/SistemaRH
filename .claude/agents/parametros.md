@@ -301,38 +301,50 @@ Escopos devem ser **excluídos fisicamente** (DELETE), não apenas inativados. U
 
 ---
 
-## Categoria `escopo_home` — Escopo de Visualização da Home (commit `1e83e0b`, out/2026)
+## Categoria `escopo_home` — Escopo de Visualização da Home (commits `1e83e0b`/`e3c718c`/`d46ddb4`, out/2026)
 
-Seção **"Home"** no CATS (renomeada de "Home do Gestor" em out/2026 — Comunicados afeta todos os perfis). Tabela: `param_escopo_home`.
+Seção **"Home"** no CATS (renomeada de "Home do Gestor" em out/2026). Tabela: `param_escopo_home`.
 
-### Renderização agrupada por gestor
+### Renderização — dois níveis de agrupamento
 
-`renderTabela` é interceptado para `escopo_home` e chama `renderEscopoHomeAgrupado(rows)` em vez da tabela flat padrão. `allRows` permanece o array flat original — apenas a UI muda.
+`renderTabela` é interceptado para `escopo_home` e chama `renderEscopoHomeAgrupado(rows)`. `allRows` permanece o array flat original.
 
-**Estrutura visual:** um card colapsável por gestor (`.eh-gestor-card`). O header mostra nome do gestor + contagem de escopos ativos/inativos. O body expande para uma `.eh-table` com as colunas: Funcionalidade, Tipo de escopo, Valor, Situação, (ações).
+**Nível 1 — card por gestor** (`.eh-gestor-card`): header com nome + contador de escopos ativos/inativos (conta grupos únicos `modulo+tipo`, não linhas). Body colapsável com `.eh-table`.
 
-**Botão "+ Adicionar escopo"** dentro de cada card expandido → `_ehAdicionarParaGestor(gid)` → abre modal + pré-seleciona o gestor via `requestAnimationFrame`.
+**Nível 2 — linha por grupo `modulo+tipo`**: dentro de cada card, registros com a mesma funcionalidade+tipo são condensados em uma única linha. Coluna "Valores" exibe chips: ativos em azul (`var(--blue-bg)`), inativos riscados em cinza. Um único botão de lápis por linha abre o modal com todos os chips do grupo.
 
-**Editar/Desativar:** botão de lápis por linha chama `editarItem(r.id)` (busca em `allRows` por `id` — inalterado). O modal exibe `btnToggleAtivo` para ativar/inativar.
+### Modal — seleção múltipla (commit `e3c718c`)
 
-### Helpers para exibição
+O modal opera por grupo (`gestor_id + modulo + tipo`):
+
+- **Criação:** chip selector — busca + chips removíveis por tipo. Salvar → INSERT de N linhas (uma por chip); duplicatas ignoradas. Tipo `todos` → 1 linha sem valor.
+- **Edição:** gestor/funcionalidade/tipo fixos (read-only). Chips pré-carregados com todos os ativos do grupo. Ao salvar: INSERT para chips novos, DELETE físico para chips removidos, chips inalterados sem ação. Registros inativos existentes não são reativados nem duplicados.
+
+**Tipos com multi-select:** gestor, colaborador, setor, empresa_atuacao, tipo_vinculo, cargo. Tipo `todos`: sem campo de valor.
+
+### Helpers
 
 ```js
 const _TIPO_L_EH  = { empresa_atuacao: 'Empresa de atuação', setor: 'Setor', todos: 'Todos os CLT', gestor: 'Equipe de gestor', colaborador: 'Colaborador específico', tipo_vinculo: 'Tipo de vínculo', cargo: 'Cargo' };
 const _MOD_L_EH   = { aniversarios: 'Aniversariantes / Tempo de casa' };
-function _ehValorDisplay(row) { /* gestor → gestoresMap, colaborador → colaboradoresEscopoMap, tipo_vinculo → tiposVinculoList, demais → row.valor */ }
+function _ehValorDisplay(row)              // gestor → gestoresMap, colaborador → colaboradoresEscopoMap, tipo_vinculo → tiposVinculoList
+function _ehRowToChip(r)                   // row DB → {valor, label, gestor_ref_id}
+function _ehMontarBody(gid, mod, tipo, chip)   // monta body para INSERT
+function _ehVerificarDuplicata(gid, mod, tipo, chip)  // GET no banco — retorna true se já existe (qualquer status)
+function _ehInicializarChipSelector(tipo)  // substitui select field_valor pelo chip UI
+function _ehRenderChips()                  // re-renderiza área de chips
+function _ehAdicionarChip(valor, label, gestorRefId)
+function _ehRemoverChip(idx)
+function _ehBuscar()                       // filtra opções e exibe dropdown
+function _ehToggle(gid)                    // expande/colapsa card
+function _ehAdicionarParaGestor(gid)       // abre modal pré-selecionando gestor
 ```
 
-### Toggle accordion
-
-```js
-function _ehToggle(gid)          // expande/colapsa card por gestor_id
-function _ehAdicionarParaGestor(gid)  // abre modal e pré-seleciona gestor_id
-```
+**State:** `_ehChips []`, `_ehGrupoLinhas []`, `_ehTipoAtual`.
 
 ### Comportamento após salvar
 
-Após `salvar()`, `carregar()` re-renderiza — todos os cards voltam ao estado colapsado (comportamento esperado, não é bug).
+`carregar()` re-renderiza — cards voltam colapsados (esperado, não é bug).
 
 ---
 
