@@ -6660,6 +6660,23 @@ async function salvarAvaliacao(status) {
 
   fecharFormAval();
   await dpLoadAvaliacoes(_dpCicloAtual.id); // recarrega do banco garantindo status correto na lista
+  // Contexto do gestor: sincroniza o mirror e re-renderiza o container correto
+  if (_gdpCicloAtual) {
+    _gdpAvaliacoes = _dpAvaliacoes;
+    let filtered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
+    if (_gdpAvalFiltroStatus) {
+      const ativos = filtered.filter(p => !p.nao_participa);
+      const naoP   = filtered.filter(p => p.nao_participa);
+      filtered = _dpFiltrarPorStatus(ativos, _gdpAvalFiltroStatus, _gdpAvaliacoes).concat(naoP);
+    }
+    dpRenderAvaliacoes({
+      containerId:        'gdptab-avaliacoes',
+      onAvaliarFn:        'gestorDpAbrirFormAvaliacao',
+      prefixHtml:         _gdpFiltrosHtml(),
+      participants:       filtered,
+      hideAvaliarWhenDone: true
+    });
+  }
 }
 
 function fecharFormAval() {
