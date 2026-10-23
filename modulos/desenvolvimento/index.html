@@ -5877,15 +5877,15 @@ function _dpFiltrarParticipantes(lista, nome, cargos) {
 function _dpFiltrarPorStatus(lista, status, avaliacoes) {
   if (!status) return lista;
   if (status === 'nao_participa') return lista.filter(p => p.nao_participa);
+  console.log('[DP-FILTER] chamado, status:', status, 'lista:', lista.length, 'avals:', avaliacoes.length);
   return lista.filter(p => {
-    if (p.nao_participa) return false; // seção separada, nunca filtrada por status
+    if (p.nao_participa) return false;
     const avalByPart  = avaliacoes.find(a => a.participante_id === p.id);
     const avalByColab = avaliacoes.find(a => a.colaborador_id === p.colaborador_id);
     const aval = avalByPart || avalByColab;
     const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
     const passes = status === 'concluida' ? (st === 'concluida' || st === 'publicada') : st === status;
-    if (passes && st !== status) console.warn('[DP-FILTER] divergência status:', { nome: (p.snapshot||{}).nome, p_id: p.id, p_colab_id: p.colaborador_id, p_id_type: typeof p.id, p_colab_type: typeof p.colaborador_id, avalByPart, avalByColab, st, filtro: status });
-    if (!passes && !aval) console.warn('[DP-FILTER] sem avaliação:', { nome: (p.snapshot||{}).nome, p_id: p.id, p_colab_id: p.colaborador_id, p_id_type: typeof p.id, p_colab_type: typeof p.colaborador_id, avaliacoes_ids: avaliacoes.map(a=>({pid:a.participante_id,cid:a.colaborador_id,pid_t:typeof a.participante_id,cid_t:typeof a.colaborador_id,st:a.status})).slice(0,5) });
+    console.log('[DP-FILTER]', (p.snapshot||{}).nome, '| p.id:', p.id, typeof p.id, '| p.col_id:', p.colaborador_id, typeof p.colaborador_id, '| avalByPart:', avalByPart?.id, avalByPart?.status, '| avalByColab:', avalByColab?.id, avalByColab?.status, '| st:', st, '| passes:', passes);
     return passes;
   });
 }
