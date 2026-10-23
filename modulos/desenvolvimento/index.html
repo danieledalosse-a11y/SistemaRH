@@ -528,11 +528,20 @@
   .activity-item-text { font-size: 12px; color: var(--text); margin-top: 1px; }
 
   /* ── ciclo ativo header banner ── */
-  .ciclo-banner { background: linear-gradient(135deg, #1E3A5F 0%, #1D4ED8 100%); border-radius: var(--radius); padding: 16px 18px; color: #fff; margin-bottom: 12px; }
-  .ciclo-banner-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
-  .ciclo-banner-sub { font-size: 12px; opacity: .75; }
-  .ciclo-banner-progress { margin-top: 12px; height: 5px; background: rgba(255,255,255,.2); border-radius: 3px; overflow: hidden; }
-  .ciclo-banner-fill { height: 100%; background: #fff; border-radius: 3px; }
+  .ciclo-banner { background: #f0f5ff; border: 1px solid #c7d9fb; border-radius: var(--radius); padding: 16px 18px; color: var(--text-main); margin-bottom: 12px; }
+  .ciclo-banner-title { font-size: 14px; font-weight: 700; color: #1a3a6e; margin-bottom: 4px; }
+  .ciclo-banner-sub { font-size: 12px; color: var(--text-sec); }
+  .ciclo-banner-progress-row { margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+  .ciclo-banner-progress { flex: 1; height: 6px; background: #dbe8fd; border-radius: 3px; overflow: hidden; }
+  .ciclo-banner-fill { height: 100%; background: #2563EB; border-radius: 3px; transition: width .4s ease; }
+  .ciclo-banner-pct { font-size: 11px; font-weight: 600; color: #2563EB; white-space: nowrap; min-width: 32px; text-align: right; }
+  @media (prefers-color-scheme: dark) {
+    .ciclo-banner { background: rgba(37,99,235,.12); border-color: rgba(37,99,235,.3); }
+    .ciclo-banner-title { color: #93b8fd; }
+    .ciclo-banner-progress { background: rgba(37,99,235,.2); }
+    .ciclo-banner-fill { background: #3b82f6; }
+    .ciclo-banner-pct { color: #3b82f6; }
+  }
 
   /* ── icon action buttons ── */
   .icon-btn { width: 30px; height: 30px; border-radius: 6px; border: none; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-ter); transition: background .15s, color .15s; }
@@ -2380,8 +2389,11 @@ function dpRenderCiclosUnificado(ciclosInput, opts = {}) {
     const dtBanner = [ativo.data_inicio, ativo.data_fim].filter(Boolean).map(formatDate).join(' a ');
     html += `<div class="ciclo-banner" onclick="_dpCicloClickFn('${ativo.id}')" style="cursor:pointer">
       <div class="ciclo-banner-title">${ativo.nome} — ${statusLabel}</div>
-      <div class="ciclo-banner-sub"><span style="opacity:.75;font-weight:400;margin-right:4px">Período avaliado</span>${dtBanner || 'Período não definido'}</div>
-      <div class="ciclo-banner-progress"><div class="ciclo-banner-fill" style="width:0%" id="cbannerFill_${containerId}"></div></div>
+      <div class="ciclo-banner-sub"><span style="font-weight:400;margin-right:4px">Período avaliado</span>${dtBanner || 'Período não definido'}</div>
+      <div class="ciclo-banner-progress-row">
+        <div class="ciclo-banner-progress"><div class="ciclo-banner-fill" style="width:0%" id="cbannerFill_${containerId}"></div></div>
+        <span class="ciclo-banner-pct" id="cbannerPct_${containerId}">—</span>
+      </div>
     </div>`;
     // Sidebar: query leve de avaliações para o ciclo ativo — respeitando RLS do perfil
     const sideEl = sidebarId ? document.getElementById(sidebarId) : null;
@@ -2401,6 +2413,8 @@ function dpRenderCiclosUnificado(ciclosInput, opts = {}) {
         const pct = total ? Math.round(concluidas / total * 100) : 0;
         const fill = document.getElementById('cbannerFill_' + containerId);
         if (fill) fill.style.width = pct + '%';
+        const pctEl = document.getElementById('cbannerPct_' + containerId);
+        if (pctEl) pctEl.textContent = pct + '%';
         const hoje = new Date(); hoje.setHours(0,0,0,0);
         const dtPeriodo = ativo.data_inicio && ativo.data_fim
           ? `${formatDate(ativo.data_inicio)} → ${formatDate(ativo.data_fim)}`
