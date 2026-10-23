@@ -5817,6 +5817,7 @@ function _dpFiltrarParticipantes(lista, nome, cargos) {
 
 function _dpFiltrarPorStatus(lista, status, avaliacoes) {
   if (!status) return lista;
+  if (status === 'nao_participa') return lista.filter(p => p.nao_participa);
   return lista.filter(p => {
     if (p.nao_participa) return false; // seção separada, nunca filtrada por status
     const aval = avaliacoes.find(a => a.participante_id === p.id);
@@ -5828,8 +5829,9 @@ function _dpFiltrarPorStatus(lista, status, avaliacoes) {
 
 function _dpRenderAvaliacoesComFiltro() {
   let filtered = _dpFiltrarParticipantes(_dpParticipantes, _dpAvalFiltroNome, _dpAvalFiltroCargos);
-  if (_dpAvalFiltroStatus) {
-    const npIds = new Set(_dpParticipantes.filter(p => p.nao_participa).map(p => p.id));
+  if (_dpAvalFiltroStatus === 'nao_participa') {
+    filtered = filtered.filter(p => p.nao_participa);
+  } else if (_dpAvalFiltroStatus) {
     const ativos = filtered.filter(p => !p.nao_participa);
     const naoParticipa = filtered.filter(p => p.nao_participa);
     filtered = _dpFiltrarPorStatus(ativos, _dpAvalFiltroStatus, _dpAvaliacoes).concat(naoParticipa);
@@ -7755,7 +7757,7 @@ function _dpSomaBonus(avaliacoes, resultados, bonuses, participantes) {
 /* ─── contagem por status (para chips) ──────────────────────── */
 function _dpStatusCounts(participantes, avaliacoes) {
   const ativos = participantes.filter(p => !p.nao_participa);
-  const counts = { nao_iniciada: 0, em_andamento: 0, respondida: 0, concluida: 0 };
+  const counts = { nao_iniciada: 0, em_andamento: 0, respondida: 0, concluida: 0, nao_participa: 0 };
   ativos.forEach(p => {
     const aval = avaliacoes.find(a => a.participante_id === p.id);
     const st = aval ? aval.status : 'nao_iniciada';
@@ -7764,16 +7766,18 @@ function _dpStatusCounts(participantes, avaliacoes) {
     else if (st === 'em_andamento') counts.em_andamento++;
     else counts.nao_iniciada++;
   });
+  counts.nao_participa = participantes.filter(p => p.nao_participa).length;
   return counts;
 }
 
 /* ─── Cards KPI clicáveis de status ─────────────────────────── */
 function _dpStatusChipsHtml(counts, statusAtivo, toggleFn, concluirBtn, valorBonus) {
   const cards = [
-    { key: 'nao_iniciada', label: 'Não iniciada', bgOff: '#F9FAFB', bgOn: '#F3F4F6', numOff: '#9CA3AF', numOn: '#374151', ring: '#9CA3AF' },
-    { key: 'em_andamento', label: 'Em andamento', bgOff: '#FFFBEB', bgOn: '#FEF3C7', numOff: '#D97706', numOn: '#92400E', ring: '#F59E0B' },
-    { key: 'respondida',   label: 'Respondida',   bgOff: '#F5F3FF', bgOn: '#EDE9FE', numOff: '#7C3AED', numOn: '#4C1D95', ring: '#5925DC' },
-    { key: 'concluida',    label: 'Concluída',    bgOff: '#F0FDF4', bgOn: '#DCFCE7', numOff: '#16A34A', numOn: '#065F46', ring: '#10B981' },
+    { key: 'nao_iniciada',  label: 'Não iniciada',  bgOff: '#F9FAFB', bgOn: '#F3F4F6', numOff: '#9CA3AF', numOn: '#374151', ring: '#9CA3AF' },
+    { key: 'em_andamento',  label: 'Em andamento',  bgOff: '#FFFBEB', bgOn: '#FEF3C7', numOff: '#D97706', numOn: '#92400E', ring: '#F59E0B' },
+    { key: 'respondida',    label: 'Respondida',    bgOff: '#F5F3FF', bgOn: '#EDE9FE', numOff: '#7C3AED', numOn: '#4C1D95', ring: '#5925DC' },
+    { key: 'concluida',     label: 'Concluída',     bgOff: '#F0FDF4', bgOn: '#DCFCE7', numOff: '#16A34A', numOn: '#065F46', ring: '#10B981' },
+    { key: 'nao_participa', label: 'Não participam', bgOff: '#F9FAFB', bgOn: '#F3F4F6', numOff: '#9CA3AF', numOn: '#374151', ring: '#9CA3AF' },
   ];
   const total     = counts.nao_iniciada + counts.em_andamento + (counts.respondida || 0) + counts.concluida;
   const respondidas = (counts.respondida || 0) + counts.concluida;
@@ -7794,7 +7798,7 @@ function _dpStatusChipsHtml(counts, statusAtivo, toggleFn, concluirBtn, valorBon
     ? `R$ ${valorBonus.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : null;
   return `<div style="display:flex;align-items:stretch;gap:8px;margin-bottom:4px">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:1">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;flex:1">
       ${cardsHtml}
     </div>
     ${concluirBtn ? `<div style="display:flex;align-items:center">${concluirBtn}</div>` : ''}
@@ -7880,7 +7884,9 @@ function gestorDpShowTab(id, btn) {
   }
   if (id === 'avaliacoes') {
     let filtered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
-    if (_gdpAvalFiltroStatus) {
+    if (_gdpAvalFiltroStatus === 'nao_participa') {
+      filtered = filtered.filter(p => p.nao_participa);
+    } else if (_gdpAvalFiltroStatus) {
       const ativos = filtered.filter(p => !p.nao_participa);
       const naoParticipa = filtered.filter(p => p.nao_participa);
       filtered = _dpFiltrarPorStatus(ativos, _gdpAvalFiltroStatus, _gdpAvaliacoes).concat(naoParticipa);
