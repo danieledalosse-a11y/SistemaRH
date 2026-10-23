@@ -5879,10 +5879,14 @@ function _dpFiltrarPorStatus(lista, status, avaliacoes) {
   if (status === 'nao_participa') return lista.filter(p => p.nao_participa);
   return lista.filter(p => {
     if (p.nao_participa) return false; // seção separada, nunca filtrada por status
-    const aval = avaliacoes.find(a => a.participante_id === p.id) || avaliacoes.find(a => a.colaborador_id === p.colaborador_id);
+    const avalByPart  = avaliacoes.find(a => a.participante_id === p.id);
+    const avalByColab = avaliacoes.find(a => a.colaborador_id === p.colaborador_id);
+    const aval = avalByPart || avalByColab;
     const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
-    if (status === 'concluida') return st === 'concluida' || st === 'publicada';
-    return st === status;
+    const passes = status === 'concluida' ? (st === 'concluida' || st === 'publicada') : st === status;
+    if (passes && st !== status) console.warn('[DP-FILTER] divergência status:', { nome: (p.snapshot||{}).nome, p_id: p.id, p_colab_id: p.colaborador_id, p_id_type: typeof p.id, p_colab_type: typeof p.colaborador_id, avalByPart, avalByColab, st, filtro: status });
+    if (!passes && !aval) console.warn('[DP-FILTER] sem avaliação:', { nome: (p.snapshot||{}).nome, p_id: p.id, p_colab_id: p.colaborador_id, p_id_type: typeof p.id, p_colab_type: typeof p.colaborador_id, avaliacoes_ids: avaliacoes.map(a=>({pid:a.participante_id,cid:a.colaborador_id,pid_t:typeof a.participante_id,cid_t:typeof a.colaborador_id,st:a.status})).slice(0,5) });
+    return passes;
   });
 }
 
