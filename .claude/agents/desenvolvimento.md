@@ -780,7 +780,7 @@ let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos
 | `dpRenderAvaliacoes(opts={})` | Card por participante cruzando _dpAvaliacoes; badge por status. Opts: `containerId` (default `dpAvaliacoesBody`), `onAvaliarFn` (default `dpAbrirFormAvaliacao`), `participants` (default `_dpParticipantes`), `prefixHtml` (HTML antes da lista), `hideAvaliarWhenDone` (boolean — se `true`, oculta botão Avaliar para status `concluida`/`publicada`) |
 | `dpAbrirFormAvaliacao(participanteId, navList?)` | Busca/cria dp_avaliacao; carrega critérios+respostas; busca histórico por critério via `sbRpc('dp_fn_historico_criterio',...)` em paralelo → `_dpHistoricoCriterios`; configura nav state (`_dpFormNavList`/`_dpFormNavIdx`); busca `foto_url` de `_colaboradores` async; atualiza avatar e botões de nav; abre formAvalOverlay. `navList` opcional: se passado, seta a lista; se omitido e lista já existir, mantém; se omitido e lista vazia, auto-constrói de `_dpParticipantes` ativos. |
 | `dpRenderFormAvaliacao()` | Linha compacta por critério (num, nome, botão ℹ, Sim/Não, obs, histórico); bloco expandível `.aval-info-expand` como irmão do `.aval-card` (substitui popup absoluto que era clipado pelo overflow) |
-| `salvarAvaliacao(status)` | Coleta resp_*; upsert dp_respostas (`on_conflict=avaliacao_id,versao_criterio_id`); PATCH dp_avaliacoes; atualiza memória; chama `fecharFormAval()` + `_dpRenderAvaliacoesComFiltro()` (atualiza lista sem nova requisição); registra evento se concluída |
+| `salvarAvaliacao(status)` | Coleta resp_*; upsert dp_respostas (`on_conflict=avaliacao_id,versao_criterio_id`); PATCH dp_avaliacoes; chama `fecharFormAval()` + `dpLoadAvaliacoes(cicloId)` (recarrega do banco); se `_gdpCicloAtual` estiver ativo (contexto gestor), também sincroniza `_gdpAvaliacoes = _dpAvaliacoes` e re-renderiza o container `gdptab-avaliacoes` preservando filtros ativos; registra evento se concluída |
 | `fecharFormAval()` | Fecha overlay; limpa estado (`_dpAvaliacaoAtual`, `_dpRespostasAtual`, `_dpVersaoCritsParaForm`); zera `_dpFormNavList` e `_dpFormNavIdx` |
 | `dpNavForm(delta)` | Navega ±1 na `_dpFormNavList`; detecta alterações via `_dpFormTemAlteracoes()`; salva rascunho via `_dpSalvarParaNavegar()` se houver mudanças; bloqueia navegação se save falhar; chama `dpLoadAvaliacoes` + `dpAbrirFormAvaliacao(nextId)` |
 | `_dpSalvarParaNavegar()` | Versão silenciosa de save (sem toast de sucesso); retorna `true/false`; apenas para status `em_andamento` — `concluida`/`publicada` retornam `true` sem salvar |
@@ -1126,6 +1126,69 @@ _dpRenderAvaliacoesComFiltro(); // redesenha a lista com status já em memória
 ```
 
 **Comportamento:** sem requisição ao banco — usa `_dpAvaliacoes` já atualizado na etapa 5. Filtros ativos são respeitados. Status "Respondida" aparece imediatamente quando todos os critérios estão respondidos; "Em andamento" se incompleto.
+
+---
+
+## Fix: status da avaliação não atualizava na lista do Gestor (commit `ab31288`, out/2026)
+
+**Causa raiz:** Após salvar avaliação, `dpLoadAvaliacoes` recarregava `_dpAvaliacoes` e renderizava via `_dpRenderAvaliacoesComFiltro()` — mas essa função usa o container `dpAvaliacoesBody` (RH). No contexto do Gestor, o container visível é `gdptab-avaliacoes` e o mirror `_gdpAvaliacoes` não era atualizado.
+
+**Correção:** No final de `salvarAvaliacao`, após o reload, verifica `_gdpCicloAtual`; se ativo, sincroniza `_gdpAvaliacoes = _dpAvaliacoes` e re-renderiza `gdptab-avaliacoes` preservando filtros de nome, cargo e status.
+
+**Padrão confirmado:** Existem duas funções `salvarAvaliacao` no arquivo — linha ~2154 (legado, tabela `dev_avaliacoes`) e linha ~6561 (motor `dp_*`, com fix aplicado). O botão do formulário moderno chama sempre a segunda.
+
+---
+
+## KPI "Não participam" clicável na aba Avaliações (commits `ab31288`, `125786f`, `06572e6`, out/2026)
+
+Novo chip KPI interativo ao lado dos status existentes (Não iniciada / Em andamento / Respondida / Concluída), implementado em ambas as visões (RH e Gestor) **sem alterações no banco**.
+
+### Funções envolvidas
+
+| Função | O que faz |
+|---|---|
+| `_dpStatusCounts(participantes, avaliacoes)` | Retorna `{ nao_iniciada, em_andamento, respondida, concluida, nao_participa }` — o 5º contador soma `participantes.filter(p => p.nao_participa).length` |
+| `_dpStatusChipsHtml(counts, filtroAtivo)` | Gera o HTML dos 5 chips em grid `repeat(5,1fr)`; chip "Não participam" tem estilo neutro (cinza) em vez de colorido |
+| `_dpFiltrarPorStatus(lista, status, avaliacoes)` | Quando `status === 'nao_participa'`: retorna `lista.filter(p => p.nao_participa)`. Para qualquer outro status: filtra ativos (`!p.nao_participa`) pelo status de avaliação |
+| `_dpRenderAvaliacoesComFiltro()` | Branch triplo: `=== 'nao_participa'` → só NP; `else if (status)` → só ativos com aquele status (sem concat NP); sem filtro → todos ativos + seção NP no rodapé |
+| `gestorDpShowTab('avaliacoes')` | Mesma lógica de branch triplo para o container `gdptab-avaliacoes` |
+
+### Comportamento dos filtros de status
+
+| Filtro ativo | Quem aparece |
+|---|---|
+| Nenhum | Todos os ativos + seção "Não participam" separada no rodapé |
+| Em andamento / Respondida / Não iniciada / Concluída | Somente os ativos com aquele status — **sem** seção NP |
+| Não participam | Somente a seção NP (com motivo + observação) — sem ativos |
+
+**Regra crítica:** nunca fazer `.concat(naoParticipa)` no branch `else if (filtroStatus)` — isso fazia não-participantes aparecerem junto a resultados de status específicos. A seção NP só é incluída no array quando `filtroStatus` está vazio.
+
+### Visual do chip "Não participam"
+
+- `bgOff: '#F9FAFB'`, `bgOn: '#F3F4F6'`, `numOff: '#9CA3AF'`, `numOn: '#374151'`, `ring: '#9CA3AF'`
+- CSS das linhas de não participantes: `.dp-np-row` com borda esquerda vermelha (`#EF4444`), fundo `#FFF5F5`
+- `.dp-np-badge`: texto vermelho (`#DC2626`), fundo `#FEE2E2`, borda `#FECACA`
+- `.dp-np-section-header`: vermelho (`#B91C1C`), uppercase, `border-top:2px solid #FECACA`
+
+### Filtros de nome e cargo
+
+Continuam funcionando normalmente com todos os filtros de status — `_dpFiltrarParticipantes` é aplicado antes de qualquer branch de status.
+
+---
+
+## Fix: filtro de status exibia não participantes indevidamente (commit `6d5bd84`, out/2026)
+
+**Sintoma:** clicar no KPI "Em andamento" mostrava o participante correto (Leandro Loyola) mais os 6 não participantes abaixo — como se o filtro "Não participam" estivesse ativo ao mesmo tempo.
+
+**Causa:** o branch `else if (_dpAvalFiltroStatus)` terminava com `.concat(naoParticipa)` nos três pontos de renderização. Isso anexava sempre todos os não-participantes ao resultado de qualquer filtro de status ativo.
+
+**Correção (3 locais):**
+
+| Local | Linha aprox. | O que mudou |
+|---|---|---|
+| `_dpRenderAvaliacoesComFiltro` | ~5834 | Removido `.concat(naoParticipa)` do `else if`; variável órfã `const naoParticipa` também removida |
+| `salvarAvaliacao` (sync gestor) | ~6669 | Removido `.concat(naoP)`; variável órfã `const naoP` também removida |
+| `gestorDpShowTab` (aba avaliacoes) | ~7889 | Removido `.concat(naoParticipa)`; variável órfã também removida |
 
 ---
 
