@@ -6165,44 +6165,18 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
     _dpFormCache[versaoId] = { versaoCrits: _dpVersaoCritsParaForm, modeloId };
   }
 
-  // Ponto 1: respostas (cache hit) e histórico batch em paralelo
-  // No cache miss as respostas já foram buscadas acima — reutilizar sem novo round-trip
+  // Respostas: buscar agora (bloqueia apenas se não temos ainda)
+  // Histórico será carregado em background — não bloqueia a abertura do formulário
   _dpHistoricoCriterios = {};
-  const [resps, batch] = await Promise.all([
-    _respostasJaBuscadas
-      ? Promise.resolve(_dpRespostasAtual)
-      : sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`),
-    (modeloId && part.colaborador_id)
-      ? sbRpc('dp_fn_historico_criterio_batch', {
-          p_versao_id:      versaoId,
-          p_colaborador_id: part.colaborador_id,
-          p_ciclo_atual_id: _dpCicloAtual.id
-        })
-      : Promise.resolve(null)
-  ]);
-  if (!_respostasJaBuscadas) _dpRespostasAtual = resps || [];
-  if (batch && Array.isArray(batch)) {
-    // Migration 128 disponível: um único round-trip para todos os critérios
-    batch.forEach(row => { _dpHistoricoCriterios[row.versao_criterio_id] = row.resultado; });
-  } else if (modeloId && part.colaborador_id) {
-    // Fallback: N RPCs individuais (migration 128 ainda não executada no banco)
-    await Promise.all(_dpVersaoCritsParaForm.map(vc =>
-      sbRpc('dp_fn_historico_criterio', {
-        p_colaborador_id: part.colaborador_id,
-        p_criterio_id:    vc.criterio_id,
-        p_ciclo_atual_id: _dpCicloAtual.id,
-        p_modelo_id:      modeloId,
-        p_escala_id:      vc.escala_id || null,
-        p_tipo_resposta:  vc.tipo_resposta
-      }).then(r => { if (r) _dpHistoricoCriterios[vc.id] = r; }).catch(() => {})
-    ));
+  if (!_respostasJaBuscadas) {
+    const resps = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`);
+    _dpRespostasAtual = resps || [];
   }
 
-  // Preencher header
+  // Abrir formulário imediatamente com respostas disponíveis
   document.getElementById('formAvalTitulo').textContent = snap.nome || '—';
   document.getElementById('formAvalSub').textContent = `${snap.cargo || '—'} · ${snap.setor || '—'}`;
   _dpAtualizarNavBtns();
-  // Foto: iniciais imediato; busca foto async (memória ou REST)
   _dpRenderAvalAvatar(null, snap.nome);
   if (part.colaborador_id) {
     const colabId = Number(part.colaborador_id);
@@ -6218,14 +6192,29 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
     }
   }
 
-  dpRenderFormAvaliacao();
+  dpRenderFormAvaliacao();        // chips de histórico renderizam vazios (placeholders)
   dpAtualizarProgressoAval();
-  // RH/admin pode editar avaliações concluídas; publicada é sempre readonly para todos
   const _forceReadonly = aval.status === 'publicada'
     || (aval.status === 'concluida' && _perfil !== 'rh' && _perfil !== 'admin');
   dpAvalFormSetReadonly(_forceReadonly, aval.concluida_em || null);
   document.getElementById('formAvalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+
+  // Histórico em background — preenche chips após retorno sem bloquear a interação
+  if (modeloId && part.colaborador_id) {
+    const _thisAvalId = aval.id; // token de guarda de corrida
+    sbRpc('dp_fn_historico_criterio_batch', {
+      p_versao_id:      versaoId,
+      p_colaborador_id: part.colaborador_id,
+      p_ciclo_atual_id: _dpCicloAtual.id
+    }).then(batch => {
+      // Aborta se o usuário navegou para outro colaborador antes da resposta chegar
+      if (!_dpAvaliacaoAtual || _dpAvaliacaoAtual.id !== _thisAvalId) return;
+      if (!batch || !Array.isArray(batch)) return;
+      batch.forEach(row => { _dpHistoricoCriterios[row.versao_criterio_id] = row.resultado; });
+      _dpAtualizarChipsHistorico();
+    }).catch(() => {});
+  }
 }
 
 // Abre o formulário sempre em modo somente leitura (olho — qualquer perfil)
@@ -6545,26 +6534,7 @@ function dpRenderFormAvaliacao() {
       inputHtml = `<div style="font-size:12px;color:var(--text-ter);margin-top:6px">Tipo de resposta não suportado: ${tipo}</div>`;
     }
 
-    // Histórico da última avaliação
-    const hist = _dpHistoricoCriterios[vc.id];
-    let histHtml = '';
-    if (hist) {
-      if (hist.comparavel === false) {
-        histHtml = `<div class="aval-hist" style="font-style:italic">Sem avaliação anterior comparável</div>`;
-      } else {
-        let valorAnterior = '';
-        if (tipo === 'escala') valorAnterior = hist.escala_opcao_label != null ? `${hist.escala_opcao_label}${hist.escala_opcao_valor != null ? ` (${hist.escala_opcao_valor})` : ''}` : '';
-        else if (tipo === 'numerico' || tipo === 'numerico_com_meta') valorAnterior = hist.valor_numerico_livre != null ? `${hist.valor_numerico_livre}` : '';
-        else if (tipo === 'binario') valorAnterior = hist.resposta_texto ? (hist.resposta_texto === 'sim' ? 'Sim' : 'Não') : (hist.conceito_selecionado || '');
-        else if (tipo === 'conceito') valorAnterior = hist.conceito_selecionado || '';
-        const cicloLabel = (hist.ciclo_nome||'—').replace(/Gratificação CD - /i,'').replace(/\/\d{4}/,'').trim();
-        histHtml = `<div class="aval-hist">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--text-ter)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span>${cicloLabel}:</span>${valorAnterior ? ` <b>${valorAnterior}</b>` : ''}${hist.nota_final != null && tipo !== 'binario' ? ` <b>${Number(hist.nota_final).toFixed(1)}</b>` : ''}
-        </div>`;
-      }
-    }
-
+    // Histórico: placeholder vazio — preenchido em background por _dpAtualizarChipsHistorico()
     const hasInfo   = !!(crit.descricao || crit.referencia);
     const infoBtn   = hasInfo ? `<div class="aval-info-wrap">
       <button type="button" class="aval-info-btn" onclick="dpToggleInfo('${vc.id}')" title="Ver descrição">i</button>
@@ -6581,11 +6551,38 @@ function dpRenderFormAvaliacao() {
         ${infoBtn}
       </div>
       ${inputHtml}
-      ${histHtml}
+      <span id="dp-hist-${vc.id}"></span>
     </div>${infoExpand}`;
   }).join('');
 
   el.innerHTML = html;
+}
+
+/* Preenche os placeholders de histórico após o batch RPC retornar em background */
+function _dpAtualizarChipsHistorico() {
+  for (const vc of _dpVersaoCritsParaForm) {
+    const el = document.getElementById('dp-hist-' + vc.id);
+    if (!el) continue;
+    const hist = _dpHistoricoCriterios[vc.id];
+    if (!hist) continue;
+    const tipo = vc.tipo_resposta;
+    let html = '';
+    if (hist.comparavel === false) {
+      html = `<div class="aval-hist" style="font-style:italic">Sem avaliação anterior comparável</div>`;
+    } else {
+      let valorAnterior = '';
+      if (tipo === 'escala') valorAnterior = hist.escala_opcao_label != null ? `${hist.escala_opcao_label}${hist.escala_opcao_valor != null ? ` (${hist.escala_opcao_valor})` : ''}` : '';
+      else if (tipo === 'numerico' || tipo === 'numerico_com_meta') valorAnterior = hist.valor_numerico_livre != null ? `${hist.valor_numerico_livre}` : '';
+      else if (tipo === 'binario') valorAnterior = hist.resposta_texto ? (hist.resposta_texto === 'sim' ? 'Sim' : 'Não') : (hist.conceito_selecionado || '');
+      else if (tipo === 'conceito') valorAnterior = hist.conceito_selecionado || '';
+      const cicloLabel = (hist.ciclo_nome||'—').replace(/Gratificação CD - /i,'').replace(/\/\d{4}/,'').trim();
+      html = `<div class="aval-hist">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--text-ter)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>${cicloLabel}:</span>${valorAnterior ? ` <b>${valorAnterior}</b>` : ''}${hist.nota_final != null && tipo !== 'binario' ? ` <b>${Number(hist.nota_final).toFixed(1)}</b>` : ''}
+      </div>`;
+    }
+    el.innerHTML = html;
+  }
 }
 
 function dpAvalRadioChange(input) {
@@ -6723,24 +6720,25 @@ async function salvarAvaliacao(status) {
   }
 
   fecharFormAval();
-  // Atualização cirúrgica: o step 5 já sincronizou _dpAvaliacoes em memória — re-renderiza sem rebuscar o banco
-  _dpRenderAvaliacoesComFiltro();
-  // Contexto do gestor: sincroniza o mirror e re-renderiza o container correto
-  if (_gdpCicloAtual) {
-    _gdpAvaliacoes = _dpAvaliacoes;
-    let filtered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
-    if (_gdpAvalFiltroStatus) {
-      const ativos = filtered.filter(p => !p.nao_participa);
-      filtered = _dpFiltrarPorStatus(ativos, _gdpAvalFiltroStatus, _gdpAvaliacoes);
+  // Deferir re-render para o próximo tick — modal fecha imediatamente, lista atualiza logo após
+  setTimeout(() => {
+    _dpRenderAvaliacoesComFiltro();
+    if (_gdpCicloAtual) {
+      _gdpAvaliacoes = _dpAvaliacoes;
+      let filtered = _dpFiltrarParticipantes(_gdpParticipantes, _gdpAvalFiltroNome, _gdpAvalFiltroCargos);
+      if (_gdpAvalFiltroStatus) {
+        const ativos = filtered.filter(p => !p.nao_participa);
+        filtered = _dpFiltrarPorStatus(ativos, _gdpAvalFiltroStatus, _gdpAvaliacoes);
+      }
+      dpRenderAvaliacoes({
+        containerId:        'gdptab-avaliacoes',
+        onAvaliarFn:        'gestorDpAbrirFormAvaliacao',
+        prefixHtml:         _gdpFiltrosHtml(),
+        participants:       filtered,
+        hideAvaliarWhenDone: true
+      });
     }
-    dpRenderAvaliacoes({
-      containerId:        'gdptab-avaliacoes',
-      onAvaliarFn:        'gestorDpAbrirFormAvaliacao',
-      prefixHtml:         _gdpFiltrosHtml(),
-      participants:       filtered,
-      hideAvaliarWhenDone: true
-    });
-  }
+  }, 0);
 }
 
 function fecharFormAval() {
