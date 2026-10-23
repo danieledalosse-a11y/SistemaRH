@@ -6341,19 +6341,25 @@ function _dpFormTemAlteracoes() {
 async function _dpSalvarParaNavegar() {
   if (!_dpAvaliacaoAtual) return true;
   const st = _dpAvaliacaoAtual.status;
-  if (st === 'concluida' || st === 'publicada') return true; // protegida, sem necessidade de salvar
+  if (st === 'concluida' || st === 'publicada') return true;
 
   const avalId   = _dpAvaliacaoAtual.id;
   const payloads = [];
   for (const vc of _dpVersaoCritsParaForm) {
-    const tipo      = vc.tipo_resposta;
-    const el        = document.getElementById(`resp_${vc.id}`);
+    const tipo  = vc.tipo_resposta;
+    const el    = document.getElementById(`resp_${vc.id}`);
     if (!el) continue;
-    const existente = _dpRespostasAtual.find(r => r.versao_criterio_id === vc.id);
-    const body      = { avaliacao_id: avalId, versao_criterio_id: vc.id };
+    const body  = { avaliacao_id: avalId, versao_criterio_id: vc.id };
     if (tipo === 'escala') {
       const checked = document.querySelector(`input[name="resp_${vc.id}"]:checked`);
-      if (checked) body.escala_opcao_id = checked.value;
+      if (checked) {
+        body.escala_opcao_id = checked.value;
+        const opcao = (vc.dp_escalas?.dp_escala_opcoes || []).find(o => o.id === checked.value);
+        if (opcao) {
+          body.snapshot_opcao_label    = opcao.label          ?? null;
+          body.snapshot_opcao_valor_num = opcao.valor_numerico ?? null;
+        }
+      }
     } else if (tipo === 'binario' || tipo === 'texto') {
       body.resposta_texto = el.value || null;
     } else if (tipo === 'numerico' || tipo === 'numerico_com_meta') {
@@ -6365,32 +6371,35 @@ async function _dpSalvarParaNavegar() {
     }
     const obsEl = document.getElementById(`obs_${vc.id}`);
     if (obsEl) body.observacao = obsEl.value || null;
-    payloads.push({ existente, body });
+    payloads.push(body);
   }
 
-  let erros = 0;
-  for (const { existente, body } of payloads) {
-    const res = existente
-      ? await sbPatch(`/rest/v1/dp_respostas?id=eq.${existente.id}`, body)
-      : await sbPost('/rest/v1/dp_respostas', body);
-    if (!res) erros++;
+  // Upsert em lote — 1 requisição no lugar de N sequenciais
+  if (payloads.length) {
+    const savedResps = await sbUpsert('/rest/v1/dp_respostas?on_conflict=avaliacao_id,versao_criterio_id', payloads);
+    if (!savedResps) {
+      toast('Erro ao salvar antes de navegar. Permanecendo na avaliação atual.', true);
+      return false;
+    }
+    _dpRespostasAtual = savedResps; // atualiza em memória diretamente — sem rebuscar
   }
 
-  // Detecta completude usando payloads salvos (refletem o estado atual do formulário)
-  const _totalCritsNav = _dpVersaoCritsParaForm.length;
-  const _respondidosNav = payloads.filter(({ body }) =>
-    body.resposta_texto != null || body.escala_opcao_id != null || body.valor_numerico_livre != null
+  // Detecta completude via payloads (estado atual do formulário)
+  const totalCrits   = _dpVersaoCritsParaForm.length;
+  const respondidos  = payloads.filter(b =>
+    b.resposta_texto != null || b.escala_opcao_id != null || b.valor_numerico_livre != null
   ).length;
-  const _statusNav = (_totalCritsNav > 0 && _respondidosNav >= _totalCritsNav) ? 'respondida' : 'em_andamento';
-  const patchAval = { status: _statusNav, iniciada_em: _dpAvaliacaoAtual.iniciada_em || new Date().toISOString() };
-  const resAval   = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
-  if (erros || !resAval) {
+  const statusNav  = (totalCrits > 0 && respondidos >= totalCrits) ? 'respondida' : 'em_andamento';
+  const patchAval  = { status: statusNav, iniciada_em: _dpAvaliacaoAtual.iniciada_em || new Date().toISOString() };
+  const resAval    = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
+  if (!resAval) {
     toast('Erro ao salvar antes de navegar. Permanecendo na avaliação atual.', true);
     return false;
   }
-  // Atualiza respostas em memória
-  const respsAtualizadas = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${avalId}&select=*`);
-  if (respsAtualizadas) _dpRespostasAtual = respsAtualizadas;
+  // Atualização cirúrgica em memória
+  Object.assign(_dpAvaliacaoAtual, patchAval);
+  const avalIdx = _dpAvaliacoes.findIndex(a => a.id === avalId);
+  if (avalIdx >= 0) Object.assign(_dpAvaliacoes[avalIdx], patchAval);
   return true;
 }
 
@@ -6406,8 +6415,7 @@ async function dpNavForm(delta) {
     if (!ok) return;
     toast('Salvo automaticamente ✓');
   }
-
-  await dpLoadAvaliacoes(_dpCicloAtual.id, { renderApos: false });
+  // _dpAvaliacoes já está sincronizado em memória por _dpSalvarParaNavegar — sem round-trip extra
   const nextId = _dpFormNavList[nextIdx];
   await dpAbrirFormAvaliacao(nextId); // reutiliza _dpFormNavList atual, atualiza índice
 }
@@ -6715,7 +6723,8 @@ async function salvarAvaliacao(status) {
   }
 
   fecharFormAval();
-  await dpLoadAvaliacoes(_dpCicloAtual.id); // recarrega do banco garantindo status correto na lista
+  // Atualização cirúrgica: o step 5 já sincronizou _dpAvaliacoes em memória — re-renderiza sem rebuscar o banco
+  _dpRenderAvaliacoesComFiltro();
   // Contexto do gestor: sincroniza o mirror e re-renderiza o container correto
   if (_gdpCicloAtual) {
     _gdpAvaliacoes = _dpAvaliacoes;
