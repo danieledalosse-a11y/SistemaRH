@@ -461,10 +461,52 @@ const HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
 
 async function sbGet(path)        { ... }
 async function sbPost(path,body)  { ... }
-async function sbPatch(path,body) { ... }
-async function sbDelete(path)     { ... }
-async function sbRpc(fn, params={}) { ... }  // POST /rest/v1/rpc/<fn> — retorna null em erro, popula _sbLastError
+async function sbPatch(path,body) { ... }   // herda Prefer: return=representation — use _dpPatchMinimal em saves D&P
+async function sbDelete(path)     { ... }   // já usa return=minimal
+async function sbRpc(fn, params={}) { ... } // POST /rest/v1/rpc/<fn> — retorna null em erro, popula _sbLastError
+async function sbUpsert(path,body){ ... }   // usa return=representation — use _dpUpsertMinimal em saves D&P
 ```
+
+### ⚠ Regra obrigatória — return=minimal em operações de escrita D&P
+
+`return=representation` (padrão de HDR e sbUpsert) faz o PostgREST executar um SELECT após cada escrita para retornar as linhas salvas. Com RLS complexo (múltiplas subqueries), isso **dobra o custo de cada operação**. Medição real em produção (2026-10-23):
+
+| Operação | Com return=representation | Com return=minimal | Ganho |
+|---|---|---|---|
+| UPSERT dp_respostas (10 linhas) | ~4.700 ms | ~580 ms | **−88%** |
+| PATCH dp_avaliacoes (1 linha) | ~1.850 ms | ~360 ms | **−80%** |
+| Total Salvar | ~6.500 ms | **~940 ms** | **−86%** |
+
+**Regra:** toda operação de escrita no D&P que **não precisa do retorno do banco** deve usar as funções locais:
+
+```js
+// Declaradas logo após sbUpsert, usadas SOMENTE nas 4 chamadas de save do D&P:
+async function _dpUpsertMinimal(path, body) { /* Prefer: resolution=merge-duplicates,return=minimal → true em sucesso, null em erro */ }
+async function _dpPatchMinimal(path, body)  { /* Prefer: return=minimal → true em sucesso, null em erro */ }
+```
+
+**Quando usar _dpUpsertMinimal / _dpPatchMinimal:**
+- `salvarAvaliacao()` — upsert dp_respostas + patch dp_avaliacoes
+- `_dpSalvarParaNavegar()` — upsert dp_respostas + patch dp_avaliacoes
+
+**Quando NÃO usar (continuar com sbUpsert/sbPatch):**
+- Qualquer chamada que precise do `id` gerado ou de campos computados pelo banco para prosseguir
+- Chamadas de outros módulos — não alterar funções globais
+
+**Atualização de `_dpRespostasAtual` sem retorno do banco:**
+```js
+// Merge cirúrgico via versao_criterio_id (nenhum consumidor usa o campo id)
+const novo = [..._dpRespostasAtual];
+for (const p of payloads) {
+  const idx = novo.findIndex(r => r.versao_criterio_id === p.versao_criterio_id);
+  if (idx >= 0) Object.assign(novo[idx], p); else novo.push(p);
+}
+_dpRespostasAtual = novo;
+```
+
+**Campos de `_dpRespostasAtual` usados pelos consumidores:** `versao_criterio_id`, `resposta_texto`, `escala_opcao_id`, `valor_numerico_livre`, `observacao`, `snapshot_opcao_label`, `snapshot_opcao_valor_num` — todos enviados no payload.
+
+**Nota sobre `trg_resposta_snapshot`:** trigger dispara em INSERT e preenche `snapshot_opcao_label`/`snapshot_opcao_valor_num`. O payload já envia esses campos explicitamente (linhas 6686-6688 do index.html) — sem divergência entre enviado e persistido.
 
 ---
 
@@ -695,7 +737,7 @@ document.getElementById('drawerDpCicloOverlay').classList.remove('open');
 | `125_dp_enum_nao_participa.sql` | `ALTER TYPE dp_evento_historico ADD VALUE IF NOT EXISTS 'nao_participa_marcado'` e `'nao_participa_revertido'`. Corrige HTTP 400 ao marcar não participante — migration 124 usava esses valores nas RPCs mas nunca os adicionou ao ENUM. | **Executado** (commit 432ae11, 2026-10-16) |
 | `126_dp_bloquear_aval_concluida.sql` | Dois triggers: (1) `trg_bloquear_resp_aval_concluida` — BEFORE INSERT/UPDATE em `dp_respostas` verifica se avaliação pai tem `status IN ('concluida','publicada')` e bloqueia com EXCEPTION; (2) `trg_bloquear_reverter_conclusao` — BEFORE UPDATE em `dp_avaliacoes` impede reversão de `concluida`/`publicada` para outro status. | **Executado** (commit 7149edb, 2026-10-16) |
 | `127_dp_rls_bonus_gestor.sql` | Policy SELECT em `dp_resultados_bonus` para perfil `gestor`: cadeia `bonus → resultado → avaliacao → participante → equipe` via `auth_gestor_equipe_ids()`. Pré-requisito para o gestor usar o embed PostgREST `dp_resultados?select=*,dp_resultados_bonus(*)`. Segue padrão da migration 113. Idempotente. | **Executado** (2026-10-16) |
-| `128_dp_historico_batch.sql` | `dp_fn_historico_criterio_batch(p_versao_id uuid, p_colaborador_id bigint, p_ciclo_atual_id uuid)` — retorna `TABLE(versao_criterio_id uuid, resultado jsonb)`. Itera os critérios da versão server-side e chama `dp_fn_historico_criterio` para cada um; substitui N RPCs paralelas por 1 chamada HTTP. `SECURITY INVOKER`. `GRANT EXECUTE TO authenticated`. | **Executado em produção** (2026-10-16) |
+| `128_dp_historico_batch.sql` | `dp_fn_historico_criterio_batch(p_versao_id uuid, p_colaborador_id bigint, p_ciclo_atual_id uuid)` — retorna `TABLE(versao_criterio_id uuid, resultado jsonb)`. Itera os critérios da versão server-side e chama `dp_fn_historico_criterio` para cada um; substitui N RPCs paralelas por 1 chamada HTTP. `SECURITY INVOKER`. `GRANT EXECUTE TO authenticated`. | **Executado em produção** (2026-10-23) — Nota: após aplicar no Supabase, o PostgREST no plano gratuito demora até ~15 min para reconhecer a nova função via PGRST202 (schema cache assíncrono). O curl com service key confirma disponibilidade imediata; o browser (JWT usuário) reflete após o cache atualizar. |
 | `130_dp_respondida_enum.sql` | `ALTER TYPE dp_status_avaliacao ADD VALUE IF NOT EXISTS 'respondida' BEFORE 'concluida'` — adiciona status intermediário entre `em_andamento` e `concluida`. **Deve ser executado e committed ANTES da migration 131** (restrição PostgreSQL: ADD VALUE não pode estar na mesma transação que código usando o novo valor). | **Executado em produção** (2026-10-16) |
 | `131_dp_validar_conclusao.sql` | Função `dp_fn_validar_conclusao()` + trigger `trg_validar_conclusao` BEFORE UPDATE em `dp_avaliacoes`. Bloqueia transição `status → concluida` quando há critérios `obrigatorio=true` sem resposta preenchida. Obtém `versao_id` via `dp_ciclos`. Não interfere em saves `em_andamento` ou `respondida`. `SECURITY DEFINER`. | **Executado em produção** (2026-10-16) |
 | `132_dp_corrigir_respondidas.sql` | Correção de dados: UPDATE `dp_avaliacoes SET status='respondida'` para registros com `status='em_andamento'` que já tinham todos os critérios obrigatórios respondidos (criados antes da migration 130). Corrigiu 9 avaliações do ciclo Gratificação CD - Setembro/2026. 1 avaliação permaneceu `em_andamento` (9/10 critérios — incompleta). | **Executado em produção** (2026-10-16) |
@@ -778,9 +820,10 @@ let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos
 |---|---|
 | `dpLoadAvaliacoes(cicloId)` | GET dp_avaliacoes; chama dpRenderAvaliacoes |
 | `dpRenderAvaliacoes(opts={})` | Card por participante cruzando _dpAvaliacoes; badge por status. Opts: `containerId` (default `dpAvaliacoesBody`), `onAvaliarFn` (default `dpAbrirFormAvaliacao`), `participants` (default `_dpParticipantes`), `prefixHtml` (HTML antes da lista), `hideAvaliarWhenDone` (boolean — se `true`, oculta botão Avaliar para status `concluida`/`publicada`) |
-| `dpAbrirFormAvaliacao(participanteId, navList?)` | Busca/cria dp_avaliacao; carrega critérios+respostas; busca histórico por critério via `sbRpc('dp_fn_historico_criterio',...)` em paralelo → `_dpHistoricoCriterios`; configura nav state (`_dpFormNavList`/`_dpFormNavIdx`); busca `foto_url` de `_colaboradores` async; atualiza avatar e botões de nav; abre formAvalOverlay. `navList` opcional: se passado, seta a lista; se omitido e lista já existir, mantém; se omitido e lista vazia, auto-constrói de `_dpParticipantes` ativos. |
-| `dpRenderFormAvaliacao()` | Linha compacta por critério (num, nome, botão ℹ, Sim/Não, obs, histórico); bloco expandível `.aval-info-expand` como irmão do `.aval-card` (substitui popup absoluto que era clipado pelo overflow) |
-| `salvarAvaliacao(status)` | Coleta resp_*; upsert dp_respostas (`on_conflict=avaliacao_id,versao_criterio_id`); PATCH dp_avaliacoes; chama `fecharFormAval()` + `dpLoadAvaliacoes(cicloId)` (recarrega do banco); se `_gdpCicloAtual` estiver ativo (contexto gestor), também sincroniza `_gdpAvaliacoes = _dpAvaliacoes` e re-renderiza o container `gdptab-avaliacoes` preservando filtros ativos; registra evento se concluída |
+| `dpAbrirFormAvaliacao(participanteId, navList?)` | Busca/cria dp_avaliacao; carrega critérios via `_dpFormCache` + respostas (`sbGet`) de forma bloqueante; abre o modal imediatamente; dispara `dp_fn_historico_criterio_batch` em background (fire-and-forget) com guard de corrida `_thisAvalId = aval.id` — resultado descartado se `_dpAvaliacaoAtual` mudou antes da resposta; preenche chips via `_dpAtualizarChipsHistorico()` quando retorna. `navList` opcional: se passado, seta a lista; se omitido e lista já existir, mantém; se omitido e lista vazia, auto-constrói de `_dpParticipantes` ativos. |
+| `dpRenderFormAvaliacao()` | Linha compacta por critério (num, nome, botão ℹ, Sim/Não, obs, chip histórico); bloco expandível `.aval-info-expand` como irmão do `.aval-card`. Chip histórico renderiza como `<span id="dp-hist-{vc.id}"></span>` (vazio) e é preenchido por `_dpAtualizarChipsHistorico()` após o batch retornar. |
+| `_dpAtualizarChipsHistorico()` | Percorre `_dpVersaoCritsParaForm`; para cada critério com `_dpHistoricoCriterios[vc.id]` preenchido, localiza `#dp-hist-{vc.id}` e injeta o HTML do chip. Chamada somente após batch retornar, somente se `_dpAvaliacaoAtual.id === _thisAvalId` (guard de corrida). |
+| `salvarAvaliacao(status)` | Coleta resp_*; upsert dp_respostas (`on_conflict=avaliacao_id,versao_criterio_id`); PATCH dp_avaliacoes; **só então** chama `fecharFormAval()` (modal fecha após confirmação de gravação); re-render da lista via `setTimeout(0)` (próximo tick — sem bloquear pintura do fechamento); se `_gdpCicloAtual` estiver ativo, sincroniza `_gdpAvaliacoes = _dpAvaliacoes` e re-renderiza `gdptab-avaliacoes` preservando filtros, também diferido no mesmo `setTimeout(0)`. Registra evento se concluída. |
 | `fecharFormAval()` | Fecha overlay; limpa estado (`_dpAvaliacaoAtual`, `_dpRespostasAtual`, `_dpVersaoCritsParaForm`); zera `_dpFormNavList` e `_dpFormNavIdx` |
 | `dpNavForm(delta)` | Navega ±1 na `_dpFormNavList`; detecta alterações via `_dpFormTemAlteracoes()`; salva rascunho via `_dpSalvarParaNavegar()` se houver mudanças; bloqueia navegação se save falhar; chama `dpLoadAvaliacoes` + `dpAbrirFormAvaliacao(nextId)` |
 | `_dpSalvarParaNavegar()` | Versão silenciosa de save (sem toast de sucesso); retorna `true/false`; apenas para status `em_andamento` — `concluida`/`publicada` retornam `true` sem salvar |
@@ -789,10 +832,11 @@ let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos
 | `_dpAvalIniciais(nome)` | Retorna `<span>XY</span>` com as iniciais do nome |
 | `_dpAtualizarNavBtns()` | Atualiza `disabled` e `display` dos botões `#formAvalPrev`/`#formAvalNext` e contador `#formAvalCounter` |
 
-**Histórico por critério no formulário:**
-- Carregado em `dpAbrirFormAvaliacao` via `Promise.all` — uma chamada RPC por critério
-- Requer `modelo_id` da versão (GET `dp_versoes?id=eq.${versaoId}&select=modelo_id`)
-- `_dpHistoricoCriterios[vc.id]` → JSONB com campos acima; `null` = sem histórico (não exibido)
+**Histórico por critério no formulário (commit 172f23f):**
+- Carregado em background após abertura do modal via `dp_fn_historico_criterio_batch` (migration 128) — 1 RPC, não N
+- Guard de corrida: `_thisAvalId = aval.id` capturado antes do fire-and-forget; se `_dpAvaliacaoAtual.id !== _thisAvalId` no retorno, resultado descartado (usuário navegou para outro colaborador)
+- Chips renderizados como `<span id="dp-hist-{vc.id}"></span>` no `dpRenderFormAvaliacao()` e preenchidos depois por `_dpAtualizarChipsHistorico()`
+- `_dpHistoricoCriterios[vc.id]` → JSONB com campos; `null` = sem histórico (chip permanece vazio)
 - `comparavel: false` → exibe "Sem avaliação anterior comparável" em itálico
 - Critérios **binários**: exibe `resposta_texto` (Sim/Não) quando disponível; fallback `conceito_selecionado`
 - Critérios **escala**: `escala_opcao_label (valor)` | **numérico**: `valor_numerico_livre` | **conceito**: `conceito_selecionado`
