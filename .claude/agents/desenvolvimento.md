@@ -780,7 +780,7 @@ let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos
 | `dpRenderAvaliacoes(opts={})` | Card por participante cruzando _dpAvaliacoes; badge por status. Opts: `containerId` (default `dpAvaliacoesBody`), `onAvaliarFn` (default `dpAbrirFormAvaliacao`), `participants` (default `_dpParticipantes`), `prefixHtml` (HTML antes da lista), `hideAvaliarWhenDone` (boolean — se `true`, oculta botão Avaliar para status `concluida`/`publicada`) |
 | `dpAbrirFormAvaliacao(participanteId, navList?)` | Busca/cria dp_avaliacao; carrega critérios+respostas; busca histórico por critério via `sbRpc('dp_fn_historico_criterio',...)` em paralelo → `_dpHistoricoCriterios`; configura nav state (`_dpFormNavList`/`_dpFormNavIdx`); busca `foto_url` de `_colaboradores` async; atualiza avatar e botões de nav; abre formAvalOverlay. `navList` opcional: se passado, seta a lista; se omitido e lista já existir, mantém; se omitido e lista vazia, auto-constrói de `_dpParticipantes` ativos. |
 | `dpRenderFormAvaliacao()` | Linha compacta por critério (num, nome, botão ℹ, Sim/Não, obs, histórico); bloco expandível `.aval-info-expand` como irmão do `.aval-card` (substitui popup absoluto que era clipado pelo overflow) |
-| `salvarAvaliacao(status)` | Coleta resp_*; PATCH/POST dp_respostas; PATCH dp_avaliacoes; registra evento; retorna `undefined` (navegação usa `_dpSalvarParaNavegar` separadamente) |
+| `salvarAvaliacao(status)` | Coleta resp_*; upsert dp_respostas (`on_conflict=avaliacao_id,versao_criterio_id`); PATCH dp_avaliacoes; atualiza memória; chama `fecharFormAval()` + `_dpRenderAvaliacoesComFiltro()` (atualiza lista sem nova requisição); registra evento se concluída |
 | `fecharFormAval()` | Fecha overlay; limpa estado (`_dpAvaliacaoAtual`, `_dpRespostasAtual`, `_dpVersaoCritsParaForm`); zera `_dpFormNavList` e `_dpFormNavIdx` |
 | `dpNavForm(delta)` | Navega ±1 na `_dpFormNavList`; detecta alterações via `_dpFormTemAlteracoes()`; salva rascunho via `_dpSalvarParaNavegar()` se houver mudanças; bloqueia navegação se save falhar; chama `dpLoadAvaliacoes` + `dpAbrirFormAvaliacao(nextId)` |
 | `_dpSalvarParaNavegar()` | Versão silenciosa de save (sem toast de sucesso); retorna `true/false`; apenas para status `em_andamento` — `concluida`/`publicada` retornam `true` sem salvar |
@@ -1094,6 +1094,56 @@ const podeNP = opts.readonly !== true &&
 ### Sem alterações na aba Avaliações
 
 Todo o comportamento existente foi preservado: `_ativos`, `_naoParticipa`, `_avalsAtivas`, seção "Não participam deste ciclo", contagens de pendentes, encerramento — nada foi modificado.
+
+---
+
+## Nome do colaborador clicável na aba Avaliações (commit `2725b25`, out/2026)
+
+O nome do colaborador na lista de avaliações (função `dpRenderAvaliacoes`) agora é clicável, com comportamento dependente do status:
+
+| Status | Clique no nome | Equivalente ao botão |
+|---|---|---|
+| Não iniciada / Em andamento / Respondida | `dpAbrirFormAvaliacao(p.id)` via `_onAvaliarFn` | Avaliar (clipboard) |
+| Concluída | `dpAbrirFormAvaliacaoReadonly(p.id)` | Visualizar (olho) |
+| Não participante | Sem ação | — |
+
+**Visual:** `text-decoration: underline` discreto (cor `var(--border)`) + `cursor: pointer`; hover muda a cor do nome para `var(--blue)`. Botões de ação originais (Avaliar, Olho, Concluir, Editar, ⊘) **preservados e inalterados**.
+
+**Escopo:** funciona em RH e Gestor — ambos usam `dpRenderAvaliacoes` com `_onAvaliarFn` como parâmetro, então o comportamento é herdado corretamente em cada visão.
+
+**Implementação:** ternário inline no template literal da linha ~5920 em `dpRenderAvaliacoes`. Sem nova função, sem duplicação de lógica.
+
+---
+
+## Fix: status não atualizava na lista após salvar (commit `ffc789d`, out/2026)
+
+**Causa:** `salvarAvaliacao` atualizava `_dpAvaliacoes` em memória corretamente, mas após `fecharFormAval()` nenhuma função re-renderizava a lista. O HTML da aba Avaliações mostrava o snapshot anterior até a próxima entrada no ciclo.
+
+**Correção:** uma linha adicionada após `fecharFormAval()` em `salvarAvaliacao`:
+```js
+fecharFormAval();
+_dpRenderAvaliacoesComFiltro(); // redesenha a lista com status já em memória
+```
+
+**Comportamento:** sem requisição ao banco — usa `_dpAvaliacoes` já atualizado na etapa 5. Filtros ativos são respeitados. Status "Respondida" aparece imediatamente quando todos os critérios estão respondidos; "Em andamento" se incompleto.
+
+---
+
+## Fix: 409 Conflict ao salvar avaliação retomada (commit `a68631e`, out/2026)
+
+**Causa:** `sbUpsert` em `dp_respostas` usava `Prefer: resolution=merge-duplicates` sem indicar qual constraint usar. O PostgREST tentava resolver conflitos pela PK (`id`), que não estava no payload → tentativa de INSERT puro → 409 na constraint `UNIQUE (avaliacao_id, versao_criterio_id)`.
+
+**Correção:** adicionado `?on_conflict=avaliacao_id,versao_criterio_id` na URL da chamada (~linha 6620):
+```js
+// antes
+await sbUpsert('/rest/v1/dp_respostas', payloads);
+// depois
+await sbUpsert('/rest/v1/dp_respostas?on_conflict=avaliacao_id,versao_criterio_id', payloads);
+```
+
+**Efeito:** PostgREST usa a constraint correta → INSERT para respostas novas, UPDATE para existentes. Avaliações novas (sem respostas anteriores) não são afetadas. Trigger `trg_resposta_snapshot` só dispara em INSERT — comportamento preservado.
+
+**Armadilha:** ao criar novas tabelas com upsert via `sbUpsert`, sempre incluir `?on_conflict=<colunas_da_unique>` na URL. Sem isso, o `resolution=merge-duplicates` usa a PK implicitamente e falha se o payload não inclui o `id`.
 
 ---
 

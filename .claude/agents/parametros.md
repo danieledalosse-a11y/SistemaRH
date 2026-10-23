@@ -348,6 +348,40 @@ function _ehAdicionarParaGestor(gid)       // abre modal pré-selecionando gesto
 
 ---
 
+## Fotos de perfil — vínculo `colaborador_id` em `usuarios_perfil` (out/2026)
+
+A foto do usuário logado é carregada em `index.html` via `colaborador_id → colaboradores.foto_url`. Se `colaborador_id = NULL` em `usuarios_perfil`, a foto nunca aparece — o perfil exibe apenas as iniciais.
+
+### Vínculos realizados (22/10/2026)
+
+| usuarios_perfil.id | Nome | perfil | colaborador_id |
+|---|---|---|---|
+| 1 | Daniele Dalosse | admin | 1611 |
+| 2 | Evelyn Lopes | admin | 1612 |
+| 3 | Heloisa Lima | rh | 1619 |
+| 11 | Diretoria (Algacir Scoqui) | diretoria | 1642 |
+| 24 | André Augusto Ferreira | diretoria | 1643 |
+
+### Diretores com `colaborador_id` identificado (pendente criação de usuário)
+
+| Nome | colaboradores.id |
+|---|---|
+| BARBARA DO NASCIMENTO TROVAO | 1644 |
+| FERNANDO JULCA | 1645 |
+| JOAO PEDRO NASCIMENTO TROVAO | 1646 |
+| PEDRO AUGUSTO TROVAO | 1647 |
+| RITA DE CASSIA DO NASCIMENTO TROVAO | 1648 |
+
+Ao criar esses usuários via Parâmetros → Usuários, vincular `colaborador_id` com os IDs acima para que a foto apareça.
+
+### Como diagnosticar usuário sem foto
+
+```sql
+SELECT id, nome, perfil, colaborador_id FROM usuarios_perfil WHERE colaborador_id IS NULL AND ativo = TRUE;
+```
+
+---
+
 ## Categoria `aviso_home` — Comunicados da Home (migrations 117/118, out/2026)
 
 Seção **"Home"** no CATS (mesma renomeação aplicada). Tabela: `param_aviso_home`.
