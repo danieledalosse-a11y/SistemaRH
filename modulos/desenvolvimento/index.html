@@ -5879,8 +5879,8 @@ function _dpFiltrarPorStatus(lista, status, avaliacoes) {
   if (status === 'nao_participa') return lista.filter(p => p.nao_participa);
   return lista.filter(p => {
     if (p.nao_participa) return false; // seção separada, nunca filtrada por status
-    const aval = avaliacoes.find(a => a.participante_id === p.id);
-    const st = aval ? aval.status : 'nao_iniciada';
+    const aval = avaliacoes.find(a => a.participante_id === p.id) || avaliacoes.find(a => a.colaborador_id === p.colaborador_id);
+    const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
     if (status === 'concluida') return st === 'concluida' || st === 'publicada';
     return st === status;
   });
@@ -7869,8 +7869,8 @@ function _dpStatusCounts(participantes, avaliacoes) {
   const ativos = participantes.filter(p => !p.nao_participa);
   const counts = { nao_iniciada: 0, em_andamento: 0, respondida: 0, concluida: 0, nao_participa: 0 };
   ativos.forEach(p => {
-    const aval = avaliacoes.find(a => a.participante_id === p.id);
-    const st = aval ? aval.status : 'nao_iniciada';
+    const aval = avaliacoes.find(a => a.participante_id === p.id) || avaliacoes.find(a => a.colaborador_id === p.colaborador_id);
+    const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
     if (st === 'concluida' || st === 'publicada') counts.concluida++;
     else if (st === 'respondida') counts.respondida++;
     else if (st === 'em_andamento') counts.em_andamento++;
@@ -7887,7 +7887,7 @@ function _dpStatusChipsHtml(counts, statusAtivo, toggleFn, concluirBtn, valorBon
     { key: 'em_andamento',  label: 'Em andamento',  bgOff: '#FFFBEB', bgOn: '#FEF3C7', numOff: '#D97706', numOn: '#92400E', ring: '#F59E0B' },
     { key: 'respondida',    label: 'Respondida',    bgOff: '#F5F3FF', bgOn: '#EDE9FE', numOff: '#7C3AED', numOn: '#4C1D95', ring: '#5925DC' },
     { key: 'concluida',     label: 'Concluída',     bgOff: '#F0FDF4', bgOn: '#DCFCE7', numOff: '#16A34A', numOn: '#065F46', ring: '#10B981' },
-    { key: 'nao_participa', label: 'Não participam', bgOff: '#F9FAFB', bgOn: '#F3F4F6', numOff: '#9CA3AF', numOn: '#374151', ring: '#9CA3AF' },
+    { key: 'nao_participa', label: 'Não participam', bgOff: '#FFF5F5', bgOn: '#FEE2E2', numOff: '#DC2626', numOn: '#991B1B', ring: '#EF4444', labelSize: '9px' },
   ];
   const total     = counts.nao_iniciada + counts.em_andamento + (counts.respondida || 0) + counts.concluida;
   const respondidas = (counts.respondida || 0) + counts.concluida;
@@ -7901,7 +7901,7 @@ function _dpStatusChipsHtml(counts, statusAtivo, toggleFn, concluirBtn, valorBon
              cursor:pointer;transition:all .15s;
              box-shadow:${ativo ? `0 0 0 3px ${c.ring}25` : 'none'}">
       <span style="font-size:22px;font-weight:700;line-height:1;color:${ativo ? c.numOn : c.numOff}">${counts[c.key] || 0}</span>
-      <span style="font-size:10px;font-weight:500;color:var(--text-sec,#4B5563);margin-top:3px;white-space:nowrap">${c.label}</span>
+      <span style="font-size:${c.labelSize||'10px'};font-weight:500;color:var(--text-sec,#4B5563);margin-top:3px;white-space:nowrap">${c.label}</span>
     </button>`;
   }).join('');
   const valorStr = valorBonus != null
