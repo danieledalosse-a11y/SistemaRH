@@ -709,9 +709,9 @@
   }
   .aval-hist b { color: var(--text-sec); font-weight: 600; }
   /* ── não participante ── */
-  .dp-np-row { display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #FECACA;background:#FFF5F5;border-left:3px solid #EF4444; }
-  .dp-np-badge { font-size:10px;font-weight:700;color:#DC2626;background:#FEE2E2;border:1px solid #FECACA;border-radius:4px;padding:2px 7px;white-space:nowrap;flex-shrink:0;letter-spacing:.02em; }
-  .dp-np-section-header { font-size:11px;font-weight:700;color:#B91C1C;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px 6px;border-top:2px solid #FECACA;background:#FFF5F5;margin-top:4px; }
+  .dp-np-row { display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border-light); }
+  .dp-np-badge { font-size:10px;font-weight:600;color:#6B7280;background:rgba(107,114,128,0.08);border:1px solid rgba(107,114,128,0.2);border-radius:4px;padding:2px 6px;white-space:nowrap;flex-shrink:0; }
+  .dp-np-section-header { font-size:11px;font-weight:600;color:var(--text-ter);letter-spacing:.03em;padding:10px 14px 6px;border-top:1px solid var(--border-light);margin-top:4px; }
   .form-aval-readonly-banner { display:flex;align-items:center;gap:8px;padding:9px 16px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;font-size:13px;color:#15803D;font-weight:600; }
   @media (max-width: 600px) {
     .aval-card { flex-wrap: wrap; padding: 10px 12px; min-height: auto; gap: 8px; }
@@ -5941,21 +5941,18 @@ function dpRenderAvaliacoes(opts = {}) {
           </div>
         </div>`;
       }).join('')
-    : `<div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px">Nenhum resultado para os filtros aplicados.</div>`;
+    : (_naoParticipa.length ? '' : `<div style="text-align:center;padding:24px;color:var(--text-ter);font-size:13px">Nenhum resultado para os filtros aplicados.</div>`);
 
   const htmlNaoParticipa = _naoParticipa.length ? `
     <div class="dp-np-section-header">Não participam deste ciclo (${_naoParticipa.length})</div>
     ${_naoParticipa.map(p => {
       const snap = p.snapshot || {};
       const data = p.nao_participa_em ? new Date(p.nao_participa_em).toLocaleDateString('pt-BR') : '';
+      const partes = [snap.cargo || '—', p.nao_participa_motivo, data].filter(Boolean);
       return `<div class="dp-np-row">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500;color:var(--text-sec);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            ${snap.nome || '—'}
-            <span class="dp-np-badge">⊘ Não participa</span>
-          </div>
-          <div style="font-size:11px;color:var(--text-ter);margin-top:2px">${snap.cargo || '—'} · ${snap.setor || '—'}</div>
-          ${p.nao_participa_motivo ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px">Motivo: ${p.nao_participa_motivo}${data ? ` · ${data}` : ''}</div>` : ''}
+          <div style="font-size:13px;font-weight:500;color:var(--text-sec)">${snap.nome || '—'}</div>
+          <div style="font-size:11px;color:var(--text-ter);margin-top:2px">${partes.join(' · ')}</div>
           ${p.nao_participa_obs ? `<div style="font-size:11px;color:var(--text-ter);margin-top:1px;font-style:italic">${p.nao_participa_obs}</div>` : ''}
         </div>
         ${_podeMarcarNP ? `<button class="btn btn-secondary btn-sm" style="font-size:12px" onclick="dpReverterNaoParticipa('${p.id}')">Reverter</button>` : ''}
@@ -5964,8 +5961,11 @@ function dpRenderAvaliacoes(opts = {}) {
 
   const _prevFocusId  = document.activeElement?.id;
   const _prevSelStart = document.activeElement?.selectionStart ?? -1;
+  const _counterText = (_ativos.length === 0 && _naoParticipa.length)
+    ? `${_naoParticipa.length} não participam`
+    : `${_ativos.length} participante(s)${_naoParticipa.length ? ` · ${_naoParticipa.length} não participam` : ''}`;
   el.innerHTML = (opts.prefixHtml || '') + bannerEncerrar
-    + `<div style="font-size:12px;color:var(--text-ter);margin-bottom:8px;padding:0 2px">${_ativos.length} participante(s)${_naoParticipa.length ? ` · ${_naoParticipa.length} não participam` : ''}</div>`
+    + `<div style="font-size:12px;color:var(--text-ter);margin-bottom:8px;padding:0 2px">${_counterText}</div>`
     + htmlAtivos + htmlNaoParticipa;
   if (_prevFocusId) {
     const fe = document.getElementById(_prevFocusId);
