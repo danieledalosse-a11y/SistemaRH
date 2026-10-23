@@ -2096,3 +2096,47 @@ const pct = total > 0 ? Math.round((respondidas / total) * 100) : 0;
 ```
 
 Valor monetário (`valorStr`) aparece à direita da barra quando `valorBonus != null` — calculado via `_dpSomaBonus` sobre `dp_resultados_bonus`.
+
+---
+
+## Unificação da tela de Ciclos RH × Gestor (commits c546268, 079e417, f9e5017 — 2026-10-23)
+
+### `dpRenderCiclosUnificado(ciclosInput, opts)` — função compartilhada
+
+Substitui `gestorDpRenderCiclos` (40+ linhas com estrutura distinta). RH e Gestor chamam a mesma função; diferenças controladas por `opts`:
+
+| opt | RH | Gestor |
+|---|---|---|
+| `containerId` | `'ciclosList'` | `'gestorDpBody'` |
+| `sidebarId` | `'cicloSidebarStats'` | `'gestorDpSidebarStats'` |
+| `onClickCiclo` | `dpAbrirDrawerCiclo` | `gestorDpAbrirDrawer` |
+| `showRascunhos` | `true` | `false` |
+| `showAnteriores` | `true` | `false` |
+| `showBtnEncerrar` | `true` | `false` |
+| `showBtnAbrir` | `true` | `false` |
+
+### Estrutura da sidebar do Gestor (`sec-gestor-dp`)
+
+Adicionado `<div class="content-area">` com `.list-col` + `.sidebar-col` — mesma estrutura do RH. Sidebar renderiza contadores, progresso e dots via as mesmas queries (`dp_avaliacoes` + `dp_ciclo_participantes`), filtradas pelo RLS do Supabase ao perfil do Gestor.
+
+### Onclick em HTML dinâmico
+
+`window._dpCicloClickFn = onClickCiclo` no início da função; `onclick="_dpCicloClickFn('${id}')"` no HTML gerado. Evita serialização de arrow function como string.
+
+### ID do cbannerFill
+
+`id="cbannerFill_${containerId}"` e `id="cbannerPct_${containerId}"` para evitar colisão se ambas as views existirem no DOM simultaneamente.
+
+### `_dpSidebarAvalCounts` restrito ao RH
+
+Populado apenas quando `containerId === 'ciclosList'`. `dpEncerrarCicloSidebar` (RH-only) lê essa variável — o Gestor não a usa.
+
+### Nome do modelo no Gestor
+
+`loadDpModelos()` chamado dentro de `gestorDpLoadCiclos` via `Promise.all`, mas **somente se `_dpModelos.length === 0`** (sem requisição redundante se RH já carregou). Popula `_dpVersoes` para que `_dpCicloModeloNome` retorne o nome completo ("Avaliação Mensal Produtividade CD — V1").
+
+### Banner de ciclo — visual e percentual (commits 079e417, f9e5017)
+
+- **Visual:** fundo `#f0f5ff` com borda `#c7d9fb`, título `#1a3a6e`, barra `#2563EB`. Dark mode via `prefers-color-scheme`. Substituiu gradiente escuro anterior.
+- **Percentual:** `<span class="ciclo-banner-pct" id="cbannerPct_${containerId}">` exibido à direita da barra, atualizado junto com o fill.
+- **Base do cálculo:** `respondidas = avals onde status ∈ ['respondida','concluida','publicada']` ÷ total de participantes ativos. Em andamento e não iniciadas ficam fora do numerador — representam o que ainda falta responder.
