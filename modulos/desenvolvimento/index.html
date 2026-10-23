@@ -1688,6 +1688,10 @@ async function sbPatch(path,body)   { const r = await fetch(SB_URL+path,{method:
 async function sbDelete(path)       { const r = await fetch(SB_URL+path,{method:'DELETE',headers:{...HDR,Prefer:'return=minimal'}}); if (!r.ok) { _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; } return r.ok; }
 // Upsert em lote: resolution=merge-duplicates garante INSERT ou UPDATE por (avaliacao_id, versao_criterio_id)
 async function sbUpsert(path,body)  { const h={...HDR,Prefer:'resolution=merge-duplicates,return=representation'}; const r=await fetch(SB_URL+path,{method:'POST',headers:h,body:JSON.stringify(body)}); if(r.ok) return r.json(); _sbLastError=await r.json().catch(()=>null); _sbLastError={...(_sbLastError||{}),_status:r.status}; return null; }
+// Variantes D&P sem return=representation: evitam o SELECT pós-escrita no PostgREST, reduzindo custo de RLS duplo.
+// Usadas SOMENTE nas 4 chamadas de salvamento do D&P — não afetam outros módulos.
+async function _dpUpsertMinimal(path,body) { const h={...HDR,Prefer:'resolution=merge-duplicates,return=minimal'}; const r=await fetch(SB_URL+path,{method:'POST',headers:h,body:JSON.stringify(body)}); if(r.ok) return true; _sbLastError=await r.json().catch(()=>null); _sbLastError={...(_sbLastError||{}),_status:r.status}; return null; }
+async function _dpPatchMinimal(path,body)  { const h={...HDR,Prefer:'return=minimal'}; const r=await fetch(SB_URL+path,{method:'PATCH',headers:h,body:JSON.stringify(body)}); if(r.ok) return true; _sbLastError=await r.json().catch(()=>null); _sbLastError={...(_sbLastError||{}),_status:r.status}; return null; }
 async function sbRpc(fn, params={}) { try { const r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`,{method:'POST',headers:{...HDR,'Content-Type':'application/json'},body:JSON.stringify(params)}); if (r.ok) return r.json(); _sbLastError = await r.json().catch(()=>null); _sbLastError = {...(_sbLastError||{}), _status: r.status}; return null; } catch(e) { _sbLastError = {message: e.message, _status: 0}; return null; } }
 let _sbLastError = null;
 function sbErrMsg() { const e = _sbLastError; _sbLastError = null; if (!e) return 'Erro desconhecido'; return `[HTTP ${e._status}] ${e.message || e.details || e.hint || JSON.stringify(e)}`; }
@@ -6088,6 +6092,11 @@ async function dpConcluirEncerramento(pendentes) {
 }
 
 async function dpAbrirFormAvaliacao(participanteId, navList) {
+  // ── INSTRUMENTAÇÃO TEMPORÁRIA — remover após medir ──────────────────
+  const _dpT0 = performance.now();
+  console.group(`%c[DP] Abrindo formulário`, 'color:#6366f1;font-weight:bold');
+  console.time('[DP] open:total');
+  // ────────────────────────────────────────────────────────────────────
   const part = _dpParticipantes.find(p => p.id === participanteId);
   if (!part || !_dpCicloAtual) return;
   if (part.nao_participa) { toast('Este colaborador está marcado como não participante neste ciclo.', true); return; }
@@ -6132,25 +6141,32 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   let modeloId;
   let _respostasJaBuscadas = false;
   if (_dpFormCache[versaoId]) {
-    // Cache hit: reutilizar dados imutáveis da versão
+    // ── INSTRUMENTAÇÃO ── cache hit
+    console.log(`[DP] open: cache HIT (versão ${versaoId.slice(0,8)}…)`);
     _dpVersaoCritsParaForm = _dpFormCache[versaoId].versaoCrits;
     modeloId               = _dpFormCache[versaoId].modeloId;
   } else {
-    // Cache miss: dp_versao_criterios e dp_respostas em paralelo (Ponto 3)
+    // ── INSTRUMENTAÇÃO ── cache miss — round-trip 1
+    console.log(`[DP] open: cache MISS — buscando versão_criterios + respostas em paralelo`);
+    const _tNet1 = performance.now();
     const [vc, respsEarly] = await Promise.all([
       sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&order=ordem.asc&select=*`),
       sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`)
     ]);
+    console.log(`[DP] open: rede 1 (versao_criterios + respostas) → ${(performance.now()-_tNet1).toFixed(0)} ms`);
     _dpRespostasAtual = respsEarly || [];
     _respostasJaBuscadas = true;
     const criterioIds = [...new Set((vc||[]).map(c => c.criterio_id).filter(Boolean))];
     const escalaIds   = [...new Set((vc||[]).map(c => c.escala_id).filter(Boolean))];
+    // ── INSTRUMENTAÇÃO ── round-trip 2
+    const _tNet2 = performance.now();
     const [criteriosData, escalasData, opcoesData, versaoData] = await Promise.all([
       criterioIds.length ? sbGet(`/rest/v1/dp_criterios?id=in.(${criterioIds.join(',')})&select=id,nome,descricao,referencia,tipo`) : Promise.resolve([]),
       escalaIds.length   ? sbGet(`/rest/v1/dp_escalas?id=in.(${escalaIds.join(',')})&select=id,nome`) : Promise.resolve([]),
       escalaIds.length   ? sbGet(`/rest/v1/dp_escala_opcoes?escala_id=in.(${escalaIds.join(',')})&select=*&order=ordem.asc`) : Promise.resolve([]),
       sbGet(`/rest/v1/dp_versoes?id=eq.${versaoId}&select=modelo_id`)
     ]);
+    console.log(`[DP] open: rede 2 (criterios + escalas + opções + versão) → ${(performance.now()-_tNet2).toFixed(0)} ms`);
     const criterioMap = Object.fromEntries((criteriosData||[]).map(c => [c.id, c]));
     const escalaMap   = Object.fromEntries((escalasData||[]).map(e => [e.id, {
       ...e,
@@ -6169,7 +6185,10 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   // Histórico será carregado em background — não bloqueia a abertura do formulário
   _dpHistoricoCriterios = {};
   if (!_respostasJaBuscadas) {
+    // ── INSTRUMENTAÇÃO ── busca de respostas (cache hit path — o único round-trip que resta)
+    const _tResps = performance.now();
     const resps = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`);
+    console.log(`[DP] open: rede — dp_respostas → ${(performance.now()-_tResps).toFixed(0)} ms  (${(resps||[]).length} registros)`);
     _dpRespostasAtual = resps || [];
   }
 
@@ -6192,6 +6211,8 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
     }
   }
 
+  // ── INSTRUMENTAÇÃO ── render DOM
+  const _tRender = performance.now();
   dpRenderFormAvaliacao();        // chips de histórico renderizam vazios (placeholders)
   dpAtualizarProgressoAval();
   const _forceReadonly = aval.status === 'publicada'
@@ -6199,6 +6220,11 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   dpAvalFormSetReadonly(_forceReadonly, aval.concluida_em || null);
   document.getElementById('formAvalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+  // ── INSTRUMENTAÇÃO ── totais
+  console.log(`[DP] open: render DOM → ${(performance.now()-_tRender).toFixed(0)} ms`);
+  console.log(`[DP] open: TOTAL até modal visível → ${(performance.now()-_dpT0).toFixed(0)} ms`);
+  console.timeEnd('[DP] open:total');
+  console.groupEnd();
 
   // Histórico em background — preenche chips após retorno sem bloquear a interação
   if (modeloId && part.colaborador_id) {
@@ -6331,6 +6357,10 @@ async function _dpSalvarParaNavegar() {
   if (!_dpAvaliacaoAtual) return true;
   const st = _dpAvaliacaoAtual.status;
   if (st === 'concluida' || st === 'publicada') return true;
+  // ── INSTRUMENTAÇÃO TEMPORÁRIA — remover após medir ──────────────────
+  const _navT0 = performance.now();
+  console.group('%c[DP] Salvamento automático (navegação)', 'color:#d97706;font-weight:bold');
+  // ────────────────────────────────────────────────────────────────────
 
   const avalId   = _dpAvaliacaoAtual.id;
   const payloads = [];
@@ -6365,12 +6395,22 @@ async function _dpSalvarParaNavegar() {
 
   // Upsert em lote — 1 requisição no lugar de N sequenciais
   if (payloads.length) {
-    const savedResps = await sbUpsert('/rest/v1/dp_respostas?on_conflict=avaliacao_id,versao_criterio_id', payloads);
+    // ── INSTRUMENTAÇÃO ──
+    const _navUpsert = performance.now();
+    const savedResps = await _dpUpsertMinimal('/rest/v1/dp_respostas?on_conflict=avaliacao_id,versao_criterio_id', payloads);
+    console.log(`[DP] nav-save: upsert dp_respostas (${payloads.length} itens) → ${(performance.now()-_navUpsert).toFixed(0)} ms`);
     if (!savedResps) {
       toast('Erro ao salvar antes de navegar. Permanecendo na avaliação atual.', true);
+      console.groupEnd();
       return false;
     }
-    _dpRespostasAtual = savedResps; // atualiza em memória diretamente — sem rebuscar
+    // Merge cirúrgico dos payloads em _dpRespostasAtual (sem retorno do banco — return=minimal)
+    const novo = [..._dpRespostasAtual];
+    for (const p of payloads) {
+      const idx = novo.findIndex(r => r.versao_criterio_id === p.versao_criterio_id);
+      if (idx >= 0) Object.assign(novo[idx], p); else novo.push(p);
+    }
+    _dpRespostasAtual = novo;
   }
 
   // Detecta completude via payloads (estado atual do formulário)
@@ -6380,15 +6420,22 @@ async function _dpSalvarParaNavegar() {
   ).length;
   const statusNav  = (totalCrits > 0 && respondidos >= totalCrits) ? 'respondida' : 'em_andamento';
   const patchAval  = { status: statusNav, iniciada_em: _dpAvaliacaoAtual.iniciada_em || new Date().toISOString() };
-  const resAval    = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
+  // ── INSTRUMENTAÇÃO ──
+  const _navPatch = performance.now();
+  const resAval    = await _dpPatchMinimal(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
+  console.log(`[DP] nav-save: patch dp_avaliacoes → ${(performance.now()-_navPatch).toFixed(0)} ms`);
   if (!resAval) {
     toast('Erro ao salvar antes de navegar. Permanecendo na avaliação atual.', true);
+    console.groupEnd();
     return false;
   }
   // Atualização cirúrgica em memória
   Object.assign(_dpAvaliacaoAtual, patchAval);
   const avalIdx = _dpAvaliacoes.findIndex(a => a.id === avalId);
   if (avalIdx >= 0) Object.assign(_dpAvaliacoes[avalIdx], patchAval);
+  // ── INSTRUMENTAÇÃO ──
+  console.log(`[DP] nav-save: TOTAL → ${(performance.now()-_navT0).toFixed(0)} ms`);
+  console.groupEnd();
   return true;
 }
 
@@ -6625,6 +6672,10 @@ async function salvarAvaliacao(status) {
     toast('Esta avaliação já foi concluída e não pode ser alterada.', true);
     return;
   }
+  // ── INSTRUMENTAÇÃO TEMPORÁRIA — remover após medir ──────────────────
+  const _saveT0 = performance.now();
+  console.group(`%c[DP] Salvando avaliação (status="${status}")`, 'color:#059669;font-weight:bold');
+  // ────────────────────────────────────────────────────────────────────
   const avalId = _dpAvaliacaoAtual.id;
 
   // ── 1. Coleta respostas ──────────────────────────────────────────
@@ -6678,12 +6729,22 @@ async function salvarAvaliacao(status) {
 
   // ── 3. Upsert em lote (1 requisição no lugar de N) ───────────────
   if (payloads.length) {
-    const savedResps = await sbUpsert('/rest/v1/dp_respostas?on_conflict=avaliacao_id,versao_criterio_id', payloads);
+    // ── INSTRUMENTAÇÃO ──
+    const _tUpsert = performance.now();
+    const savedResps = await _dpUpsertMinimal('/rest/v1/dp_respostas?on_conflict=avaliacao_id,versao_criterio_id', payloads);
+    console.log(`[DP] save: upsert dp_respostas (${payloads.length} itens) → ${(performance.now()-_tUpsert).toFixed(0)} ms`);
     if (!savedResps) {
       toast('Erro ao salvar respostas: ' + sbErrMsg(), true);
+      console.groupEnd();
       return; // formulário permanece aberto com dados intactos
     }
-    _dpRespostasAtual = savedResps; // atualiza memória direto do retorno
+    // Merge cirúrgico dos payloads em _dpRespostasAtual (sem retorno do banco — return=minimal)
+    const novo = [..._dpRespostasAtual];
+    for (const p of payloads) {
+      const idx = novo.findIndex(r => r.versao_criterio_id === p.versao_criterio_id);
+      if (idx >= 0) Object.assign(novo[idx], p); else novo.push(p);
+    }
+    _dpRespostasAtual = novo;
     dpAtualizarProgressoAval();
   }
 
@@ -6700,9 +6761,13 @@ async function salvarAvaliacao(status) {
   const patchAval = { status: statusEfetivo };
   if (statusEfetivo === 'concluida') patchAval.concluida_em = new Date().toISOString();
   else patchAval.iniciada_em = _dpAvaliacaoAtual.iniciada_em || new Date().toISOString();
-  const resAval = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
+  // ── INSTRUMENTAÇÃO ──
+  const _tPatch = performance.now();
+  const resAval = await _dpPatchMinimal(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
+  console.log(`[DP] save: patch dp_avaliacoes (status="${statusEfetivo}") → ${(performance.now()-_tPatch).toFixed(0)} ms`);
   if (!resAval) {
     toast('Erro ao atualizar status da avaliação: ' + sbErrMsg(), true);
+    console.groupEnd();
     return; // não navega — respostas já foram salvas, status será corrigido no retry
   }
 
@@ -6719,8 +6784,12 @@ async function salvarAvaliacao(status) {
     dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', avalId, { colaborador: partSnap.nome });
   }
 
+  // ── INSTRUMENTAÇÃO ──
+  console.log(`[DP] save: TOTAL até modal fechar → ${(performance.now()-_saveT0).toFixed(0)} ms`);
+  console.groupEnd();
   fecharFormAval();
   // Deferir re-render para o próximo tick — modal fecha imediatamente, lista atualiza logo após
+  const _tRerender = performance.now();
   setTimeout(() => {
     _dpRenderAvaliacoesComFiltro();
     if (_gdpCicloAtual) {
@@ -6738,6 +6807,8 @@ async function salvarAvaliacao(status) {
         hideAvaliarWhenDone: true
       });
     }
+    // ── INSTRUMENTAÇÃO ──
+    console.log(`%c[DP] save: re-render lista (setTimeout) → ${(performance.now()-_tRerender).toFixed(0)} ms`, 'color:#6b7280');
   }, 0);
 }
 
