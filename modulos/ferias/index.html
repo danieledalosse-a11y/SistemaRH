@@ -8852,6 +8852,9 @@ function _rhEhRecente(h) {
   const _reg = COLABORADORES.flatMap(c => c.registros)
                              .find(r => String(r._sbId) === String(h.ferias_id));
   if (!_reg || _reg.status === 'Descartado') return false;
+  // Fallback: status do banco como fonte de verdade (cobre histórico incompleto ou falha de _logAtiv)
+  const _statusPendente = { solicitado: 'Pendente', cancelamento_solicitado: 'Cancelamento', alteracao_solicitada: 'Alteracao' };
+  if (_reg.status !== _statusPendente[acao]) return false;
   return !respostas[acao].some(r =>
     FERIAS_HISTORICO.some(x => x.ferias_id === h.ferias_id && (x.acao || '').toLowerCase() === r)
   );
