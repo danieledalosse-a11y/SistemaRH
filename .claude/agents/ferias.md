@@ -103,6 +103,25 @@ Todos os helpers compartilhados ficam **agrupados antes de `_ganttPrepararLancs`
 ### `ferias`
 `id, colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status, dias_antecipados, abono_pecuniario` + colunas de lançamentos + `periodos` JSONB
 
+#### Campo `ano` — convenção e integridade
+
+**Convenção obrigatória:** `ano = Number(pa_fim.slice(0, 4))` — sempre o ano em que o PA termina.  
+Ambas as funções de criação (`autocriarPasFaltantes` e `gestorSolicitarNovoPa`) já seguem essa regra.
+
+**Divergência RH × Gestor causada por `ano` errado:**
+- `supabaseParaModelo` (RH) renderiza cada row separadamente → dois rows com `ano=2026` aparecem como dois "PA 2026"
+- `processGestorFerias` (Gestor) deduplica por `colaborador_id|ano` via `_periodoKeys` → mantém só um
+- Resultado: RH mostra duplicata, Gestor esconde o PA real
+
+**Anomalias conhecidas (import histórico) — aguardando análise antes de corrigir:**
+
+| id | colab | ano campo | pa_fim | tipo | impacto |
+|---|---|---|---|---|---|
+| 923 | 1605 | 2020 | 2019-04-16 | +1 ano | Sem duplicata (sem PA 2019 rival) |
+| 924 | 1605 | 2021 | 2020-04-16 | +1 ano | **Duplicata PA 2021** com id=925 |
+| 939 | 1608 | 2025 | 2024-02-17 | +1 ano | Duplicata PA com id=938 (mesmo pa) |
+| 1294 | 1751 | 2027 | 2026-05-04 | +1 ano | PA 2027 fantasma (pa_fim=2026) |
+
 #### Coluna `periodos` JSONB (migration 073, 2026-10-09 — executada em produção)
 
 Fonte de verdade para períodos de férias após 2026-10-09.
@@ -3686,9 +3705,12 @@ function gestorAbrirModalAltSol(colabId, periodoId, lancId) {
 1. Lê `periodos[]` da row atual (`per._feriasRow`) ou reconstrói de `GESTOR_LANCAMENTOS` (fallback registros antigos)
 2. Chama `_encontrarPeriodoSolicitado` para localizar o período pelo `ctx.inicio`
 3. Atualiza `periodos[idx].inicio` e `periodos[idx].fim` com as novas datas
-4. PATCH condicional: filtro `id=eq.{periodoId}&status=eq.Pendente`
+4. PATCH condicional: filtro `id=eq.{periodoId}&status=eq.Pendente`  
+   **Também sincroniza flat fields (commit 1f01f91):** `patchData` inclui `periodo1_*` ou `periodo2_*` conforme `ctx.slot`
 5. Se retornar array vazio → conflito de concorrência (toast de erro, sem atualizar memória local)
 6. Se sucesso → atualiza memória local SOMENTE a partir do `_rowsAltSol[0]` retornado pelo banco
+
+**Motivo da sincronização:** antes de 1f01f91, alterar datas de uma solicitação pendente atualizava apenas `periodos[]`, deixando os flat fields com os valores da solicitação original. Ao combinar retirada + nova solicitação em fluxos rápidos, essa divergência podia causar inconsistência entre as visões RH e Gestor.
 
 **TextContent do botão no catch:** `ctx?._modoSolicitado ? 'Alterar datas' : 'Enviar para RH aprovar'`
 
@@ -3726,6 +3748,15 @@ const novoStatus = _restaSolicit
 // Se não há mais solicitados e o PA não está em outro estado protegido → volta a Aprovado
 if (!_restaSolicit) patchData.obs_gestor = null;
 ```
+
+**Sincronização de flat fields (commit 1f01f91):**
+Além de atualizar `periodos[]`, o PATCH também limpa os flat fields do slot retirado:
+```js
+const _slotRetirada = String(lancId).endsWith('-p2') ? 'p2' : 'p1';
+if (_slotRetirada === 'p1') { patchData.periodo1_inicio = null; patchData.periodo1_fim = null; patchData.dias1 = 0; }
+else { patchData.periodo2_inicio = null; patchData.periodo2_fim = null; patchData.dias2 = 0; }
+```
+**Motivo:** antes dessa correção, o PATCH atualizava `periodos[]` mas deixava os flat fields com as datas antigas, gerando inconsistência entre os dois mecanismos de leitura.
 
 **PATCH condicional:** filtro `id=eq.{feriasId}&status=eq.Pendente` com `Prefer: return=representation`. Array vazio na resposta = conflito (outra sessão modificou o registro).
 
