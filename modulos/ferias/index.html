@@ -11925,14 +11925,18 @@ function gestorAbrirModal(colabId, periodoId, slotRemarcar, lancRecusado) {
     ? `${gestorFmtData(periodo.pa_inicio)} — ${gestorFmtData(periodo.pa_fim)}`
     : (periodo.data_inicio ? gestorFmtData(periodo.data_inicio) : '—');
   const saldo = gestorSaldoPeriodo(periodo);
+  const _diasSolPend = GESTOR_LANCAMENTOS
+    .filter(l => String(l.periodo_id) === String(periodo.id) && (l.status||'').toLowerCase() === 'solicitado')
+    .reduce((s, l) => s + (Number(l.dias) || 0), 0);
+  const saldoDisp = Math.max(0, saldo - _diasSolPend);
 
   document.getElementById('mgPA').textContent    = paLabel;
-  document.getElementById('mgSaldo').textContent = `${saldo} dias`;
+  document.getElementById('mgSaldo').textContent = `${saldoDisp} dias${_diasSolPend > 0 ? ` (${_diasSolPend}d aguardando aprovação)` : ''}`;
   document.getElementById('mgVenc').textContent  = periodo.data_fim_gozo ? gestorFmtData(periodo.data_fim_gozo) : '—';
-  document.getElementById('mgDias').max           = saldo;
-  document.getElementById('mgDiasHint').textContent = saldo > 0 ? `máx. ${saldo}` : '';
+  document.getElementById('mgDias').max           = saldoDisp;
+  document.getElementById('mgDiasHint').textContent = saldoDisp > 0 ? `máx. ${saldoDisp}` : '';
   document.getElementById('mgInicio').value       = '';
-  document.getElementById('mgDias').value         = saldo > 0 ? saldo : '';
+  document.getElementById('mgDias').value         = saldoDisp > 0 ? saldoDisp : '';
   document.getElementById('mgRetorno').value      = '';
   document.getElementById('mgBarFill').style.width = '0%';
   document.getElementById('mgBarPct').textContent  = '—';
@@ -12417,26 +12421,21 @@ async function gestorEnviarSolicitacao() {
     }
   }
   const saldo = gestorSaldoPeriodo(periodo);
-  if (diasVal > saldo) { toast('Dias ultrapassam o saldo disponível.'); return; }
-
-  const fim = addDays(inicio, diasVal - 1);
-
-  // Validação: já existe solicitação pendente para este PA (qualquer slot)
-  const jaSolicitado = GESTOR_LANCAMENTOS.some(l =>
-    String(l.periodo_id) === String(periodo.id) &&
-    (l.status||'').toLowerCase() === 'solicitado'
-  );
-  if (jaSolicitado) {
+  const _pendDias = GESTOR_LANCAMENTOS
+    .filter(l => String(l.periodo_id) === String(periodo.id) && (l.status||'').toLowerCase() === 'solicitado')
+    .reduce((s, l) => s + (Number(l.dias) || 0), 0);
+  const saldoDispEnvio = Math.max(0, saldo - _pendDias);
+  if (diasVal > saldoDispEnvio) {
     const erroEl = document.getElementById('mgErro');
-    if (erroEl) {
-      erroEl.textContent = 'Já existe uma solicitação aguardando aprovação do RH para este período. Aguarde a resposta antes de enviar novamente.';
-      erroEl.classList.add('show');
-      setTimeout(() => erroEl.classList.remove('show'), 6000);
-    } else {
-      toast('Já existe uma solicitação pendente para este PA.');
-    }
+    const _msg = _pendDias > 0
+      ? `Dias ultrapassam o saldo disponível. Saldo: ${saldo}d, sendo ${_pendDias}d já solicitados (aguardando aprovação). Disponível: ${saldoDispEnvio}d.`
+      : 'Dias ultrapassam o saldo disponível.';
+    if (erroEl) { erroEl.textContent = _msg; erroEl.classList.add('show'); setTimeout(() => erroEl.classList.remove('show'), 7000); }
+    else toast(_msg);
     return;
   }
+
+  const fim = addDays(inicio, diasVal - 1);
 
   // Validação: datas idênticas a qualquer lançamento recusado deste PA
   const lancRecusado = _gestorColabSolicitando._lancRecusado;
