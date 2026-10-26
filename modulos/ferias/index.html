@@ -6027,11 +6027,24 @@ async function aprovarPendente() {
       }
       reg._periodos = _periosAprov;
     }
+    // Captura datas antes de zerar _novoLanc
+    const _lancAprovDet = reg._novoLanc ? { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias } : {};
     reg.lancamentos.push({ ...reg._novoLanc });
     reg._novoLanc = null;
     reg.status = 'Aprovado';
+    // Registra aprovação no histórico
+    const _perfAprov = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+    let _histFalhouAprov = false;
+    if (reg._sbId && colab._sbColabId) {
+      try { await _logAtiv(reg._sbId, colab._sbColabId, 'aprovado', _perfAprov.nome || 'RH', { ..._lancAprovDet, aprovado_por: _perfAprov.nome || 'RH' }); }
+      catch(e) { _histFalhouAprov = true; console.error('[_logAtiv aprovado]', e); }
+    }
+    if (colab._sbColabId) {
+      try { await _logColabHist(colab._sbColabId, 'ferias_aprovadas', `Férias aprovadas${_lancAprovDet.inicio ? ': ' + formatDate(_lancAprovDet.inicio) + ' → ' + formatDate(_lancAprovDet.fim) + ' (' + _lancAprovDet.dias + 'd)' : ''}`, _perfAprov.nome || 'RH'); }
+      catch(e) { console.warn('[_logColabHist ferias_aprovadas]', e); }
+    }
     document.getElementById('modalAprovar').classList.remove('open');
-    toast(`✓ Férias aprovadas — ${colab.nome}`);
+    toast(_histFalhouAprov ? `✓ Férias aprovadas — ${colab.nome} (histórico não registrado)` : `✓ Férias aprovadas — ${colab.nome}`, _histFalhouAprov ? 'aviso' : '');
     renderAll();
   } catch(e) {
     toast('Erro ao salvar aprovação: ' + e.message, 'erro');
