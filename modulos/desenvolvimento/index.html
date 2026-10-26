@@ -5877,16 +5877,15 @@ function _dpFiltrarParticipantes(lista, nome, cargos) {
 function _dpFiltrarPorStatus(lista, status, avaliacoes) {
   if (!status) return lista;
   if (status === 'nao_participa') return lista.filter(p => p.nao_participa);
-  console.log('[DP-FILTER] chamado, status:', status, 'lista:', lista.length, 'avals:', avaliacoes.length);
+  // Usa Maps (última entrada vence em chave duplicada) — idêntico ao dpRenderAvaliacoes
+  const avalByPartId  = new Map(avaliacoes.map(a => [a.participante_id, a]));
+  const avalByColabId = new Map(avaliacoes.map(a => [a.colaborador_id, a]));
   return lista.filter(p => {
     if (p.nao_participa) return false;
-    const avalByPart  = avaliacoes.find(a => a.participante_id === p.id);
-    const avalByColab = avaliacoes.find(a => a.colaborador_id === p.colaborador_id);
-    const aval = avalByPart || avalByColab;
+    const aval = avalByPartId.get(p.id) || avalByColabId.get(p.colaborador_id);
     const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
-    const passes = status === 'concluida' ? (st === 'concluida' || st === 'publicada') : st === status;
-    console.log('[DP-FILTER]', (p.snapshot||{}).nome, '| p.id:', p.id, typeof p.id, '| p.col_id:', p.colaborador_id, typeof p.colaborador_id, '| avalByPart:', avalByPart?.id, avalByPart?.status, '| avalByColab:', avalByColab?.id, avalByColab?.status, '| st:', st, '| passes:', passes);
-    return passes;
+    if (status === 'concluida') return st === 'concluida' || st === 'publicada';
+    return st === status;
   });
 }
 
@@ -7872,8 +7871,11 @@ function _dpSomaBonus(avaliacoes, resultados, bonuses, participantes) {
 function _dpStatusCounts(participantes, avaliacoes) {
   const ativos = participantes.filter(p => !p.nao_participa);
   const counts = { nao_iniciada: 0, em_andamento: 0, respondida: 0, concluida: 0, nao_participa: 0 };
+  // Usa Maps (última entrada vence em chave duplicada) — idêntico ao dpRenderAvaliacoes
+  const avalByPartId  = new Map(avaliacoes.map(a => [a.participante_id, a]));
+  const avalByColabId = new Map(avaliacoes.map(a => [a.colaborador_id, a]));
   ativos.forEach(p => {
-    const aval = avaliacoes.find(a => a.participante_id === p.id) || avaliacoes.find(a => a.colaborador_id === p.colaborador_id);
+    const aval = avalByPartId.get(p.id) || avalByColabId.get(p.colaborador_id);
     const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
     if (st === 'concluida' || st === 'publicada') counts.concluida++;
     else if (st === 'respondida') counts.respondida++;
