@@ -165,7 +165,7 @@ Tabela de auditoria imutável — nunca editada, só recebe INSERT.
 | `acao` | Origem | Detalhe |
 |---|---|---|
 | `'solicitado'` | Gestor (autoatendimento) | `{ inicio, fim, dias, slot }` |
-| `'aprovado'` | RH | `{ status: 'Aprovado' }` |
+| `'aprovado'` | RH (`aprovarPendente` fluxo padrão — commit `177d847`, 26/10/2026) | `{ inicio, fim, dias, aprovado_por }` |
 | `'rejeitado'` | RH | `{ status, obs_gestor }` |
 | `'gozo_solicitado'` | Gestor | `{ saida, retorno, dias, lancIdx }` |
 | `'gozo_aprovado'` | RH | `{ saida, dias, lancIdx }` |
@@ -1175,6 +1175,7 @@ toast(_histFalhouXxx ? '✓ Operação — histórico não registrado, contate o
 | `rhAprovarGozoPendente` | `'gozo_aprovado'` | `_histFalhouGozo` | `perfil.nome \|\| 'RH'` |
 | `rhAprovarSolicitado` | `'aprovado'` | `_histFalhouAprov` | `perfil.nome \|\| 'RH'` |
 | `rhRecusarSolicitado` | `'rejeitado'` | `_histFalhouRec` | `perfil.nome \|\| 'RH'` |
+| `aprovarPendente` (**fluxo padrão** — commit `177d847`) | `'aprovado'` | `_histFalhouAprov` | `perfil.nome \|\| 'RH'` |
 | `aprovarPendente` (alteração) | `'alteracao_aprovada'` | `_histFalhouAlt` | `perfil.nome \|\| 'RH'` |
 | `aprovarPendente` (cancelamento) | `'cancelamento_aprovado'` | `_histFalhouCancAprov` | `perfil.nome \|\| 'RH'` |
 | `rejeitarPendente` (alteração) | `'alteracao_recusada'` | `_histFalhouAltRec` | `perfil.nome \|\| 'RH'` |
@@ -1221,9 +1222,13 @@ async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
 
 **Dedup natural:** após INSERT bem-sucedido, `_gestorAgruparProcessos` elege `gestor_ciente` como evento mais recente → `_gestorProcessoInfo` retorna `ativo: false` → item sai de "Atividade Recente" → botão nunca é renderizado novamente.
 
-**Ações que exibem o botão Ciente** (`_DESFECHOS_RH`):
+**Ações que exibem o botão Ciente** (`_DESFECHOS_RH` + fallback):
 ```js
 const _DESFECHOS_RH = new Set(['aprovado','alteracao_aprovada','rejeitado','alteracao_recusada','cancelamento_aprovado','cancelamento_recusado']);
+// ehDesfecho também é true quando _gestorProcessoInfo retorna _ehDesfecho:true (fallback via ferias.status)
+const ehDesfecho = _DESFECHOS_RH.has((h.acao || '').toLowerCase()) || !!info._ehDesfecho;
+// acaoRef passada ao gestorMarcarCiente usa info._acaoEfetiva (fallback) ou h.acao (normal)
+const _acaoParaCiente = info._acaoEfetiva || h.acao || '';
 ```
 
 ### `_normGA(s)` — helper de normalização do Histórico
@@ -1273,6 +1278,40 @@ A função `_gestorProcessoInfo(h)` recebe o evento mais recente de um processo 
 ```
 
 **Nunca** verificar data (`passou`) ou retomada (`temNovo`, `paVenc`) para decidir `ativo`. A classificação é puramente pelo tipo de ação do último evento.
+
+#### ⚠ Fallback: `ferias.status` como fonte de verdade (commits `263becd`, `4bd7b43`, `7f5dcba` — 26/10/2026)
+
+Quando `ferias_historico` não tem entrada de desfecho (registro aprovado antes do fix, ou falha silenciosa de `_logAtiv`), o sistema usa `ferias.status` para determinar se o processo foi resolvido.
+
+**`_rhEhRecente` (visão RH):** antes de verificar o histórico, checa se o status do banco ainda corresponde ao estado pendente esperado:
+
+```js
+const _statusPendente = { solicitado: 'Pendente', cancelamento_solicitado: 'Cancelamento', alteracao_solicitada: 'Alteracao' };
+if (_reg.status !== _statusPendente[acao]) return false; // já resolvido no banco
+```
+
+**`_gestorProcessoInfo` (visão Gestor):** extrai `_feriasRow.status` de `GESTOR_PERIODOS` e mapeia para o estado visual correto:
+
+```js
+const _periodo   = (GESTOR_PERIODOS || []).find(p => String(p.id) === String(h.ferias_id));
+const _rowStatus = (_periodo?._feriasRow?.status || '').toLowerCase();
+// Se status != pendente esperado, retorna desfecho mapeado com _ehDesfecho:true e _acaoEfetiva
+```
+
+O campo `_ehDesfecho: true` no retorno sinaliza para `_itemRow` que deve exibir o botão "Ciente", mesmo que `h.acao` seja `'solicitado'`. O campo `_acaoEfetiva` (`'aprovado'`, `'rejeitado'` etc.) é passado como `acaoRef` para `gestorMarcarCiente`.
+
+**Mapeamento do fallback:**
+
+| `acao` | `_rowStatus` | `estado` retornado | `_acaoEfetiva` |
+|---|---|---|---|
+| `solicitado` | `aprovado` / `agendado` | `'Aprovadas'` | `'aprovado'` |
+| `solicitado` | `rejeitado` | `'Recusadas'` | `'rejeitado'` |
+| `cancelamento_solicitado` | `cancelado` | `'Canceladas'` | `'cancelamento_aprovado'` |
+| `cancelamento_solicitado` | `aprovado` | `'Canc. recusado'` | `'cancelamento_recusado'` |
+| `alteracao_solicitada` | `aprovado` | `'Alt. aprovada'` | `'alteracao_aprovada'` |
+| `alteracao_solicitada` | `rejeitado` | `'Alt. recusada'` | `'alteracao_recusada'` |
+
+**Regra:** o fallback só dispara quando `_statusPendG[acao]` existe **E** `_rowStatus` está preenchido **E** difere do status esperado para pendente. Quando `_periodo` não existe (registro fora do escopo do gestor), `_rowStatus` é `''` → fallback não dispara → comportamento original preservado.
 
 #### `_gestorAgruparProcessos(idsPermitidos)`
 
