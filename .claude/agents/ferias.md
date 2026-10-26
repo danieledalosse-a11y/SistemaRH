@@ -1406,6 +1406,16 @@ Usa `_rhEhRecente(h)` para classificar eventos individuais (não processos agrup
 - Estados de expansão são independentes: `_rhHistExpanded` e `_gestorHistExpanded` nunca se confundem
 - Toggle inline gerado pelo helper usa `window['_rhHistExpanded']` ou `window['_gestorHistExpanded']` — ambos são `const` no escopo do módulo e acessíveis via `window`
 
+#### Toggle expand/collapse nos títulos das abas (commit `c2cd11e`, 26/10/2026)
+
+Clicar no título de uma aba **já ativa** alterna `_rhExpandido` / `_gestorExpandido` (expande/recolhe). Clicar numa aba **diferente** troca de aba e sempre expande. Comportamento idêntico em RH e Gestor. Chevron continua funcionando como alternativa.
+
+Padrão implementado (ambas as visões, variáveis trocadas conforme perfil):
+```js
+// aba ativa → toggle; aba diferente → troca + expande
+onclick="if(_rhAba==='recente'){_rhExpandido=!_rhExpandido}else{_rhAba='recente';_rhExpandido=true;_rhHistOffset=0};renderRhAtividade()"
+```
+
 **Fallback obrigatório (out/2026):** após filtrar recentes do `FERIAS_HISTORICO`, injeta itens sintéticos para cada pendente em `getPendentes()` cujo `reg._sbId` não existe em `FERIAS_HISTORICO`. Garante convergência entre o KPI "Pendentes de aprovação" e a Atividade Recente.
 
 ```js
