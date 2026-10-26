@@ -611,6 +611,50 @@ O objeto `periodo` em `GESTOR_PERIODOS` tem `dias_direito: 30` hardcoded no JS (
 
 `_sbRefreshSession()` em `modulos/cadastro/index.html` — ao detectar `JWT expired` em `sbPatch` ou `sbGet`, tenta renovar usando `refresh_token` do localStorage e refaz a chamada original. Se o refresh falhar, lança o erro normalmente.
 
+## Múltiplas solicitações por PA — Gestor (commit 16de87c · 2026-10-26)
+
+### Regra atual (após correção)
+
+O Gestor pode fazer mais de uma solicitação dentro do mesmo PA, mesmo que a anterior ainda esteja aguardando aprovação do RH. O sistema bloqueia apenas quando os dias somados ultrapassam o saldo disponível.
+
+### Implementação
+
+**Saldo disponível para o Gestor** = `gestorSaldoPeriodo(periodo)` − dias pendentes (status `solicitado`):
+
+```js
+// Modal (gestorAbrirModal) e envio (gestorEnviarSolicitacao) — cálculo independente em cada ponto
+const _diasSolPend = GESTOR_LANCAMENTOS
+  .filter(l => String(l.periodo_id) === String(periodo.id) && (l.status||'').toLowerCase() === 'solicitado')
+  .reduce((s, l) => s + (Number(l.dias) || 0), 0);
+const saldoDisp = Math.max(0, saldo - _diasSolPend);
+```
+
+**No modal:** exibe `"X dias (Yd aguardando aprovação)"` quando há pendentes; limita `mgDias.max` ao `saldoDisp`.
+
+**No envio:** erro detalhado quando `diasVal > saldoDispEnvio`:
+`"Dias ultrapassam o saldo disponível. Saldo: Xd, sendo Yd já solicitados (aguardando aprovação). Disponível: Zd."`
+
+**`gestorSaldoPeriodo`** conta apenas `['aprovado','agendado','gozado']` — `solicitado` nunca entra no saldo base, por isso a subtração de `_diasSolPend` é necessária e não duplica.
+
+### Comportamento pós-aprovação/reprovação RH
+
+- **Aprovação** (`solicitado → aprovado`): dias migram para `gestorSaldoPeriodo`; `_diasSolPend` zera. Saldo correto.
+- **Reprovação** (`solicitado → recusado`): nenhuma das duas contagens inclui `recusado`. Saldo integralmente restaurado.
+- Ambos dependem de recarregamento de `GESTOR_LANCAMENTOS` (reload da página) — comportamento preexistente.
+
+### O que foi removido
+
+Bloco `jaSolicitado` que impedia qualquer segunda solicitação enquanto havia uma `solicitado` no mesmo PA. Era independente do saldo e bloqueava casos legítimos.
+
+### Validações que permanecem intactas
+
+1. Data de início antes de hoje → bloqueado
+2. Consistência `ano` vs. `pa_fim` → bloqueado
+3. Data fora do período de concessão (`pa_inicio` … `pa_fim + 366d`) → bloqueado
+4. Datas iguais a lançamento já recusado → bloqueado
+
+---
+
 ## Validações no fluxo do Gestor (commit 22a1af1 · 2026-10-26)
 
 Aplicadas em `gestorEnviarSolicitacao` e `gestorEnviarAlteracao` (`_modoSolicitado` branch):
