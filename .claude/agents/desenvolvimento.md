@@ -464,6 +464,7 @@ async function sbPost(path,body)  { ... }
 async function sbPatch(path,body) { ... }   // herda Prefer: return=representation — use _dpPatchMinimal em saves D&P
 async function sbDelete(path)     { ... }   // já usa return=minimal
 async function sbRpc(fn, params={}) { ... } // POST /rest/v1/rpc/<fn> — retorna null em erro, popula _sbLastError
+                                             // ⚠ RPCs que retornam VOID respondem HTTP 200 com corpo VAZIO — sbRpc usa r.text() + JSON.parse condicional para não lançar SyntaxError (commit 0c379d5)
 async function sbUpsert(path,body){ ... }   // usa return=representation — use _dpUpsertMinimal em saves D&P
 ```
 
@@ -1102,6 +1103,33 @@ Usado em `dpRenderInfoCiclo` para exibir "Por gestor — ORIEL LEITE RODRIGUES" 
 | `3b5a0fb` | Correção 3: `initDpGestor()` lança erro explícito se `gestor_direto` não encontrado em `dp_tipos_avaliador`; `gestorDpAbrirFormAvaliacao` tem segunda guarda antes de criar avaliações |
 | `a78b661` | Migration 119: SELECT em `dp_historico_eventos` para gestor (ciclos + avaliações próprias) |
 | `a78b661` | Interface diretoria — `isDiretoria` adicionada ao `init()`; 5 pontos ocultam botões de ação para diretoria |
+
+## D&P — "Não participa" — entrega completa (commits 5b7648b / 0c379d5, 2026-10-26)
+
+### Problema original
+Botão ⊘ no modal "Não participa deste ciclo" não gravava. Dois bugs independentes:
+
+1. **Migrations não executadas no banco:** RPCs `dp_fn_marcar_nao_participa` e `dp_fn_reverter_nao_participa` (migration 124) retornavam PGRST202 ("function not found"). Migrations 122, 123, 125 e 124 foram executadas manualmente no Supabase Dashboard em 2026-10-26 (nessa ordem — 125 deve preceder 124 pois o enum `dp_evento_historico` precisa ter os valores antes das RPCs os usarem).
+
+2. **`sbRpc` lançava `SyntaxError` em resposta VOID (commit 0c379d5):** RPCs VOID respondem HTTP 200 com corpo vazio. O código antigo fazia `r.json()` → `SyntaxError` → `catch` de `sbRpc` → `_sbLastError` setado → modal tratava como falha. Fix: `if (r.ok) { const t = await r.text(); return t ? JSON.parse(t) : null; }`.
+
+3. **Modal fechava antes do RPC (commit 5b7648b):** overlay era removido ANTES da chamada `await sbRpc(...)`. Fix: modal fecha APÓS sucesso; erros aparecem no `#dpNpErro` (div inline acima dos botões) mantendo modal aberto.
+
+### Ordem de execução obrigatória das migrations NP
+122 → 123 → 125 → 124 (125 obrigatória antes de 124 — enum antes das RPCs)
+
+### Funções NP no código
+
+| Função | Linha aprox. | O que faz |
+|---|---|---|
+| `dpAbrirModalNaoParticipa(participanteId)` | ~7469 | Busca participante, filtra `_dpMotivosNaoParticipa.filter(m => m.ativo)`, overlay com select + textarea + `#dpNpErro` |
+| `dpConfirmarNaoParticipa(participanteId)` | ~7503 | RPC → erro exibe `#dpNpErro` sem fechar → sucesso remove overlay, atualiza otimisticamente os dois arrays, re-renderiza |
+| `dpReverterNaoParticipa(participanteId)` | ~7547 | RPC reverter → em erro toast; em sucesso atualiza estado e re-renderiza |
+| `loadDpMotivosNaoParticipa()` | ~3070 | GET `dp_param_motivos_nao_participacao?order=criado_em.asc&select=*` → `_dpMotivosNaoParticipa[]` |
+
+Variável: `let _dpMotivosNaoParticipa = []` — carregada no init RH e Gestor se vazia.
+
+---
 
 ## Melhoria: "Não participará" direto na aba Participantes (commit c30e31e, 2026-10-16)
 
