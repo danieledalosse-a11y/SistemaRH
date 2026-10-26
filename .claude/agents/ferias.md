@@ -1384,9 +1384,27 @@ O KPI era calculado por `_gestorColabsComAcordoAndamento` (função preservada) 
 
 Usa `_rhEhRecente(h)` para classificar eventos individuais (não processos agrupados):
 - **Atividade Recente:** evento sem resposta para o mesmo `ferias_id`
-- **Histórico:** evento que já teve resposta
+- **Histórico:** cards colapsáveis idênticos ao Gestor (commit `875bc6e`)
 
 > ⚠ **`renderRhAtividade()` não faz parte de `renderAll()`** — deve ser chamada explicitamente após qualquer ação que altere o status de uma solicitação. Commit `d73950b` (26/10/2026): adicionada chamada a `renderRhAtividade()` nos 6 pontos de saída de `aprovarPendente()` e `rejeitarPendente()` (fluxos padrão, alteração e cancelamento). A visão do Gestor não tinha esse problema — `renderGestorAtividade()` já era chamada em todas as ações do Gestor.
+
+#### Helper compartilhado do Histórico (commit `875bc6e`, 26/10/2026)
+
+`_renderCardHistoricoShared(g, opts)` — única implementação de card colapsável usada por ambas as visões no Histórico. Parâmetros:
+
+| Campo | RH | Gestor |
+|---|---|---|
+| `expandedSet` | `_rhHistExpanded` (Set global) | `_gestorHistExpanded` (Set global) |
+| `rerenderFn` | `'renderRhAtividade'` | `'renderGestorAtividade'` |
+| `processInfoFn` | `_rhProcessoInfo` | `_gestorProcessoInfo` |
+
+`_rhProcessoInfo(h)`: adapta `_acaoInfo(h.acao)` (retorna `{cls, chip, svg}`) para o formato `{cls, estado, inicio, fim, dias, motivo}` extraindo datas e motivo de `h.detalhe`.
+
+**Regras de uso:**
+- Nunca reimplementar o card colapsável do Histórico em nenhuma visão — sempre passar opts para o helper
+- A aba "Atividade Recente" **não usa** o helper — continua com `_itemRow` flat em ambas as visões
+- Estados de expansão são independentes: `_rhHistExpanded` e `_gestorHistExpanded` nunca se confundem
+- Toggle inline gerado pelo helper usa `window['_rhHistExpanded']` ou `window['_gestorHistExpanded']` — ambos são `const` no escopo do módulo e acessíveis via `window`
 
 **Fallback obrigatório (out/2026):** após filtrar recentes do `FERIAS_HISTORICO`, injeta itens sintéticos para cada pendente em `getPendentes()` cujo `reg._sbId` não existe em `FERIAS_HISTORICO`. Garante convergência entre o KPI "Pendentes de aprovação" e a Atividade Recente.
 
