@@ -12242,6 +12242,16 @@ async function gestorEnviarAlteracao() {
     if (ctx._modoSolicitado) {
       const per    = GESTOR_PERIODOS.find(p => String(p.id) === String(ctx.periodoId));
       const row    = per?._feriasRow || {};
+      // Validação: consistência do campo ano vs. pa_fim (impede uso de registros com dados corrompidos)
+      const _anoEspAlt = Number((row.pa_fim || '').slice(0, 4));
+      const _anoRegAlt = Number(row.ano);
+      if (_anoEspAlt && _anoRegAlt && _anoEspAlt !== _anoRegAlt) {
+        erroEl.textContent   = `Este registro possui inconsistência de dados (PA ${_anoRegAlt} com fim em ${formatDate(row.pa_fim)}). Contate o RH para corrigir antes de alterar.`;
+        erroEl.style.display = '';
+        btn.disabled    = false;
+        btn.textContent = 'Alterar datas';
+        return;
+      }
       const perArr = Array.isArray(row.periodos) && row.periodos.length > 0
         ? [...row.periodos]
         : GESTOR_LANCAMENTOS
@@ -12381,6 +12391,28 @@ async function gestorEnviarSolicitacao() {
       toast('Não é possível agendar férias para um período já passado. Verifique o ano informado.');
     }
     return;
+  }
+  // Validação: consistência do campo ano vs. pa_fim
+  const _fRow = periodo._feriasRow || {};
+  const _anoEsperadoSol = Number((_fRow.pa_fim || '').slice(0, 4));
+  const _anoRegistroSol = Number(_fRow.ano);
+  if (_anoEsperadoSol && _anoRegistroSol && _anoEsperadoSol !== _anoRegistroSol) {
+    const erroEl = document.getElementById('mgErro');
+    const _msg = `Este registro possui inconsistência de dados (PA ${_anoRegistroSol} com fim em ${formatDate(_fRow.pa_fim)}). Contate o RH para corrigir antes de solicitar.`;
+    if (erroEl) { erroEl.textContent = _msg; erroEl.classList.add('show'); setTimeout(() => erroEl.classList.remove('show'), 8000); }
+    else toast(_msg);
+    return;
+  }
+  // Validação: data de início dentro do período de concessão (pa_inicio → pa_fim + 366 dias)
+  if (_fRow.pa_inicio && _fRow.pa_fim) {
+    const _fimConcessao = addDays(_fRow.pa_fim, 366);
+    if (inicio < _fRow.pa_inicio || inicio > _fimConcessao) {
+      const erroEl = document.getElementById('mgErro');
+      const _msg = `A data de início deve estar dentro do período de concessão: ${formatDate(_fRow.pa_inicio)} a ${formatDate(_fimConcessao)}.`;
+      if (erroEl) { erroEl.textContent = _msg; erroEl.classList.add('show'); setTimeout(() => erroEl.classList.remove('show'), 8000); }
+      else toast(_msg);
+      return;
+    }
   }
   const saldo = gestorSaldoPeriodo(periodo);
   if (diasVal > saldo) { toast('Dias ultrapassam o saldo disponível.'); return; }
