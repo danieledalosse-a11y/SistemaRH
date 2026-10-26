@@ -9055,79 +9055,12 @@ function renderGestorAtividade() {
       return latB.localeCompare(latA);
     });
 
-    const _renderCardGestor = g => {
-      const cid   = String(g.colab?.id || g.eventos[0]?.colaborador_id || '');
-      const nome  = g.colab ? g.colab.nome : '—';
-      const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
-      const expandido = _gestorHistExpanded.has(cid);
-
-      // Subagrupamento por ferias_id — cada processo vira um bloco de timeline
-      const procMap = new Map();
-      g.eventos.forEach(h => {
-        const pid = String(h.ferias_id);
-        if (!procMap.has(pid)) procMap.set(pid, []);
-        procMap.get(pid).push(h);
-      });
-      // Cada bloco: eventos em ordem cronológica (do mais antigo ao mais recente)
-      procMap.forEach(evts => evts.sort((a, b) => (a.criado_em || '').localeCompare(b.criado_em || '')));
-      // Processos mais recentes primeiro
-      const processosArr = [...procMap.values()].sort((a, b) =>
-        (b[b.length - 1]?.criado_em || '').localeCompare(a[a.length - 1]?.criado_em || ''));
-
-      // Resumo visível no header mesmo quando colapsado
-      const ultimoInfo = _gestorProcessoInfo(processosArr[0]?.[processosArr[0].length - 1] || g.eventos[0]);
-      const nProc = processosArr.length;
-      const resumoHeader = `<span class="gstor-ativ-chip ${ultimoInfo.cls}" style="font-size:10px;padding:2px 7px;">${ultimoInfo.estado}</span>`
-        + (nProc > 1 ? `<span style="font-size:11px;color:var(--text-sec);margin-left:6px;">+${nProc - 1} processo${nProc > 2 ? 's' : ''}</span>` : '');
-
-      const chevronSvg = expandido
-        ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`
-        : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
-
-      let processoBlocos = '';
-      if (expandido) {
-        processoBlocos = processosArr.map((evts, pIdx) => {
-          const infoComPer = evts.map(h => _gestorProcessoInfo(h)).find(i => i.inicio && i.fim);
-          const headerPer = infoComPer
-            ? `<div style="font-size:12px;color:var(--text-sec);margin-bottom:4px;">${fmtD(infoComPer.inicio)} → ${fmtD(infoComPer.fim)}${infoComPer.dias ? ' · ' + infoComPer.dias + 'd' : ''}</div>`
-            : '';
-
-          const eventoRows = evts.map(h => {
-            const info = _gestorProcessoInfo(h);
-            const tsLine = h.criado_em
-              ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>`
-              : '';
-            const motivoLine = info.motivo
-              ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${info.motivo}</div>`
-              : '';
-            return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
-              <div class="gstor-ativ-icon ${info.cls}" style="width:20px;height:20px;min-width:20px;margin-top:1px;">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
-              <div style="flex:1;min-width:0;">
-                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                  <span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>
-                </div>
-                ${tsLine}${motivoLine}
-              </div>
-            </div>`;
-          }).join('');
-
-          const sep = pIdx > 0 ? '<div style="height:1px;background:var(--border);margin:6px 0 8px;"></div>' : '';
-          return `${sep}${headerPer ? `<div style="padding:0 12px;">${headerPer}</div>` : ''}<div style="padding:0 12px 2px;">${eventoRows}</div>`;
-        }).join('');
-      }
-
-      const toggleFn = `(function(cid){if(_gestorHistExpanded.has(cid))_gestorHistExpanded.delete(cid);else _gestorHistExpanded.add(cid);renderGestorAtividade();}('${cid}'))`;
-      return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
-        <div onclick="${toggleFn}" style="padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;">
-          <div style="flex:1;min-width:0;">
-            <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">${resumoHeader}</div>
-          </div>
-          <div style="color:var(--text-sec);flex-shrink:0;">${chevronSvg}</div>
-        </div>
-        ${expandido ? `<div style="border-top:1px solid var(--border);padding:0 0 4px;">${processoBlocos}</div>` : ''}
-      </div>`;
-    };
+    const _renderCardGestor = g => _renderCardHistoricoShared(g, {
+      expandedSet:   _gestorHistExpanded,
+      rerenderFn:    'renderGestorAtividade',
+      processInfoFn: _gestorProcessoInfo,
+      fmtD, fmtDH,
+    });
 
     const pagina = gruposArr.slice(0, _gestorHistOffset + _HIST_PAGE);
     const temMais = gruposArr.length > pagina.length;
@@ -9163,6 +9096,97 @@ function renderGestorAtividade() {
   </div>`;
 
   el.innerHTML = `<div class="gstor-ativ-wrap">${headerHtml}${_gestorExpandido ? conteudo : ''}</div>`;
+}
+
+// ─── Helper compartilhado: card colapsável do Histórico (RH e Gestor) ────────
+const _rhHistExpanded = new Set(); // estado de expansão independente do RH
+
+function _renderCardHistoricoShared(g, opts) {
+  // opts: { expandedSet, toggleFnName, rerenderFn, processInfoFn, fmtD, fmtDH }
+  const { expandedSet, rerenderFn, processInfoFn, fmtD, fmtDH } = opts;
+  const cid     = String(g.colab?.id || g.eventos[0]?.colaborador_id || '');
+  const nome    = g.colab ? g.colab.nome : '—';
+  const cargo   = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
+  const expandido = expandedSet.has(cid);
+
+  // Subagrupamento por ferias_id — cada processo vira um bloco de timeline
+  const procMap = new Map();
+  g.eventos.forEach(h => {
+    const pid = String(h.ferias_id);
+    if (!procMap.has(pid)) procMap.set(pid, []);
+    procMap.get(pid).push(h);
+  });
+  procMap.forEach(evts => evts.sort((a, b) => (a.criado_em || '').localeCompare(b.criado_em || '')));
+  const processosArr = [...procMap.values()].sort((a, b) =>
+    (b[b.length - 1]?.criado_em || '').localeCompare(a[a.length - 1]?.criado_em || ''));
+
+  // Resumo visível no header mesmo colapsado
+  const ultimoInfo = processInfoFn(processosArr[0]?.[processosArr[0].length - 1] || g.eventos[0]);
+  const nProc = processosArr.length;
+  const resumoHeader = `<span class="gstor-ativ-chip ${ultimoInfo.cls}" style="font-size:10px;padding:2px 7px;">${ultimoInfo.estado}</span>`
+    + (nProc > 1 ? `<span style="font-size:11px;color:var(--text-sec);margin-left:6px;">+${nProc - 1} processo${nProc > 2 ? 's' : ''}</span>` : '');
+
+  const chevronSvg = expandido
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
+
+  let processoBlocos = '';
+  if (expandido) {
+    processoBlocos = processosArr.map((evts, pIdx) => {
+      const infoComPer = evts.map(h => processInfoFn(h)).find(i => i.inicio && i.fim);
+      const headerPer = infoComPer
+        ? `<div style="font-size:12px;color:var(--text-sec);margin-bottom:4px;">${fmtD(infoComPer.inicio)} → ${fmtD(infoComPer.fim)}${infoComPer.dias ? ' · ' + infoComPer.dias + 'd' : ''}</div>`
+        : '';
+      const eventoRows = evts.map(h => {
+        const info = processInfoFn(h);
+        const det  = h.detalhe || {};
+        const tsLine = h.criado_em
+          ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>`
+          : '';
+        const motivoLine = (info.motivo || det.motivo || det.obs_gestor)
+          ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${info.motivo || det.motivo || det.obs_gestor}</div>`
+          : '';
+        return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
+          <div class="gstor-ativ-icon ${info.cls}" style="width:20px;height:20px;min-width:20px;margin-top:1px;">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span class="gstor-ativ-chip ${info.cls}">${info.estado || info.chip || info.cls}</span>
+            </div>
+            ${tsLine}${motivoLine}
+          </div>
+        </div>`;
+      }).join('');
+      const sep = pIdx > 0 ? '<div style="height:1px;background:var(--border);margin:6px 0 8px;"></div>' : '';
+      return `${sep}${headerPer ? `<div style="padding:0 12px;">${headerPer}</div>` : ''}<div style="padding:0 12px 2px;">${eventoRows}</div>`;
+    }).join('');
+  }
+
+  const toggleFn = `(function(cid,fn){var s=window['${expandedSet === _rhHistExpanded ? '_rhHistExpanded' : '_gestorHistExpanded'}'];if(s.has(cid))s.delete(cid);else s.add(cid);window[fn]();}('${cid}','${rerenderFn}'))`;
+  return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
+    <div onclick="${toggleFn}" style="padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;">
+      <div style="flex:1;min-width:0;">
+        <div><span class="gstor-ativ-nome">${nome}</span>${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">${resumoHeader}</div>
+      </div>
+      <div style="color:var(--text-sec);flex-shrink:0;">${chevronSvg}</div>
+    </div>
+    ${expandido ? `<div style="border-top:1px solid var(--border);padding:0 0 4px;">${processoBlocos}</div>` : ''}
+  </div>`;
+}
+
+function _rhProcessoInfo(h) {
+  // Adapta _acaoInfo (cls/chip/svg) para o formato {cls, estado, inicio, fim, dias, motivo}
+  // esperado pelo helper compartilhado do histórico
+  const { cls, chip } = _acaoInfo(h.acao || '');
+  const det = h.detalhe || {};
+  return {
+    cls,
+    estado: chip,
+    inicio: det.inicio || det.novo_inicio || null,
+    fim:    det.fim    || det.novo_fim    || null,
+    dias:   det.dias   || null,
+    motivo: det.motivo || det.obs_gestor  || null,
+  };
 }
 
 // ─── Atividade recente — Visão RH ────────────────────────────────────────────
@@ -9252,48 +9276,12 @@ function renderRhAtividade() {
     if (busca) gruposArr = gruposArr.filter(g => g.colab ? _norm(g.colab.nome).includes(busca) : false);
     gruposArr.sort((a, b) => (b.eventos[0]?.criado_em || '').localeCompare(a.eventos[0]?.criado_em || ''));
 
-    const _renderCardRH = g => {
-      const nome  = g.colab ? g.colab.nome : '—';
-      const cargo = g.colab ? [g.colab.cargo, g.colab.setor].filter(Boolean).join(' · ') : '';
-      const pares = g.eventos
-        .map(h => { const d = h.detalhe || {}; return (d.inicio && d.fim) ? `${d.inicio}|${d.fim}` : null; })
-        .filter(Boolean);
-      const unicos = [...new Set(pares)];
-      const periodoUnico = unicos.length === 1;
-      let headerPer = '';
-      if (periodoUnico) {
-        const [ini, fim] = unicos[0].split('|');
-        headerPer = `<div style="font-size:12px;color:var(--text-sec);margin-top:2px;">${fmtD(ini)} → ${fmtD(fim)}</div>`;
-      }
-      const eventoRows = g.eventos.map(h => {
-        const { cls, chip, svg } = _acaoInfo(h.acao || '');
-        const det = h.detalhe || {};
-        const ts  = h.criado_em ? `${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}` : '';
-        let perInline = '';
-        if (!periodoUnico && det.inicio && det.fim) {
-          perInline = `<span style="font-size:11px;color:var(--text-sec);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap;">📅 ${fmtD(det.inicio)} → ${fmtD(det.fim)}</span>`;
-        }
-        const motivoEvento = det.motivo || det.obs_gestor;
-        return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--border);">
-          <div class="gstor-ativ-icon ${cls}" style="width:20px;height:20px;min-width:20px;margin-top:1px;">${svg}</div>
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              <span class="gstor-ativ-chip ${cls}">${chip}</span>${perInline}
-            </div>
-            ${ts ? `<div class="gstor-ativ-ts">${ts}</div>` : ''}
-            ${motivoEvento ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${motivoEvento}</div>` : ''}
-          </div>
-        </div>`;
-      }).join('');
-      return `<div style="border:1px solid var(--border);border-radius:8px;margin:0 12px 8px;background:var(--surface);overflow:hidden;">
-        <div style="padding:10px 12px;">
-          <span class="gstor-ativ-nome">${nome}</span>
-          ${cargo ? `<span class="gstor-ativ-cargo">${cargo}</span>` : ''}
-          ${headerPer}
-        </div>
-        <div style="padding:0 12px 4px;">${eventoRows}</div>
-      </div>`;
-    };
+    const _renderCardRH = g => _renderCardHistoricoShared(g, {
+      expandedSet:   _rhHistExpanded,
+      rerenderFn:    'renderRhAtividade',
+      processInfoFn: _rhProcessoInfo,
+      fmtD, fmtDH,
+    });
 
     const pagina = gruposArr.slice(0, _rhHistOffset + _HIST_PAGE);
     const temMais = gruposArr.length > pagina.length;
