@@ -113,14 +113,16 @@ Ambas as funções de criação (`autocriarPasFaltantes` e `gestorSolicitarNovoP
 - `processGestorFerias` (Gestor) deduplica por `colaborador_id|ano` via `_periodoKeys` → mantém só um
 - Resultado: RH mostra duplicata, Gestor esconde o PA real
 
-**Anomalias conhecidas (import histórico) — aguardando análise antes de corrigir:**
+**Anomalias do import histórico — todas corrigidas em 2026-10-26:**
 
-| id | colab | ano campo | pa_fim | tipo | impacto |
-|---|---|---|---|---|---|
-| 923 | 1605 | 2020 | 2019-04-16 | +1 ano | Sem duplicata (sem PA 2019 rival) |
-| 924 | 1605 | 2021 | 2020-04-16 | +1 ano | **Duplicata PA 2021** com id=925 |
-| 939 | 1608 | 2025 | 2024-02-17 | +1 ano | Duplicata PA com id=938 (mesmo pa) |
-| 1294 | 1751 | 2027 | 2026-05-04 | +1 ano | PA 2027 fantasma (pa_fim=2026) |
+| id | colab | correção aplicada |
+|---|---|---|
+| 923 | 1605 | PATCH `ano=2019` (pa_fim=2019-04-16) |
+| 924 | 1605 | PATCH `ano=2020` (pa_fim=2020-04-16) |
+| 939 | 1608 | PATCH `pa_inicio="2024-02-18"`, `pa_fim="2025-02-17"`, `ano=2025` — datas corretas do PA 2025 |
+| 1294 | 1751 | DELETADO (3 dias, errado) + criado id=1915 (PA 2027: 2026-05-05 → 2027-05-04) |
+
+Nota: id=1294 não pôde ser recriado por `autocriarPasFaltantes` porque id=1293 (PA 2026) ainda tem saldo > 0 — o guard da linha ~4071 impede autocriação enquanto houver saldo.
 
 #### Coluna `periodos` JSONB (migration 073, 2026-10-09 — executada em produção)
 
