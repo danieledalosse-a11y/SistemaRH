@@ -1368,6 +1368,8 @@ Usa `_rhEhRecente(h)` para classificar eventos individuais (não processos agrup
 - **Atividade Recente:** evento sem resposta para o mesmo `ferias_id`
 - **Histórico:** evento que já teve resposta
 
+> ⚠ **`renderRhAtividade()` não faz parte de `renderAll()`** — deve ser chamada explicitamente após qualquer ação que altere o status de uma solicitação. Commit `d73950b` (26/10/2026): adicionada chamada a `renderRhAtividade()` nos 6 pontos de saída de `aprovarPendente()` e `rejeitarPendente()` (fluxos padrão, alteração e cancelamento). A visão do Gestor não tinha esse problema — `renderGestorAtividade()` já era chamada em todas as ações do Gestor.
+
 **Fallback obrigatório (out/2026):** após filtrar recentes do `FERIAS_HISTORICO`, injeta itens sintéticos para cada pendente em `getPendentes()` cujo `reg._sbId` não existe em `FERIAS_HISTORICO`. Garante convergência entre o KPI "Pendentes de aprovação" e a Atividade Recente.
 
 ```js
