@@ -131,7 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_ferias_periodos ON ferias USING GIN (periodos);
 | `processGestorFerias` | Idem — visão Gestor |
 | `confirmarDrawerLancamento` | Append com id sequencial; mantém flat compat p0/p1 |
 | `salvarEditLanc` | Atualiza `periodos[id]` pelo campo `id` do item |
-| `excluirLancamento` | Marca `status:'excluido'`; sem compactação de slots |
+| `excluirLancamento` | Marca `status:'excluido'`; recalcula campos flat a partir dos períodos ativos restantes |
 | `validarDrawerForm` | Check `maxPeriodosPorPA` |
 | `renderDrawerHistorico` | Itera `periodos[]` |
 | `aprovarPendente` | Todos os 3 ramos gravam em `periodos[]` |
@@ -145,6 +145,8 @@ CREATE INDEX IF NOT EXISTS idx_ferias_periodos ON ferias USING GIN (periodos);
 3. PATCH com o array inteiro: `{ periodos: [...] }`
 
 **Bug corrigido (commit 2745d68):** `confirmarDrawerLancamento` tinha lógica `length===0 ? p1 : p2` que sobrescrevia o 2º período ao lançar o 3º. Substituído por append-only. Casos de perda confirmados: Victor Hugo (mat.402) e Valdir Felix (mat.439) — períodos não recuperáveis do sistema.
+
+**Bug corrigido (commit 4db6fe5):** `excluirLancamento` mapeava `periodos[].id` diretamente ao slot flat (id=0 → `periodo1_*`, id=1 → `periodo2_*`). Quando o id interno não correspondia ao slot real dos dados (ex: o único lançamento ativo estava em `periodo2_*`), os campos flat errados ficavam preenchidos, causando divergência entre visão RH (lê `periodos[]`) e Gestor (lê flat fields). **Correção:** após marcar o período como `excluido`, recalcular os campos flat filtrando os períodos ainda ativos (`status` não in `['excluido','recusado','cancelado']`) e mapeando posicionalmente: ativo[0] → `periodo1_*`, ativo[1] → `periodo2_*`, restante → null.
 
 ### `ferias_historico` (criada 2026-09-14, expandida 2026-10-09)
 
@@ -1108,6 +1110,20 @@ const temSolicitado = lancsPA.some(l => (l.status||'').toLowerCase() === 'solici
 ```
 
 **Por quê:** solicitações com datas de gozo no passado (ex: gestor solicita férias retroativas para aprovação do RH) devem permanecer visíveis no painel até serem aprovadas/recusadas.
+
+## Visão Gestor — bloqueio de datas retroativas (commit 4db6fe5)
+
+Em `gestorEnviarSolicitacao`, logo após validar `inicio` e `diasVal`, bloquear datas no passado:
+```js
+const _hoje = new Date().toISOString().slice(0, 10);
+if (inicio < _hoje) {
+  // exibir erro em #mgErro (com classe .show por 6s) ou toast
+  return;
+}
+```
+**Regra:** somente a visão do Gestor tem esse bloqueio. O RH não é afetado — o drawer do RH (lançamento manual) permanece sem restrição de data para correções históricas.
+
+**Motivação:** gestores digitavam o ano atual (ex: 2026) em vez de 2027 ao solicitar férias futuras, gerando lançamentos retroativos inválidos que o sistema não rejeitava.
 
 ## Visão Gestor — prevenção de solicitação duplicada
 
