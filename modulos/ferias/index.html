@@ -4282,10 +4282,18 @@ async function excluirLancamento(chave, sbId, lancIdx) {
     : reg.lancamentos.map((ll, i) => ({ id: ll.id ?? i, inicio: ll.inicio, fim: ll.fim, dias: ll.dias, nota: ll.nota || null, status: ll.status || 'aprovado' }));
   const _exclIdx = _periosAtual.findIndex(p => p.id === _pid);
   if (_exclIdx >= 0) _periosAtual[_exclIdx] = { ..._periosAtual[_exclIdx], status: 'excluido' };
-  // Mantém campos flat: limpa o slot correspondente para compatibilidade
-  const _flatDel = _pid === 0 ? { periodo1_inicio: null, periodo1_fim: null, dias1: null, nota1: null }
-                : _pid === 1 ? { periodo2_inicio: null, periodo2_fim: null, dias2: null, nota2: null }
-                : {};
+  // Recalcula campos flat a partir dos períodos ativos restantes (evita dessincronização de slot)
+  const _activeAfter = _periosAtual.filter(p => !['excluido','recusado','cancelado'].includes((p.status||'').toLowerCase()));
+  const _flatDel = {
+    periodo1_inicio: _activeAfter[0]?.inicio ?? null,
+    periodo1_fim:    _activeAfter[0]?.fim    ?? null,
+    dias1:           _activeAfter[0]?.dias   ?? null,
+    nota1:           _activeAfter[0]?.nota   ?? null,
+    periodo2_inicio: _activeAfter[1]?.inicio ?? null,
+    periodo2_fim:    _activeAfter[1]?.fim    ?? null,
+    dias2:           _activeAfter[1]?.dias   ?? null,
+    nota2:           _activeAfter[1]?.nota   ?? null,
+  };
   const payload = { periodos: _periosAtual, ..._flatDel };
 
   try {
@@ -12366,6 +12374,18 @@ async function gestorEnviarSolicitacao() {
   const retorno = document.getElementById('mgRetorno').value;
 
   if (!inicio || !diasVal) { toast('Preencha data de início e quantidade de dias.'); return; }
+  const _hoje = new Date().toISOString().slice(0, 10);
+  if (inicio < _hoje) {
+    const erroEl = document.getElementById('mgErro');
+    if (erroEl) {
+      erroEl.textContent = 'Não é possível agendar férias para um período já passado. Verifique o ano informado.';
+      erroEl.classList.add('show');
+      setTimeout(() => erroEl.classList.remove('show'), 6000);
+    } else {
+      toast('Não é possível agendar férias para um período já passado. Verifique o ano informado.');
+    }
+    return;
+  }
   const saldo = gestorSaldoPeriodo(periodo);
   if (diasVal > saldo) { toast('Dias ultrapassam o saldo disponível.'); return; }
 
