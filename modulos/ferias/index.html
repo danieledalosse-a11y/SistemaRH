@@ -12042,6 +12042,10 @@ async function gestorExecutarRetirada(feriasId, colabId, lancId) {
 
     const patchData = { periodos: perArr, status: novoStatus, atualizado_em: new Date().toISOString() };
     if (!_restaSolicit) patchData.obs_gestor = null;
+    // Limpa flat fields do slot retirado (mantém consistência legado)
+    const _slotRetirada = String(lancId).endsWith('-p2') ? 'p2' : 'p1';
+    if (_slotRetirada === 'p1') { patchData.periodo1_inicio = null; patchData.periodo1_fim = null; patchData.dias1 = 0; }
+    else { patchData.periodo2_inicio = null; patchData.periodo2_fim = null; patchData.dias2 = 0; }
 
     // PATCH condicional: só retira se a solicitação ainda estiver Pendente
     const _filtroRetirada = `id=eq.${feriasId}&status=eq.Pendente`;
@@ -12258,6 +12262,9 @@ async function gestorEnviarAlteracao() {
         obs_gestor:    row.obs_gestor ?? null,
         atualizado_em: new Date().toISOString(),
       };
+      // Sincroniza flat fields com o slot alterado (mantém consistência legado)
+      if (ctx.slot === 'p1') { patchData.periodo1_inicio = novoInicio; patchData.periodo1_fim = novoFim; }
+      else if (ctx.slot === 'p2') { patchData.periodo2_inicio = novoInicio; patchData.periodo2_fim = novoFim; }
       // PATCH condicional: só atualiza se a solicitação ainda estiver Pendente
       const _filtroAltSol = `id=eq.${ctx.periodoId}&status=eq.Pendente`;
       const _respAltSol = await _sbFetch(`${SB_URL}/rest/v1/ferias?${_filtroAltSol}`, {
