@@ -8811,17 +8811,44 @@ function _gestorProcessoInfo(h) {
   const motivo = det.motivo || det.obs_gestor || null;
 
   // Atividade Recente: aguardando resposta do RH (só para registros sobreviventes da dedup)
-  const _ehSurvivor = (GESTOR_PERIODOS || []).some(p => String(p.id) === String(h.ferias_id));
+  const _periodo    = (GESTOR_PERIODOS || []).find(p => String(p.id) === String(h.ferias_id));
+  const _ehSurvivor = !!_periodo;
+  const _rowStatus  = (_periodo?._feriasRow?.status || '').toLowerCase();
+
+  // Desfechos: ficam em Atividade Recente por param_ferias_config.dias_resposta_visivel dias
+  const diasAtras = h.criado_em ? (Date.now() - new Date(h.criado_em).getTime()) / 86400000 : 999;
+  const ativoResolvido = diasAtras <= (FERIAS_CONFIG.dias_resposta_visivel ?? 7);
+
+  // Fallback: status do banco indica resolução mas histórico está incompleto (mesma lógica do RH)
+  const _statusPendG = { solicitado: 'pendente', cancelamento_solicitado: 'cancelamento', alteracao_solicitada: 'alteracao' };
+  if (_statusPendG[acao] && _rowStatus && _rowStatus !== _statusPendG[acao]) {
+    if (acao === 'solicitado') {
+      if (_rowStatus === 'aprovado' || _rowStatus === 'agendado')
+        return { estado: 'Aprovadas',     cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+      if (_rowStatus === 'rejeitado')
+        return { estado: 'Recusadas',     cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+    }
+    if (acao === 'cancelamento_solicitado') {
+      if (_rowStatus === 'cancelado')
+        return { estado: 'Canceladas',    cls: 'cancel-aprov',ativo: ativoResolvido, inicio, fim, dias, motivo };
+      if (_rowStatus === 'aprovado')
+        return { estado: 'Canc. recusado',cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+    }
+    if (acao === 'alteracao_solicitada') {
+      if (_rowStatus === 'aprovado')
+        return { estado: 'Alt. aprovada', cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+      if (_rowStatus === 'rejeitado')
+        return { estado: 'Alt. recusada', cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+    }
+    return { estado: acao, cls: 'neutro', ativo: false, inicio, fim, dias, motivo };
+  }
+
   if (acao === 'solicitado')
     return { estado: 'Aguardando RH',             cls: 'neutro',     ativo: _ehSurvivor, inicio, fim, dias, motivo };
   if (acao === 'alteracao_solicitada')
     return { estado: 'Alteração aguardando RH',   cls: 'cancel-sol', ativo: _ehSurvivor, inicio, fim, dias, motivo };
   if (acao === 'cancelamento_solicitado')
     return { estado: 'Cancelamento aguardando RH',cls: 'cancel-sol', ativo: _ehSurvivor, inicio, fim, dias, motivo };
-
-  // Desfechos: ficam em Atividade Recente por param_ferias_config.dias_resposta_visivel dias
-  const diasAtras = h.criado_em ? (Date.now() - new Date(h.criado_em).getTime()) / 86400000 : 999;
-  const ativoResolvido = diasAtras <= (FERIAS_CONFIG.dias_resposta_visivel ?? 7);
 
   if (acao === 'aprovado' || acao === 'alteracao_aprovada')
     return { estado: 'Aprovadas',            cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
