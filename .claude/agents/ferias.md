@@ -124,6 +124,12 @@ Ambas as funções de criação (`autocriarPasFaltantes` e `gestorSolicitarNovoP
 
 Nota: id=1294 não pôde ser recriado por `autocriarPasFaltantes` porque id=1293 (PA 2026) ainda tem saldo > 0 — o guard da linha ~4071 impede autocriação enquanto houver saldo.
 
+**Correção de vinculação — Luciano (2026-10-26):**
+Lançamento (27/01/2027→25/02/2027·30d) estava em PA 2027 (id=1339) mas pertence ao PA 2026 (id=1907). Movido via PATCH no banco:
+- id=1339 (PA 2027): `periodos=[]`, campos flat null, `status="Ativo"`
+- id=1907 (PA 2026): `periodos=[{id:0, inicio:"2027-01-27", fim:"2027-02-25", dias:30, status:"solicitado"}]`, `periodo1_inicio/fim/dias1` sincronizados, `status="Pendente"` — aguarda aprovação RH
+Auditoria registrada em `ferias_historico` para ambos os registros com `acao="correcao_vinculacao"`.
+
 #### Coluna `periodos` JSONB (migration 073, 2026-10-09 — executada em produção)
 
 Fonte de verdade para períodos de férias após 2026-10-09.
@@ -466,6 +472,63 @@ gestorSaldoPeriodo(pa)
 // de direito. A regra espelha calcSaldo() da visão RH, que nunca lê realizacoes no saldo.
 ```
 
+## Visão Gestor — cards do drawer (PA Vigente · Saldo · Vencimento)
+
+Regra obrigatória (corrigida em 2026-10-26, commits `ee8a406` e `bede823`):
+
+> **Os três cards representam o mesmo PA — o mais antigo que ainda precisa de ação.**
+
+### Variáveis em `gestorAbrirSolicitacoes`
+
+```js
+const pa    = gestorPeriodoAtivo(c.id);   // PA mais antigo com saldo > 0
+const paVig = gestorPeriodoVigente(c.id); // PA vigente por data (pa_inicio ≤ hoje ≤ data_fim_gozo)
+const _paBase = pa || paVig;              // fallback: quando saldo=0, usa PA vigente por data
+
+const saldo = _paBase ? gestorSaldoPeriodo(_paBase) : 0;
+const total = _paBase ? (Number(_paBase.dias_direito) || 30) : 30;
+const venc  = _paBase?.data_fim_gozo ? gestorFmtData(_paBase.data_fim_gozo) : '—';
+const paAno = _paBase?.pa_fim ? _paBase.pa_fim.slice(0,4) : (_paBase?.pa_inicio ? _paBase.pa_inicio.slice(0,4) : '—');
+```
+
+**Todos os três — `saldo`, `venc`, `paAno` — usam `_paBase`, nunca `pa` ou `paVig` sozinhos.**
+
+### Comportamento esperado
+
+| Situação | `pa` | `_paBase` | Cards |
+|---|---|---|---|
+| PA 2026 pendente (solicitado, saldo 30d) | PA 2026 | PA 2026 | PA Vigente=2026, Saldo=30d, Venc=dobra do PA 2026 |
+| RH aprova PA 2026 → saldo zera | PA 2027 | PA 2027 | PA Vigente=2027, Saldo=30d, Venc=dobra do PA 2027 |
+| Saldo zero (ex: Gisele) | null | paVig | Todos os cards mostram PA vigente por data |
+
+### Vencimento = data de dobra
+
+`venc = _paBase.data_fim_gozo` = `_addOneYear(pa_fim)` = pa_fim + 1 ano (prazo legal antes de pagamento em dobro). **Não é a data fim do PA.**
+
+### `gestorPeriodoAtivo` — definição
+
+```js
+function gestorPeriodoAtivo(colaborador_id) {
+  // Retorna o PA mais antigo com saldo > 0 e não expirado
+  // Fallback: expirado mas com saldo (dobra ocorrida)
+  // Null: todos os PAs concluídos
+}
+```
+
+`gestorSaldoPeriodo` conta apenas lançamentos com status `['aprovado','agendado','gozado']` — lançamentos `solicitado` (pendentes) **não** reduzem o saldo.
+
+### Anti-padrão crítico
+
+```js
+// ERRADO — venc e paAno usam fontes diferentes, causando incoerência:
+const venc  = paVig?.data_fim_gozo ? gestorFmtData(paVig.data_fim_gozo) : '—'; // ← usa paVig
+const paAno = pa?.pa_fim ? pa.pa_fim.slice(0,4) : '—';                          // ← usa pa
+
+// CORRETO — mesma fonte para os três:
+const venc  = _paBase?.data_fim_gozo ? gestorFmtData(_paBase.data_fim_gozo) : '—';
+const paAno = _paBase?.pa_fim ? _paBase.pa_fim.slice(0,4) : (_paBase?.pa_inicio ? _paBase.pa_inicio.slice(0,4) : '—');
+```
+
 ## Visão Gestor — filtro KPI ativo
 
 `_gestorAlertaAtivo` — variável de módulo: `null` | `'agendado'` | `'dobra'` | `'sem-agendado'` | `'saindo'` | `'aguard'`
@@ -533,6 +596,37 @@ O objeto `periodo` em `GESTOR_PERIODOS` tem `dias_direito: 30` hardcoded no JS (
 ## Renovação automática de JWT (módulo cadastro)
 
 `_sbRefreshSession()` em `modulos/cadastro/index.html` — ao detectar `JWT expired` em `sbPatch` ou `sbGet`, tenta renovar usando `refresh_token` do localStorage e refaz a chamada original. Se o refresh falhar, lança o erro normalmente.
+
+## Validações no fluxo do Gestor (commit 22a1af1 · 2026-10-26)
+
+Aplicadas em `gestorEnviarSolicitacao` e `gestorEnviarAlteracao` (`_modoSolicitado` branch):
+
+### 1. Consistência do campo `ano` vs. `pa_fim`
+
+```js
+const _anoEsperado = Number((_fRow.pa_fim || '').slice(0, 4));
+const _anoRegistro = Number(_fRow.ano);
+if (_anoEsperado && _anoRegistro && _anoEsperado !== _anoRegistro) {
+  erroEl.textContent = 'Este registro possui inconsistência de dados (ano ≠ pa_fim). Contate o RH.';
+  return;
+}
+```
+
+Bloqueia solicitação quando `ferias.ano` difere do ano de `pa_fim`. Esse estado indica import incorreto — o RH precisa corrigir antes.
+
+### 2. Data de início dentro do período de concessão
+
+```js
+const _fimConcessao = addDays(_fRow.pa_fim, 366); // pa_fim + 366 dias
+if (inicio < _fRow.pa_inicio || inicio > _fimConcessao) {
+  erroEl.textContent = `A data de início deve estar entre ${formatDate(_fRow.pa_inicio)} e ${formatDate(_fimConcessao)} (período de concessão).`;
+  return;
+}
+```
+
+O período de concessão vai de `pa_inicio` até `pa_fim + 366 dias`. Bloqueia datas fora desse range.
+
+**Ordem das validações em `gestorEnviarSolicitacao`:** (1) data no passado → (2) consistência ano/pa_fim → (3) data fora da concessão. A validação de data passada já existia; as novas vieram depois.
 
 ## Cancelamento de lançamento pelo Gestor — regra crítica
 
