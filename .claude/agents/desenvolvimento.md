@@ -1192,9 +1192,9 @@ Novo chip KPI interativo ao lado dos status existentes (Não iniciada / Em andam
 
 | Função | O que faz |
 |---|---|
-| `_dpStatusCounts(participantes, avaliacoes)` | Retorna `{ nao_iniciada, em_andamento, respondida, concluida, nao_participa }` — o 5º contador soma `participantes.filter(p => p.nao_participa).length` |
-| `_dpStatusChipsHtml(counts, filtroAtivo)` | Gera o HTML dos 5 chips em grid `repeat(5,1fr)`; chip "Não participam" tem estilo neutro (cinza) em vez de colorido |
-| `_dpFiltrarPorStatus(lista, status, avaliacoes)` | Quando `status === 'nao_participa'`: retorna `lista.filter(p => p.nao_participa)`. Para qualquer outro status: filtra ativos (`!p.nao_participa`) pelo status de avaliação |
+| `_dpStatusCounts(participantes, avaliacoes)` | Retorna `{ nao_iniciada, em_andamento, respondida, concluida, nao_participa }` — o 5º contador soma `participantes.filter(p => p.nao_participa).length`. **Usa Maps internos** (`avalByPartId`, `avalByColabId`) para lookup O(1) e consistência com `dpRenderAvaliacoes` (última vence em chave duplicada) |
+| `_dpStatusChipsHtml(counts, filtroAtivo)` | Gera o HTML dos 5 chips em grid `repeat(5,1fr)`; chip "Não participam" tem cor vermelha (`#DC2626`) e `labelSize: '9px'` para caber sem corte |
+| `_dpFiltrarPorStatus(lista, status, avaliacoes)` | Quando `status === 'nao_participa'`: retorna `lista.filter(p => p.nao_participa)`. Para qualquer outro status: **constrói Maps** `avalByPartId`/`avalByColabId` antes do loop (idêntico a `dpRenderAvaliacoes`) para garantir que o mesmo registro de avaliação seja usado no filtro e na renderização |
 | `_dpRenderAvaliacoesComFiltro()` | Branch triplo: `=== 'nao_participa'` → só NP; `else if (status)` → só ativos com aquele status (sem concat NP); sem filtro → todos ativos + seção NP no rodapé |
 | `gestorDpShowTab('avaliacoes')` | Mesma lógica de branch triplo para o container `gdptab-avaliacoes` |
 
@@ -1210,9 +1210,13 @@ Novo chip KPI interativo ao lado dos status existentes (Não iniciada / Em andam
 
 ### Visual do chip "Não participam"
 
-- `bgOff: '#F9FAFB'`, `bgOn: '#F3F4F6'`, `numOff: '#9CA3AF'`, `numOn: '#374151'`, `ring: '#9CA3AF'`
+- `bgOff: '#FFF5F5'`, `bgOn: '#FEE2E2'`, `numOff: '#DC2626'`, `numOn: '#991B1B'`, `ring: '#EF4444'`, `labelSize: '9px'`
 - CSS das linhas de não participantes: `.dp-np-row` com borda esquerda vermelha (`#EF4444`), fundo `#FFF5F5`
 - `.dp-np-badge`: texto vermelho (`#DC2626`), fundo `#FEE2E2`, borda `#FECACA`
+
+### ⚠ Regra: Maps em lookup de avaliação por status
+
+`_dpFiltrarPorStatus`, `_dpStatusCounts` e `dpRenderAvaliacoes` devem sempre usar a mesma lógica de lookup: `new Map(avaliacoes.map(a => [a.participante_id, a]))` (e fallback `colaborador_id` se existir na tabela). **Nunca usar `Array.find`** nessas funções — quando há dois registros com a mesma chave, `find` retorna o primeiro e `Map` retorna o último, causando divergência entre filtro e renderização. Contexto: `dp_avaliacoes` não tem coluna `colaborador_id`; o Map por `colaborador_id` é inócuo mas mantido para robustez futura.
 - `.dp-np-section-header`: vermelho (`#B91C1C`), uppercase, `border-top:2px solid #FECACA`
 
 ### Filtros de nome e cargo
