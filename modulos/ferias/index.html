@@ -8824,21 +8824,21 @@ function _gestorProcessoInfo(h) {
   if (_statusPendG[acao] && _rowStatus && _rowStatus !== _statusPendG[acao]) {
     if (acao === 'solicitado') {
       if (_rowStatus === 'aprovado' || _rowStatus === 'agendado')
-        return { estado: 'Aprovadas',     cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+        return { estado: 'Aprovadas',     cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'aprovado' };
       if (_rowStatus === 'rejeitado')
-        return { estado: 'Recusadas',     cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+        return { estado: 'Recusadas',     cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'rejeitado' };
     }
     if (acao === 'cancelamento_solicitado') {
       if (_rowStatus === 'cancelado')
-        return { estado: 'Canceladas',    cls: 'cancel-aprov',ativo: ativoResolvido, inicio, fim, dias, motivo };
+        return { estado: 'Canceladas',    cls: 'cancel-aprov',ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'cancelamento_aprovado' };
       if (_rowStatus === 'aprovado')
-        return { estado: 'Canc. recusado',cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+        return { estado: 'Canc. recusado',cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'cancelamento_recusado' };
     }
     if (acao === 'alteracao_solicitada') {
       if (_rowStatus === 'aprovado')
-        return { estado: 'Alt. aprovada', cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+        return { estado: 'Alt. aprovada', cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'alteracao_aprovada' };
       if (_rowStatus === 'rejeitado')
-        return { estado: 'Alt. recusada', cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+        return { estado: 'Alt. recusada', cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'alteracao_recusada' };
     }
     return { estado: acao, cls: 'neutro', ativo: false, inicio, fim, dias, motivo };
   }
@@ -8992,9 +8992,10 @@ function renderGestorAtividade() {
       : '';
     const motivoLine = info.motivo ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic;">Motivo: ${info.motivo}</div>` : '';
     const tsLine = h.criado_em ? `<div class="gstor-ativ-ts">${fmtDH(h.criado_em)}${h.usuario ? ' · ' + h.usuario : ''}</div>` : '';
-    const ehDesfecho = _DESFECHOS_RH.has((h.acao || '').toLowerCase());
+    const ehDesfecho = _DESFECHOS_RH.has((h.acao || '').toLowerCase()) || !!info._ehDesfecho;
+    const _acaoParaCiente = info._acaoEfetiva || h.acao || '';
     const btnCiente = ehDesfecho
-      ? `<button onclick="gestorMarcarCiente(${h.ferias_id},${h.colaborador_id},'${h.acao}',this)" style="margin-left:6px;padding:4px 10px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text-sec);cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">Ciente</button>`
+      ? `<button onclick="gestorMarcarCiente(${h.ferias_id},${h.colaborador_id},'${_acaoParaCiente}',this)" style="margin-left:6px;padding:4px 10px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text-sec);cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">Ciente</button>`
       : '';
     return `<div class="gstor-ativ-item">
       <div class="gstor-ativ-icon ${info.cls}">${ACAO_SVG[info.cls] || ACAO_SVG.neutro}</div>
