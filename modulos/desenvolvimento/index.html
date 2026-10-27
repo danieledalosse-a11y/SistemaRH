@@ -6929,29 +6929,17 @@ function dpRenderResultados(opts = {}) {
       } else {
         badge = `<span class="sbadge sbadge-green" style="font-size:11px">Calculado</span>`;
       }
-      if (!_readonly) {
-        btnHtml = `<button class="btn btn-secondary btn-sm" onclick="dpCalcularAvaliacao('${aval.id}',true)" style="font-size:12px">Recalcular</button>`;
-      }
     } else if (aval && aval.status === 'concluida') {
       badge = `<span class="sbadge sbadge-amber" style="font-size:11px">Aguardando cálculo</span>`;
-      if (!_readonly) btnHtml = `<button class="btn btn-secondary btn-sm" onclick="dpCalcularAvaliacao('${aval.id}',true)" style="font-size:12px">Calcular</button>`;
     } else {
       badge = `<span class="sbadge sbadge-gray" style="font-size:11px">Sem avaliação</span>`;
       btnHtml = '';
     }
 
-    const bonusObj = resultado ? _dpResultadosBonus.find(b => b.resultado_id === resultado.id) : null;
-    const bonusValor = bonusObj?.valor_bonus;
-    const bonusInfo = bonusValor != null && Number(bonusValor) > 0
-      ? `<br>bônus: <b>R$ ${Number(bonusValor).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</b>`
-      : '';
-    const exibirNota = resultado && resultado.nota_final != null;
-    const notaInfo = resultado
+    const exibirNota = resultado && resultado.nota_final != null && !(_dpResultadosBonus.find(b => b.resultado_id === resultado.id)?.valor_bonus != null);
+    const notaInfo = exibirNota
       ? `<div id="rv_${aval.id}" style="font-size:11px;color:var(--text-ter);margin-top:3px">
-          ${exibirNota && resultado.nota_final != null ? `nota: <b>${Number(resultado.nota_final).toFixed(2)}</b>` : ''}
-          ${exibirNota && resultado.nota_final != null && resultado.conceito ? ' · ' : ''}
-          ${resultado.conceito ? `conceito: <b>${resultado.conceito}</b>` : ''}
-          ${bonusInfo}
+          nota: <b>${Number(resultado.nota_final).toFixed(2)}</b>${resultado.conceito ? ` · conceito: <b>${resultado.conceito}</b>` : ''}
         </div>`
       : '';
 
@@ -6964,7 +6952,7 @@ function dpRenderResultados(opts = {}) {
           ${notaInfo}
         </div>
         ${badge}
-        <div style="display:flex;gap:4px;flex-wrap:wrap">${btnHtml}</div>
+        ${btnHtml ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${btnHtml}</div>` : ''}
       </div>
     </div>`;
   }).join('');
