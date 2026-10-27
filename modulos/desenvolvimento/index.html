@@ -6773,46 +6773,49 @@ async function salvarAvaliacao(status) {
   }
 
   // ── 4. Atualizar status da avaliação ─────────────────────────────
-  // Detecta completude: se 'em_andamento' e todos os critérios respondidos → 'respondida'
+  // Em modo ajuste, não altera o status aqui — fecharFormAval() é responsável por
+  // recalcular e restaurar 'concluida' após as respostas serem salvas.
   let statusEfetivo = status;
-  if (status === 'em_andamento') {
-    const totalCrits = _dpVersaoCritsParaForm.length;
-    const respondidos = _dpRespostasAtual.filter(r =>
-      r.resposta_texto != null || r.escala_opcao_id != null || r.valor_numerico_livre != null
-    ).length;
-    if (totalCrits > 0 && respondidos >= totalCrits) statusEfetivo = 'respondida';
-  }
-  const patchAval = { status: statusEfetivo };
-  if (statusEfetivo === 'concluida') patchAval.concluida_em = new Date().toISOString();
-  else patchAval.iniciada_em = _dpAvaliacaoAtual.iniciada_em || new Date().toISOString();
-  // ── INSTRUMENTAÇÃO ──
-  const _tPatch = performance.now();
-  const resAval = await _dpPatchMinimal(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
-  console.log(`[DP] save: patch dp_avaliacoes (status="${statusEfetivo}") → ${(performance.now()-_tPatch).toFixed(0)} ms`);
-  if (!resAval) {
-    toast('Erro ao atualizar status da avaliação: ' + sbErrMsg(), true);
-    console.groupEnd();
-    return; // não navega — respostas já foram salvas, status será corrigido no retry
-  }
-
-  // ── 5. Atualização cirúrgica em memória (sem recarregar todos os 81+) ─
-  Object.assign(_dpAvaliacaoAtual, patchAval);
-  const avalIdx = _dpAvaliacoes.findIndex(a => a.id === avalId);
-  if (avalIdx >= 0) Object.assign(_dpAvaliacoes[avalIdx], patchAval);
-
-  if (!_dpModoAjuste) toast(statusEfetivo === 'concluida' ? 'Avaliação concluída.' : 'Avaliação salva.');
-
-  // ── 6. Registro de evento (fire-and-forget — não bloqueia navegação) ─
-  if (statusEfetivo === 'concluida') {
-    const partSnap = (_dpParticipantes.find(p => p.id === _dpAvaliacaoAtual.participante_id) || {}).snapshot || {};
-    dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', avalId, { colaborador: partSnap.nome });
-    dpGravarTrajetoriaDP(avalId, partSnap, _dpCicloAtual?.id);
+  if (!_dpModoAjuste) {
+    // Detecta completude: se 'em_andamento' e todos os critérios respondidos → 'respondida'
+    if (status === 'em_andamento') {
+      const totalCrits = _dpVersaoCritsParaForm.length;
+      const respondidos = _dpRespostasAtual.filter(r =>
+        r.resposta_texto != null || r.escala_opcao_id != null || r.valor_numerico_livre != null
+      ).length;
+      if (totalCrits > 0 && respondidos >= totalCrits) statusEfetivo = 'respondida';
+    }
+    const patchAval = { status: statusEfetivo };
+    if (statusEfetivo === 'concluida') patchAval.concluida_em = new Date().toISOString();
+    else patchAval.iniciada_em = _dpAvaliacaoAtual.iniciada_em || new Date().toISOString();
+    // ── INSTRUMENTAÇÃO ──
+    const _tPatch = performance.now();
+    const resAval = await _dpPatchMinimal(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
+    console.log(`[DP] save: patch dp_avaliacoes (status="${statusEfetivo}") → ${(performance.now()-_tPatch).toFixed(0)} ms`);
+    if (!resAval) {
+      toast('Erro ao atualizar status da avaliação: ' + sbErrMsg(), true);
+      console.groupEnd();
+      return; // não navega — respostas já foram salvas, status será corrigido no retry
+    }
+    // ── 5. Atualização cirúrgica em memória ─
+    Object.assign(_dpAvaliacaoAtual, patchAval);
+    const avalIdx = _dpAvaliacoes.findIndex(a => a.id === avalId);
+    if (avalIdx >= 0) Object.assign(_dpAvaliacoes[avalIdx], patchAval);
+    toast(statusEfetivo === 'concluida' ? 'Avaliação concluída.' : 'Avaliação salva.');
+    // ── 6. Registro de evento (fire-and-forget) ─
+    if (statusEfetivo === 'concluida') {
+      const partSnap = (_dpParticipantes.find(p => p.id === _dpAvaliacaoAtual.participante_id) || {}).snapshot || {};
+      dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', avalId, { colaborador: partSnap.nome });
+      dpGravarTrajetoriaDP(avalId, partSnap, _dpCicloAtual?.id);
+    }
   }
 
   // ── INSTRUMENTAÇÃO ──
   console.log(`[DP] save: TOTAL até modal fechar → ${(performance.now()-_saveT0).toFixed(0)} ms`);
   console.groupEnd();
-  fecharFormAval();
+  // await garante que fecharFormAval (que em modo ajuste recalcula + patcha 'concluida')
+  // termine antes do re-render via setTimeout, evitando exibição de status desatualizado
+  await fecharFormAval();
   // Deferir re-render para o próximo tick — modal fecha imediatamente, lista atualiza logo após
   const _tRerender = performance.now();
   setTimeout(() => {
