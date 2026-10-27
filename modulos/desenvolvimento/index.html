@@ -2285,9 +2285,14 @@ async function salvarAvaliacao() {
 ───────────────────────────────────────────── */
 async function renderPDI() {
   const el = document.getElementById('pdiForm');
+  if (!_cicloAtivo) {
+    _pdiAcoes = [];
+    el.innerHTML = `<div class="empty-state" style="padding:32px 0;"><p>Selecione um ciclo para gerenciar o PDI.</p></div>`;
+    return;
+  }
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
 
-  const rows = await sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${_drawerMatricula}&select=*`);
+  const rows = await sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${_drawerMatricula}&ciclo_id=eq.${_cicloAtivo.id}&select=*`);
   const pdiRec = (rows || [])[0] || null;
   _pdiAcoes = pdiRec ? (pdiRec.acoes || []) : [];
 
@@ -2337,11 +2342,12 @@ function renderPDIHtml(el, pdiRec) {
 }
 
 async function salvarPDI() {
-  const rows = await sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${_drawerMatricula}&select=id`);
+  if (!_cicloAtivo) { toast('Selecione um ciclo antes de salvar o PDI.', true); return; }
+  const rows = await sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${_drawerMatricula}&ciclo_id=eq.${_cicloAtivo.id}&select=id`);
   const pdiRec = (rows || [])[0] || null;
   const body = {
     matricula_colaborador: _drawerMatricula,
-    ciclo_id: _cicloAtivo ? _cicloAtivo.id : null,
+    ciclo_id: _cicloAtivo.id,
     acoes: _pdiAcoes,
     updated_at: new Date().toISOString()
   };
