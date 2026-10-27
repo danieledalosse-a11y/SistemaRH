@@ -1468,6 +1468,8 @@ Resetados em `dpFecharDrawerCiclo()` (RH) e `gestorDpFecharDrawer()` (Gestor) vi
 
 `dpAbrirFormAvaliacao` (auto-build RH) e `gestorDpAbrirFormAvaliacao` constroem a navList chamando `_dpFiltrarParticipantes` com os filtros ativos no momento da abertura. Se o resultado for vazio, fallback para todos os participantes ativos (garante que o colaborador clicado sempre esteja na navList).
 
+**Fix commit `eab7e09` (2026-10-26):** a navList RH também aplica `_dpAvalFiltroStatus` — se um chip de status estiver ativo ("Em andamento", "Não iniciada", "Concluída"), a construção automática chama `_dpFiltrarPorStatus(base, _dpAvalFiltroStatus, _dpAvaliacoes)` após o filtro de nome/cargo. Antes disso, as setas percorriam todos os participantes independentemente do card selecionado. O caso `nao_participa` é excluído (card não abre formulário).
+
 ---
 
 ## Arquitetura de Performance (2026-10-16, commits fca3346 / a96bea9 / 4671245)
