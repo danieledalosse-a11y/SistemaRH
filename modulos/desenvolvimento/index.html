@@ -7153,17 +7153,30 @@ async function dpGravarTrajetoriaDP(avalId, snap, cicloId) {
     if (existente && existente.length > 0) return;
 
     const cicloNome = _dpCiclos?.find(c => c.id === cicloId)?.nome || '';
-    const descricao = [snap.cargo, cicloNome].filter(Boolean).join(' · ');
+
+    // Busca resultado financeiro já salvo para esta avaliação
+    let resultadoValor = null;
+    try {
+      const res = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=eq.${avalId}&select=id,dp_resultados_bonus(valor_bonus)&limit=1`);
+      resultadoValor = res?.[0]?.dp_resultados_bonus?.[0]?.valor_bonus ?? null;
+    } catch(_) {}
+
+    const valorLabel = resultadoValor != null
+      ? ' · R$ ' + Number(resultadoValor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : '';
+    const descricao = [snap.cargo, cicloNome].filter(Boolean).join(' · ') + valorLabel;
 
     await sbPost(`/rest/v1/dev_historico`, {
       matricula_colaborador: matricula,
       data:            new Date().toISOString().slice(0, 10),
       tipo:            'avaliacao_concluida',
-      titulo:          'Avaliação de desempenho concluída',
+      titulo:          cicloNome || 'Avaliação de desempenho concluída',
       descricao,
       modulo_origem:   'dp',
       ciclo_id:        cicloId || null,
       avaliacao_id:    avalId,
+      resultado_valor: resultadoValor,
+      created_by:      _nomeUsuario || null,
     });
   } catch(e) { /* silencioso — não deve travar o fluxo */ }
 }
@@ -8177,7 +8190,7 @@ async function renderTrajetoria() {
   if (!_dpCiclos.length) await dpLoadCiclos();
 
   // Carrega histórico D&P de todos os colaboradores
-  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data,titulo,descricao,ciclo_id,avaliacao_id,created_by') || [];
+  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data,titulo,descricao,ciclo_id,avaliacao_id,created_by,resultado_valor') || [];
 
   // Agrupa por matricula
   _trHistoricoMap = {};
@@ -8282,10 +8295,17 @@ async function trAbrirPerfil(matricula, nome) {
   const cor = ['#2563EB','#059669','#7C3AED','#D97706','#DC2626','#0891B2'][Math.abs([...(colab.nome||nome||'')].reduce((a,ch)=>a+ch.charCodeAt(0),0)) % 6];
 
   // Carrega histórico D&P desta matrícula
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor`) || [];
 
   const ciclos = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
   const feeds  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
+
+  // Pontos do gráfico: avaliações com resultado_valor, ordem cronológica
+  const avalComValor = hist
+    .filter(h => h.tipo === 'avaliacao_concluida' && h.resultado_valor != null)
+    .slice().reverse(); // mais antigo → mais recente
+
+  const graficoHtml = avalComValor.length >= 1 ? trRenderGraficoCiclos(avalComValor) : '';
 
   // Resumo
   const admissao = colab.data_admissao ? formatDate(colab.data_admissao) : '—';
@@ -8302,7 +8322,8 @@ async function trAbrirPerfil(matricula, nome) {
       <div class="tr-mini-stat"><div class="val" style="color:var(--accent)">${ciclos}</div><div class="lbl">Ciclos</div></div>
       <div class="tr-mini-stat"><div class="val" style="color:var(--green)">${feeds}</div><div class="lbl">Feedbacks</div></div>
       <div class="tr-mini-stat"><div class="val" style="color:var(--text-ter)">—</div><div class="lbl">PDI</div></div>
-    </div>`;
+    </div>
+    ${graficoHtml}`;
 
   // Formulário de feedback (apenas RH e Gestor)
   const formEl = document.getElementById('tr-perfil-form');
@@ -8326,6 +8347,54 @@ async function trAbrirPerfil(matricula, nome) {
 
   // Linha do tempo
   trRenderTimeline(hist);
+}
+
+/* ─── Gráfico de evolução de resultados por ciclo ─── */
+// avalList: array de registros avaliacao_concluida com resultado_valor != null, ordem cronológica
+function trRenderGraficoCiclos(avalList) {
+  if (!avalList.length) return '';
+
+  const W = 260, H = 80, PAD_L = 8, PAD_R = 8, PAD_T = 10, PAD_B = 24;
+  const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+
+  const valores = avalList.map(h => Number(h.resultado_valor));
+  const maxV = Math.max(...valores, 1);
+
+  const xStep = avalList.length > 1 ? innerW / (avalList.length - 1) : innerW / 2;
+  const points = avalList.map((h, i) => {
+    const x = PAD_L + (avalList.length > 1 ? i * xStep : innerW / 2);
+    const y = PAD_T + innerH - (Number(h.resultado_valor) / maxV) * innerH;
+    return { x, y, val: Number(h.resultado_valor), titulo: h.titulo || '' };
+  });
+
+  const polyline = points.map(p => `${p.x},${p.y}`).join(' ');
+
+  const dots = points.map(p => `
+    <circle cx="${p.x}" cy="${p.y}" r="3.5" fill="var(--accent)" stroke="var(--card)" stroke-width="1.5">
+      <title>${p.titulo}: R$ ${p.val.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</title>
+    </circle>`).join('');
+
+  const labels = points.map(p => {
+    const nome = (p.titulo || '').replace(/Gratificação CD - /i,'').replace(/\/\d{4}/,'').trim();
+    return `<text x="${p.x}" y="${H - 4}" text-anchor="middle" font-size="8" fill="var(--text-ter)">${nome}</text>`;
+  }).join('');
+
+  const lastP = points[points.length - 1];
+  const lastValFmt = 'R$ ' + lastP.val.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  return `
+    <div style="margin-top:14px;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:600;color:var(--text-sec)">Resultado por ciclo</span>
+        <span style="font-size:12px;font-weight:700;color:var(--accent)">${lastValFmt}</span>
+      </div>
+      <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+        <polyline points="${polyline}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+        ${dots}
+        ${labels}
+      </svg>
+    </div>`;
 }
 
 /* ─── Renderiza a timeline do perfil ─── */
@@ -8430,7 +8499,7 @@ async function trExcluirFeedback(id) {
   toast('Registro excluído.');
   // Recarrega a timeline usando _trMatriculaAtual (definida em trAbrirPerfil)
   const matricula = _trMatriculaAtual;
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor`) || [];
   trRenderTimeline(hist);
   _trHistoricoMap[matricula] = hist;
 }
@@ -8462,7 +8531,7 @@ async function trSalvarFeedback(matricula) {
   toast('Registro salvo.');
   document.getElementById('tr-fb-texto').value = '';
   // Recarrega a timeline
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor`) || [];
   trRenderTimeline(hist);
   // Atualiza mapa em memória
   _trHistoricoMap[matricula] = hist;
