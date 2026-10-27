@@ -6918,7 +6918,7 @@ function dpRenderResultados(opts = {}) {
     const aval = _rAvByPartId.get(p.id) || _rAvByColabId.get(p.colaborador_id); // Grupo E: O(1)
     const resultado = aval ? _rResByAvalId.get(aval.id) : null;
 
-    let badge, btnHtml, ajusteHtml = '';
+    let badge, btnHtml = '', ajusteHtml = '';
     if (resultado) {
       const bonusObjBadge = _dpResultadosBonus.find(b => b.resultado_id === resultado.id);
       const bonusValorBadge = bonusObjBadge?.valor_bonus != null ? Number(bonusObjBadge.valor_bonus) : null;
@@ -8072,10 +8072,10 @@ async function gestorDpLoadResultados() {
     el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-ter);font-size:13px">Nenhuma avaliação encontrada para a equipe.</div>';
     return;
   }
-  const res = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${avalIds.join(',')})&select=*`) || [];
-  _dpResultados  = res;
-  _gdpResultados = res;
-  // _dpResultadosBonus já carregado na abertura do ciclo — não zerar aqui
+  const resultadosRaw = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${avalIds.join(',')})&select=*,dp_resultados_bonus(*)`) || [];
+  _dpResultados  = resultadosRaw.map(r => { const { dp_resultados_bonus: _, ...rest } = r; return rest; });
+  _gdpResultados = _dpResultados;
+  _dpResultadosBonus = resultadosRaw.flatMap(r => r.dp_resultados_bonus || []);
   dpRenderResultados({ containerId: 'gdptab-resultados', readonly: true });
 }
 
