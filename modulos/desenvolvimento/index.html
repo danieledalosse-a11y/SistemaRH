@@ -7141,74 +7141,99 @@ async function dpExportarResultados() {
   const nomeCiclo = _dpCiclos.find(c => c.id === _dpCicloAtual?.id)?.nome || 'Ciclo';
   const dataExp = new Date().toLocaleDateString('pt-BR');
 
-  const linhas = _dpParticipantes.map(p => {
+  const participantes = [];
+  const naoParticipantes = [];
+
+  for (const p of _dpParticipantes) {
     const snap = p.snapshot || {};
     if (p.nao_participa) {
-      return {
-        nome:     snap.nome      || '—',
-        cargo:    snap.cargo     || '—',
-        setor:    snap.setor     || '—',
-        unidade:  snap.unidade   || '—',
-        mat:      snap.matricula || '—',
-        status:   'Não participou',
-        nota:     '—',
-        conceito: p.nao_participa_motivo || '—',
-        npRow:    true,
-      };
+      naoParticipantes.push({
+        empresa: snap.empresa || snap.unidade || '—',
+        mat:     snap.matricula || '—',
+        nome:    snap.nome  || '—',
+        cargo:   snap.cargo || '—',
+        valor:   '—',
+        status:  'Não participou',
+        npRow:   true,
+      });
+    } else {
+      const aval   = _dpAvaliacoes.find(a => a.colaborador_id === p.colaborador_id);
+      const res    = aval ? _dpResultados.find(r => r.avaliacao_id === aval.id) : null;
+      const bonus  = res  ? _dpResultadosBonus.find(b => b.resultado_id === res.id) : null;
+      const valorNum = bonus?.valor_bonus != null ? Number(bonus.valor_bonus) : null;
+      const valorFmt = valorNum != null
+        ? valorNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : '—';
+      const statusLabel = { nao_iniciada: 'Não iniciada', em_andamento: 'Em andamento', respondida: 'Respondida', concluida: 'Concluída', publicada: 'Publicada' }[aval?.status] || '—';
+      participantes.push({
+        empresa: snap.empresa || snap.unidade || '—',
+        mat:     snap.matricula || '—',
+        nome:    snap.nome  || '—',
+        cargo:   snap.cargo || '—',
+        valor:   valorFmt,
+        status:  statusLabel,
+        npRow:   false,
+      });
     }
-    const aval = _dpAvaliacoes.find(a => a.colaborador_id === p.colaborador_id);
-    const res  = aval ? _dpResultados.find(r => r.avaliacao_id === aval.id) : null;
-    return {
-      nome:     snap.nome      || '—',
-      cargo:    snap.cargo     || '—',
-      setor:    snap.setor     || '—',
-      unidade:  snap.unidade   || '—',
-      mat:      snap.matricula || '—',
-      status:   { nao_iniciada: 'Não iniciada', em_andamento: 'Em andamento', respondida: 'Respondida', concluida: 'Concluída', publicada: 'Publicada' }[aval?.status] || '—',
-      nota:     res?.nota_final != null ? Number(res.nota_final).toFixed(2).replace('.', ',') : '—',
-      conceito: res?.conceito || '—',
-      npRow:    false,
-    };
-  });
+  }
 
-  const thStyle = 'font-family:Calibri,Arial,sans-serif;font-size:11pt;font-weight:bold;background:#1E3A5F;color:#ffffff;border:1px solid #999;padding:4px 8px;white-space:nowrap';
-  const tdStyle = 'font-family:Calibri,Arial,sans-serif;font-size:10pt;border:1px solid #D0D0D0;padding:3px 7px';
-  const tdAlt   = 'font-family:Calibri,Arial,sans-serif;font-size:10pt;border:1px solid #D0D0D0;padding:3px 7px;background:#F5F7FA';
+  const linhas = [...participantes, ...naoParticipantes];
 
-  const tdNP = 'font-family:Calibri,Arial,sans-serif;font-size:10pt;border:1px solid #D0D0D0;padding:3px 7px;color:#9CA3AF;font-style:italic;background:#F9FAFB';
+  const F  = 'font-family:Calibri,Arial,sans-serif';
+  const th = `${F};font-size:10pt;font-weight:700;background:#1B2E4B;color:#FFFFFF;border-bottom:2px solid #0F1E33;border-right:1px solid #2A4270;padding:7px 10px;white-space:nowrap`;
+  const tdBase = `${F};font-size:10pt;border-bottom:1px solid #E8ECF2;border-right:1px solid #E8ECF2;padding:6px 10px`;
+  const tdEven = `${tdBase};background:#FFFFFF;color:#1B2E4B`;
+  const tdOdd  = `${tdBase};background:#F4F7FB;color:#1B2E4B`;
+  const tdNP   = `${tdBase};background:#FAFAFA;color:#A0AABA;font-style:italic`;
+
+  const statusColor = {
+    'Concluída':    { bg: '#E8F5E9', fg: '#2E7D32' },
+    'Publicada':    { bg: '#E3F2FD', fg: '#1565C0' },
+    'Em andamento': { bg: '#FFF8E1', fg: '#F57F17' },
+    'Não iniciada': { bg: '#FCE4EC', fg: '#C62828' },
+    'Respondida':   { bg: '#EDE7F6', fg: '#4527A0' },
+    'Não participou': { bg: '#F5F5F5', fg: '#9E9E9E' },
+  };
+
   const rows = linhas.map((l, i) => {
-    const td = l.npRow ? tdNP : (i % 2 === 0 ? tdStyle : tdAlt);
+    const td = l.npRow ? tdNP : (i % 2 === 0 ? tdEven : tdOdd);
+    const sc = statusColor[l.status] || { bg: '#F5F5F5', fg: '#555' };
+    const statusCell = `<td style="${td};text-align:center">` +
+      `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:9pt;font-weight:600;background:${sc.bg};color:${sc.fg}">${l.status}</span></td>`;
+    const valorCell = l.valor !== '—'
+      ? `<td style="${td};text-align:right;font-weight:600;color:#1B5E20">${l.valor}</td>`
+      : `<td style="${td};text-align:center;color:#A0AABA">—</td>`;
     return `<tr>
-      <td style="${td}">${l.mat}</td>
-      <td style="${td}">${l.nome}</td>
+      <td style="${td}">${l.empresa}</td>
+      <td style="${td};text-align:center">${l.mat}</td>
+      <td style="${td};font-weight:600">${l.nome}</td>
       <td style="${td}">${l.cargo}</td>
-      <td style="${td}">${l.setor}</td>
-      <td style="${td}">${l.unidade}</td>
-      <td style="${td};text-align:center">${l.status}</td>
-      <td style="${td};text-align:center">${l.nota}</td>
-      <td style="${td};text-align:center">${l.conceito}</td>
+      ${valorCell}
+      ${statusCell}
     </tr>`;
   }).join('');
+
+  const totalPart = participantes.length;
+  const totalNP   = naoParticipantes.length;
+  const resumo    = `${totalPart} participante${totalPart !== 1 ? 's' : ''}${totalNP ? ` · ${totalNP} não participou` : ''}`;
 
   const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
 <head><meta charset="UTF-8">
 <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
-<x:Name>Resultados</x:Name>
+<x:Name>Resultados D&amp;P</x:Name>
 <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
 </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
 </head><body>
-<table>
-  <tr><td colspan="8" style="font-family:Calibri,Arial,sans-serif;font-size:13pt;font-weight:bold;padding:6px 8px">Avaliações D&amp;P — ${nomeCiclo}</td></tr>
-  <tr><td colspan="8" style="font-family:Calibri,Arial,sans-serif;font-size:9pt;color:#666;padding:2px 8px 8px">Exportado em ${dataExp}</td></tr>
+<table cellspacing="0" cellpadding="0">
+  <tr><td colspan="6" style="${F};font-size:15pt;font-weight:700;color:#1B2E4B;padding:10px 10px 2px">Avaliações D&amp;P — ${nomeCiclo}</td></tr>
+  <tr><td colspan="6" style="${F};font-size:9pt;color:#6B7A99;padding:0 10px 10px">${resumo} · Exportado em ${dataExp}</td></tr>
   <tr>
-    <th style="${thStyle}">Matrícula</th>
-    <th style="${thStyle}">Nome</th>
-    <th style="${thStyle}">Cargo</th>
-    <th style="${thStyle}">Setor</th>
-    <th style="${thStyle}">Unidade</th>
-    <th style="${thStyle}">Status Avaliação</th>
-    <th style="${thStyle}">Nota Final</th>
-    <th style="${thStyle}">Conceito</th>
+    <th style="${th}">Empresa</th>
+    <th style="${th}">Matrícula</th>
+    <th style="${th}">Nome</th>
+    <th style="${th}">Cargo</th>
+    <th style="${th};text-align:right">Valor</th>
+    <th style="${th};text-align:center">Status</th>
   </tr>
   ${rows}
 </table>
