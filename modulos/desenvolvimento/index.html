@@ -1167,9 +1167,9 @@
       <!-- KPIs -->
       <div id="tr-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
       <!-- filtros -->
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-        <input type="text" id="tr-filtro-nome" placeholder="Buscar colaborador..." oninput="trFiltrar()" style="flex:1;min-width:130px">
-        <select id="tr-filtro-setor" onchange="trFiltrar()">
+      <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="tr-filtro-nome" placeholder="Buscar colaborador..." oninput="trFiltrar()" style="flex:1;min-width:200px">
+        <select id="tr-filtro-setor" onchange="trFiltrar()" style="min-width:200px">
           <option value="">Todos os setores</option>
         </select>
       </div>
@@ -8195,11 +8195,11 @@ async function renderTrajetoria() {
       <div style="font-size:11px;color:var(--text-ter)">${k.sub}</div>
     </div>`).join('');
 
-  // Popula filtro de setor
+  // Popula filtro de setor a partir de param_setor (fonte oficial)
   const setorSel = document.getElementById('tr-filtro-setor');
   if (setorSel && setorSel.options.length <= 1) {
-    const setores = [...new Set(_colaboradores.map(c => c.setor).filter(Boolean))].sort();
-    setores.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; setorSel.appendChild(o); });
+    if (!_dpSetores.length) await loadParamSetores();
+    _dpSetores.forEach(s => { const o = document.createElement('option'); o.value = s.nome; o.textContent = s.nome; setorSel.appendChild(o); });
   }
 
   _trFiltroNome  = document.getElementById('tr-filtro-nome')?.value || '';
@@ -8223,7 +8223,10 @@ function trRenderLista() {
   }
 
   if (_trFiltroNome)  colabs = colabs.filter(c => (c.nome || '').toLowerCase().includes(_trFiltroNome));
-  if (_trFiltroSetor) colabs = colabs.filter(c => c.setor === _trFiltroSetor);
+  if (_trFiltroSetor) {
+    const _trNormSetor = s => { const p = (s||'').split(' - '); return (p.length > 1 ? p.slice(1).join(' - ') : s).trim(); };
+    colabs = colabs.filter(c => _trNormSetor(c.setor) === _trFiltroSetor);
+  }
 
   const el = document.getElementById('tr-lista');
   if (!el) return;
