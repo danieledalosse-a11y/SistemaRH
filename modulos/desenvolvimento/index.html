@@ -6990,8 +6990,9 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
   const versao = versaoArr[0];
   const tc = versao.tipo_calculo;
 
-  // b) Critérios calculáveis da versão
-  const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${_dpCicloAtual.versao_id}&contribui_calculo=eq.true&select=id,peso,tipo_resposta,valor_se_sim,valor_se_nao`) || [];
+  // b) Critérios da versão — sem filtro de contribui_calculo para capturar binários com valor_se_sim
+  // (critérios de bônus monetário podem ter contribui_calculo=false mas ainda assim produzem resultado_bonus)
+  const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${_dpCicloAtual.versao_id}&select=id,peso,tipo_resposta,valor_se_sim,valor_se_nao,contribui_calculo`) || [];
 
   // c) Respostas da avaliação
   const respostas = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${avaliacaoId}&select=versao_criterio_id,valor_numerico_livre,snapshot_opcao_valor_numerico,resposta_texto`) || [];
@@ -7014,10 +7015,11 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
     critsComValor.push({ ...c, valor: Number(val), resposta_texto: r.resposta_texto });
   }
 
-  // d2) Opção B: separar critérios de nota dos critérios de bônus monetário
-  // Binários com valor_se_sim produzem resultado_bonus, não contribuem para nota_final
+  // d2) Separar critérios de nota dos critérios de bônus monetário
+  // Bônus: binários com valor_se_sim (incluídos independente de contribui_calculo — igual ao formulário)
+  // Nota: demais critérios, apenas se contribui_calculo=true (preserva modelos mistos)
   const critsBonus = critsComValor.filter(c => c.tipo_resposta === 'binario' && c.valor_se_sim != null);
-  const critsNota  = critsComValor.filter(c => !(c.tipo_resposta === 'binario' && c.valor_se_sim != null));
+  const critsNota  = critsComValor.filter(c => !(c.tipo_resposta === 'binario' && c.valor_se_sim != null) && c.contribui_calculo);
 
   // Calcular bônus total
   let bonusTotal = null;
