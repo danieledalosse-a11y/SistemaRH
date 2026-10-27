@@ -958,6 +958,7 @@
   <button class="mod-tab active" onclick="showSec('modelos',this)" data-rh-only>Modelos</button>
   <button class="mod-tab" onclick="showSec('ciclos',this)" data-rh-only>Ciclos</button>
   <button class="mod-tab" id="tabGestorDP" onclick="showSec('gestor-dp',this)" style="display:none">Minha Equipe</button>
+  <button class="mod-tab" id="tabPDI" onclick="showSec('pdi',this)" style="display:none">PDI</button>
   <button class="mod-tab" id="tabTrajetoria" onclick="showSec('trajetoria',this)" style="display:none">Trajetória Profissional</button>
 </div>
 
@@ -1189,6 +1190,29 @@
     </div>
   </div>
 
+  <!-- ══ SEC: PDI ══ -->
+  <div id="sec-pdi" class="sec">
+    <div class="toolbar" style="margin-bottom:16px">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:600;margin-bottom:2px">PDI — Planos de Desenvolvimento</div>
+        <div style="font-size:13px;color:var(--text-sec)">Acompanhe os planos individuais de desenvolvimento dos colaboradores.</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="pdiAbrirCriacao({})" id="pdi-btn-novo">+ Novo PDI</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <input type="text" id="pdi-filtro-nome" placeholder="Buscar colaborador ou plano..." oninput="pdiAplicarFiltro()" style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none">
+      <select id="pdi-filtro-status" onchange="pdiAplicarFiltro()" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface)">
+        <option value="">Todos os status</option>
+        <option value="ativo">Ativo</option>
+        <option value="concluido">Concluído</option>
+        <option value="arquivado">Arquivado</option>
+      </select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="pdi-tabela-body"><div class="loader" style="padding:32px;display:flex;justify-content:center"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+
   <!-- ══ SEC: TRAJETÓRIA PROFISSIONAL ══ -->
   <div id="sec-trajetoria" class="sec">
     <!-- view lista -->
@@ -1216,6 +1240,7 @@
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
         <button class="btn btn-secondary btn-sm" onclick="trVoltarLista()">← Voltar</button>
         <span id="tr-perfil-breadcrumb" style="font-size:13px;color:var(--text-sec);flex:1"></span>
+        <button class="btn btn-secondary btn-sm" id="tr-btn-pdi" onclick="pdiAbrirCriacao({matricula:_trMatriculaAtual})" style="display:none">+ PDI</button>
         <button class="btn btn-secondary btn-sm" id="tr-btn-relatorio" onclick="trGerarRelatorio(_trMatriculaAtual)" style="display:none">Relatório completo</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:14px;align-items:start" class="tr-twocol">
@@ -1231,6 +1256,21 @@
   </div>
 
 </div><!-- /container -->
+
+<!-- ══ DRAWER: PDI ══ -->
+<div class="wizard-overlay" id="pdiDrawerOverlay" onclick="if(event.target===this)pdiFecharDrawer()">
+  <div class="wizard-panel" style="width:560px;display:flex;flex-direction:column" id="pdiDrawerPanel">
+    <div class="wizard-header" style="flex-shrink:0">
+      <div style="min-width:0">
+        <div class="wiz-step-title" id="pdiDrawerTitulo">PDI</div>
+        <div class="wiz-step-sub" id="pdiDrawerSub"></div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="pdiFecharDrawer()" style="margin-left:16px;flex-shrink:0">Fechar</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px" id="pdiDrawerBody"></div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0" id="pdiDrawerFooter"></div>
+  </div>
+</div>
 
 <!-- ══ DRAWER: GESTOR D&P ══ -->
 <div class="wiz-overlay wiz-overlay--center" id="gestorDpDrawerOverlay" onclick="if(event.target===this)gestorDpFecharDrawer()">
@@ -1843,6 +1883,7 @@ function showSec(id, btn) {
   if (id === 'configuracoes')   renderConfiguracoes();
   if (id === 'avaliacoes')      renderColabList();
   if (id === 'gestor-dp')      gestorDpLoadCiclos();
+  if (id === 'pdi')            pdiInit();
   if (id === 'trajetoria')     renderTrajetoria();
 }
 function showDrawerTab(id, btn) {
@@ -1873,6 +1914,8 @@ async function init() {
   if (tabGestor) tabGestor.style.display = isGestor ? '' : 'none';
   const tabTraj = document.getElementById('tabTrajetoria');
   if (tabTraj) tabTraj.style.display = '';
+  const tabPDI = document.getElementById('tabPDI');
+  if (tabPDI) tabPDI.style.display = '';
 
   if (isGestor) {
     // Ativa sec-gestor-dp imediatamente — antes de qualquer await
@@ -2262,7 +2305,8 @@ async function renderPDI() {
   }
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
 
-  const rows = await sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${_drawerMatricula}&ciclo_id=eq.${_cicloAtivo.id}&select=*`);
+  // Lê de pdi_planos — busca por matricula, sem filtrar por ciclo (ciclo legado ≠ dp_ciclos)
+  const rows = await sbGet(`/rest/v1/pdi_planos?matricula_colaborador=eq.${_drawerMatricula}&status=in.(ativo,concluido)&order=updated_at.desc&limit=1&select=*`);
   const pdiRec = (rows || [])[0] || null;
   _pdiAcoes = pdiRec ? (pdiRec.acoes || []) : [];
 
@@ -2316,18 +2360,22 @@ function renderPDIHtml(el, pdiRec) {
 
 async function salvarPDI() {
   if (!_cicloAtivo) { toast('Selecione um ciclo antes de salvar o PDI.', true); return; }
-  const rows = await sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${_drawerMatricula}&ciclo_id=eq.${_cicloAtivo.id}&select=id`);
+  // Busca plano existente pelo matricula (ciclo legado não mapeia para dp_ciclos)
+  const rows = await sbGet(`/rest/v1/pdi_planos?matricula_colaborador=eq.${_drawerMatricula}&status=in.(ativo,concluido)&order=updated_at.desc&limit=1&select=id`);
   const pdiRec = (rows || [])[0] || null;
-  const body = {
-    matricula_colaborador: _drawerMatricula,
-    ciclo_id: _cicloAtivo.id,
-    acoes: _pdiAcoes,
-    updated_at: new Date().toISOString()
-  };
+  const now = new Date().toISOString();
   if (pdiRec) {
-    await sbPatch(`/rest/v1/dev_pdi?id=eq.${pdiRec.id}`, body);
+    await sbPatch(`/rest/v1/pdi_planos?id=eq.${pdiRec.id}`, { acoes: _pdiAcoes, updated_at: now });
   } else {
-    await sbPost('/rest/v1/dev_pdi', body);
+    await sbPost('/rest/v1/pdi_planos', {
+      matricula_colaborador: _drawerMatricula,
+      titulo: 'PDI — ' + (_cicloAtivo.nome || 'Ciclo'),
+      gatilho: 'Resultado de avaliação',
+      ciclo_id: null,
+      acoes: _pdiAcoes,
+      status: 'ativo',
+      criado_por: _nomeUsuario || null
+    });
   }
 }
 
@@ -8227,6 +8275,11 @@ let _trSnapshotFullMap      = {};  // avaliacao_id → snapshot_criterios comple
 let _trHistAtual            = [];  // histórico do colaborador aberto na view de perfil
 let _trPdiData              = [];  // PDI do colaborador: [{ciclo_id, acoes}] — apenas registros com ações
 let _trInicializado         = false; // guard: evita re-fetch ao voltar para a aba
+
+/* ─── PDI — Planos de Desenvolvimento ─── */
+let _pdiConfig      = null;  // {gatilhos:[], categorias_acao:[], status_opcoes:[]}
+let _pdiPlanos      = [];    // todos os planos carregados
+let _pdiDrawerPlano = null;  // plano aberto no drawer
 let _trFiltroNome     = '';
 let _trFiltroSetor    = '';
 let _trGestorApelido  = ''; // apelido param_gestor do gestor logado (filtro de equipe)
@@ -8373,7 +8426,7 @@ async function trAbrirPerfil(matricula, nome) {
   // Carrega histórico D&P e PDI em paralelo
   const [histRaw, pdiRaw] = await Promise.all([
     sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`),
-    sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=ciclo_id,acoes`)
+    trCarregarPdi(matricula)
   ]);
   const hist = histRaw || [];
   _trPdiData = (pdiRaw || []).filter(p => (p.acoes || []).length > 0);
@@ -8474,6 +8527,365 @@ async function trAbrirPerfil(matricula, nome) {
   _trHistAtual = hist;
   const btnRel = document.getElementById('tr-btn-relatorio');
   if (btnRel) btnRel.style.display = '';
+  const btnPdi = document.getElementById('tr-btn-pdi');
+  if (btnPdi) btnPdi.style.display = (_perfil === 'diretoria') ? 'none' : '';
+}
+
+/* ─── trCarregarPdi ─── */
+async function trCarregarPdi(matricula) {
+  return await sbGet(
+    `/rest/v1/pdi_planos?matricula_colaborador=eq.${encodeURIComponent(matricula)}`
+    + `&select=id,titulo,gatilho,ciclo_id,avaliacao_id,status,acoes,criado_por,responsavel,created_at,updated_at`
+    + `&order=created_at.desc`
+  ) || [];
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PDI — Planos de Desenvolvimento (aba PDI no módulo D&P)
+───────────────────────────────────────────────────────────────────────────── */
+
+async function pdiCarregarConfig() {
+  if (_pdiConfig) return _pdiConfig;
+  const rows = await sbGet('/rest/v1/pdi_config?id=eq.1&select=dados&limit=1') || [];
+  _pdiConfig = rows[0]?.dados || { gatilhos: [], categorias_acao: [], status_opcoes: ['ativo','concluido','arquivado'] };
+  return _pdiConfig;
+}
+
+async function pdiCarregarPlanos() {
+  _pdiPlanos = await sbGet('/rest/v1/pdi_planos?order=updated_at.desc&select=*') || [];
+}
+
+async function pdiInit() {
+  const el = document.getElementById('pdi-tabela-body');
+  if (el) el.innerHTML = '<div class="loader"></div>';
+  await Promise.all([pdiCarregarConfig(), pdiCarregarPlanos()]);
+  pdiRenderTabela();
+}
+
+function pdiAplicarFiltro() {
+  pdiRenderTabela();
+}
+
+function pdiRenderTabela() {
+  const el = document.getElementById('pdi-tabela-body');
+  if (!el) return;
+  const nome   = (document.getElementById('pdi-filtro-nome')?.value || '').toLowerCase();
+  const status = document.getElementById('pdi-filtro-status')?.value || '';
+  const btnNovo = document.getElementById('pdi-btn-novo');
+  if (btnNovo) btnNovo.style.display = (_perfil === 'diretoria') ? 'none' : '';
+
+  let lista = [..._pdiPlanos];
+  if (nome)   lista = lista.filter(p => (p.matricula_colaborador||'').toLowerCase().includes(nome)
+                                     || (p.titulo||'').toLowerCase().includes(nome));
+  if (status) lista = lista.filter(p => p.status === status);
+
+  if (!lista.length) {
+    el.innerHTML = `<div class="empty-state" style="padding:40px 0">
+      <p style="color:var(--text-ter);font-size:13px">Nenhum plano encontrado.</p>
+      ${_perfil !== 'diretoria' ? `<button class="btn btn-primary btn-sm" onclick="pdiAbrirCriacao({})">+ Novo PDI</button>` : ''}
+    </div>`;
+    return;
+  }
+
+  const STATUS_BG  = { ativo: '#fef3c7', concluido: '#d1fae5', arquivado: '#f1f5f9' };
+  const STATUS_CLR = { ativo: '#92400e', concluido: '#065f46', arquivado: '#64748b' };
+  const STATUS_LBL = { ativo: 'Ativo', concluido: 'Concluído', arquivado: 'Arquivado' };
+
+  el.innerHTML = lista.map(p => {
+    const acoes = p.acoes || [];
+    const total  = acoes.length;
+    const feitas = acoes.filter(a => a.done).length;
+    const pct    = total > 0 ? Math.round((feitas / total) * 100) : 0;
+    const colab  = (_colaboradores||[]).find(c => c.matricula === p.matricula_colaborador);
+    const nomeColab = colab?.nome || p.matricula_colaborador || '—';
+    const cargo     = colab?.cargo || '';
+    const data      = p.updated_at ? new Date(p.updated_at).toLocaleDateString('pt-BR') : '';
+    return `<div class="row-card" style="cursor:pointer" onclick="pdiAbrirDrawer('${p.id}')">
+      <div class="row-icon" style="background:#e0f2fe;color:#0284c7">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+        </svg>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.titulo}</div>
+        <div style="font-size:12px;color:var(--text-sec);margin-top:2px">${nomeColab}${cargo?' · '+cargo:''}</div>
+        ${p.gatilho ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px">${p.gatilho}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+        <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:${STATUS_BG[p.status]||'#f1f5f9'};color:${STATUS_CLR[p.status]||'#64748b'}">${STATUS_LBL[p.status]||p.status}</span>
+        ${total > 0 ? `<div style="font-size:11px;color:var(--text-ter)">${feitas}/${total} ações · ${pct}%</div>` : '<div style="font-size:11px;color:var(--text-ter)">Sem ações</div>'}
+        ${data ? `<div style="font-size:11px;color:var(--text-ter)">${data}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function pdiAbrirDrawer(id) {
+  const plano = _pdiPlanos.find(p => p.id === id);
+  if (!plano) return;
+  _pdiDrawerPlano = JSON.parse(JSON.stringify(plano)); // cópia editável
+  document.getElementById('pdiDrawerTitulo').textContent = plano.titulo;
+  const colab = (_colaboradores||[]).find(c => c.matricula === plano.matricula_colaborador);
+  document.getElementById('pdiDrawerSub').textContent = colab?.nome || plano.matricula_colaborador || '';
+  pdiRenderDrawerBody();
+  document.getElementById('pdiDrawerOverlay').classList.add('open');
+}
+
+function pdiFecharDrawer() {
+  document.getElementById('pdiDrawerOverlay').classList.remove('open');
+  _pdiDrawerPlano = null;
+}
+
+function pdiRenderDrawerBody() {
+  const p = _pdiDrawerPlano;
+  if (!p) return;
+  const el = document.getElementById('pdiDrawerBody');
+  const footer = document.getElementById('pdiDrawerFooter');
+  if (!el || !footer) return;
+
+  const STATUS_LBL = { ativo: 'Ativo', concluido: 'Concluído', arquivado: 'Arquivado' };
+  const config = _pdiConfig || { gatilhos: [], categorias_acao: [], status_opcoes: ['ativo','concluido','arquivado'] };
+  const readonly = _perfil === 'diretoria';
+
+  const acoes = p.acoes || [];
+  const acoesHtml = acoes.length ? acoes.map((a, i) => {
+    const meta = [a.prazo || null, a.area || a.categoria || null].filter(Boolean).join(' · ');
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light)">
+      ${readonly ? '' : `<input type="checkbox" style="margin-top:3px;flex-shrink:0" ${a.done?'checked':''} onchange="pdiToggleAcaoDrawer(${i},this.checked)">`}
+      ${readonly ? `<div style="width:14px;height:14px;border-radius:3px;flex-shrink:0;margin-top:3px;border:2px solid ${a.done?'#059669':'#d1d5db'};background:${a.done?'#059669':'transparent'};display:flex;align-items:center;justify-content:center">${a.done?'<svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="3"><polyline points="2,6 5,9 10,3"/></svg>':''}</div>` : ''}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;${a.done?'text-decoration:line-through;color:var(--text-ter)':'color:var(--text)'}">${a.acao}</div>
+        ${meta ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px">${meta}</div>` : ''}
+        ${a.obs ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic">${a.obs}</div>` : ''}
+      </div>
+      ${!readonly ? `<button class="icon-btn" title="Remover" onclick="pdiRemoverAcaoDrawer(${i})" style="flex-shrink:0;color:var(--red)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+      </button>` : ''}
+    </div>`;
+  }).join('') : `<div style="font-size:13px;color:var(--text-ter);padding:12px 0;text-align:center">Nenhuma ação cadastrada.</div>`;
+
+  el.innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Título</label>
+      <input class="form-input" id="pdiDrwTitulo" value="${(p.titulo||'').replace(/"/g,'&quot;')}" ${readonly?'disabled':''}>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Gatilho</label>
+      <select class="form-input" id="pdiDrwGatilho" ${readonly?'disabled':''}>
+        ${config.gatilhos.map(g => `<option value="${g}" ${p.gatilho===g?'selected':''}>${g}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Status</label>
+      <select class="form-input" id="pdiDrwStatus" ${readonly?'disabled':''}>
+        <option value="ativo" ${p.status==='ativo'?'selected':''}>Ativo</option>
+        <option value="concluido" ${p.status==='concluido'?'selected':''}>Concluído</option>
+        <option value="arquivado" ${p.status==='arquivado'?'selected':''}>Arquivado</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Responsável</label>
+      <input class="form-input" id="pdiDrwResponsavel" value="${(p.responsavel||'').replace(/"/g,'&quot;')}" ${readonly?'disabled':''}
+             placeholder="Nome do responsável pelo acompanhamento">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Observações</label>
+      <textarea class="form-input" id="pdiDrwObs" rows="2" ${readonly?'disabled':''} style="resize:vertical">${p.observacoes||''}</textarea>
+    </div>
+    <div style="margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:600">Ações (${acoes.length})</span>
+        ${!readonly ? `<button class="btn btn-secondary btn-sm" onclick="pdiAdicionarAcaoDrawer()">+ Ação</button>` : ''}
+      </div>
+      <div id="pdiDrawerAcoes">${acoesHtml}</div>
+    </div>`;
+
+  footer.innerHTML = readonly ? '' : `
+    <button class="btn btn-secondary btn-sm" onclick="pdiFecharDrawer()">Cancelar</button>
+    <button class="btn btn-primary btn-sm" onclick="pdiSalvarDrawer()">Salvar</button>`;
+}
+
+function pdiToggleAcaoDrawer(idx, done) {
+  if (!_pdiDrawerPlano) return;
+  _pdiDrawerPlano.acoes = _pdiDrawerPlano.acoes || [];
+  if (_pdiDrawerPlano.acoes[idx]) {
+    _pdiDrawerPlano.acoes[idx].done = done;
+    if (done) _pdiDrawerPlano.acoes[idx].concluido_em = new Date().toISOString();
+    else delete _pdiDrawerPlano.acoes[idx].concluido_em;
+  }
+}
+
+function pdiRemoverAcaoDrawer(idx) {
+  if (!_pdiDrawerPlano) return;
+  _pdiDrawerPlano.acoes.splice(idx, 1);
+  pdiRenderDrawerBody();
+}
+
+function pdiAdicionarAcaoDrawer() {
+  const config = _pdiConfig || { categorias_acao: [] };
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:10000';
+  overlay.innerHTML = `<div class="modal" style="max-width:420px;width:100%;padding:24px">
+    <div class="modal-title" style="margin-bottom:16px">Nova Ação</div>
+    <div class="form-group">
+      <label class="form-label">Ação *</label>
+      <input class="form-input" id="pdiNovaAcaoTexto" placeholder="Descreva a ação de desenvolvimento">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoria</label>
+      <select class="form-input" id="pdiNovaAcaoCategoria">
+        <option value="">Sem categoria</option>
+        ${config.categorias_acao.map(c => `<option value="${c}">${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Prazo</label>
+      <input class="form-input" type="date" id="pdiNovaAcaoPrazo">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Observação</label>
+      <input class="form-input" id="pdiNovaAcaoObs" placeholder="Opcional">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="pdiConfirmarNovaAcao(this)">Adicionar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#pdiNovaAcaoTexto').focus();
+}
+
+function pdiConfirmarNovaAcao(btn) {
+  const overlay = btn.closest('.modal-overlay');
+  const acao = overlay.querySelector('#pdiNovaAcaoTexto').value.trim();
+  if (!acao) { toast('Informe a ação.', true); return; }
+  const categoria = overlay.querySelector('#pdiNovaAcaoCategoria').value;
+  const prazo     = overlay.querySelector('#pdiNovaAcaoPrazo').value;
+  const obs       = overlay.querySelector('#pdiNovaAcaoObs').value.trim();
+  if (!_pdiDrawerPlano) return;
+  _pdiDrawerPlano.acoes = _pdiDrawerPlano.acoes || [];
+  _pdiDrawerPlano.acoes.push({ acao, area: categoria || undefined, prazo: prazo || undefined, obs: obs || undefined, done: false });
+  overlay.remove();
+  pdiRenderDrawerBody();
+}
+
+async function pdiSalvarDrawer() {
+  if (!_pdiDrawerPlano) return;
+  _pdiDrawerPlano.titulo       = document.getElementById('pdiDrwTitulo')?.value.trim() || _pdiDrawerPlano.titulo;
+  _pdiDrawerPlano.gatilho      = document.getElementById('pdiDrwGatilho')?.value || _pdiDrawerPlano.gatilho;
+  _pdiDrawerPlano.status       = document.getElementById('pdiDrwStatus')?.value || _pdiDrawerPlano.status;
+  _pdiDrawerPlano.responsavel  = document.getElementById('pdiDrwResponsavel')?.value.trim() || null;
+  _pdiDrawerPlano.observacoes  = document.getElementById('pdiDrwObs')?.value.trim() || null;
+  _pdiDrawerPlano.updated_at   = new Date().toISOString();
+
+  const btn = document.querySelector('#pdiDrawerFooter .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
+
+  const res = await sbPatch(`/rest/v1/pdi_planos?id=eq.${_pdiDrawerPlano.id}`, {
+    titulo:      _pdiDrawerPlano.titulo,
+    gatilho:     _pdiDrawerPlano.gatilho,
+    status:      _pdiDrawerPlano.status,
+    responsavel: _pdiDrawerPlano.responsavel,
+    observacoes: _pdiDrawerPlano.observacoes,
+    acoes:       _pdiDrawerPlano.acoes,
+    updated_at:  _pdiDrawerPlano.updated_at
+  });
+  if (!res) { toast('Erro ao salvar PDI.', true); if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; } return; }
+  // Atualiza cache
+  const idx = _pdiPlanos.findIndex(p => p.id === _pdiDrawerPlano.id);
+  if (idx >= 0) _pdiPlanos[idx] = { ..._pdiPlanos[idx], ..._pdiDrawerPlano };
+  toast('PDI salvo.');
+  pdiFecharDrawer();
+  pdiRenderTabela();
+  // Invalida cache trajetória para refletir mudanças
+  _trInicializado = false;
+}
+
+/* ─── Modal de criação de novo PDI ─── */
+async function pdiAbrirCriacao(opts) {
+  // opts: { matricula }
+  const config = await pdiCarregarConfig();
+  const matriculaPre = opts.matricula || '';
+  const overlay = document.createElement('div');
+  overlay.id = 'pdiModalCriacao';
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:10000';
+
+  const colaboradoresOpts = (_colaboradores||[])
+    .sort((a, b) => (a.nome||'').localeCompare(b.nome||''))
+    .map(c => `<option value="${c.matricula}" ${c.matricula===matriculaPre?'selected':''}>${c.nome} — ${c.matricula}</option>`)
+    .join('');
+
+  overlay.innerHTML = `<div class="modal modal-lg" style="max-width:480px;width:100%;padding:24px">
+    <div class="modal-title" style="margin-bottom:16px">Novo PDI</div>
+    <div class="form-group">
+      <label class="form-label">Colaborador *</label>
+      <select class="form-input" id="pdiCriacaoColab">
+        <option value="">Selecione…</option>
+        ${colaboradoresOpts}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Título *</label>
+      <input class="form-input" id="pdiCriacaoTitulo" placeholder="Ex: PDI — Liderança Q4/2026">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Gatilho</label>
+      <select class="form-input" id="pdiCriacaoGatilho">
+        ${config.gatilhos.map(g => `<option value="${g}">${g}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Responsável</label>
+      <input class="form-input" id="pdiCriacaoResponsavel" placeholder="Opcional">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('pdiModalCriacao').remove()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="pdiSalvarNovo()">Criar PDI</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  // Se matrícula pré-definida, foca no título
+  if (matriculaPre) overlay.querySelector('#pdiCriacaoTitulo').focus();
+}
+
+async function pdiSalvarNovo() {
+  const overlay = document.getElementById('pdiModalCriacao');
+  if (!overlay) return;
+  const matricula  = overlay.querySelector('#pdiCriacaoColab').value;
+  const titulo     = overlay.querySelector('#pdiCriacaoTitulo').value.trim();
+  const gatilho    = overlay.querySelector('#pdiCriacaoGatilho').value;
+  const responsavel = overlay.querySelector('#pdiCriacaoResponsavel').value.trim();
+  if (!matricula) { toast('Selecione o colaborador.', true); return; }
+  if (!titulo)    { toast('Informe o título do PDI.', true); return; }
+
+  const btn = overlay.querySelector('.btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Criando…'; }
+
+  const payload = {
+    matricula_colaborador: matricula,
+    titulo,
+    gatilho: gatilho || null,
+    responsavel: responsavel || null,
+    status: 'ativo',
+    acoes: [],
+    criado_por: _nomeUsuario || null
+  };
+  const res = await sbPost('/rest/v1/pdi_planos', payload);
+  if (!res || !res[0]) {
+    toast('Erro ao criar PDI.', true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Criar PDI'; }
+    return;
+  }
+  overlay.remove();
+  _pdiPlanos.unshift(res[0]);
+  pdiRenderTabela();
+  toast('PDI criado.');
+  // Abre o drawer do novo plano para adicionar ações
+  pdiAbrirDrawer(res[0].id);
+  // Invalida cache trajetória
+  _trInicializado = false;
 }
 
 /* ─── Relatório Completo do Colaborador ─── */
@@ -8594,21 +9006,34 @@ function trGerarRelatorio(matricula) {
     ${(() => {
       const pdi = _trPdiData;
       if (!pdi.length) return '';
-      let s = `<div class="rel-section-title">PDI — Ações de Desenvolvimento</div>`;
-      for (const p of pdi) {
-        const ciclo = (_dpCiclos||[]).find(c => c.id === p.ciclo_id);
-        const cicloNome = ciclo?.nome || 'Ciclo não identificado';
+      // Ordena: ativo primeiro, concluido depois, arquivado por último
+      const ordem = { ativo: 0, concluido: 1, arquivado: 2 };
+      const sorted = [...pdi].sort((a, b) => (ordem[a.status] ?? 9) - (ordem[b.status] ?? 9));
+      const STATUS_LABEL = { ativo: 'Ativo', concluido: 'Concluído', arquivado: 'Arquivado' };
+      let s = `<div class="rel-section-title">PDI — Planos de Desenvolvimento</div>`;
+      for (const p of sorted) {
+        // Suporta pdi_planos (titulo) e dev_pdi legado
+        const tituloPlano = p.titulo || ((_dpCiclos||[]).find(c => c.id === p.ciclo_id)?.nome) || 'Ciclo não identificado';
         const acoes = p.acoes || [];
-        s += `<div class="rel-item"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6c7589;margin-bottom:8px">${cicloNome}</div>`;
+        const criado = p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : '';
+        const statusLbl = STATUS_LABEL[p.status] || '';
+        const origem = [p.gatilho, p.ciclo_id ? 'Ciclo vinculado' : null].filter(Boolean).join(' · ');
+        s += `<div class="rel-item">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">
+            <div style="font-size:12px;font-weight:700;color:#1e293b">${tituloPlano}</div>
+            ${statusLbl ? `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:${p.status==='concluido'?'#d1fae5':p.status==='arquivado'?'#f1f5f9':'#fef3c7'};color:${p.status==='concluido'?'#065f46':p.status==='arquivado'?'#64748b':'#92400e'};white-space:nowrap">${statusLbl}</span>` : ''}
+          </div>
+          ${criado || p.criado_por ? `<div style="font-size:11px;color:#9ca3af;margin-bottom:6px">${[criado?'Criado em: '+criado:null,p.criado_por?'por: '+p.criado_por:null,origem||null].filter(Boolean).join(' · ')}</div>` : ''}`;
         for (const a of acoes) {
           const done = !!a.done;
-          const meta = [a.prazo ? formatDate(a.prazo) : null, a.area || null].filter(Boolean).join(' · ');
+          const meta = [a.prazo ? formatDate(a.prazo) : null, a.area || a.categoria || null].filter(Boolean).join(' · ');
+          const concluídoEm = done && a.concluido_em ? ' — concluído em ' + new Date(a.concluido_em).toLocaleDateString('pt-BR') : '';
           s += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
             <div style="width:14px;height:14px;border-radius:3px;border:2px solid ${done?'#059669':'#d1d5db'};flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:${done?'#059669':'transparent'}">
               ${done?'<svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="3"><polyline points="2,6 5,9 10,3"/></svg>':''}
             </div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:12px;${done?'text-decoration:line-through;color:#9ca3af':'color:#374151'}">${a.acao}</div>
+              <div style="font-size:12px;${done?'text-decoration:line-through;color:#9ca3af':'color:#374151'}">${a.acao}${concluídoEm}</div>
               ${meta?`<div style="font-size:11px;color:#9ca3af">${meta}</div>`:''}
             </div>
           </div>`;
@@ -8639,18 +9064,20 @@ function trRenderPdiSection(pdiData) {
   let html = `<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-ter);margin-bottom:10px">PDI — Ações de Desenvolvimento</div>`;
   for (const p of pdiData) {
-    const ciclo = (_dpCiclos || []).find(c => c.id === p.ciclo_id);
-    const cicloNome = ciclo?.nome || 'Ciclo não identificado';
+    // Suporta pdi_planos (tem .titulo) e dev_pdi legado (resolve de dp_ciclos)
+    const tituloPlano = p.titulo
+      || ((_dpCiclos || []).find(c => c.id === p.ciclo_id)?.nome)
+      || 'Ciclo não identificado';
     const acoes = p.acoes || [];
     html += `<div style="margin-bottom:10px">
-      <div style="font-size:10px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${cicloNome}</div>`;
+      <div style="font-size:10px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${tituloPlano}</div>`;
     for (const a of acoes) {
       const done = !!a.done;
       const bordeCor = done ? 'var(--green)' : 'var(--border)';
       const bgCor    = done ? 'var(--green)' : 'transparent';
       const txtStyle = done ? 'text-decoration:line-through;color:var(--text-ter)' : 'color:var(--text)';
       const check    = done ? `<svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="3"><polyline points="2,6 5,9 10,3"/></svg>` : '';
-      const meta     = [a.prazo ? formatDate(a.prazo) : null, a.area || null].filter(Boolean).join(' · ');
+      const meta     = [a.prazo ? formatDate(a.prazo) : null, a.area || a.categoria || null].filter(Boolean).join(' · ');
       html += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
         <div style="width:14px;height:14px;border-radius:3px;border:2px solid ${bordeCor};flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:${bgCor}">${check}</div>
         <div style="flex:1;min-width:0">
