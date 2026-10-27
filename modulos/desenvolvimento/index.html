@@ -2305,6 +2305,9 @@ async function renderPDI() {
   }
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
 
+  // Garante que a config (categorias_acao) esteja carregada antes de renderizar
+  await pdiCarregarConfig();
+
   // Lê de pdi_planos — busca por matricula, sem filtrar por ciclo (ciclo legado ≠ dp_ciclos)
   const rows = await sbGet(`/rest/v1/pdi_planos?matricula_colaborador=eq.${_drawerMatricula}&status=in.(ativo,concluido)&order=updated_at.desc&limit=1&select=*`);
   const pdiRec = (rows || [])[0] || null;
@@ -2345,11 +2348,7 @@ function renderPDIHtml(el, pdiRec) {
       <input type="date" id="pdiNovaPrazo" style="flex:1">
       <select id="pdiNovaArea" style="flex:1">
         <option value="">Área (opcional)</option>
-        <option>Comportamental</option>
-        <option>Técnica</option>
-        <option>Liderança</option>
-        <option>Comunicação</option>
-        <option>Processos</option>
+        ${(_pdiConfig?.categorias_acao || ['Comportamental','Técnica','Liderança','Comunicação','Processos']).map(c => `<option>${c}</option>`).join('')}
       </select>
       <button class="btn btn-primary btn-sm" onclick="adicionarPDIItem()">Adicionar</button>
     </div>

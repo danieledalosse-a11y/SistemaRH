@@ -36,6 +36,9 @@ INSERT INTO pdi_config (id) VALUES (1) ON CONFLICT DO NOTHING;
 -- dev_pdi.ciclo_id referencia dev_ciclos (tabela legada), não dp_ciclos.
 -- Por isso ciclo_id é definido como NULL nos registros migrados.
 -- Apenas registros com pelo menos uma ação são migrados.
+-- Proteção contra re-execução: pula colaboradores que já têm plano migrado
+-- (identificado por gatilho='Resultado de avaliação' + ciclo_id IS NULL, que é
+-- exatamente o que este bloco cria — planos criados pelo RH têm ciclo_id preenchido).
 INSERT INTO pdi_planos (
   matricula_colaborador, titulo, gatilho, ciclo_id, acoes, status, created_at
 )
@@ -63,7 +66,12 @@ SELECT
   now()
 FROM dev_pdi dp
 WHERE dp.acoes IS NOT NULL AND jsonb_array_length(dp.acoes) > 0
-ON CONFLICT DO NOTHING;
+  AND NOT EXISTS (
+    SELECT 1 FROM pdi_planos pp
+    WHERE pp.matricula_colaborador = dp.matricula_colaborador
+      AND pp.gatilho = 'Resultado de avaliação'
+      AND pp.ciclo_id IS NULL
+  );
 
 -- ─── 4. RLS em pdi_planos ────────────────────────────────────────────────────
 ALTER TABLE pdi_planos ENABLE ROW LEVEL SECURITY;
@@ -78,7 +86,8 @@ CREATE POLICY pdi_diretoria_sel ON pdi_planos FOR SELECT
   USING (auth_perfil() = 'diretoria');
 
 -- Gestor: lê e escreve apenas PDIs de sua equipe
--- (mesma lógica de colaboradores.gestor ILIKE param_gestor.apelido usada em migration 113)
+-- Mesma âncora usada em migration 113: pg.colaborador_id = auth_colaborador_id()
+-- param_gestor NÃO tem coluna user_id; usar auth_colaborador_id() → colaborador_id.
 CREATE POLICY pdi_gestor_sel ON pdi_planos FOR SELECT
   USING (
     auth_perfil() = 'gestor' AND
@@ -86,7 +95,8 @@ CREATE POLICY pdi_gestor_sel ON pdi_planos FOR SELECT
       SELECT c.matricula FROM colaboradores c
       WHERE c.gestor ILIKE (
         SELECT pg.apelido FROM param_gestor pg
-        WHERE pg.user_id = auth.uid() LIMIT 1
+        WHERE pg.colaborador_id = auth_colaborador_id()
+          AND pg.ativo = true LIMIT 1
       )
     )
   );
@@ -98,7 +108,8 @@ CREATE POLICY pdi_gestor_ins ON pdi_planos FOR INSERT
       SELECT c.matricula FROM colaboradores c
       WHERE c.gestor ILIKE (
         SELECT pg.apelido FROM param_gestor pg
-        WHERE pg.user_id = auth.uid() LIMIT 1
+        WHERE pg.colaborador_id = auth_colaborador_id()
+          AND pg.ativo = true LIMIT 1
       )
     )
   );
@@ -110,7 +121,8 @@ CREATE POLICY pdi_gestor_upd ON pdi_planos FOR UPDATE
       SELECT c.matricula FROM colaboradores c
       WHERE c.gestor ILIKE (
         SELECT pg.apelido FROM param_gestor pg
-        WHERE pg.user_id = auth.uid() LIMIT 1
+        WHERE pg.colaborador_id = auth_colaborador_id()
+          AND pg.ativo = true LIMIT 1
       )
     )
   )
@@ -120,7 +132,8 @@ CREATE POLICY pdi_gestor_upd ON pdi_planos FOR UPDATE
       SELECT c.matricula FROM colaboradores c
       WHERE c.gestor ILIKE (
         SELECT pg.apelido FROM param_gestor pg
-        WHERE pg.user_id = auth.uid() LIMIT 1
+        WHERE pg.colaborador_id = auth_colaborador_id()
+          AND pg.ativo = true LIMIT 1
       )
     )
   );
