@@ -220,6 +220,25 @@
   .pdi-meta { font-size: 12px; color: var(--text-sec); }
   .pdi-del { background: none; border: none; cursor: pointer; color: var(--text-ter); padding: 2px; border-radius: 4px; transition: color 0.15s; display: flex; align-items: center; }
   .pdi-del:hover { color: var(--red); }
+  /* ── PDI Drawer — gestão de ações ── */
+  .pdi-acao-row { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--border-light); }
+  .pdi-acao-check { width:18px; height:18px; border:2px solid var(--border); border-radius:4px; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+  .pdi-acao-check.done { background:var(--green); border-color:var(--green); cursor:pointer; }
+  .pdi-acao-check.cancelada { background:#e5e7eb; border-color:#e5e7eb; cursor:default; }
+  .pdi-acao-nome { font-size:13px; color:var(--text); }
+  .pdi-acao-nome.done { text-decoration:line-through; color:var(--text-ter); }
+  .pdi-acao-nome.cancelada { color:var(--text-ter); font-style:italic; }
+  .pdi-acao-prazo { font-size:11px; color:var(--text-ter); flex-shrink:0; white-space:nowrap; }
+  .pdi-acao-prazo.vencido { color:#d97706; font-weight:600; }
+  .pdi-acao-menu-wrap { position:relative; flex-shrink:0; }
+  .pdi-acao-menu-btn { background:none; border:1px solid transparent; border-radius:5px; width:30px; height:30px; cursor:pointer; color:var(--text-ter); display:flex; align-items:center; justify-content:center; font-size:15px; line-height:1; padding:0; }
+  .pdi-acao-menu-btn:hover { background:var(--bg); border-color:var(--border); color:var(--text); }
+  .pdi-acao-menu { position:absolute; right:0; top:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.12); z-index:400; min-width:175px; padding:4px 0; }
+  .pdi-acao-menu-item { display:block; width:100%; text-align:left; padding:8px 14px; font-size:12px; border:none; background:none; cursor:pointer; color:var(--text); white-space:nowrap; font-family:inherit; }
+  .pdi-acao-menu-item:hover { background:var(--bg); }
+  .pdi-acao-menu-item.danger { color:var(--red); }
+  .pdi-acao-extra { padding:8px 10px 12px 10px; background:var(--bg); border-bottom:1px solid var(--border-light); }
+  .pdi-hist-item { font-size:11px; color:var(--text-sec); padding:5px 0; border-top:1px solid var(--border-light); }
   .pdi-add-form { border: 1.5px dashed var(--border); border-radius: 8px; padding: 14px 16px; }
   .pdi-add-form input, .pdi-add-form select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface); margin-bottom: 8px; }
   .pdi-add-form input:focus, .pdi-add-form select:focus { outline: none; border-color: var(--accent); }
@@ -8606,7 +8625,7 @@ function pdiRenderTabela() {
   const STATUS_LBL = { ativo: 'Ativo', concluido: 'Concluído', arquivado: 'Arquivado' };
 
   el.innerHTML = lista.map(p => {
-    const acoes = p.acoes || [];
+    const acoes = (p.acoes || []).filter(a => !a.cancelada);
     const total  = acoes.length;
     const feitas = acoes.filter(a => a.done).length;
     const pct    = total > 0 ? Math.round((feitas / total) * 100) : 0;
@@ -8662,21 +8681,6 @@ function pdiRenderDrawerBody() {
   const readonly = _perfil === 'diretoria';
 
   const acoes = p.acoes || [];
-  const acoesHtml = acoes.length ? acoes.map((a, i) => {
-    const meta = [a.prazo || null, a.area || a.categoria || null].filter(Boolean).join(' · ');
-    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light)">
-      ${readonly ? '' : `<input type="checkbox" style="margin-top:3px;flex-shrink:0" ${a.done?'checked':''} onchange="pdiToggleAcaoDrawer(${i},this.checked)">`}
-      ${readonly ? `<div style="width:14px;height:14px;border-radius:3px;flex-shrink:0;margin-top:3px;border:2px solid ${a.done?'#059669':'#d1d5db'};background:${a.done?'#059669':'transparent'};display:flex;align-items:center;justify-content:center">${a.done?'<svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="3"><polyline points="2,6 5,9 10,3"/></svg>':''}</div>` : ''}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;${a.done?'text-decoration:line-through;color:var(--text-ter)':'color:var(--text)'}">${a.acao}</div>
-        ${meta ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px">${meta}</div>` : ''}
-        ${a.obs ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;font-style:italic">${a.obs}</div>` : ''}
-      </div>
-      ${!readonly ? `<button class="icon-btn" title="Remover" onclick="pdiRemoverAcaoDrawer(${i})" style="flex-shrink:0;color:var(--red)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-      </button>` : ''}
-    </div>`;
-  }).join('') : `<div style="font-size:13px;color:var(--text-ter);padding:12px 0;text-align:center">Nenhuma ação cadastrada.</div>`;
 
   el.innerHTML = `
     <div class="form-group">
@@ -8708,15 +8712,16 @@ function pdiRenderDrawerBody() {
     </div>
     <div style="margin-top:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <span style="font-size:13px;font-weight:600">Ações (${acoes.length})</span>
+        <span style="font-size:13px;font-weight:600">Ações (${acoes.filter(a=>!a.cancelada).length})</span>
         ${!readonly ? `<button class="btn btn-secondary btn-sm" onclick="pdiAdicionarAcaoDrawer()">+ Ação</button>` : ''}
       </div>
-      <div id="pdiDrawerAcoes">${acoesHtml}</div>
+      <div id="pdiDrawerAcoes"></div>
     </div>`;
 
   footer.innerHTML = readonly ? '' : `
     <button class="btn btn-secondary btn-sm" onclick="pdiFecharDrawer()">Cancelar</button>
     <button class="btn btn-primary btn-sm" onclick="pdiSalvarDrawer()">Salvar</button>`;
+  pdiRenderDrawerAcoes();
 }
 
 function pdiToggleAcaoDrawer(idx, done) {
@@ -8733,6 +8738,327 @@ function pdiRemoverAcaoDrawer(idx) {
   if (!_pdiDrawerPlano) return;
   _pdiDrawerPlano.acoes.splice(idx, 1);
   pdiRenderDrawerBody();
+}
+
+/* ─── PDI — Gestão rica de ações (histórico, acompanhamento, conclusão) ─── */
+
+function _pdiHoje() { return new Date().toISOString().slice(0, 10); }
+
+async function pdiSalvarAcoesDrawer() {
+  if (!_pdiDrawerPlano) return false;
+  const r = await fetch(`${SB_URL}/rest/v1/pdi_planos?id=eq.${_pdiDrawerPlano.id}`, {
+    method: 'PATCH',
+    headers: { ...HDR, Prefer: 'return=minimal' },
+    body: JSON.stringify({ acoes: _pdiDrawerPlano.acoes })
+  });
+  if (!r.ok) { toast('Erro ao salvar ação.', true); return false; }
+  const ci = _pdiPlanos.findIndex(p => p.id === _pdiDrawerPlano.id);
+  if (ci >= 0) _pdiPlanos[ci].acoes = JSON.parse(JSON.stringify(_pdiDrawerPlano.acoes));
+  _trInicializado = false;
+  return true;
+}
+
+function pdiFecharMenusAcao() {
+  document.querySelectorAll('.pdi-acao-menu').forEach(m => m.remove());
+}
+
+function pdiFecharExtras(exceto) {
+  const acoes = _pdiDrawerPlano?.acoes || [];
+  acoes.forEach((_, i) => {
+    if (i === exceto) return;
+    const el = document.getElementById('pdi-extra-' + i);
+    if (el) { el.style.display = 'none'; el.innerHTML = ''; delete el.dataset.tipo; }
+  });
+}
+
+function pdiToggleMenuAcao(idx) {
+  const existing = document.getElementById('pdi-menu-' + idx);
+  if (existing) { existing.remove(); return; }
+  pdiFecharMenusAcao();
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  const done = !!a.done;
+  const cancelada = !!a.cancelada;
+  const temHist = (a.historico || []).length > 0;
+  let itens = '';
+  if (!cancelada) {
+    if (!done) {
+      itens += `<button class="pdi-acao-menu-item" onclick="pdiFecharMenusAcao();pdiAbrirAndamento(${idx})">Registrar andamento</button>`;
+      itens += `<button class="pdi-acao-menu-item" onclick="pdiFecharMenusAcao();pdiEditarAcao(${idx})">Editar</button>`;
+    }
+    if (temHist) {
+      itens += `<button class="pdi-acao-menu-item" onclick="pdiFecharMenusAcao();pdiVerHistorico(${idx})">Ver histórico</button>`;
+    }
+    if (done) {
+      itens += `<button class="pdi-acao-menu-item" onclick="pdiFecharMenusAcao();pdiIniciarReativacao(${idx})">Reativar</button>`;
+    }
+    itens += `<button class="pdi-acao-menu-item danger" onclick="pdiFecharMenusAcao();pdiExcluirAcao(${idx})">${temHist ? 'Cancelar ação' : 'Excluir'}</button>`;
+  } else {
+    if (temHist) {
+      itens += `<button class="pdi-acao-menu-item" onclick="pdiFecharMenusAcao();pdiVerHistorico(${idx})">Ver histórico</button>`;
+    }
+    itens += `<button class="pdi-acao-menu-item" onclick="pdiFecharMenusAcao();pdiIniciarReativacao(${idx})">Reativar</button>`;
+  }
+  const wrap = document.getElementById('pdi-menu-wrap-' + idx);
+  if (!wrap) return;
+  const menu = document.createElement('div');
+  menu.className = 'pdi-acao-menu';
+  menu.id = 'pdi-menu-' + idx;
+  menu.innerHTML = itens;
+  wrap.appendChild(menu);
+  setTimeout(() => {
+    document.addEventListener('click', function _h(e) {
+      if (!wrap.contains(e.target)) { menu.remove(); document.removeEventListener('click', _h); }
+    });
+  }, 0);
+}
+
+function pdiRenderDrawerAcoes() {
+  const el = document.getElementById('pdiDrawerAcoes');
+  if (!el || !_pdiDrawerPlano) return;
+  const readonly = _perfil === 'diretoria';
+  const acoes = _pdiDrawerPlano.acoes || [];
+  const hoje = _pdiHoje();
+  if (!acoes.length) {
+    el.innerHTML = `<div style="font-size:13px;color:var(--text-ter);padding:12px 0;text-align:center">Nenhuma ação cadastrada.</div>`;
+    return;
+  }
+  el.innerHTML = acoes.map((a, i) => {
+    const done = !!a.done;
+    const cancelada = !!a.cancelada;
+    const vencido = !done && !cancelada && a.prazo && a.prazo < hoje;
+    const temHist = (a.historico || []).length > 0;
+
+    let checkHtml;
+    if (cancelada) {
+      checkHtml = `<div style="width:18px;height:18px;border-radius:4px;background:#e5e7eb;flex-shrink:0;display:flex;align-items:center;justify-content:center">
+        <svg width="10" height="2" viewBox="0 0 10 2" fill="none"><rect y="0.25" width="10" height="1.5" rx="0.75" fill="#9ca3af"/></svg>
+      </div>`;
+    } else if (done) {
+      checkHtml = `<div class="pdi-acao-check done" onclick="pdiIniciarReativacao(${i})" title="Concluída — clique para reativar">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="3"><polyline points="2,6 5,9 10,3"/></svg>
+      </div>`;
+    } else {
+      checkHtml = `<div class="pdi-acao-check" onclick="pdiConcluirAcao(${i})" title="Marcar como concluída"></div>`;
+    }
+
+    const nomeClass = cancelada ? 'cancelada' : done ? 'done' : '';
+    let prazoHtml = '';
+    if (done && a.concluido_em) {
+      prazoHtml = `<span class="pdi-acao-prazo" style="color:var(--green)">✓ ${new Date(a.concluido_em).toLocaleDateString('pt-BR')}</span>`;
+    } else if (cancelada) {
+      prazoHtml = `<span class="pdi-acao-prazo" style="color:#9ca3af">Cancelada</span>`;
+    } else if (a.prazo) {
+      prazoHtml = vencido
+        ? `<span class="pdi-acao-prazo vencido">⚠ ${formatDate(a.prazo)}</span>`
+        : `<span class="pdi-acao-prazo">${formatDate(a.prazo)}</span>`;
+    }
+
+    const histLink = temHist
+      ? `<span style="font-size:11px;color:var(--blue);cursor:pointer;margin-left:2px" onclick="pdiVerHistorico(${i})">↓ ${(a.historico||[]).length}</span>`
+      : '';
+
+    const menuBtn = !readonly
+      ? `<div class="pdi-acao-menu-wrap" id="pdi-menu-wrap-${i}">
+          <button class="pdi-acao-menu-btn" onclick="event.stopPropagation();pdiToggleMenuAcao(${i})" title="Mais opções">···</button>
+        </div>`
+      : '';
+
+    return `<div class="pdi-acao-row" id="pdi-row-${i}">
+      ${checkHtml}
+      <div style="flex:1;min-width:0;overflow:hidden">
+        <span class="pdi-acao-nome ${nomeClass}">${a.acao}</span>${histLink}
+        ${a.area||a.categoria ? `<div style="font-size:11px;color:var(--text-ter)">${a.area||a.categoria}</div>` : ''}
+      </div>
+      ${prazoHtml}
+      ${menuBtn}
+    </div>
+    <div class="pdi-acao-extra" id="pdi-extra-${i}" style="display:none"></div>`;
+  }).join('');
+}
+
+function pdiAbrirAndamento(idx) {
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  const el = document.getElementById('pdi-extra-' + idx);
+  if (!el) return;
+  pdiFecharExtras(idx);
+  const hoje = _pdiHoje();
+  const vencido = !a.done && a.prazo && a.prazo < hoje;
+  const label = vencido ? 'Motivo do atraso e próximos passos' : 'O que aconteceu?';
+  el.style.display = 'block';
+  el.innerHTML = `<div style="font-size:12px;color:var(--text-sec);margin-bottom:6px">${label}${vencido ? ' <span style="color:#d97706;font-size:11px">(obrigatório)</span>' : ''}</div>
+    <textarea id="pdi-and-nota-${idx}" rows="2" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;resize:none;background:var(--surface);color:var(--text);box-sizing:border-box" placeholder="${vencido ? 'Obrigatório' : 'Opcional'}"></textarea>
+    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-secondary btn-sm" onclick="pdiFecharExtras(-1)">✕</button>
+      <button class="btn btn-primary btn-sm" onclick="pdiSalvarAndamento(${idx},${vencido ? 'true' : 'false'})">Salvar</button>
+    </div>`;
+  el.querySelector('#pdi-and-nota-' + idx).focus();
+}
+
+async function pdiSalvarAndamento(idx, obrigatorio) {
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  const nota = (document.getElementById('pdi-and-nota-' + idx)?.value || '').trim();
+  if (obrigatorio && !nota) { toast('Descreva o andamento para registrar.', true); return; }
+  a.historico = a.historico || [];
+  a.historico.push({ evento: 'acompanhamento', nota, autor: _nomeUsuario || '—', data: _pdiHoje() });
+  const ok = await pdiSalvarAcoesDrawer();
+  if (ok) { pdiFecharExtras(-1); pdiRenderDrawerAcoes(); toast('Andamento registrado.'); }
+}
+
+function pdiConcluirAcao(idx) {
+  const el = document.getElementById('pdi-extra-' + idx);
+  if (!el) return;
+  pdiFecharExtras(idx);
+  el.style.display = 'block';
+  el.innerHTML = `<div style="font-size:12px;color:var(--text-sec);margin-bottom:6px">Observação de conclusão <span style="color:var(--text-ter);font-size:11px">(opcional)</span></div>
+    <textarea id="pdi-conc-nota-${idx}" rows="2" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;resize:none;background:var(--surface);color:var(--text);box-sizing:border-box" placeholder="Opcional"></textarea>
+    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-secondary btn-sm" onclick="pdiFecharExtras(-1)">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="pdiConfirmarConclusao(${idx})">Confirmar conclusão</button>
+    </div>`;
+}
+
+async function pdiConfirmarConclusao(idx) {
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  const nota = (document.getElementById('pdi-conc-nota-' + idx)?.value || '').trim();
+  a.done = true;
+  a.concluido_em = new Date().toISOString();
+  a.historico = a.historico || [];
+  a.historico.push({ evento: 'conclusao', nota, autor: _nomeUsuario || '—', data: _pdiHoje() });
+  const ok = await pdiSalvarAcoesDrawer();
+  if (ok) { pdiRenderDrawerAcoes(); toast('Ação concluída.'); }
+}
+
+function pdiIniciarReativacao(idx) {
+  const el = document.getElementById('pdi-extra-' + idx);
+  if (!el) return;
+  pdiFecharExtras(idx);
+  el.style.display = 'block';
+  el.innerHTML = `<div style="font-size:12px;color:var(--text-sec)">Reativar esta ação?</div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button class="btn btn-secondary btn-sm" onclick="pdiFecharExtras(-1)">Não</button>
+      <button class="btn btn-primary btn-sm" onclick="pdiConfirmarReativacao(${idx})">Sim, reativar</button>
+    </div>`;
+}
+
+async function pdiConfirmarReativacao(idx) {
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  a.done = false;
+  delete a.concluido_em;
+  a.cancelada = false;
+  a.historico = a.historico || [];
+  a.historico.push({ evento: 'reativacao', nota: '', autor: _nomeUsuario || '—', data: _pdiHoje() });
+  const ok = await pdiSalvarAcoesDrawer();
+  if (ok) { pdiRenderDrawerAcoes(); toast('Ação reativada.'); }
+}
+
+function pdiExcluirAcao(idx) {
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  const el = document.getElementById('pdi-extra-' + idx);
+  if (!el) return;
+  pdiFecharExtras(idx);
+  const temHist = (a.historico || []).length > 0;
+  el.style.display = 'block';
+  if (temHist) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--text-sec)">Esta ação tem registros. Deseja cancelá-la?</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-secondary btn-sm" onclick="pdiFecharExtras(-1)">Não</button>
+        <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit" onclick="pdiConfirmarCancelamento(${idx})">Cancelar ação</button>
+      </div>`;
+  } else {
+    el.innerHTML = `<div style="font-size:12px;color:var(--text-sec)">Excluir esta ação?</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-secondary btn-sm" onclick="pdiFecharExtras(-1)">Não</button>
+        <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit" onclick="pdiConfirmarExclusaoAcao(${idx})">Excluir</button>
+      </div>`;
+  }
+}
+
+async function pdiConfirmarCancelamento(idx) {
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  a.cancelada = true;
+  a.historico = a.historico || [];
+  a.historico.push({ evento: 'cancelamento', nota: '', autor: _nomeUsuario || '—', data: _pdiHoje() });
+  const ok = await pdiSalvarAcoesDrawer();
+  if (ok) { pdiRenderDrawerAcoes(); toast('Ação cancelada.'); }
+}
+
+async function pdiConfirmarExclusaoAcao(idx) {
+  if (!_pdiDrawerPlano) return;
+  _pdiDrawerPlano.acoes.splice(idx, 1);
+  const ok = await pdiSalvarAcoesDrawer();
+  if (ok) { pdiRenderDrawerAcoes(); toast('Ação removida.'); }
+}
+
+function pdiEditarAcao(idx) {
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  const el = document.getElementById('pdi-extra-' + idx);
+  if (!el) return;
+  pdiFecharExtras(idx);
+  const config = _pdiConfig || { categorias_acao: [] };
+  const cats = config.categorias_acao || [];
+  el.style.display = 'block';
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">
+    <input id="pdi-edit-acao-${idx}" type="text" value="${(a.acao||'').replace(/"/g,'&quot;')}" placeholder="Ação"
+      style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);box-sizing:border-box">
+    <div style="display:flex;gap:6px">
+      <input id="pdi-edit-prazo-${idx}" type="date" value="${a.prazo||''}"
+        style="flex:1;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+      <select id="pdi-edit-cat-${idx}"
+        style="flex:1;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        <option value="">Sem categoria</option>
+        ${cats.map(c => `<option value="${c}" ${(a.area||a.categoria||'')==c?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div style="display:flex;gap:6px;justify-content:flex-end">
+      <button class="btn btn-secondary btn-sm" onclick="pdiFecharExtras(-1)">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="pdiSalvarEdicaoAcao(${idx})">Salvar</button>
+    </div>
+  </div>`;
+  document.getElementById('pdi-edit-acao-' + idx)?.focus();
+}
+
+async function pdiSalvarEdicaoAcao(idx) {
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  const novaAcao = (document.getElementById('pdi-edit-acao-' + idx)?.value || '').trim();
+  if (!novaAcao) { toast('Informe a descrição da ação.', true); return; }
+  a.acao = novaAcao;
+  const novoPrazo = document.getElementById('pdi-edit-prazo-' + idx)?.value || '';
+  if (novoPrazo) a.prazo = novoPrazo; else delete a.prazo;
+  const novaCat = document.getElementById('pdi-edit-cat-' + idx)?.value || '';
+  if (novaCat) a.area = novaCat; else delete a.area;
+  // NÃO altera done, concluido_em, historico, cancelada
+  const ok = await pdiSalvarAcoesDrawer();
+  if (ok) { pdiRenderDrawerAcoes(); toast('Ação atualizada.'); }
+}
+
+function pdiVerHistorico(idx) {
+  const a = (_pdiDrawerPlano?.acoes || [])[idx];
+  if (!a) return;
+  const el = document.getElementById('pdi-extra-' + idx);
+  if (!el) return;
+  if (el.style.display !== 'none' && el.dataset.tipo === 'hist') { pdiFecharExtras(-1); return; }
+  pdiFecharExtras(idx);
+  const hist = a.historico || [];
+  if (!hist.length) return;
+  const EVENTO_LABEL = { acompanhamento: 'Andamento', conclusao: 'Conclusão', cancelamento: 'Cancelamento', reativacao: 'Reativação' };
+  el.dataset.tipo = 'hist';
+  el.style.display = 'block';
+  el.innerHTML = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);margin-bottom:4px">Histórico da ação</div>
+    ${hist.map(h => `<div class="pdi-hist-item">
+      <span style="font-weight:600">${formatDate(h.data)}</span>
+      ${h.autor ? ' · ' + h.autor : ''}
+      ${h.nota ? ' · <em>' + h.nota + '</em>' : ''}
+      <span style="font-size:10px;color:var(--text-ter);margin-left:4px">[${EVENTO_LABEL[h.evento] || h.evento}]</span>
+    </div>`).join('')}`;
 }
 
 function pdiAdicionarAcaoDrawer() {
@@ -9121,7 +9447,9 @@ function trGerarRelatorio(matricula) {
       for (const p of sorted) {
         // Suporta pdi_planos (titulo) e dev_pdi legado
         const tituloPlano = p.titulo || ((_dpCiclos||[]).find(c => c.id === p.ciclo_id)?.nome) || 'Ciclo não identificado';
-        const acoes = p.acoes || [];
+        const acoes = (p.acoes || []);
+        const acoesAtivas = acoes.filter(a => !a.cancelada);
+        const acoesCanc  = acoes.filter(a => !!a.cancelada);
         const criado = p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : '';
         const statusLbl = STATUS_LABEL[p.status] || '';
         const origem = [p.gatilho, p.ciclo_id ? 'Ciclo vinculado' : null].filter(Boolean).join(' · ');
@@ -9131,10 +9459,12 @@ function trGerarRelatorio(matricula) {
             ${statusLbl ? `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:${p.status==='concluido'?'#d1fae5':p.status==='arquivado'?'#f1f5f9':'#fef3c7'};color:${p.status==='concluido'?'#065f46':p.status==='arquivado'?'#64748b':'#92400e'};white-space:nowrap">${statusLbl}</span>` : ''}
           </div>
           ${criado || p.criado_por ? `<div style="font-size:11px;color:#9ca3af;margin-bottom:6px">${[criado?'Criado em: '+criado:null,p.criado_por?'por: '+p.criado_por:null,origem||null].filter(Boolean).join(' · ')}</div>` : ''}`;
-        for (const a of acoes) {
+        const EVENTO_REL = { acompanhamento: 'Andamento', conclusao: 'Conclusão', cancelamento: 'Cancelamento', reativacao: 'Reativação' };
+        for (const a of acoesAtivas) {
           const done = !!a.done;
           const meta = [a.prazo ? formatDate(a.prazo) : null, a.area || a.categoria || null].filter(Boolean).join(' · ');
           const concluídoEm = done && a.concluido_em ? ' — concluído em ' + new Date(a.concluido_em).toLocaleDateString('pt-BR') : '';
+          const hist = a.historico || [];
           s += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
             <div style="width:14px;height:14px;border-radius:3px;border:2px solid ${done?'#059669':'#d1d5db'};flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:${done?'#059669':'transparent'}">
               ${done?'<svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="3"><polyline points="2,6 5,9 10,3"/></svg>':''}
@@ -9142,8 +9472,14 @@ function trGerarRelatorio(matricula) {
             <div style="flex:1;min-width:0">
               <div style="font-size:12px;${done?'text-decoration:line-through;color:#9ca3af':'color:#374151'}">${a.acao}${concluídoEm}</div>
               ${meta?`<div style="font-size:11px;color:#9ca3af">${meta}</div>`:''}
+              ${hist.length ? `<div style="margin-top:4px;padding-left:4px;border-left:2px solid #e5e7eb">
+                ${hist.map(h=>`<div style="font-size:10px;color:#9ca3af;margin-bottom:2px"><strong>${formatDate(h.data)}</strong>${h.autor?' · '+h.autor:''} [${EVENTO_REL[h.evento]||h.evento}]${h.nota?' — <em>'+h.nota+'</em>':''}</div>`).join('')}
+              </div>` : ''}
             </div>
           </div>`;
+        }
+        if (acoesCanc.length) {
+          s += `<div style="font-size:11px;color:#9ca3af;margin-top:4px">${acoesCanc.length} ação(ões) cancelada(s)</div>`;
         }
         s += `</div>`;
       }
@@ -9175,7 +9511,7 @@ function trRenderPdiSection(pdiData) {
     const tituloPlano = p.titulo
       || ((_dpCiclos || []).find(c => c.id === p.ciclo_id)?.nome)
       || 'Ciclo não identificado';
-    const acoes = p.acoes || [];
+    const acoes = (p.acoes || []).filter(a => !a.cancelada);
     html += `<div style="margin-bottom:10px">
       <div style="font-size:10px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${tituloPlano}</div>`;
     for (const a of acoes) {
