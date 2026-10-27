@@ -7161,6 +7161,17 @@ async function dpGravarTrajetoriaDP(avalId, snap, cicloId) {
       resultadoValor = res?.[0]?.dp_resultados_bonus?.[0]?.valor_bonus ?? null;
     } catch(_) {}
 
+    // Busca o valor máximo possível da versão (soma de valor_se_sim de todos os critérios)
+    let resultadoValorMax = null;
+    try {
+      const versaoId = _dpCiclos?.find(c => c.id === cicloId)?.versao_id;
+      if (versaoId) {
+        const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&select=valor_se_sim`) || [];
+        const soma = crits.reduce((s, c) => s + (c.valor_se_sim != null ? Number(c.valor_se_sim) : 0), 0);
+        if (soma > 0) resultadoValorMax = soma;
+      }
+    } catch(_) {}
+
     const valorLabel = resultadoValor != null
       ? ' · R$ ' + Number(resultadoValor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       : '';
@@ -7168,15 +7179,16 @@ async function dpGravarTrajetoriaDP(avalId, snap, cicloId) {
 
     await sbPost(`/rest/v1/dev_historico`, {
       matricula_colaborador: matricula,
-      data:            new Date().toISOString().slice(0, 10),
-      tipo:            'avaliacao_concluida',
-      titulo:          cicloNome || 'Avaliação de desempenho concluída',
+      data:                new Date().toISOString().slice(0, 10),
+      tipo:                'avaliacao_concluida',
+      titulo:              cicloNome || 'Avaliação de desempenho concluída',
       descricao,
-      modulo_origem:   'dp',
-      ciclo_id:        cicloId || null,
-      avaliacao_id:    avalId,
-      resultado_valor: resultadoValor,
-      created_by:      _nomeUsuario || null,
+      modulo_origem:       'dp',
+      ciclo_id:            cicloId || null,
+      avaliacao_id:        avalId,
+      resultado_valor:     resultadoValor,
+      resultado_valor_max: resultadoValorMax,
+      created_by:          _nomeUsuario || null,
     });
   } catch(e) { /* silencioso — não deve travar o fluxo */ }
 }
@@ -8190,7 +8202,7 @@ async function renderTrajetoria() {
   if (!_dpCiclos.length) await dpLoadCiclos();
 
   // Carrega histórico D&P de todos os colaboradores
-  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data,titulo,descricao,ciclo_id,avaliacao_id,created_by,resultado_valor') || [];
+  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data,titulo,descricao,ciclo_id,avaliacao_id,created_by,resultado_valor,resultado_valor_max') || [];
 
   // Agrupa por matricula
   _trHistoricoMap = {};
@@ -8295,7 +8307,7 @@ async function trAbrirPerfil(matricula, nome) {
   const cor = ['#2563EB','#059669','#7C3AED','#D97706','#DC2626','#0891B2'][Math.abs([...(colab.nome||nome||'')].reduce((a,ch)=>a+ch.charCodeAt(0),0)) % 6];
 
   // Carrega histórico D&P desta matrícula
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
 
   const ciclos = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
   const feeds  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
@@ -8350,6 +8362,15 @@ async function trAbrirPerfil(matricula, nome) {
 }
 
 /* ─── Gráfico de evolução de resultados por ciclo ─── */
+// Retorna cor e cor de texto para o percentual de atingimento
+function trCorAting(valor, max) {
+  if (!max || max <= 0) return { cor: 'var(--accent)', txt: 'var(--accent)' };
+  const pct = Number(valor) / Number(max);
+  if (pct >= 1)    return { cor: '#047857', txt: '#047857' }; // verde
+  if (pct >= 0.7)  return { cor: '#b45309', txt: '#b45309' }; // âmbar
+  return           { cor: '#dc2626', txt: '#dc2626' };        // vermelho
+}
+
 // avalList: array de registros avaliacao_concluida com resultado_valor != null, ordem cronológica
 function trRenderGraficoCiclos(avalList) {
   if (!avalList.length) return '';
@@ -8365,13 +8386,14 @@ function trRenderGraficoCiclos(avalList) {
   const points = avalList.map((h, i) => {
     const x = PAD_L + (avalList.length > 1 ? i * xStep : innerW / 2);
     const y = PAD_T + innerH - (Number(h.resultado_valor) / maxV) * innerH;
-    return { x, y, val: Number(h.resultado_valor), titulo: h.titulo || '' };
+    const cores = trCorAting(h.resultado_valor, h.resultado_valor_max);
+    return { x, y, val: Number(h.resultado_valor), titulo: h.titulo || '', cor: cores.cor };
   });
 
   const polyline = points.map(p => `${p.x},${p.y}`).join(' ');
 
   const dots = points.map(p => `
-    <circle cx="${p.x}" cy="${p.y}" r="3.5" fill="var(--accent)" stroke="var(--card)" stroke-width="1.5">
+    <circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${p.cor}" stroke="var(--card)" stroke-width="1.5">
       <title>${p.titulo}: R$ ${p.val.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</title>
     </circle>`).join('');
 
@@ -8380,14 +8402,16 @@ function trRenderGraficoCiclos(avalList) {
     return `<text x="${p.x}" y="${H - 4}" text-anchor="middle" font-size="8" fill="var(--text-ter)">${nome}</text>`;
   }).join('');
 
+  const lastH = avalList[avalList.length - 1];
   const lastP = points[points.length - 1];
   const lastValFmt = 'R$ ' + lastP.val.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const lastCor = trCorAting(lastH.resultado_valor, lastH.resultado_valor_max).cor;
 
   return `
     <div style="margin-top:14px;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <span style="font-size:11px;font-weight:600;color:var(--text-sec)">Resultado por ciclo</span>
-        <span style="font-size:12px;font-weight:700;color:var(--accent)">${lastValFmt}</span>
+        <span style="font-size:12px;font-weight:700;color:${lastCor}">${lastValFmt}</span>
       </div>
       <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
         <polyline points="${polyline}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
@@ -8462,12 +8486,20 @@ function trRenderTimelineItens(hist) {
       (_perfil === 'rh' || _perfil === 'admin') ||
       (_perfil === 'gestor' && h.created_by === _nomeUsuario)
     );
+    const valorBadge = (h.tipo === 'avaliacao_concluida' && h.resultado_valor != null)
+      ? (() => {
+          const cor = trCorAting(h.resultado_valor, h.resultado_valor_max).cor;
+          const fmt = 'R$ ' + Number(h.resultado_valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+          return `<span style="font-size:11px;font-weight:700;color:${cor}">${fmt}</span>`;
+        })()
+      : '';
     return `<div class="hist-item">
       <div class="hist-dot tipo-${h.tipo}"></div>
       <div class="hist-content">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">
           <span style="font-size:11px;color:var(--text-ter)">${mes}</span>
           <span class="status-badge ${meta.cor}">${meta.label}</span>
+          ${valorBadge}
           ${podeExcluir ? `<button onclick="trExcluirFeedback(${h.id})" style="margin-left:auto;padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-ter);cursor:pointer" title="Excluir registro">Excluir</button>` : ''}
         </div>
         <div class="hist-titulo">${h.titulo || '—'}</div>
@@ -8499,7 +8531,7 @@ async function trExcluirFeedback(id) {
   toast('Registro excluído.');
   // Recarrega a timeline usando _trMatriculaAtual (definida em trAbrirPerfil)
   const matricula = _trMatriculaAtual;
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
   trRenderTimeline(hist);
   _trHistoricoMap[matricula] = hist;
 }
@@ -8531,7 +8563,7 @@ async function trSalvarFeedback(matricula) {
   toast('Registro salvo.');
   document.getElementById('tr-fb-texto').value = '';
   // Recarrega a timeline
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
   trRenderTimeline(hist);
   // Atualiza mapa em memória
   _trHistoricoMap[matricula] = hist;
