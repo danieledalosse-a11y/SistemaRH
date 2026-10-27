@@ -6790,6 +6790,7 @@ async function salvarAvaliacao(status) {
   if (statusEfetivo === 'concluida') {
     const partSnap = (_dpParticipantes.find(p => p.id === _dpAvaliacaoAtual.participante_id) || {}).snapshot || {};
     dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', avalId, { colaborador: partSnap.nome });
+    dpGravarTrajetoriaDP(avalId, partSnap, _dpCicloAtual?.id);
   }
 
   // ── INSTRUMENTAÇÃO ──
@@ -7124,6 +7125,33 @@ async function dpRegistrarEvento(tipo, entidade, entidadeId, detalhe = {}) {
   } catch(e) { /* silencioso — log não deve travar o fluxo */ }
 }
 
+// Grava um registro em dev_historico ao concluir avaliação.
+// Idempotente: verifica se já existe registro com o mesmo avaliacao_id antes de inserir.
+async function dpGravarTrajetoriaDP(avalId, snap, cicloId) {
+  try {
+    const matricula = snap?.matricula;
+    if (!matricula || !avalId) return;
+
+    // Idempotência: não duplicar se já existe registro para esta avaliação
+    const existente = await sbGet(`/rest/v1/dev_historico?avaliacao_id=eq.${avalId}&tipo=eq.avaliacao_concluida&select=id&limit=1`);
+    if (existente && existente.length > 0) return;
+
+    const cicloNome = _dpCiclos?.find(c => c.id === cicloId)?.nome || '';
+    const descricao = [snap.cargo, cicloNome].filter(Boolean).join(' · ');
+
+    await sbPost(`/rest/v1/dev_historico`, {
+      matricula_colaborador: matricula,
+      data:            new Date().toISOString().slice(0, 10),
+      tipo:            'avaliacao_concluida',
+      titulo:          'Avaliação de desempenho concluída',
+      descricao,
+      modulo_origem:   'dp',
+      ciclo_id:        cicloId || null,
+      avaliacao_id:    avalId,
+    });
+  } catch(e) { /* silencioso — não deve travar o fluxo */ }
+}
+
 async function dpIniciarAjuste(participanteId) {
   if (_perfil !== 'rh' && _perfil !== 'admin') { toast('Apenas o RH pode ajustar avaliações concluídas.', true); return; }
   const part = _dpParticipantes.find(p => p.id === participanteId);
@@ -7432,6 +7460,7 @@ async function dpConcluirAvaliacaoIndividual(participanteId) {
     if (a) { a.status = 'concluida'; a.concluida_em = agora; }
   });
   await dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', aval.id, { colaborador: nome });
+  dpGravarTrajetoriaDP(aval.id, part?.snapshot || {}, _dpCicloAtual?.id);
   toast('Avaliação concluída.');
   _dpRenderAvaliacoesComFiltro();
   const gdpBtn = document.getElementById('gdptab-btn-avaliacoes');
@@ -7491,6 +7520,7 @@ async function dpConcluirTodasAvaliacoes(escopo) {
         if (x) { x.status = 'concluida'; x.concluida_em = agora; }
       });
       await dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', a.id, { colaborador: (p.snapshot||{}).nome });
+      dpGravarTrajetoriaDP(a.id, p.snapshot || {}, _dpCicloAtual?.id);
     } else {
       erros++;
     }
