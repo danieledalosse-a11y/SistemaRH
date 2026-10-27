@@ -3308,10 +3308,10 @@ async function loadDpModelos() {
 /* ─────────────────────────────────────────────
    MODELOS — RENDER
 ───────────────────────────────────────────── */
-async function renderModelos() {
+async function renderModelos(reload = false) {
   const el = document.getElementById('modelosList');
   el.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
-  await loadDpModelos();
+  if (reload) await loadDpModelos();
   const q = (document.getElementById('modelosSearchInput')?.value||'').toLowerCase().trim();
   const visíveis = q ? _dpModelos.filter(m => m.nome.toLowerCase().includes(q)) : _dpModelos;
   if (!visíveis.length) {
@@ -3410,7 +3410,7 @@ async function salvarNovoModelo() {
   if (!versao) { toast('Modelo criado mas erro ao criar versão: ' + sbErrMsg(), true); }
   else { toast('Modelo criado.'); }
   document.getElementById('modalNovoModelo').classList.remove('open');
-  renderModelos();
+  renderModelos(true);
 }
 
 async function criarVersaoModelo(modeloId) {
@@ -3424,7 +3424,7 @@ async function criarVersaoModelo(modeloId) {
   });
   if (ok && ok[0]) {
     toast('Versão criada.');
-    await renderModelos();
+    await renderModelos(true);
     abrirDrawerVersao(ok[0].id, false);
   } else {
     toast('Erro ao criar versão: ' + sbErrMsg(), true);
@@ -3464,7 +3464,7 @@ async function novaVersaoBaseada(versaoId) {
     });
   }
   toast('Nova versão criada com base na anterior.');
-  await renderModelos();
+  await renderModelos(true);
   abrirDrawerVersao(novoId, false);
 }
 
@@ -3985,7 +3985,7 @@ async function confirmarPublicacao() {
   const el = document.getElementById('dvValidacaoInline');
   el.innerHTML = `<div class="validacao-result validacao-ok">Publicando...</div>`;
   const ok = await sbPatch(`/rest/v1/dp_versoes?id=eq.${_dpVersaoAtual.id}`, { em_uso: true, publicado_em: new Date().toISOString() });
-  if (ok) { toast('Versão publicada com sucesso.'); fecharDrawerVersao(); renderModelos(); }
+  if (ok) { toast('Versão publicada com sucesso.'); fecharDrawerVersao(); renderModelos(true); }
   else { el.innerHTML = `<div class="validacao-result validacao-err">Erro ao publicar.</div>`; }
 }
 
@@ -3993,7 +3993,7 @@ async function publicarVersao() {
   if (!_dpVersaoAtual) return;
   if (!confirm(`Publicar a versão ${_dpVersaoAtual.versao}? Esta ação não pode ser desfeita.`)) return;
   const ok = await sbPatch(`/rest/v1/dp_versoes?id=eq.${_dpVersaoAtual.id}`, { em_uso: true, publicado_em: new Date().toISOString() });
-  if (ok) { toast('Versão publicada.'); fecharDrawerVersao(); renderModelos(); }
+  if (ok) { toast('Versão publicada.'); fecharDrawerVersao(); renderModelos(true); }
   else toast('Erro ao publicar versão.', true);
 }
 
@@ -4010,7 +4010,7 @@ async function publicarVersaoDirecto(versaoId) {
   } catch {}
   if (!confirm('Publicar esta versão? Esta ação não pode ser desfeita.')) return;
   const ok = await sbPatch(`/rest/v1/dp_versoes?id=eq.${versaoId}`, { em_uso: true, publicado_em: new Date().toISOString() });
-  if (ok) { toast('Versão publicada.'); renderModelos(); }
+  if (ok) { toast('Versão publicada.'); renderModelos(true); }
   else toast('Erro ao publicar.', true);
 }
 
@@ -5845,14 +5845,14 @@ async function salvarWizard() {
       tipo_calculo: _wiz.tipo_calculo || 'media',
       converte_para_conceito: _wiz.converte_conceito
     });
-    if (!versaoRes || !versaoRes[0]) { toast('Modelo criado mas erro ao criar versão: ' + sbErrMsg(), true); fecharWizard(); renderModelos(); return; }
+    if (!versaoRes || !versaoRes[0]) { toast('Modelo criado mas erro ao criar versão: ' + sbErrMsg(), true); fecharWizard(); renderModelos(true); return; }
     const versaoId = versaoRes[0].id;
 
     toast('Modelo criado. Configure os critérios no drawer.');
     fecharWizard();
 
     // 4. Atualizar lista e abrir drawer da versão criada
-    await renderModelos();
+    await renderModelos(true);
     abrirDrawerVersao(versaoId, false);
 
   } catch(e) {
