@@ -743,6 +743,7 @@ document.getElementById('drawerDpCicloOverlay').classList.remove('open');
 | `131_dp_validar_conclusao.sql` | Função `dp_fn_validar_conclusao()` + trigger `trg_validar_conclusao` BEFORE UPDATE em `dp_avaliacoes`. Bloqueia transição `status → concluida` quando há critérios `obrigatorio=true` sem resposta preenchida. Obtém `versao_id` via `dp_ciclos`. Não interfere em saves `em_andamento` ou `respondida`. `SECURITY DEFINER`. | **Executado em produção** (2026-10-16) |
 | `132_dp_corrigir_respondidas.sql` | Correção de dados: UPDATE `dp_avaliacoes SET status='respondida'` para registros com `status='em_andamento'` que já tinham todos os critérios obrigatórios respondidos (criados antes da migration 130). Corrigiu 9 avaliações do ciclo Gratificação CD - Setembro/2026. 1 avaliação permaneceu `em_andamento` (9/10 critérios — incompleta). | **Executado em produção** (2026-10-16) |
 | `134_dp_avaliacoes_unique_participante.sql` | `ALTER TABLE dp_avaliacoes ADD CONSTRAINT dp_avaliacoes_participante_id_key UNIQUE (participante_id)` — impede duplicatas por condição de corrida (duplo clique ou requisições paralelas antes do retorno do primeiro POST). Pré-requisito: limpar duplicatas existentes com `SELECT participante_id, COUNT(*) FROM dp_avaliacoes GROUP BY participante_id HAVING COUNT(*) > 1`. | **Executado em produção** (2026-10-26) |
+| `133_dp_permitir_ajuste_avaliacao.sql` | **(1)** `ALTER TYPE dp_evento_historico ADD VALUE IF NOT EXISTS 'avaliacao_ajuste_iniciado'` e `'avaliacao_ajuste_concluido'`. **(2)** Reescreve `dp_fn_bloquear_reverter_conclusao()` com exceção explícita: permite `concluida → respondida` apenas quando `auth_perfil() IN ('rh','admin')`; todas as demais proteções (publicada irrestrita; outros perfis; outras transições) mantidas. | **Executado em produção** (2026-10-27) |
 
 ---
 
@@ -879,7 +880,50 @@ let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos
 ### Etapa 6 — Exportação
 | Função | O que faz |
 |---|---|
-| `dpExportarResultados()` | Gera .xls (HTML-as-XLS com mso-conditionals) com todos os participantes; colunas: matrícula, nome, cargo, setor, unidade, status avaliação, nota final, conceito |
+| `dpExportarResultados()` | Gera .xls (HTML-as-XLS com mso-conditionals); participantes antes dos não-participantes; colunas: Empresa, Matrícula, Nome, Cargo, Valor, Status; badges coloridos por status; `<colgroup>` com larguras fixas (Nome 220pt, Cargo 180pt, Empresa 160pt, Status 120pt, Valor 90pt, Matrícula 70pt) |
+
+**Regras de `dpExportarResultados()` (commits 92762d5 / e885120 / eff1736):**
+- **Empresa:** `_colaboradores.find(c => c.id === p.colaborador_id)?.empresa_registro_nome` com fallback para `snap.empresa_registro_nome`. Não usa snapshot de ciclos antigos (campo adicionado ao SELECT só em 2026-10-27).
+- **Valor:** `_dpResultadosBonus` → `valor_bonus`; formata como `R$ X.XXX,XX`; `—` quando sem bônus calculado.
+- **Status:** badge colorido inline: verde (Concluída), azul (Publicada), âmbar (Em andamento), vermelho (Não iniciada), roxo (Respondida), cinza (Não participou).
+- **Lookup de avaliação:** `_dpAvaliacoes.find(a => a.participante_id === p.id)` — não por `colaborador_id` (campo inexistente em `dp_avaliacoes`).
+- **`loadColaboradores`** e query de retroativos agora incluem `empresa_registro_nome` no `select=`.
+- **Snapshot** em `dpAdicionarColaboradores` mapeado com `empresa_registro_nome: c.empresa_registro_nome || ''`.
+
+## Melhorias entregues (2026-10-27) — fluxo Ajustar e Resultados
+
+### Etapa 0 — Correção do fluxo de Ajuste de Avaliação (commits `3f…` → `e885120`)
+
+**Problema:** botão "Ajustar" na aba Resultados retornava HTTP 400 ao tentar reverter `concluida → respondida`.
+
+**Três causas corrigidas:**
+
+| Causa | Correção |
+|---|---|
+| Trigger `trg_bloquear_reverter_conclusao` bloqueava toda reversão | Migration 133: exceção explícita para `concluida → respondida` quando `auth_perfil() IN ('rh','admin')` |
+| `dpAbrirAjuste` passava `avaliacaoId` para `dpAbrirFormAvaliacao` que espera `participanteId` | Função reescrita como `dpIniciarAjuste(participanteId)` com lookup correto |
+| ENUM `dp_evento_historico` não tinha `avaliacao_ajuste_iniciado`/`concluido` | Adicionados na migration 133 via `ADD VALUE IF NOT EXISTS` |
+
+**Redesign UX do Ajuste:**
+- Botão Ajustar **removido** da aba Resultados
+- Na aba Avaliações: ícone de lápis (botão `editarBtn`) aparece para avaliações com `status=concluida`, visível apenas para RH/admin
+- `editarBtn` chama `dpIniciarAjuste(participanteId)`:
+  1. PATCH `dp_avaliacoes → status='respondida'`
+  2. Registra evento `avaliacao_ajuste_iniciado`
+  3. Seta `_dpModoAjuste = true`
+  4. Abre `dpAbrirFormAvaliacao(participanteId)`
+- Ao fechar o formulário (`fecharFormAval`): se `_dpModoAjuste=true`, recalcula resultado, seta `status=concluida`, registra `avaliacao_ajuste_concluido`, exibe toast "Ajuste salvo…"
+- Toast de "Avaliação concluída." suprimido durante ajuste (`if (!_dpModoAjuste)`)
+
+**Variável de estado adicionada:**
+```js
+let _dpModoAjuste = false;  // true quando formulário aberto via dpIniciarAjuste
+```
+
+### Aba Resultados — simplificação visual
+
+- **Bônus duplicado removido:** linha `"bônus: R$ X"` abaixo do nome eliminada. A informação permanece como badge à direita. `notaInfo` agora exibe nota/conceito apenas quando não há bônus — nunca duplica.
+- **Botões Recalcular/Calcular por linha removidos:** toolbar mantém apenas "Calcular resultados (N)" em lote, exportar e encerrar ciclo. Cards da Resultados são somente leitura — lista limpa e visual.
 
 ## Melhorias entregues (2026-10-15) — prazo_avaliacao e edição de ciclos
 
@@ -919,6 +963,102 @@ let _dpCicloEditandoId = null;  // null = modo criação; UUID = modo edição
 - `dpAbrirModalCiclo(cicloId)` → modo edição (carrega dados, título "Editar Ciclo D&P")
 - `dpFecharModalCiclo()` zera `_dpCicloEditandoId`
 - Botão "Editar ciclo" na `dpRenderInfoCiclo()` — oculto quando `_perfil === 'gestor'`
+
+---
+
+## Trajetória Profissional — feature completa (commits cb588c6 / 7ed2703 / 3f8a5e3 / d18613a, 27/10/2026)
+
+### O que é
+
+Rastreia o histórico de desempenho de cada colaborador ao longo dos ciclos D&P, gravando registros em `dev_historico` a cada avaliação concluída, e exibindo essa linha do tempo tanto no módulo D&P quanto na aba "Desempenho" do drawer do Cadastro.
+
+### Migrations envolvidas
+
+| Migration | Conteúdo | Status |
+|---|---|---|
+| **135** (`135_trajetoria_dev_historico.sql`) | ADD COLUMN `ciclo_id uuid` + `avaliacao_id uuid` em `dev_historico` (nullable, SEM NOT NULL) | ✅ executada |
+| **136** (`136_dev_pdi_created_at.sql`) | ADD COLUMN `created_at TIMESTAMPTZ DEFAULT now()` em `dev_pdi` | ✅ executada |
+
+### Etapa 1 + 2 + 3 — Gravação e exibição no D&P (commit cb588c6)
+
+**`dpGravarTrajetoriaDP(avaliacaoId, cicloId, colaboradorId, matricula, nota, conceito)`**
+- POST em `dev_historico` com `modulo_origem='dp'`, `tipo='avaliacao_concluida'`, `ciclo_id`, `avaliacao_id`, `matricula_colaborador`
+- Chamada dentro de `salvarAvaliacao('concluida')` como fire-and-forget (sem `await`) para não bloquear o save
+- Título: `"Avaliação concluída — Ciclo {nome_ciclo}"` com nota e conceito no detalhe
+
+**Seção "Trajetória Profissional" no drawer D&P (aba Histórico ou seção separada):**
+- `renderTrajetoria(matricula)` — GET `dev_historico?matricula_colaborador=eq.X&modulo_origem=eq.dp&order=data.desc`
+- `trFiltrar(tipo)` — filtra por tipo de registro (todos/avaliação/feedback/melhoria/anotação)
+- `trRenderLista(registros)` — lista de cards com dot colorido, título, descrição, data
+- `trAbrirPerfil(registroId)` — abre painel lateral com detalhes
+- `trRenderTimeline(registros)` — linha do tempo visual com dados de cada ciclo
+- `trSalvarFeedback(tipo, titulo, descricao)` — POST novo registro em `dev_historico`
+
+**Tipos reconhecidos em `dev_historico` para o módulo D&P:**
+```js
+const TIPO_META = {
+  avaliacao_concluida: { label: 'Avaliação concluída', cor: '#16a34a' },
+  feedback_positivo:   { label: 'Feedback positivo',  cor: '#1570EF' },
+  ponto_melhoria:      { label: 'Ponto de melhoria',  cor: '#D97706' },
+  anotacao:            { label: 'Anotação',            cor: '#64748b' },
+};
+```
+
+### Etapa 4 — Aba "Desempenho" no drawer do Cadastro (commit 7ed2703)
+
+**Arquivo:** `modulos/cadastro/index.html`
+
+Tab button adicionado após "Histórico":
+```html
+<button class="drawer-tab" id="tab-btn-desempenho" onclick="setDrawerTab('desempenho', this)">
+  <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Desempenho
+</button>
+```
+
+Array `setDrawerTab` inclui `'desempenho'`; hook: `if (nome === 'desempenho') renderDesempenhoDP()`.
+
+**`renderDesempenhoDP()`** (Cadastro):
+- Usa `sbGet('dev_historico', 'matricula_colaborador=eq.X&modulo_origem=eq.dp&order=data.desc&limit=100')`
+- Assinatura `sbGet(tableName, queryParams)` — dois argumentos (padrão Cadastro, diferente do D&P que usa path completo)
+- `c.codigo` = matrícula (mapeado de `row.matricula` em L1746 do Cadastro)
+- Renderiza cards com dot colorido, título, descrição e data — mesma estrutura visual do `hist-item`
+
+### Etapa 5 — PDI vinculado ao ciclo ativo (commit 3f8a5e3)
+
+**Problema corrigido:** `renderPDI` e `salvarPDI` consultavam `dev_pdi` filtrando só por `matricula_colaborador` — o `[0]` poderia retornar o PDI de qualquer ciclo.
+
+**Comportamento atual:**
+
+`renderPDI()`:
+```js
+if (!_cicloAtivo) {
+  _pdiAcoes = [];
+  el.innerHTML = `<div class="empty-state"><p>Selecione um ciclo para gerenciar o PDI.</p></div>`;
+  return;  // bloqueio explícito — sem consultar banco
+}
+// filtra por ciclo_id=eq.{_cicloAtivo.id}
+```
+
+`salvarPDI()`:
+```js
+if (!_cicloAtivo) { toast('Selecione um ciclo antes de salvar o PDI.', true); return; }
+// upsert com ciclo_id=eq.{_cicloAtivo.id} — PATCH no registro deste ciclo ou POST novo
+```
+
+**Regra permanente:** quando `_cicloAtivo` é null, renderPDI e salvarPDI NUNCA consultam nem alteram o banco. Registros de outros ciclos são preservados. Sem risco de duplicidade porque o PATCH inclui filtro `ciclo_id=eq.X` e o POST cria com `ciclo_id` explícito.
+
+### Etapa 6 — Aba Resultados oculta para Gestor (commit d18613a)
+
+**Local:** `dpAbrirDrawerCiclo` (~L4533 de `modulos/desenvolvimento/index.html`)
+
+```js
+// antes:
+if (btnRes) btnRes.style.display = ativoOuEncerrado ? '' : 'none';
+// depois:
+if (btnRes) btnRes.style.display = (ativoOuEncerrado && _perfil !== 'gestor') ? '' : 'none';
+```
+
+Gestor não tem acesso à aba Resultados (nota final, conceito, bônus). RH/admin permanecem sem alteração.
 
 ---
 
