@@ -6995,18 +6995,15 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
   const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${_dpCicloAtual.versao_id}&select=id,peso,tipo_resposta,valor_se_sim,valor_se_nao,contribui_calculo`) || [];
 
   // c) Respostas da avaliação
-  const respostas = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${avaliacaoId}&select=versao_criterio_id,valor_numerico_livre,snapshot_opcao_valor_numerico,resposta_texto`) || [];
+  const respostas = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${avaliacaoId}&select=versao_criterio_id,valor_numerico_livre,snapshot_opcao_valor_num,resposta_texto`) || [];
 
-  // d) Mapear valor numérico por critério — DEBUG TEMPORÁRIO
-  console.log('[DP:calc] crits retornados:', crits.length, crits.map(c=>({tipo:c.tipo_resposta,vsim:c.valor_se_sim,contrib:c.contribui_calculo})));
-  console.log('[DP:calc] respostas retornadas:', respostas.length, respostas.map(r=>({vcId:r.versao_criterio_id?.slice(0,8),txt:r.resposta_texto})));
   const critsComValor = [];
   for (const c of crits) {
     const r = respostas.find(rs => rs.versao_criterio_id === c.id);
     if (!r) continue;
     let val;
     if (c.tipo_resposta === 'escala') {
-      val = r.snapshot_opcao_valor_numerico;
+      val = r.snapshot_opcao_valor_num;
     } else if (c.tipo_resposta === 'binario' && c.valor_se_sim != null) {
       // binário com valor monetário: usa valor_se_sim se "sim", valor_se_nao (default 0) se "não"
       val = r.resposta_texto === 'sim' ? c.valor_se_sim : (c.valor_se_nao ?? 0);
