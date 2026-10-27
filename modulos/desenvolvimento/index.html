@@ -6110,8 +6110,10 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
     _dpFormNavIdx  = navList.indexOf(participanteId);
   } else if (_dpFormNavList.length === 0 || !_dpFormNavList.includes(participanteId)) {
     // Primeira abertura via botão RH sem lista explícita — auto-constrói respeitando filtros ativos
-    const base = _dpFiltrarParticipantes(_dpParticipantes, _dpAvalFiltroNome, _dpAvalFiltroCargos)
+    let base = _dpFiltrarParticipantes(_dpParticipantes, _dpAvalFiltroNome, _dpAvalFiltroCargos)
       .filter(p => !p.nao_participa);
+    if (_dpAvalFiltroStatus && _dpAvalFiltroStatus !== 'nao_participa')
+      base = _dpFiltrarPorStatus(base, _dpAvalFiltroStatus, _dpAvaliacoes);
     _dpFormNavList = base.length ? base.map(p => p.id) : _dpParticipantes.filter(p => !p.nao_participa).map(p => p.id);
     _dpFormNavIdx  = _dpFormNavList.indexOf(participanteId);
   } else {
