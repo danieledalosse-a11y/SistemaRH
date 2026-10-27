@@ -1861,8 +1861,9 @@ async function init() {
     loadCompetencias(),
     loadDpCriterios(),
     loadDpEscalas(),
-    loadDpModelos(),
-    loadDpTiposCalculo(),
+    // renderModelos só precisa de _dpModelos/_dpVersoes e _dpTiposCalculo —
+    // encadeia o render assim que esses dois chegam, sem esperar as demais queries
+    Promise.all([loadDpModelos(), loadDpTiposCalculo()]).then(() => renderModelos()),
     loadDpTiposAvaliador(),
     loadDpTabelasConceito(),
     loadParamSetores(),
@@ -1871,7 +1872,6 @@ async function init() {
   ]);
   populateSetorFilter();
   renderColabList();
-  renderModelos();
 }
 
 async function loadColaboradores() {
@@ -1902,6 +1902,7 @@ async function loadAvaliacoesCiclo(cicloId) {
 ───────────────────────────────────────────── */
 function populateCicloSelect() {
   const sel = document.getElementById('cicloSelect');
+  if (!sel) return;
   sel.innerHTML = '<option value="">— Selecione um ciclo —</option>';
   _ciclos.forEach(c => {
     const opt = document.createElement('option');
@@ -1916,15 +1917,17 @@ function populateCicloSelect() {
 }
 
 async function onCicloChange() {
-  const id = document.getElementById('cicloSelect').value;
+  const cicloSel = document.getElementById('cicloSelect');
+  if (!cicloSel) return;
+  const id = cicloSel.value;
   _cicloAtivo = _ciclos.find(c => String(c.id) === String(id)) || null;
   const badge = document.getElementById('cicloBadge');
-  if (_cicloAtivo) {
+  if (_cicloAtivo && badge) {
     badge.style.display = '';
     badge.className = `ciclo-badge ${_cicloAtivo.status}`;
     const labels = { aberto:'Ativo', fechado:'Encerrado', rascunho:'Rascunho' };
     badge.textContent = labels[_cicloAtivo.status] || _cicloAtivo.status;
-  } else {
+  } else if (badge) {
     badge.style.display = 'none';
   }
   await loadAvaliacoesCiclo(id);
@@ -1935,8 +1938,9 @@ async function onCicloChange() {
    LISTA DE COLABORADORES
 ───────────────────────────────────────────── */
 function populateSetorFilter() {
-  const setores = [...new Set(_colaboradores.map(c => c.setor).filter(Boolean))].sort();
   const sel = document.getElementById('filterSetor');
+  if (!sel) return;
+  const setores = [...new Set(_colaboradores.map(c => c.setor).filter(Boolean))].sort();
   sel.innerHTML = '<option value="">Todos os setores</option>';
   setores.forEach(s => {
     const opt = document.createElement('option');
@@ -1969,6 +1973,7 @@ function mediaBadge(media) {
 }
 
 function renderColabList() {
+  if (!document.getElementById('colabList')) return;
   const q     = (document.getElementById('searchInput').value||'').toLowerCase();
   const fSt   = document.getElementById('filterStatus').value;
   const fSet  = document.getElementById('filterSetor').value;
