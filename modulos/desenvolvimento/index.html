@@ -244,6 +244,41 @@
   .tr-mini-stat { text-align:center; background:var(--card); border-radius:8px; padding:8px; }
   .tr-mini-stat .val { font-size:20px; font-weight:700; }
   .tr-mini-stat .lbl { font-size:10px; color:var(--text-ter); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+  /* ── Relatório Completo do Colaborador ── */
+  #trRelatorioOverlay { position:fixed; inset:0; z-index:9999; background:#fff; color:#1a1a1a; overflow-y:auto; display:none; }
+  .rel-page { max-width:780px; margin:0 auto; padding:32px 40px 48px; font-family:inherit; }
+  .rel-header { display:flex; align-items:flex-start; gap:18px; border-bottom:2px solid #e5e7eb; padding-bottom:20px; margin-bottom:24px; }
+  .rel-avatar { width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:17px; font-weight:700; color:#fff; flex-shrink:0; }
+  .rel-nome { font-size:18px; font-weight:700; margin-bottom:3px; color:#111827; }
+  .rel-sub { font-size:12px; color:#6c7589; margin-bottom:2px; }
+  .rel-kpis { display:flex; gap:32px; margin-bottom:28px; padding:16px 20px; background:#f8fafc; border-radius:10px; border:1px solid #e5e7eb; }
+  .rel-kpi .rv { font-size:22px; font-weight:700; color:#2563eb; }
+  .rel-kpi .rl { font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:#6c7589; margin-top:2px; }
+  .rel-section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#9ca3af; margin-bottom:12px; border-top:1px solid #e5e7eb; padding-top:20px; margin-top:4px; }
+  .rel-item { border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; margin-bottom:10px; }
+  .rel-item-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:4px; }
+  .rel-item-titulo { font-size:13px; font-weight:600; color:#111827; margin-top:2px; }
+  .rel-item-meta { font-size:11px; color:#9ca3af; white-space:nowrap; flex-shrink:0; }
+  .rel-item-desc { font-size:12px; color:#374151; margin-top:6px; line-height:1.6; }
+  .rel-item-tipo { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; display:inline-block; padding:2px 8px; border-radius:6px; }
+  .rel-tipo-avaliacao { background:#eff6ff; color:#2563eb; }
+  .rel-tipo-feedback  { background:#f0fdf4; color:#059669; }
+  .rel-tipo-melhoria  { background:#fff7ed; color:#d97706; }
+  .rel-tipo-anotacao  { background:#f5f3ff; color:#7c3aed; }
+  .rel-resultado-chip { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; margin-top:8px; }
+  .rel-crit-table { width:100%; border-collapse:collapse; margin-top:10px; font-size:12px; }
+  .rel-crit-table th { text-align:left; color:#6c7589; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:4px 8px; border-bottom:1px solid #e5e7eb; }
+  .rel-crit-table td { padding:5px 8px; border-bottom:1px solid #f3f4f6; vertical-align:top; color:#374151; }
+  .rel-crit-obs { font-style:italic; color:#374151; }
+  .rel-actions { position:sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid #e5e7eb; padding:10px 40px; display:flex; align-items:center; gap:10px; }
+  .rel-empty { color:#9ca3af; font-size:12px; font-style:italic; padding:12px 0; }
+  @media print {
+    body > *:not(#trRelatorioOverlay) { display:none !important; }
+    #trRelatorioOverlay { position:static !important; overflow:visible !important; display:block !important; }
+    .rel-actions { display:none !important; }
+    .rel-page { padding:0; }
+    @page { size:A4; margin:20mm 25mm; }
+  }
   /* colab list items — reutilizados na Trajetória */
   .colab-item { display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:6px; transition: border-color .15s; }
   .colab-item:hover { border-color:var(--accent); }
@@ -1180,7 +1215,8 @@
     <div id="tr-view-perfil" style="display:none">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
         <button class="btn btn-secondary btn-sm" onclick="trVoltarLista()">← Voltar</button>
-        <span id="tr-perfil-breadcrumb" style="font-size:13px;color:var(--text-sec)"></span>
+        <span id="tr-perfil-breadcrumb" style="font-size:13px;color:var(--text-sec);flex:1"></span>
+        <button class="btn btn-secondary btn-sm" id="tr-btn-relatorio" onclick="trGerarRelatorio(_trMatriculaAtual)" style="display:none">Relatório completo</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:14px;align-items:start" class="tr-twocol">
         <!-- col esquerda: resumo + form feedback -->
@@ -8187,6 +8223,8 @@ init();
 
 let _trHistoricoMap         = {};  // matricula → [registros dp de dev_historico]
 let _trSnapshotCriteriosMap = {};  // avaliacao_id → [critérios com observação do snapshot]
+let _trSnapshotFullMap      = {};  // avaliacao_id → snapshot_criterios completo (todos os critérios)
+let _trHistAtual            = [];  // histórico do colaborador aberto na view de perfil
 let _trInicializado         = false; // guard: evita re-fetch ao voltar para a aba
 let _trFiltroNome     = '';
 let _trFiltroSetor    = '';
@@ -8340,12 +8378,14 @@ async function trAbrirPerfil(matricula, nome) {
   // Carrega snapshot_criterios para avaliações concluídas (observações por competência)
   const avalIds = hist.filter(h => h.tipo === 'avaliacao_concluida' && h.avaliacao_id).map(h => h.avaliacao_id);
   _trSnapshotCriteriosMap = {};
+  _trSnapshotFullMap = {};
   if (avalIds.length) {
     try {
       const bonusRows = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${avalIds.join(',')})&select=avaliacao_id,dp_resultados_bonus(snapshot_criterios)`) || [];
       for (const row of bonusRows) {
         const snap = row.dp_resultados_bonus?.snapshot_criterios;
         if (!snap) continue;
+        _trSnapshotFullMap[row.avaliacao_id] = snap;
         const comObs = snap.filter(c => c.observacao && c.observacao.trim() !== '');
         if (comObs.length) _trSnapshotCriteriosMap[row.avaliacao_id] = comObs;
       }
@@ -8417,6 +8457,144 @@ async function trAbrirPerfil(matricula, nome) {
 
   // Linha do tempo
   trRenderTimeline(hist);
+
+  // Armazena histórico em memória para o relatório completo
+  _trHistAtual = hist;
+  const btnRel = document.getElementById('tr-btn-relatorio');
+  if (btnRel) btnRel.style.display = '';
+}
+
+/* ─── Relatório Completo do Colaborador ─── */
+function trGerarRelatorio(matricula) {
+  if (!matricula) return;
+  const colab = _colaboradores.find(c => c.matricula === matricula) || {};
+  const hist  = _trHistAtual;
+
+  const iniciais = (colab.nome || matricula).split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  const cor = ['#2563EB','#059669','#7C3AED','#D97706','#DC2626','#0891B2'][
+    Math.abs([...(colab.nome||'')].reduce((a,ch)=>a+ch.charCodeAt(0),0)) % 6];
+
+  // Tempo de empresa
+  let tempoEmpresa = '';
+  if (colab.data_admissao) {
+    const adm = new Date(colab.data_admissao);
+    const hoje = new Date();
+    let anos = hoje.getFullYear() - adm.getFullYear();
+    let meses = hoje.getMonth() - adm.getMonth();
+    if (meses < 0) { anos--; meses += 12; }
+    if (anos > 0) tempoEmpresa = `${anos} ano${anos>1?'s':''}, ${meses} mês${meses!==1?'es':''}`;
+    else tempoEmpresa = `${meses} mês${meses!==1?'es':''}`;
+  }
+
+  const avaliacoes = hist.filter(h => h.tipo === 'avaliacao_concluida');
+  const feedbacks  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo));
+
+  // Último resultado (mais recente = primeiro em order desc)
+  let ultimoResultadoHtml = '';
+  if (avaliacoes.length && avaliacoes[0].resultado_valor != null) {
+    const u = avaliacoes[0];
+    const ci = trCorAting(u.resultado_valor, u.resultado_valor_max);
+    const pct = u.resultado_valor_max ? ` (${Math.round(u.resultado_valor/u.resultado_valor_max*100)}%)` : '';
+    ultimoResultadoHtml = `<div class="rel-kpi">
+      <div class="rv" style="font-size:15px;color:${ci.cor}">${Number(u.resultado_valor).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}${pct}</div>
+      <div class="rl">Último resultado</div>
+    </div>`;
+  }
+
+  // Renderiza cada item da timeline
+  function renderItem(h) {
+    const data  = h.data ? formatDate(h.data.split('T')[0]) : '—';
+    const autor = h.created_by || '—';
+    const metaStr = autor !== '—' ? `${data} · ${autor}` : data;
+
+    if (h.tipo === 'avaliacao_concluida') {
+      const snap = _trSnapshotFullMap[h.avaliacao_id] || _trSnapshotCriteriosMap[h.avaliacao_id] || [];
+      const cicloNome = (() => {
+        if (!h.ciclo_id) return '';
+        const c = (_dpCiclos||[]).find(c => c.id === h.ciclo_id);
+        return c?.nome || '';
+      })();
+      let resultHtml = '';
+      if (h.resultado_valor != null) {
+        const ci = trCorAting(h.resultado_valor, h.resultado_valor_max);
+        const pct = h.resultado_valor_max ? ` · ${Math.round(h.resultado_valor/h.resultado_valor_max*100)}% da meta` : '';
+        resultHtml = `<div class="rel-resultado-chip" style="background:${ci.cor}20;color:${ci.cor}">
+          ${Number(h.resultado_valor).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}${pct}
+        </div>`;
+      }
+      const critsHtml = snap.length ? `
+        <table class="rel-crit-table">
+          <thead><tr><th>Competência</th><th>Resposta</th><th>Observação</th></tr></thead>
+          <tbody>${snap.map(c => `<tr>
+            <td>${c.nome || '—'}</td>
+            <td>${c.tipo_resposta === 'sim_nao' ? (c.resposta ? 'Sim' : 'Não') : (c.resposta ?? '—')}</td>
+            <td class="rel-crit-obs">${c.observacao || ''}</td>
+          </tr>`).join('')}</tbody>
+        </table>` : '';
+      return `<div class="rel-item">
+        <div class="rel-item-header">
+          <div>
+            <span class="rel-item-tipo rel-tipo-avaliacao">Avaliação D&amp;P</span>
+            ${cicloNome ? `<span style="font-size:11px;font-weight:600;color:#374151;margin-left:6px">${cicloNome}</span>` : ''}
+          </div>
+          <span class="rel-item-meta">${metaStr}</span>
+        </div>
+        ${h.titulo ? `<div class="rel-item-titulo">${h.titulo}</div>` : ''}
+        ${resultHtml}${critsHtml}
+      </div>`;
+    }
+
+    const tipoMap = {
+      feedback_positivo: { cls:'rel-tipo-feedback', label:'Feedback positivo' },
+      ponto_melhoria:    { cls:'rel-tipo-melhoria', label:'Ponto de melhoria' },
+      anotacao:          { cls:'rel-tipo-anotacao', label:'Anotação' },
+    };
+    const t = tipoMap[h.tipo] || { cls:'rel-tipo-anotacao', label: h.tipo };
+    return `<div class="rel-item">
+      <div class="rel-item-header">
+        <span class="rel-item-tipo ${t.cls}">${t.label}</span>
+        <span class="rel-item-meta">${metaStr}</span>
+      </div>
+      ${h.titulo ? `<div class="rel-item-titulo">${h.titulo}</div>` : ''}
+      ${h.descricao ? `<div class="rel-item-desc">${h.descricao}</div>` : ''}
+    </div>`;
+  }
+
+  const geradoEm = new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  const html = `
+    <div class="rel-header">
+      <div class="rel-avatar" style="background:${cor}">${iniciais}</div>
+      <div>
+        <div class="rel-nome">${colab.nome || matricula}</div>
+        <div class="rel-sub">${[colab.cargo, colab.setor].filter(Boolean).join(' · ') || '—'}</div>
+        ${colab.empresa_registro_nome ? `<div class="rel-sub">${colab.empresa_registro_nome}</div>` : ''}
+        ${colab.data_admissao ? `<div class="rel-sub">Admissão: ${formatDate(colab.data_admissao)}${tempoEmpresa ? ` · ${tempoEmpresa}` : ''}</div>` : ''}
+        <div class="rel-sub" style="margin-top:2px">Matrícula: ${matricula}</div>
+      </div>
+    </div>
+    <div class="rel-kpis">
+      <div class="rel-kpi"><div class="rv">${avaliacoes.length}</div><div class="rl">Ciclos D&amp;P</div></div>
+      <div class="rel-kpi"><div class="rv">${feedbacks.length}</div><div class="rl">Registros</div></div>
+      ${ultimoResultadoHtml}
+    </div>
+    ${hist.length
+      ? `<div class="rel-section-title">Histórico completo</div>${hist.map(renderItem).join('')}`
+      : `<div class="rel-empty">Nenhum registro encontrado para este colaborador.</div>`}
+    <div style="font-size:10px;color:#9ca3af;margin-top:32px;padding-top:12px;border-top:1px solid #e5e7eb">
+      Relatório gerado em ${geradoEm} · SistemaRH Revest do Brasil
+    </div>`;
+
+  document.getElementById('trRelatorioConteudo').innerHTML = html;
+  document.getElementById('trRelatorioBreadcrumb').textContent = colab.nome || matricula;
+  const overlay = document.getElementById('trRelatorioOverlay');
+  overlay.style.display = 'block';
+  overlay.scrollTop = 0;
+}
+
+function trFecharRelatorio() {
+  const o = document.getElementById('trRelatorioOverlay');
+  if (o) o.style.display = 'none';
 }
 
 /* ─── Gráfico de evolução de resultados por ciclo ─── */
@@ -8670,6 +8848,8 @@ async function trSalvarFeedback(matricula) {
 function trVoltarLista() {
   document.getElementById('tr-view-lista').style.display = '';
   document.getElementById('tr-view-perfil').style.display = 'none';
+  const btnRel = document.getElementById('tr-btn-relatorio');
+  if (btnRel) btnRel.style.display = 'none';
 }
 </script>
 
@@ -8702,6 +8882,16 @@ function trVoltarLista() {
       <button class="btn btn-secondary btn-sm" onclick="salvarAvaliacao('em_andamento')">Salvar</button>
     </div>
   </div>
+</div>
+
+<!-- ══ OVERLAY: RELATÓRIO COMPLETO DO COLABORADOR ══ -->
+<div id="trRelatorioOverlay">
+  <div class="rel-actions">
+    <button class="btn btn-secondary btn-sm" onclick="trFecharRelatorio()">← Fechar</button>
+    <span id="trRelatorioBreadcrumb" style="font-size:13px;color:#6c7589;flex:1"></span>
+    <button class="btn btn-primary btn-sm" onclick="window.print()">Imprimir / Salvar PDF</button>
+  </div>
+  <div class="rel-page" id="trRelatorioConteudo"></div>
 </div>
 
 </body>
