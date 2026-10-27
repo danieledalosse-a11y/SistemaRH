@@ -7191,6 +7191,8 @@ async function dpGravarTrajetoriaDP(avalId, snap, cicloId) {
       resultado_valor_max: resultadoValorMax,
       created_by:          _nomeUsuario || null,
     });
+    // Invalida o cache da Trajetória para que a próxima abertura da aba reflita o novo registro
+    _trInicializado = false;
   } catch(e) { /* silencioso — não deve travar o fluxo */ }
 }
 
@@ -8182,6 +8184,7 @@ init();
 
 let _trHistoricoMap         = {};  // matricula → [registros dp de dev_historico]
 let _trSnapshotCriteriosMap = {};  // avaliacao_id → [critérios com observação do snapshot]
+let _trInicializado         = false; // guard: evita re-fetch ao voltar para a aba
 let _trFiltroNome     = '';
 let _trFiltroSetor    = '';
 let _trGestorApelido  = ''; // apelido param_gestor do gestor logado (filtro de equipe)
@@ -8194,6 +8197,12 @@ async function renderTrajetoria() {
   if (viewLista) viewLista.style.display = '';
   if (viewPerfil) viewPerfil.style.display = 'none';
 
+  // Fast path: dados já carregados — só re-renderiza a lista sem nova requisição
+  if (_trInicializado) {
+    trRenderLista();
+    return;
+  }
+
   // Para Gestor: obtém seu apelido uma vez (para filtrar equipe)
   if (_perfil === 'gestor' && !_trGestorApelido && _sessionColaboradorId) {
     const pg = await sbGet(`/rest/v1/param_gestor?colaborador_id=eq.${_sessionColaboradorId}&select=apelido&limit=1`);
@@ -8203,8 +8212,8 @@ async function renderTrajetoria() {
   // Garante que os ciclos estão carregados (Gestor não os carrega no init)
   if (!_dpCiclos.length) await dpLoadCiclos();
 
-  // Carrega histórico D&P de todos os colaboradores
-  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data,titulo,descricao,ciclo_id,avaliacao_id,created_by,resultado_valor,resultado_valor_max') || [];
+  // Carrega histórico D&P de todos os colaboradores — apenas campos necessários para lista e KPIs
+  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data') || [];
 
   // Agrupa por matricula
   _trHistoricoMap = {};
@@ -8213,6 +8222,8 @@ async function renderTrajetoria() {
     if (!_trHistoricoMap[r.matricula_colaborador]) _trHistoricoMap[r.matricula_colaborador] = [];
     _trHistoricoMap[r.matricula_colaborador].push(r);
   });
+
+  _trInicializado = true;
 
   // KPIs
   const hoje = new Date();
