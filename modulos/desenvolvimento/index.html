@@ -7020,7 +7020,7 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
 
   // b) Critérios da versão — sem filtro de contribui_calculo para capturar binários com valor_se_sim
   // (critérios de bônus monetário podem ter contribui_calculo=false mas ainda assim produzem resultado_bonus)
-  const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${_dpCicloAtual.versao_id}&select=id,peso,tipo_resposta,valor_se_sim,valor_se_nao,contribui_calculo`) || [];
+  const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${_dpCicloAtual.versao_id}&select=id,peso,tipo_resposta,valor_se_sim,valor_se_nao,contribui_calculo,criterio_nome_snapshot`) || [];
 
   // c) Respostas da avaliação
   const respostas = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${avaliacaoId}&select=versao_criterio_id,valor_numerico_livre,snapshot_opcao_valor_num,resposta_texto,observacao`) || [];
@@ -7105,7 +7105,7 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
   // O banco valida perfil (rh/admin) e resultado vazio internamente — sem dependência do frontend.
   const snapshotCriterios = critsBonus.length ? critsBonus.map(c => ({
     criterio_id:   c.id,
-    nome:          c.dp_criterios?.nome || c.criterio_nome_snapshot || '',
+    nome:          c.criterio_nome_snapshot || '',
     valor_se_sim:  c.valor_se_sim,
     valor_se_nao:  c.valor_se_nao ?? 0,
     resposta:      c.resposta_texto,
@@ -8348,6 +8348,24 @@ async function trAbrirPerfil(matricula, nome) {
         if (!snap) continue;
         const comObs = snap.filter(c => c.observacao && c.observacao.trim() !== '');
         if (comObs.length) _trSnapshotCriteriosMap[row.avaliacao_id] = comObs;
+      }
+    } catch(_) {}
+  }
+
+  // Resolver nomes dos critérios para snapshots legados (nome: '' quando gravado sem criterio_nome_snapshot)
+  if (Object.keys(_trSnapshotCriteriosMap).length) {
+    try {
+      const versaoIds = [...new Set(
+        hist.filter(h => h.ciclo_id).map(h => (_dpCiclos || []).find(c => c.id === h.ciclo_id)?.versao_id).filter(Boolean)
+      )];
+      if (versaoIds.length) {
+        const critsNomes = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=in.(${versaoIds.join(',')})&select=id,criterio_nome_snapshot`) || [];
+        const nomeMap = Object.fromEntries(critsNomes.map(c => [c.id, c.criterio_nome_snapshot || '']));
+        for (const criterios of Object.values(_trSnapshotCriteriosMap)) {
+          for (const c of criterios) {
+            if (!c.nome && nomeMap[c.criterio_id]) c.nome = nomeMap[c.criterio_id];
+          }
+        }
       }
     } catch(_) {}
   }
