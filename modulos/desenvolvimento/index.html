@@ -8811,19 +8811,21 @@ async function pdiAbrirCriacao(opts) {
   overlay.className = 'modal-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:10000';
 
-  const colaboradoresOpts = (_colaboradores||[])
-    .sort((a, b) => (a.nome||'').localeCompare(b.nome||''))
-    .map(c => `<option value="${c.matricula}" ${c.matricula===matriculaPre?'selected':''}>${c.nome} — ${c.matricula}</option>`)
-    .join('');
+  const nomePreInp = matriculaPre
+    ? ((_colaboradores||[]).find(c => c.matricula === matriculaPre)?.nome || '')
+    : '';
 
   overlay.innerHTML = `<div class="modal modal-lg" style="max-width:480px;width:100%;padding:24px">
     <div class="modal-title" style="margin-bottom:16px">Novo PDI</div>
     <div class="form-group">
       <label class="form-label">Colaborador *</label>
-      <select class="form-input" id="pdiCriacaoColab">
-        <option value="">Selecione…</option>
-        ${colaboradoresOpts}
-      </select>
+      <div style="position:relative">
+        <input type="text" id="pdiCriacaoColab" placeholder="Digite o nome..." autocomplete="off"
+          style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;background:var(--surface);color:var(--text)"
+          oninput="pdiFilterColab(this.value)" onfocus="pdiFilterColab(this.value)" onblur="setTimeout(()=>pdiHideColabList(),200)">
+        <input type="hidden" id="pdi-colab-matricula">
+        <div id="pdi-colab-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;max-height:220px;overflow-y:auto;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.12)"></div>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Título *</label>
@@ -8845,14 +8847,46 @@ async function pdiAbrirCriacao(opts) {
     </div>
   </div>`;
   document.body.appendChild(overlay);
-  // Se matrícula pré-definida, foca no título
-  if (matriculaPre) overlay.querySelector('#pdiCriacaoTitulo').focus();
+  // Se matrícula pré-definida, preenche o autocomplete e foca no título
+  if (matriculaPre && nomePreInp) {
+    pdiSelectColab(matriculaPre, nomePreInp);
+    overlay.querySelector('#pdiCriacaoTitulo').focus();
+  }
+}
+
+function pdiFilterColab(q) {
+  const list = document.getElementById('pdi-colab-list');
+  if (!list) return;
+  const colabs = (_colaboradores || [])
+    .filter(c => !q || c.nome.toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 40);
+  if (!colabs.length) { list.style.display = 'none'; return; }
+  list.innerHTML = colabs.map(c =>
+    `<div style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text)"
+      onmousedown="pdiSelectColab('${c.matricula}','${(c.nome||'').replace(/'/g,"\\'")}')"
+      onmouseover="this.style.background='var(--bg)'"
+      onmouseout="this.style.background=''">${c.nome}</div>`
+  ).join('');
+  list.style.display = 'block';
+}
+
+function pdiSelectColab(matricula, nome) {
+  const inp = document.getElementById('pdiCriacaoColab');
+  const mat = document.getElementById('pdi-colab-matricula');
+  if (inp) inp.value = nome;
+  if (mat) mat.value = matricula;
+  pdiHideColabList();
+}
+
+function pdiHideColabList() {
+  const list = document.getElementById('pdi-colab-list');
+  if (list) list.style.display = 'none';
 }
 
 async function pdiSalvarNovo() {
   const overlay = document.getElementById('pdiModalCriacao');
   if (!overlay) return;
-  const matricula  = overlay.querySelector('#pdiCriacaoColab').value;
+  const matricula  = overlay.querySelector('#pdi-colab-matricula').value;
   const titulo     = overlay.querySelector('#pdiCriacaoTitulo').value.trim();
   const gatilho    = overlay.querySelector('#pdiCriacaoGatilho').value;
   const responsavel = overlay.querySelector('#pdiCriacaoResponsavel').value.trim();
