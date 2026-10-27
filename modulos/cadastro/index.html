@@ -692,6 +692,7 @@
     <button class="drawer-tab" onclick="setDrawerTab('beneficios', this)"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>Benefícios</button>
     <button class="drawer-tab" onclick="setDrawerTab('arquivos', this)"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Arquivos</button>
     <button class="drawer-tab" onclick="setDrawerTab('historico', this)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Histórico</button>
+    <button class="drawer-tab" id="tab-btn-desempenho" onclick="setDrawerTab('desempenho', this)"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Desempenho</button>
     <button class="drawer-tab" onclick="setDrawerTab('uniformes', this)"><svg viewBox="0 0 24 24"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg>Uniformes e EPIs</button>
   </div>
   <div class="drawer-body">
@@ -1251,6 +1252,14 @@
       <div class="drawer-section">
         <div class="drawer-section-title">Movimentações registradas</div>
         <div id="historicoList"></div>
+      </div>
+    </div>
+
+    <!-- Aba: Desempenho (D&P) -->
+    <div id="tab-desempenho" style="display:none;">
+      <div class="drawer-section">
+        <div class="drawer-section-title">Trajetória de desempenho</div>
+        <div id="desempenhoList"></div>
       </div>
     </div>
 
@@ -3375,12 +3384,13 @@ function fecharFicha() {
 }
 
 function setDrawerTab(nome, btn) {
-  ['geral','contato','documentos','arquivos','familia','remuneracao','beneficios','historico','uniformes'].forEach(t => {
+  ['geral','contato','documentos','arquivos','familia','remuneracao','beneficios','historico','desempenho','uniformes'].forEach(t => {
     document.getElementById('tab-' + t).style.display = t === nome ? 'block' : 'none';
   });
   document.querySelectorAll('.drawer-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (nome === 'historico') renderHistoricoFicha();
+  if (nome === 'desempenho') renderDesempenhoDP();
   if (nome === 'uniformes') renderUniformesEPIs();
   if (nome === 'contato') setTimeout(atualizarMapa, 100);
   if (nome === 'arquivos') { const c = _fichaIdx !== null ? COLABORADORES[_fichaIdx] : null; if (c?._sbId) loadDocsPasta(c._sbId); }
@@ -4082,6 +4092,63 @@ function renderHistoricoFicha() {
       </div>
     </div>`;
   }).join('');
+}
+
+// ─── Desempenho D&P ──────────────────────────────────────────────────────────
+
+async function renderDesempenhoDP() {
+  if (_fichaIdx === null) return;
+  const c = COLABORADORES[_fichaIdx];
+  const el = document.getElementById('desempenhoList');
+  if (!c?.codigo) { el.innerHTML = '<p class="hist-vazio">Colaborador sem matrícula.</p>'; return; }
+
+  el.innerHTML = '<p class="hist-vazio" style="color:var(--text-ter)">Carregando…</p>';
+  try {
+    const hist = await sbGet('dev_historico',
+      `matricula_colaborador=eq.${encodeURIComponent(c.codigo)}&modulo_origem=eq.dp&order=data.desc&limit=100`
+    );
+
+    if (!hist.length) {
+      el.innerHTML = '<p class="hist-vazio">Nenhum registro de desempenho encontrado.</p>';
+      return;
+    }
+
+    const TIPO_META = {
+      avaliacao_concluida: { label: 'Avaliação concluída', cor: '#16a34a' },
+      feedback_positivo:   { label: 'Feedback positivo',  cor: '#1570EF' },
+      ponto_melhoria:      { label: 'Ponto de melhoria',  cor: '#D97706' },
+      anotacao:            { label: 'Anotação',            cor: '#64748b' },
+    };
+
+    const fmtData = d => {
+      if (!d) return '—';
+      if (d.includes('T')) {
+        const dt = new Date(d);
+        return dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      }
+      const [y, m, day] = d.split('-');
+      return `${day}/${m}/${y}`;
+    };
+
+    el.innerHTML = hist.map(h => {
+      const m = TIPO_META[h.tipo] || { label: h.tipo, cor: '#64748b' };
+      const titulo = h.titulo ? `<div class="hist-tipo" style="color:${m.cor};">${h.titulo}</div>` : `<div class="hist-tipo" style="color:${m.cor};">${m.label}</div>`;
+      const descricao = h.descricao ? `<div class="hist-detalhe">${h.descricao}</div>` : '';
+      const usuario = h.usuario_nome ? `<span style="font-weight:600;">${h.usuario_nome}</span> · ` : '';
+      const badge = `<span style="display:inline-block;font-size:9px;font-weight:600;padding:1px 6px;border-radius:4px;background:${m.cor}20;color:${m.cor};margin-right:4px;">${m.label}</span>`;
+      return `
+      <div class="hist-item">
+        <div class="hist-dot" style="background:${m.cor};flex-shrink:0;"></div>
+        <div class="hist-info">
+          ${titulo}
+          ${descricao}
+          <div class="hist-data">${usuario}${fmtData(h.data)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<p class="hist-vazio" style="color:var(--red);">Erro ao carregar: ${e.message}</p>`;
+  }
 }
 
 // ─── Uniformes e EPIs ────────────────────────────────────────────────────────
