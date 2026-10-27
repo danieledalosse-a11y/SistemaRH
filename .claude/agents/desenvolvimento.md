@@ -24,6 +24,8 @@ Arquivo principal: `C:\Users\reves\SistemaRH\modulos\desenvolvimento\index.html`
 9. **verde/laranja/amarelo (melhorou/piorou/manteve/sem_comparacao) são calculados na camada de apresentação** — nunca armazenar no banco.
 10. **Legibilidade mínima 11px** para qualquer texto informativo; usar tokens `--text-sec/#4B5565` e `--text-ter/#6C7589`.
 11. **Biblioteca de Critérios usa `dp_criterios` exclusivamente** — `dev_competencias` é legado preservado para referência histórica, nunca exibida na UI.
+12. **`renderModelos()` deve ser chamado APÓS o `await Promise.all` no `init()`** — nunca encadeado dentro de `.then()` dentro do Promise.all. Encadear como `.then()` interno cria ponto de falha sem fallback: se o inner chain não executar, o spinner fica eterno. Posição correta: `populateSetorFilter(); renderColabList(); renderModelos();` após o `await`.
+13. **Abas Colaboradores · legado e Avaliações · legado foram removidas da UI** (commit `12a046e`) — elementos `#cicloSelect`, `#cicloBadge`, `#colabList`, `#searchInput`, `#filterStatus`, `#filterSetor` não existem mais no DOM. As funções `populateCicloSelect`, `onCicloChange`, `populateSetorFilter`, `renderColabList` têm null guards. As tabelas `dev_ciclos`, `dev_avaliacoes`, `dev_colaboradores` e o JS legado permanecem intactos.
 
 ---
 
@@ -1047,6 +1049,41 @@ if (!_cicloAtivo) { toast('Selecione um ciclo antes de salvar o PDI.', true); re
 
 **Regra permanente:** quando `_cicloAtivo` é null, renderPDI e salvarPDI NUNCA consultam nem alteram o banco. Registros de outros ciclos são preservados. Sem risco de duplicidade porque o PATCH inclui filtro `ciclo_id=eq.X` e o POST cria com `ciclo_id` explícito.
 
+### Permissões por perfil na Trajetória Profissional (commit ade208f)
+
+**Feedback/anotação — excluir na timeline:**
+
+- `trRenderTimelineItens()`: calcula `podeExcluir` por item — só para tipos editáveis (`feedback_positivo`, `ponto_melhoria`, `anotacao`):
+  - RH/admin: sempre pode
+  - Gestor: apenas se `h.created_by === _nomeUsuario`
+  - Diretoria: nunca
+- `trExcluirFeedback(id)`: dupla proteção — guard frontend para Diretoria + consulta ao banco confirmando `created_by` antes do DELETE para Gestor (impede exclusão via console)
+- `_trMatriculaAtual`: variável de estado que armazena a matrícula aberta em `trAbrirPerfil()`; usada pelo `trExcluirFeedback` para recarregar a timeline
+
+**PDI — somente leitura para Diretoria:**
+
+- `renderPDIHtml()`: constante `_pdiPodeEditar = (_perfil === 'rh' || 'admin' || 'gestor')` — oculta formulário de nova ação e botões de excluir para Diretoria
+- `adicionarPDIItem()` e `deletePDIItem()`: guards bloqueiam Diretoria na camada de função
+- `togglePDIItem()` (marcar como concluído): sem restrição de perfil
+
+**Importante:** `dev_historico` não tem RLS habilitado (ver migration 135). Toda a proteção de exclusão de feedback é no frontend + verificação de `created_by` no banco antes do DELETE.
+
+---
+
+### Filtros da seção Trajetória Profissional (commits d2973af / cbcfe59)
+
+Localização: `sec-trajetoria`, ~L1170 de `index.html`.
+
+```html
+<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+  <input id="tr-filtro-nome" ... style="flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--card);outline:none">
+  <select id="tr-filtro-setor" ... style="min-width:200px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--card)">
+```
+
+- **Fonte oficial do select:** `_dpSetores` carregado via `loadParamSetores()` → strips prefixo numérico (`"2148 - CD"` → `"CD"`)
+- **Comparação no filtro:** `_trNormSetor` normaliza `c.setor` do colaborador para o mesmo formato antes de comparar
+- **Visual:** padding/border/border-radius idênticos ao `.form-input` do sistema; `background:var(--card)` para suporte a tema escuro
+
 ### Etapa 6 — Aba Resultados oculta para Gestor (commit d18613a)
 
 **Local:** `dpAbrirDrawerCiclo` (~L4533 de `modulos/desenvolvimento/index.html`)
@@ -2046,6 +2083,8 @@ const enriquecidos = ciclos.map(c => ({ ...c, dp_versoes: versaoMap[c.versao_id]
 | `89effd2` | Gestor não via nenhum ciclo ("Nenhum ciclo aberto") | `versao_id NOT NULL` → PostgREST INNER JOIN → RLS zerando resultado | `gestorDpLoadCiclos` separado em 3 queries |
 | `f3de5d9` | `dp_versoes` nulo no drawer (exibia "—" onde deveria ser versão) | Mesmo INNER JOIN em `gestorDpAbrirDrawer` | Separado em 2 queries |
 | `5bf1b9f` | Botão "Avaliar" não fazia nada (formulário abria vazio) | `criterio_id NOT NULL` em `dp_versao_criterios` → INNER JOIN zerando critérios para gestor | `dpAbrirFormAvaliacao` separado em Promise.all de 3 queries |
+| `ade208f` | Diretoria podia criar/excluir ações de PDI e ver botão Excluir em feedbacks alheios | `renderPDIHtml`, `adicionarPDIItem`, `deletePDIItem` e `trRenderTimelineItens` sem verificação de perfil | Guards por `_perfil` nas funções de gravação/exclusão + `trExcluirFeedback` confirma `created_by` no banco antes do DELETE para Gestor |
+| `f5dbcf9` + `5f27b98` | Aba Modelos exibia spinner eterno na abertura do módulo; funcionava ao navegar para outra aba e voltar | Remoção das abas legado (commits `12a046e`/`614a49a`) eliminou do DOM: `#cicloSelect`, `#cicloBadge`, `#colabList`, `#searchInput`, `#filterStatus`, `#filterSetor`. `loadCiclos()` chamava `populateCicloSelect()` que tentava acessar `#cicloSelect` → TypeError → `Promise.all` rejeitava → `renderModelos()` (chamada após o `await`) nunca executava | (1) Null guards adicionados em `populateCicloSelect`, `onCicloChange`, `populateSetorFilter`, `renderColabList`; (2) `renderModelos()` restaurado para **depois** do `await Promise.all` — não encadeado dentro de `.then()` |
 
 ### UX gestor — melhorias entregues (commit `f3de5d9`)
 
