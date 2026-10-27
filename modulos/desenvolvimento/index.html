@@ -8504,13 +8504,21 @@ function trRenderTimelineItens(hist) {
       (_perfil === 'rh' || _perfil === 'admin') ||
       (_perfil === 'gestor' && h.created_by === _nomeUsuario)
     );
-    const valorBadge = (h.tipo === 'avaliacao_concluida' && h.resultado_valor != null)
-      ? (() => {
-          const cor = trCorAting(h.resultado_valor, h.resultado_valor_max).cor;
-          const fmt = 'R$ ' + Number(h.resultado_valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-          return `<span style="font-size:11px;font-weight:700;color:${cor}">${fmt}</span>`;
-        })()
-      : '';
+    // Para avaliação concluída: linha de resultado colorida e rodapé com cargo
+    let resultadoHtml = '';
+    let rodapeHtml = h.created_by ? `<div class="hist-date">Por: ${h.created_by}</div>` : '';
+    if (h.tipo === 'avaliacao_concluida') {
+      // Extrai cargo do primeiro segmento da descricao (formato: "cargo · ciclo · R$ valor")
+      const partes = (h.descricao || '').split(' · ');
+      const cargo = partes[0] || '';
+      if (h.resultado_valor != null) {
+        const cor = trCorAting(h.resultado_valor, h.resultado_valor_max).cor;
+        const fmt = 'R$ ' + Number(h.resultado_valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+        resultadoHtml = `<div class="hist-desc">Resultado: <span style="font-weight:700;color:${cor}">${fmt}</span></div>`;
+      }
+      const rodapePartes = [h.created_by ? `Por: ${h.created_by}` : '', cargo ? `Cargo: ${cargo}` : ''].filter(Boolean);
+      rodapeHtml = rodapePartes.length ? `<div class="hist-date">${rodapePartes.join(' · ')}</div>` : '';
+    }
 
     // Seção colapsável de observações por competência (apenas avaliação_concluida com snapshot)
     const obsSnap = (h.tipo === 'avaliacao_concluida' && h.avaliacao_id)
@@ -8544,12 +8552,13 @@ function trRenderTimelineItens(hist) {
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">
           <span style="font-size:11px;color:var(--text-ter)">${mes}</span>
           <span class="status-badge ${meta.cor}">${meta.label}</span>
-          ${valorBadge}
           ${podeExcluir ? `<button onclick="trExcluirFeedback(${h.id})" style="margin-left:auto;padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-ter);cursor:pointer" title="Excluir registro">Excluir</button>` : ''}
         </div>
         <div class="hist-titulo">${h.titulo || '—'}</div>
-        ${h.descricao ? `<div class="hist-desc">${h.descricao}</div>` : ''}
-        ${h.created_by ? `<div class="hist-date">Por: ${h.created_by}</div>` : ''}
+        ${h.tipo === 'avaliacao_concluida'
+          ? resultadoHtml
+          : (h.descricao ? `<div class="hist-desc">${h.descricao}</div>` : '')}
+        ${rodapeHtml}
         ${obsHtml}
       </div>
     </div>`;
