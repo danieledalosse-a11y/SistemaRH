@@ -8225,6 +8225,7 @@ let _trHistoricoMap         = {};  // matricula → [registros dp de dev_histori
 let _trSnapshotCriteriosMap = {};  // avaliacao_id → [critérios com observação do snapshot]
 let _trSnapshotFullMap      = {};  // avaliacao_id → snapshot_criterios completo (todos os critérios)
 let _trHistAtual            = [];  // histórico do colaborador aberto na view de perfil
+let _trPdiData              = [];  // PDI do colaborador: [{ciclo_id, acoes}] — apenas registros com ações
 let _trInicializado         = false; // guard: evita re-fetch ao voltar para a aba
 let _trFiltroNome     = '';
 let _trFiltroSetor    = '';
@@ -8369,11 +8370,21 @@ async function trAbrirPerfil(matricula, nome) {
   const iniciais = (colab.nome || nome || '?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
   const cor = ['#2563EB','#059669','#7C3AED','#D97706','#DC2626','#0891B2'][Math.abs([...(colab.nome||nome||'')].reduce((a,ch)=>a+ch.charCodeAt(0),0)) % 6];
 
-  // Carrega histórico D&P desta matrícula
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
+  // Carrega histórico D&P e PDI em paralelo
+  const [histRaw, pdiRaw] = await Promise.all([
+    sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`),
+    sbGet(`/rest/v1/dev_pdi?matricula_colaborador=eq.${encodeURIComponent(matricula)}&select=ciclo_id,acoes`)
+  ]);
+  const hist = histRaw || [];
+  _trPdiData = (pdiRaw || []).filter(p => (p.acoes || []).length > 0);
 
-  const ciclos = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
-  const feeds  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
+  const ciclos        = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
+  const feeds         = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
+  const todasAcoesPdi = _trPdiData.flatMap(p => p.acoes || []);
+  const pdiPendentes  = todasAcoesPdi.filter(a => !a.done).length;
+  const pdiConcluidas = todasAcoesPdi.filter(a =>  a.done).length;
+  const pdiVal = todasAcoesPdi.length === 0 ? '0' : pdiPendentes > 0 ? String(pdiPendentes) : '✓';
+  const pdiCor = todasAcoesPdi.length === 0 ? 'var(--text-ter)' : pdiPendentes > 0 ? 'var(--amber,#D97706)' : 'var(--green)';
 
   // Carrega snapshot_criterios para avaliações concluídas (observações por competência)
   const avalIds = hist.filter(h => h.tipo === 'avaliacao_concluida' && h.avaliacao_id).map(h => h.avaliacao_id);
@@ -8431,9 +8442,10 @@ async function trAbrirPerfil(matricula, nome) {
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
       <div class="tr-mini-stat"><div class="val" style="color:var(--accent)">${ciclos}</div><div class="lbl">Ciclos</div></div>
       <div class="tr-mini-stat"><div class="val" style="color:var(--green)">${feeds}</div><div class="lbl">Feedbacks</div></div>
-      <div class="tr-mini-stat"><div class="val" style="color:var(--text-ter)">—</div><div class="lbl">PDI</div></div>
+      <div class="tr-mini-stat"><div class="val" style="color:${pdiCor}">${pdiVal}</div><div class="lbl">PDI</div></div>
     </div>
-    ${graficoHtml}`;
+    ${graficoHtml}
+    ${trRenderPdiSection(_trPdiData)}`;
 
   // Formulário de feedback (apenas RH e Gestor)
   const formEl = document.getElementById('tr-perfil-form');
@@ -8579,6 +8591,32 @@ function trGerarRelatorio(matricula) {
     ${hist.length
       ? `<div class="rel-section-title">Histórico completo</div>${hist.map(renderItem).join('')}`
       : `<div class="rel-empty">Nenhum registro encontrado para este colaborador.</div>`}
+    ${(() => {
+      const pdi = _trPdiData;
+      if (!pdi.length) return '';
+      let s = `<div class="rel-section-title">PDI — Ações de Desenvolvimento</div>`;
+      for (const p of pdi) {
+        const ciclo = (_dpCiclos||[]).find(c => c.id === p.ciclo_id);
+        const cicloNome = ciclo?.nome || 'Ciclo não identificado';
+        const acoes = p.acoes || [];
+        s += `<div class="rel-item"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6c7589;margin-bottom:8px">${cicloNome}</div>`;
+        for (const a of acoes) {
+          const done = !!a.done;
+          const meta = [a.prazo ? formatDate(a.prazo) : null, a.area || null].filter(Boolean).join(' · ');
+          s += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
+            <div style="width:14px;height:14px;border-radius:3px;border:2px solid ${done?'#059669':'#d1d5db'};flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:${done?'#059669':'transparent'}">
+              ${done?'<svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="3"><polyline points="2,6 5,9 10,3"/></svg>':''}
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;${done?'text-decoration:line-through;color:#9ca3af':'color:#374151'}">${a.acao}</div>
+              ${meta?`<div style="font-size:11px;color:#9ca3af">${meta}</div>`:''}
+            </div>
+          </div>`;
+        }
+        s += `</div>`;
+      }
+      return s;
+    })()}
     <div style="font-size:10px;color:#9ca3af;margin-top:32px;padding-top:12px;border-top:1px solid #e5e7eb">
       Relatório gerado em ${geradoEm} · SistemaRH Revest do Brasil
     </div>`;
@@ -8593,6 +8631,38 @@ function trGerarRelatorio(matricula) {
 function trFecharRelatorio() {
   const o = document.getElementById('trRelatorioOverlay');
   if (o) o.style.display = 'none';
+}
+
+/* ─── Seção PDI na Trajetória ─── */
+function trRenderPdiSection(pdiData) {
+  if (!pdiData.length) return '';
+  let html = `<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-ter);margin-bottom:10px">PDI — Ações de Desenvolvimento</div>`;
+  for (const p of pdiData) {
+    const ciclo = (_dpCiclos || []).find(c => c.id === p.ciclo_id);
+    const cicloNome = ciclo?.nome || 'Ciclo não identificado';
+    const acoes = p.acoes || [];
+    html += `<div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:600;color:var(--text-ter);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${cicloNome}</div>`;
+    for (const a of acoes) {
+      const done = !!a.done;
+      const bordeCor = done ? 'var(--green)' : 'var(--border)';
+      const bgCor    = done ? 'var(--green)' : 'transparent';
+      const txtStyle = done ? 'text-decoration:line-through;color:var(--text-ter)' : 'color:var(--text)';
+      const check    = done ? `<svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="3"><polyline points="2,6 5,9 10,3"/></svg>` : '';
+      const meta     = [a.prazo ? formatDate(a.prazo) : null, a.area || null].filter(Boolean).join(' · ');
+      html += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
+        <div style="width:14px;height:14px;border-radius:3px;border:2px solid ${bordeCor};flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:${bgCor}">${check}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;${txtStyle}">${a.acao}</div>
+          ${meta ? `<div style="font-size:11px;color:var(--text-ter)">${meta}</div>` : ''}
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+  return html;
 }
 
 /* ─── Gráfico de evolução de resultados por ciclo ─── */
