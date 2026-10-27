@@ -8508,7 +8508,7 @@ function trGerarRelatorio(matricula) {
     const metaStr = autor !== '—' ? `${data} · ${autor}` : data;
 
     if (h.tipo === 'avaliacao_concluida') {
-      const snap = _trSnapshotFullMap[h.avaliacao_id] || _trSnapshotCriteriosMap[h.avaliacao_id] || [];
+      const snap = _trSnapshotCriteriosMap[h.avaliacao_id] || [];
       const cicloNome = (() => {
         if (!h.ciclo_id) return '';
         const c = (_dpCiclos||[]).find(c => c.id === h.ciclo_id);
@@ -8523,14 +8523,12 @@ function trGerarRelatorio(matricula) {
         </div>`;
       }
       const critsHtml = snap.length ? `
-        <table class="rel-crit-table">
-          <thead><tr><th>Competência</th><th>Resposta</th><th>Observação</th></tr></thead>
-          <tbody>${snap.map(c => `<tr>
-            <td>${c.nome || '—'}</td>
-            <td>${c.tipo_resposta === 'sim_nao' ? (c.resposta ? 'Sim' : 'Não') : (c.resposta ?? '—')}</td>
-            <td class="rel-crit-obs">${c.observacao || ''}</td>
-          </tr>`).join('')}</tbody>
-        </table>` : '';
+        <div style="margin-top:10px;border-top:1px solid #f3f4f6;padding-top:8px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;margin-bottom:6px">Observações por competência</div>
+          ${snap.map(c => `<div style="font-size:12px;margin-bottom:5px;line-height:1.5">
+            <span style="font-weight:600;color:#374151">${c.nome || '—'}</span><span style="color:#9ca3af"> — </span><span style="font-style:italic;color:#374151">${c.observacao}</span>
+          </div>`).join('')}
+        </div>` : '';
       return `<div class="rel-item">
         <div class="rel-item-header">
           <div>
