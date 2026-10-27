@@ -1875,7 +1875,7 @@ async function init() {
 }
 
 async function loadColaboradores() {
-  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.true&order=nome.asc');
+  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro_nome,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.true&order=nome.asc');
   _colaboradores = _colaboradores || [];
 }
 
@@ -4469,7 +4469,7 @@ async function dpAbrirDrawerCiclo(cicloId, abaInicial) {
   // Retroativos (ciclos antigos) e motivos são independentes dos participantes — paralelo
   if (fimCiclo && fimCiclo < hoje) {
     loadsIniciais.push(
-      sbGet(`/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.false&data_demissao=gte.${_dpCicloAtual.data_inicio}&order=nome.asc`)
+      sbGet(`/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro_nome,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.false&data_demissao=gte.${_dpCicloAtual.data_inicio}&order=nome.asc`)
         .then(inicos => {
           const idsExistentes = new Set(_colaboradores.map(c => c.id));
           (inicos || []).forEach(c => { if (!idsExistentes.has(c.id)) _colaboradores.push(c); });
@@ -4654,7 +4654,8 @@ async function dpAdicionarColaboradores(colabs) {
     const snap = {
       nome:          c.nome          || '',
       matricula:     c.matricula     || '',
-      empresa:       c.empresa_atuacao || '',
+      empresa:             c.empresa_atuacao || '',
+      empresa_registro_nome: c.empresa_registro_nome || '',
       setor:         c.setor         || '',
       cargo:         c.cargo         || '',
       unidade:       c.unidade       || '',
@@ -7148,7 +7149,7 @@ async function dpExportarResultados() {
     const snap = p.snapshot || {};
     if (p.nao_participa) {
       naoParticipantes.push({
-        empresa: snap.empresa || snap.unidade || '—',
+        empresa: snap.empresa_registro_nome || '—',
         mat:     snap.matricula || '—',
         nome:    snap.nome  || '—',
         cargo:   snap.cargo || '—',
@@ -7157,7 +7158,7 @@ async function dpExportarResultados() {
         npRow:   true,
       });
     } else {
-      const aval   = _dpAvaliacoes.find(a => a.colaborador_id === p.colaborador_id);
+      const aval   = _dpAvaliacoes.find(a => a.participante_id === p.id);
       const res    = aval ? _dpResultados.find(r => r.avaliacao_id === aval.id) : null;
       const bonus  = res  ? _dpResultadosBonus.find(b => b.resultado_id === res.id) : null;
       const valorNum = bonus?.valor_bonus != null ? Number(bonus.valor_bonus) : null;
@@ -7166,7 +7167,7 @@ async function dpExportarResultados() {
         : '—';
       const statusLabel = { nao_iniciada: 'Não iniciada', em_andamento: 'Em andamento', respondida: 'Respondida', concluida: 'Concluída', publicada: 'Publicada' }[aval?.status] || '—';
       participantes.push({
-        empresa: snap.empresa || snap.unidade || '—',
+        empresa: snap.empresa_registro_nome || '—',
         mat:     snap.matricula || '—',
         nome:    snap.nome  || '—',
         cargo:   snap.cargo || '—',
@@ -7225,6 +7226,14 @@ async function dpExportarResultados() {
 </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
 </head><body>
 <table cellspacing="0" cellpadding="0">
+  <colgroup>
+    <col style="width:160pt">
+    <col style="width:70pt">
+    <col style="width:220pt">
+    <col style="width:180pt">
+    <col style="width:90pt">
+    <col style="width:120pt">
+  </colgroup>
   <tr><td colspan="6" style="${F};font-size:15pt;font-weight:700;color:#1B2E4B;padding:10px 10px 2px">Avaliações D&amp;P — ${nomeCiclo}</td></tr>
   <tr><td colspan="6" style="${F};font-size:9pt;color:#6B7A99;padding:0 10px 10px">${resumo} · Exportado em ${dataExp}</td></tr>
   <tr>
