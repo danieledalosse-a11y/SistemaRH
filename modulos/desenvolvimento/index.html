@@ -8370,7 +8370,7 @@ async function trAbrirPerfil(matricula, nome) {
   const cor = ['#2563EB','#059669','#7C3AED','#D97706','#DC2626','#0891B2'][Math.abs([...(colab.nome||nome||'')].reduce((a,ch)=>a+ch.charCodeAt(0),0)) % 6];
 
   // Carrega histórico D&P desta matrícula
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
 
   const ciclos = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
   const feeds  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
@@ -8445,7 +8445,7 @@ async function trAbrirPerfil(matricula, nome) {
         <option value="ponto_melhoria">Ponto de melhoria</option>
         <option value="anotacao">Anotação geral</option>
       </select>
-      <textarea id="tr-fb-texto" rows="3" placeholder="Descreva o feedback..." style="width:100%;resize:none;font-family:inherit"></textarea>
+      <textarea id="tr-fb-texto" rows="6" placeholder="Descreva o feedback..." style="width:100%;resize:vertical;font-family:inherit;min-height:120px"></textarea>
       <div style="font-size:11px;color:var(--text-ter);margin-top:5px">Visível apenas para RH e Gestor. O colaborador não tem acesso.</div>
       <div style="display:flex;justify-content:flex-end;margin-top:8px">
         <button class="btn btn-primary btn-sm" onclick="trSalvarFeedback('${matricula}')">Salvar</button>
@@ -8804,7 +8804,7 @@ async function trExcluirFeedback(id) {
   toast('Registro excluído.');
   // Recarrega a timeline usando _trMatriculaAtual (definida em trAbrirPerfil)
   const matricula = _trMatriculaAtual;
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
   trRenderTimeline(hist);
   _trHistoricoMap[matricula] = hist;
 }
@@ -8836,7 +8836,7 @@ async function trSalvarFeedback(matricula) {
   toast('Registro salvo.');
   document.getElementById('tr-fb-texto').value = '';
   // Recarrega a timeline
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100&select=id,tipo,titulo,descricao,data,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
   trRenderTimeline(hist);
   // Atualiza mapa em memória
   _trHistoricoMap[matricula] = hist;
