@@ -8815,43 +8815,90 @@ async function pdiAbrirCriacao(opts) {
     ? ((_colaboradores||[]).find(c => c.matricula === matriculaPre)?.nome || '')
     : '';
 
-  overlay.innerHTML = `<div class="modal modal-lg" style="max-width:480px;width:100%;padding:24px">
-    <div class="modal-title" style="margin-bottom:16px">Novo PDI</div>
-    <div class="form-group">
-      <label class="form-label">Colaborador *</label>
-      <div style="position:relative">
-        <input type="text" id="pdiCriacaoColab" placeholder="Digite o nome..." autocomplete="off"
-          style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;background:var(--surface);color:var(--text)"
-          oninput="pdiFilterColab(this.value)" onfocus="pdiFilterColab(this.value)" onblur="setTimeout(()=>pdiHideColabList(),200)">
-        <input type="hidden" id="pdi-colab-matricula">
-        <div id="pdi-colab-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;max-height:220px;overflow-y:auto;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.12)"></div>
+  overlay.innerHTML = `<div class="modal modal-lg" style="max-width:480px;width:100%;padding:0;overflow:hidden">
+    <!-- Cabeçalho -->
+    <div style="padding:24px 24px 0">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        </div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">Novo Plano de Desenvolvimento</div>
+          <div style="font-size:12px;color:var(--text-ter)">Preencha as informações abaixo para criar o PDI</div>
+        </div>
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Título *</label>
-      <input class="form-input" id="pdiCriacaoTitulo" placeholder="Ex: PDI — Liderança Q4/2026">
+    <!-- Separador -->
+    <div style="height:1px;background:var(--border);margin:16px 0"></div>
+    <!-- Campos -->
+    <div style="padding:0 24px;display:flex;flex-direction:column;gap:16px">
+      <!-- Colaborador -->
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Colaborador <span style="color:#ef4444">*</span></label>
+        <div style="position:relative">
+          <input type="text" id="pdiCriacaoColab" placeholder="Digite o nome..." autocomplete="off"
+            style="width:100%;padding:9px 34px 9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;background:var(--bg);color:var(--text);transition:border-color .15s"
+            oninput="pdiFilterColab(this.value)" onfocus="pdiFilterColab(this.value)" onblur="setTimeout(()=>pdiHideColabList(),200)"
+            onfocus2="this.style.borderColor='#3b82f6'" onblur2="this.style.borderColor='var(--border)'">
+          <input type="hidden" id="pdi-colab-matricula">
+          <button type="button" id="pdi-colab-clear" onclick="pdiLimparColab()"
+            style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:2px 4px;line-height:1"
+            title="Limpar">✕</button>
+          <div id="pdi-colab-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;max-height:220px;overflow-y:auto;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.12)"></div>
+        </div>
+      </div>
+      <!-- Título -->
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Título do plano <span style="color:#ef4444">*</span></label>
+        <input id="pdiCriacaoTitulo" type="text" placeholder="Ex: Liderança Q4/2026"
+          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--bg);box-sizing:border-box;transition:border-color .15s"
+          onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <!-- Gatilho -->
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Gatilho</label>
+        <select id="pdiCriacaoGatilho"
+          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--bg);box-sizing:border-box;appearance:auto">
+          ${config.gatilhos.map(g => `<option value="${g}">${g}</option>`).join('')}
+        </select>
+      </div>
+      <!-- Responsável -->
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Responsável</label>
+        <input id="pdiCriacaoResponsavel" type="text" placeholder="Nome do responsável"
+          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--bg);box-sizing:border-box;transition:border-color .15s"
+          onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
+        <div style="font-size:11px;color:var(--text-ter);margin-top:4px">Pré-preenchido com o usuário atual. Edite se necessário.</div>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Gatilho</label>
-      <select class="form-input" id="pdiCriacaoGatilho">
-        ${config.gatilhos.map(g => `<option value="${g}">${g}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Responsável</label>
-      <input class="form-input" id="pdiCriacaoResponsavel" placeholder="Opcional">
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
-      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('pdiModalCriacao').remove()">Cancelar</button>
-      <button class="btn btn-primary btn-sm" onclick="pdiSalvarNovo()">Criar PDI</button>
+    <!-- Rodapé -->
+    <div style="height:1px;background:var(--border);margin:20px 0 0"></div>
+    <div style="padding:16px 24px;display:flex;justify-content:flex-end;gap:10px">
+      <button onclick="pdiFecharModal()"
+        style="padding:9px 18px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);font-size:13px;font-weight:500;color:var(--text-sec);cursor:pointer">
+        Cancelar
+      </button>
+      <button onclick="pdiSalvarNovo()"
+        style="padding:9px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#6366f1);font-size:13px;font-weight:600;color:#fff;cursor:pointer;display:flex;align-items:center;gap:6px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        Criar PDI
+      </button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
+  // Pré-preenche Responsável com o usuário logado
+  const respEl = overlay.querySelector('#pdiCriacaoResponsavel');
+  if (respEl && _nomeUsuario) respEl.value = _nomeUsuario;
   // Se matrícula pré-definida, preenche o autocomplete e foca no título
   if (matriculaPre && nomePreInp) {
     pdiSelectColab(matriculaPre, nomePreInp);
     overlay.querySelector('#pdiCriacaoTitulo').focus();
   }
+}
+
+function pdiFecharModal() {
+  const overlay = document.getElementById('pdiModalCriacao');
+  if (overlay) overlay.remove();
 }
 
 function pdiFilterColab(q) {
@@ -8875,12 +8922,24 @@ function pdiSelectColab(matricula, nome) {
   const mat = document.getElementById('pdi-colab-matricula');
   if (inp) inp.value = nome;
   if (mat) mat.value = matricula;
+  const btn = document.getElementById('pdi-colab-clear');
+  if (btn) btn.style.display = '';
   pdiHideColabList();
 }
 
 function pdiHideColabList() {
   const list = document.getElementById('pdi-colab-list');
   if (list) list.style.display = 'none';
+}
+
+function pdiLimparColab() {
+  const inp = document.getElementById('pdiCriacaoColab');
+  const mat = document.getElementById('pdi-colab-matricula');
+  if (inp) { inp.value = ''; inp.focus(); }
+  if (mat) mat.value = '';
+  const btn = document.getElementById('pdi-colab-clear');
+  if (btn) btn.style.display = 'none';
+  pdiFilterColab('');
 }
 
 async function pdiSalvarNovo() {
