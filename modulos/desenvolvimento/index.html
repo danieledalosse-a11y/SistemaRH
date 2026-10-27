@@ -5976,7 +5976,7 @@ function dpRenderAvaliacoes(opts = {}) {
           ? `<button style="${_ib}" title="Visualizar avaliação" onclick="dpAbrirFormAvaliacaoReadonly('${p.id}')">${svgVisualizar}</button>`
           : '';
         const editarBtn     = (concluido && st === 'concluida' && (_perfil === 'rh' || _perfil === 'admin'))
-          ? `<button style="${_ib}" title="Editar avaliação (RH)" onclick="${_onAvaliarFn}('${p.id}')">${svgEditar}</button>`
+          ? `<button style="${_ib}" title="Ajustar avaliação (RH)" onclick="dpIniciarAjuste('${p.id}')">${svgEditar}</button>`
           : '';
         return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border-light)${exp ? ';background:rgba(245,158,11,0.04)' : ''}">
           ${avatarHtml}
@@ -6783,7 +6783,7 @@ async function salvarAvaliacao(status) {
   const avalIdx = _dpAvaliacoes.findIndex(a => a.id === avalId);
   if (avalIdx >= 0) Object.assign(_dpAvaliacoes[avalIdx], patchAval);
 
-  toast(statusEfetivo === 'concluida' ? 'Avaliação concluída.' : 'Avaliação salva.');
+  if (!_dpModoAjuste) toast(statusEfetivo === 'concluida' ? 'Avaliação concluída.' : 'Avaliação salva.');
 
   // ── 6. Registro de evento (fire-and-forget — não bloqueia navegação) ─
   if (statusEfetivo === 'concluida') {
@@ -6931,9 +6931,6 @@ function dpRenderResultados(opts = {}) {
       }
       if (!_readonly) {
         btnHtml = `<button class="btn btn-secondary btn-sm" onclick="dpCalcularAvaliacao('${aval.id}',true)" style="font-size:12px">Recalcular</button>`;
-        if (_dpCicloAtual && _dpCicloAtual.status === 'aberto' && (_perfil === 'rh' || _perfil === 'admin')) {
-          btnHtml += ` <button class="btn btn-secondary btn-sm" onclick="dpAbrirAjuste('${aval.id}')" style="font-size:12px">Ajustar</button>`;
-        }
       }
     } else if (aval && aval.status === 'concluida') {
       badge = `<span class="sbadge sbadge-amber" style="font-size:11px">Aguardando cálculo</span>`;
@@ -7138,17 +7135,18 @@ async function dpRegistrarEvento(tipo, entidade, entidadeId, detalhe = {}) {
   } catch(e) { /* silencioso — log não deve travar o fluxo */ }
 }
 
-async function dpAbrirAjuste(avaliacaoId) {
+async function dpIniciarAjuste(participanteId) {
   if (_perfil !== 'rh' && _perfil !== 'admin') { toast('Apenas o RH pode ajustar avaliações concluídas.', true); return; }
-  const aval = _dpAvaliacoes.find(a => a.id === avaliacaoId);
-  if (!aval) return;
-  // Reverter status para respondida para liberar edição
-  const ok = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avaliacaoId}`, { status: 'respondida' });
+  const part = _dpParticipantes.find(p => p.id === participanteId);
+  if (!part) return;
+  const aval = _dpAvaliacoes.find(a => a.participante_id === participanteId);
+  if (!aval || aval.status !== 'concluida') { toast('Avaliação não está concluída.', true); return; }
+  const ok = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${aval.id}`, { status: 'respondida' });
   if (!ok) { toast('Erro ao reabrir avaliação: ' + sbErrMsg(), true); return; }
   aval.status = 'respondida';
-  await dpRegistrarEvento('avaliacao_ajuste_iniciado', 'dp_avaliacoes', avaliacaoId, { colaborador: ((_dpParticipantes.find(p => p.id === aval.participante_id)?.snapshot || {}).nome || '') });
+  await dpRegistrarEvento('avaliacao_ajuste_iniciado', 'dp_avaliacoes', aval.id, { colaborador: (part.snapshot || {}).nome || '' });
   _dpModoAjuste = true;
-  await dpAbrirFormAvaliacao(avaliacaoId);
+  await dpAbrirFormAvaliacao(participanteId);
 }
 
 async function dpExportarResultados() {
