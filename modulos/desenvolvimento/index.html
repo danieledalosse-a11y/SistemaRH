@@ -233,11 +233,33 @@
   .hist-timeline::before { content: ''; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--border); border-radius: 2px; }
   .hist-item { position: relative; margin-bottom: 20px; }
   .hist-dot { position: absolute; left: -24px; top: 4px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; }
-  .hist-dot.tipo-avaliacao { border-color: var(--purple); background: var(--purple-bg); }
-  .hist-dot.tipo-pdi       { border-color: var(--blue);   background: var(--blue-bg); }
-  .hist-dot.tipo-admissao  { border-color: var(--green);  background: var(--green-bg); }
-  .hist-dot.tipo-ferias    { border-color: #F79009;       background: #FFFAEB; }
-  .hist-dot.tipo-geral     { border-color: var(--text-ter); }
+  .hist-dot.tipo-avaliacao          { border-color: var(--purple); background: var(--purple-bg); }
+  .hist-dot.tipo-avaliacao_concluida{ border-color: var(--green);  background: var(--green-bg); }
+  .hist-dot.tipo-feedback_positivo  { border-color: var(--blue);   background: var(--blue-bg); }
+  .hist-dot.tipo-ponto_melhoria     { border-color: #F79009;       background: #FFFAEB; }
+  .hist-dot.tipo-anotacao           { border-color: var(--text-sec); }
+  .hist-dot.tipo-pdi                { border-color: var(--blue);   background: var(--blue-bg); }
+  .hist-dot.tipo-admissao           { border-color: var(--green);  background: var(--green-bg); }
+  .hist-dot.tipo-ferias             { border-color: #F79009;       background: #FFFAEB; }
+  .hist-dot.tipo-geral              { border-color: var(--text-ter); }
+  .tr-twocol { display: grid; grid-template-columns: 1fr 1.4fr; gap: 14px; align-items: start; }
+  @media (max-width: 700px) { .tr-twocol { grid-template-columns: 1fr; } }
+  .tr-mini-stat { text-align:center; background:var(--card); border-radius:8px; padding:8px; }
+  .tr-mini-stat .val { font-size:20px; font-weight:700; }
+  .tr-mini-stat .lbl { font-size:10px; color:var(--text-ter); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+  /* colab list items — reutilizados na Trajetória */
+  .colab-item { display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:6px; transition: border-color .15s; }
+  .colab-item:hover { border-color:var(--accent); }
+  .colab-av { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; flex-shrink:0; }
+  .colab-info { flex:1; min-width:0; }
+  .colab-nome { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .colab-cargo { font-size:11px; color:var(--text-ter); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* badges de status / tags coloridas */
+  .status-badge { display:inline-flex; align-items:center; font-size:10px; font-weight:600; padding:2px 8px; border-radius:6px; white-space:nowrap; }
+  .tag-green  { background:var(--green-bg);  color:var(--green);  border:1px solid var(--green); }
+  .tag-blue   { background:var(--blue-bg,#EBF0FF); color:var(--blue,#3B6CF0); border:1px solid var(--blue,#3B6CF0); }
+  .tag-amber  { background:var(--amber-bg,#FFFAEB); color:var(--amber,#D97706); border:1px solid var(--amber,#D97706); }
+  .tag-purple { background:var(--purple-bg); color:var(--purple); border:1px solid var(--purple); }
   .hist-dot svg { width: 8px; height: 8px; }
   .hist-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; box-shadow: var(--shadow-sm); }
   .hist-titulo { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
@@ -906,6 +928,7 @@
   <button class="mod-tab tab-legado" onclick="showSec('colaboradores',this)" data-rh-only>Colaboradores · legado</button>
   <button class="mod-tab tab-legado" onclick="showSec('avaliacoes',this)" data-rh-only>Avaliações · legado</button>
   <button class="mod-tab" id="tabGestorDP" onclick="showSec('gestor-dp',this)" style="display:none">Minha Equipe</button>
+  <button class="mod-tab" id="tabTrajetoria" onclick="showSec('trajetoria',this)" style="display:none">Trajetória Profissional</button>
 </div>
 
 <div class="container">
@@ -1198,6 +1221,46 @@
           <div class="panel-title">Ciclo atual</div>
           <div id="gestorDpSidebarStats"><div style="font-size:12px;color:var(--text-ter)">Nenhum ciclo ativo.</div></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SEC: TRAJETÓRIA PROFISSIONAL ══ -->
+  <div id="sec-trajetoria" class="sec">
+    <!-- view lista -->
+    <div id="tr-view-lista">
+      <div class="toolbar">
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:600;margin-bottom:2px">Trajetória Profissional</div>
+          <div style="font-size:13px;color:var(--text-sec)">Histórico de desenvolvimento e desempenho de cada colaborador.</div>
+        </div>
+      </div>
+      <!-- KPIs -->
+      <div id="tr-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
+      <!-- filtros -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="tr-filtro-nome" placeholder="Buscar colaborador..." oninput="trFiltrar()" style="flex:1;min-width:130px">
+        <select id="tr-filtro-setor" onchange="trFiltrar()">
+          <option value="">Todos os setores</option>
+        </select>
+      </div>
+      <!-- lista -->
+      <div id="tr-lista"></div>
+    </div>
+    <!-- view perfil -->
+    <div id="tr-view-perfil" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <button class="btn btn-secondary btn-sm" onclick="trVoltarLista()">← Voltar</button>
+        <span id="tr-perfil-breadcrumb" style="font-size:13px;color:var(--text-sec)"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:14px;align-items:start" class="tr-twocol">
+        <!-- col esquerda: resumo + form feedback -->
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="card" style="padding:16px" id="tr-perfil-resumo"></div>
+          <div class="card" style="padding:14px" id="tr-perfil-form"></div>
+        </div>
+        <!-- col direita: linha do tempo -->
+        <div class="card" style="padding:15px" id="tr-perfil-timeline"></div>
       </div>
     </div>
   </div>
@@ -1700,6 +1763,8 @@ function sbErrMsg() { const e = _sbLastError; _sbLastError = null; if (!e) retur
    AUTH
 ───────────────────────────────────────────── */
 let _perfil = 'rh';
+let _nomeUsuario = '';
+let _sessionColaboradorId = null;
 
 function getSession() {
   try {
@@ -1721,7 +1786,9 @@ function initAuth() {
   if (!s) { window.location.href = '../../login.html'; return; }
   HDR = { apikey: SB_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
   _perfil = s.perfil || 'rh';
-  const nome = s.nome || s.email || '—';
+  _nomeUsuario = s.nome || s.email || '—';
+  _sessionColaboradorId = s.colaborador_id || null;
+  const nome = _nomeUsuario;
   const iniciais = nome.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
   const av = document.getElementById('userAvatar');
   const un = document.getElementById('userName');
@@ -1811,6 +1878,7 @@ function showSec(id, btn) {
   if (id === 'configuracoes')   renderConfiguracoes();
   if (id === 'avaliacoes')      renderColabList();
   if (id === 'gestor-dp')      gestorDpLoadCiclos();
+  if (id === 'trajetoria')     renderTrajetoria();
 }
 function showDrawerTab(id, btn) {
   document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
@@ -1838,6 +1906,8 @@ async function init() {
   });
   const tabGestor = document.getElementById('tabGestorDP');
   if (tabGestor) tabGestor.style.display = isGestor ? '' : 'none';
+  const tabTraj = document.getElementById('tabTrajetoria');
+  if (tabTraj) tabTraj.style.display = '';
 
   if (isGestor) {
     // Ativa sec-gestor-dp imediatamente — antes de qualquer await
@@ -1847,7 +1917,8 @@ async function init() {
     if (secGestor) secGestor.classList.add('active');
     if (tabGestor) tabGestor.classList.add('active');
     try {
-      await initDpGestor();
+      // loadColaboradores é necessário para a aba Trajetória Profissional
+      await Promise.all([loadColaboradores(), initDpGestor()]);
     } catch (e) {
       const body = document.getElementById('gestorDpBody');
       if (body) body.innerHTML = `<div class="empty-state"><p>${e.message || 'Erro ao carregar avaliações. Tente recarregar a página.'}</p></div>`;
@@ -8133,6 +8204,293 @@ async function gestorDpLoadResultados() {
 
 /* ─── START ─── */
 init();
+
+/* ══════════════════════════════════════════════════════════════
+   TRAJETÓRIA PROFISSIONAL
+══════════════════════════════════════════════════════════════ */
+
+let _trHistoricoMap  = {};  // matricula → [registros dp de dev_historico]
+let _trFiltroNome    = '';
+let _trFiltroSetor   = '';
+let _trGestorApelido = ''; // apelido param_gestor do gestor logado (filtro de equipe)
+
+/* ─── Renderiza a seção principal (lista) ─── */
+async function renderTrajetoria() {
+  const viewLista = document.getElementById('tr-view-lista');
+  const viewPerfil = document.getElementById('tr-view-perfil');
+  if (viewLista) viewLista.style.display = '';
+  if (viewPerfil) viewPerfil.style.display = 'none';
+
+  // Para Gestor: obtém seu apelido uma vez (para filtrar equipe)
+  if (_perfil === 'gestor' && !_trGestorApelido && _sessionColaboradorId) {
+    const pg = await sbGet(`/rest/v1/param_gestor?colaborador_id=eq.${_sessionColaboradorId}&select=apelido&limit=1`);
+    _trGestorApelido = pg?.[0]?.apelido || '';
+  }
+
+  // Garante que os ciclos estão carregados (Gestor não os carrega no init)
+  if (!_dpCiclos.length) await dpLoadCiclos();
+
+  // Carrega histórico D&P de todos os colaboradores
+  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data,titulo,descricao,ciclo_id,avaliacao_id,created_by') || [];
+
+  // Agrupa por matricula
+  _trHistoricoMap = {};
+  registros.forEach(r => {
+    if (!_trHistoricoMap[r.matricula_colaborador]) _trHistoricoMap[r.matricula_colaborador] = [];
+    _trHistoricoMap[r.matricula_colaborador].push(r);
+  });
+
+  // KPIs
+  const hoje = new Date();
+  const noventa = new Date(hoje); noventa.setDate(hoje.getDate() - 90);
+  const matriculasComHist = Object.keys(_trHistoricoMap).length;
+  const ciclosEncerrados  = (_dpCiclos || []).filter(c => c.status === 'encerrado').length;
+  const feedbacksRecentes = registros.filter(r => ['feedback_positivo','ponto_melhoria','anotacao'].includes(r.tipo) && new Date(r.data) >= noventa).length;
+
+  const kpisEl = document.getElementById('tr-kpis');
+  if (kpisEl) kpisEl.innerHTML = [
+    { label:'Colaboradores', val: matriculasComHist, sub:'com histórico D&P', cor:'var(--accent)' },
+    { label:'Ciclos realizados', val: ciclosEncerrados, sub:'encerrados', cor:'var(--fg)' },
+    { label:'Feedbacks reg.', val: feedbacksRecentes, sub:'últimos 90 dias', cor:'var(--green)' },
+    { label:'PDI ativos', val: '—', sub:'em andamento', cor:'var(--amber)' },
+  ].map(k => `
+    <div class="metric m-${k.cor === 'var(--accent)' ? 'purple' : k.cor === 'var(--green)' ? 'green' : k.cor === 'var(--amber)' ? 'amber' : 'purple'}">
+      <div class="metric-val" style="color:${k.cor}">${k.val}</div>
+      <div class="metric-label">${k.label}</div>
+      <div style="font-size:11px;color:var(--text-ter)">${k.sub}</div>
+    </div>`).join('');
+
+  // Popula filtro de setor
+  const setorSel = document.getElementById('tr-filtro-setor');
+  if (setorSel && setorSel.options.length <= 1) {
+    const setores = [...new Set(_colaboradores.map(c => c.setor).filter(Boolean))].sort();
+    setores.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; setorSel.appendChild(o); });
+  }
+
+  _trFiltroNome  = document.getElementById('tr-filtro-nome')?.value || '';
+  _trFiltroSetor = document.getElementById('tr-filtro-setor')?.value || '';
+  trRenderLista();
+}
+
+/* ─── Filtra e renderiza lista de colaboradores ─── */
+function trFiltrar() {
+  _trFiltroNome  = (document.getElementById('tr-filtro-nome')?.value || '').toLowerCase();
+  _trFiltroSetor = document.getElementById('tr-filtro-setor')?.value || '';
+  trRenderLista();
+}
+
+function trRenderLista() {
+  let colabs = _colaboradores.filter(c => c.ativo !== false);
+
+  // Gestor: filtra sua equipe
+  if (_perfil === 'gestor' && _trGestorApelido) {
+    colabs = colabs.filter(c => (c.gestor || '').toLowerCase() === _trGestorApelido.toLowerCase());
+  }
+
+  if (_trFiltroNome)  colabs = colabs.filter(c => (c.nome || '').toLowerCase().includes(_trFiltroNome));
+  if (_trFiltroSetor) colabs = colabs.filter(c => c.setor === _trFiltroSetor);
+
+  const el = document.getElementById('tr-lista');
+  if (!el) return;
+
+  if (!colabs.length) { el.innerHTML = `<div class="empty-state"><p>Nenhum colaborador encontrado.</p></div>`; return; }
+
+  el.innerHTML = colabs.map(c => {
+    const hist  = _trHistoricoMap[c.matricula] || [];
+    const ciclos = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
+    const feeds  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
+    const iniciais = (c.nome || '?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+    const cor = ['#2563EB','#059669','#7C3AED','#D97706','#DC2626','#0891B2'][Math.abs([...(c.nome||'')].reduce((a,ch)=>a+ch.charCodeAt(0),0)) % 6];
+    const tags = [
+      ciclos ? `<span class="status-badge" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green)">${ciclos} ciclo${ciclos!==1?'s':''}</span>` : '',
+      feeds  ? `<span class="status-badge" style="background:var(--blue-bg,#EBF0FF);color:var(--blue,#3B6CF0);border:1px solid var(--blue,#3B6CF0)">${feeds} feedback${feeds!==1?'s':''}</span>` : '',
+    ].filter(Boolean).join('');
+    return `<div class="colab-item" style="cursor:pointer" onclick="trAbrirPerfil('${c.matricula}','${(c.nome||'').replace(/'/g,"\\'")}')">
+      <div class="colab-av" style="background:${cor}">${iniciais}</div>
+      <div class="colab-info">
+        <div class="colab-nome">${c.nome || '—'}</div>
+        <div class="colab-cargo">${[c.cargo, c.setor].filter(Boolean).join(' · ')}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap">
+        ${tags}
+        <span style="color:var(--text-ter);font-size:14px">›</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Abre perfil individual ─── */
+async function trAbrirPerfil(matricula, nome) {
+  document.getElementById('tr-view-lista').style.display = 'none';
+  document.getElementById('tr-view-perfil').style.display = '';
+
+  const bread = document.getElementById('tr-perfil-breadcrumb');
+  if (bread) bread.textContent = nome || matricula;
+
+  const colab = _colaboradores.find(c => c.matricula === matricula) || {};
+  const iniciais = (colab.nome || nome || '?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  const cor = ['#2563EB','#059669','#7C3AED','#D97706','#DC2626','#0891B2'][Math.abs([...(colab.nome||nome||'')].reduce((a,ch)=>a+ch.charCodeAt(0),0)) % 6];
+
+  // Carrega histórico D&P desta matrícula
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100`) || [];
+
+  const ciclos = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
+  const feeds  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
+
+  // Resumo
+  const admissao = colab.data_admissao ? formatDate(colab.data_admissao) : '—';
+  document.getElementById('tr-perfil-resumo').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <div class="colab-av" style="width:42px;height:42px;font-size:13px;background:${cor}">${iniciais}</div>
+      <div>
+        <div style="font-size:14px;font-weight:700">${colab.nome || nome}</div>
+        <div style="font-size:11px;color:var(--text-ter)">${[colab.cargo, colab.setor].filter(Boolean).join(' · ')}</div>
+        <div style="font-size:11px;color:var(--text-ter)">Admissão: ${admissao}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="tr-mini-stat"><div class="val" style="color:var(--accent)">${ciclos}</div><div class="lbl">Ciclos</div></div>
+      <div class="tr-mini-stat"><div class="val" style="color:var(--green)">${feeds}</div><div class="lbl">Feedbacks</div></div>
+      <div class="tr-mini-stat"><div class="val" style="color:var(--text-ter)">—</div><div class="lbl">PDI</div></div>
+    </div>`;
+
+  // Formulário de feedback (apenas RH e Gestor)
+  const formEl = document.getElementById('tr-perfil-form');
+  if (_perfil === 'rh' || _perfil === 'admin' || _perfil === 'gestor') {
+    formEl.innerHTML = `
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">Registrar feedback ou anotação</div>
+      <select id="tr-fb-tipo" style="width:100%;margin-bottom:8px">
+        <option value="feedback_positivo">Feedback positivo</option>
+        <option value="ponto_melhoria">Ponto de melhoria</option>
+        <option value="anotacao">Anotação geral</option>
+      </select>
+      <textarea id="tr-fb-texto" rows="3" placeholder="Descreva o feedback..." style="width:100%;resize:none;font-family:inherit"></textarea>
+      <div style="font-size:11px;color:var(--text-ter);margin-top:5px">Visível apenas para RH e Gestor. O colaborador não tem acesso.</div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-primary btn-sm" onclick="trSalvarFeedback('${matricula}')">Salvar</button>
+      </div>`;
+    formEl.style.display = '';
+  } else {
+    formEl.style.display = 'none';
+  }
+
+  // Linha do tempo
+  trRenderTimeline(hist);
+}
+
+/* ─── Renderiza a timeline do perfil ─── */
+function trRenderTimeline(hist) {
+  const el = document.getElementById('tr-perfil-timeline');
+  if (!el) return;
+
+  const TIPO_LABEL = {
+    avaliacao_concluida: { label:'Avaliação', cor:'tag-green' },
+    feedback_positivo:   { label:'Feedback positivo', cor:'tag-blue' },
+    ponto_melhoria:      { label:'Ponto de melhoria', cor:'tag-amber' },
+    anotacao:            { label:'Anotação', cor:'tag-purple' },
+    pdi:                 { label:'PDI', cor:'tag-blue' },
+  };
+
+  const filterOpts = `
+    <select id="tr-tl-filtro" onchange="trFiltrarTimeline()" style="background:var(--card);border:1px solid var(--border);color:var(--text-sec);border-radius:7px;padding:5px 9px;font-size:11px">
+      <option value="">Todos os registros</option>
+      <option value="avaliacao_concluida">Somente avaliações</option>
+      <option value="feedback">Somente feedbacks</option>
+    </select>`;
+
+  if (!hist.length) {
+    el.innerHTML = `<div style="font-size:12px;font-weight:600;margin-bottom:14px">Linha do tempo</div><div style="font-size:12px;color:var(--text-ter)">Nenhum registro ainda.</div>`;
+    return;
+  }
+
+  el.dataset.hist = JSON.stringify(hist);
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap">
+      <div style="font-size:12px;font-weight:600">Linha do tempo</div>
+      ${filterOpts}
+    </div>
+    <div id="tr-tl-body"></div>`;
+
+  trRenderTimelineItens(hist);
+}
+
+function trFiltrarTimeline() {
+  const filtro = document.getElementById('tr-tl-filtro')?.value || '';
+  const el = document.getElementById('tr-perfil-timeline');
+  if (!el?.dataset.hist) return;
+  let hist = JSON.parse(el.dataset.hist);
+  if (filtro === 'avaliacao_concluida') hist = hist.filter(h => h.tipo === 'avaliacao_concluida');
+  else if (filtro === 'feedback') hist = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo));
+  trRenderTimelineItens(hist);
+}
+
+function trRenderTimelineItens(hist) {
+  const TIPO_LABEL = {
+    avaliacao_concluida: { label:'Avaliação', cor:'tag-green' },
+    feedback_positivo:   { label:'Feedback positivo', cor:'tag-blue' },
+    ponto_melhoria:      { label:'Ponto de melhoria', cor:'tag-amber' },
+    anotacao:            { label:'Anotação', cor:'tag-purple' },
+    pdi:                 { label:'PDI', cor:'tag-blue' },
+  };
+  const el = document.getElementById('tr-tl-body');
+  if (!el) return;
+  if (!hist.length) { el.innerHTML = `<div style="font-size:12px;color:var(--text-ter)">Nenhum registro para o filtro selecionado.</div>`; return; }
+  el.innerHTML = `<div class="hist-timeline">${hist.map(h => {
+    const meta = TIPO_LABEL[h.tipo] || { label: h.tipo, cor:'tag-purple' };
+    const mes = h.data ? new Date(h.data+'T12:00:00').toLocaleDateString('pt-BR',{month:'short',year:'numeric'}) : '—';
+    return `<div class="hist-item">
+      <div class="hist-dot tipo-${h.tipo}"></div>
+      <div class="hist-content">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">
+          <span style="font-size:11px;color:var(--text-ter)">${mes}</span>
+          <span class="status-badge ${meta.cor}">${meta.label}</span>
+        </div>
+        <div class="hist-titulo">${h.titulo || '—'}</div>
+        ${h.descricao ? `<div class="hist-desc">${h.descricao}</div>` : ''}
+        ${h.created_by ? `<div class="hist-date">Por: ${h.created_by}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* ─── Salva feedback/anotação em dev_historico ─── */
+async function trSalvarFeedback(matricula) {
+  const tipo  = document.getElementById('tr-fb-tipo')?.value;
+  const texto = (document.getElementById('tr-fb-texto')?.value || '').trim();
+  if (!texto) { toast('Descreva o feedback antes de salvar.', true); return; }
+
+  const TITULO = { feedback_positivo:'Feedback positivo', ponto_melhoria:'Ponto de melhoria', anotacao:'Anotação' };
+  const colab  = _colaboradores.find(c => c.matricula === matricula);
+
+  const r = await fetch(SB_URL + '/rest/v1/dev_historico', {
+    method: 'POST',
+    headers: { ...HDR, Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      matricula_colaborador: matricula,
+      data:         new Date().toISOString().slice(0,10),
+      tipo,
+      titulo:       TITULO[tipo] || tipo,
+      descricao:    texto,
+      modulo_origem:'dp',
+      created_by:   _nomeUsuario || null,
+    })
+  });
+  if (!r.ok) { toast('Erro ao salvar: ' + (await r.json().catch(()=>({message:'desconhecido'}))).message, true); return; }
+
+  toast('Registro salvo.');
+  document.getElementById('tr-fb-texto').value = '';
+  // Recarrega a timeline
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100`) || [];
+  trRenderTimeline(hist);
+  // Atualiza mapa em memória
+  _trHistoricoMap[matricula] = hist;
+}
+
+/* ─── Volta para a lista ─── */
+function trVoltarLista() {
+  document.getElementById('tr-view-lista').style.display = '';
+  document.getElementById('tr-view-perfil').style.display = 'none';
+}
 </script>
 
 <!-- ══ OVERLAY: FORMULÁRIO DE AVALIAÇÃO ══ -->
