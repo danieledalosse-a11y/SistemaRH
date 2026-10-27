@@ -2234,6 +2234,7 @@ async function renderPDI() {
 }
 
 function renderPDIHtml(el, pdiRec) {
+  const _pdiPodeEditar = (_perfil === 'rh' || _perfil === 'admin' || _perfil === 'gestor');
   let html = `<div class="pdi-list" id="pdiItens">`;
   if (!_pdiAcoes.length) {
     html += `<div class="empty-state" style="padding:32px 0;"><p>Nenhuma ação de desenvolvimento cadastrada.</p></div>`;
@@ -2249,14 +2250,15 @@ function renderPDIHtml(el, pdiRec) {
           <div class="pdi-acao ${textClass}">${a.acao}</div>
           <div class="pdi-meta">${a.prazo ? '📅 Prazo: ' + formatDate(a.prazo) : 'Sem prazo definido'}${a.area ? ' · ' + a.area : ''}</div>
         </div>
-        <button class="pdi-del" onclick="deletePDIItem(${i})" title="Remover">
+        ${_pdiPodeEditar ? `<button class="pdi-del" onclick="deletePDIItem(${i})" title="Remover">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-        </button>
+        </button>` : ''}
       </div>`;
     });
   }
   html += `</div>`;
-  html += `<div class="pdi-add-form" id="pdiAddForm">
+  if (_pdiPodeEditar) {
+    html += `<div class="pdi-add-form" id="pdiAddForm">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text-sec)">Nova ação de desenvolvimento</div>
     <input type="text" id="pdiNovaAcao" placeholder="Descrição da ação (ex: Participar do treinamento de liderança)">
     <div class="pdi-add-row">
@@ -2272,6 +2274,7 @@ function renderPDIHtml(el, pdiRec) {
       <button class="btn btn-primary btn-sm" onclick="adicionarPDIItem()">Adicionar</button>
     </div>
   </div>`;
+  }
   el.innerHTML = html;
 }
 
@@ -2293,6 +2296,7 @@ async function salvarPDI() {
 }
 
 function adicionarPDIItem() {
+  if (_perfil === 'diretoria') { toast('Sem permissão para esta ação.', true); return; }
   const acao  = (document.getElementById('pdiNovaAcao').value||'').trim();
   const prazo = document.getElementById('pdiNovaPrazo').value;
   const area  = document.getElementById('pdiNovaArea').value;
@@ -2307,6 +2311,7 @@ function togglePDIItem(i) {
 }
 
 function deletePDIItem(i) {
+  if (_perfil === 'diretoria') { toast('Sem permissão para esta ação.', true); return; }
   _pdiAcoes.splice(i, 1);
   salvarPDI().then(() => { renderPDIHtml(document.getElementById('pdiForm'), null); toast('Ação removida.'); });
 }
@@ -8149,10 +8154,11 @@ init();
    TRAJETÓRIA PROFISSIONAL
 ══════════════════════════════════════════════════════════════ */
 
-let _trHistoricoMap  = {};  // matricula → [registros dp de dev_historico]
-let _trFiltroNome    = '';
-let _trFiltroSetor   = '';
-let _trGestorApelido = ''; // apelido param_gestor do gestor logado (filtro de equipe)
+let _trHistoricoMap   = {};  // matricula → [registros dp de dev_historico]
+let _trFiltroNome     = '';
+let _trFiltroSetor    = '';
+let _trGestorApelido  = ''; // apelido param_gestor do gestor logado (filtro de equipe)
+let _trMatriculaAtual = ''; // matrícula do colaborador aberto na view de perfil
 
 /* ─── Renderiza a seção principal (lista) ─── */
 async function renderTrajetoria() {
@@ -8264,6 +8270,7 @@ function trRenderLista() {
 
 /* ─── Abre perfil individual ─── */
 async function trAbrirPerfil(matricula, nome) {
+  _trMatriculaAtual = matricula;
   document.getElementById('tr-view-lista').style.display = 'none';
   document.getElementById('tr-view-perfil').style.display = '';
 
@@ -8375,18 +8382,24 @@ function trRenderTimelineItens(hist) {
     anotacao:            { label:'Anotação', cor:'tag-purple' },
     pdi:                 { label:'PDI', cor:'tag-blue' },
   };
+  const _tiposEditaveis = ['feedback_positivo','ponto_melhoria','anotacao'];
   const el = document.getElementById('tr-tl-body');
   if (!el) return;
   if (!hist.length) { el.innerHTML = `<div style="font-size:12px;color:var(--text-ter)">Nenhum registro para o filtro selecionado.</div>`; return; }
   el.innerHTML = `<div class="hist-timeline">${hist.map(h => {
     const meta = TIPO_LABEL[h.tipo] || { label: h.tipo, cor:'tag-purple' };
     const mes = h.data ? new Date(h.data+'T12:00:00').toLocaleDateString('pt-BR',{month:'short',year:'numeric'}) : '—';
+    const podeExcluir = _tiposEditaveis.includes(h.tipo) && (
+      (_perfil === 'rh' || _perfil === 'admin') ||
+      (_perfil === 'gestor' && h.created_by === _nomeUsuario)
+    );
     return `<div class="hist-item">
       <div class="hist-dot tipo-${h.tipo}"></div>
       <div class="hist-content">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">
           <span style="font-size:11px;color:var(--text-ter)">${mes}</span>
           <span class="status-badge ${meta.cor}">${meta.label}</span>
+          ${podeExcluir ? `<button onclick="trExcluirFeedback(${h.id})" style="margin-left:auto;padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-ter);cursor:pointer" title="Excluir registro">Excluir</button>` : ''}
         </div>
         <div class="hist-titulo">${h.titulo || '—'}</div>
         ${h.descricao ? `<div class="hist-desc">${h.descricao}</div>` : ''}
@@ -8394,6 +8407,32 @@ function trRenderTimelineItens(hist) {
       </div>
     </div>`;
   }).join('')}</div>`;
+}
+
+async function trExcluirFeedback(id) {
+  // Guard frontend — diretoria nunca chega aqui pelo botão, mas protege chamadas diretas
+  if (_perfil === 'diretoria') { toast('Sem permissão para esta ação.', true); return; }
+
+  // Para gestor: buscar o registro e confirmar que é o próprio antes de deletar
+  if (_perfil === 'gestor') {
+    const rec = await sbGet(`/rest/v1/dev_historico?id=eq.${id}&select=created_by`);
+    const item = (rec || [])[0];
+    if (!item) { toast('Registro não encontrado.', true); return; }
+    if (item.created_by !== _nomeUsuario) { toast('Você só pode excluir registros que você mesmo criou.', true); return; }
+  }
+
+  const r = await fetch(SB_URL + `/rest/v1/dev_historico?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: { ...HDR, Prefer: 'return=minimal' }
+  });
+  if (!r.ok) { toast('Erro ao excluir registro.', true); return; }
+
+  toast('Registro excluído.');
+  // Recarrega a timeline usando _trMatriculaAtual (definida em trAbrirPerfil)
+  const matricula = _trMatriculaAtual;
+  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc&limit=100`) || [];
+  trRenderTimeline(hist);
+  _trHistoricoMap[matricula] = hist;
 }
 
 /* ─── Salva feedback/anotação em dev_historico ─── */
