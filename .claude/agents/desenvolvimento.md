@@ -1049,6 +1049,32 @@ if (!_cicloAtivo) { toast('Selecione um ciclo antes de salvar o PDI.', true); re
 
 **Regra permanente:** quando `_cicloAtivo` é null, renderPDI e salvarPDI NUNCA consultam nem alteram o banco. Registros de outros ciclos são preservados. Sem risco de duplicidade porque o PATCH inclui filtro `ciclo_id=eq.X` e o POST cria com `ciclo_id` explícito.
 
+### Trajetória Profissional — título, resultado financeiro e gráfico (commit 4519ee7)
+
+**Migration 137:** `ALTER TABLE dev_historico ADD COLUMN IF NOT EXISTS resultado_valor NUMERIC` — campo numérico para resultado financeiro; nullable, sem impacto em outros módulos.
+
+**`dpGravarTrajetoriaDP(avalId, snap, cicloId)`** — chamada ao concluir avaliação:
+- `titulo` = nome do ciclo (`_dpCiclos.find(c => c.id === cicloId)?.nome`) — antes era string fixa
+- Busca `dp_resultados → dp_resultados_bonus.valor_bonus` e grava em `resultado_valor`
+- `descricao` = `"cargo · cicloNome · R$ valor"` quando há resultado financeiro
+- `created_by = _nomeUsuario` (vem de `s.nome || s.email` via `getSession()`)
+- Todos os selects de `dev_historico` na Trajetória incluem `resultado_valor`
+
+**Gráfico `trRenderGraficoCiclos(avalList)`** — SVG inline em `trAbrirPerfil`:
+- Lê `h.resultado_valor` (numérico) — nunca regex em texto
+- `avalList`: avaliações com `resultado_valor != null`, ordem cronológica (`.slice().reverse()`)
+- Renderizado acima da timeline, oculto quando não há dados
+- 1 ponto = ponto único sem linha; 0 pontos = componente não renderizado
+
+**Backfill setembro/2026 (executado em produção, 27/10/2026):**
+- 73 registros em `dev_historico` atualizados: `titulo = dp_ciclos.nome`, `descricao += ' · R$ X,XX'`, `resultado_valor = dp_resultados_bonus.valor_bonus`
+- Validado: `total=73, com_resultado_valor=73, menor_valor=200, maior_valor=400`
+- Guard idempotente: Passo 2 usa `titulo = 'Avaliação de desempenho concluída'`; Passo 3 usa `resultado_valor IS NULL`
+
+**D3 (responsável) — setembro:** avaliador não recuperável (`fn_get_usuarios_perfil()` retornou 0 linhas para `ciclos.avaliador_id`). `created_by` dos 73 registros permanece nulo. Futuros ciclos gravam `_nomeUsuario` automaticamente.
+
+---
+
 ### Permissões por perfil na Trajetória Profissional (commit ade208f)
 
 **Feedback/anotação — excluir na timeline:**
