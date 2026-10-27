@@ -1073,6 +1073,22 @@ if (!_cicloAtivo) { toast('Selecione um ciclo antes de salvar o PDI.', true); re
 
 **D3 (responsável) — setembro:** avaliador não recuperável (`fn_get_usuarios_perfil()` retornou 0 linhas para `ciclos.avaliador_id`). `created_by` dos 73 registros permanece nulo. Futuros ciclos gravam `_nomeUsuario` automaticamente.
 
+### Próxima feature — Análise por critério na Trajetória (aguarda 2º ciclo)
+
+**Objetivo:** seção "Pontos de atenção" no perfil do colaborador, abaixo do gráfico, com três blocos:
+- **Pontos fortes:** critérios respondidos "sim" em todos os ciclos disponíveis
+- **Pontos de atenção:** critérios respondidos "não" em ≥2 ciclos consecutivos
+- **Em observação:** critérios com variação (alternaram sim/não entre ciclos)
+
+**Dados disponíveis:**
+- `dp_respostas` — resposta por critério por avaliação (`versao_criterio_id`, `resposta_texto`)
+- `dp_resultados_bonus.snapshot_criterios` — JSONB com `criterio_id`, `resposta`, `valor_apurado` (campo `nome` está vazio nos registros atuais — buscar nome via `dp_versao_criterios`)
+- Critérios são por versão (`versao_id`); comparação cross-ciclo só é válida quando o mesmo modelo é usado
+
+**Regra de exibição:** com 1 ciclo, exibe fotografia atual sem inferir tendência. Análise de recorrência aparece apenas com ≥2 ciclos do mesmo modelo concluídos. Nunca exibir conclusão sem evidência mínima de 2 ocorrências.
+
+**Quando implementar:** após o segundo ciclo com o mesmo modelo (ex: Gratificação CD Outubro/2026) ser encerrado.
+
 ---
 
 ### Permissões por perfil na Trajetória Profissional (commit ade208f)
