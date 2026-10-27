@@ -7020,7 +7020,7 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
   const crits = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${_dpCicloAtual.versao_id}&select=id,peso,tipo_resposta,valor_se_sim,valor_se_nao,contribui_calculo`) || [];
 
   // c) Respostas da avaliação
-  const respostas = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${avaliacaoId}&select=versao_criterio_id,valor_numerico_livre,snapshot_opcao_valor_num,resposta_texto`) || [];
+  const respostas = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${avaliacaoId}&select=versao_criterio_id,valor_numerico_livre,snapshot_opcao_valor_num,resposta_texto,observacao`) || [];
 
   const critsComValor = [];
   for (const c of crits) {
@@ -7036,7 +7036,7 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
       val = r.valor_numerico_livre;
     }
     if (val == null) continue;
-    critsComValor.push({ ...c, valor: Number(val), resposta_texto: r.resposta_texto });
+    critsComValor.push({ ...c, valor: Number(val), resposta_texto: r.resposta_texto, observacao: r.observacao || null });
   }
 
   // d2) Separar critérios de nota dos critérios de bônus monetário
@@ -7101,12 +7101,13 @@ async function dpCalcularAvaliacao(avaliacaoId, rerender) {
   // dp_salvar_resultado garante atomicidade: ou ambos persistem, ou nenhum (rollback automático).
   // O banco valida perfil (rh/admin) e resultado vazio internamente — sem dependência do frontend.
   const snapshotCriterios = critsBonus.length ? critsBonus.map(c => ({
-    criterio_id: c.id,
-    nome: c.dp_criterios?.nome || c.criterio_nome_snapshot || '',
-    valor_se_sim: c.valor_se_sim,
-    valor_se_nao: c.valor_se_nao ?? 0,
-    resposta: c.resposta_texto,
-    valor_apurado: c.valor
+    criterio_id:   c.id,
+    nome:          c.dp_criterios?.nome || c.criterio_nome_snapshot || '',
+    valor_se_sim:  c.valor_se_sim,
+    valor_se_nao:  c.valor_se_nao ?? 0,
+    resposta:      c.resposta_texto,
+    valor_apurado: c.valor,
+    observacao:    c.observacao || null,
   })) : null;
 
   const rpcRes = await sbRpc('dp_salvar_resultado', {
@@ -8179,7 +8180,8 @@ init();
    TRAJETÓRIA PROFISSIONAL
 ══════════════════════════════════════════════════════════════ */
 
-let _trHistoricoMap   = {};  // matricula → [registros dp de dev_historico]
+let _trHistoricoMap         = {};  // matricula → [registros dp de dev_historico]
+let _trSnapshotCriteriosMap = {};  // avaliacao_id → [critérios com observação do snapshot]
 let _trFiltroNome     = '';
 let _trFiltroSetor    = '';
 let _trGestorApelido  = ''; // apelido param_gestor do gestor logado (filtro de equipe)
@@ -8206,6 +8208,7 @@ async function renderTrajetoria() {
 
   // Agrupa por matricula
   _trHistoricoMap = {};
+  _trSnapshotCriteriosMap = {};
   registros.forEach(r => {
     if (!_trHistoricoMap[r.matricula_colaborador]) _trHistoricoMap[r.matricula_colaborador] = [];
     _trHistoricoMap[r.matricula_colaborador].push(r);
@@ -8311,6 +8314,21 @@ async function trAbrirPerfil(matricula, nome) {
 
   const ciclos = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
   const feeds  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
+
+  // Carrega snapshot_criterios para avaliações concluídas (observações por competência)
+  const avalIds = hist.filter(h => h.tipo === 'avaliacao_concluida' && h.avaliacao_id).map(h => h.avaliacao_id);
+  _trSnapshotCriteriosMap = {};
+  if (avalIds.length) {
+    try {
+      const bonusRows = await sbGet(`/rest/v1/dp_resultados?avaliacao_id=in.(${avalIds.join(',')})&select=avaliacao_id,dp_resultados_bonus(snapshot_criterios)`) || [];
+      for (const row of bonusRows) {
+        const snap = row.dp_resultados_bonus?.[0]?.snapshot_criterios;
+        if (!snap) continue;
+        const comObs = snap.filter(c => c.observacao && c.observacao.trim() !== '');
+        if (comObs.length) _trSnapshotCriteriosMap[row.avaliacao_id] = comObs;
+      }
+    } catch(_) {}
+  }
 
   // Pontos do gráfico: avaliações com resultado_valor, ordem cronológica
   const avalComValor = hist
@@ -8493,6 +8511,33 @@ function trRenderTimelineItens(hist) {
           return `<span style="font-size:11px;font-weight:700;color:${cor}">${fmt}</span>`;
         })()
       : '';
+
+    // Seção colapsável de observações por competência (apenas avaliação_concluida com snapshot)
+    const obsSnap = (h.tipo === 'avaliacao_concluida' && h.avaliacao_id)
+      ? (_trSnapshotCriteriosMap[h.avaliacao_id] || null)
+      : null;
+    const obsHtml = obsSnap
+      ? (() => {
+          const rows = obsSnap.map(c => {
+            const resp = c.resposta === 'sim' ? '✓ Sim' : c.resposta === 'nao' ? '✗ Não' : (c.resposta || '—');
+            const respCor = c.resposta === 'sim' ? '#047857' : c.resposta === 'nao' ? '#dc2626' : 'var(--text-sec)';
+            return `<div style="padding:5px 0;border-bottom:1px solid var(--border-light,var(--border));display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:start">
+              <span style="font-size:11px;color:${respCor};font-weight:600;white-space:nowrap">${resp}</span>
+              <div>
+                <div style="font-size:11px;font-weight:600;color:var(--text-sec)">${c.nome || '—'}</div>
+                <div style="font-size:11px;color:var(--text-ter);margin-top:2px">${c.observacao}</div>
+              </div>
+            </div>`;
+          }).join('');
+          return `<details style="margin-top:6px">
+            <summary style="font-size:11px;color:var(--accent);cursor:pointer;user-select:none;padding:2px 0">
+              Observações por competência (${obsSnap.length})
+            </summary>
+            <div style="margin-top:6px;padding:6px 8px;background:var(--bg-alt,var(--bg));border-radius:6px;border:1px solid var(--border)">${rows}</div>
+          </details>`;
+        })()
+      : '';
+
     return `<div class="hist-item">
       <div class="hist-dot tipo-${h.tipo}"></div>
       <div class="hist-content">
@@ -8505,6 +8550,7 @@ function trRenderTimelineItens(hist) {
         <div class="hist-titulo">${h.titulo || '—'}</div>
         ${h.descricao ? `<div class="hist-desc">${h.descricao}</div>` : ''}
         ${h.created_by ? `<div class="hist-date">Por: ${h.created_by}</div>` : ''}
+        ${obsHtml}
       </div>
     </div>`;
   }).join('')}</div>`;
