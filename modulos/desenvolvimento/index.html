@@ -7045,8 +7045,9 @@ async function salvarAvaliacao(status) {
     // ── 6. Registro de evento (fire-and-forget) ─
     if (statusEfetivo === 'concluida') {
       const partSnap = (_dpParticipantes.find(p => p.id === _dpAvaliacaoAtual.participante_id) || {}).snapshot || {};
+      const partColabId = (_dpParticipantes.find(p => p.id === _dpAvaliacaoAtual.participante_id) || {}).colaborador_id || null;
       dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', avalId, { colaborador: partSnap.nome });
-      dpGravarTrajetoriaDP(avalId, partSnap, _dpCicloAtual?.id);
+      dpGravarTrajetoriaDP(avalId, partSnap, _dpCicloAtual?.id, partColabId);
     }
   }
 
@@ -7387,7 +7388,7 @@ async function dpRegistrarEvento(tipo, entidade, entidadeId, detalhe = {}) {
 
 // Grava um registro em dev_historico ao concluir avaliação.
 // Idempotente: verifica se já existe registro com o mesmo avaliacao_id antes de inserir.
-async function dpGravarTrajetoriaDP(avalId, snap, cicloId) {
+async function dpGravarTrajetoriaDP(avalId, snap, cicloId, colaboradorId = null) {
   try {
     const matricula = snap?.matricula;
     if (!matricula || !avalId) return;
@@ -7423,6 +7424,7 @@ async function dpGravarTrajetoriaDP(avalId, snap, cicloId) {
 
     await sbPost(`/rest/v1/dev_historico`, {
       matricula_colaborador: matricula,
+      colaborador_id:      colaboradorId || null,
       data:                new Date().toISOString().slice(0, 10),
       tipo:                'avaliacao_concluida',
       titulo:              cicloNome || 'Avaliação de desempenho concluída',
@@ -7747,7 +7749,7 @@ async function dpConcluirAvaliacaoIndividual(participanteId) {
     if (a) { a.status = 'concluida'; a.concluida_em = agora; }
   });
   await dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', aval.id, { colaborador: nome });
-  dpGravarTrajetoriaDP(aval.id, part?.snapshot || {}, _dpCicloAtual?.id);
+  dpGravarTrajetoriaDP(aval.id, part?.snapshot || {}, _dpCicloAtual?.id, part?.colaborador_id || null);
   toast('Avaliação concluída.');
   _dpRenderAvaliacoesComFiltro();
   const gdpBtn = document.getElementById('gdptab-btn-avaliacoes');
@@ -7807,7 +7809,7 @@ async function dpConcluirTodasAvaliacoes(escopo) {
         if (x) { x.status = 'concluida'; x.concluida_em = agora; }
       });
       await dpRegistrarEvento('avaliacao_concluida', 'dp_avaliacoes', a.id, { colaborador: (p.snapshot||{}).nome });
-      dpGravarTrajetoriaDP(a.id, p.snapshot || {}, _dpCicloAtual?.id);
+      dpGravarTrajetoriaDP(a.id, p.snapshot || {}, _dpCicloAtual?.id, p?.colaborador_id || null);
     } else {
       erros++;
     }
@@ -8441,6 +8443,7 @@ let _trFiltroSetor    = '';
 let _trFiltroCargo    = '';
 let _trGestorApelido  = ''; // apelido param_gestor do gestor logado (filtro de equipe)
 let _trMatriculaAtual = ''; // matrícula do colaborador aberto na view de perfil
+let _trColabIdAtual   = null; // colaboradores.id do colaborador aberto (integer) — identificação única
 
 /* ─── Renderiza a seção principal (lista) ─── */
 async function renderTrajetoria() {
@@ -8679,7 +8682,7 @@ function trRenderLista() {
       ciclos ? `<span class="status-badge" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green)">${ciclos} ciclo${ciclos!==1?'s':''}</span>` : '',
       feeds  ? `<span class="status-badge" style="background:var(--blue-bg,#EBF0FF);color:var(--blue,#3B6CF0);border:1px solid var(--blue,#3B6CF0)">${feeds} feedback${feeds!==1?'s':''}</span>` : '',
     ].filter(Boolean).join('');
-    return `<div class="colab-item" style="cursor:pointer" onclick="trAbrirPerfil('${c.matricula}','${(c.nome||'').replace(/'/g,"\\'")}')">
+    return `<div class="colab-item" style="cursor:pointer" onclick="trAbrirPerfil('${c.matricula}','${(c.nome||'').replace(/'/g,"\\'")}',${c.id})">
       <div class="colab-av" style="background:${cor}">${iniciais}</div>
       <div class="colab-info">
         <div class="colab-nome">${c.nome || '—'}</div>
@@ -8693,9 +8696,18 @@ function trRenderLista() {
   }).join('');
 }
 
+/* ─── Monta filtro seguro para dev_historico (evita contaminação por matrícula compartilhada) ─── */
+function _trBuildHistFiltro(matricula, colaboradorId) {
+  if (colaboradorId) return `colaborador_id=eq.${colaboradorId}&modulo_origem=eq.dp`;
+  const unica = (_colaboradores || []).filter(c => String(c.matricula) === String(matricula)).length <= 1;
+  if (unica) return `matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp`;
+  return `id=eq.-1`; // matrícula ambígua sem UUID: não exibe nada
+}
+
 /* ─── Abre perfil individual ─── */
-async function trAbrirPerfil(matricula, nome) {
+async function trAbrirPerfil(matricula, nome, colaboradorId) {
   _trMatriculaAtual = matricula;
+  _trColabIdAtual   = colaboradorId || null;
   document.getElementById('tr-view-lista').style.display = 'none';
   document.getElementById('tr-view-perfil').style.display = '';
 
@@ -8716,7 +8728,7 @@ async function trAbrirPerfil(matricula, nome) {
 
   // Carrega histórico D&P e PDI em paralelo
   const [histRaw, pdiRaw] = await Promise.all([
-    sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`),
+    sbGet(`/rest/v1/dev_historico?${_trBuildHistFiltro(matricula, colaboradorId)}&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`),
     trCarregarPdi(matricula)
   ]);
   const hist = histRaw || [];
@@ -9673,11 +9685,18 @@ async function pdiSalvarDrawer() {
     try {
       const hoje = new Date().toISOString().slice(0, 10);
       const hMin = { ...HDR, Prefer: 'return=minimal' };
+      // Resolve colaborador_id: usa _trColabIdAtual (perfil aberto) ou busca por matrícula única
+      const _pdiColabId = _trColabIdAtual || (() => {
+        const mat = _pdiDrawerPlano.matricula_colaborador;
+        const matches = (_colaboradores||[]).filter(c => String(c.matricula) === String(mat));
+        return matches.length === 1 ? matches[0].id : null;
+      })();
       await fetch(`${SB_URL}/rest/v1/dev_historico`, {
         method: 'POST',
         headers: hMin,
         body: JSON.stringify({
           matricula_colaborador: _pdiDrawerPlano.matricula_colaborador,
+          colaborador_id: _pdiColabId || null,
           modulo_origem: 'dp',
           tipo: 'pdi',
           titulo: `PDI concluído: ${_pdiDrawerPlano.titulo}`,
@@ -10350,9 +10369,9 @@ async function trExcluirFeedback(id) {
   if (!r.ok) { toast('Erro ao excluir registro.', true); return; }
 
   toast('Registro excluído.');
-  // Recarrega a timeline usando _trMatriculaAtual (definida em trAbrirPerfil)
+  // Recarrega a timeline usando filtro seguro por UUID
   const matricula = _trMatriculaAtual;
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
+  const hist = await sbGet(`/rest/v1/dev_historico?${_trBuildHistFiltro(matricula, _trColabIdAtual)}&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
   trRenderTimeline(hist);
   _trHistoricoMap[matricula] = hist;
 }
@@ -10371,6 +10390,7 @@ async function trSalvarFeedback(matricula) {
     headers: { ...HDR, Prefer: 'return=minimal' },
     body: JSON.stringify({
       matricula_colaborador: matricula,
+      colaborador_id:        _trColabIdAtual || null,
       data:         new Date().toISOString().slice(0,10),
       tipo,
       titulo:       TITULO[tipo] || tipo,
@@ -10383,8 +10403,8 @@ async function trSalvarFeedback(matricula) {
 
   toast('Registro salvo.');
   document.getElementById('tr-fb-texto').value = '';
-  // Recarrega a timeline
-  const hist = await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
+  // Recarrega a timeline usando filtro seguro por UUID
+  const hist = await sbGet(`/rest/v1/dev_historico?${_trBuildHistFiltro(matricula, _trColabIdAtual)}&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
   trRenderTimeline(hist);
   // Atualiza mapa em memória
   _trHistoricoMap[matricula] = hist;
