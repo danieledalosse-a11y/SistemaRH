@@ -10399,11 +10399,33 @@ function trRenderTimelineItens(hist) {
   }).join('')}</div>`;
 }
 
-async function trExcluirFeedback(id) {
-  // Guard frontend — diretoria nunca chega aqui pelo botão, mas protege chamadas diretas
+function trExcluirFeedback(id) {
+  // Evita abrir duas confirmações ao mesmo tempo
+  if (document.getElementById(`tr-del-${id}`)) return;
+  const btn = document.querySelector(`[onclick*="trExcluirFeedback(${id})"]`);
+  if (!btn) return;
+  const wrap = btn.parentElement;
+
+  // Substitui o botão de lixeira por confirmação inline
+  btn.style.display = 'none';
+  const conf = document.createElement('div');
+  conf.id = `tr-del-${id}`;
+  conf.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0';
+  conf.innerHTML = `<span style="font-size:11px;color:var(--text-sec);white-space:nowrap">Excluir este registro?</span>
+    <button onclick="event.stopPropagation();trConfirmarExclusao(${id})" style="padding:2px 8px;font-size:11px;border:none;border-radius:4px;background:#dc2626;color:#fff;cursor:pointer;font-family:inherit;font-weight:600">Sim</button>
+    <button onclick="event.stopPropagation();trCancelarExclusao(${id})" style="padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit">Não</button>`;
+  wrap.appendChild(conf);
+}
+
+function trCancelarExclusao(id) {
+  document.getElementById(`tr-del-${id}`)?.remove();
+  const btn = document.querySelector(`[onclick*="trExcluirFeedback(${id})"]`);
+  if (btn) btn.style.display = '';
+}
+
+async function trConfirmarExclusao(id) {
   if (_perfil === 'diretoria') { toast('Sem permissão para esta ação.', true); return; }
 
-  // Para gestor: buscar o registro e confirmar que é o próprio antes de deletar
   if (_perfil === 'gestor') {
     const rec = await sbGet(`/rest/v1/dev_historico?id=eq.${id}&select=created_by`);
     const item = (rec || [])[0];
@@ -10418,11 +10440,9 @@ async function trExcluirFeedback(id) {
   if (!r.ok) { toast('Erro ao excluir registro.', true); return; }
 
   toast('Registro excluído.');
-  // Recarrega a timeline usando busca segura por UUID
-  const matricula = _trMatriculaAtual;
-  const hist = await _trFetchHist(matricula, _trColabIdAtual);
+  const hist = await _trFetchHist(_trMatriculaAtual, _trColabIdAtual);
   trRenderTimeline(hist);
-  _trHistoricoMap[matricula] = hist;
+  _trHistoricoMap[_trColabIdAtual || _trMatriculaAtual] = hist;
 }
 
 /* ─── Edição inline de feedback/anotação ─── */
