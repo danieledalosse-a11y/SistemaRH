@@ -9238,14 +9238,23 @@ function pdiRenderDrawerAcoes() {
     const catColor = categoria ? CAT_COLORS[hc % CAT_COLORS.length] : '#9ca3af';
     const catBg    = catColor + '18';
 
-    // Checkbox
-    let checkHtml;
+    // Ícone de categoria = toggle de conclusão (círculo único, sem checkbox separado)
+    let catIconStyle, catIconContent, catIconClick, catIconTitle;
     if (cancelada) {
-      checkHtml = `<div style="width:18px;height:18px;border-radius:4px;background:#e5e7eb;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:2px"><svg width="10" height="2" viewBox="0 0 10 2" fill="none"><rect y=".25" width="10" height="1.5" rx=".75" fill="#9ca3af"/></svg></div>`;
+      catIconStyle = `background:#f3f4f6;color:#9ca3af;cursor:default`;
+      catIconContent = `<svg width="14" height="14" viewBox="0 0 10 2" fill="none"><rect y=".25" width="10" height="1.5" rx=".75" fill="#9ca3af"/></svg>`;
+      catIconClick = '';
+      catIconTitle = 'Cancelada';
     } else if (done) {
-      checkHtml = `<div class="pdi-acao-check done" onclick="pdiIniciarReativacao(${i})" title="Concluída — clique para reativar" style="margin-top:2px"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="3"><polyline points="2,6 5,9 10,3"/></svg></div>`;
+      catIconStyle = `background:#dcfce7;color:#16a34a;cursor:pointer;box-shadow:0 0 0 2px #bbf7d0`;
+      catIconContent = `<svg width="15" height="15" viewBox="0 0 12 12" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="2,6 5,9 10,3"/></svg>`;
+      catIconClick = `onclick="event.stopPropagation();pdiIniciarReativacao(${i})"`;
+      catIconTitle = 'Concluída — clique para reativar';
     } else {
-      checkHtml = `<div class="pdi-acao-check" onclick="pdiConcluirAcao(${i})" title="Marcar como concluída" style="margin-top:2px"></div>`;
+      catIconStyle = `background:${catBg};color:${catColor};cursor:pointer`;
+      catIconContent = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`;
+      catIconClick = `onclick="event.stopPropagation();pdiConcluirAcao(${i})"`;
+      catIconTitle = 'Marcar como concluída';
     }
 
     // Prazo chip
@@ -9290,9 +9299,8 @@ function pdiRenderDrawerAcoes() {
 
     return `<div class="pdi-action-card ${cardClass}" id="pdi-row-${i}">
       <div class="pdi-action-card-body">
-        ${checkHtml}
-        <div class="pdi-action-cat-icon" style="background:${catBg};color:${catColor}">
-          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <div class="pdi-action-cat-icon" style="${catIconStyle};transition:all .18s" ${catIconClick} title="${catIconTitle}">
+          ${catIconContent}
         </div>
         <div style="flex:1;min-width:0">
           ${categoria ? `<span class="pdi-cat-badge" style="display:inline-block;margin-bottom:5px">${categoria}</span>` : ''}
