@@ -8503,14 +8503,25 @@ function trSyncDropdown(which) {
   // Campo de busca interno
   const searchWrap = document.createElement('div');
   searchWrap.style.cssText = 'padding:8px 8px 6px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1';
+  const searchRow = document.createElement('div');
+  searchRow.style.cssText = 'position:relative';
   const searchInp = document.createElement('input');
   searchInp.type = 'text';
   searchInp.className = 'tr-dd-search';
   searchInp.placeholder = which === 'setor' ? 'Buscar setor...' : 'Buscar função...';
-  searchInp.style.cssText = 'width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;box-sizing:border-box';
-  searchInp.oninput = () => trFilterDropdownItems(which, searchInp.value);
+  searchInp.style.cssText = 'width:100%;padding:6px 28px 6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;box-sizing:border-box';
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.textContent = '×';
+  clearBtn.style.cssText = 'display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:16px;line-height:1;padding:0 2px;border-radius:3px';
+  clearBtn.onmouseenter = () => clearBtn.style.color = 'var(--text)';
+  clearBtn.onmouseleave = () => clearBtn.style.color = 'var(--text-ter)';
+  clearBtn.onclick = e => { e.stopPropagation(); searchInp.value = ''; clearBtn.style.display = 'none'; trFilterDropdownItems(which, ''); searchInp.focus(); };
+  searchInp.oninput = () => { trFilterDropdownItems(which, searchInp.value); clearBtn.style.display = searchInp.value ? 'block' : 'none'; };
   searchInp.onclick = e => e.stopPropagation();
-  searchWrap.appendChild(searchInp);
+  searchRow.appendChild(searchInp);
+  searchRow.appendChild(clearBtn);
+  searchWrap.appendChild(searchRow);
   list.appendChild(searchWrap);
 
   // Items
