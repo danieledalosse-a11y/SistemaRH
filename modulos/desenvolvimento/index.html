@@ -1257,9 +1257,16 @@
       <div id="tr-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
       <!-- filtros -->
       <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-        <input type="text" id="tr-filtro-nome" placeholder="Buscar colaborador..." oninput="trFiltrar()" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--card);outline:none">
-        <select id="tr-filtro-setor" onchange="trFiltrar()" style="min-width:200px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--card)">
+        <div style="position:relative;flex:1;min-width:200px">
+          <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-ter)" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" id="tr-filtro-nome" placeholder="Buscar colaborador..." oninput="trFiltrar();trToggleClearBtn()" style="width:100%;padding:9px 32px 9px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;box-sizing:border-box;transition:border-color .15s" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
+          <button id="tr-filtro-nome-clear" onclick="trLimparBuscaNome()" title="Limpar busca" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-ter);padding:2px;line-height:1;font-size:16px;border-radius:4px" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-ter)'">×</button>
+        </div>
+        <select id="tr-filtro-setor" onchange="trFiltrar()" style="min-width:170px;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
           <option value="">Todos os setores</option>
+        </select>
+        <select id="tr-filtro-cargo" onchange="trFiltrar()" style="min-width:170px;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
+          <option value="">Todas as funções</option>
         </select>
       </div>
       <!-- lista -->
@@ -8356,6 +8363,7 @@ let _pdiPlanos      = [];    // todos os planos carregados
 let _pdiDrawerPlano = null;  // plano aberto no drawer
 let _trFiltroNome     = '';
 let _trFiltroSetor    = '';
+let _trFiltroCargo    = '';
 let _trGestorApelido  = ''; // apelido param_gestor do gestor logado (filtro de equipe)
 let _trMatriculaAtual = ''; // matrícula do colaborador aberto na view de perfil
 
@@ -8421,8 +8429,16 @@ async function renderTrajetoria() {
     _dpSetores.forEach(s => { const o = document.createElement('option'); o.value = s.nome; o.textContent = s.nome; setorSel.appendChild(o); });
   }
 
+  // Popula filtro de cargo dinamicamente a partir de _colaboradores
+  const cargoSel = document.getElementById('tr-filtro-cargo');
+  if (cargoSel && cargoSel.options.length <= 1) {
+    const cargos = [...new Set((_colaboradores || []).map(c => (c.cargo || '').trim()).filter(Boolean))].sort();
+    cargos.forEach(cargo => { const o = document.createElement('option'); o.value = cargo; o.textContent = cargo; cargoSel.appendChild(o); });
+  }
+
   _trFiltroNome  = document.getElementById('tr-filtro-nome')?.value || '';
   _trFiltroSetor = document.getElementById('tr-filtro-setor')?.value || '';
+  _trFiltroCargo = document.getElementById('tr-filtro-cargo')?.value || '';
   trRenderLista();
 }
 
@@ -8430,7 +8446,20 @@ async function renderTrajetoria() {
 function trFiltrar() {
   _trFiltroNome  = (document.getElementById('tr-filtro-nome')?.value || '').toLowerCase();
   _trFiltroSetor = document.getElementById('tr-filtro-setor')?.value || '';
+  _trFiltroCargo = document.getElementById('tr-filtro-cargo')?.value || '';
   trRenderLista();
+}
+
+function trToggleClearBtn() {
+  const btn = document.getElementById('tr-filtro-nome-clear');
+  const inp = document.getElementById('tr-filtro-nome');
+  if (btn) btn.style.display = (inp?.value || '') ? 'block' : 'none';
+}
+
+function trLimparBuscaNome() {
+  const inp = document.getElementById('tr-filtro-nome');
+  if (inp) { inp.value = ''; inp.dispatchEvent(new Event('input')); inp.focus(); }
+  trToggleClearBtn();
 }
 
 function trRenderLista() {
@@ -8446,6 +8475,7 @@ function trRenderLista() {
     const _trNormSetor = s => { const p = (s||'').split(' - '); return (p.length > 1 ? p.slice(1).join(' - ') : s).trim(); };
     colabs = colabs.filter(c => _trNormSetor(c.setor) === _trFiltroSetor);
   }
+  if (_trFiltroCargo) colabs = colabs.filter(c => (c.cargo || '').trim() === _trFiltroCargo);
 
   const el = document.getElementById('tr-lista');
   if (!el) return;
