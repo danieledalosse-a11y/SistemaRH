@@ -2025,6 +2025,28 @@ function voltarParaEmpresas() {
   renderTelaEmpresas();
 }
 
+/**
+ * Retorna true se o colaborador está em período de experiência HOJE.
+ * Usa data_fim_experiencia quando disponível (fonte confiável).
+ * Fallback: data_admissao + 90 dias quando data_fim_experiencia ausente.
+ * Nunca depende apenas do campo booleano em_experiencia, que pode estar desatualizado.
+ * Suporta ambas as convenções de nome (data_fim_experiencia e fimExperiencia).
+ */
+function isEmExperiencia(c) {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const fimExp = (c.data_fim_experiencia || c.fimExperiencia) || null;
+  if (fimExp) {
+    return new Date(fimExp) >= hoje;
+  }
+  const admissao = (c.data_admissao || c.dataAdmissao) || null;
+  if (admissao && (c.em_experiencia || c.periodoExp)) {
+    const fim = new Date(admissao);
+    fim.setDate(fim.getDate() + 90);
+    return fim >= hoje;
+  }
+  return false;
+}
+
 async function verificarExperienciaWorkflows() {
   try {
     const SB_URL_CAD = SB_URL;
@@ -2034,7 +2056,7 @@ async function verificarExperienciaWorkflows() {
     const perfil = (() => { try { return JSON.parse(localStorage.getItem('sb_perfil') || '{}'); } catch(_) { return {}; } })();
 
     for (const c of COLABORADORES) {
-      if (!c.em_experiencia || c.data_demissao || !c.data_admissao || c.tipoVinculo === 'pro_labore') continue;
+      if (!isEmExperiencia(c) || c.dataDemissao || !c.dataAdmissao || c.tipoVinculo === 'pro_labore') continue;
 
       const adm = new Date(c.data_admissao + 'T00:00:00');
 

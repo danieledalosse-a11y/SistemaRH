@@ -121,6 +121,28 @@ document.addEventListener('click', () => {
   document.getElementById('heroAcoesMenu')?.classList.remove('open');
 });
 
+/**
+ * Retorna true se o colaborador está em período de experiência HOJE.
+ * Usa data_fim_experiencia quando disponível (fonte confiável).
+ * Fallback: data_admissao + 90 dias quando data_fim_experiencia ausente.
+ * Nunca depende apenas do campo booleano em_experiencia, que pode estar desatualizado.
+ * Suporta ambas as convenções de nome (data_fim_experiencia e fimExperiencia).
+ */
+function isEmExperiencia(c) {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const fimExp = (c.data_fim_experiencia || c.fimExperiencia) || null;
+  if (fimExp) {
+    return new Date(fimExp) >= hoje;
+  }
+  const admissao = (c.data_admissao || c.dataAdmissao) || null;
+  if (admissao && (c.em_experiencia || c.periodoExp)) {
+    const fim = new Date(admissao);
+    fim.setDate(fim.getDate() + 90);
+    return fim >= hoje;
+  }
+  return false;
+}
+
 /* ── Painel Alertas e lembretes ── */
 function _buildAlertas() {
   const c    = _colab;
@@ -134,7 +156,7 @@ function _buildAlertas() {
   }
 
   /* Em período de experiência */
-  if (c.em_experiencia) {
+  if (isEmExperiencia(c)) {
     alertas.push({ cor:'amber', txt:'Em período de experiência' });
   }
 

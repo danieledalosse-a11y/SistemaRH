@@ -1983,8 +1983,51 @@ async function init() {
   renderModelos();
 }
 
+/**
+ * Retorna true se o colaborador está em período de experiência HOJE.
+ * Usa data_fim_experiencia quando disponível (fonte confiável).
+ * Fallback: data_admissao + 90 dias quando data_fim_experiencia ausente.
+ * Nunca depende apenas do campo booleano em_experiencia, que pode estar desatualizado.
+ * Suporta ambas as convenções de nome (data_fim_experiencia e fimExperiencia).
+ */
+function isEmExperiencia(c) {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const fimExp = (c.data_fim_experiencia || c.fimExperiencia) || null;
+  if (fimExp) {
+    return new Date(fimExp) >= hoje;
+  }
+  const admissao = (c.data_admissao || c.dataAdmissao) || null;
+  if (admissao && (c.em_experiencia || c.periodoExp)) {
+    const fim = new Date(admissao);
+    fim.setDate(fim.getDate() + 90);
+    return fim >= hoje;
+  }
+  return false;
+}
+
+/**
+ * Retorna true se o colaborador ESTAVA em período de experiência na data de referência.
+ * Para ciclos históricos usa data_fim do ciclo como referência; para ciclos ativos usa hoje.
+ * Recebe um snapshot de participante (dp_ciclo_participantes.snapshot).
+ */
+function isEmExperienciaNoContexto(snap, cicloDataFim) {
+  const refDate = cicloDataFim ? new Date(cicloDataFim) : new Date();
+  refDate.setHours(0,0,0,0);
+  const fimExp = (snap.data_fim_experiencia || snap.fimExperiencia) || null;
+  if (fimExp) {
+    return new Date(fimExp) >= refDate;
+  }
+  const admissao = (snap.data_admissao || snap.dataAdmissao) || null;
+  if (admissao && snap.em_experiencia) {
+    const fim = new Date(admissao);
+    fim.setDate(fim.getDate() + 90);
+    return fim >= refDate;
+  }
+  return false;
+}
+
 async function loadColaboradores() {
-  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro_nome,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.true&order=nome.asc');
+  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro_nome,foto_url,gestor,ativo,em_experiencia,data_fim_experiencia,data_admissao,data_demissao&ativo=eq.true&order=nome.asc');
   _colaboradores = _colaboradores || [];
 }
 
@@ -4598,7 +4641,7 @@ async function dpAbrirDrawerCiclo(cicloId, abaInicial) {
   // Retroativos (ciclos antigos) e motivos são independentes dos participantes — paralelo
   if (fimCiclo && fimCiclo < hoje) {
     loadsIniciais.push(
-      sbGet(`/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro_nome,foto_url,gestor,ativo,em_experiencia,data_admissao,data_demissao&ativo=eq.false&data_demissao=gte.${_dpCicloAtual.data_inicio}&order=nome.asc`)
+      sbGet(`/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro_nome,foto_url,gestor,ativo,em_experiencia,data_fim_experiencia,data_admissao,data_demissao&ativo=eq.false&data_demissao=gte.${_dpCicloAtual.data_inicio}&order=nome.asc`)
         .then(inicos => {
           const idsExistentes = new Set(_colaboradores.map(c => c.id));
           (inicos || []).forEach(c => { if (!idsExistentes.has(c.id)) _colaboradores.push(c); });
@@ -4691,7 +4734,7 @@ function dpRenderParticipantes(opts = {}) {
     html += `<div style="font-size:12px;color:var(--text-ter);margin-bottom:8px">${ativos} participante(s) ativo(s)${npCount ? ` · ${npCount} não participam` : ''}</div>`;
     html += _dpParticipantes.map(p => {
       const snap = p.snapshot || {};
-      const exp  = snap.em_experiencia;
+      const exp  = isEmExperienciaNoContexto(snap, _dpCicloAtual?.data_fim);
       const np   = !!p.nao_participa;
       const rowBg = np ? 'background:rgba(156,163,175,0.07)' : (exp ? 'background:rgba(245,158,11,0.06)' : '');
 
@@ -4788,8 +4831,9 @@ async function dpAdicionarColaboradores(colabs) {
       setor:         c.setor         || '',
       cargo:         c.cargo         || '',
       unidade:       c.unidade       || '',
-      em_experiencia:  !!c.em_experiencia,
-      data_admissao:   c.data_admissao || ''
+      em_experiencia:      !!c.em_experiencia,
+      data_fim_experiencia: c.data_fim_experiencia || null,
+      data_admissao:       c.data_admissao || ''
     };
     const res = await sbPost('/rest/v1/dp_ciclo_participantes', {
       ciclo_id:       _dpCicloAtual.id,
@@ -4895,16 +4939,17 @@ function dpFiltrarPicker() {
   if (countEl) countEl.textContent = lista.length > 30
     ? `Exibindo 30 de ${lista.length} — refine a busca para ver mais`
     : `${lista.length} colaborador(es) encontrado(s)`;
-  el.innerHTML = lista.slice(0, 30).map(c =>
-    `<div style="display:flex;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border-light);font-size:13px${c.em_experiencia ? ';background:rgba(245,158,11,0.06)' : ''}">
+  el.innerHTML = lista.slice(0, 30).map(c => {
+    const _exp = isEmExperiencia(c);
+    return `<div style="display:flex;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border-light);font-size:13px${_exp ? ';background:rgba(245,158,11,0.06)' : ''}">
       <div style="flex:1;min-width:0">
         <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
-        ${c.em_experiencia ? '<div style="font-size:11px;color:#b45309;font-weight:500;margin-top:1px">⏱ Em período de experiência</div>' : ''}
+        ${_exp ? '<div style="font-size:11px;color:#b45309;font-weight:500;margin-top:1px">⏱ Em período de experiência</div>' : ''}
       </div>
       <span style="width:120px;flex-shrink:0;color:var(--text-ter);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px">${c.setor||'—'}</span>
       <button class="btn btn-primary btn-sm" onclick="dpAdicionarUm(${c.id})" style="padding:3px 10px;width:32px;flex-shrink:0">+</button>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
 }
 
 async function dpAdicionarUm(colaboradorId) {
@@ -6072,7 +6117,7 @@ function dpRenderAvaliacoes(opts = {}) {
   const htmlAtivos = _ativos.length
     ? _ativos.map(p => {
         const snap = p.snapshot || {};
-        const exp  = snap.em_experiencia;
+        const exp  = isEmExperienciaNoContexto(snap, _dpCicloAtual?.data_fim);
         const aval = _avalByPartId.get(p.id) || _avalByColabId.get(p.colaborador_id);
         const st = aval ? (aval.status || 'nao_iniciada') : 'nao_iniciada';
         const concluido  = st === 'concluida' || st === 'publicada';
