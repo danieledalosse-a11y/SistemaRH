@@ -8748,7 +8748,8 @@ async function trAbrirPerfil(matricula, nome) {
   }
 
   // Resolver nomes dos critérios para snapshots legados (nome: '' quando gravado sem criterio_nome_snapshot)
-  if (Object.keys(_trSnapshotCriteriosMap).length) {
+  // Dispara se _trSnapshotFullMap tem entradas — cobre tanto critérios com observação quanto os demais
+  if (Object.keys(_trSnapshotFullMap).length) {
     try {
       const versaoIds = [...new Set(
         hist.filter(h => h.ciclo_id).map(h => (_dpCiclos || []).find(c => c.id === h.ciclo_id)?.versao_id).filter(Boolean)
@@ -8756,6 +8757,13 @@ async function trAbrirPerfil(matricula, nome) {
       if (versaoIds.length) {
         const critsNomes = await sbGet(`/rest/v1/dp_versao_criterios?versao_id=in.(${versaoIds.join(',')})&select=id,criterio_nome_snapshot`) || [];
         const nomeMap = Object.fromEntries(critsNomes.map(c => [c.id, c.criterio_nome_snapshot || '']));
+        // Preenche nomes em _trSnapshotFullMap (todos os critérios)
+        for (const criterios of Object.values(_trSnapshotFullMap)) {
+          for (const c of criterios) {
+            if (!c.nome && nomeMap[c.criterio_id]) c.nome = nomeMap[c.criterio_id];
+          }
+        }
+        // Preenche nomes em _trSnapshotCriteriosMap (só critérios com observação)
         for (const criterios of Object.values(_trSnapshotCriteriosMap)) {
           for (const c of criterios) {
             if (!c.nome && nomeMap[c.criterio_id]) c.nome = nomeMap[c.criterio_id];
@@ -10199,12 +10207,17 @@ function trBuildExpandHtml(h) {
     const rows = snap.map(c => {
       const r = c.resposta === 'sim' ? '✓ Sim' : c.resposta === 'nao' ? '✗ Não' : (c.resposta || '—');
       const rc = c.resposta === 'sim' ? '#047857' : c.resposta === 'nao' ? '#dc2626' : 'var(--text-sec)';
-      return `<div style="display:grid;grid-template-columns:52px 1fr;gap:4px 8px;padding:5px 0;border-bottom:1px solid var(--border-light,var(--border));align-items:start">
-        <span style="font-size:11px;color:${rc};font-weight:600">${r}</span>
-        <div>
-          <div style="font-size:11px;font-weight:600;color:var(--text-sec)">${c.nome || '—'}</div>
-          ${c.observacao ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px">${c.observacao}</div>` : ''}
+      const nota = c.valor_apurado != null
+        ? `<span style="font-size:11px;color:var(--text-ter);white-space:nowrap">R$ ${Number(c.valor_apurado).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
+        : '';
+      const nome = c.nome || '—';
+      return `<div style="display:grid;grid-template-columns:52px 1fr auto;gap:4px 8px;padding:5px 0;border-bottom:1px solid var(--border-light,var(--border));align-items:start">
+        <span style="font-size:11px;color:${rc};font-weight:600;padding-top:1px">${r}</span>
+        <div style="min-width:0">
+          <div style="font-size:11px;font-weight:600;color:var(--text-sec)">${nome}</div>
+          ${c.observacao ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px;font-style:italic">${c.observacao}</div>` : ''}
         </div>
+        <div style="text-align:right;padding-top:1px">${nota}</div>
       </div>`;
     }).join('');
     const autor = h.created_by ? `<div style="font-size:11px;color:var(--text-ter);margin-top:8px">Registrado por: ${h.created_by}</div>` : '';
