@@ -9556,8 +9556,18 @@ async function pdiExcluirHistorico(acaoIdx, histIdx) {
   a.historico.splice(histIdx, 1);
   const ok = await pdiSalvarAcoesDrawer();
   if (ok) {
-    if (a.historico.length) pdiVerHistorico(acaoIdx);
-    else { pdiFecharExtras(-1); pdiRenderDrawerAcoes(); }
+    if (a.historico.length) {
+      pdiVerHistorico(acaoIdx);
+      // Atualiza o contador no botão do card sem re-renderizar tudo
+      const btn = document.querySelector(`#pdi-row-${acaoIdx} .pdi-hist-toggle`);
+      if (btn) {
+        const n = a.historico.length;
+        btn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>${n} ${n===1?'registro':'registros'}`;
+      }
+    } else {
+      pdiFecharExtras(-1);
+      pdiRenderDrawerAcoes();
+    }
   }
 }
 
