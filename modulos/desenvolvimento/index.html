@@ -7068,9 +7068,8 @@ async function salvarAvaliacao(status) {
   // ── INSTRUMENTAÇÃO ──
   console.log(`[DP] save: TOTAL até modal fechar → ${(performance.now()-_saveT0).toFixed(0)} ms`);
   console.groupEnd();
-  // await garante que fecharFormAval (que em modo ajuste recalcula + patcha 'concluida')
-  // termine antes do re-render via setTimeout, evitando exibição de status desatualizado
-  await fecharFormAval();
+  // await garante que fecharFormAval termine antes do re-render via setTimeout
+  await fecharFormAval(true);
   // Deferir re-render para o próximo tick — modal fecha imediatamente, lista atualiza logo após
   const _tRerender = performance.now();
   setTimeout(() => {
@@ -7095,26 +7094,25 @@ async function salvarAvaliacao(status) {
   }, 0);
 }
 
-async function fecharFormAval() {
-  // Se estiver em modo ajuste, recalcular e voltar status para concluida antes de fechar
-  if (_dpModoAjuste && _dpAvaliacaoAtual) {
+async function fecharFormAval(foiSalvo = false) {
+  // Recalcula e registra apenas quando o usuário efetivamente salvou o ajuste.
+  // Fechar sem salvar (Fechar / clique fora) não altera o banco — o status já é 'concluida'.
+  if (_dpModoAjuste && _dpAvaliacaoAtual && foiSalvo) {
     const avalId = _dpAvaliacaoAtual.id;
-    // 1. Recalcular resultado com as respostas atualizadas
     await dpCalcularAvaliacao(avalId, false);
-    // 2. Marcar avaliação como concluida novamente
     const agora = new Date().toISOString();
-    const patch = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, { status: 'concluida', concluida_em: agora });
+    const patch = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, { concluida_em: agora });
     if (patch) {
       const a = _dpAvaliacoes.find(x => x.id === avalId);
-      if (a) { a.status = 'concluida'; a.concluida_em = agora; }
+      if (a) { a.concluida_em = agora; }
       await dpRegistrarEvento('avaliacao_ajuste_concluido', 'dp_avaliacoes', avalId, { colaborador: (_dpAvaliacaoAtual.snapshot_nome || '') });
       await dpLoadResultados(_dpCicloAtual.id);
       toast('Ajuste salvo e resultado recalculado.');
     } else {
       toast('Avaliação ajustada, mas erro ao concluir: ' + sbErrMsg(), true);
     }
-    _dpModoAjuste = false;
   }
+  _dpModoAjuste = false;
   document.getElementById('formAvalOverlay').classList.remove('open');
   document.body.style.overflow = '';
   _dpAvaliacaoAtual = null;
@@ -7462,9 +7460,6 @@ async function dpIniciarAjuste(participanteId) {
   if (!part) return;
   const aval = _dpAvaliacoes.find(a => a.participante_id === participanteId);
   if (!aval || aval.status !== 'concluida') { toast('Avaliação não está concluída.', true); return; }
-  const ok = await sbPatch(`/rest/v1/dp_avaliacoes?id=eq.${aval.id}`, { status: 'respondida' });
-  if (!ok) { toast('Erro ao reabrir avaliação: ' + sbErrMsg(), true); return; }
-  aval.status = 'respondida';
   await dpRegistrarEvento('avaliacao_ajuste_iniciado', 'dp_avaliacoes', aval.id, { colaborador: (part.snapshot || {}).nome || '' });
   _dpModoAjuste = true;
   await dpAbrirFormAvaliacao(participanteId);
