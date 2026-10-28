@@ -830,7 +830,7 @@ let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos
 | `dpRenderFormAvaliacao()` | Linha compacta por critério (num, nome, botão ℹ, Sim/Não, obs, chip histórico); bloco expandível `.aval-info-expand` como irmão do `.aval-card`. Chip histórico renderiza como `<span id="dp-hist-{vc.id}"></span>` (vazio) e é preenchido por `_dpAtualizarChipsHistorico()` após o batch retornar. |
 | `_dpAtualizarChipsHistorico()` | Percorre `_dpVersaoCritsParaForm`; para cada critério com `_dpHistoricoCriterios[vc.id]` preenchido, localiza `#dp-hist-{vc.id}` e injeta o HTML do chip. Chamada somente após batch retornar, somente se `_dpAvaliacaoAtual.id === _thisAvalId` (guard de corrida). |
 | `salvarAvaliacao(status)` | Coleta resp_*; upsert dp_respostas (`on_conflict=avaliacao_id,versao_criterio_id`); PATCH dp_avaliacoes; **só então** chama `fecharFormAval()` (modal fecha após confirmação de gravação); re-render da lista via `setTimeout(0)` (próximo tick — sem bloquear pintura do fechamento); se `_gdpCicloAtual` estiver ativo, sincroniza `_gdpAvaliacoes = _dpAvaliacoes` e re-renderiza `gdptab-avaliacoes` preservando filtros, também diferido no mesmo `setTimeout(0)`. Registra evento se concluída. |
-| `fecharFormAval()` | Fecha overlay; limpa estado (`_dpAvaliacaoAtual`, `_dpRespostasAtual`, `_dpVersaoCritsParaForm`); zera `_dpFormNavList` e `_dpFormNavIdx` |
+| `fecharFormAval(foiSalvo=false)` | Fecha overlay; limpa estado (`_dpAvaliacaoAtual`, `_dpRespostasAtual`, `_dpVersaoCritsParaForm`); zera `_dpFormNavList` e `_dpFormNavIdx`. Se `_dpModoAjuste=true AND foiSalvo=true`: recalcula resultado e PATCH `concluida_em`. Fechar sem salvar (Fechar, clique fora, reload) não altera o banco. |
 | `dpNavForm(delta)` | Navega ±1 na `_dpFormNavList`; detecta alterações via `_dpFormTemAlteracoes()`; salva rascunho via `_dpSalvarParaNavegar()` se houver mudanças; bloqueia navegação se save falhar; chama `dpLoadAvaliacoes` + `dpAbrirFormAvaliacao(nextId)` |
 | `_dpSalvarParaNavegar()` | Versão silenciosa de save (sem toast de sucesso); retorna `true/false`; apenas para status `em_andamento` — `concluida`/`publicada` retornam `true` sem salvar |
 | `_dpFormTemAlteracoes()` | Compara valores atuais do DOM com `_dpRespostasAtual`; detecta alterações em respostas e observações |
@@ -911,17 +911,19 @@ let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos
 - Botão Ajustar **removido** da aba Resultados
 - Na aba Avaliações: ícone de lápis (botão `editarBtn`) aparece para avaliações com `status=concluida`, visível apenas para RH/admin
 - `editarBtn` chama `dpIniciarAjuste(participanteId)`:
-  1. PATCH `dp_avaliacoes → status='respondida'`
-  2. Registra evento `avaliacao_ajuste_iniciado`
-  3. Seta `_dpModoAjuste = true`
-  4. Abre `dpAbrirFormAvaliacao(participanteId)`
-- Ao fechar o formulário (`fecharFormAval`): se `_dpModoAjuste=true`, recalcula resultado, seta `status=concluida`, registra `avaliacao_ajuste_concluido`, exibe toast "Ajuste salvo…"
+  1. Registra evento `avaliacao_ajuste_iniciado` (**sem** PATCH de status — banco permanece `concluida`)
+  2. Seta `_dpModoAjuste = true`
+  3. Abre `dpAbrirFormAvaliacao(participanteId)`
+- "Salvar ajuste" → `salvarAvaliacao('em_andamento')` → salva respostas → `await fecharFormAval(true)`: recalcula resultado, PATCH `concluida_em` (sem alterar status), registra `avaliacao_ajuste_concluido`, toast "Ajuste salvo…"
+- Fechar sem salvar (botão Fechar, clique fora) → `fecharFormAval(false)` → nenhuma alteração no banco — status permanece `concluida`
 - Toast de "Avaliação concluída." suprimido durante ajuste (`if (!_dpModoAjuste)`)
 
-**⚠ Regra crítica — `salvarAvaliacao` em modo ajuste (fix commit 33ed7b8):**
-Em `_dpModoAjuste=true`, o step 4 de `salvarAvaliacao` (patch de status) é **totalmente pulado** via guard `if (!_dpModoAjuste)`. Apenas as respostas (`dp_respostas`) são salvas. O controle de status é exclusividade de `fecharFormAval`, que recalcula e restaura `concluida`.
-Sem esse guard, `salvarAvaliacao` patcheava para `respondida` e o `fecharFormAval` (chamado sem `await`) não terminava antes do re-render — status ficava `respondida` na lista.
-`fecharFormAval()` é chamado com `await` em `salvarAvaliacao` para garantir que o PATCH de retorno para `concluida` complete antes do `setTimeout` do re-render.
+**⚠ Regra crítica — banco nunca muda de status durante o ajuste (fix commit f7a0af5):**
+`dpIniciarAjuste` **não faz PATCH** de status. O banco permanece `concluida` durante todo o ajuste. `_dpModoAjuste=true` em memória é o único sinalizador do modo de edição. Isso garante que reload/navegação durante o ajuste nunca deixa o banco em estado inconsistente — causa raiz do bug onde avaliação ficava presa em `respondida`.
+
+**⚠ Regra crítica — `salvarAvaliacao` em modo ajuste:**
+Em `_dpModoAjuste=true`, o step 4 de `salvarAvaliacao` (patch de status) é **totalmente pulado** via guard `if (!_dpModoAjuste)`. Apenas as respostas (`dp_respostas`) são salvas. O controle de `concluida_em` é exclusividade de `fecharFormAval(true)`.
+`fecharFormAval(true)` é chamado com `await` em `salvarAvaliacao` para garantir que o PATCH complete antes do `setTimeout` do re-render.
 
 **Variável de estado adicionada:**
 ```js
