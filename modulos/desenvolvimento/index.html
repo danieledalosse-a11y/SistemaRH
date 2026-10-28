@@ -8687,12 +8687,15 @@ function trRenderLista() {
     const feeds  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
     const iniciais = (c.nome || '?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
     const cor = ['#2563EB','#059669','#7C3AED','#D97706','#DC2626','#0891B2'][Math.abs([...(c.nome||'')].reduce((a,ch)=>a+ch.charCodeAt(0),0)) % 6];
+    const avEl = c.foto_url
+      ? `<div class="colab-av" style="background:none;padding:0"><img src="${c.foto_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" alt="${c.nome}"></div>`
+      : `<div class="colab-av" style="background:${cor}">${iniciais}</div>`;
     const tags = [
       ciclos ? `<span class="status-badge" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green)">${ciclos} ciclo${ciclos!==1?'s':''}</span>` : '',
       feeds  ? `<span class="status-badge" style="background:var(--blue-bg,#EBF0FF);color:var(--blue,#3B6CF0);border:1px solid var(--blue,#3B6CF0)">${feeds} feedback${feeds!==1?'s':''}</span>` : '',
     ].filter(Boolean).join('');
     return `<div class="colab-item" style="cursor:pointer" onclick="trAbrirPerfil('${c.matricula}','${(c.nome||'').replace(/'/g,"\\'")}',${c.id})">
-      <div class="colab-av" style="background:${cor}">${iniciais}</div>
+      ${avEl}
       <div class="colab-info">
         <div class="colab-nome">${c.nome || '—'}</div>
         <div class="colab-cargo">${[c.cargo, c.setor].filter(Boolean).join(' · ')}</div>
@@ -8837,7 +8840,9 @@ async function trAbrirPerfil(matricula, nome, colaboradorId) {
   const admissao = colab.data_admissao ? formatDate(colab.data_admissao) : '—';
   document.getElementById('tr-perfil-resumo').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-      <div class="colab-av" style="width:42px;height:42px;font-size:13px;background:${cor}">${iniciais}</div>
+      ${colab.foto_url
+        ? `<div class="colab-av" style="width:42px;height:42px;background:none;padding:0"><img src="${colab.foto_url}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;" alt="${colab.nome||nome}"></div>`
+        : `<div class="colab-av" style="width:42px;height:42px;font-size:13px;background:${cor}">${iniciais}</div>`}
       <div>
         <div style="font-size:14px;font-weight:700">${colab.nome || nome}</div>
         <div style="font-size:11px;color:var(--text-ter)">${[colab.cargo, colab.setor].filter(Boolean).join(' · ')}</div>
