@@ -7422,9 +7422,10 @@ async function dpGravarTrajetoriaDP(avalId, snap, cicloId, colaboradorId = null)
       : '';
     const descricao = [snap.cargo, cicloNome].filter(Boolean).join(' · ') + valorLabel;
 
+    const _dpColIdExiste = colaboradorId != null ? await _trDetectColaboradorIdExists() : false;
     await sbPost(`/rest/v1/dev_historico`, {
       matricula_colaborador: matricula,
-      colaborador_id:      colaboradorId || null,
+      ...(_dpColIdExiste ? { colaborador_id: colaboradorId } : {}),
       data:                new Date().toISOString().slice(0, 10),
       tipo:                'avaliacao_concluida',
       titulo:              cicloNome || 'Avaliação de desempenho concluída',
@@ -8696,12 +8697,45 @@ function trRenderLista() {
   }).join('');
 }
 
-/* ─── Monta filtro seguro para dev_historico (evita contaminação por matrícula compartilhada) ─── */
-function _trBuildHistFiltro(matricula, colaboradorId) {
-  if (colaboradorId) return `colaborador_id=eq.${colaboradorId}&modulo_origem=eq.dp`;
+/* ─── Detecção de existência da coluna colaborador_id (cacheada — executada uma vez) ─── */
+let _trColaboradorIdExists = null;
+async function _trDetectColaboradorIdExists() {
+  if (_trColaboradorIdExists !== null) return _trColaboradorIdExists;
+  const r = await fetch(
+    SB_URL + '/rest/v1/dev_historico?colaborador_id=is.null&limit=0&select=id',
+    { headers: HDR }
+  ).catch(() => ({ ok: false }));
+  _trColaboradorIdExists = r.ok;
+  return _trColaboradorIdExists;
+}
+
+/* ─── Busca segura do histórico — lida com transição antes/depois de 142-a e 142-b ─── */
+async function _trFetchHist(matricula, colaboradorId) {
+  const colExists = await _trDetectColaboradorIdExists();
   const unica = (_colaboradores || []).filter(c => String(c.matricula) === String(matricula)).length <= 1;
-  if (unica) return `matricula_colaborador=eq.${encodeURIComponent(matricula)}&modulo_origem=eq.dp`;
-  return `id=eq.-1`; // matrícula ambígua sem UUID: não exibe nada
+  const SEL = `modulo_origem=eq.dp&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`;
+
+  if (!colExists) {
+    // Coluna ainda não existe: query legada por matrícula
+    if (!unica) return []; // ambígua sem UUID e sem coluna: não exibe nada (evita contaminação)
+    return (await sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&${SEL}`)) || [];
+  }
+
+  // Coluna existe: byUUID + legados NULL (só se matrícula única — evita mostrar registro ambíguo)
+  const [byId, byMat] = await Promise.all([
+    colaboradorId
+      ? sbGet(`/rest/v1/dev_historico?colaborador_id=eq.${colaboradorId}&${SEL}`)
+      : Promise.resolve([]),
+    unica
+      ? sbGet(`/rest/v1/dev_historico?matricula_colaborador=eq.${encodeURIComponent(matricula)}&colaborador_id=is.null&${SEL}`)
+      : Promise.resolve([])
+  ]);
+
+  // Combina, remove duplicatas por id e ordena por data desc
+  const seen = new Set();
+  return [...(byId || []), ...(byMat || [])]
+    .filter(h => seen.has(h.id) ? false : seen.add(h.id))
+    .sort((a, b) => a.data < b.data ? 1 : a.data > b.data ? -1 : a.created_at < b.created_at ? 1 : -1);
 }
 
 /* ─── Abre perfil individual ─── */
@@ -8727,11 +8761,10 @@ async function trAbrirPerfil(matricula, nome, colaboradorId) {
   const cor = ['#2563EB','#059669','#7C3AED','#D97706','#DC2626','#0891B2'][Math.abs([...(colab.nome||nome||'')].reduce((a,ch)=>a+ch.charCodeAt(0),0)) % 6];
 
   // Carrega histórico D&P e PDI em paralelo
-  const [histRaw, pdiRaw] = await Promise.all([
-    sbGet(`/rest/v1/dev_historico?${_trBuildHistFiltro(matricula, colaboradorId)}&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`),
+  const [hist, pdiRaw] = await Promise.all([
+    _trFetchHist(matricula, colaboradorId),
     trCarregarPdi(matricula)
   ]);
-  const hist = histRaw || [];
   _trPdiData = (pdiRaw || []).filter(p => (p.acoes || []).length > 0);
 
   const ciclos        = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
@@ -9691,12 +9724,13 @@ async function pdiSalvarDrawer() {
         const matches = (_colaboradores||[]).filter(c => String(c.matricula) === String(mat));
         return matches.length === 1 ? matches[0].id : null;
       })();
+      const _pdiColIdExiste = _pdiColabId != null ? await _trDetectColaboradorIdExists() : false;
       await fetch(`${SB_URL}/rest/v1/dev_historico`, {
         method: 'POST',
         headers: hMin,
         body: JSON.stringify({
           matricula_colaborador: _pdiDrawerPlano.matricula_colaborador,
-          colaborador_id: _pdiColabId || null,
+          ...(_pdiColIdExiste ? { colaborador_id: _pdiColabId } : {}),
           modulo_origem: 'dp',
           tipo: 'pdi',
           titulo: `PDI concluído: ${_pdiDrawerPlano.titulo}`,
@@ -10369,9 +10403,9 @@ async function trExcluirFeedback(id) {
   if (!r.ok) { toast('Erro ao excluir registro.', true); return; }
 
   toast('Registro excluído.');
-  // Recarrega a timeline usando filtro seguro por UUID
+  // Recarrega a timeline usando busca segura por UUID
   const matricula = _trMatriculaAtual;
-  const hist = await sbGet(`/rest/v1/dev_historico?${_trBuildHistFiltro(matricula, _trColabIdAtual)}&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
+  const hist = await _trFetchHist(matricula, _trColabIdAtual);
   trRenderTimeline(hist);
   _trHistoricoMap[matricula] = hist;
 }
@@ -10385,12 +10419,13 @@ async function trSalvarFeedback(matricula) {
   const TITULO = { feedback_positivo:'Feedback positivo', ponto_melhoria:'Ponto de melhoria', anotacao:'Anotação' };
   const colab  = _colaboradores.find(c => c.matricula === matricula);
 
+  const _fbColIdExiste = _trColabIdAtual != null ? await _trDetectColaboradorIdExists() : false;
   const r = await fetch(SB_URL + '/rest/v1/dev_historico', {
     method: 'POST',
     headers: { ...HDR, Prefer: 'return=minimal' },
     body: JSON.stringify({
       matricula_colaborador: matricula,
-      colaborador_id:        _trColabIdAtual || null,
+      ...(_fbColIdExiste ? { colaborador_id: _trColabIdAtual } : {}),
       data:         new Date().toISOString().slice(0,10),
       tipo,
       titulo:       TITULO[tipo] || tipo,
@@ -10403,8 +10438,8 @@ async function trSalvarFeedback(matricula) {
 
   toast('Registro salvo.');
   document.getElementById('tr-fb-texto').value = '';
-  // Recarrega a timeline usando filtro seguro por UUID
-  const hist = await sbGet(`/rest/v1/dev_historico?${_trBuildHistFiltro(matricula, _trColabIdAtual)}&order=data.desc,created_at.desc&limit=100&select=id,tipo,titulo,descricao,data,created_at,created_by,avaliacao_id,ciclo_id,resultado_valor,resultado_valor_max`) || [];
+  // Recarrega a timeline usando busca segura por UUID
+  const hist = await _trFetchHist(matricula, _trColabIdAtual);
   trRenderTimeline(hist);
   // Atualiza mapa em memória
   _trHistoricoMap[matricula] = hist;
