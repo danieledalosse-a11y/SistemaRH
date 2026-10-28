@@ -8467,7 +8467,20 @@ function trToggleDropdown(which) {
   if (!list) return;
   const isOpen = list.style.display !== 'none';
   ['setor','cargo'].forEach(w => { const l = document.getElementById(`tr-filtro-${w}-list`); if (l) l.style.display = 'none'; });
-  if (!isOpen) list.style.display = 'block';
+  if (!isOpen) {
+    list.style.display = 'block';
+    const inp = list.querySelector('.tr-dd-search');
+    if (inp) { inp.value = ''; trFilterDropdownItems(which, ''); inp.focus(); }
+  }
+}
+
+function trFilterDropdownItems(which, q) {
+  const list = document.getElementById(`tr-filtro-${which}-list`);
+  if (!list) return;
+  const lower = q.toLowerCase();
+  list.querySelectorAll('.tr-dd-item').forEach(item => {
+    item.style.display = item.textContent.toLowerCase().includes(lower) ? '' : 'none';
+  });
 }
 
 function trSelectOption(which, value, label) {
@@ -8486,16 +8499,34 @@ function trSyncDropdown(which) {
   if (!sel || !list) return;
   const currentVal = sel.value;
   list.innerHTML = '';
+
+  // Campo de busca interno
+  const searchWrap = document.createElement('div');
+  searchWrap.style.cssText = 'padding:8px 8px 6px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1';
+  const searchInp = document.createElement('input');
+  searchInp.type = 'text';
+  searchInp.className = 'tr-dd-search';
+  searchInp.placeholder = which === 'setor' ? 'Buscar setor...' : 'Buscar função...';
+  searchInp.style.cssText = 'width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;box-sizing:border-box';
+  searchInp.oninput = () => trFilterDropdownItems(which, searchInp.value);
+  searchInp.onclick = e => e.stopPropagation();
+  searchWrap.appendChild(searchInp);
+  list.appendChild(searchWrap);
+
+  // Items
+  const itemsWrap = document.createElement('div');
   Array.from(sel.options).forEach(opt => {
     const item = document.createElement('div');
+    item.className = 'tr-dd-item';
     item.dataset.val = opt.value;
     item.style.cssText = 'padding:9px 12px;cursor:pointer;font-size:13px;font-family:inherit;color:var(--text);' + (opt.value === currentVal ? 'background:var(--accent-soft,#eff6ff);font-weight:500' : '');
     item.textContent = opt.textContent;
     item.onmouseenter = () => { if (opt.value !== sel.value) item.style.background = 'var(--hover,rgba(0,0,0,.05))'; };
     item.onmouseleave = () => { item.style.background = opt.value === sel.value ? 'var(--accent-soft,#eff6ff)' : ''; };
     item.onclick = () => trSelectOption(which, opt.value, opt.textContent);
-    list.appendChild(item);
+    itemsWrap.appendChild(item);
   });
+  list.appendChild(itemsWrap);
 }
 
 function trSyncDropdownActive(which, value) {
