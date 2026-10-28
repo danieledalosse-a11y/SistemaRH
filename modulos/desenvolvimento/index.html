@@ -8974,7 +8974,7 @@ async function pdiConfirmarExclusaoPlano() {
 }
 
 async function pdiExcluirPlanoById(id) {
-  if (!confirm('Excluir este plano permanentemente?')) return;
+  if (!await pdiConfirmModal('Excluir este plano permanentemente?')) return;
   const r = await fetch(`${SB_URL}/rest/v1/pdi_planos?id=eq.${id}`, {
     method: 'DELETE', headers: { ...HDR, Prefer: 'return=minimal' }
   });
@@ -9510,6 +9510,24 @@ function pdiVerHistorico(idx) {
   </div>`;
 }
 
+function pdiConfirmModal(msg, confirmLabel = 'Excluir') {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+    overlay.innerHTML = `
+      <div style="background:var(--bg);border-radius:12px;padding:24px 28px;max-width:380px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);font-family:inherit">
+        <div style="font-size:14px;color:var(--text);margin-bottom:20px">${msg}</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button id="_pdiConfCancel" class="btn btn-secondary btn-sm">Cancelar</button>
+          <button id="_pdiConfOk" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none;border-radius:7px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600">${confirmLabel}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#_pdiConfOk').onclick    = () => { overlay.remove(); resolve(true); };
+    overlay.querySelector('#_pdiConfCancel').onclick = () => { overlay.remove(); resolve(false); };
+  });
+}
+
 function pdiEditarHistorico(acaoIdx, histIdx) {
   const a = (_pdiDrawerPlano?.acoes || [])[acaoIdx];
   if (!a) return;
@@ -9524,7 +9542,7 @@ function pdiEditarHistorico(acaoIdx, histIdx) {
 async function pdiExcluirHistorico(acaoIdx, histIdx) {
   const a = (_pdiDrawerPlano?.acoes || [])[acaoIdx];
   if (!a || !a.historico) return;
-  if (!confirm('Excluir este registro do histórico?')) return;
+  if (!await pdiConfirmModal('Excluir este registro do histórico?')) return;
   a.historico.splice(histIdx, 1);
   const ok = await pdiSalvarAcoesDrawer();
   if (ok) {
