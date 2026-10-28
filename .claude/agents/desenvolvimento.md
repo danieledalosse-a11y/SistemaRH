@@ -1392,12 +1392,59 @@ function dpIsElegivel(c) {
 ```
 Aplicado como **filtro rígido** em `dpFiltrarPicker()` para ciclos não-`todos`. Garante que o picker manual só lista colaboradores elegíveis dentro do período — adição por exceção não existe.
 
-### Destaque visual `em_experiencia` (commit f49e176)
+### Destaque visual `em_experiencia` — regra atualizada (commits f49e176 / dc461c6 / 6680267, 27/10/2026)
 
 - **Picker:** fundo âmbar suave `rgba(245,158,11,0.06)` + texto `#b45309` "⏱ Em período de experiência" abaixo do nome
 - **Lista de participantes:** badge compacto `#b45309`/`rgba(245,158,11,0.15)` "⏱ Em experiência" ao lado do nome + fundo âmbar suave na linha
-- **Regra:** colaboradores com `em_experiencia=true` são incluídos normalmente — o destaque é visual, não filtrante
-- **Na equipe do Oriel:** 20 colaboradores com `em_experiencia=true` (verificado 2026-10-15)
+- **Regra:** colaboradores elegíveis são incluídos normalmente — o destaque é visual, não filtrante
+- **NUNCA usar `em_experiencia` booleano diretamente para exibir o badge** — o campo pode estar desatualizado no banco. Usar sempre `isEmExperiencia(c)` ou `isEmExperienciaNoContexto(snap, cicloDataFim)`.
+
+#### `isEmExperiencia(c)` — função presente em desenvolvimento, cadastro e ficha-render
+
+```js
+function isEmExperiencia(c) {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const fimExp = (c.data_fim_experiencia || c.fimExperiencia) || null;
+  if (fimExp) return new Date(fimExp) >= hoje;          // fonte confiável
+  const admissao = (c.data_admissao || c.dataAdmissao) || null;
+  if (admissao && (c.em_experiencia || c.periodoExp)) { // fallback 90d
+    const fim = new Date(admissao);
+    fim.setDate(fim.getDate() + 90);
+    return fim >= hoje;
+  }
+  return false;
+}
+```
+
+#### `isEmExperienciaNoContexto(snap, cicloDataFim)` — somente em desenvolvimento
+
+Para ciclos históricos usa `cicloDataFim` como data de referência (não hoje) — preserva o significado do badge na época da avaliação. Se `cicloDataFim` for null/undefined, usa hoje (ciclo atual).
+
+```js
+// Ciclo atual:
+const exp = isEmExperienciaNoContexto(snap, _dpCicloAtual?.data_fim);
+// Ciclos históricos:
+const exp = isEmExperienciaNoContexto(snap, ciclo.data_fim);
+```
+
+#### SELECT obrigatório em `loadColaboradores`
+
+`data_fim_experiencia` e `data_admissao` devem estar no select — ambos são necessários para `isEmExperienciaNoContexto`.
+
+#### Snapshot ao adicionar participante
+
+```js
+snapshot: {
+  nome, matricula, empresa, setor, cargo, unidade,
+  em_experiencia: !!c.em_experiencia,
+  data_fim_experiencia: c.data_fim_experiencia || null,  // ← obrigatório
+  data_admissao: c.data_admissao || null,
+}
+```
+
+#### Migration 141 — executada em produção (27/10/2026)
+
+Corrigiu 31 registros com `em_experiencia=true` e `data_fim_experiencia` no passado. Todos os colaboradores que já saíram do período tinham o booleano desatualizado. O sistema já não depende do booleano para exibir o badge (usa a data), mas a migration elimina inconsistência nos dados.
 
 ### `_dpParamGestores` e exibição de elegibilidade
 
