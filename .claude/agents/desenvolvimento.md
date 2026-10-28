@@ -9,7 +9,7 @@ description: Especialista no módulo Desenvolvimento & Performance do SistemaRH 
 
 Sistema RH da Revest do Brasil Acabamentos Ltda (varejo, Lucro Real).
 Stack: HTML + CSS + JS puro, sem framework. Backend: Supabase REST API.
-Arquivo principal: `C:\Users\reves\SistemaRH\modulos\desenvolvimento\index.html` (~2.700 linhas, tudo inline).
+Arquivo principal: `C:\Users\reves\SistemaRH\modulos\desenvolvimento\index.html` (~8.708 linhas, tudo inline).
 
 ## Regras obrigatórias
 
@@ -917,6 +917,11 @@ let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos
 - Ao fechar o formulário (`fecharFormAval`): se `_dpModoAjuste=true`, recalcula resultado, seta `status=concluida`, registra `avaliacao_ajuste_concluido`, exibe toast "Ajuste salvo…"
 - Toast de "Avaliação concluída." suprimido durante ajuste (`if (!_dpModoAjuste)`)
 
+**⚠ Regra crítica — `salvarAvaliacao` em modo ajuste (fix commit 33ed7b8):**
+Em `_dpModoAjuste=true`, o step 4 de `salvarAvaliacao` (patch de status) é **totalmente pulado** via guard `if (!_dpModoAjuste)`. Apenas as respostas (`dp_respostas`) são salvas. O controle de status é exclusividade de `fecharFormAval`, que recalcula e restaura `concluida`.
+Sem esse guard, `salvarAvaliacao` patcheava para `respondida` e o `fecharFormAval` (chamado sem `await`) não terminava antes do re-render — status ficava `respondida` na lista.
+`fecharFormAval()` é chamado com `await` em `salvarAvaliacao` para garantir que o PATCH de retorno para `concluida` complete antes do `setTimeout` do re-render.
+
 **Variável de estado adicionada:**
 ```js
 let _dpModoAjuste = false;  // true quando formulário aberto via dpIniciarAjuste
@@ -1073,6 +1078,67 @@ if (!_cicloAtivo) { toast('Selecione um ciclo antes de salvar o PDI.', true); re
 
 **D3 (responsável) — setembro:** avaliador não recuperável (`fn_get_usuarios_perfil()` retornou 0 linhas para `ciclos.avaliador_id`). `created_by` dos 73 registros permanece nulo. Futuros ciclos gravam `_nomeUsuario` automaticamente.
 
+### Trajetória Profissional — cor por percentual de atingimento (commit 31238cb)
+
+**Migration 138:** `ALTER TABLE dev_historico ADD COLUMN IF NOT EXISTS resultado_valor_max NUMERIC` — valor máximo possível do ciclo; nullable.
+
+**`dpGravarTrajetoriaDP`** atualizado:
+- Busca `SUM(vc.valor_se_sim)` de `dp_versao_criterios` via `_dpCiclos.find(c => c.id === cicloId)?.versao_id`
+- Grava `resultado_valor_max` junto com `resultado_valor` em cada conclusão de avaliação
+
+**`trCorAting(valor, max)`** — função auxiliar de cor:
+- `pct >= 1.0` → verde `#047857`
+- `pct >= 0.7` → âmbar `#b45309`
+- `pct < 0.7` → vermelho `#dc2626`
+- Sem `max` válido → fallback `var(--accent)`
+
+**Timeline (`trRenderTimelineItens`):** para `avaliacao_concluida`, renderiza linha `"cargo · Resultado: R$ X,XX"` (cargo extraído do 1º segmento de `descricao`; R$ colorido por tier). Outros tipos (feedback, anotação) mantêm renderização original.
+
+**Gráfico (`trRenderGraficoCiclos`):** cada ponto (`<circle>`) e o valor do último ciclo no cabeçalho usam `trCorAting` em vez de `var(--accent)` fixo.
+
+**Todos os 4 selects** de `dev_historico` na Trajetória incluem `resultado_valor_max`.
+
+**Backfill setembro/2026 (executado em produção, 27/10/2026):**
+- 73 registros atualizados: `resultado_valor_max = 400`
+- Validado: `total=73, com_max=73, menor_max=400, maior_max=400`
+
+---
+
+### Trajetória Profissional — observações por competência (commit 77db59b/31419e9/e67bd22)
+
+**Fluxo de gravação:** `dpCalcularAvaliacao` inclui `observacao` no select de `dp_respostas` e `criterio_nome_snapshot` no select de `dp_versao_criterios`; propaga ambos em `critsComValor`, gravando em `dp_resultados_bonus.snapshot_criterios` (JSONB). Cobre conclusão normal e ajuste RH — ambos passam por `dpCalcularAvaliacao → dp_salvar_resultado` via RPC.
+
+**Exibição na Trajetória:** `trAbrirPerfil` busca `dp_resultados + dp_resultados_bonus(snapshot_criterios)` para os `avaliacao_id`s do perfil e popula `_trSnapshotCriteriosMap` (variável de módulo: `avaliacao_id → [critérios com observação]`). `trRenderTimelineItens` renderiza `<details>` colapsável "Observações por competência (N)" apenas quando há observações — oculto caso contrário.
+
+**⚠ Armadilha do embed PostgREST (fix commits c77e11d, 3f1a47e):** `dp_resultados_bonus.resultado_id` tem `UNIQUE` constraint → PostgREST retorna o embed como **objeto** (não array). Acesso **correto**: `row.dp_resultados_bonus?.snapshot_criterios` e `res?.[0]?.dp_resultados_bonus?.valor_bonus`. O acesso via `[0]` retorna `undefined` silenciosamente.
+
+**Nomes dos critérios nos snapshots legados:** snapshots criados antes do fix tinham `nome: ""`. `trAbrirPerfil` resolve isso após montar `_trSnapshotCriteriosMap`: extrai `versao_id` dos ciclos via `_dpCiclos` (em memória), busca `dp_versao_criterios(criterio_nome_snapshot)` e preenche `c.nome` nos critérios com observação — sem alterar `dp_resultados_bonus`.
+
+---
+
+### Trajetória Profissional — performance (commits 5537612, d3a20d0)
+
+**Problema 1:** `renderTrajetoria` refazia fetch completo de `dev_historico` a cada clique na aba; select trazia 10 campos desnecessários.
+
+**Solução implementada:**
+- `_trInicializado` (flag de módulo): fast path — se já carregado, `renderTrajetoria` apenas chama `trRenderLista()` sem nova requisição
+- Select global reduzido a `matricula_colaborador,tipo,data` — suficiente para badges da lista e KPIs; perfil individual faz seu próprio fetch completo
+- Invalidação automática: `dpGravarTrajetoriaDP` seta `_trInicializado = false` ao gravar novo registro, garantindo dados frescos após conclusão de avaliação
+
+**O que NÃO foi implementado (risco de regressão):** lazy load do histórico — `trRenderLista` usa `_trHistoricoMap` para badges "N ciclos / N feedbacks"; remover o fetch global quebraria esses indicadores.
+
+**Problema 2 (commit d3a20d0):** ao clicar em outro colaborador na lista, a view do perfil trocava de `display` mas `tr-perfil-resumo`, `tr-perfil-timeline` e `tr-perfil-form` continuavam com os dados do colaborador anterior até as duas queries (`dev_historico` + `dp_resultados`) retornarem — usuário via conteúdo desatualizado por 1–2 s.
+
+**Solução:** `trAbrirPerfil` limpa os três elementos imediatamente após atualizar o breadcrumb, antes do primeiro `await`:
+```js
+if (_resumoEl) _resumoEl.innerHTML = '<div style="color:var(--text-ter);font-size:12px;padding:16px 0;text-align:center">Carregando...</div>';
+if (_timelineEl) _timelineEl.innerHTML = '';
+if (_formEl) _formEl.style.display = 'none';
+```
+As duas queries permanecem sequenciais (a segunda depende de `avalIds` da primeira — impossível paralelizar). O ganho é perceptual: a transição entre perfis é imediata para o usuário.
+
+---
+
 ### Próxima feature — Análise por critério na Trajetória (aguarda 2º ciclo)
 
 **Objetivo:** seção "Pontos de atenção" no perfil do colaborador, abaixo do gráfico, com três blocos:
@@ -1109,6 +1175,37 @@ if (!_cicloAtivo) { toast('Selecione um ciclo antes de salvar o PDI.', true); re
 - `togglePDIItem()` (marcar como concluído): sem restrição de perfil
 
 **Importante:** `dev_historico` não tem RLS habilitado (ver migration 135). Toda a proteção de exclusão de feedback é no frontend + verificação de `created_by` no banco antes do DELETE.
+
+---
+
+### Relatório Completo do Colaborador (commits 69db8ce / 495847a, 27/10/2026)
+
+**Botão "Relatório completo"** aparece no breadcrumb da view de perfil da Trajetória Profissional após `trAbrirPerfil` carregar os dados. Código **único e compartilhado** entre RH, Gestor e Diretoria — sem ramificações por perfil.
+
+**Como funciona:**
+- `trGerarRelatorio(matricula)` — gera o relatório em memória e exibe overlay fullscreen `#trRelatorioOverlay`
+- **Zero fetches adicionais**: todos os dados já estão em memória quando o botão é clicado:
+  - `_trHistAtual` (hist do colaborador — todos os tipos, order desc)
+  - `_trSnapshotCriteriosMap` (avaliacao_id → critérios **com observação** apenas)
+  - `_dpCiclos` (para resolver nome do ciclo)
+  - `_colaboradores` (admissão/cargo/setor)
+- `trFecharRelatorio()` — fecha o overlay
+- `window.print()` abre o diálogo de impressão com CSS `@media print`: `@page { size:A4; margin:20mm 25mm }`, tudo exceto `#trRelatorioOverlay` oculto
+
+**Variáveis de módulo adicionadas:**
+- `_trHistAtual = []` — populado ao final de `trAbrirPerfil`
+- `_trSnapshotFullMap = {}` — mantido em memória (usado internamente); **não usado na renderização do relatório** — o relatório usa `_trSnapshotCriteriosMap`
+
+**Estrutura do relatório:**
+- Cabeçalho: avatar colorido, nome, cargo/setor, empresa, admissão + tempo na empresa, matrícula
+- KPIs: ciclos D&P, registros de feedback, último resultado financeiro (colorido por % atingimento)
+- Linha do tempo (mais recente → topo):
+  - **Avaliação D&P:** resultado financeiro + lista compacta de observações por competência (`Nome — *comentário*`) — só critérios com observação; se não houver, a seção de observações é omitida
+  - **Feedback positivo / Ponto de melhoria / Anotação:** título, texto (`descricao`), data, autor (`created_by` ou "—")
+- `created_by` mostra "—" quando nulo (registros históricos de setembro/2026 não têm autor)
+- Rodapé: data/hora de geração
+
+**⚠ Limitação conhecida (intencional):** Gestor não tem acesso a `dp_resultados_bonus` (RLS) → `_trSnapshotCriteriosMap` fica vazio para o Gestor; observações por competência não aparecem no relatório dele. Tratar permissões em tarefa futura.
 
 ---
 
@@ -2434,6 +2531,113 @@ Populado apenas quando `containerId === 'ciclosList'`. `dpEncerrarCicloSidebar` 
 ### Nome do modelo no Gestor
 
 `loadDpModelos()` chamado dentro de `gestorDpLoadCiclos` via `Promise.all`, mas **somente se `_dpModelos.length === 0`** (sem requisição redundante se RH já carregou). Popula `_dpVersoes` para que `_dpCicloModeloNome` retorne o nome completo ("Avaliação Mensal Produtividade CD — V1").
+
+---
+
+## Seção PDI (Aba dentro do módulo D&P)
+
+### Banco de dados
+
+**`pdi_planos`** (migration 140, executada em produção 27/10/2026):
+```
+id                    UUID PK
+matricula_colaborador TEXT NOT NULL
+titulo                TEXT NOT NULL
+gatilho               TEXT  — valor vem de pdi_config; nunca hardcoded no JS
+ciclo_id              UUID nullable — ciclo de origem quando aplicável
+avaliacao_id          UUID nullable
+dev_historico_id      UUID nullable — feedback/anotação de origem
+criado_por            TEXT
+responsavel           TEXT  — preenchido automaticamente com _nomeUsuario
+status                TEXT DEFAULT 'ativo'  — opções em pdi_config
+acoes                 JSONB DEFAULT '[]'
+observacoes           TEXT
+created_at/updated_at TIMESTAMPTZ
+```
+
+**`pdi_config`** — singleton (id=1), dados JSONB:
+```json
+{
+  "gatilhos": ["Resultado de avaliação","Feedback/anotação","Iniciativa do gestor","Iniciativa RH","Outro"],
+  "categorias_acao": ["Técnica","Comportamental","Liderança","Processo","Comunicação","Outro"],
+  "status_opcoes": ["ativo","concluido","arquivado"]
+}
+```
+Listas 100% dinâmicas — editáveis pelo RH sem alterar código. JS lê de `_pdiConfig` em runtime.
+
+**RLS em `pdi_planos`:** habilitado. rh/admin CRUD irrestrito, diretoria SELECT, gestor SELECT/INSERT/UPDATE via `auth_colaborador_id() + param_gestor` (padrão migration 113).
+
+**`dev_pdi`:** preservada no banco, não lida em nenhum ponto do código.
+
+---
+
+### Estrutura de cada ação (JSONB `acoes`)
+
+```json
+{
+  "acao": "texto",
+  "categoria": "",
+  "prazo": "YYYY-MM-DD",
+  "area": "",
+  "done": false,
+  "concluido_em": null,
+  "cancelada": false,
+  "historico": [
+    { "evento": "acompanhamento|conclusao|cancelamento|reativacao", "nota": "", "autor": "_nomeUsuario", "data": "YYYY-MM-DD" }
+  ]
+}
+```
+
+**Regras de negócio das ações:**
+- Ações **com histórico**: nunca excluídas — recebem `cancelada: true` + entrada no historico
+- Ações **sem histórico**: exclusão direta com confirmação inline
+- **Prazo vencido**: detectado automaticamente (`prazo < hoje AND done=false AND cancelada≠true`); campo de andamento torna-se obrigatório ao registrar
+- **Conclusão**: `done=true`, `concluido_em=hoje`, entrada `conclusao` no historico (nota opcional); checkbox verde, data com `✓` em verde, texto normal sem risco
+- **Reativação**: `done=false`, `concluido_em=null`, `cancelada=false`, entrada `reativacao` no historico (todo histórico anterior preservado)
+- **Edição**: altera campos da ação (`acao`, `categoria`, `prazo`, `area`) SEM tocar em `historico`, `done`, `concluido_em`
+- **autor** sempre vem de `_nomeUsuario` — nunca string fixa
+
+---
+
+### Funções JS (bloco `pdi*`)
+
+| Função | O que faz |
+|---|---|
+| `pdiInit()` | Carrega config + planos ao ativar a aba |
+| `pdiCarregarConfig()` | Lê `pdi_config`, popula `_pdiConfig` |
+| `pdiCarregarPlanos()` / `pdiRenderTabela()` | Lista com filtros por nome e status |
+| `pdiAbrirCriacao(preenchimento)` | Modal com autocomplete de colaborador (sem matrícula visível), responsável auto-preenchido com `_nomeUsuario` |
+| `pdiSalvarNovo()` | POST em `pdi_planos` |
+| `pdiAbrirDrawer(planoId)` | Drawer de edição do plano |
+| `pdiSalvarAcoesDrawer()` | PATCH com `return=minimal` |
+| `pdiRenderDrawerAcoes()` | Renderiza ações com estado visual por situação |
+| `pdiToggleMenuAcao(idx)` | Menu contextual `···` com opções contextuais por estado |
+| `pdiAbrirAndamento(idx)` / `pdiSalvarAndamento()` | Registro inline de acompanhamento |
+| `pdiConcluirAcao(idx)` / `pdiConfirmarConclusao()` | Conclusão com observação opcional |
+| `pdiIniciarReativacao(idx)` / `pdiConfirmarReativacao()` | Reativação preservando histórico |
+| `pdiExcluirAcao(idx)` | Exclusão (sem histórico) ou cancelamento (com histórico) |
+| `pdiEditarAcao(idx)` / `pdiSalvarEdicaoAcao()` | Edição inline sem tocar no histórico |
+| `pdiVerHistorico(idx)` | Expansão inline do histórico por ação |
+| `pdiFilterColab(q)` / `pdiSelectColab(matricula, nome)` / `pdiLimparColab()` | Autocomplete do modal de criação |
+| `trCarregarPdi(matricula)` | Lê `pdi_planos` para a Trajetória (substituiu leitura de `dev_pdi`) |
+
+**Variáveis de módulo:**
+```js
+let _pdiConfig = null;   // dados de pdi_config
+let _pdiPlanos = [];     // planos carregados na aba
+```
+
+---
+
+### Integração com Trajetória Profissional
+
+- `trCarregarPdi(matricula)` chamada em `trAbrirPerfil` via `Promise.all`
+- `trRenderPdiSection`: agrupa por plano (`titulo`), filtra `cancelada !== true`
+- Mini-stat PDI: conta ações `done=false AND cancelada≠true` de planos com `status='ativo'`
+- `trGerarRelatorio`: seção PDI exibe planos ativos primeiro, concluídos depois; histórico por ação quando existe; ações canceladas aparecem como "(cancelada)"
+- Ações sem campo `historico` (registros antigos) tratadas como `[]` — sem quebra
+
+---
 
 ### Banner de ciclo — visual e percentual (commits 079e417, f9e5017)
 
