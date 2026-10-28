@@ -8477,15 +8477,16 @@ async function renderTrajetoria() {
   // Garante que os ciclos estão carregados (Gestor não os carrega no init)
   if (!_dpCiclos.length) await dpLoadCiclos();
 
-  // Carrega histórico D&P de todos os colaboradores — campos necessários para lista e KPIs
-  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data,ciclo_id') || [];
+  // Carrega histórico D&P — usa colaborador_id como chave para evitar contaminação por matrícula compartilhada
+  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=colaborador_id,tipo,data,ciclo_id') || [];
 
-  // Agrupa por matricula
+  // Agrupa por colaborador_id (inteiro). Registros sem colaborador_id são ignorados — matrícula não é identificador único.
   _trHistoricoMap = {};
   _trSnapshotCriteriosMap = {};
   registros.forEach(r => {
-    if (!_trHistoricoMap[r.matricula_colaborador]) _trHistoricoMap[r.matricula_colaborador] = [];
-    _trHistoricoMap[r.matricula_colaborador].push(r);
+    if (!r.colaborador_id) return;
+    if (!_trHistoricoMap[r.colaborador_id]) _trHistoricoMap[r.colaborador_id] = [];
+    _trHistoricoMap[r.colaborador_id].push(r);
   });
 
   _trInicializado = true;
@@ -8501,10 +8502,10 @@ async function renderTrajetoria() {
     const equipeSet = new Set(
       (_colaboradores || [])
         .filter(c => c.ativo !== false && (c.gestor || '').toLowerCase() === _trGestorApelido.toLowerCase())
-        .map(c => c.matricula)
+        .map(c => c.id)
     );
-    kpiRegistros  = registros.filter(r => equipeSet.has(r.matricula_colaborador));
-    kpiMatriculas = Object.keys(_trHistoricoMap).filter(m => equipeSet.has(m));
+    kpiRegistros  = registros.filter(r => r.colaborador_id && equipeSet.has(r.colaborador_id));
+    kpiMatriculas = Object.keys(_trHistoricoMap).filter(m => equipeSet.has(parseInt(m)));
   }
 
   const matriculasComHist = kpiMatriculas.length;
@@ -8683,7 +8684,7 @@ function trRenderLista() {
   if (!colabs.length) { el.innerHTML = `<div class="empty-state"><p>Nenhum colaborador encontrado.</p></div>`; return; }
 
   el.innerHTML = colabs.map(c => {
-    const hist  = _trHistoricoMap[c.matricula] || [];
+    const hist  = _trHistoricoMap[c.id] || [];
     const ciclos = hist.filter(h => h.tipo === 'avaliacao_concluida').length;
     const feeds  = hist.filter(h => ['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)).length;
     const iniciais = (c.nome || '?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
