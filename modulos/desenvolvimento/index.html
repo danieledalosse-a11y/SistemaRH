@@ -1262,12 +1262,22 @@
           <input type="text" id="tr-filtro-nome" placeholder="Buscar colaborador..." oninput="trFiltrar();trToggleClearBtn()" style="width:100%;padding:9px 32px 9px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;box-sizing:border-box;transition:border-color .15s" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
           <button id="tr-filtro-nome-clear" onclick="trLimparBuscaNome()" title="Limpar busca" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-ter);padding:2px;line-height:1;font-size:16px;border-radius:4px" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-ter)'">×</button>
         </div>
-        <select id="tr-filtro-setor" onchange="trFiltrar()" style="min-width:170px;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
-          <option value="">Todos os setores</option>
-        </select>
-        <select id="tr-filtro-cargo" onchange="trFiltrar()" style="min-width:170px;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
-          <option value="">Todas as funções</option>
-        </select>
+        <div class="tr-custom-select" id="tr-filtro-setor-wrap" style="position:relative;min-width:170px">
+          <button type="button" onclick="trToggleDropdown('setor')" style="width:100%;padding:9px 32px 9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);text-align:left;cursor:pointer;position:relative;box-sizing:border-box;transition:border-color .15s" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
+            <span id="tr-filtro-setor-label">Todos os setores</span>
+            <svg style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-ter)" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div id="tr-filtro-setor-list" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:200;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.12)"></div>
+          <select id="tr-filtro-setor" style="display:none"><option value="">Todos os setores</option></select>
+        </div>
+        <div class="tr-custom-select" id="tr-filtro-cargo-wrap" style="position:relative;min-width:170px">
+          <button type="button" onclick="trToggleDropdown('cargo')" style="width:100%;padding:9px 32px 9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);text-align:left;cursor:pointer;position:relative;box-sizing:border-box;transition:border-color .15s" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='var(--border)'">
+            <span id="tr-filtro-cargo-label">Todas as funções</span>
+            <svg style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-ter)" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div id="tr-filtro-cargo-list" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:200;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.12)"></div>
+          <select id="tr-filtro-cargo" style="display:none"><option value="">Todas as funções</option></select>
+        </div>
       </div>
       <!-- lista -->
       <div id="tr-lista"></div>
@@ -8427,6 +8437,7 @@ async function renderTrajetoria() {
   if (setorSel && setorSel.options.length <= 1) {
     if (!_dpSetores.length) await loadParamSetores();
     _dpSetores.forEach(s => { const o = document.createElement('option'); o.value = s.nome; o.textContent = s.nome; setorSel.appendChild(o); });
+    trSyncDropdown('setor');
   }
 
   // Popula filtro de cargo dinamicamente a partir de _colaboradores
@@ -8434,6 +8445,7 @@ async function renderTrajetoria() {
   if (cargoSel && cargoSel.options.length <= 1) {
     const cargos = [...new Set((_colaboradores || []).map(c => (c.cargo || '').trim()).filter(Boolean))].sort();
     cargos.forEach(cargo => { const o = document.createElement('option'); o.value = cargo; o.textContent = cargo; cargoSel.appendChild(o); });
+    trSyncDropdown('cargo');
   }
 
   _trFiltroNome  = document.getElementById('tr-filtro-nome')?.value || '';
@@ -8449,6 +8461,57 @@ function trFiltrar() {
   _trFiltroCargo = document.getElementById('tr-filtro-cargo')?.value || '';
   trRenderLista();
 }
+
+function trToggleDropdown(which) {
+  const list = document.getElementById(`tr-filtro-${which}-list`);
+  if (!list) return;
+  const isOpen = list.style.display !== 'none';
+  ['setor','cargo'].forEach(w => { const l = document.getElementById(`tr-filtro-${w}-list`); if (l) l.style.display = 'none'; });
+  if (!isOpen) list.style.display = 'block';
+}
+
+function trSelectOption(which, value, label) {
+  const lbl = document.getElementById(`tr-filtro-${which}-label`);
+  const sel = document.getElementById(`tr-filtro-${which}`);
+  const list = document.getElementById(`tr-filtro-${which}-list`);
+  if (lbl) lbl.textContent = label;
+  if (sel) sel.value = value;
+  if (list) { list.style.display = 'none'; trSyncDropdownActive(which, value); }
+  trFiltrar();
+}
+
+function trSyncDropdown(which) {
+  const sel = document.getElementById(`tr-filtro-${which}`);
+  const list = document.getElementById(`tr-filtro-${which}-list`);
+  if (!sel || !list) return;
+  const currentVal = sel.value;
+  list.innerHTML = '';
+  Array.from(sel.options).forEach(opt => {
+    const item = document.createElement('div');
+    item.dataset.val = opt.value;
+    item.style.cssText = 'padding:9px 12px;cursor:pointer;font-size:13px;font-family:inherit;color:var(--text);' + (opt.value === currentVal ? 'background:var(--accent-soft,#eff6ff);font-weight:500' : '');
+    item.textContent = opt.textContent;
+    item.onmouseenter = () => { if (opt.value !== sel.value) item.style.background = 'var(--hover,rgba(0,0,0,.05))'; };
+    item.onmouseleave = () => { item.style.background = opt.value === sel.value ? 'var(--accent-soft,#eff6ff)' : ''; };
+    item.onclick = () => trSelectOption(which, opt.value, opt.textContent);
+    list.appendChild(item);
+  });
+}
+
+function trSyncDropdownActive(which, value) {
+  const list = document.getElementById(`tr-filtro-${which}-list`);
+  if (!list) return;
+  Array.from(list.children).forEach(item => {
+    item.style.background = item.dataset.val === value ? 'var(--accent-soft,#eff6ff)' : '';
+    item.style.fontWeight = item.dataset.val === value ? '500' : '';
+  });
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.tr-custom-select')) {
+    ['setor','cargo'].forEach(w => { const l = document.getElementById(`tr-filtro-${w}-list`); if (l) l.style.display = 'none'; });
+  }
+});
 
 function trToggleClearBtn() {
   const btn = document.getElementById('tr-filtro-nome-clear');
