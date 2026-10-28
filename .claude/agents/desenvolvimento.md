@@ -1194,7 +1194,7 @@ As duas queries permanecem sequenciais (a segunda depende de `avalIds` da primei
 
 **Variáveis de módulo adicionadas:**
 - `_trHistAtual = []` — populado ao final de `trAbrirPerfil`
-- `_trSnapshotFullMap = {}` — mantido em memória (usado internamente); **não usado na renderização do relatório** — o relatório usa `_trSnapshotCriteriosMap`
+- `_trSnapshotFullMap = {}` — mantido em memória; usado na expansão inline da timeline (todos os critérios) e internamente; o relatório usa `_trSnapshotCriteriosMap` (só critérios com observação)
 
 **Estrutura do relatório:**
 - Cabeçalho: avatar colorido, nome, cargo/setor, empresa, admissão + tempo na empresa, matrícula
@@ -1209,19 +1209,26 @@ As duas queries permanecem sequenciais (a segunda depende de `avalIds` da primei
 
 ---
 
-### Filtros da seção Trajetória Profissional (commits d2973af / cbcfe59)
+### Filtros da seção Trajetória Profissional (commits e891d71 / 4758fc6 / e2b3fb3 / 2975d22, 28/10/2026)
 
-Localização: `sec-trajetoria`, ~L1170 de `index.html`.
+Localização: `sec-trajetoria`, ~L1258 de `index.html`.
 
-```html
-<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-  <input id="tr-filtro-nome" ... style="flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--card);outline:none">
-  <select id="tr-filtro-setor" ... style="min-width:200px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--card)">
-```
+**Filtros implementados:**
+- **Nome:** `<input id="tr-filtro-nome">` com ícone lupa, botão X para limpar, foco automático
+- **Setor:** dropdown customizado (sempre abre para baixo) com busca interna + X para limpar busca
+- **Função/cargo:** dropdown customizado idem
 
-- **Fonte oficial do select:** `_dpSetores` carregado via `loadParamSetores()` → strips prefixo numérico (`"2148 - CD"` → `"CD"`)
-- **Comparação no filtro:** `_trNormSetor` normaliza `c.setor` do colaborador para o mesmo formato antes de comparar
-- **Visual:** padding/border/border-radius idênticos ao `.form-input` do sistema; `background:var(--card)` para suporte a tema escuro
+**Variáveis de estado:** `_trFiltroNome`, `_trFiltroSetor`, `_trFiltroCargo` — aplicadas juntas em `trRenderLista()`.
+
+**Dropdowns customizados (não usar `<select>` nativo — abre para cima dependendo do viewport):**
+- `<select id="tr-filtro-setor|cargo">` ficam **ocultos** (`display:none`) — mantidos apenas para compatibilidade com JS existente que lê `.value` e popula `.options`
+- Elemento visual: `<div class="tr-custom-select">` com botão trigger + `<div id="tr-filtro-X-list">` posicionado `top: calc(100% + 4px)` para sempre abrir para baixo
+- Funções de controle: `trToggleDropdown(which)`, `trSelectOption(which, value, label)`, `trSyncDropdown(which)`, `trSyncDropdownActive(which, value)`, `trFilterDropdownItems(which, q)`
+- `trSyncDropdown(which)` deve ser chamado após popular o select oculto com opções — já feito em `renderTrajetoria()` para ambos
+- Campo de busca interno: `input.tr-dd-search` sticky no topo da lista; foco automático ao abrir; X aparece só quando há texto
+- Fechar ao clicar fora: listener global `document.addEventListener('click', ...)` checa `.closest('.tr-custom-select')`
+- **Fonte oficial do setor:** `_dpSetores` via `loadParamSetores()`
+- **Fonte oficial do cargo:** `_colaboradores` (dinâmico, A-Z, sem duplicatas)
 
 ### Etapa 6 — Aba Resultados oculta para Gestor (commit d18613a)
 
@@ -1235,6 +1242,100 @@ if (btnRes) btnRes.style.display = (ativoOuEncerrado && _perfil !== 'gestor') ? 
 ```
 
 Gestor não tem acesso à aba Resultados (nota final, conceito, bônus). RH/admin permanecem sem alteração.
+
+---
+
+### Trajetória Profissional — KPIs filtrados por equipe e registro de conclusão de PDI (28/10/2026)
+
+#### KPIs da seção Trajetória — filtro por equipe do gestor
+
+**Problema corrigido:** os 4 KPI cards (`trRenderKpis`) usavam dados globais (`registros`, `_trHistoricoMap`) sem filtrar pela equipe do gestor — exibiam números de toda a empresa para qualquer perfil.
+
+**Solução:** `renderTrajetoria` agora constrói um `equipeSet` para o perfil gestor e filtra todas as contagens:
+
+```js
+let kpiRegistros = registros;
+let kpiMatriculas = Object.keys(_trHistoricoMap);
+
+if (_perfil === 'gestor' && _trGestorApelido) {
+  const equipeSet = new Set(
+    (_colaboradores || [])
+      .filter(c => c.ativo !== false && (c.gestor || '').toLowerCase() === _trGestorApelido.toLowerCase())
+      .map(c => c.matricula)
+  );
+  kpiRegistros  = registros.filter(r => equipeSet.has(r.matricula_colaborador));
+  kpiMatriculas = Object.keys(_trHistoricoMap).filter(m => equipeSet.has(m));
+}
+```
+
+- **Colaboradores com histórico D&P:** conta `kpiMatriculas.length` (apenas equipe do gestor)
+- **Ciclos realizados:** para gestor = `distinct ciclo_id` de `avaliacao_concluida` na equipe; para RH/admin = `_dpCiclos` com `status='encerrado'`
+- **Feedbacks recentes (90 dias):** filtra `kpiRegistros` por tipo e data
+- **PDI ativo:** permanece como `—` (implementação futura separada)
+- Select global de `dev_historico` agora inclui `ciclo_id` além de `matricula_colaborador,tipo,data`
+
+#### Conclusão de PDI → registro em `dev_historico`
+
+**Problema corrigido:** ao concluir um PDI pelo drawer, o evento não era gravado em `dev_historico` — não aparecia na linha do tempo da Trajetória Profissional.
+
+**Solução em `pdiSalvarDrawer`:** captura `statusAnterior` antes de atualizar os campos; após o PATCH bem-sucedido, faz POST condicional:
+
+```js
+if (_pdiDrawerPlano.status === 'concluido' && statusAnterior !== 'concluido') {
+  await fetch(`${SB_URL}/rest/v1/dev_historico`, {
+    method: 'POST',
+    headers: { ...HDR, Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      matricula_colaborador: _pdiDrawerPlano.matricula_colaborador,
+      modulo_origem: 'dp',
+      tipo: 'pdi',
+      titulo: `PDI concluído: ${_pdiDrawerPlano.titulo}`,
+      descricao: _pdiDrawerPlano.gatilho ? `Gatilho: ${_pdiDrawerPlano.gatilho}` : null,
+      data: hoje,
+      created_by: _nomeUsuario || '—',
+      avaliacao_id: _pdiDrawerPlano.avaliacao_id || null,
+      ciclo_id: _pdiDrawerPlano.ciclo_id || null,
+    })
+  });
+}
+```
+
+- Guard `statusAnterior !== 'concluido'` evita duplicatas ao salvar um PDI já concluído
+- Falha silenciosa (`catch(_) {}`) — não bloqueia o save principal
+- `return=minimal` evita SELECT após POST (reduz custo RLS)
+
+---
+
+### Trajetória Profissional — timeline expansível com accordion (28/10/2026)
+
+**Motivação:** cada item da linha do tempo agora é clicável e expande detalhes inline, sem novas consultas ao banco. O antigo `<details>` "Observações por competência" foi removido e substituído por este sistema.
+
+#### Funções novas
+
+**`trBuildExpandHtml(h)`** — constrói o HTML de detalhes por tipo de registro:
+- `avaliacao_concluida`: tabela de critérios com resposta (✓ Sim / ✗ Não) e observação, vinda de `_trSnapshotFullMap[h.avaliacao_id]` (TODOS os critérios, não só os com observação)
+- `feedback_positivo` / `ponto_melhoria` / `anotacao`: exibe `h.descricao` e `h.created_by`
+- `pdi`: busca em `_trPdiData` pelo `ciclo_id`, exibe gatilho, responsável e lista de ações com status ✓/○
+- Retorna `''` quando não há dados → item não fica clicável
+
+**`trToggleHistItem(idx)`** — toggle accordion:
+- Abre o item clicado e fecha todos os outros (accordion: um aberto por vez)
+- Rotaciona o chevron SVG 180° no item aberto
+- Acessa `#tr-hi-{idx}` e o `.tr-hi-detail` dentro dele
+
+#### `trRenderTimelineItens` atualizado
+
+Cada item recebe:
+- `id="tr-hi-N"` para o toggle
+- `onclick="trToggleHistItem(N)"` e `cursor:pointer` somente quando `trBuildExpandHtml(h)` retorna conteúdo
+- Chevron SVG no canto direito que rotaciona ao expandir
+- `.tr-hi-detail` com `display:none` inicialmente
+- `event.stopPropagation()` no botão Excluir para não acionar o toggle
+
+**Dados usados (todos já em memória — zero fetches novos):**
+- `_trSnapshotFullMap` → critérios de avaliação
+- `_trPdiData` → planos PDI do colaborador
+- `h.descricao`, `h.created_by` → feedbacks e anotações
 
 ---
 
@@ -2657,22 +2758,67 @@ Listas 100% dinâmicas — editáveis pelo RH sem alterar código. JS lê de `_p
 | `pdiSalvarNovo()` | POST em `pdi_planos` |
 | `pdiAbrirDrawer(planoId)` | Drawer de edição do plano |
 | `pdiSalvarAcoesDrawer()` | PATCH com `return=minimal` |
-| `pdiRenderDrawerAcoes()` | Renderiza ações com estado visual por situação |
-| `pdiToggleMenuAcao(idx)` | Menu contextual `···` com opções contextuais por estado |
+| `pdiRenderDrawerBody()` | Header estático + body scrollável; título "Plano de Desenvolvimento" fica no header (à direita dos chips de status/vínculo), não no body |
+| `pdiRenderDrawerAcoes()` | Renderiza ações; ícone de categoria = toggle de conclusão (sem checkbox separado) |
 | `pdiAbrirAndamento(idx)` / `pdiSalvarAndamento()` | Registro inline de acompanhamento |
 | `pdiConcluirAcao(idx)` / `pdiConfirmarConclusao()` | Conclusão com observação opcional |
 | `pdiIniciarReativacao(idx)` / `pdiConfirmarReativacao()` | Reativação preservando histórico |
-| `pdiExcluirAcao(idx)` | Exclusão (sem histórico) ou cancelamento (com histórico) |
+| `pdiExcluirAcao(idx)` | Exclusão (sem histórico) ou cancelamento (com histórico); opções visíveis inline no card (lápis + lixeira), sem menu `···` |
 | `pdiEditarAcao(idx)` / `pdiSalvarEdicaoAcao()` | Edição inline sem tocar no histórico |
 | `pdiVerHistorico(idx)` | Expansão inline do histórico por ação |
+| `pdiEditarHistorico(acaoIdx, histIdx)` | Edita nota de um registro de histórico via `prompt()` |
+| `pdiExcluirHistorico(acaoIdx, histIdx)` | Exclui registro do histórico; usa `pdiConfirmModal` (não `confirm()` nativo); atualiza contador do botão `pdi-hist-toggle` sem re-renderizar o card |
+| `pdiConfirmModal(msg, confirmLabel)` | Modal de confirmação customizado (overlay + botões estilizados); substitui `confirm()` nativo; retorna `Promise<boolean>` |
+| `pdiToggleHeaderMenu(btn)` | Menu `···` no header: Editar plano / Excluir plano / Imprimir |
+| `pdiExcluirPlano()` | Confirmação inline no body (painel vermelho) |
+| `pdiExcluirPlanoById(id)` | Exclusão da linha da tabela; usa `pdiConfirmModal` |
 | `pdiFilterColab(q)` / `pdiSelectColab(matricula, nome)` / `pdiLimparColab()` | Autocomplete do modal de criação |
 | `trCarregarPdi(matricula)` | Lê `pdi_planos` para a Trajetória (substituiu leitura de `dev_pdi`) |
 
 **Variáveis de módulo:**
 ```js
-let _pdiConfig = null;   // dados de pdi_config
-let _pdiPlanos = [];     // planos carregados na aba
+let _pdiConfig        = null;  // dados de pdi_config
+let _pdiPlanos        = [];    // planos carregados na aba
+let _pdiDrawerPlano   = null;  // cópia de trabalho do plano aberto no drawer
 ```
+
+---
+
+### Drawer PDI — layout e comportamento visual (estado atual)
+
+**Estrutura HTML:**
+```html
+<div id="pdiDrawerPanel" class="wiz-container" style="width:680px;flex-direction:column;max-height:90vh">
+  <div id="pdiDrawerHeader" style="flex-shrink:0"></div>   <!-- fixo, fora do scroll -->
+  <div id="pdiDrawerBody"   style="flex:1;overflow-y:auto"></div>
+  <div id="pdiDrawerFooter" style="flex-shrink:0"></div>
+</div>
+```
+
+**Header** (gerado por `pdiRenderDrawerBody`):
+- Foto 64px + nome (20px bold) + cargo · setor
+- Chips: `● Ativo/Concluído/Arquivado` + chip de vínculo (quando não é "PDI independente")
+- **Label "Plano de Desenvolvimento"** — chip roxo à direita dos chips, antes dos botões `···` e `✕` (commit `077fc8e`)
+- Botões: `···` (menu: Editar / Excluir / Imprimir) + `✕` fechar
+
+**Body** (gerado por `pdiRenderDrawerBody`):
+- Card `.pdi-plan-card` começa **direto no `.pdi-plan-card-body`** — sem linha de cabeçalho separada (`.pdi-plan-card-hdr` removido em `077fc8e`)
+- Grid 3 colunas: Gatilho (select) | Status (select) | Responsável (read-only box)
+- Textarea de Observações
+- Seção `.pdi-actions-section`: header com contadores + botão "+ Nova ação" + `div#pdiDrawerAcoes`
+
+**Cards de ação** (gerados por `pdiRenderDrawerAcoes`):
+- **Ícone de categoria = toggle de conclusão** (commit `ba64c5b`) — elemento único, sem checkbox separado:
+  - Pendente → círculo colorido (cor derivada por hash do nome da categoria) com ícone task, cursor pointer, `onclick=pdiConcluirAcao(i)`
+  - Concluída → círculo verde `#dcfce7` com visto ✓ e borda `#bbf7d0`, `onclick=pdiIniciarReativacao(i)`
+  - Cancelada → círculo cinza `#f3f4f6` com traço `—`, cursor default
+- **Ícones de ação** visíveis no canto direito (sem menu `···`): lápis (editar, só quando não concluída/cancelada) + lixeira (cancelar/excluir) ou seta de reativar (quando cancelada)
+- **Footer do card**: botão `+ Andamento` + botão `↓ N registros` (`.pdi-hist-toggle`)
+- **Painel de histórico** (`.pdi-hist-panel`): itens em linha única (dot + data + badge tipo + nota truncada + ícones editar/excluir); cabeçalho mostra só "HISTÓRICO DA AÇÃO" sem repetir contador (commit `953a0c9`)
+
+**Regras de confirmação:**
+- `confirm()` nativo **não usado** em nenhuma função PDI — todos os flows usam `pdiConfirmModal` (overlay customizado) ou painel inline vermelho (`pdiExcluirPlano`)
+- `prompt()` nativo ainda usado apenas em `pdiEditarHistorico` (edição de nota)
 
 ---
 

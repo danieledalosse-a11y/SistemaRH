@@ -8464,8 +8464,8 @@ async function renderTrajetoria() {
   // Garante que os ciclos estão carregados (Gestor não os carrega no init)
   if (!_dpCiclos.length) await dpLoadCiclos();
 
-  // Carrega histórico D&P de todos os colaboradores — apenas campos necessários para lista e KPIs
-  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data') || [];
+  // Carrega histórico D&P de todos os colaboradores — campos necessários para lista e KPIs
+  const registros = await sbGet('/rest/v1/dev_historico?modulo_origem=eq.dp&select=matricula_colaborador,tipo,data,ciclo_id') || [];
 
   // Agrupa por matricula
   _trHistoricoMap = {};
@@ -8477,17 +8477,34 @@ async function renderTrajetoria() {
 
   _trInicializado = true;
 
-  // KPIs
+  // KPIs — para gestor, restringe ao subconjunto da equipe
   const hoje = new Date();
   const noventa = new Date(hoje); noventa.setDate(hoje.getDate() - 90);
-  const matriculasComHist = Object.keys(_trHistoricoMap).length;
-  const ciclosEncerrados  = (_dpCiclos || []).filter(c => c.status === 'encerrado').length;
-  const feedbacksRecentes = registros.filter(r => ['feedback_positivo','ponto_melhoria','anotacao'].includes(r.tipo) && new Date(r.data) >= noventa).length;
+
+  let kpiRegistros = registros;
+  let kpiMatriculas = Object.keys(_trHistoricoMap);
+
+  if (_perfil === 'gestor' && _trGestorApelido) {
+    const equipeSet = new Set(
+      (_colaboradores || [])
+        .filter(c => c.ativo !== false && (c.gestor || '').toLowerCase() === _trGestorApelido.toLowerCase())
+        .map(c => c.matricula)
+    );
+    kpiRegistros  = registros.filter(r => equipeSet.has(r.matricula_colaborador));
+    kpiMatriculas = Object.keys(_trHistoricoMap).filter(m => equipeSet.has(m));
+  }
+
+  const matriculasComHist = kpiMatriculas.length;
+  // Ciclos realizados: conta ciclo_ids distintos presentes nas avaliações concluídas da equipe
+  const ciclosRealizados  = _perfil === 'gestor' && _trGestorApelido
+    ? new Set(kpiRegistros.filter(r => r.tipo === 'avaliacao_concluida' && r.ciclo_id).map(r => r.ciclo_id)).size
+    : (_dpCiclos || []).filter(c => c.status === 'encerrado').length;
+  const feedbacksRecentes = kpiRegistros.filter(r => ['feedback_positivo','ponto_melhoria','anotacao'].includes(r.tipo) && new Date(r.data) >= noventa).length;
 
   const kpisEl = document.getElementById('tr-kpis');
   if (kpisEl) kpisEl.innerHTML = [
     { label:'Colaboradores', val: matriculasComHist, sub:'com histórico D&P', cor:'var(--accent)' },
-    { label:'Ciclos realizados', val: ciclosEncerrados, sub:'encerrados', cor:'var(--fg)' },
+    { label:'Ciclos realizados', val: ciclosRealizados, sub:'encerrados', cor:'var(--fg)' },
     { label:'Feedbacks reg.', val: feedbacksRecentes, sub:'últimos 90 dias', cor:'var(--green)' },
     { label:'PDI ativos', val: '—', sub:'em andamento', cor:'var(--amber)' },
   ].map(k => `
@@ -9621,6 +9638,7 @@ function pdiConfirmarNovaAcao(btn) {
 
 async function pdiSalvarDrawer() {
   if (!_pdiDrawerPlano) return;
+  const statusAnterior = _pdiDrawerPlano.status;
   _pdiDrawerPlano.titulo       = document.getElementById('pdiDrwTitulo')?.value.trim() || _pdiDrawerPlano.titulo;
   _pdiDrawerPlano.gatilho      = document.getElementById('pdiDrwGatilho')?.value || _pdiDrawerPlano.gatilho;
   _pdiDrawerPlano.status       = document.getElementById('pdiDrwStatus')?.value || _pdiDrawerPlano.status;
@@ -9641,6 +9659,30 @@ async function pdiSalvarDrawer() {
     updated_at:  _pdiDrawerPlano.updated_at
   });
   if (!res) { toast('Erro ao salvar PDI.', true); if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; } return; }
+
+  // Ao concluir um PDI pela primeira vez, registra na linha do tempo do colaborador
+  if (_pdiDrawerPlano.status === 'concluido' && statusAnterior !== 'concluido') {
+    try {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const hMin = { ...HDR, Prefer: 'return=minimal' };
+      await fetch(`${SB_URL}/rest/v1/dev_historico`, {
+        method: 'POST',
+        headers: hMin,
+        body: JSON.stringify({
+          matricula_colaborador: _pdiDrawerPlano.matricula_colaborador,
+          modulo_origem: 'dp',
+          tipo: 'pdi',
+          titulo: `PDI concluído: ${_pdiDrawerPlano.titulo}`,
+          descricao: _pdiDrawerPlano.gatilho ? `Gatilho: ${_pdiDrawerPlano.gatilho}` : null,
+          data: hoje,
+          created_by: _nomeUsuario || '—',
+          avaliacao_id: _pdiDrawerPlano.avaliacao_id || null,
+          ciclo_id: _pdiDrawerPlano.ciclo_id || null,
+        })
+      });
+    } catch(_) { /* silencioso — não bloqueia o save principal */ }
+  }
+
   // Atualiza cache
   const idx = _pdiPlanos.findIndex(p => p.id === _pdiDrawerPlano.id);
   if (idx >= 0) _pdiPlanos[idx] = { ..._pdiPlanos[idx], ..._pdiDrawerPlano };
@@ -10150,6 +10192,79 @@ function trFiltrarTimeline() {
   trRenderTimelineItens(hist);
 }
 
+function trBuildExpandHtml(h) {
+  if (h.tipo === 'avaliacao_concluida') {
+    const snap = _trSnapshotFullMap[h.avaliacao_id] || [];
+    if (!snap.length) return '';
+    const rows = snap.map(c => {
+      const r = c.resposta === 'sim' ? '✓ Sim' : c.resposta === 'nao' ? '✗ Não' : (c.resposta || '—');
+      const rc = c.resposta === 'sim' ? '#047857' : c.resposta === 'nao' ? '#dc2626' : 'var(--text-sec)';
+      return `<div style="display:grid;grid-template-columns:52px 1fr;gap:4px 8px;padding:5px 0;border-bottom:1px solid var(--border-light,var(--border));align-items:start">
+        <span style="font-size:11px;color:${rc};font-weight:600">${r}</span>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-sec)">${c.nome || '—'}</div>
+          ${c.observacao ? `<div style="font-size:11px;color:var(--text-ter);margin-top:2px">${c.observacao}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    const autor = h.created_by ? `<div style="font-size:11px;color:var(--text-ter);margin-top:8px">Registrado por: ${h.created_by}</div>` : '';
+    return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">${rows}${autor}</div>`;
+  }
+
+  if (['feedback_positivo','ponto_melhoria','anotacao'].includes(h.tipo)) {
+    const texto = h.descricao || '';
+    if (!texto) return '';
+    const autor = h.created_by ? `<div style="font-size:11px;color:var(--text-ter);margin-top:8px">Por: ${h.created_by}</div>` : '';
+    return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--text-sec);line-height:1.55">${texto}</div>${autor}</div>`;
+  }
+
+  if (h.tipo === 'pdi') {
+    const plan = _trPdiData.find(p => h.ciclo_id && p.ciclo_id === h.ciclo_id) || _trPdiData[0];
+    if (!plan) return '';
+    const acoes = (plan.acoes || []).filter(a => !a.cancelada);
+    if (!acoes.length) return '';
+    const metaTexto = [
+      plan.gatilho    ? `Gatilho: ${plan.gatilho}` : '',
+      plan.responsavel? `Responsável: ${plan.responsavel}` : ''
+    ].filter(Boolean).join(' · ');
+    const acoesHtml = acoes.map(a => {
+      const ico = a.done ? '✓' : '○';
+      const icoCor = a.done ? '#047857' : 'var(--text-ter)';
+      const prazoStr = a.prazo ? ` · ${formatDate(a.prazo)}` : '';
+      return `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-light,var(--border));align-items:flex-start">
+        <span style="font-size:12px;color:${icoCor};font-weight:700;flex-shrink:0;margin-top:1px">${ico}</span>
+        <div style="min-width:0">
+          <div style="font-size:12px;color:var(--text-sec)">${a.acao || '—'}</div>
+          <div style="font-size:11px;color:var(--text-ter)">${[a.area, prazoStr].filter(Boolean).join('')}</div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+      ${metaTexto ? `<div style="font-size:11px;color:var(--text-ter);margin-bottom:8px">${metaTexto}</div>` : ''}
+      ${acoesHtml}</div>`;
+  }
+
+  return '';
+}
+
+function trToggleHistItem(idx) {
+  const el = document.getElementById('tr-hi-' + idx);
+  if (!el) return;
+  const detail = el.querySelector('.tr-hi-detail');
+  const chevron = el.querySelector('.tr-hi-chevron');
+  if (!detail) return;
+  const isOpen = detail.style.display !== 'none';
+  // Fecha todos
+  document.querySelectorAll('#tr-tl-body .tr-hi-detail').forEach(d => d.style.display = 'none');
+  document.querySelectorAll('#tr-tl-body .tr-hi-chevron').forEach(c => { c.style.transform = ''; });
+  // Abre este se estava fechado
+  if (!isOpen) {
+    detail.style.display = 'block';
+    if (chevron) chevron.style.transform = 'rotate(180deg)';
+  }
+}
+
 function trRenderTimelineItens(hist) {
   const TIPO_LABEL = {
     avaliacao_concluida: { label:'Avaliação', cor:'tag-green' },
@@ -10162,71 +10277,48 @@ function trRenderTimelineItens(hist) {
   const el = document.getElementById('tr-tl-body');
   if (!el) return;
   if (!hist.length) { el.innerHTML = `<div style="font-size:12px;color:var(--text-ter)">Nenhum registro para o filtro selecionado.</div>`; return; }
-  el.innerHTML = `<div class="hist-timeline">${hist.map(h => {
+  el.innerHTML = `<div class="hist-timeline">${hist.map((h, idx) => {
     const meta = TIPO_LABEL[h.tipo] || { label: h.tipo, cor:'tag-purple' };
     const mes = h.data ? new Date(h.data+'T12:00:00').toLocaleDateString('pt-BR',{month:'short',year:'numeric'}) : '—';
     const podeExcluir = _tiposEditaveis.includes(h.tipo) && (
       (_perfil === 'rh' || _perfil === 'admin') ||
       (_perfil === 'gestor' && h.created_by === _nomeUsuario)
     );
-    // Para avaliação concluída: linha de resultado colorida e rodapé com cargo
-    let resultadoHtml = '';
-    let rodapeHtml = h.created_by ? `<div class="hist-date">Por: ${h.created_by}</div>` : '';
+
+    // Resumo compacto: resultado para avaliação, autor para demais
+    let compactBottom = '';
     if (h.tipo === 'avaliacao_concluida') {
-      // Extrai cargo do primeiro segmento da descricao (formato: "cargo · ciclo · R$ valor")
       const partes = (h.descricao || '').split(' · ');
       const cargo = partes[0] || '';
       if (h.resultado_valor != null) {
         const cor = trCorAting(h.resultado_valor, h.resultado_valor_max).cor;
         const fmt = 'R$ ' + Number(h.resultado_valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
         const prefixo = cargo ? `${cargo} · Resultado: ` : 'Resultado: ';
-        resultadoHtml = `<div class="hist-desc">${prefixo}<span style="font-weight:700;color:${cor}">${fmt}</span></div>`;
+        compactBottom = `<div class="hist-desc">${prefixo}<span style="font-weight:700;color:${cor}">${fmt}</span></div>`;
       } else if (cargo) {
-        resultadoHtml = `<div class="hist-desc" style="color:var(--text-ter)">${cargo}</div>`;
+        compactBottom = `<div class="hist-desc" style="color:var(--text-ter)">${cargo}</div>`;
       }
-      rodapeHtml = h.created_by ? `<div class="hist-date">Por: ${h.created_by}</div>` : '';
+    } else if (h.created_by) {
+      compactBottom = `<div class="hist-date">Por: ${h.created_by}</div>`;
     }
 
-    // Seção colapsável de observações por competência (apenas avaliação_concluida com snapshot)
-    const obsSnap = (h.tipo === 'avaliacao_concluida' && h.avaliacao_id)
-      ? (_trSnapshotCriteriosMap[h.avaliacao_id] || null)
-      : null;
-    const obsHtml = obsSnap
-      ? (() => {
-          const rows = obsSnap.map(c => {
-            const resp = c.resposta === 'sim' ? '✓ Sim' : c.resposta === 'nao' ? '✗ Não' : (c.resposta || '—');
-            const respCor = c.resposta === 'sim' ? '#047857' : c.resposta === 'nao' ? '#dc2626' : 'var(--text-sec)';
-            return `<div style="padding:5px 0;border-bottom:1px solid var(--border-light,var(--border));display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:start">
-              <span style="font-size:11px;color:${respCor};font-weight:600;white-space:nowrap">${resp}</span>
-              <div>
-                <div style="font-size:11px;font-weight:600;color:var(--text-sec)">${c.nome || '—'}</div>
-                <div style="font-size:11px;color:var(--text-ter);margin-top:2px">${c.observacao}</div>
-              </div>
-            </div>`;
-          }).join('');
-          return `<details style="margin-top:6px">
-            <summary style="font-size:11px;color:var(--accent);cursor:pointer;user-select:none;padding:2px 0">
-              Observações por competência (${obsSnap.length})
-            </summary>
-            <div style="margin-top:6px;padding:6px 8px;background:var(--bg-alt,var(--bg));border-radius:6px;border:1px solid var(--border)">${rows}</div>
-          </details>`;
-        })()
-      : '';
+    const expandHtml = trBuildExpandHtml(h);
+    const hasExpand = !!expandHtml;
+    const chevronSvg = `<svg class="tr-hi-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;transition:transform .2s;color:var(--text-ter)"><polyline points="6 9 12 15 18 9"/></svg>`;
 
-    return `<div class="hist-item">
+    return `<div class="hist-item" id="tr-hi-${idx}">
       <div class="hist-dot tipo-${h.tipo}"></div>
-      <div class="hist-content">
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">
-          <span style="font-size:11px;color:var(--text-ter)">${mes}</span>
-          <span class="status-badge ${meta.cor}">${meta.label}</span>
-          ${podeExcluir ? `<button onclick="trExcluirFeedback(${h.id})" style="margin-left:auto;padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-ter);cursor:pointer" title="Excluir registro">Excluir</button>` : ''}
+      <div class="hist-content" ${hasExpand ? `onclick="trToggleHistItem(${idx})" style="cursor:pointer"` : ''}>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap;margin-bottom:3px">
+          <span style="font-size:11px;color:var(--text-ter);flex-shrink:0">${mes}</span>
+          <span class="status-badge ${meta.cor}" style="flex-shrink:0">${meta.label}</span>
+          <div style="flex:1"></div>
+          ${podeExcluir ? `<button onclick="event.stopPropagation();trExcluirFeedback(${h.id})" style="padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-ter);cursor:pointer;flex-shrink:0" title="Excluir registro">Excluir</button>` : ''}
+          ${hasExpand ? chevronSvg : ''}
         </div>
         <div class="hist-titulo">${h.titulo || '—'}</div>
-        ${h.tipo === 'avaliacao_concluida'
-          ? resultadoHtml
-          : (h.descricao ? `<div class="hist-desc">${h.descricao}</div>` : '')}
-        ${rodapeHtml}
-        ${obsHtml}
+        ${compactBottom}
+        ${hasExpand ? `<div class="tr-hi-detail" style="display:none">${expandHtml}</div>` : ''}
       </div>
     </div>`;
   }).join('')}</div>`;
