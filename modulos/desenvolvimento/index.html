@@ -4892,14 +4892,17 @@ async function dpGerarPreviewParticipantes() {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
   overlay.innerHTML = `
     <div style="background:var(--bg);border-radius:12px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18);font-family:inherit">
-      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px">Adicionar participantes</div>
-      <div style="font-size:13px;color:var(--text-sec);margin-bottom:24px">
-        Foram encontrados <strong>${novos.length}</strong> colaborador(es) elegíveis para este ciclo.<br>
-        Deseja adicioná-los agora?
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px">${novos.length === 1 ? 'Novo participante encontrado' : `${novos.length} novos participantes encontrados`}</div>
+      <div style="font-size:13px;color:var(--text-sec);margin-bottom:${novos.length > 1 ? '12px' : '24px'}">
+        ${novos.length === 1
+          ? `<strong>${novos[0].nome}</strong>${novos[0].cargo ? ` — ${novos[0].cargo}` : ''}${novos[0].setor ? ` · ${novos[0].setor}` : ''}<br><span style="margin-top:4px;display:inline-block">Atende aos critérios deste ciclo, mas ainda não está na lista de participantes. Deseja incluí-lo?</span>`
+          : `Os colaboradores abaixo atendem aos critérios deste ciclo, mas ainda não estão na lista de participantes:`
+        }
       </div>
+      ${novos.length > 1 ? `<ul style="margin:0 0 20px;padding-left:18px;font-size:13px;color:var(--text-sec);display:flex;flex-direction:column;gap:4px">${novos.slice(0,5).map(c=>`<li><strong>${c.nome}</strong>${c.cargo?` — ${c.cargo}`:''}${c.setor?` · ${c.setor}`:''}</li>`).join('')}${novos.length>5?`<li style="color:var(--text-ter)">e mais ${novos.length-5} colaborador(es)…</li>`:''}</ul>` : ''}
       <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button id="_dpConfirmCancel" class="btn btn-secondary btn-sm" style="padding:7px 18px">Cancelar</button>
-        <button id="_dpConfirmOk" class="btn btn-primary btn-sm" style="padding:7px 18px">Confirmar</button>
+        <button id="_dpConfirmCancel" class="btn btn-secondary btn-sm" style="padding:7px 18px" title="Nenhum participante será adicionado">Cancelar</button>
+        <button id="_dpConfirmOk" class="btn btn-primary btn-sm" style="padding:7px 18px">Adicionar${novos.length > 1 ? ` ${novos.length} participantes` : ''}</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
