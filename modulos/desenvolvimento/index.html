@@ -791,9 +791,8 @@
     letter-spacing: 0.5px; flex-shrink: 0; width: 22px; text-align: right;
   }
   .aval-nome-info {
-    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0; overflow: hidden;
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden;
   }
-  .aval-nome-top { display: flex; align-items: center; gap: 5px; min-width: 0; width: 100%; }
   .aval-card-nome {
     font-size: 13px; font-weight: 600; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -860,18 +859,19 @@
   .aval-obs-input:focus { outline: none; border-color: var(--accent); }
   .aval-obs-input.aval-obs--nao { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.04); }
   .aval-obs-input.aval-obs--nao.aval-obs-expanded { border-color: rgba(245,158,11,0.8); }
-  /* ── Histórico — barra sob o nome do critério ── */
-  .aval-hist-bar {
-    display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
-    margin-top: 4px; padding: 3px 8px;
-    background: var(--bg-alt, #f4f5f7); border-left: 2px solid var(--border);
-    border-radius: 0 4px 4px 0; font-size: 11px; line-height: 1.3;
-    white-space: nowrap; max-width: 100%; overflow: hidden; box-sizing: border-box;
+  /* ── Histórico — chip inline ao lado do critério ── */
+  .aval-hist-chip {
+    display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+    font-size: 11px; padding: 2px 9px; border-radius: 20px;
+    border: 1.5px solid var(--border); background: var(--bg);
+    white-space: nowrap; transition: border-color 0.15s, background 0.15s;
   }
-  .aval-hist-ciclo { color: var(--text-ter); font-weight: 500; flex-shrink: 0; }
+  .aval-hist-chip--sim  { border-color: #bbf7d0; background: #f0fdf4; }
+  .aval-hist-chip--nao  { border-color: #fecaca; background: #fff5f5; }
+  .aval-hist-ciclo { color: var(--text-ter); font-weight: 500; }
   .aval-hist-resp { font-weight: 700; flex-shrink: 0; }
-  .aval-hist-resp.sim  { color: var(--green); }
-  .aval-hist-resp.nao  { color: var(--red); }
+  .aval-hist-resp.sim    { color: var(--green); }
+  .aval-hist-resp.nao    { color: var(--red); }
   .aval-hist-resp.neutro { color: var(--text-sec); }
   .aval-hist-tend { flex-shrink: 0; font-size: 10px; font-weight: 600; letter-spacing: .02em; }
   .aval-hist-tend.up   { color: var(--green); }
@@ -887,7 +887,7 @@
     .aval-nome-info { min-width: 100px; }
     .aval-obs-input { width: 100%; flex-basis: 100%; min-width: 0; }
     .aval-obs-input.aval-obs-expanded { position: static; width: 100%; right: auto; top: auto; box-shadow: none; }
-    .aval-hist-bar { max-width: 100%; }
+    .aval-hist-chip { flex-basis: 100%; justify-content: center; }
   }
   /* filtros na aba Avaliações do drawer gestor */
   .gdp-aval-filtros {
@@ -6523,7 +6523,16 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
       if (!batch || !Array.isArray(batch)) return;
       batch.forEach(row => { _dpHistoricoCriterios[row.versao_criterio_id] = row.resultado; });
       _dpAtualizarChipsHistorico();
-    }).catch(() => {});
+    }).catch(() => {
+      // RPC falhou — limpa loading de todos os critérios sem simular dado
+      if (!_dpAvaliacaoAtual || _dpAvaliacaoAtual.id !== _thisAvalId) return;
+      for (const vc of _dpVersaoCritsParaForm) {
+        const el = document.getElementById('dp-hist-' + vc.id);
+        if (el && el.classList.contains('aval-hist-chip')) {
+          el.innerHTML = '<span style="color:var(--text-ter);font-size:11px;">Histórico indisponível</span>';
+        }
+      }
+    });
   }
 }
 
@@ -6883,14 +6892,12 @@ function dpRenderFormAvaliacao() {
     return `<div class="aval-card">
       <div class="aval-card-num">${num}${vc.obrigatorio?'<span style="color:var(--red)">*</span>':''}</div>
       <div class="aval-nome-info">
-        <div class="aval-nome-top">
-          <div class="aval-card-nome" title="${(crit.nome||'—').replace(/"/g,'&quot;')}">${crit.nome || '—'}</div>
-          ${infoBtn}
-        </div>
-        <div id="dp-hist-${vc.id}" class="aval-hist-bar">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite;flex-shrink:0;color:var(--text-ter)"><path d="M21 12a9 9 0 1 1-18 0"/></svg>
-          <span style="color:var(--text-ter);">Carregando histórico…</span>
-        </div>
+        <div class="aval-card-nome" title="${(crit.nome||'—').replace(/"/g,'&quot;')}">${crit.nome || '—'}</div>
+        ${infoBtn}
+      </div>
+      <div id="dp-hist-${vc.id}" class="aval-hist-chip">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite;flex-shrink:0;color:var(--text-ter)"><path d="M21 12a9 9 0 1 1-18 0"/></svg>
+        <span style="color:var(--text-ter);font-size:11px;">Carregando…</span>
       </div>
       ${inputHtml}
     </div>${infoExpand}`;
@@ -6908,29 +6915,26 @@ function _dpAtualizarChipsHistorico() {
     const tipo = vc.tipo_resposta;
 
     if (!hist) {
-      el.style.borderLeftColor = 'transparent';
-      el.style.background = 'none';
-      el.innerHTML = `<span style="color:var(--text-ter);font-size:11px;font-style:italic;">Primeira avaliação — sem histórico anterior</span>`;
+      el.innerHTML = `<span style="color:var(--text-ter);font-size:11px;font-style:italic;">1ª avaliação</span>`;
       continue;
     }
     if (hist.comparavel === false) {
-      el.style.borderLeftColor = 'var(--border)';
-      el.innerHTML = `<span class="aval-hist-ciclo">Sem avaliação anterior compatível</span>`;
+      el.innerHTML = `<span class="aval-hist-ciclo">Sem histórico compatível</span>`;
       continue;
     }
 
     const cicloLabel = (hist.ciclo_nome || '—').replace(/Gratificação CD - /i, '').replace(/\/\d{4}/, '').trim();
     let respHtml = '';
-    let borderColor = 'var(--accent)';
+    let chipClass = '';
 
     if (tipo === 'binario') {
       const r = hist.resposta_texto;
       if (r === 'sim') {
         respHtml = `<span class="aval-hist-resp sim">✓ SIM</span>`;
-        borderColor = 'var(--green)';
+        chipClass = 'aval-hist-chip--sim';
       } else if (r === 'nao') {
         respHtml = `<span class="aval-hist-resp nao">✗ NÃO</span>`;
-        borderColor = 'var(--red)';
+        chipClass = 'aval-hist-chip--nao';
       }
       el.dataset.histResp = r || '';
     } else if (tipo === 'escala') {
@@ -6944,9 +6948,9 @@ function _dpAtualizarChipsHistorico() {
       respHtml = c ? `<span class="aval-hist-resp neutro">${c}</span>` : '';
     }
 
-    el.style.borderLeftColor = borderColor;
+    el.className = 'aval-hist-chip' + (chipClass ? ' ' + chipClass : '');
     el.dataset.histTipo = tipo;
-    el.innerHTML = `<span class="aval-hist-ciclo">Anterior · ${cicloLabel}:</span>${respHtml}<span id="dp-tend-${vc.id}" class="aval-hist-tend"></span>`;
+    el.innerHTML = `<span class="aval-hist-ciclo">${cicloLabel}:</span>${respHtml}<span id="dp-tend-${vc.id}" class="aval-hist-tend"></span>`;
 
     // Se já há resposta atual (avaliação parcialmente preenchida), mostrar tendência imediatamente
     if (tipo === 'binario') {
