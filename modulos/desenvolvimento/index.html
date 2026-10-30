@@ -791,8 +791,9 @@
     letter-spacing: 0.5px; flex-shrink: 0; width: 22px; text-align: right;
   }
   .aval-nome-info {
-    flex: 1; min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden;
+    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0; overflow: hidden;
   }
+  .aval-nome-top { display: flex; align-items: center; gap: 5px; min-width: 0; width: 100%; }
   .aval-card-nome {
     font-size: 13px; font-weight: 600; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -859,14 +860,23 @@
   .aval-obs-input:focus { outline: none; border-color: var(--accent); }
   .aval-obs-input.aval-obs--nao { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.04); }
   .aval-obs-input.aval-obs--nao.aval-obs-expanded { border-color: rgba(245,158,11,0.8); }
-  /* ── Histórico inline chip ── */
-  .aval-hist {
-    display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
-    font-size: 11px; color: var(--text-ter); white-space: nowrap;
-    padding: 2px 8px; background: var(--bg); border: 1px solid var(--border-light);
-    border-radius: 20px;
+  /* ── Histórico — barra sob o nome do critério ── */
+  .aval-hist-bar {
+    display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+    margin-top: 4px; padding: 3px 8px;
+    background: var(--bg-alt, #f4f5f7); border-left: 2px solid var(--border);
+    border-radius: 0 4px 4px 0; font-size: 11px; line-height: 1.3;
+    white-space: nowrap; max-width: 100%; overflow: hidden; box-sizing: border-box;
   }
-  .aval-hist b { color: var(--text-sec); font-weight: 600; }
+  .aval-hist-ciclo { color: var(--text-ter); font-weight: 500; flex-shrink: 0; }
+  .aval-hist-resp { font-weight: 700; flex-shrink: 0; }
+  .aval-hist-resp.sim  { color: var(--green); }
+  .aval-hist-resp.nao  { color: var(--red); }
+  .aval-hist-resp.neutro { color: var(--text-sec); }
+  .aval-hist-tend { flex-shrink: 0; font-size: 10px; font-weight: 600; letter-spacing: .02em; }
+  .aval-hist-tend.up   { color: var(--green); }
+  .aval-hist-tend.down { color: var(--red); }
+  .aval-hist-tend.same { color: var(--text-ter); }
   /* ── não participante ── */
   .dp-np-row { display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #FECACA;background:#FFF5F5;border-left:3px solid #EF4444; }
   .dp-np-badge { font-size:10px;font-weight:700;color:#DC2626;background:#FEE2E2;border:1px solid #FECACA;border-radius:4px;padding:2px 7px;white-space:nowrap;flex-shrink:0;letter-spacing:.02em; }
@@ -877,7 +887,7 @@
     .aval-nome-info { min-width: 100px; }
     .aval-obs-input { width: 100%; flex-basis: 100%; min-width: 0; }
     .aval-obs-input.aval-obs-expanded { position: static; width: 100%; right: auto; top: auto; box-shadow: none; }
-    .aval-hist { flex-basis: 100%; }
+    .aval-hist-bar { max-width: 100%; }
   }
   /* filtros na aba Avaliações do drawer gestor */
   .gdp-aval-filtros {
@@ -6873,11 +6883,16 @@ function dpRenderFormAvaliacao() {
     return `<div class="aval-card">
       <div class="aval-card-num">${num}${vc.obrigatorio?'<span style="color:var(--red)">*</span>':''}</div>
       <div class="aval-nome-info">
-        <div class="aval-card-nome" title="${(crit.nome||'—').replace(/"/g,'&quot;')}">${crit.nome || '—'}</div>
-        ${infoBtn}
+        <div class="aval-nome-top">
+          <div class="aval-card-nome" title="${(crit.nome||'—').replace(/"/g,'&quot;')}">${crit.nome || '—'}</div>
+          ${infoBtn}
+        </div>
+        <div id="dp-hist-${vc.id}" class="aval-hist-bar">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite;flex-shrink:0;color:var(--text-ter)"><path d="M21 12a9 9 0 1 1-18 0"/></svg>
+          <span style="color:var(--text-ter);">Carregando histórico…</span>
+        </div>
       </div>
       ${inputHtml}
-      <span id="dp-hist-${vc.id}"></span>
     </div>${infoExpand}`;
   }).join('');
 
@@ -6890,24 +6905,66 @@ function _dpAtualizarChipsHistorico() {
     const el = document.getElementById('dp-hist-' + vc.id);
     if (!el) continue;
     const hist = _dpHistoricoCriterios[vc.id];
-    if (!hist) continue;
     const tipo = vc.tipo_resposta;
-    let html = '';
-    if (hist.comparavel === false) {
-      html = `<div class="aval-hist" style="font-style:italic">Sem avaliação anterior comparável</div>`;
-    } else {
-      let valorAnterior = '';
-      if (tipo === 'escala') valorAnterior = hist.escala_opcao_label != null ? `${hist.escala_opcao_label}${hist.escala_opcao_valor != null ? ` (${hist.escala_opcao_valor})` : ''}` : '';
-      else if (tipo === 'numerico' || tipo === 'numerico_com_meta') valorAnterior = hist.valor_numerico_livre != null ? `${hist.valor_numerico_livre}` : '';
-      else if (tipo === 'binario') valorAnterior = hist.resposta_texto ? (hist.resposta_texto === 'sim' ? 'Sim' : 'Não') : (hist.conceito_selecionado || '');
-      else if (tipo === 'conceito') valorAnterior = hist.conceito_selecionado || '';
-      const cicloLabel = (hist.ciclo_nome||'—').replace(/Gratificação CD - /i,'').replace(/\/\d{4}/,'').trim();
-      html = `<div class="aval-hist">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--text-ter)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>${cicloLabel}:</span>${valorAnterior ? ` <b>${valorAnterior}</b>` : ''}${hist.nota_final != null && tipo !== 'binario' ? ` <b>${Number(hist.nota_final).toFixed(1)}</b>` : ''}
-      </div>`;
+
+    if (!hist) {
+      el.style.borderLeftColor = 'transparent';
+      el.style.background = 'none';
+      el.innerHTML = `<span style="color:var(--text-ter);font-size:11px;font-style:italic;">Primeira avaliação — sem histórico anterior</span>`;
+      continue;
     }
-    el.innerHTML = html;
+    if (hist.comparavel === false) {
+      el.style.borderLeftColor = 'var(--border)';
+      el.innerHTML = `<span class="aval-hist-ciclo">Sem avaliação anterior compatível</span>`;
+      continue;
+    }
+
+    const cicloLabel = (hist.ciclo_nome || '—').replace(/Gratificação CD - /i, '').replace(/\/\d{4}/, '').trim();
+    let respHtml = '';
+    let borderColor = 'var(--accent)';
+
+    if (tipo === 'binario') {
+      const r = hist.resposta_texto;
+      if (r === 'sim') {
+        respHtml = `<span class="aval-hist-resp sim">✓ SIM</span>`;
+        borderColor = 'var(--green)';
+      } else if (r === 'nao') {
+        respHtml = `<span class="aval-hist-resp nao">✗ NÃO</span>`;
+        borderColor = 'var(--red)';
+      }
+      el.dataset.histResp = r || '';
+    } else if (tipo === 'escala') {
+      const lbl = hist.escala_opcao_label;
+      respHtml = lbl ? `<span class="aval-hist-resp neutro">${lbl}</span>` : '';
+    } else if (tipo === 'numerico' || tipo === 'numerico_com_meta') {
+      const v = hist.valor_numerico_livre;
+      respHtml = v != null ? `<span class="aval-hist-resp neutro">${v}</span>` : '';
+    } else if (tipo === 'conceito') {
+      const c = hist.conceito_selecionado;
+      respHtml = c ? `<span class="aval-hist-resp neutro">${c}</span>` : '';
+    }
+
+    el.style.borderLeftColor = borderColor;
+    el.dataset.histTipo = tipo;
+    el.innerHTML = `<span class="aval-hist-ciclo">Anterior · ${cicloLabel}:</span>${respHtml}<span id="dp-tend-${vc.id}" class="aval-hist-tend"></span>`;
+
+    // Se já há resposta atual (avaliação parcialmente preenchida), mostrar tendência imediatamente
+    if (tipo === 'binario') {
+      const inp = document.getElementById('resp_' + vc.id);
+      if (inp && inp.value) _dpAtualizarTendencia(vc.id, inp.value, hist.resposta_texto);
+    }
+  }
+}
+
+function _dpAtualizarTendencia(vcId, valAtual, valAnterior) {
+  const tend = document.getElementById('dp-tend-' + vcId);
+  if (!tend || !valAnterior || !valAtual) return;
+  if (valAtual === valAnterior) {
+    tend.textContent = '→ Manteve'; tend.className = 'aval-hist-tend same';
+  } else if (valAnterior === 'nao' && valAtual === 'sim') {
+    tend.textContent = '↑ Melhorou'; tend.className = 'aval-hist-tend up';
+  } else if (valAnterior === 'sim' && valAtual === 'nao') {
+    tend.textContent = '↓ Piorou'; tend.className = 'aval-hist-tend down';
   }
 }
 
@@ -6941,6 +6998,11 @@ function dpAvalBinario(vcId, val) {
   if (obsEl) {
     obsEl.classList.toggle('aval-obs--nao', val === 'nao');
     obsEl.placeholder = val === 'nao' ? '⚠ Justificativa (recomendado)…' : 'Observação…';
+  }
+  // Atualiza indicador de tendência vs. avaliação anterior
+  const histEl = document.getElementById('dp-hist-' + vcId);
+  if (histEl && histEl.dataset.histTipo === 'binario') {
+    _dpAtualizarTendencia(vcId, val, histEl.dataset.histResp);
   }
   dpAtualizarProgressoAval();
 }
