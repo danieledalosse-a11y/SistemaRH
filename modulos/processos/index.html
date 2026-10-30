@@ -955,7 +955,7 @@ async function carregarCancelados() {
   const filtroData = dataCorte ? '&atualizado_em=gte.' + dataCorte : '';
   try {
     const r = await fetch(
-      SB_URL + '/rest/v1/processos_rh?status=eq.cancelado&select=*,processos_checklist(*)&order=criado_em.desc&limit=200' + (USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : '') + filtroData,
+      SB_URL + '/rest/v1/processos_rh?status=eq.cancelado&select=*,processos_checklist(*),colaboradores(empresa_registro)&order=criado_em.desc&limit=200' + (USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : '') + filtroData,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar');
@@ -989,7 +989,7 @@ async function init() {
   await verificarBonusIndicacao();
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/processos_rh?status=eq.aberto&select=*,processos_checklist(*)&order=criado_em.desc${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}`,
+      `${SB_URL}/rest/v1/processos_rh?status=eq.aberto&select=*,processos_checklist(*),colaboradores(empresa_registro)&order=criado_em.desc${USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : ''}`,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar processos');
@@ -1391,12 +1391,8 @@ function buildCard(p) {
     const _opLabel = extras.operacao === 'exclusao' ? 'Exclusão de VT' : extras.operacao === 'alteracao' ? 'Alteração de VT' : 'Inclusão de VT';
     const _opCor   = extras.operacao === 'exclusao' ? '#991b1b' : extras.operacao === 'alteracao' ? '#5b21b6' : '#166534';
     const _opBg    = extras.operacao === 'exclusao' ? '#fee2e2' : extras.operacao === 'alteracao' ? '#ede9fe' : '#dcfce7';
-    const _vtInfo  = (extras.vt_cartao || extras.vt_passes)
-      ? ` · Cartão: ${extras.vt_cartao || '—'} · ${extras.vt_passes || '?'} passes/dia${extras.vt_linha ? ' · ' + extras.vt_linha : ''}`
-      : (extras.motivo ? ` · Motivo: ${extras.motivo.replace(/_/g, ' ')}` : '');
     extraHtml = `<div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
       <span style="font-size:11px;background:${_opBg};color:${_opCor};padding:2px 8px;border-radius:20px;font-weight:600;">${_opLabel}</span>
-      ${_vtInfo ? `<span style="font-size:11px;color:var(--text-sec);">${_vtInfo}</span>` : ''}
     </div>`;
   }
 
@@ -1443,6 +1439,7 @@ function buildCard(p) {
           <span class="row-nome" style="flex-shrink:0;">${p.colaborador_nome || '—'}</span>
           ${badgeUrgencia}
         </div>
+        ${p.colaboradores?.empresa_registro ? `<span style="font-size:11px;color:var(--text-ter);">${p.colaboradores.empresa_registro}</span>` : ''}
         ${extraHtml}
       </div>
       <div class="row-prog-inline">
@@ -3159,7 +3156,7 @@ async function carregarConcluidos() {
   const filtroData = dataCorte ? '&concluido_em=gte.' + dataCorte : '';
   try {
     const r = await fetch(
-      SB_URL + '/rest/v1/processos_rh?status=eq.concluido&select=*,processos_checklist(*)&order=concluido_em.desc&limit=200' + (USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : '') + filtroData,
+      SB_URL + '/rest/v1/processos_rh?status=eq.concluido&select=*,processos_checklist(*),colaboradores(empresa_registro)&order=concluido_em.desc&limit=200' + (USUARIO_PERFIL === 'gestor' ? '&criado_por_user_id=eq.' + USUARIO_ID : '') + filtroData,
       { headers: SB_HEADERS }
     );
     if (!r.ok) throw new Error('Erro ao carregar histórico');
