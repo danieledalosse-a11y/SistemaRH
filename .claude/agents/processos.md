@@ -751,6 +751,26 @@ Processos do tipo `admissao` e `vt_alteracao` são criados automaticamente ao **
 
 Ver skill `admissao` para o fluxo completo.
 
+## Empresa/Unidade na listagem — regras e layout (commits b60694e/7b5de21/8522450, out/2026)
+
+### Fonte dos dados
+- Processos com colaborador (`colaborador_id` não nulo): `colaboradores(empresa_registro)` via embedded select — incluído nas 3 queries (`status=eq.aberto`, `cancelado`, `concluido`)
+- Processos de admissão (`colaborador_id=null`): `dados_extras.unidade` — campo salvo no momento da criação do processo (a partir do commit 7b5de21)
+- Processos de admissão antigos sem `dados_extras.unidade`: campo não aparece; corrigidos manualmente via UPDATE no banco quando necessário
+
+### Layout no card (linha principal)
+```js
+<span class="row-nome" style="flex:0 0 auto;">${p.colaborador_nome || '—'}</span>
+${(() => {
+  const _emp = p.colaboradores?.empresa_registro || (p.tipo === 'admissao' ? extras.unidade : null);
+  return _emp ? `<span style="font-size:11px;font-weight:500;color:var(--text-sec);background:var(--bg-alt,#f3f4f6);border:1px solid var(--border);border-radius:4px;padding:1px 7px;flex-shrink:0;letter-spacing:0.01em;">${_emp}</span>` : '';
+})()}
+```
+
+**Regra crítica de layout:** `.row-nome` tem `flex:1` na classe CSS. O inline style deve ser `flex:0 0 auto` (não `flex-shrink:0`) — sem isso, o nome expande e empurra o pill da empresa para a extrema direita, junto à barra de progresso.
+
+A empresa aparece como pill sutil: fundo `var(--bg-alt)`, borda `var(--border)`, 11px semi-bold, `border-radius:4px`. Não usar o separador `·` — o pill já isola visualmente a informação.
+
 ## Deploy
 
 GitHub Pages — branch `main`:
