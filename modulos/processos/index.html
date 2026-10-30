@@ -3542,24 +3542,20 @@ async function criarProcesso(tipo, colaboradorId, colaboradorNome, dadosExtras) 
   if (!r.ok) { const e = await r.json(); throw new Error(e?.message || 'Erro ao criar processo'); }
   const [proc] = await r.json();
 
-  let _chklSrc = CHECKLISTS[tipo];
-  if (tipo === 'vt_alteracao') {
-    const op = dadosExtras?.operacao || 'inclusao';
-    _chklSrc = _chklSrc?.[op] || [];
-  }
-  let itensBase = [...(_chklSrc || [])];
-  // Alelo incluído em todas as admissões — não-utilizadores marcam "Não utiliza"
+  let _chklSrc;
   if (tipo === 'admissao') {
-    const idxGas = itensBase.findIndex(it => it.item === 'Inserir no Vale Gás');
-    if (idxGas >= 0) {
-      const alelo = { item: 'Pedir cartão Alelo Pagamento', prazo_dias: 3 };
-      itensBase = [
-        ...itensBase.slice(0, idxGas + 1),
-        alelo,
-        ...itensBase.slice(idxGas + 1)
-      ];
+    const jsonUrl = new URL('checklist-admissao.json', location.href).href;
+    const rj = await fetch(jsonUrl, { cache: 'no-store' });
+    if (!rj.ok) throw new Error('Não foi possível carregar o checklist de admissão. Verifique sua conexão e tente novamente.');
+    _chklSrc = await rj.json();
+  } else {
+    _chklSrc = CHECKLISTS[tipo];
+    if (tipo === 'vt_alteracao') {
+      const op = dadosExtras?.operacao || 'inclusao';
+      _chklSrc = _chklSrc?.[op] || [];
     }
   }
+  let itensBase = [...(_chklSrc || [])];
   const checklist = itensBase.map((it, i) => ({
     processo_id: proc.id,
     item:        it.item,
