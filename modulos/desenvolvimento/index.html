@@ -6513,11 +6513,15 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   // Histórico em background — preenche chips após retorno sem bloquear a interação
   if (modeloId && part.colaborador_id) {
     const _thisAvalId = aval.id; // token de guarda de corrida
-    sbRpc('dp_fn_historico_criterio_batch', {
-      p_versao_id:      versaoId,
-      p_colaborador_id: part.colaborador_id,
-      p_ciclo_atual_id: _dpCicloAtual.id
-    }).then(batch => {
+    const _rpcTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+    Promise.race([
+      sbRpc('dp_fn_historico_criterio_batch', {
+        p_versao_id:      versaoId,
+        p_colaborador_id: part.colaborador_id,
+        p_ciclo_atual_id: _dpCicloAtual.id
+      }),
+      _rpcTimeout
+    ]).then(batch => {
       // Aborta se o usuário navegou para outro colaborador antes da resposta chegar
       if (!_dpAvaliacaoAtual || _dpAvaliacaoAtual.id !== _thisAvalId) return;
       if (!batch || !Array.isArray(batch)) return;
