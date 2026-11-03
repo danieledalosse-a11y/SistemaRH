@@ -1,0 +1,33 @@
+# Memory Index — PainelRH + SistemaRH
+
+- [user_profile](user_profile.md) — Perfil da usuária: RH Revest, preferências de trabalho
+- [cron_validacao_pendente](cron_validacao_pendente.md) — RESOLVIDO (29/09/2026): cron verificar-workflows-diario validado, funcionando, sem ação pendente
+- [project_state](project_state.md) — Estado atual do PainelRH local (folha de pagamento): arquivos, funcionalidades, pendências
+- [sistemarh_state](sistemarh_state.md) — Estado atual do SistemaRH web: módulos, banco de dados, fluxos, admissão online, shared.css (recursos compartilhados)
+- [feedback_style](feedback_style.md) — Preferências de resposta e estilo de colaboração
+- [feedback_icons](feedback_icons.md) — Padrão de ícones emoji antes do texto em todas as abas do sistema
+- [supabase_config](supabase_config.md) — Credenciais Supabase: URL, chaves publicável e secreta do projeto SistemaRH
+- [netlify_config](netlify_config.md) — Token, site ID e URL do Netlify para deploy do SistemaRH
+- [ferias_realizacoes](ferias_realizacoes.md) — Feature planejada: bloco "Realizações" no drawer RH — gozo real vs. período oficial, com saldo automático
+- [conferencia_folha_regras](conferencia_folha_regras.md) — Ponteiro pra pasta "conferencia-folha-pagamento" (fontes de dados, regras, armadilhas de PDF, formato de relatório — arquivos normais, não skill instalada)
+- [conciliacao_web_state](conciliacao_web_state.md) — Conciliação Web em produção: infraestrutura do servidor, pendências em aberto, cuidados de teste (arquitetura/regras ficam no CLAUDE.md do projeto)
+- [conciliacao_web_auth](conciliacao_web_auth.md) — Credenciais do Conciliação Web (senha da app, root VPS, Gmail relay, GitHub) e decisões pendentes sobre recuperação de senha
+- [auditoria_historico](auditoria_historico.md) — Premissa obrigatória: todo módulo deve registrar histórico de movimentações (tipo, detalhe, data, usuario) em colaboradores.historico JSONB
+- [ambientes_ia_supabase](ambientes_ia_supabase.md) — Credenciais Supabase, Hugging Face e Netlify do Prompt Master — independente do SistemaRH
+- [prompt_master_state](prompt_master_state.md) — Estado do Prompt Master: deploy Vercel, funcionalidades, pendencias
+- [feedback_tdz_constantes](feedback_tdz_constantes.md) — TDZ silencioso no index.html: constantes usadas por renderHomeGestor devem ficar ANTES da IIFE RBAC
+- [feedback_return_minimal](feedback_return_minimal.md) — return=representation dobra custo RLS; sempre usar return=minimal em saves que não precisam do retorno do banco
+- [feedback_browser_preview](feedback_browser_preview.md) — NAO verificar UI pelo browser; NAO misturar projetos em sessoes
+- [feedback_legibility](feedback_legibility.md) — Padrão global de legibilidade: mínimo 11px para texto informativo, tokens --text-sec/#4B5565 e --text-ter/#6C7589
+- [feedback_arquitetura_modular](feedback_arquitetura_modular.md) — Regra permanente: separar código por visão (RH/Gestor/Diretoria), reutilizar componentes/funções compartilhados, nunca duplicar — localizar → entender → reutilizar → alterar fonte única
+- [feedback_dp_arquitetura_generica](feedback_dp_arquitetura_generica.md) — D&P: motor genérico e parametrizável, nunca orientado ao caso atual; perguntar "estou criando solução reutilizável ou regra para o caso?" antes de implementar
+- [feedback_skill_storage_ephemera](feedback_skill_storage_ephemera.md) — "Save skill" não funciona pra Dani; guardar skills como arquivos normais na pasta dela e ler direto
+- [ferias_dashboard_visual](ferias_dashboard_visual.md) — Design visual aprovado do Dashboard: dois cards 50/50, calendário com bolinhas por setor, ícones circulares no painel Ausentes por Setor
+- [SistemaRH/.claude/agents/home.md](../../../../../SistemaRH/.claude/agents/home.md) — Skill da Home Dashboard: roteamento por perfil, regra TDZ, foto gestor, segurança salarial, view v_historico_eventos_home, helpers, shared.css e btn-sair
+- [SistemaRH/.claude/agents/permissoes.md](../../../../../SistemaRH/.claude/agents/permissoes.md) — Skill de controle de acesso: guardModulo(), RBAC, acesso_modulos, injeção automática de shared.css via permissoes.js
+- [SistemaRH/.claude/agents/relatorios.md](../../../../../SistemaRH/.claude/agents/relatorios.md) — Skill do módulo Central de Relatórios: RELATORIOS dict, painel lateral, como adicionar relatórios, regras Excel
+- [SistemaRH/.claude/agents/parametros.md](../../../../../SistemaRH/.claude/agents/parametros.md) — Skill do módulo Parâmetros Gerais: arquitetura de credenciais (Auth como fonte única), RLS, fn_get_usuarios_perfil, Edge Function criar-usuario-auth, migrations 060/061
+- [SistemaRH/.claude/agents/desenvolvimento.md](../../../../../SistemaRH/.claude/agents/desenvolvimento.md) — Skill do módulo D&P: motor genérico, tabelas dp_*, etapas 1-6 implementadas, drawer de ciclo, variáveis de estado, sistema visual, pendências técnicas
+- [dp_mockup_referencia](dp_mockup_referencia.md) — Mockup visual aprovado do módulo D&P: caminho permanente em .claude/dp_mockup.html no repositório SistemaRH
+- [SistemaRH/.claude/agents/ferias.md](../../../../../SistemaRH/.claude/agents/ferias.md) — Skill do módulo Férias: periodos[] JSONB append-only, fallback flat fields, 11 funções afetadas, log RH ferias_historico, migration 073
+- [logistica_state](logistica_state.md) — Estado do SistemaLogistica: stack HTML/JS/CSS puro, padrão SistemaRH, premissa Claude=dev, estrutura base criada em 12-FROTA\CLAUDE\SistemaLogistica
