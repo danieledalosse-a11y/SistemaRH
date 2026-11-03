@@ -1578,6 +1578,22 @@
   </div>
 </div>
 
+<!-- ══ MODAL: EDITAR MODELO ══ -->
+<div class="modal-overlay" id="modalEditarModelo">
+  <div class="modal">
+    <div class="modal-title">Editar modelo</div>
+    <input type="hidden" id="editarModeloId">
+    <div class="form-group">
+      <label class="form-label">Nome *</label>
+      <input class="form-input" id="editarModeloNome" placeholder="Nome do modelo">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('modalEditarModelo').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEdicaoModelo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL: COMPETÊNCIA ══ -->
 <div class="modal-overlay" id="modalCompetencia">
   <div class="modal" style="max-width:520px">
@@ -3619,7 +3635,10 @@ async function renderModelos(reload = false) {
       </div>
       <div class="row-meta" style="align-self:flex-start;margin-top:2px">
         <button class="btn btn-secondary btn-sm" onclick="criarVersaoModelo('${m.id}')">+ Versão</button>
-        <div class="row-actions"><button class="icon-btn" title="Editar" onclick="/* edit */">${EDIT_SVG}</button></div>
+        <div class="row-actions">
+          <button class="icon-btn" title="Editar nome" onclick="abrirEditarModelo('${m.id}')">${EDIT_SVG}</button>
+          ${!versoes.some(v => v.em_uso) ? `<button class="icon-btn" title="Excluir modelo" onclick="excluirModelo('${m.id}')" style="color:var(--red,#D92D20)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : ''}
+        </div>
       </div>
     </div>`;
   }
@@ -4118,6 +4137,55 @@ async function excluirBloco(blocoId) {
   _dpVersaoBlocos = _dpVersaoBlocos.filter(b => b.id !== blocoId);
   renderVersaoCriterios();
   toast('Bloco excluído.');
+}
+
+function abrirEditarModelo(modeloId) {
+  const m = _dpModelos.find(x => x.id === modeloId);
+  if (!m) return;
+  document.getElementById('editarModeloId').value = modeloId;
+  document.getElementById('editarModeloNome').value = m.nome;
+  document.getElementById('modalEditarModelo').classList.add('open');
+  setTimeout(() => document.getElementById('editarModeloNome').select(), 50);
+}
+
+async function salvarEdicaoModelo() {
+  const id   = document.getElementById('editarModeloId').value;
+  const nome = (document.getElementById('editarModeloNome').value || '').trim();
+  if (!nome) { toast('Informe o nome do modelo.', true); return; }
+  const m = _dpModelos.find(x => x.id === id);
+  if (!m || nome === m.nome) { document.getElementById('modalEditarModelo').classList.remove('open'); return; }
+  const ok = await sbPatch(`/rest/v1/dp_modelos?id=eq.${id}`, { nome });
+  if (ok === null) { toast('Erro ao salvar: ' + sbErrMsg(), true); return; }
+  m.nome = nome;
+  document.getElementById('modalEditarModelo').classList.remove('open');
+  toast('Nome atualizado.');
+  renderModelos();
+}
+
+async function excluirModelo(modeloId) {
+  const m = _dpModelos.find(x => x.id === modeloId);
+  const versoes = (_dpVersoes[modeloId] || []).map(v => v.id);
+
+  // Verifica vínculos dinâmicos: ciclos vinculados a qualquer versão deste modelo
+  // (participantes e avaliações são transitivamente cobertos — só existem se há ciclo)
+  if (versoes.length) {
+    const ciclosVinc = await sbGet(`/rest/v1/dp_ciclos?versao_id=in.(${versoes.join(',')})&select=id&limit=1`);
+    if (Array.isArray(ciclosVinc) && ciclosVinc.length) {
+      toast('Não é possível excluir: o modelo está vinculado a um ou mais ciclos.', true);
+      return;
+    }
+  }
+
+  if (!confirm(`Excluir o modelo "${m?.nome || 'este modelo'}"?\n\nEsta ação não pode ser desfeita.`)) return;
+
+  // Exclui versões (critérios da versão são em cascata pelo banco) e depois o modelo
+  for (const vid of versoes) {
+    await sbDelete(`/rest/v1/dp_versoes?id=eq.${vid}`);
+  }
+  const ok = await sbDelete(`/rest/v1/dp_modelos?id=eq.${modeloId}`);
+  if (!ok) { toast('Erro ao excluir: ' + sbErrMsg(), true); return; }
+  toast('Modelo excluído.');
+  renderModelos(true);
 }
 
 function abrirModalCriterio(blocoId) {
