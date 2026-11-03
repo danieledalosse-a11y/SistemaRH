@@ -529,6 +529,26 @@
   .dv-val-peso-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; }
   .dv-row-drag-over { outline: 2px dashed var(--accent); outline-offset: 2px; }
 
+  /* ── construtor: modal centralizado ── */
+  #drawerVersaoOverlay { display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #drawerVersao { position: relative; top: unset; right: unset; bottom: unset; left: unset; width: min(1100px, 95vw); max-width: 100%; height: min(88vh, 860px); border-radius: 12px; transform: scale(0.96) translateY(10px); opacity: 0; transition: transform 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.22s; }
+  #drawerVersaoOverlay.open #drawerVersao { transform: none; opacity: 1; }
+
+  /* ── construtor: badges coloridos por tipo ── */
+  .dv-crit-badge.tipo  { background: #EEF2FF; color: #1D4ED8; border-color: #BFDBFE; font-weight: 600; }
+  .dv-crit-badge.escala { background: #F5F3FF; color: #7C3AED; border-color: #DDD6FE; }
+  .dv-crit-badge.peso  { background: #FFFBEB; color: #D97706; border-color: #FDE68A; }
+
+  /* ── construtor: seção com borda lateral e ponto colorido ── */
+  .dv-secao-item { border-left: 2px solid transparent; padding-left: 10px; }
+  .dv-secao-item.active { background: #EEF2FF; border-left-color: #2563EB; }
+  .dv-secao-item.active .dv-secao-nome { color: #1D4ED8; font-weight: 600; }
+  .dv-secao-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── construtor: card expandido ── */
+  .dv-crit-card.open { border-color: var(--accent); }
+  .dv-crit-card.open .dv-crit-card-nome { white-space: normal; overflow: visible; text-overflow: unset; font-weight: 600; }
+
   /* ── validacao result ── */
   .validacao-result { margin-top: 4px; padding: 10px 12px; border-radius: 8px; font-size: 12px; }
   .validacao-ok  { background: var(--green-bg); color: var(--green); }
@@ -3894,7 +3914,7 @@ function renderVersaoCriterios() {
       <button class="dv-secao-action-btn" title="Excluir" style="color:var(--red)" onclick="event.stopPropagation();excluirBloco('${b.id}')">✕</button>
     </div>` : '';
     return `<div class="dv-secao-item${active?' active':''}" onclick="dvSelectSecao('${b.id}')">
-      <div class="dv-secao-icon" style="background:${cor}22;color:${cor}">${i+1}</div>
+      <span class="dv-secao-dot" style="background:${cor}"></span>
       <span class="dv-secao-nome" title="${b.nome}">${b.nome}</span>
       <span class="dv-secao-count">${count}</span>
       ${actBtns}
@@ -3905,7 +3925,7 @@ function renderVersaoCriterios() {
   if (semBlocoCount > 0 || !_dpVersaoBlocos.length) {
     const active = _dvSecaoAtiva === 'sem-secao';
     secoesHtml += `<div class="dv-secao-item${active?' active':''}" onclick="dvSelectSecao('sem-secao')">
-      <div class="dv-secao-icon" style="background:var(--border);color:var(--text-ter)">—</div>
+      <span class="dv-secao-dot" style="background:var(--border)"></span>
       <span class="dv-secao-nome">Sem seção</span>
       <span class="dv-secao-count">${semBlocoCount}</span>
     </div>`;
@@ -3965,10 +3985,10 @@ function _dvBuildCritCard(c, readonly, RESP_OPTS, showPeso) {
   // badges no cabeçalho do card
   const escalaBadge = needEscala
     ? (escalaLabel
-        ? `<span class="dv-crit-badge">${escalaLabel}</span>`
+        ? `<span class="dv-crit-badge escala">${escalaLabel}</span>`
         : `<span class="dv-crit-badge alerta">sem escala</span>`)
     : '';
-  const pesoBadge   = (showPeso && c.peso != null) ? `<span class="dv-crit-badge">Peso ${c.peso}</span>` : '';
+  const pesoBadge   = (showPeso && c.peso != null) ? `<span class="dv-crit-badge peso">Peso ${c.peso}</span>` : '';
   const contaBadge  = (c.contribui_calculo && !noCalc) ? `<span class="dv-crit-badge ok">✓ nota</span>` : '';
 
   // escala select no corpo
@@ -4017,7 +4037,7 @@ function _dvBuildCritCard(c, readonly, RESP_OPTS, showPeso) {
       <span class="dv-crit-card-drag crit-drag-handle" title="Arrastar para reordenar" onclick="event.stopPropagation()">⠿</span>
       <span class="dv-crit-card-nome" title="${nome}">${nome}</span>
       <div class="dv-crit-meta">
-        <span class="dv-crit-badge">${tipoLabel}</span>
+        <span class="dv-crit-badge tipo">${tipoLabel}</span>
         ${escalaBadge}${pesoBadge}${contaBadge}
       </div>
       <svg class="dv-crit-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
