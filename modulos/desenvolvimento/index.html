@@ -6524,11 +6524,22 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
     ]).then(batch => {
       // Aborta se o usuário navegou para outro colaborador antes da resposta chegar
       if (!_dpAvaliacaoAtual || _dpAvaliacaoAtual.id !== _thisAvalId) return;
-      if (!batch || !Array.isArray(batch)) return;
+      // null = sbRpc capturou erro silenciosamente; tratar igual a falha
+      if (batch === null) {
+        for (const vc of _dpVersaoCritsParaForm) {
+          const el = document.getElementById('dp-hist-' + vc.id);
+          if (el && el.classList.contains('aval-hist-chip')) {
+            el.innerHTML = '<span style="color:var(--text-ter);font-size:11px;">Histórico indisponível</span>';
+          }
+        }
+        return;
+      }
+      if (!Array.isArray(batch)) return;
+      // [] = válido: colaborador sem ciclo anterior → chips mostrarão "1ª avaliação"
       batch.forEach(row => { _dpHistoricoCriterios[row.versao_criterio_id] = row.resultado; });
       _dpAtualizarChipsHistorico();
     }).catch(() => {
-      // RPC falhou — limpa loading de todos os critérios sem simular dado
+      // Timeout ou rejeição explícita — limpa loading de todos os critérios
       if (!_dpAvaliacaoAtual || _dpAvaliacaoAtual.id !== _thisAvalId) return;
       for (const vc of _dpVersaoCritsParaForm) {
         const el = document.getElementById('dp-hist-' + vc.id);
