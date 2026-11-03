@@ -6,7 +6,17 @@ metadata:
   type: project
   updated: 2026-10-16T00:00:00
   originSessionId: 8172e317-1917-45cd-9732-a1d412d45df8
-  modified: 2026-11-03T19:10:47.196Z
+  modified: 2026-11-03T19:35:56.461Z
+---
+
+## D&P — Editar nome e excluir modelo (commit 47ceb77, 03/11/2026)
+
+**Editar:** botão de lápis sempre visível no card de modelo → `modalEditarModelo` (mesmo padrão do `modalNovoModelo`) → PATCH em `dp_modelos`.
+
+**Excluir:** botão de lixeira condicional — aparece somente quando nenhuma versão do modelo tem `em_uso=true`. Antes de deletar, verifica dinamicamente `dp_ciclos?versao_id=in.(...)` para garantir que não há ciclo vinculado. Se houver, bloqueia. Participantes e avaliações são cobertos transitivamente.
+
+**Regra:** `sbDelete` retorna `true/false`, não `null` — verificar com `!ok`, não `=== null`.
+
 ---
 
 ## Férias — Fix JSON bruto na visão Gestor (commits 6312ceb/16fb381, 03/11/2026)

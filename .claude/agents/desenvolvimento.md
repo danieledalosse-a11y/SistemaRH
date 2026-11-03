@@ -459,6 +459,24 @@ let _dpTabelasConceito = [];      // dp_tabelas_conceito
 let _dpFaixasConceito  = {};      // { tabela_id: [faixas] }
 ```
 
+### Editar nome e excluir modelo (commit 47ceb77, nov/2026)
+
+**Editar nome:**
+- Botão de lápis sempre visível no card → abre `modalEditarModelo` com nome pré-preenchido e selecionado
+- `abrirEditarModelo(modeloId)` / `salvarEdicaoModelo()` — PATCH em `dp_modelos`
+- Usa `sbPatch('/rest/v1/dp_modelos?id=eq.{id}', { nome })`
+
+**Excluir:**
+- Botão de lixeira aparece **somente quando `versoes.some(v => v.em_uso) === false`** (nenhuma versão publicada)
+- `excluirModelo(modeloId)`:
+  1. Verifica dinamicamente `dp_ciclos?versao_id=in.(...)` — se houver ciclo vinculado, bloqueia com mensagem
+  2. `confirm()` de confirmação
+  3. DELETE em cada versão em rascunho → DELETE no modelo
+- Participantes e avaliações são cobertos transitivamente: só existem se há ciclo vinculado
+- `sbDelete` retorna `true/false` (não `null`) — verificar com `!ok`
+
+**Modal `modalEditarModelo`:** padrão idêntico ao `modalNovoModelo` — `modal-overlay` → `modal` → `form-group` → `modal-footer`.
+
 ---
 
 ## Padrão de acesso ao Supabase
