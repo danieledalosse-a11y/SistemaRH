@@ -1761,15 +1761,21 @@ Analogia: chip roxo para `abono_pecuniario`, chip laranja para `dias_antecipados
 A nota de cada lançamento segue esta cadeia de prioridade (apenas no primeiro lançamento do PA, `li === 0`):
 
 ```js
+const _temMetaPendente = !!(_altMetaGsol || _cancelMetaGsol);
+const _lObsGestorNota = _temMetaPendente ? null : l._obsGestor;
+const _obsGestorNota  = _temMetaPendente ? null : row.obs_gestor;
+const _rhObsNota      = _temMetaPendente ? null : _rhObsMap.get(l.inicio);
 const _notaTxt = li === 0
-  ? (l.nota || l._obsGestor || _rhObsMap.get(l.inicio) || row.obs_gestor || row.nota_livre || row.nota || null)
-  : null;
+  ? (l.nota || _lObsGestorNota || _rhObsNota || _obsGestorNota || row.nota_livre || row.nota || null)
+  : (l.nota || null);
 ```
 
 - `l.nota` — campo mapeado de `nota1`/`nota2` (fonte primária, visível também na visão RH)
-- `l._obsGestor` — `obs_gestor` da row Supabase (fallback)
-- `_rhObsMap` — mapa construído a partir de `COLABORADORES` (fallback quando Gestor abre direto, sem o array RH carregado)
+- `l._obsGestor` — `obs_gestor` da row Supabase copiado para cada lancamento (p1 e p2)
+- `_rhObsMap` — mapa construído a partir de `COLABORADORES` (fallback quando Gestor abre direto)
 - `row.obs_gestor`, `row.nota_livre`, `row.nota` — fallbacks adicionais
+
+> **Armadilha (commits 6312ceb/16fb381, nov/2026):** quando `status = 'Alteracao_Solicitada'` ou `'Cancelamento_Solicitado'`, o campo `obs_gestor` contém JSON de metadados (não texto legível). Como `l._obsGestor`, `_rhObsMap` e `row.obs_gestor` são todos derivados desse campo, os três aparecem como JSON cru na nota. A guarda `_temMetaPendente` bloqueia as três fontes — o banner já exibe a informação formatada. **Regra:** ao adicionar novas fontes à cadeia `_notaTxt`, sempre incluí-las na guarda `_temMetaPendente`.
 
 **Regra:** nunca trocar `l.nota` por `l._obsGestor` como fonte primária — são colunas diferentes e só `nota1`/`nota2` refletem o que o RH vê.
 

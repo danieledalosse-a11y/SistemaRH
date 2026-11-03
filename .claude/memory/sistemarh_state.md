@@ -6,7 +6,19 @@ metadata:
   type: project
   updated: 2026-10-16T00:00:00
   originSessionId: 8172e317-1917-45cd-9732-a1d412d45df8
-  modified: 2026-11-03T18:51:56.450Z
+  modified: 2026-11-03T19:10:47.196Z
+---
+
+## Férias — Fix JSON bruto na visão Gestor (commits 6312ceb/16fb381, 03/11/2026)
+
+**Problema:** ao solicitar alteração de data de férias via Gestor, o drawer exibia o JSON de metadados (`obs_gestor`) como texto de observação no primeiro período (p1), mesmo quando a alteração era no segundo (p2).
+
+**Causa:** `l._obsGestor`, `_rhObsMap.get(l.inicio)` e `row.obs_gestor` são todos derivados do campo `obs_gestor` do banco. Quando status = `Alteracao_Solicitada` / `Cancelamento_Solicitado`, esse campo contém JSON — não texto legível. Os três apareciam na cadeia de fallback de `_notaTxt`. Além disso, `l._obsGestor` é copiado para **ambos** os lancamentos (p1 e p2) na montagem de `GESTOR_LANCAMENTOS`.
+
+**Fix:** guarda `_temMetaPendente` bloqueia as três fontes quando há meta pendente. O banner azul/amarelo já exibe a informação formatada corretamente.
+
+**Regra permanente:** ao adicionar novas fontes à cadeia `_notaTxt` na visão Gestor, sempre incluí-las na guarda `_temMetaPendente`.
+
 ---
 
 ## Processos + Admissão — Empresa na listagem do Workflow (commits b60694e/7b5de21/3abe4dd/8522450, 30/10/2026)
