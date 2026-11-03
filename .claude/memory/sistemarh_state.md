@@ -6,7 +6,7 @@ metadata:
   type: project
   updated: 2026-10-16T00:00:00
   originSessionId: 8172e317-1917-45cd-9732-a1d412d45df8
-  modified: 2026-11-03T17:17:21.603Z
+  modified: 2026-11-03T18:51:56.450Z
 ---
 
 ## Processos + Admissão — Empresa na listagem do Workflow (commits b60694e/7b5de21/3abe4dd/8522450, 30/10/2026)
@@ -49,6 +49,20 @@ metadata:
 **Correção pontual do Vitor Hugo (processo_id=83):** INSERT manual no Supabase adicionou o Alelo; botão "⊘ Não utiliza" confirmado funcionando (visível no hover).
 
 **Regra "Não utiliza":** botão aparece apenas no hover (`display:none` por padrão, `display:inline-block` no `.checklist-item:hover`). Cobre todos os itens de GRUPOS_ADMISSAO com `naoUtilizavel:true` — Benefícios e Planos & Seguros.
+
+---
+
+## D&P — Fix chips histórico: status 'concluida' e tipo integer (migration 143, commit 14ae0c4, 03/11/2026)
+
+**Problema:** chips de referência histórica no formulário de avaliação ficavam em "Carregando..." para colaboradores com ciclo anterior encerrado.
+
+**Causa raiz 1 — filtro de status:** `dp_fn_historico_criterio` filtrava `a.status = 'publicada'` apenas. Ciclos encerrados sem publicação formal (`status='concluida'`) nunca eram localizados.
+**Fix:** filtro ampliado para `IN ('concluida', 'publicada')`.
+
+**Causa raiz 2 — mismatch de tipo:** `dp_fn_historico_criterio_batch` declarava `p_colaborador_id BIGINT` mas a função interna espera `INTEGER`. Com parâmetros nomeados (`=>`), PostgreSQL não faz cast implícito — gerava erro 42883 silencioso, sbRpc retornava `null`.
+**Fix:** tipo alinhado para `INTEGER` + `DROP FUNCTION` da sobrecarga `bigint` sobrante (CREATE OR REPLACE com assinatura diferente cria overload, não substitui).
+
+**Regra permanente:** ao criar/corrigir funções PostgreSQL com parâmetros nomeados, verificar que os tipos são idênticos na cadeia de chamadas. Nunca assumir que bigint↔integer é compatível com parâmetros nomeados.
 
 ---
 
