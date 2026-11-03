@@ -438,11 +438,56 @@ Edição (`emUso=true`): todos os campos desabilitados, botão Salvar oculto, av
 
 ## Aba Modelos — detalhes de implementação
 
-### Drawer de versão (`drawerVersao`)
-- **Tab Critérios:** accordion por bloco → tabela de critérios (tudo `disabled` se `em_uso`)
-- **Tab Configurações:** `tipo_calculo`, `tipo_avaliador_id` (select de `dp_tipos_avaliador`), `converte_para_conceito`, `tabela_conceito_id` (select de `dp_tabelas_conceito`)
-- **Footer:** Validar → resultado inline → Publicar (só após validação ok)
-- Picker de critérios: filtra `na_biblioteca=true AND ativo=true`
+### Drawer de versão (`drawerVersao`) — Construtor de Avaliações (commit 9a4aa79, nov/2026)
+
+Layout de duas colunas substituiu as antigas abas Critérios / Configurações de cálculo.
+
+**Estrutura do drawer:**
+```
+Header: nome do modelo / versão / badge status
+dvConfigRow: Tipo de cálculo [select] | Converter para conceito [checkbox] [tabela select]
+dvStatusBar: barra verde/amber/vermelho (publicada / rascunho com crits / sem crits)
+dv-builder-body (flex row):
+  dv-secoes-panel (220px): lista de seções (blocos) + "Sem seção" + botão "+ Nova seção"
+  dv-crits-panel (flex:1): header da seção ativa + cards de critérios
+dvValBar: "X critérios · Y seções" + alerta sem escala + barra de pesos (media_ponderada)
+drawer-footer: botão Verificar e publicar + Fechar
+```
+
+**Painel de seções (esquerda):**
+- Cada `dp_versao_bloco` é um item clicável com ícone colorido, nome, contagem
+- Hover mostra botões ✎ (renomear) e ✕ (excluir) — ocultos quando `readonly`
+- Item "Sem seção" aparece quando há critérios sem bloco ou não há blocos
+- "+ Nova seção" no rodapé invoca `adicionarBloco()` existente
+
+**Cards de critério (direita):**
+- Fechado: `⠿ [nome] [badge tipo] [badge escala/alerta] [badge peso] [badge conta] ▼`
+- Expandido: grid 2 colunas com todos os campos editáveis (tipo_resposta, escala, peso, obrigatório, contribui_calculo, range/monetário por tipo)
+- Rodapé do card: select "Mover para seção…" + setas ↑↓ + botão Remover
+- Arrasto drag/drop reaproveitado das funções `dpCritDragStart/Over/Leave/Drop/End` existentes
+
+**Variáveis de estado adicionadas:**
+```js
+let _dvSecaoAtiva = null;  // id do bloco ativo, ou 'sem-secao'
+let _dvCardAberto = null;  // id do critério com card expandido
+```
+
+**Funções novas:**
+| Função | O que faz |
+|---|---|
+| `dvSelectSecao(id)` | Clica em uma seção no painel esquerdo — atualiza `_dvSecaoAtiva` e re-renderiza |
+| `dvToggleCritCard(critId)` | Abre/fecha um card de critério — atualiza `_dvCardAberto` e re-renderiza |
+| `dvMoverCritSecao(critId, secaoId)` | PATCH `bloco_id` no banco; navega para a seção destino |
+| `_dvBuildCritCard(c, readonly, RESP_OPTS, showPeso)` | Constrói o HTML de um card; chamada internamente por `renderVersaoCriterios` |
+
+**Funções reutilizadas sem alteração:**
+`setCritField`, `moverCrit`, `removerCrit`, `adicionarBloco`, `renomearBloco`, `excluirBloco`, `abrirModalCriterio`, `adicionarCritVersao`, `verificarEPublicar`, `fecharDrawerVersao`, `salvarConfigVersao`, `toggleFaixasConceito`
+
+**`renderVersaoConfigs()` agora renderiza para `dvConfigRow`** (barra de configuração inline), não mais para `dvConfigsBody` (elemento removido do DOM).
+
+**`atualizarStatusBarVersao()` agora também popula `dvValBar`** com contagens, alertas e barra de pesos.
+
+**`adicionarCritVersao`** sincroniza `_dvSecaoAtiva` para a seção que recebeu o critério.
 
 ### Variáveis de estado (Modelos)
 ```js
@@ -453,6 +498,8 @@ let _dpVersaoCrits    = [];
 let _dpVersaoBlocos   = [];
 let _dpVersaoReadonly = false;
 let _dpBlocoAlvoId    = null;
+let _dvSecaoAtiva     = null;     // seção ativa no construtor (bloco id ou 'sem-secao')
+let _dvCardAberto     = null;     // critério com card expandido no construtor
 let _dpTiposCalculo   = [];       // dp_tipos_calculo_config
 let _dpTiposAvaliador = [];       // dp_tipos_avaliador
 let _dpTabelasConceito = [];      // dp_tabelas_conceito
