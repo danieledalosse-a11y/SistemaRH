@@ -1477,9 +1477,12 @@ Quando `ferias_historico` não tem entrada de desfecho (registro aprovado antes 
 **`_rhEhRecente` (visão RH):** antes de verificar o histórico, checa se o status do banco ainda corresponde ao estado pendente esperado:
 
 ```js
-const _statusPendente = { solicitado: 'Pendente', cancelamento_solicitado: 'Cancelamento', alteracao_solicitada: 'Alteracao' };
+// CORRETO — valores exatos do banco (corrigido commit f2b84a8, nov/2026)
+const _statusPendente = { solicitado: 'Pendente', cancelamento_solicitado: 'Cancelamento_Solicitado', alteracao_solicitada: 'Alteracao_Solicitada' };
 if (_reg.status !== _statusPendente[acao]) return false; // já resolvido no banco
 ```
+
+> **Armadilha crítica:** os valores do dicionário devem ser os **valores exatos de `ferias.status` no banco** — com capitalização e underscore corretos. Valores encurtados (`'Cancelamento'`, `'Alteracao'`) não fazem match com `reg.status` normalizado e causam `return false` prematuro, escondendo o evento da Atividade Recente/Recente.
 
 **`_gestorProcessoInfo` (visão Gestor):** extrai `_feriasRow.status` de `GESTOR_PERIODOS` e mapeia para o estado visual correto:
 
@@ -1501,6 +1504,15 @@ O campo `_ehDesfecho: true` no retorno sinaliza para `_itemRow` que deve exibir 
 | `cancelamento_solicitado` | `aprovado` | `'Canc. recusado'` | `'cancelamento_recusado'` |
 | `alteracao_solicitada` | `aprovado` | `'Alt. aprovada'` | `'alteracao_aprovada'` |
 | `alteracao_solicitada` | `rejeitado` | `'Alt. recusada'` | `'alteracao_recusada'` |
+
+**`_statusPendG` — mapeamento `acao → ferias.status` esperado quando ainda pendente (corrigido commit f2b84a8, nov/2026):**
+
+```js
+// CORRETO — valores exatos do banco (corrigido commit f2b84a8, nov/2026)
+const _statusPendG = { solicitado: 'pendente', cancelamento_solicitado: 'cancelamento_solicitado', alteracao_solicitada: 'alteracao_solicitada' };
+```
+
+> **Armadilha:** `solicitado` mapeia para `'pendente'` (normalizado pelo parse — `'Solicitado'` → `'Pendente'` → `.toLowerCase() = 'pendente'`). Já `cancelamento_solicitado` e `alteracao_solicitada` devem usar o valor exato do banco em lowercase (`'cancelamento_solicitado'`, `'alteracao_solicitada'`). Abreviações (`'cancelamento'`, `'alteracao'`) nunca fazem match.
 
 **Regra:** o fallback só dispara quando `_statusPendG[acao]` existe **E** `_rowStatus` está preenchido **E** difere do status esperado para pendente. Quando `_periodo` não existe (registro fora do escopo do gestor), `_rowStatus` é `''` → fallback não dispara → comportamento original preservado.
 
