@@ -484,7 +484,7 @@
   .dv-secoes-panel { width: 160px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
   .dv-secoes-list { flex: 1; overflow-y: auto; padding: 6px 0; }
   .dv-secoes-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-ter); padding: 10px 14px 4px; }
-  .dv-secao-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; transition: background .12s; user-select: none; border-radius: 0; }
+  .dv-secao-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 10px; cursor: pointer; transition: background .12s; user-select: none; border-radius: 0; border-left: 2px solid transparent; }
   .dv-secao-item:hover { background: rgba(0,0,0,.04); }
   .dv-secao-item.active { background: #EEF2FF; }
   .dv-secao-item.active .dv-secao-nome { color: #1D4ED8; font-weight: 600; }
@@ -540,7 +540,6 @@
   .dv-crit-badge.peso  { background: #FFFBEB; color: #D97706; border-color: #FDE68A; }
 
   /* ── construtor: seção com borda lateral e ponto colorido ── */
-  .dv-secao-item { border-left: 2px solid transparent; padding-left: 10px; }
   .dv-secao-item.active { background: #EEF2FF; border-left-color: #2563EB; }
   .dv-secao-item.active .dv-secao-nome { color: #1D4ED8; font-weight: 600; }
   .dv-secao-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
@@ -1572,7 +1571,7 @@
       Ver ficha completa
     </a>
     <button class="btn btn-secondary" onclick="fecharDrawer()">Fechar</button>
-    <button class="btn btn-primary" id="btnSalvarAv" onclick="salvarAvaliacao()">Salvar avaliação</button>
+    <button class="btn btn-primary" id="btnSalvarAv" onclick="salvarAvaliacaoLegado()">Salvar avaliação</button>
   </div>
 </div>
 
@@ -2561,7 +2560,7 @@ function selecionarNota(compId, nota, btnEl) {
   });
 }
 
-async function salvarAvaliacao() {
+async function salvarAvaliacaoLegado() {
   if (!_cicloAtivo || !_drawerMatricula) return;
   _avObs = (document.getElementById('avObs') ? document.getElementById('avObs').value : '');
   const btn = document.getElementById('btnSalvarAv');
@@ -6789,11 +6788,6 @@ async function dpConcluirEncerramento(pendentes) {
 }
 
 async function dpAbrirFormAvaliacao(participanteId, navList) {
-  // ── INSTRUMENTAÇÃO TEMPORÁRIA — remover após medir ──────────────────
-  const _dpT0 = performance.now();
-  console.group(`%c[DP] Abrindo formulário`, 'color:#6366f1;font-weight:bold');
-  console.time('[DP] open:total');
-  // ────────────────────────────────────────────────────────────────────
   const part = _dpParticipantes.find(p => p.id === participanteId);
   if (!part || !_dpCicloAtual) return;
   if (part.nao_participa) { toast('Este colaborador está marcado como não participante neste ciclo.', true); return; }
@@ -6840,32 +6834,23 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   let modeloId;
   let _respostasJaBuscadas = false;
   if (_dpFormCache[versaoId]) {
-    // ── INSTRUMENTAÇÃO ── cache hit
-    console.log(`[DP] open: cache HIT (versão ${versaoId.slice(0,8)}…)`);
     _dpVersaoCritsParaForm = _dpFormCache[versaoId].versaoCrits;
     modeloId               = _dpFormCache[versaoId].modeloId;
   } else {
-    // ── INSTRUMENTAÇÃO ── cache miss — round-trip 1
-    console.log(`[DP] open: cache MISS — buscando versão_criterios + respostas em paralelo`);
-    const _tNet1 = performance.now();
     const [vc, respsEarly] = await Promise.all([
       sbGet(`/rest/v1/dp_versao_criterios?versao_id=eq.${versaoId}&order=ordem.asc&select=*`),
       sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`)
     ]);
-    console.log(`[DP] open: rede 1 (versao_criterios + respostas) → ${(performance.now()-_tNet1).toFixed(0)} ms`);
     _dpRespostasAtual = respsEarly || [];
     _respostasJaBuscadas = true;
     const criterioIds = [...new Set((vc||[]).map(c => c.criterio_id).filter(Boolean))];
     const escalaIds   = [...new Set((vc||[]).map(c => c.escala_id).filter(Boolean))];
-    // ── INSTRUMENTAÇÃO ── round-trip 2
-    const _tNet2 = performance.now();
     const [criteriosData, escalasData, opcoesData, versaoData] = await Promise.all([
       criterioIds.length ? sbGet(`/rest/v1/dp_criterios?id=in.(${criterioIds.join(',')})&select=id,nome,descricao,referencia,tipo`) : Promise.resolve([]),
       escalaIds.length   ? sbGet(`/rest/v1/dp_escalas?id=in.(${escalaIds.join(',')})&select=id,nome`) : Promise.resolve([]),
       escalaIds.length   ? sbGet(`/rest/v1/dp_escala_opcoes?escala_id=in.(${escalaIds.join(',')})&select=*&order=ordem.asc`) : Promise.resolve([]),
       sbGet(`/rest/v1/dp_versoes?id=eq.${versaoId}&select=modelo_id`)
     ]);
-    console.log(`[DP] open: rede 2 (criterios + escalas + opções + versão) → ${(performance.now()-_tNet2).toFixed(0)} ms`);
     const criterioMap = Object.fromEntries((criteriosData||[]).map(c => [c.id, c]));
     const escalaMap   = Object.fromEntries((escalasData||[]).map(e => [e.id, {
       ...e,
@@ -6884,10 +6869,7 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   // Histórico será carregado em background — não bloqueia a abertura do formulário
   _dpHistoricoCriterios = {};
   if (!_respostasJaBuscadas) {
-    // ── INSTRUMENTAÇÃO ── busca de respostas (cache hit path — o único round-trip que resta)
-    const _tResps = performance.now();
     const resps = await sbGet(`/rest/v1/dp_respostas?avaliacao_id=eq.${aval.id}&select=*`);
-    console.log(`[DP] open: rede — dp_respostas → ${(performance.now()-_tResps).toFixed(0)} ms  (${(resps||[]).length} registros)`);
     _dpRespostasAtual = resps || [];
   }
 
@@ -6910,8 +6892,6 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
     }
   }
 
-  // ── INSTRUMENTAÇÃO ── render DOM
-  const _tRender = performance.now();
   dpRenderFormAvaliacao();        // chips de histórico renderizam vazios (placeholders)
   dpAtualizarProgressoAval();
   const _forceReadonly = aval.status === 'publicada'
@@ -6919,11 +6899,6 @@ async function dpAbrirFormAvaliacao(participanteId, navList) {
   dpAvalFormSetReadonly(_forceReadonly, aval.concluida_em || null);
   document.getElementById('formAvalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
-  // ── INSTRUMENTAÇÃO ── totais
-  console.log(`[DP] open: render DOM → ${(performance.now()-_tRender).toFixed(0)} ms`);
-  console.log(`[DP] open: TOTAL até modal visível → ${(performance.now()-_dpT0).toFixed(0)} ms`);
-  console.timeEnd('[DP] open:total');
-  console.groupEnd();
 
   // Histórico em background — preenche chips após retorno sem bloquear a interação
   if (modeloId && part.colaborador_id) {
@@ -7080,10 +7055,6 @@ async function _dpSalvarParaNavegar() {
   if (!_dpAvaliacaoAtual) return true;
   const st = _dpAvaliacaoAtual.status;
   if (st === 'concluida' || st === 'publicada') return true;
-  // ── INSTRUMENTAÇÃO TEMPORÁRIA — remover após medir ──────────────────
-  const _navT0 = performance.now();
-  console.group('%c[DP] Salvamento automático (navegação)', 'color:#d97706;font-weight:bold');
-  // ────────────────────────────────────────────────────────────────────
 
   const avalId   = _dpAvaliacaoAtual.id;
   const payloads = [];
@@ -7118,13 +7089,9 @@ async function _dpSalvarParaNavegar() {
 
   // Upsert em lote — 1 requisição no lugar de N sequenciais
   if (payloads.length) {
-    // ── INSTRUMENTAÇÃO ──
-    const _navUpsert = performance.now();
     const savedResps = await _dpUpsertMinimal('/rest/v1/dp_respostas?on_conflict=avaliacao_id,versao_criterio_id', payloads);
-    console.log(`[DP] nav-save: upsert dp_respostas (${payloads.length} itens) → ${(performance.now()-_navUpsert).toFixed(0)} ms`);
     if (!savedResps) {
       toast('Erro ao salvar antes de navegar. Permanecendo na avaliação atual.', true);
-      console.groupEnd();
       return false;
     }
     // Merge cirúrgico dos payloads em _dpRespostasAtual (sem retorno do banco — return=minimal)
@@ -7143,22 +7110,15 @@ async function _dpSalvarParaNavegar() {
   ).length;
   const statusNav  = (totalCrits > 0 && respondidos >= totalCrits) ? 'respondida' : 'em_andamento';
   const patchAval  = { status: statusNav, iniciada_em: _dpAvaliacaoAtual.iniciada_em || new Date().toISOString() };
-  // ── INSTRUMENTAÇÃO ──
-  const _navPatch = performance.now();
   const resAval    = await _dpPatchMinimal(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
-  console.log(`[DP] nav-save: patch dp_avaliacoes → ${(performance.now()-_navPatch).toFixed(0)} ms`);
   if (!resAval) {
     toast('Erro ao salvar antes de navegar. Permanecendo na avaliação atual.', true);
-    console.groupEnd();
     return false;
   }
   // Atualização cirúrgica em memória
   Object.assign(_dpAvaliacaoAtual, patchAval);
   const avalIdx = _dpAvaliacoes.findIndex(a => a.id === avalId);
   if (avalIdx >= 0) Object.assign(_dpAvaliacoes[avalIdx], patchAval);
-  // ── INSTRUMENTAÇÃO ──
-  console.log(`[DP] nav-save: TOTAL → ${(performance.now()-_navT0).toFixed(0)} ms`);
-  console.groupEnd();
   return true;
 }
 
@@ -7447,10 +7407,6 @@ async function salvarAvaliacao(status) {
     toast('Esta avaliação já foi concluída e não pode ser alterada.', true);
     return;
   }
-  // ── INSTRUMENTAÇÃO TEMPORÁRIA — remover após medir ──────────────────
-  const _saveT0 = performance.now();
-  console.group(`%c[DP] Salvando avaliação (status="${status}")`, 'color:#059669;font-weight:bold');
-  // ────────────────────────────────────────────────────────────────────
   const avalId = _dpAvaliacaoAtual.id;
 
   // ── 1. Coleta respostas ──────────────────────────────────────────
@@ -7504,13 +7460,9 @@ async function salvarAvaliacao(status) {
 
   // ── 3. Upsert em lote (1 requisição no lugar de N) ───────────────
   if (payloads.length) {
-    // ── INSTRUMENTAÇÃO ──
-    const _tUpsert = performance.now();
     const savedResps = await _dpUpsertMinimal('/rest/v1/dp_respostas?on_conflict=avaliacao_id,versao_criterio_id', payloads);
-    console.log(`[DP] save: upsert dp_respostas (${payloads.length} itens) → ${(performance.now()-_tUpsert).toFixed(0)} ms`);
     if (!savedResps) {
       toast('Erro ao salvar respostas: ' + sbErrMsg(), true);
-      console.groupEnd();
       return; // formulário permanece aberto com dados intactos
     }
     // Merge cirúrgico dos payloads em _dpRespostasAtual (sem retorno do banco — return=minimal)
@@ -7539,13 +7491,9 @@ async function salvarAvaliacao(status) {
     const patchAval = { status: statusEfetivo };
     if (statusEfetivo === 'concluida') patchAval.concluida_em = new Date().toISOString();
     else patchAval.iniciada_em = _dpAvaliacaoAtual.iniciada_em || new Date().toISOString();
-    // ── INSTRUMENTAÇÃO ──
-    const _tPatch = performance.now();
     const resAval = await _dpPatchMinimal(`/rest/v1/dp_avaliacoes?id=eq.${avalId}`, patchAval);
-    console.log(`[DP] save: patch dp_avaliacoes (status="${statusEfetivo}") → ${(performance.now()-_tPatch).toFixed(0)} ms`);
     if (!resAval) {
       toast('Erro ao atualizar status da avaliação: ' + sbErrMsg(), true);
-      console.groupEnd();
       return; // não navega — respostas já foram salvas, status será corrigido no retry
     }
     // ── 5. Atualização cirúrgica em memória ─
@@ -7562,13 +7510,9 @@ async function salvarAvaliacao(status) {
     }
   }
 
-  // ── INSTRUMENTAÇÃO ──
-  console.log(`[DP] save: TOTAL até modal fechar → ${(performance.now()-_saveT0).toFixed(0)} ms`);
-  console.groupEnd();
   // await garante que fecharFormAval termine antes do re-render via setTimeout
   await fecharFormAval(true);
   // Deferir re-render para o próximo tick — modal fecha imediatamente, lista atualiza logo após
-  const _tRerender = performance.now();
   setTimeout(() => {
     _dpRenderAvaliacoesComFiltro();
     if (_gdpCicloAtual) {
@@ -7586,8 +7530,6 @@ async function salvarAvaliacao(status) {
         hideAvaliarWhenDone: true
       });
     }
-    // ── INSTRUMENTAÇÃO ──
-    console.log(`%c[DP] save: re-render lista (setTimeout) → ${(performance.now()-_tRerender).toFixed(0)} ms`, 'color:#6b7280');
   }, 0);
 }
 
