@@ -4029,10 +4029,11 @@ function dvRenderPreview() {
     el.innerHTML = '<div class="dv-preview-empty">Nenhum critério configurado nesta versão.</div>';
     return;
   }
-  const showPeso = _dpVersaoAtual && _dpVersaoAtual.tipo_calculo === 'media_ponderada';
+
+  // Build sections — same logic as the builder (sem seção first, then named blocks)
   const secoes = [];
   const semSecao = _dpVersaoCrits.filter(c => !c.bloco_id);
-  if (semSecao.length) secoes.push({ nome: 'Sem seção', crits: semSecao });
+  if (semSecao.length) secoes.push({ nome: null, crits: semSecao });
   for (const bloco of (_dpVersaoBlocos || [])) {
     const crits = _dpVersaoCrits.filter(c => c.bloco_id === bloco.id);
     if (crits.length) secoes.push({ nome: bloco.nome || 'Seção', crits });
@@ -4041,56 +4042,106 @@ function dvRenderPreview() {
     el.innerHTML = '<div class="dv-preview-empty">Nenhum critério configurado nesta versão.</div>';
     return;
   }
-  const cards = secoes.map(sec => {
+
+  const totalCrits = _dpVersaoCrits.length;
+  let globalIdx = 0;
+
+  const sections = secoes.map(sec => {
     const crits = sec.crits.map(c => {
-      const crit = _dpCriterios.find(x => x.id === c.criterio_id);
-      const nome = crit ? crit.nome : `(critério ${c.criterio_id})`;
-      const tipo = c.tipo_resposta || 'binario';
+      const crit   = _dpCriterios.find(x => x.id === c.criterio_id);
+      const nome   = crit ? crit.nome : `(critério ${c.criterio_id})`;
+      const tipo   = c.tipo_resposta || 'binario';
       const escala = c.escala_id ? _dpEscalas.find(e => e.id === c.escala_id) : null;
       const opcoes = c.escala_id ? (_dpEscalaOpcoes[c.escala_id] || []).slice().sort((a,b)=>(a.ordem||0)-(b.ordem||0)) : [];
-      const noCalc = ['conceito','texto'].includes(tipo);
+      const num    = String(++globalIdx).padStart(2, '0');
+
       let inputHtml = '';
       if (tipo === 'binario') {
-        inputHtml = `<div class="dv-preview-sim-nao">
-          <div class="dv-preview-sim-nao-btn">✓ Sim</div>
-          <div class="dv-preview-sim-nao-btn">✗ Não</div>
+        inputHtml = `<div class="aval-row">
+          <div class="aval-bin-btns-wrap">
+            <button type="button" class="aval-btn-bin aval-btn-bin--sim" style="pointer-events:none">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Sim
+            </button>
+            <button type="button" class="aval-btn-bin aval-btn-bin--nao" style="pointer-events:none">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Não
+            </button>
+          </div>
+          <textarea class="aval-obs-input" placeholder="Observação…" rows="1" style="pointer-events:none"></textarea>
         </div>`;
       } else if (tipo === 'escala') {
         if (!escala) {
           inputHtml = `<div class="dv-preview-alerta">⚠ Escala não configurada</div>`;
         } else if (!opcoes.length) {
-          inputHtml = `<div class="dv-preview-escala-label">${escala.nome}</div>
-            <div class="dv-preview-alerta">⚠ Escala sem opções cadastradas</div>`;
+          inputHtml = `<div class="dv-preview-alerta">⚠ Escala sem opções cadastradas</div>`;
         } else {
-          inputHtml = `<div class="dv-preview-escala-label">${escala.nome}</div>
-            <div class="dv-preview-escala-opts">
-              ${opcoes.map(o=>`<label class="dv-preview-escala-opt">
-                <input type="radio" name="prev_${c.id}" disabled> ${o.label||o.rotulo||''}
-              </label>`).join('')}
-            </div>`;
+          inputHtml = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">` +
+            opcoes.map(op =>
+              `<label style="display:flex;align-items:center;gap:6px;cursor:default;font-size:13px;padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg)">
+                <input type="radio" style="display:none"> ${op.rotulo}${op.valor_numerico != null ? ` <span style="font-size:11px;opacity:0.75">(${op.valor_numerico})</span>` : ''}
+              </label>`).join('') +
+          `</div>`;
         }
-      } else if (['numerico','numerico_com_meta'].includes(tipo)) {
-        const ph = tipo==='numerico_com_meta' && c.nota_min!=null ? `${c.nota_min} – ${c.nota_max}` : 'Valor numérico';
-        inputHtml = `<input class="dv-preview-num" type="number" placeholder="${ph}" disabled>`;
+      } else if (tipo === 'numerico' || tipo === 'numerico_com_meta') {
+        const ph = (tipo === 'numerico_com_meta' && c.nota_min != null) ? `${c.nota_min} – ${c.nota_max}` : 'Valor numérico';
+        const rangeHint = (c.nota_min != null && c.nota_max != null)
+          ? `<div style="font-size:11px;color:var(--text-ter);margin-top:3px">Referência: ${c.nota_min} a ${c.nota_max}</div>` : '';
+        inputHtml = `<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">
+          <div>
+            <label style="font-size:11px;color:var(--text-ter)">Realizado</label>
+            <input type="number" style="display:block;margin-top:4px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:140px;pointer-events:none;font-family:inherit" placeholder="${ph}">
+            ${rangeHint}
+          </div>
+          ${tipo === 'numerico_com_meta' ? `<div>
+            <label style="font-size:11px;color:var(--text-ter)">Meta</label>
+            <input type="number" style="display:block;margin-top:4px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:140px;pointer-events:none;font-family:inherit" placeholder="0">
+          </div>` : ''}
+        </div>`;
       } else if (tipo === 'texto') {
-        inputHtml = `<textarea class="dv-preview-textarea" rows="3" placeholder="Observação…" disabled></textarea>`;
+        inputHtml = `<textarea style="width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:none;min-height:80px;box-sizing:border-box;font-family:inherit;background:var(--surface);pointer-events:none" placeholder="Digite a observação..."></textarea>`;
       } else if (tipo === 'conceito') {
-        inputHtml = `<input class="dv-preview-num" type="text" placeholder="Conceito" disabled>`;
+        inputHtml = `<input type="text" style="display:block;margin-top:10px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:140px;background:var(--surface);pointer-events:none;font-family:inherit" placeholder="Conceito">`;
       }
-      const pesoHtml = (showPeso && c.peso!=null && !noCalc)
-        ? `<div class="dv-preview-crit-peso">Peso ${c.peso}</div>` : '';
-      return `<div class="dv-preview-crit">
-        <div class="dv-preview-crit-nome">${nome}</div>
-        ${pesoHtml}
+
+      const hasInfo = !!(crit && (crit.descricao || crit.referencia));
+      const infoBtn = hasInfo
+        ? `<div class="aval-info-wrap"><button type="button" class="aval-info-btn" style="pointer-events:none" title="Ver descrição">i</button></div>` : '';
+
+      // History chip — static placeholder (no real data in preview)
+      const histHtml = `<span class="aval-hist-chip"><span style="color:var(--text-ter);font-size:11px;font-style:italic">1ª avaliação</span></span>`;
+
+      return `<div class="aval-card">
+        <div class="aval-card-num">${num}${c.obrigatorio ? '<span style="color:var(--red)">*</span>' : ''}</div>
+        <div class="aval-nome-info">
+          <div class="aval-card-nome" title="${nome.replace(/"/g, '&quot;')}">${nome}</div>
+          ${infoBtn}
+        </div>
+        ${histHtml}
         ${inputHtml}
       </div>`;
     }).join('');
-    return `<div class="dv-preview-secao-card">
-      <div class="dv-preview-secao-header">${sec.nome}</div>
-      ${crits}
-    </div>`;
+
+    return sec.nome
+      ? `<div class="dv-preview-secao-card"><div class="dv-preview-secao-header">${sec.nome}</div>${crits}</div>`
+      : `<div class="dv-preview-secao-card">${crits}</div>`;
   }).join('');
-  el.innerHTML = `<div class="dv-preview-form">${cards}</div>`;
+
+  // Simulated header — mirrors the real formAvalOverlay header
+  const headerHtml = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;flex-shrink:0">RH</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:14px;font-weight:600;color:var(--text)">Pré-visualização do formulário</div>
+      <div style="font-size:11px;color:var(--text-ter)">— · —</div>
+    </div>
+    <span style="font-size:12px;color:var(--text-ter);flex-shrink:0">0 de ${totalCrits} critérios</span>
+  </div>`;
+
+  // Simulated footer — mirrors the real form footer (disabled)
+  const footerHtml = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+    <button style="padding:7px 14px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--text-ter);cursor:default;font-family:inherit;pointer-events:none">Limpar avaliação</button>
+    <button style="padding:7px 20px;font-size:12px;border:none;border-radius:7px;background:var(--accent);color:#fff;opacity:0.5;cursor:default;font-family:inherit;pointer-events:none">Salvar</button>
+  </div>`;
+
+  el.innerHTML = `<div class="dv-preview-form">${headerHtml}${sections}${footerHtml}</div>`;
 }
 
 function _dvBuildCritCard(c, readonly, RESP_OPTS, showPeso) {
