@@ -9400,10 +9400,10 @@ function _computeGestorMetricas(base) {
     if (st === 'cancelamento_solicitado') return true;
     return st === 'recusado' && l.fim >= hoje;
   });
-  // Alterações/cancelamentos pendentes cujo status fica no PA (ferias.status),
-  // não no lancamento individual — mesmo critério da visão RH (getPendentes).
+  // Pendentes cujo status fica no PA (ferias.status), não no lançamento individual
+  // — mesmo critério da visão RH (getPendentes): solicitado, pendente, alteracao_solicitada, cancelamento_solicitado.
   const _altPendIds = GESTOR_PERIODOS
-    .filter(p => { const st = (p._feriasRow?.status || '').toLowerCase(); return st === 'alteracao_solicitada' || st === 'cancelamento_solicitado'; })
+    .filter(p => { const st = (p._feriasRow?.status || '').toLowerCase(); return st === 'solicitado' || st === 'pendente' || st === 'alteracao_solicitada' || st === 'cancelamento_solicitado'; })
     .map(p => p.colaborador_id);
   const colabsComPend = [...new Set([...aguardAprov.map(l => l.colaborador_id), ..._altPendIds])];
   const aguardandoAprov = colabs.filter(c => colabsComPend.some(id => String(id) === String(c.id)));
@@ -11221,12 +11221,10 @@ function renderGestorAtencao() {
     ));
     _sub = `${colabs.length} colaborador(es) em férias hoje`;
   } else if (_gestorAlertaAtivo === 'aguard') {
-    colabs = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => {
-      const st = (l.status||'').toLowerCase();
-      if (!['solicitado','recusado','pendente_gestor'].includes(st)) return false;
-      if (String(l.colaborador_id) !== String(c.id)) return false;
-      return st === 'solicitado' || st === 'pendente_gestor' || (l.fim||'') >= _hj; // solicitado/pendente_gestor: sem filtro de data
-    }));
+    // Usa o mesmo cálculo de _computeGestorMetricas (via window._gestorAguardAprov),
+    // que já foi executado em renderGestorAlerts() logo acima — fonte única de verdade.
+    const _aguardIds = new Set(window._gestorAguardAprov || []);
+    colabs = colabs.filter(c => _aguardIds.has(String(c.id)));
     _sub = `${colabs.length} colaborador(es) com solicitações pendentes ou recusas para analisar`;
   } else if (_gestorAlertaAtivo === 'agendado') {
     colabs = colabs.filter(c => gestorIsAgendado(c.id));
