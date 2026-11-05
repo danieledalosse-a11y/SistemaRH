@@ -1269,22 +1269,21 @@ const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
   if (st === 'cancelamento_solicitado') return true;
   return st === 'recusado' && l.fim >= hoje;
 });
-// Alterações/cancelamentos pendentes cujo status fica no PA (ferias.status),
-// não no lancamento — quando o PA usa periodos[] JSONB o lancamento individual
-// ainda tem status 'aprovado'. GESTOR_PERIODOS é a fonte correta, igual à
-// visão RH que usa reg.status === 'Alteracao_Solicitada' (getPendentes).
+// Pendentes cujo status fica no PA (ferias.status), não no lançamento individual
+// — mesmo critério da visão RH (getPendentes): solicitado, pendente,
+// alteracao_solicitada, cancelamento_solicitado. Necessário para PAs que ainda
+// não possuem lançamento com datas no periodos[] JSONB.
 const _altPendIds = GESTOR_PERIODOS
-  .filter(p => { const st = (p._feriasRow?.status||'').toLowerCase(); return st === 'alteracao_solicitada' || st === 'cancelamento_solicitado'; })
+  .filter(p => { const st = (p._feriasRow?.status||'').toLowerCase(); return st === 'solicitado' || st === 'pendente' || st === 'alteracao_solicitada' || st === 'cancelamento_solicitado'; })
   .map(p => p.colaborador_id);
 const colabsComPend = [...new Set([...aguardAprov.map(l => l.colaborador_id), ..._altPendIds])];
 
-// Filtro de lista 'aguard' (renderGestorAtencao):
-colabs = colabs.filter(c => GESTOR_LANCAMENTOS.some(l => {
-  const st = (l.status||'').toLowerCase();
-  if (!['solicitado','recusado'].includes(st)) return false;
-  if (String(l.colaborador_id) !== String(c.id)) return false;
-  return st === 'solicitado' || (l.fim||'') >= _hj;
-}));
+// Filtro de lista 'aguard' (renderGestorAtencao) — fonte única de verdade:
+// usa window._gestorAguardAprov (já calculado por _computeGestorMetricas em
+// renderGestorAlerts), eliminando lógica paralela e garantindo que KPI e lista
+// sempre usem o mesmo critério.
+const _aguardIds = new Set(window._gestorAguardAprov || []);
+colabs = colabs.filter(c => _aguardIds.has(String(c.id)));
 
 // Badge e botão na linha da lista:
 const lancsPA = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
@@ -1659,15 +1658,17 @@ const aguardAprov = GESTOR_LANCAMENTOS.filter(l => {
   return st === 'recusado' && l.fim >= hoje;
 });
 const _altPendIds = GESTOR_PERIODOS
-  .filter(p => { const st = (p._feriasRow?.status||'').toLowerCase(); return st === 'alteracao_solicitada' || st === 'cancelamento_solicitado'; })
+  .filter(p => { const st = (p._feriasRow?.status||'').toLowerCase(); return st === 'solicitado' || st === 'pendente' || st === 'alteracao_solicitada' || st === 'cancelamento_solicitado'; })
   .map(p => p.colaborador_id);
 const colabsComPend = [...new Set([...aguardAprov.map(l => l.colaborador_id), ..._altPendIds])];
 ```
 
 **Regras:**
+- `_altPendIds` via `GESTOR_PERIODOS` cobre PAs `solicitado`/`pendente` sem lançamento no JSONB
 - Sem filtro de data para `solicitado`/`cancelamento_solicitado`/`alteracao_solicitada`
 - `Set` garante sem duplicidade quando o mesmo colaborador aparece nas duas fontes
-- Nunca usar só `GESTOR_LANCAMENTOS` para verificar pendências de alteração
+- **Nunca usar só `GESTOR_LANCAMENTOS`** para verificar pendências — um PA pode estar pendente sem lançamento com datas
+- **O filtro de lista `'aguard'`** usa `window._gestorAguardAprov` (fonte única de verdade), não recomputa inline
 
 ### Modal de confirmação genérico (`abrirModalConfirm`)
 
@@ -2034,7 +2035,7 @@ toast('✓ Gozo aprovado e registrado!');
 
 ### Contagem de pendentes
 
-`countGozoPendentes()` — varre `COLABORADORES[].registros[].realizacoes` somando entradas com `status === 'pendente_gestor'`. Somado ao `getPendentes().length` em todas as métricas/KPIs.
+`countGozoPendentes()` — varre `COLABORADORES[].registros[].realizacoes` somando entradas com `status === 'pendente_gestor'`. **NÃO entra no KPI "Pendentes de aprovação"** — realizações de gozo são etapa distinta e aparecem na Atividade Recente, não no KPI. A função existe no código mas não é chamada em nenhuma métrica ou KPI (commit 20dbb81, nov/2026).
 
 ### Botão "+ Solicitar gozo" (Gestor)
 
@@ -3842,11 +3843,19 @@ function _renderAgendCell(lRef, alertaHtml) {
 
 ### KPI "Pendentes de aprovação"
 
+**Critério (commit 20dbb81, nov/2026):** conta apenas solicitações de férias dos Gestores aguardando decisão do RH — `getPendentes().length` exclusivamente. Realizações de gozo (`countGozoPendentes()`) NÃO entram neste KPI.
+
+`getPendentes()` retorna PAs com status `Pendente`, `Alteracao_Solicitada` ou `Cancelamento_Solicitado`. Lançamentos diretos do RH (que nascem com status `Aprovado`) nunca aparecem aqui.
+
+**Consistência KPI ↔ lista:** a lista exibida ao clicar no card usa o mesmo `getPendentes()` para construir os cards. Os dois nunca divergem. Funções alteradas: `renderKPI` (linha ~6486), `renderMetricas` (linha ~4684), `renderPendentes` (linha ~5038), `atualizarSidebarContadores` (linha ~6772).
+
 Nome padronizado em ambas as visões (RH e Gestor). No Gestor, o card tem dois estados renderizados em `renderGestorAlerts`:
 - **Âmbar** (`#FFFBEB / #FDE68A`) quando `aguardandoAprov.length > 0`
 - **Verde** (`#ECFDF3 / #A7F3D0`) quando zerado
 
 Ambos os estados exibem o label `"Pendentes de aprovação"` (não apenas `"Pendentes"`).
+
+**Armadilha documentada (commit c24034f, nov/2026):** `GESTOR_LANCAMENTOS` só contém lançamentos que possuem `inicio`/`dias` definidos no campo `periodos` JSONB. Um PA com `status='Solicitado'`/`'Pendente'` mas sem datas de gozo não gera entrada em `GESTOR_LANCAMENTOS`, portanto não seria contado pelo primeiro filtro (`aguardAprov`). `_altPendIds` via `GESTOR_PERIODOS` cobre esse caso adicionando os status `'solicitado'` e `'pendente'`. O `Set` em `colabsComPend` garante dedup. O filtro de lista usa `window._gestorAguardAprov` (fonte única) — KPI e lista nunca divergem.
 
 ---
 
