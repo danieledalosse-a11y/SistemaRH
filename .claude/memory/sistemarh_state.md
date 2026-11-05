@@ -9,6 +9,25 @@ metadata:
   modified: 2026-11-03T19:35:56.461Z
 ---
 
+## D&P — Prévia do Construtor: modo tela cheia fiel ao formulário real (commits 1c67a02 / 9c60fcf / 388640f, 04/11/2026)
+
+**Contexto:** o builder do drawer `drawerVersao` tinha uma 3ª coluna fixa de prévia (280px). Substituída por modo toggle em tela cheia.
+
+**Fase 2 → Fase 3 (consolidado):**
+- `dvTogglePrevia()`: liga/desliga classe `.preview-mode` em `.dv-builder-body`; atualiza rótulo de `#btnDvPrevia` ("Prévia" / "Fechar prévia"); chama `dvRenderPreview()` ao entrar
+- `.dv-builder-body.preview-mode`: esconde `.dv-secoes-panel` e `.dv-crits-panel`; exibe `.dv-preview-panel` em `flex:1`
+- `dvRenderPreview()`: renderiza **todas as seções** em sequência, usando as mesmas classes do formulário real do gestor (`.aval-card`, `.aval-btn-bin`, `.aval-hist-chip`, `.aval-obs-input`). Chip histórico = "1ª avaliação" (placeholder). Cabeçalho com avatar "RH" + "NOME DO COLABORADOR" / "Cargo · Unidade" + contador "0 de N critérios". Footer simulado com botões desabilitados
+- Botão "Prévia" no `drawer-footer`; botão "← Voltar à edição" no cabeçalho do painel
+- `fecharDrawerVersao()` reseta `.preview-mode` e rótulo do botão
+- `dvRenderPreview()` **não é chamada** dentro de `renderVersaoCriterios()` — só ao entrar na prévia
+
+**Limpeza técnica (commit d86ccb3, 04/11/2026):**
+- `salvarAvaliacao` duplicada: versão legada renomeada para `salvarAvaliacaoLegado()`; botão legado `#btnSalvarAv` atualizado; versão D&P ativa permanece `salvarAvaliacao(status)`
+- 15 blocos de instrumentação de performance removidos (`console.group/time`, `performance.now()`)
+- CSS `.dv-secao-item` definido duas vezes (linhas 487 e 543) — mergeado em uma regra
+
+---
+
 ## D&P — Editar nome e excluir modelo (commit 47ceb77, 03/11/2026)
 
 **Editar:** botão de lápis sempre visível no card de modelo → `modalEditarModelo` (mesmo padrão do `modalNovoModelo`) → PATCH em `dp_modelos`.

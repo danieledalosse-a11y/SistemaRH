@@ -9,7 +9,7 @@ description: Especialista no módulo Desenvolvimento & Performance do SistemaRH 
 
 Sistema RH da Revest do Brasil Acabamentos Ltda (varejo, Lucro Real).
 Stack: HTML + CSS + JS puro, sem framework. Backend: Supabase REST API.
-Arquivo principal: `C:\Users\reves\SistemaRH\modulos\desenvolvimento\index.html` (~8.708 linhas, tudo inline).
+Arquivo principal: `C:\Users\reves\SistemaRH\modulos\desenvolvimento\index.html` (~11.071 linhas, tudo inline).
 
 ## Regras obrigatórias
 
@@ -438,20 +438,27 @@ Edição (`emUso=true`): todos os campos desabilitados, botão Salvar oculto, av
 
 ## Aba Modelos — detalhes de implementação
 
-### Drawer de versão (`drawerVersao`) — Construtor de Avaliações (commit 9a4aa79, nov/2026)
+### Drawer de versão (`drawerVersao`) — Construtor de Avaliações (commits 9a4aa79 → 388640f, nov/2026)
 
 Layout de duas colunas substituiu as antigas abas Critérios / Configurações de cálculo.
+**Fase 2** adicionou prévia em tempo real. **Fase 3** converteu a prévia para modo tela cheia com toggle.
 
 **Estrutura do drawer:**
 ```
 Header: nome do modelo / versão / badge status
 dvConfigRow: Tipo de cálculo [select] | Converter para conceito [checkbox] [tabela select]
 dvStatusBar: barra verde/amber/vermelho (publicada / rascunho com crits / sem crits)
-dv-builder-body (flex row):
+dv-builder-body (flex row, classe .preview-mode togglada por dvTogglePrevia()):
   dv-secoes-panel (220px): lista de seções (blocos) + "Sem seção" + botão "+ Nova seção"
+              [oculto quando .preview-mode]
   dv-crits-panel (flex:1): header da seção ativa + cards de critérios
+              [oculto quando .preview-mode]
+  dv-preview-panel (flex:1, oculto por padrão):
+              cabeçalho simulado (avatar "RH", "NOME DO COLABORADOR", "Cargo · Unidade")
+              + critérios de TODAS as seções em linhas .aval-card (mesmo HTML do formulário real)
+              + footer simulado com botões desabilitados
 dvValBar: "X critérios · Y seções" + alerta sem escala + barra de pesos (media_ponderada)
-drawer-footer: botão Verificar e publicar + Fechar
+drawer-footer: botão Prévia (#btnDvPrevia) | Verificar e publicar | Fechar
 ```
 
 **Painel de seções (esquerda):**
@@ -477,11 +484,23 @@ let _dvCardAberto = null;  // id do critério com card expandido
 |---|---|
 | `dvSelectSecao(id)` | Clica em uma seção no painel esquerdo — atualiza `_dvSecaoAtiva` e re-renderiza |
 | `dvToggleCritCard(critId)` | Abre/fecha um card de critério — atualiza `_dvCardAberto` e re-renderiza |
+| `dvTogglePrevia()` | Liga/desliga `.preview-mode` em `.dv-builder-body`; atualiza label de `#btnDvPrevia`; chama `dvRenderPreview()` ao entrar |
+| `dvRenderPreview()` | Renderiza **todas** as seções no `#dvPreviewScroll` usando `.aval-card` (mesmas classes do formulário real do gestor); cabeçalho com avatar "RH" + "NOME DO COLABORADOR" / "Cargo · Unidade" + contador "0 de N critérios" |
 | `dvMoverCritSecao(critId, secaoId)` | PATCH `bloco_id` no banco; navega para a seção destino |
 | `_dvBuildCritCard(c, readonly, RESP_OPTS, showPeso)` | Constrói o HTML de um card; chamada internamente por `renderVersaoCriterios` |
 
 **Funções reutilizadas sem alteração:**
-`setCritField`, `moverCrit`, `removerCrit`, `adicionarBloco`, `renomearBloco`, `excluirBloco`, `abrirModalCriterio`, `adicionarCritVersao`, `verificarEPublicar`, `fecharDrawerVersao`, `salvarConfigVersao`, `toggleFaixasConceito`
+`setCritField`, `moverCrit`, `removerCrit`, `adicionarBloco`, `renomearBloco`, `excluirBloco`, `abrirModalCriterio`, `adicionarCritVersao`, `verificarEPublicar`, `salvarConfigVersao`, `toggleFaixasConceito`
+
+**`fecharDrawerVersao()`** — reaproveitada, mas recebeu adição: reseta `.preview-mode` e rótulo do `#btnDvPrevia` para garantir que o próximo drawer abra sempre em modo edição.
+
+**`salvarAvaliacaoLegado()`** — função legada renomeada (era `salvarAvaliacao`); chamada apenas pelo botão do drawer legado (`id="btnSalvarAv"`). A função D&P ativa permanece `salvarAvaliacao(status)` — não confundir.
+
+**Prévia — regras de fidelidade:**
+- Usa exatamente as mesmas classes CSS do formulário real: `.aval-card`, `.aval-card-num`, `.aval-nome-info`, `.aval-hist-chip`, `.aval-btn-bin`, `.aval-btn-bin--sim`, `.aval-btn-bin--nao`, `.aval-obs-input`
+- Chip de histórico exibe "1ª avaliação" como placeholder (nenhum dado real)
+- Botões e campos ficam desabilitados (`pointer-events: none` / `disabled`) — prévia é somente leitura
+- `dvRenderPreview()` **não é chamada automaticamente** dentro de `renderVersaoCriterios()` — só ao entrar no modo prévia via `dvTogglePrevia()`
 
 **`renderVersaoConfigs()` agora renderiza para `dvConfigRow`** (barra de configuração inline), não mais para `dvConfigsBody` (elemento removido do DOM).
 

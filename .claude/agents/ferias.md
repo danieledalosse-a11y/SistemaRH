@@ -887,6 +887,12 @@ Chamada em `carregarDoSupabase()` após `supabaseParaModelo()`. Cria em **loop**
 - Algum PA válido já tem `pa_fim >= HOJE` (vigente existe)
 - Último PA tem saldo > 0 (PA aberto, não concluído)
 
+**Definição de "PA válido" para efeito de guard (commit `be0e170`):**
+`excluirExistencia = new Set(['Rejeitado','Cancelado','Descartado'])` — **`Pendente` está ausente intencionalmente**. Um PA com status `Pendente` existe e tem saldo real; reconhecê-lo como vigente impede a criação de duplicatas. Antes do fix, `Pendente` era excluído, fazendo a função enxergar "sem PA vigente" e criar um PA fantasma idêntico ao pendente.
+
+**Armadilha crítica — interação com `getRegistroParaLancar`:**
+`getRegistroParaLancar` exclui `Pendente` ao calcular qual PA deve receber lançamentos (fluxo de lançamento RH). Se o único PA com saldo for `Pendente`, `regParaLancar` aponta para o PA anterior (saldo=0). Isso é correto — o RH não deve lançar num PA cuja solicitação ainda aguarda aprovação.
+
 **Campos do POST** (só o que existe na tabela `ferias`):
 `colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status`
 — nunca incluir `dias_direito` (campo inexistente).
@@ -931,7 +937,8 @@ Elementos suprimidos por `!IS_DIRETORIA` (set/2026):
 | Botões clock / edit / delete / container de ações | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')` |
 | Formulário de edição de lançamento (`editFormHtml`) | `!excluirPA && IS_RH && !IS_DIRETORIA` |
 | Botões Aprovar/Recusar do `_novoLanc` pendente | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')` |
-| Botão "+ Lançar" (`lancarBtnHtml`) | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir')` |
+| Botão "+ Lançar" (`lancarBtnHtml`) | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir') && saldo > 0` |
+| Form inline de lançamento (`inlineFormHtml`) | `isActivePa && !excluirPA && saldo > 0` — form não é renderizado no DOM quando saldo=0 |
 | Execução de `confirmarDrawerLancamento()` | `IS_RH && !IS_DIRETORIA && podeAcao('ferias','inserir')` |
 | Botão "Analisar" na aba Auditoria | `IS_RH && !IS_DIRETORIA && _rhEhRecente(h)` |
 
@@ -2111,6 +2118,33 @@ if (_keyParaReabrir) try { _abrirDrawerInterno(_keyParaReabrir); } catch(_) {}
 
 **Regra crítica de ordem:** `renderAll()` sempre antes de `_abrirDrawerInterno()`. Inverter a ordem faz o renderAll fechar o drawer recém-aberto.
 
+### Proteção em camadas contra lançamento indevido (commit `8691a43`)
+
+A validação de saldo opera em três camadas independentes:
+
+| Camada | Onde | Condição |
+|---|---|---|
+| 1. Interface | `lancarBtnHtml` (render) | `saldo > 0` — botão não renderizado |
+| 2. DOM | `inlineFormHtml` (render) | `saldo > 0` — form não está no DOM, `toggleInlineLancar` retorna imediatamente |
+| 3. Função de save | `confirmarDrawerLancamento` | `calcSaldo(reg) <= 0` → toast + return antes de qualquer `sbPatch` |
+
+**Regra:** a validação de saldo no save deve ser a primeira checagem após obter `reg`, antes de ler os campos do formulário:
+
+```js
+const reg = getRegistroParaLancar(colab);
+if (!reg) return;
+const ini  = document.getElementById('dInicio')?.value;
+const dias = parseInt(document.getElementById('dDias')?.value);
+if (!ini || !dias) { toast('Preencha início e número de dias'); return; }
+// ← AQUI: validação de saldo (commit 8691a43)
+const saldoDisp = calcSaldo(reg);
+if (saldoDisp <= 0) { toast('Este período aquisitivo não possui saldo disponível.', 'erro'); return; }
+if (dias > saldoDisp) { toast(`Saldo insuficiente. Disponível: ${saldoDisp} dia${saldoDisp !== 1 ? 's' : ''}.`, 'erro'); return; }
+// ← SOMENTE DEPOIS: gravação no banco
+```
+
+**Por quê três camadas:** a camada 1 e 2 protegem a UI normal. A camada 3 protege contra qualquer acesso direto via console (`confirmarDrawerLancamento()`) ou extensão de browser.
+
 **Por quê não usar só `renderDrawerHistorico`:** essa função atualiza apenas o conteúdo interno do drawer — não reabre o drawer se ele foi fechado por `renderAll`. É necessário chamar `_abrirDrawerInterno` para recolocar a classe `open`.
 
 ### Observação salva no banco
@@ -2183,9 +2217,12 @@ Ambos aparecem separadamente na lista (vínculos distintos, comportamento corret
 **Fix implementado:** Banner âmbar no topo de `#drawerHistorico` quando `regParaLancar` não é o primeiro PA da lista (regs reversed = mais recente primeiro):
 
 ```js
+// REGRA ATUAL (commit 9157fcf): exige saldo > 0 além de IDs diferentes
+// Evita banner "PA 2026 tem 0d de saldo pendente" (caso regParaLancar for PA com saldo=0)
 const paAtivoNaoEhOPrimeiro = regParaLancar && regs.length > 0
-  && String(regs[0]._sbId) !== String(regParaLancar._sbId);
-const bannerPaAtivo = (IS_RH && paAtivoNaoEhOPrimeiro) ? `
+  && String(regs[0]._sbId) !== String(regParaLancar._sbId)
+  && calcSaldo(regParaLancar) > 0;
+const bannerPaAtivo = (IS_RH && !IS_DIRETORIA && paAtivoNaoEhOPrimeiro) ? `
   <div onclick="document.getElementById('pa-block-${regParaLancar._sbId}')
                   ?.scrollIntoView({behavior:'smooth',block:'center'})"
        style="...cursor:pointer;...background:#FFFBEB;border:1.5px solid #FDE68A;...">
@@ -2194,7 +2231,9 @@ const bannerPaAtivo = (IS_RH && paAtivoNaoEhOPrimeiro) ? `
   </div>` : '';
 ```
 
-Cada bloco de PA tem `id="pa-block-${r._sbId}"` para o scroll funcionar. Banner só aparece na visão RH.
+**Armadilha crítica:** `getRegistroParaLancar` exclui PAs com status `Pendente` e retorna o último PA válido como fallback quando não há PA com saldo. Se o único PA com saldo real for `Pendente` (ex: PA 2027 do Paulo), `regParaLancar` aponta para PA 2026 (saldo=0). Sem `calcSaldo(regParaLancar) > 0`, o banner dispararia com "0d de saldo pendente" — inútil e confuso.
+
+Cada bloco de PA tem `id="pa-block-${r._sbId}"` para o scroll funcionar. Banner só aparece na visão RH (excluída Diretoria).
 
 ## Relatório Mensal de Férias — funções e regras (2026-09-09)
 
