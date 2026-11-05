@@ -4045,7 +4045,10 @@ async function autocriarPasFaltantes() {
   // Condição de entrada: último PA válido já terminou (pa_fim < hoje) E saldo = 0.
   // Condição de parada: o PA recém-criado tem pa_fim >= hoje (PA vigente atingido).
   // Limite de segurança: máximo 10 PAs por colaborador por execução (evita loop infinito).
-  const excluir = new Set(['Pendente','Rejeitado','Cancelado','Descartado']);
+  // excluirExistencia: statuses que tornam um PA inválido para fins de verificação
+  // de existência. 'Pendente' é excluído propositalmente — um PA pendente de aprovação
+  // é um PA real que existe e deve impedir a criação de duplicata.
+  const excluirExistencia = new Set(['Rejeitado','Cancelado','Descartado']);
   const MAX_POR_COLAB = 10;
   let totalCriados = 0;
 
@@ -4053,7 +4056,7 @@ async function autocriarPasFaltantes() {
     if (!colab.ativo || !colab._sbColabId) continue;
 
     const regsValidos = () => colab.registros
-      .filter(r => !excluir.has(r.status) && r.paFim)
+      .filter(r => !excluirExistencia.has(r.status) && r.paFim)
       .sort((a, b) => (a.paFim || '').localeCompare(b.paFim || ''));
 
     let iteracoes = 0;
