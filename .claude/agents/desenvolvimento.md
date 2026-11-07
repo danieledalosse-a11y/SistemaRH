@@ -496,6 +496,32 @@ let _dvCardAberto = null;  // id do critério com card expandido
 
 **`fecharDrawerVersao()`** — reaproveitada, mas recebeu adição: reseta `.preview-mode` e rótulo do `#btnDvPrevia` para garantir que o próximo drawer abra sempre em modo edição.
 
+### PDI — Restrição de equipe no modal Novo PDI (commit 5f1e590, nov/2026)
+
+**Problema:** `pdiFilterColab` usava `_colaboradores` (array global, todos os ativos) sem filtro de equipe — Gestor via todos os colaboradores da empresa no autocomplete.
+
+**Fix — duas alterações:**
+
+1. **`pdiAbrirCriacao`:** carga lazy de `_trGestorApelido` antes de abrir o modal (mesma lógica de `renderTrajetoria()`; sem nova requisição se já carregado):
+```js
+if (_perfil === 'gestor' && !_trGestorApelido && _sessionColaboradorId) {
+  const pg = await sbGet(`/rest/v1/param_gestor?colaborador_id=eq.${_sessionColaboradorId}&select=apelido&limit=1`);
+  _trGestorApelido = pg?.[0]?.apelido || '';
+}
+```
+
+2. **`pdiFilterColab`:** Gestor filtra por `c.gestor ILIKE apelido` — mesmo critério de `renderTrajetoria()` e da policy `pdi_gestor_ins` do banco. Se apelido não resolvido: lista vazia (nunca libera todos como fallback):
+```js
+if (_perfil === 'gestor') {
+  if (!_trGestorApelido) { list.style.display = 'none'; return; }
+  base = base.filter(c => (c.gestor || '').toLowerCase() === _trGestorApelido.toLowerCase());
+}
+```
+
+**Proteção de banco:** `pdi_gestor_ins` (migration 140) já bloqueava INSERT fora da equipe via RLS — sem migration necessária.
+
+**Regra:** o critério de equipe no PDI é sempre `c.gestor ILIKE _trGestorApelido`, compatível com a policy do banco. Nunca usar `_colaboradores` direto no PDI para o Gestor. RH/Admin/Diretoria: sem alteração.
+
 **`salvarAvaliacaoLegado()`** — função legada renomeada (era `salvarAvaliacao`); chamada apenas pelo botão do drawer legado (`id="btnSalvarAv"`). A função D&P ativa permanece `salvarAvaliacao(status)` — não confundir.
 
 **Prévia — regras de fidelidade:**
