@@ -10278,6 +10278,12 @@ async function pdiSalvarDrawer() {
 /* ─── Modal de criação de novo PDI ─── */
 async function pdiAbrirCriacao(opts) {
   // opts: { matricula }
+  // Para Gestor: garante que o apelido da equipe esteja disponível antes de abrir o modal.
+  // Mesma lógica de renderTrajetoria() — sem nova requisição se já carregado.
+  if (_perfil === 'gestor' && !_trGestorApelido && _sessionColaboradorId) {
+    const pg = await sbGet(`/rest/v1/param_gestor?colaborador_id=eq.${_sessionColaboradorId}&select=apelido&limit=1`);
+    _trGestorApelido = pg?.[0]?.apelido || '';
+  }
   const config = await pdiCarregarConfig();
   const matriculaPre = opts.matricula || '';
   const overlay = document.createElement('div');
@@ -10378,7 +10384,14 @@ function pdiFecharModal() {
 function pdiFilterColab(q) {
   const list = document.getElementById('pdi-colab-list');
   if (!list) return;
-  const colabs = (_colaboradores || [])
+  let base = _colaboradores || [];
+  // Para Gestor: restringe à equipe usando o mesmo critério de renderTrajetoria().
+  // Se o apelido não estiver resolvido, retorna lista vazia — nunca libera todos como fallback.
+  if (_perfil === 'gestor') {
+    if (!_trGestorApelido) { list.style.display = 'none'; return; }
+    base = base.filter(c => (c.gestor || '').toLowerCase() === _trGestorApelido.toLowerCase());
+  }
+  const colabs = base
     .filter(c => !q || c.nome.toLowerCase().includes(q.toLowerCase()))
     .slice(0, 40);
   if (!colabs.length) { list.style.display = 'none'; return; }
