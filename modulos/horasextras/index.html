@@ -468,7 +468,7 @@ async function loadData() {
   }
 
   // Carrega colaboradores (apenas campos necessários)
-  const colabs = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,cargo,situacao&order=nome');
+  const colabs = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,cargo,ativo&order=nome');
   _colabsMap = {};
   for (const c of (colabs||[])) _colabsMap[c.id] = c;
 
@@ -941,7 +941,7 @@ async function processarArquivos(files) {
   if (!pdfs.length) { toast('Nenhum PDF selecionado.', 'error'); return; }
 
   if (!_colabsForImport) {
-    const c = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,situacao&order=nome');
+    const c = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,ativo&order=nome');
     _colabsForImport = c || [];
   }
 
@@ -994,7 +994,7 @@ async function processarArquivos(files) {
         reg.status_vinculo = 'nao_encontrado';
       } else if (matches.length === 1) {
         reg.colaborador_id = matches[0].id;
-        reg.status_vinculo = matches[0].situacao === 'ativo' ? 'vinculado' : 'inativo';
+        reg.status_vinculo = matches[0].ativo ? 'vinculado' : 'inativo';
       } else {
         // Múltiplos — verifica se todos têm o mesmo nome
         const nomes = [...new Set(matches.map(c => c.nome))];
@@ -1002,7 +1002,7 @@ async function processarArquivos(files) {
           // Mesmo nome — vincula ao de maior id
           const best = matches.sort((a,b) => b.id - a.id)[0];
           reg.colaborador_id = best.id;
-          reg.status_vinculo = best.situacao === 'ativo' ? 'vinculado' : 'inativo';
+          reg.status_vinculo = best.ativo ? 'vinculado' : 'inativo';
         } else {
           reg.status_vinculo = 'ambiguo';
         }
