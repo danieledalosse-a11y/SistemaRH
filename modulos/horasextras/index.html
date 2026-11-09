@@ -887,11 +887,26 @@ function parsePDFPages(allPages, fileName) {
     const trabIdx = trabLine.items.findIndex(it => it.str === 'Trabalhador');
     if (trabIdx < 0) continue;
 
-    // Empresa: procura padrão "Empresa NNNN" nos itens antes de Trabalhador
-    for (let i = 1; i < trabIdx; i++) {
-      if (/^\d{3,5}$/.test(trabLine.items[i].str) &&
-          /empresa/i.test(trabLine.items[i - 1]?.str || '')) {
-        empresaCodigo = trabLine.items[i].str.trim();
+    // Empresa: procura "Empresa" seguido de código numérico nos itens antes de Trabalhador
+    if (!empresaCodigo) {
+      const empItemIdx = trabLine.items.slice(0, trabIdx).findIndex(it => /^empresa$/i.test(it.str));
+      if (empItemIdx >= 0) {
+        // Próximo item numérico após "Empresa"
+        for (let j = empItemIdx + 1; j < trabIdx; j++) {
+          if (/^\d{3,5}$/.test(trabLine.items[j].str)) {
+            empresaCodigo = trabLine.items[j].str.trim();
+            break;
+          }
+        }
+      }
+      // Fallback: qualquer item de 3-5 dígitos puro antes de Trabalhador
+      if (!empresaCodigo) {
+        for (let i = 0; i < trabIdx; i++) {
+          if (/^\d{3,5}$/.test(trabLine.items[i].str.trim())) {
+            empresaCodigo = trabLine.items[i].str.trim();
+            break;
+          }
+        }
       }
     }
 
@@ -1012,7 +1027,19 @@ function parsePDFPages(allPages, fileName) {
   }));
 
   if (!registros.length) return [];
-  return [{ empresaCodigo, competencia, registros }];
+
+  // Calcula total_quant e total_valor somando os percentuais (o PDF pivô não tem linha "Total" separada)
+  for (const reg of registros) {
+    if (reg.total_quant === 0 && reg.total_valor === 0) {
+      for (const pct of Object.values(reg.percentuais)) {
+        reg.total_quant += pct.quant || 0;
+        reg.total_valor += pct.valor || 0;
+      }
+      reg.total_quant += reg.dsr_quant || 0;
+    }
+  }
+
+  return [{ empresaCodigo, empresaNome: '', competencia, registros }];
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1143,8 +1170,8 @@ function renderImportPreview(allBlocks) {
     html += `<div class="emp-block">
       <div class="emp-block-header">
         <div>
-          <div class="emp-block-name">${block.empresaNome}</div>
-          <div class="emp-block-meta">${empLabel} · ${compLabel} · ${block.registros.length} registros · ${fmtBRL(totalValor)}</div>
+          <div class="emp-block-name">${empLabel}</div>
+          <div class="emp-block-meta">${compLabel} · ${block.registros.length} registros · ${fmtBRL(totalValor)}</div>
         </div>
         ${!block.param_empresa ? '<span class="badge badge-red">Empresa não mapeada</span>' : ''}
         ${block.substituicao ? '<span class="badge badge-amber">⚠ Substituição</span>' : '<span class="badge badge-green">Nova importação</span>'}
