@@ -863,10 +863,13 @@ function parsePDFPages(allPages, fileName) {
   // DEBUG — remover após diagnóstico
   console.group('[HE DEBUG] parsePDFPages:', fileName);
   console.log('Total páginas:', allPages.length);
-  for (let pi = 0; pi < Math.min(allPages.length, 2); pi++) {
-    console.log(`--- Página ${pi+1} (primeiras 20 linhas) ---`);
-    allPages[pi].slice(0,20).forEach((l,i) => console.log(`  [${i}] ${l}`));
-  }
+  // Página 1 completa
+  console.log('--- Página 1 (COMPLETA) ---');
+  allPages[0].forEach((l,i) => console.log(`  [${i}] ${l}`));
+  // Busca matrículas (7 dígitos) em todas as páginas
+  const matriculaLines = [];
+  allPages.forEach((pg,pi) => pg.forEach((l,li) => { if (/\b\d{7}\b/.test(l)) matriculaLines.push(`P${pi+1}L${li}: ${l.substring(0,120)}`); }));
+  console.log('Linhas com 7 dígitos:', matriculaLines.length, matriculaLines.slice(0,10));
   console.groupEnd();
 
   for (const pageLines of allPages) {
