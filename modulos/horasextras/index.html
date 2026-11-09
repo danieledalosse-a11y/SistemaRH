@@ -849,7 +849,7 @@ async function extractPDFPages(file) {
         lines.push({ y: item.y, items: [item], text: item.str });
       }
     }
-    pages.push(lines.map(l => l.text.trim()).filter(Boolean));
+    pages.push(lines.filter(l => l.text.trim()).map(l => ({ text: l.text.trim(), items: l.items, y: l.y })));
   }
 
   return pages;
@@ -862,20 +862,36 @@ function parsePDFPages(allPages, fileName) {
 
   // DEBUG — remover após diagnóstico
   console.group('[HE DEBUG] parsePDFPages:', fileName);
-  console.log('Total páginas:', allPages.length);
-  // Página 1 completa
-  console.log('--- Página 1 (COMPLETA) ---');
-  allPages[0].forEach((l,i) => console.log(`  [${i}] ${l}`));
-  // Busca matrículas (7 dígitos) em todas as páginas
-  const matriculaLines = [];
-  allPages.forEach((pg,pi) => pg.forEach((l,li) => { if (/\b\d{7}\b/.test(l)) matriculaLines.push(`P${pi+1}L${li}: ${l.substring(0,120)}`); }));
-  console.log('Linhas com 7 dígitos:', matriculaLines.length, matriculaLines.slice(0,10));
+  // Página 1: encontra linha do cabeçalho de employees e mostra estrutura depois dela
+  const pg1 = allPages[0];
+  const empHdrIdx = pg1.findIndex(l => /\b\d{7}\b/.test(l.text||l));
+  console.log('Linha do cabeçalho employees:', empHdrIdx);
+  if (empHdrIdx >= 0) {
+    const hdrLine = pg1[empHdrIdx];
+    const hdrText = hdrLine.text || hdrLine;
+    // Mostra IDs e posições x
+    if (hdrLine.items) {
+      const empIds = hdrLine.items.filter(it => /^\d{7}$/.test(it.str)).slice(0,6);
+      console.log('Primeiros 6 employees (id, x):', empIds.map(e=>`${e.str}@x${e.x}`));
+    } else {
+      console.log('Texto do cabeçalho (sem items):', hdrText.substring(0,120));
+    }
+    // Mostra 20 linhas DEPOIS do cabeçalho
+    console.log('--- Linhas APÓS cabeçalho ---');
+    for (let i = empHdrIdx+1; i < Math.min(empHdrIdx+21, pg1.length); i++) {
+      const l = pg1[i];
+      const txt = l.text || l;
+      const xInfo = l.items ? ` [${l.items.slice(0,3).map(it=>`"${it.str}"@${it.x}`).join(', ')}...]` : '';
+      console.log(`  [${i-empHdrIdx-1}] ${txt.substring(0,100)}${xInfo}`);
+    }
+  }
   console.groupEnd();
 
   for (const pageLines of allPages) {
     // Detecta competência no cabeçalho da página
     for (const line of pageLines) {
-      const m = line.match(/Compet[êe]ncia[:\s]+([A-ZÁÉÍÓÚÂÊÔÃÕÇ]+)\/(\d{4})/i);
+      const lt = line.text || line;
+      const m = lt.match(/Compet[êe]ncia[:\s]+([A-ZÁÉÍÓÚÂÊÔÃÕÇ]+)\/(\d{4})/i);
       if (m) {
         const mes = _MESES_PT[m[1].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'')];
         if (mes) pageCompetencia = `${m[2]}-${mes}`;
@@ -884,8 +900,9 @@ function parsePDFPages(allPages, fileName) {
     }
 
     for (const line of pageLines) {
+      const lt = line.text || line;
       // Detecta bloco de empresa: "0148 REVEST DO BRASIL ... Inscrição: XX.XXX.XXX/XXXX-XX"
-      const empMatch = line.match(/^(\d{3,5})\s+(.+?)\s+Inscri[çc][ãa]o[:\s]+([\d.\/\-]+)/i);
+      const empMatch = lt.match(/^(\d{3,5})\s+(.+?)\s+Inscri[çc][ãa]o[:\s]+([\d.\/\-]+)/i);
       if (empMatch) {
         currentBlock = {
           empresaCodigo: empMatch[1],
@@ -900,15 +917,15 @@ function parsePDFPages(allPages, fileName) {
       }
 
       // Detecta cabeçalho de colunas: linha com "HExt NN%"
-      if (currentBlock && line.includes('HExt')) {
-        const pcts = [...line.matchAll(/HExt\s+(\d+)%/g)].map(m => m[1]);
+      if (currentBlock && lt.includes('HExt')) {
+        const pcts = [...lt.matchAll(/HExt\s+(\d+)%/g)].map(m => m[1]);
         if (pcts.length) { currentBlock.percentuals = pcts; }
         continue;
       }
 
       // Detecta linha de dados: inicia com 7 dígitos
       if (currentBlock && currentBlock.percentuals) {
-        const dataMatch = line.match(/^(\d{7})\s+(.+?)\s+([\d,]+(?:\s+[\d,]+)+)\s*$/);
+        const dataMatch = lt.match(/^(\d{7})\s+(.+?)\s+([\d,]+(?:\s+[\d,]+)+)\s*$/);
         if (dataMatch) {
           const nums = dataMatch[3].trim().split(/\s+/).map(parseBR);
           const nPcts = currentBlock.percentuals.length;
