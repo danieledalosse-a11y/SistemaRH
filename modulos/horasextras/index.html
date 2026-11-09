@@ -868,21 +868,16 @@ function parsePDFPages(allPages, fileName) {
   console.log('Linha do cabeçalho employees:', empHdrIdx);
   if (empHdrIdx >= 0) {
     const hdrLine = pg1[empHdrIdx];
-    const hdrText = hdrLine.text || hdrLine;
-    // Mostra IDs e posições x
-    if (hdrLine.items) {
-      const empIds = hdrLine.items.filter(it => /^\d{7}$/.test(it.str)).slice(0,6);
-      console.log('Primeiros 6 employees (id, x):', empIds.map(e=>`${e.str}@x${e.x}`));
-    } else {
-      console.log('Texto do cabeçalho (sem items):', hdrText.substring(0,120));
-    }
-    // Mostra 20 linhas DEPOIS do cabeçalho
-    console.log('--- Linhas APÓS cabeçalho ---');
-    for (let i = empHdrIdx+1; i < Math.min(empHdrIdx+21, pg1.length); i++) {
+    // Mostra todos os items do cabeçalho (x, str truncado)
+    console.log('Items do cabeçalho (todos):', hdrLine.items.slice(0,8).map(it=>`"${it.str.substring(0,20)}"@x${Math.round(it.x)}`));
+    // Mostra 15 linhas ANTES do cabeçalho (são os dados reais)
+    console.log('--- Linhas ANTES do cabeçalho (dados) ---');
+    const start = Math.max(0, empHdrIdx-15);
+    for (let i = start; i < empHdrIdx; i++) {
       const l = pg1[i];
       const txt = l.text || l;
-      const xInfo = l.items ? ` [${l.items.slice(0,3).map(it=>`"${it.str}"@${it.x}`).join(', ')}...]` : '';
-      console.log(`  [${i-empHdrIdx-1}] ${txt.substring(0,100)}${xInfo}`);
+      const xInfo = l.items ? ` [items: ${l.items.length}, primeiro: "${l.items[0]?.str?.substring(0,15)}"@x${Math.round(l.items[0]?.x)}]` : '';
+      console.log(`  [${i}] ${txt.substring(0,80)}${xInfo}`);
     }
   }
   console.groupEnd();
