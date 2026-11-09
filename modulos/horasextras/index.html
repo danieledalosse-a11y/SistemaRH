@@ -145,7 +145,12 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 
 /* Importação — empresa block */
 .emp-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden;box-shadow:var(--shadow-sm)}
-.emp-block-header{padding:14px 18px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.emp-block-header{padding:14px 18px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;user-select:none}
+.emp-block-header:hover{background:var(--surface)}
+.emp-block-toggle{font-size:11px;color:var(--text-sec);transition:transform .2s;display:inline-block}
+.emp-block.expanded .emp-block-toggle{transform:rotate(90deg)}
+.emp-block-detail{display:none}
+.emp-block.expanded .emp-block-detail{display:block}
 .emp-block-name{font-size:14px;font-weight:700;color:var(--text)}
 .emp-block-meta{font-size:12px;color:var(--text-sec)}
 .emp-block-body{padding:0}
@@ -1167,15 +1172,34 @@ function renderImportPreview(allBlocks) {
     const empLabel = block.param_empresa ? block.param_empresa.nome_simplificado : `Empresa não mapeada (${block.empresaCodigo})`;
     const totalValor = block.registros.reduce((s,r)=>s+(r.total_valor||0),0);
 
-    html += `<div class="emp-block">
+    // Contadores por bloco para exibir no resumo
+    const bV = block.registros.filter(r=>r.status_vinculo==='vinculado').length;
+    const bI = block.registros.filter(r=>r.status_vinculo==='inativo').length;
+    const bN = block.registros.filter(r=>r.status_vinculo==='nao_encontrado').length;
+    const bA = block.registros.filter(r=>r.status_vinculo==='ambiguo').length;
+    const badgesBloco = [
+      bV ? `<span class="badge badge-green">✓ ${bV}</span>` : '',
+      bI ? `<span class="badge badge-amber">⚠ ${bI}</span>` : '',
+      bN ? `<span class="badge badge-red">✗ ${bN}</span>` : '',
+      bA ? `<span class="badge badge-purple">? ${bA}</span>` : ''
+    ].join('');
+
+    html += `<div class="emp-block" onclick="this.classList.toggle('expanded')">
       <div class="emp-block-header">
-        <div>
-          <div class="emp-block-name">${empLabel}</div>
-          <div class="emp-block-meta">${compLabel} · ${block.registros.length} registros · ${fmtBRL(totalValor)}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="emp-block-toggle">▶</span>
+          <div>
+            <div class="emp-block-name">${empLabel}</div>
+            <div class="emp-block-meta">${compLabel} · ${block.registros.length} registros · ${fmtBRL(totalValor)}</div>
+          </div>
         </div>
-        ${!block.param_empresa ? '<span class="badge badge-red">Empresa não mapeada</span>' : ''}
-        ${block.substituicao ? '<span class="badge badge-amber">⚠ Substituição</span>' : '<span class="badge badge-green">Nova importação</span>'}
-      </div>`;
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${badgesBloco}
+          ${!block.param_empresa ? '<span class="badge badge-red">Empresa não mapeada</span>' : ''}
+          ${block.substituicao ? '<span class="badge badge-amber">⚠ Substituição</span>' : '<span class="badge badge-green">Nova importação</span>'}
+        </div>
+      </div>
+      <div class="emp-block-detail">`;
 
     if (block.substituicao) {
       html += `<div class="alert alert-amber" style="margin:12px;border-radius:8px">
@@ -1205,7 +1229,7 @@ function renderImportPreview(allBlocks) {
         <td class="text-right text-num">${fmtBRL(r.total_valor)}</td>
       </tr>`;
     }
-    html += '</tbody></table></div></div>';
+    html += '</tbody></table></div></div></div>';
   }
 
   area.innerHTML = html;
