@@ -257,7 +257,7 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 
     <div id="importPreviewArea" style="display:none;margin-top:24px"></div>
 
-    <div id="importActionsArea" style="display:none;margin-top:20px;display:none;gap:12px;align-items:center">
+    <div id="importActionsArea" style="display:none;margin-top:20px;gap:12px;align-items:center">
       <button class="btn btn-primary" onclick="confirmarImportacao()" id="btnConfirmar">Confirmar Importação</button>
       <button class="btn btn-secondary" onclick="cancelarImportacao()">Cancelar</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-sec);cursor:pointer">
@@ -350,9 +350,29 @@ async function sbPatch(path, data) {
   return r.ok;
 }
 
-function uuidv4() {
-  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+async function sbRpc(fn, params) {
+  let r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  if (r.ok) return r.json();
+  const txt = await r.text().catch(() => '');
+  if (r.status === 401 || txt.includes('JWT expired')) {
+    if (await _sbRefreshSession()) {
+      r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+      if (r.ok) return r.json();
+    }
+    localStorage.removeItem('sb_session'); localStorage.removeItem('sb_perfil');
+    window.location.href = '../../login.html'; return null;
+  }
+  console.error('sbRpc', fn, txt);
+  toast('Erro ao importar: ' + (JSON.parse(txt || '{}').message || txt), 'error');
+  return null;
 }
 
 function logout() {
@@ -1090,11 +1110,10 @@ async function confirmarImportacao() {
   btn.textContent = 'Salvando…';
 
   const somenteVinculados = document.getElementById('chkSomenteVinculados').checked;
-  const todasImpAtivas = await sbGet('/rest/v1/he_importacoes?ativo=eq.true&select=id,competencia,param_empresa_id');
+  let total = 0, erros = [];
 
-  let total = 0;
   for (const block of _importPreviewData) {
-    if (!block.param_empresa) continue; // ignora blocos sem empresa mapeada
+    if (!block.param_empresa) continue;
 
     const regsParaSalvar = somenteVinculados
       ? block.registros.filter(r => r.status_vinculo === 'vinculado')
@@ -1102,52 +1121,33 @@ async function confirmarImportacao() {
 
     if (!regsParaSalvar.length) continue;
 
-    // Desativa importação anterior se houver
-    const existing = (todasImpAtivas||[]).find(i => i.competencia === block.competencia && i.param_empresa_id === block.param_empresa.id);
-    if (existing) {
-      await sbPatch(`/rest/v1/he_importacoes?id=eq.${existing.id}`, { ativo: false });
-    }
-
-    // Versão
-    const versaoAnterior = existing ? 1 : 0; // simplificado
-    const novaVersao = versaoAnterior + 1;
-
-    // Cria importacao com UUID gerado client-side
-    const importacaoId = uuidv4();
-    await sbPost('/rest/v1/he_importacoes', {
-      id: importacaoId,
-      competencia: block.competencia,
-      param_empresa_id: block.param_empresa.id,
-      arquivo_nome: block.arquivoNome,
-      versao: novaVersao,
-      importado_por: _userName,
-      total_colabs: regsParaSalvar.length,
-      total_horas: regsParaSalvar.reduce((s,r) => s+(r.total_quant||0), 0),
-      total_valor: regsParaSalvar.reduce((s,r) => s+(r.total_valor||0), 0)
-    });
-
-    // Insere registros em lote
-    const payload = regsParaSalvar.map(r => ({
-      importacao_id: importacaoId,
-      colaborador_id: r.colaborador_id || null,
+    // Monta payload para a RPC — inclui detalhe_historico pré-formatado
+    const rpcRegistros = regsParaSalvar.map(r => ({
+      colaborador_id: r.colaborador_id ? String(r.colaborador_id) : '',
       matricula_pdf: r.matricula_pdf,
       empresa_codigo: block.empresaCodigo,
-      competencia: block.competencia,
       percentuais: r.percentuais || {},
       dsr_quant: r.dsr_quant || 0,
       dsr_valor: r.dsr_valor || 0,
       total_quant: r.total_quant || 0,
       total_valor: r.total_valor || 0,
-      status_vinculo: r.status_vinculo
+      status_vinculo: r.status_vinculo,
+      detalhe_historico: `${fmtComp(block.competencia)} · ${block.param_empresa.nome_simplificado} · ${fmtN(r.total_quant)}h · ${fmtBRL(r.total_valor)}`
     }));
-    await sbPost('/rest/v1/he_registros', payload);
 
-    // Atualiza histórico dos colaboradores vinculados
-    for (const r of regsParaSalvar.filter(r => r.colaborador_id)) {
-      await appendHEHistorico(r.colaborador_id, block, r);
-    }
+    const result = await sbRpc('he_fn_importar', {
+      p_competencia:      block.competencia,
+      p_param_empresa_id: block.param_empresa.id,
+      p_arquivo_nome:     block.arquivoNome,
+      p_importado_por:    _userName,
+      p_total_colabs:     regsParaSalvar.length,
+      p_total_horas:      regsParaSalvar.reduce((s,r) => s+(r.total_quant||0), 0),
+      p_total_valor:      regsParaSalvar.reduce((s,r) => s+(r.total_valor||0), 0),
+      p_registros:        rpcRegistros
+    });
 
-    total++;
+    if (result) total++;
+    else erros.push(block.param_empresa.nome_simplificado);
   }
 
   // Recarrega dados
@@ -1161,26 +1161,13 @@ async function confirmarImportacao() {
 
   cancelarImportacao();
   renderHistoricoImportacoes();
-  _importInitDone = false; // força reload do histórico
+  _importInitDone = false;
 
-  toast(`${total} empresa(s) importada(s) com sucesso!`, 'success');
+  if (erros.length) toast(`Erro ao importar: ${erros.join(', ')}. Demais empresas gravadas.`, 'error');
+  else toast(`${total} empresa(s) importada(s) com sucesso!`, 'success');
+
   btn.disabled = false;
   btn.textContent = 'Confirmar Importação';
-}
-
-async function appendHEHistorico(colabId, block, reg) {
-  try {
-    const colabs = await sbGet(`/rest/v1/colaboradores?id=eq.${colabId}&select=id,historico`);
-    if (!colabs || !colabs.length) return;
-    const historico = Array.isArray(colabs[0].historico) ? [...colabs[0].historico] : [];
-    historico.push({
-      tipo: 'he_importacao',
-      data: new Date().toISOString(),
-      detalhe: `${fmtComp(block.competencia)} · ${block.param_empresa.nome_simplificado} · ${fmtN(reg.total_quant)}h · ${fmtBRL(reg.total_valor)}`,
-      usuario: _userName
-    });
-    await sbPatch(`/rest/v1/colaboradores?id=eq.${colabId}`, { historico });
-  } catch(_) { /* falha silenciosa */ }
 }
 
 function cancelarImportacao() {
