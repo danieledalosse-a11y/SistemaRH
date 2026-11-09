@@ -856,100 +856,163 @@ async function extractPDFPages(file) {
 }
 
 function parsePDFPages(allPages, fileName) {
-  const empresaBlocks = [];
-  let currentBlock = null;
-  let pageCompetencia = null;
+  // PDF Senior: tabela pivô — employees = colunas, tipos HE = linhas
+  // Linha do cabeçalho (Trabalhador) é a ÚLTIMA linha de cada página (y mais baixo)
+  // Linhas de dados ficam ACIMA (y maior = topo da página em coordenadas PDF)
 
-  // DEBUG — remover após diagnóstico
-  console.group('[HE DEBUG] parsePDFPages:', fileName);
-  // Página 1: encontra linha do cabeçalho de employees e mostra estrutura depois dela
-  const pg1 = allPages[0];
-  const empHdrIdx = pg1.findIndex(l => /\b\d{7}\b/.test(l.text||l));
-  console.log('Linha do cabeçalho employees:', empHdrIdx);
-  if (empHdrIdx >= 0) {
-    const hdrLine = pg1[empHdrIdx];
-    const trabIdx = hdrLine.items.findIndex(it => it.str === 'Trabalhador');
-    console.log('Total items linha 29:', hdrLine.items.length, '| "Trabalhador" idx:', trabIdx);
-    // Items APÓS "Trabalhador" = dados de employees
-    const empItems = trabIdx >= 0 ? hdrLine.items.slice(trabIdx+1, trabIdx+6) : hdrLine.items.slice(8,14);
-    console.log('Primeiros items employee:', empItems.map(it=>`"${it.str.substring(0,25)}"@x${Math.round(it.x)}`));
-    // Linha [23] completa com x-positions (linha de total valor)
-    const l23 = pg1[Math.max(0, empHdrIdx-7)];
-    if (l23) console.log('Linha totais (idx', empHdrIdx-7, '):', (l23.text||l23).substring(0,80), '| items:', l23.items?.slice(0,5).map(it=>`"${it.str}"@x${Math.round(it.x)}`));
-    // Linha de dados HExt completa com x-positions
-    const l14 = pg1[Math.max(0, empHdrIdx-15)];
-    if (l14) console.log('Linha HExt (idx', empHdrIdx-15, '):', (l14.text||l14).substring(0,60), '| primeiros items:', l14.items?.slice(0,5).map(it=>`"${it.str}"@x${Math.round(it.x)}`));
+  const LABEL_X_MAX = 90;  // itens com x < 90 são labels de linha
+  const EMP_X_MIN   = 90;  // itens com x >= 90 são valores de employee
+  const X_TOL       = 5;   // tolerância de x para identificar coluna do employee
+
+  // Acumula dados por matrícula (merge de múltiplas páginas do mesmo arquivo)
+  const colabMap = {}; // id -> { percentuais, dsr_quant, dsr_valor, total_quant, total_valor }
+  let competencia  = null;
+  let empresaCodigo = '';
+
+  function detectType(label) {
+    if (/dsr/i.test(label))                                return 'dsr';
+    if (/total.*valor|valor.*total/i.test(label))          return 'total_valor';
+    if (/total.*hora|hora.*total|total.*quant/i.test(label)) return 'total_quant';
+    const m = label.match(/(\d+)%/);
+    return m ? m[1] : '50'; // HExt sem % = 50%
   }
-  console.groupEnd();
 
   for (const pageLines of allPages) {
-    // Detecta competência no cabeçalho da página
-    for (const line of pageLines) {
-      const lt = line.text || line;
-      const m = lt.match(/Compet[êe]ncia[:\s]+([A-ZÁÉÍÓÚÂÊÔÃÕÇ]+)\/(\d{4})/i);
-      if (m) {
-        const mes = _MESES_PT[m[1].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'')];
-        if (mes) pageCompetencia = `${m[2]}-${mes}`;
-        break;
+    if (pageLines.length < 2) continue;
+
+    // Cabeçalho de employees = última linha
+    const trabLine = pageLines[pageLines.length - 1];
+    if (!trabLine.items) continue;
+
+    const trabIdx = trabLine.items.findIndex(it => it.str === 'Trabalhador');
+    if (trabIdx < 0) continue;
+
+    // Empresa: procura padrão "Empresa NNNN" nos itens antes de Trabalhador
+    for (let i = 1; i < trabIdx; i++) {
+      if (/^\d{3,5}$/.test(trabLine.items[i].str) &&
+          /empresa/i.test(trabLine.items[i - 1]?.str || '')) {
+        empresaCodigo = trabLine.items[i].str.trim();
       }
     }
 
-    for (const line of pageLines) {
-      const lt = line.text || line;
-      // Detecta bloco de empresa: "0148 REVEST DO BRASIL ... Inscrição: XX.XXX.XXX/XXXX-XX"
-      const empMatch = lt.match(/^(\d{3,5})\s+(.+?)\s+Inscri[çc][ãa]o[:\s]+([\d.\/\-]+)/i);
-      if (empMatch) {
-        currentBlock = {
-          empresaCodigo: empMatch[1],
-          empresaNome: empMatch[2].trim(),
-          cnpj: empMatch[3],
-          competencia: pageCompetencia,
-          percentuals: null,
-          registros: []
-        };
-        empresaBlocks.push(currentBlock);
-        continue;
+    // Colunas de employee: itens após Trabalhador (pula separador "====")
+    const afterTrab = trabLine.items.slice(trabIdx + 1).filter(it => !/^=+$/.test(it.str));
+    const cols = afterTrab.map(it => {
+      const m = it.str.match(/^(\d{7})\s*(.*)/);
+      return m ? { id: m[1], x: Math.round(it.x) } : null;
+    }).filter(Boolean);
+
+    if (!cols.length) continue;
+
+    for (const col of cols) {
+      if (!colabMap[col.id]) {
+        colabMap[col.id] = { percentuais: {}, dsr_quant: 0, dsr_valor: 0, total_quant: 0, total_valor: 0 };
       }
+    }
 
-      // Detecta cabeçalho de colunas: linha com "HExt NN%"
-      if (currentBlock && lt.includes('HExt')) {
-        const pcts = [...lt.matchAll(/HExt\s+(\d+)%/g)].map(m => m[1]);
-        if (pcts.length) { currentBlock.percentuals = pcts; }
-        continue;
+    // Competência: busca "Inscrição MÊS/ANO" em qualquer linha
+    if (!competencia) {
+      for (const line of pageLines) {
+        const m = (line.text || '').match(/Inscri[çc][ãa]o\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ]+)\/(\d{4})/i);
+        if (m) {
+          const mes = _MESES_PT[(m[1].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''))];
+          if (mes) { competencia = `${m[2]}-${mes}`; break; }
+        }
       }
+    }
 
-      // Detecta linha de dados: inicia com 7 dígitos
-      if (currentBlock && currentBlock.percentuals) {
-        const dataMatch = lt.match(/^(\d{7})\s+(.+?)\s+([\d,]+(?:\s+[\d,]+)+)\s*$/);
-        if (dataMatch) {
-          const nums = dataMatch[3].trim().split(/\s+/).map(parseBR);
-          const nPcts = currentBlock.percentuals.length;
+    function colIdxForX(x) {
+      let best = -1, bestDist = Infinity;
+      for (let i = 0; i < cols.length; i++) {
+        const d = Math.abs(cols[i].x - x);
+        if (d < bestDist) { bestDist = d; best = i; }
+      }
+      return bestDist <= X_TOL ? best : -1;
+    }
 
-          const percentuais = {};
-          for (let i = 0; i < nPcts; i++) {
-            const q = nums[i*2]||0, v = nums[i*2+1]||0;
-            if (q > 0 || v > 0) percentuais[currentBlock.percentuals[i]] = { quant: q, valor: v };
+    function applyValueItems(items, type, isQuant) {
+      for (const it of items) {
+        const v = parseBR(it.str);
+        if (isNaN(v)) continue;
+        const ci = colIdxForX(Math.round(it.x));
+        if (ci < 0) continue;
+        const reg = colabMap[cols[ci].id];
+        if (!reg) continue;
+        if (type === 'dsr') {
+          if (isQuant) reg.dsr_quant += v; else reg.dsr_valor += v;
+        } else if (type === 'total_quant') {
+          reg.total_quant += v;
+        } else if (type === 'total_valor') {
+          reg.total_valor += v;
+        } else {
+          if (!reg.percentuais[type]) reg.percentuais[type] = { quant: 0, valor: 0 };
+          if (isQuant) reg.percentuais[type].quant += v;
+          else         reg.percentuais[type].valor += v;
+        }
+      }
+    }
+
+    // Processa linhas de dados (todas exceto a última = cabeçalho)
+    const dataLines = pageLines.slice(0, -1);
+    let pendingLabelParts = [];
+    let currentType  = null;
+    let expectQuant  = false; // próxima linha de valores é quantidade
+
+    for (const line of dataLines) {
+      const items = line.items || [];
+      const labelItems = items.filter(it => it.x < LABEL_X_MAX && /\S/.test(it.str));
+      const valueItems = items.filter(it => it.x >= EMP_X_MIN);
+      const labelStr   = labelItems.map(it => it.str).join(' ').trim();
+
+      if (valueItems.length >= 3) {
+        // Linha com dados de employees
+        // Se tem label na mesma linha, finaliza tipo agora
+        if (labelStr) {
+          if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
+            expectQuant = true;
+          } else {
+            const fullLabel = [...pendingLabelParts, labelStr].join(' ');
+            currentType = detectType(fullLabel);
+            expectQuant = false;
+            pendingLabelParts = [];
           }
+        } else if (pendingLabelParts.length) {
+          // Label acumulado em linhas anteriores
+          currentType = detectType(pendingLabelParts.join(' '));
+          expectQuant = false;
+          pendingLabelParts = [];
+        }
 
-          const off = nPcts * 2;
-          currentBlock.registros.push({
-            matricula_pdf: dataMatch[1],
-            nome_pdf: dataMatch[2].trim(),
-            percentuais,
-            dsr_quant: nums[off]||0,
-            dsr_valor: nums[off+1]||0,
-            total_quant: nums[off+2]||0,
-            total_valor: nums[off+3]||0,
-            status_vinculo: 'nao_encontrado',
-            colaborador_id: null
-          });
-          continue;
+        if (currentType) {
+          applyValueItems(valueItems, currentType, expectQuant);
+          if (expectQuant) expectQuant = false;
+        }
+      } else if (labelStr) {
+        // Linha só com label (sem dados de employee)
+        if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
+          expectQuant = true; // próxima linha de valores = quant
+        } else {
+          pendingLabelParts.push(labelStr); // acumula partes do label
         }
       }
     }
   }
 
-  return empresaBlocks.filter(b => b.registros.length > 0);
+  // Monta resultado final
+  const registros = Object.entries(colabMap).map(([id, data]) => ({
+    matricula_pdf: id,
+    nome_pdf: '',
+    percentuais: data.percentuais,
+    dsr_quant:   data.dsr_quant,
+    dsr_valor:   data.dsr_valor,
+    total_quant: data.total_quant,
+    total_valor: data.total_valor,
+    status_vinculo:  'nao_encontrado',
+    colaborador_id:  null
+  }));
+
+  if (!registros.length) return [];
+  return [{ empresaCodigo, competencia, registros }];
 }
 
 /* ═══════════════════════════════════════════════════════════
