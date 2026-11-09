@@ -985,14 +985,22 @@ function parsePDFPages(allPages, fileName) {
 
       if (valueItems.length >= 3) {
         // Linha com dados de employees
-        // Se tem label na mesma linha, finaliza tipo agora
         if (labelStr) {
-          if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
+          if (/^valor$/i.test(labelStr)) {
+            // "Valor" puro: mantém currentType, apenas garante isQuant=false
+            expectQuant = false;
+          } else if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
+            // "Quant" label: resolve pendingLabelParts em currentType ANTES de setar expectQuant
+            if (pendingLabelParts.length) {
+              currentType = detectType(pendingLabelParts.join(' '));
+              pendingLabelParts = [];
+            }
             expectQuant = true;
           } else {
+            // Label de seção com valores inline (ex: "DSR S/EXTRA" vem com quant na mesma linha)
             const fullLabel = [...pendingLabelParts, labelStr].join(' ');
             currentType = detectType(fullLabel);
-            expectQuant = false;
+            expectQuant = true; // primeiro bloco de valores de qualquer seção = quant
             pendingLabelParts = [];
           }
         } else if (pendingLabelParts.length) {
@@ -1003,21 +1011,15 @@ function parsePDFPages(allPages, fileName) {
         }
 
         if (currentType && currentType !== '_skip') {
-          // DEBUG: mostra o que está sendo acumulado para 0000427 (Adriane)
-          const adrianeCol = cols.find(c => c.id === '0000427');
-          if (adrianeCol) {
-            const adrianeItem = valueItems.find(it => Math.abs(Math.round(it.x) - adrianeCol.x) <= X_TOL);
-            if (adrianeItem) console.log(`[DBG] tipo=${currentType} isQuant=${expectQuant} Adriane@x${adrianeCol.x} val="${adrianeItem.str}" label="${labelStr||pendingLabelParts.join(' ')}"`);
-          }
           applyValueItems(valueItems, currentType, expectQuant);
           if (expectQuant) expectQuant = false;
         }
       } else if (labelStr) {
         // Linha só com label (sem dados de employee)
         if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
-          if (currentType !== '_skip') expectQuant = true; // ignora "Quant" do bloco TOTAL
+          if (currentType !== '_skip') expectQuant = true;
         } else {
-          pendingLabelParts.push(labelStr); // acumula partes do label
+          pendingLabelParts.push(labelStr);
         }
       }
     }
