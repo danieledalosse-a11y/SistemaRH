@@ -5842,16 +5842,47 @@ function abrirModalAprovar(idx) {
   } else {
     document.getElementById('aprovarTitle').textContent = 'Aprovar ou rejeitar';
     const nl = reg._novoLanc;
+    // Calcula saldo disponível para exibir no limite do campo dias
+    const _saldoAprov = calcSaldo(reg);
     document.getElementById('aprovarInfo').innerHTML = `
-      <div style="display:flex;gap:16px;flex-wrap:wrap;">
-        <div><span style="font-size:11px;color:var(--text-sec);">Período de gozo</span><br><strong>${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</strong></div>
-        <div><span style="font-size:11px;color:var(--text-sec);">Dias</span><br><strong>${nl.dias}</strong></div>
-        ${nl.motivo ? `<div><span style="font-size:11px;color:var(--text-sec);">Motivo</span><br><strong>${nl.motivo}</strong></div>` : ''}
-        ${nl.diasTrabalhar ? `<div><span style="font-size:11px;color:var(--text-sec);">Acordo (dias trabalhando)</span><br><strong>${nl.diasTrabalhar}</strong></div>` : ''}
-      </div>`;
+      <div style="margin-bottom:12px;padding:10px 12px;background:#F8FAFC;border:1px solid var(--border);border-radius:7px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Solicitado pelo gestor</div>
+        <div style="font-size:13px;color:var(--text-sec);">${formatDate(nl.inicio)} → ${formatDate(nl.fim)} · <strong>${nl.dias} dias</strong>${nl.motivo ? ' · ' + nl.motivo : ''}</div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Início</label>
+          <input type="date" id="aprvEditInicio" value="${nl.inicio}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);" oninput="aprvRecalcDias()">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Fim</label>
+          <input type="date" id="aprvEditFim" value="${nl.fim}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);" oninput="aprvRecalcDias()">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Dias <span style="font-weight:400;color:var(--text-ter);">(máx. ${_saldoAprov})</span></label>
+          <input type="number" id="aprvEditDias" value="${nl.dias}" min="1" max="${_saldoAprov}" readonly style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);width:70px;background:var(--bg-sec,#F8FAFC);">
+        </div>
+      </div>
+      <div id="aprvEditErro" style="display:none;margin-top:8px;font-size:12px;color:var(--red);"></div>`;
     document.getElementById('btnAprovar').textContent = '✓ Aprovar';
   }
   document.getElementById('modalAprovar').classList.add('open');
+}
+
+function aprvRecalcDias() {
+  const ini = document.getElementById('aprvEditInicio')?.value;
+  const fim = document.getElementById('aprvEditFim')?.value;
+  const diasEl = document.getElementById('aprvEditDias');
+  const erroEl = document.getElementById('aprvEditErro');
+  if (!ini || !fim || !diasEl) return;
+  if (fim < ini) {
+    if (erroEl) { erroEl.textContent = 'A data de fim não pode ser anterior ao início.'; erroEl.style.display = 'block'; }
+    diasEl.value = '';
+    return;
+  }
+  const d = Math.round((new Date(fim + 'T12:00:00') - new Date(ini + 'T12:00:00')) / 86400000) + 1;
+  diasEl.value = d;
+  if (erroEl) erroEl.style.display = 'none';
 }
 
 function toggleMotivoRejeicao() {
@@ -5981,6 +6012,44 @@ async function aprovarPendente() {
       return;
     }
     // Fluxo padrão (nova solicitação): promove item solicitado → aprovado em periodos[]
+    // Lê campos editáveis do modal — RH pode ter corrigido as datas antes de aprovar
+    const _nlOriginal = { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias };
+    const _aprvIni  = document.getElementById('aprvEditInicio')?.value  || reg._novoLanc.inicio;
+    const _aprvFim  = document.getElementById('aprvEditFim')?.value     || reg._novoLanc.fim;
+    const _aprvDias = parseInt(document.getElementById('aprvEditDias')?.value) || reg._novoLanc.dias;
+    const _aprvErroEl = document.getElementById('aprvEditErro');
+    const _rhEditou = _aprvIni !== _nlOriginal.inicio || _aprvFim !== _nlOriginal.fim || _aprvDias !== _nlOriginal.dias;
+    // Validação das datas editadas (somente quando RH alterou)
+    if (_rhEditou) {
+      if (!_aprvIni || !_aprvFim || !(_aprvDias >= 1)) {
+        if (_aprvErroEl) { _aprvErroEl.textContent = 'Preencha início, fim e dias.'; _aprvErroEl.style.display = 'block'; }
+        btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
+      }
+      if (_aprvFim < _aprvIni) {
+        if (_aprvErroEl) { _aprvErroEl.textContent = 'A data de fim não pode ser anterior ao início.'; _aprvErroEl.style.display = 'block'; }
+        btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
+      }
+      const _saldoDisp = calcSaldo(reg);
+      if (_aprvDias > _saldoDisp) {
+        if (_aprvErroEl) { _aprvErroEl.textContent = `Dias (${_aprvDias}) ultrapassam o saldo disponível (${_saldoDisp}d).`; _aprvErroEl.style.display = 'block'; }
+        btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
+      }
+      // Validação de conflito com outros lançamentos do colaborador
+      const _excluirConfl = new Set(['Pendente','Rejeitado','Cancelado','Descartado','Alteracao_Solicitada']);
+      const _outrosLancAprov = [];
+      colab.registros.forEach(r => {
+        if (_excluirConfl.has(r.status)) return;
+        r.lancamentos.forEach(l => _outrosLancAprov.push(l));
+      });
+      const _conflito = _outrosLancAprov.some(l => l.inicio && l.fim && _aprvIni <= l.fim && _aprvFim >= l.inicio);
+      if (_conflito) {
+        if (_aprvErroEl) { _aprvErroEl.textContent = 'As novas datas conflitam com outro período já programado para este colaborador.'; _aprvErroEl.style.display = 'block'; }
+        btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
+      }
+      if (_aprvErroEl) _aprvErroEl.style.display = 'none';
+      // Aplica correção do RH em _novoLanc para que o restante do fluxo use os valores corrigidos
+      reg._novoLanc = { ...reg._novoLanc, inicio: _aprvIni, fim: _aprvFim, dias: _aprvDias };
+    }
     if (reg._sbId) {
       // Pré-verificação obrigatória — sem fallback se falhar
       let registroAtual;
@@ -6000,9 +6069,10 @@ async function aprovarPendente() {
         toast('Conflito: este registro já foi processado por outro usuário. Recarregue a página.', 'erro');
         return;
       }
+      // Verifica concorrência comparando com as datas ORIGINAIS do Gestor (não as editadas pelo RH)
       const nl = reg._novoLanc;
       const solAtualNoDb = (registroAtual.periodos || []).find(p => p.status === 'solicitado');
-      if (solAtualNoDb && (solAtualNoDb.inicio !== nl.inicio || solAtualNoDb.fim !== nl.fim || solAtualNoDb.dias !== nl.dias)) {
+      if (solAtualNoDb && (solAtualNoDb.inicio !== _nlOriginal.inicio || solAtualNoDb.fim !== _nlOriginal.fim || solAtualNoDb.dias !== _nlOriginal.dias)) {
         btnAprovar.disabled = false;
         btnAprovar.textContent = '✓ Aprovar';
         toast('Conflito: as datas da solicitação foram alteradas pelo gestor. Recarregue a página.', 'erro');
@@ -6045,24 +6115,34 @@ async function aprovarPendente() {
       }
       reg._periodos = _periosAprov;
     }
-    // Captura datas antes de zerar _novoLanc
+    // Captura datas finais (já corrigidas, se RH editou) antes de zerar _novoLanc
     const _lancAprovDet = reg._novoLanc ? { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias } : {};
     reg.lancamentos.push({ ...reg._novoLanc });
     reg._novoLanc = null;
     reg.status = 'Aprovado';
-    // Registra aprovação no histórico
+    // Registra aprovação no histórico — inclui datas originais quando RH corrigiu
     const _perfAprov = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     let _histFalhouAprov = false;
     if (reg._sbId && colab._sbColabId) {
-      try { await _logAtiv(reg._sbId, colab._sbColabId, 'aprovado', _perfAprov.nome || 'RH', { ..._lancAprovDet, aprovado_por: _perfAprov.nome || 'RH' }); }
+      const _logDetalhe = { ..._lancAprovDet, aprovado_por: _perfAprov.nome || 'RH' };
+      if (_rhEditou) {
+        _logDetalhe.corrigido_de = { inicio: _nlOriginal.inicio, fim: _nlOriginal.fim, dias: _nlOriginal.dias };
+      }
+      try { await _logAtiv(reg._sbId, colab._sbColabId, 'aprovado', _perfAprov.nome || 'RH', _logDetalhe); }
       catch(e) { _histFalhouAprov = true; console.error('[_logAtiv aprovado]', e); }
     }
     if (colab._sbColabId) {
-      try { await _logColabHist(colab._sbColabId, 'ferias_aprovadas', `Férias aprovadas${_lancAprovDet.inicio ? ': ' + formatDate(_lancAprovDet.inicio) + ' → ' + formatDate(_lancAprovDet.fim) + ' (' + _lancAprovDet.dias + 'd)' : ''}`, _perfAprov.nome || 'RH'); }
+      const _logMsg = _rhEditou
+        ? `Férias aprovadas com correção de datas: ${formatDate(_nlOriginal.inicio)}→${formatDate(_nlOriginal.fim)} (${_nlOriginal.dias}d) corrigido para ${formatDate(_lancAprovDet.inicio)}→${formatDate(_lancAprovDet.fim)} (${_lancAprovDet.dias}d)`
+        : `Férias aprovadas${_lancAprovDet.inicio ? ': ' + formatDate(_lancAprovDet.inicio) + ' → ' + formatDate(_lancAprovDet.fim) + ' (' + _lancAprovDet.dias + 'd)' : ''}`;
+      try { await _logColabHist(colab._sbColabId, 'ferias_aprovadas', _logMsg, _perfAprov.nome || 'RH'); }
       catch(e) { console.warn('[_logColabHist ferias_aprovadas]', e); }
     }
     document.getElementById('modalAprovar').classList.remove('open');
-    toast(_histFalhouAprov ? `✓ Férias aprovadas — ${colab.nome} (histórico não registrado)` : `✓ Férias aprovadas — ${colab.nome}`, _histFalhouAprov ? 'aviso' : '');
+    const _toastMsg = _rhEditou
+      ? `✓ Férias aprovadas com correção — ${colab.nome}`
+      : `✓ Férias aprovadas — ${colab.nome}`;
+    toast(_histFalhouAprov ? `${_toastMsg} (histórico não registrado)` : _toastMsg, _histFalhouAprov ? 'aviso' : '');
     renderAll();
     renderRhAtividade();
   } catch(e) {
