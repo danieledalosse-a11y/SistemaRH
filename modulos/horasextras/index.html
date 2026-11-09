@@ -875,9 +875,8 @@ function parsePDFPages(allPages, fileName) {
   let empresaCodigo = '';
 
   function detectType(label) {
-    if (/dsr/i.test(label))                                return 'dsr';
-    if (/total.*valor|valor.*total/i.test(label))          return 'total_valor';
-    if (/total.*hora|hora.*total|total.*quant/i.test(label)) return 'total_quant';
+    if (/dsr/i.test(label))   return 'dsr';
+    if (/\btotal\b/i.test(label)) return '_skip'; // TOTAL EXTRA: ignorar — calculamos internamente
     const m = label.match(/(\d+)%/);
     return m ? m[1] : '50'; // HExt sem % = 50%
   }
@@ -1003,14 +1002,14 @@ function parsePDFPages(allPages, fileName) {
           pendingLabelParts = [];
         }
 
-        if (currentType) {
+        if (currentType && currentType !== '_skip') {
           applyValueItems(valueItems, currentType, expectQuant);
           if (expectQuant) expectQuant = false;
         }
       } else if (labelStr) {
         // Linha só com label (sem dados de employee)
         if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
-          expectQuant = true; // próxima linha de valores = quant
+          if (currentType !== '_skip') expectQuant = true; // ignora "Quant" do bloco TOTAL
         } else {
           pendingLabelParts.push(labelStr); // acumula partes do label
         }
@@ -1033,15 +1032,17 @@ function parsePDFPages(allPages, fileName) {
 
   if (!registros.length) return [];
 
-  // Calcula total_quant e total_valor somando os percentuais (o PDF pivô não tem linha "Total" separada)
+  // Recalcula total_quant e total_valor sempre — somando todos os percentuais + DSR
+  // (ignora qualquer valor que tenha vindo da linha "TOTAL EXTRA" do PDF, que é bloqueada)
   for (const reg of registros) {
-    if (reg.total_quant === 0 && reg.total_valor === 0) {
-      for (const pct of Object.values(reg.percentuais)) {
-        reg.total_quant += pct.quant || 0;
-        reg.total_valor += pct.valor || 0;
-      }
-      reg.total_quant += reg.dsr_quant || 0;
+    reg.total_quant = 0;
+    reg.total_valor = 0;
+    for (const pct of Object.values(reg.percentuais)) {
+      reg.total_quant += pct.quant || 0;
+      reg.total_valor += pct.valor || 0;
     }
+    reg.total_quant += reg.dsr_quant || 0;
+    reg.total_valor += reg.dsr_valor || 0;
   }
 
   return [{ empresaCodigo, empresaNome: '', competencia, registros }];
