@@ -1372,7 +1372,7 @@ toast(_histFalhouXxx ? '✓ Operação — histórico não registrado, contate o
 | `rhAprovarGozoPendente` | `'gozo_aprovado'` | `_histFalhouGozo` | `perfil.nome \|\| 'RH'` |
 | `rhAprovarSolicitado` | `'aprovado'` | `_histFalhouAprov` | `perfil.nome \|\| 'RH'` |
 | `rhRecusarSolicitado` | `'rejeitado'` | `_histFalhouRec` | `perfil.nome \|\| 'RH'` |
-| `aprovarPendente` (**fluxo padrão** — commit `177d847`) | `'aprovado'` | `_histFalhouAprov` | `perfil.nome \|\| 'RH'` |
+| `aprovarPendente` (**fluxo padrão** — commits `177d847`/`4ad38e3`/`dee4197`) | `'aprovado'` | `_histFalhouAprov` | `perfil.nome \|\| 'RH'` |
 | `aprovarPendente` (alteração) | `'alteracao_aprovada'` | `_histFalhouAlt` | `perfil.nome \|\| 'RH'` |
 | `aprovarPendente` (cancelamento) | `'cancelamento_aprovado'` | `_histFalhouCancAprov` | `perfil.nome \|\| 'RH'` |
 | `rejeitarPendente` (alteração) | `'alteracao_recusada'` | `_histFalhouAltRec` | `perfil.nome \|\| 'RH'` |
@@ -3444,6 +3444,50 @@ if (_tipo === 'cancelamento') {
 ```
 
 **Regra:** o PA só recebe status `'Cancelado'` quando **não restar nenhum slot válido**. Se houver p1 e p2, e apenas p1 for cancelado, o PA continua `'Aprovado'` com apenas p2.
+
+---
+
+#### RH pode corrigir datas no modal de aprovação (commits `4ad38e3` / `dee4197` / `a954249`, 09/11/2026)
+
+**Feature:** quando um Gestor envia uma solicitação com datas incorretas (ex: 16 dias em vez de 15), o RH pode corrigir diretamente no modal de aprovação sem rejeitar e reabrir o processo.
+
+**Escopo:** somente `_tipo === 'default'` ou `'legado'` (solicitações iniciais pendentes). Alterações e cancelamentos não são afetados.
+
+**UI no modal (`abrirModalAprovar` — ramo `else`):**
+- Bloco cinza de referência: "SOLICITADO PELO GESTOR — DD/MM → DD/MM · N dias"
+- Campo `aprvEditInicio` (date, editável) — oninput chama `aprvRecalcDias()`
+- Campo `aprvEditFim` (date, editável) — oninput chama `aprvRecalcDias()`
+- Campo `aprvEditDias` (number, editável) — oninput chama `aprvRecalcFim()`; label mostra "(máx. Xd)"
+- `div#aprvEditErro` para erros inline
+
+**Funções de recálculo:**
+- `aprvRecalcDias()` — datas mudam → dias = fim − inicio + 1
+- `aprvRecalcFim()` — dias mudam → fim = addDays(inicio, dias − 1); valida dias ≥ 1 e dias ≤ max
+
+**Detecção de edição:**
+```js
+const _nlOriginal = { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias };
+const _rhEditou = _aprvIni !== _nlOriginal.inicio || _aprvFim !== _nlOriginal.fim || _aprvDias !== _nlOriginal.dias;
+```
+
+**Fluxo em `aprovarPendente` quando `_rhEditou = true`:**
+1. Valida campos preenchidos + fim ≥ inicio
+2. Valida dias ≤ saldo disponível (`calcSaldo(reg)`)
+3. Valida conflito com outros lançamentos do mesmo colaborador
+4. Atualiza `reg._novoLanc` com os valores corrigidos **antes** do check de concorrência
+5. Check de concorrência compara banco com `_nlOriginal` (não os valores editados)
+6. Grava no banco com as datas corrigidas
+7. `_logAtiv` inclui `corrigido_de: { inicio, fim, dias }` para rastreabilidade
+8. Toast: `"✓ Férias aprovadas com correção — Nome"`
+
+**`rhAprovarSolicitado` redireciona para `abrirModalAprovar`:** botão "✓ Aprovar" no card chama `rhAprovarSolicitado`, que agora redireciona para `abrirModalAprovar` quando `_tipo === 'default'/'legado'` — garante que o RH sempre veja o modal com campos editáveis antes de confirmar. Alterações e cancelamentos continuam no fluxo direto.
+
+**Regras permanentes:**
+- Nunca atualizar `reg._novoLanc` antes de capturar `_nlOriginal` — a detecção de edição depende da comparação com os valores originais do Gestor
+- O check de concorrência sempre usa `_nlOriginal` (não os valores editados)
+- Fluxo do Gestor, alteração, cancelamento e lançamento direto RH: inalterados
+
+---
 
 #### `rejeitarPendente` — ramo cancelamento
 
