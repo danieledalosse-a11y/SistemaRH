@@ -868,17 +868,17 @@ function parsePDFPages(allPages, fileName) {
   console.log('Linha do cabeçalho employees:', empHdrIdx);
   if (empHdrIdx >= 0) {
     const hdrLine = pg1[empHdrIdx];
-    // Mostra todos os items do cabeçalho (x, str truncado)
-    console.log('Items do cabeçalho (todos):', hdrLine.items.slice(0,8).map(it=>`"${it.str.substring(0,20)}"@x${Math.round(it.x)}`));
-    // Mostra 15 linhas ANTES do cabeçalho (são os dados reais)
-    console.log('--- Linhas ANTES do cabeçalho (dados) ---');
-    const start = Math.max(0, empHdrIdx-15);
-    for (let i = start; i < empHdrIdx; i++) {
-      const l = pg1[i];
-      const txt = l.text || l;
-      const xInfo = l.items ? ` [items: ${l.items.length}, primeiro: "${l.items[0]?.str?.substring(0,15)}"@x${Math.round(l.items[0]?.x)}]` : '';
-      console.log(`  [${i}] ${txt.substring(0,80)}${xInfo}`);
-    }
+    const trabIdx = hdrLine.items.findIndex(it => it.str === 'Trabalhador');
+    console.log('Total items linha 29:', hdrLine.items.length, '| "Trabalhador" idx:', trabIdx);
+    // Items APÓS "Trabalhador" = dados de employees
+    const empItems = trabIdx >= 0 ? hdrLine.items.slice(trabIdx+1, trabIdx+6) : hdrLine.items.slice(8,14);
+    console.log('Primeiros items employee:', empItems.map(it=>`"${it.str.substring(0,25)}"@x${Math.round(it.x)}`));
+    // Linha [23] completa com x-positions (linha de total valor)
+    const l23 = pg1[Math.max(0, empHdrIdx-7)];
+    if (l23) console.log('Linha totais (idx', empHdrIdx-7, '):', (l23.text||l23).substring(0,80), '| items:', l23.items?.slice(0,5).map(it=>`"${it.str}"@x${Math.round(it.x)}`));
+    // Linha de dados HExt completa com x-positions
+    const l14 = pg1[Math.max(0, empHdrIdx-15)];
+    if (l14) console.log('Linha HExt (idx', empHdrIdx-15, '):', (l14.text||l14).substring(0,60), '| primeiros items:', l14.items?.slice(0,5).map(it=>`"${it.str}"@x${Math.round(it.x)}`));
   }
   console.groupEnd();
 
