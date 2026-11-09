@@ -15,6 +15,7 @@ function showTab(id, btn) {
   document.getElementById('sec-'+id).classList.add('active');
   if (id==='carreira')       renderCarreira();
   if (id==='financeiro')     renderFinanceiro();
+  if (id==='horasextras')    renderHE();
   if (id==='ferias')        renderFerias();
   if (id==='desenvolvimento') renderDesenvolvimento();
   if (id==='historico')     renderHistorico();
@@ -455,6 +456,56 @@ function renderFinanceiro() {
       </div>
     </div>`;
   }).join('')}</div>`;
+}
+
+/* ── Horas Extras ── */
+function renderHE() {
+  const el = document.getElementById('heContent');
+  if (!el) return;
+  if (_heRegistros === null) {
+    el.innerHTML = '<div style="padding:40px 0;text-align:center;color:var(--text-ter);font-size:13px">Carregando horas extras…</div>';
+    return;
+  }
+  if (!_heRegistros.length) {
+    el.innerHTML = '<div style="padding:40px 0;text-align:center;color:var(--text-ter);font-size:13px">Nenhum registro de horas extras encontrado.</div>';
+    return;
+  }
+
+  const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  function fmtComp(yyyymm) {
+    if (!yyyymm) return '—';
+    const [y,m] = yyyymm.split('-');
+    return `${MESES[parseInt(m)-1]}/${y}`;
+  }
+  function fmtN(v) { return (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="border-bottom:2px solid var(--border)">
+      <th style="text-align:left;padding:8px 0;color:var(--text-ter);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em">Competência</th>
+      <th style="text-align:left;padding:8px 0;color:var(--text-ter);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em">Empresa</th>
+      <th style="text-align:right;padding:8px 0;color:var(--text-ter);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em">Horas</th>
+      <th style="text-align:right;padding:8px 0;color:var(--text-ter);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em">Valor</th>
+      <th style="text-align:right;padding:8px 0;color:var(--text-ter);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em">Detalhes</th>
+    </tr></thead>
+    <tbody>`;
+
+  for (const r of _heRegistros) {
+    const empresa = r._imp?.empresa?.nome_simplificado || r.empresa_codigo || '—';
+    const pcts = r.percentuais || {};
+    const pctKeys = Object.keys(pcts).sort((a,b)=>parseInt(a)-parseInt(b));
+    const detalhes = pctKeys.map(k => `HE ${k}%: ${fmtN(pcts[k].quant)}h (R$&nbsp;${fmtN(pcts[k].valor)})`).join(' · ');
+
+    html += `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:10px 0;font-weight:600">${fmtComp(r.competencia)}</td>
+      <td style="padding:10px 0;color:var(--text-sec)">${empresa}</td>
+      <td style="padding:10px 0;text-align:right;font-weight:600">${fmtN(r.total_quant)}h</td>
+      <td style="padding:10px 0;text-align:right;font-weight:600;color:var(--green)">R$ ${fmtN(r.total_valor)}</td>
+      <td style="padding:10px 0;text-align:right;font-size:11px;color:var(--text-ter)">${detalhes || '—'}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 /* ── Férias ── */

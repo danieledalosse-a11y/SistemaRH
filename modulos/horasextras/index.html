@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horas Extras — Sistema RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --bg:#F0F2F5; --surface:#fff; --border:#E4E7EC;
+  --text:#101828; --text-sec:#4B5565; --text-ter:#6C7589;
+  --accent:#101828;
+  --green:#027A48; --green-bg:#ECFDF3;
+  --blue:#1849A9;  --blue-bg:#EFF4FF;
+  --amber:#92400E; --amber-bg:#FFFAEB;
+  --purple:#5925DC;--purple-bg:#F4F3FF;
+  --red:#BE123C;   --red-bg:#FFF1F2;
+  --radius:12px;
+  --shadow-sm:0 1px 2px rgba(16,24,40,0.05);
+  --shadow-md:0 4px 8px -2px rgba(16,24,40,0.10),0 2px 4px -2px rgba(16,24,40,0.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased;min-height:100vh}
+
+/* Topbar */
+.topbar{background:var(--accent);color:#fff;padding:0 32px;height:68px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 0 rgba(255,255,255,0.07)}
+.topbar-left{display:flex;align-items:center;gap:8px}
+.topbar-logo{color:#fff;text-decoration:none;font-size:30px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase}
+.topbar-sep{color:rgba(255,255,255,0.3);font-size:18px;margin:0 4px}
+.topbar-mod{color:rgba(255,255,255,0.75);font-size:14px;font-weight:500}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.topbar-user-name{font-size:13px;color:rgba(255,255,255,0.6)}
+.avatar{width:34px;height:34px;border-radius:50%;background:#1570EF;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.btn-icon-top{background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.6);display:flex;align-items:center;padding:4px}
+.btn-icon-top:hover{color:#fff}
+
+/* Tabs */
+.tabs{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.tabs-inner{max-width:1100px;margin:0 auto;padding:0 24px;display:flex;gap:0}
+.tab{background:none;border:none;padding:16px 20px;font-family:inherit;font-size:14px;font-weight:500;color:var(--text-sec);cursor:pointer;border-bottom:2px solid transparent;transition:color 0.15s,border-color 0.15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--text);font-weight:600}
+.tab.hidden{display:none}
+
+/* Container */
+.container{max-width:1100px;margin:0 auto;padding:32px 24px}
+
+/* Cards KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-sm)}
+.kpi-label{font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px}
+.kpi-value{font-size:26px;font-weight:700;color:var(--text);line-height:1}
+.kpi-sub{font-size:11px;color:var(--text-ter);margin-top:4px}
+
+/* Filtros */
+.filters{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:24px}
+.filters label{font-size:12px;color:var(--text-sec);font-weight:600}
+.filters select,.filters input[type=text]{height:36px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-family:inherit;font-size:13px;color:var(--text);background:var(--surface);cursor:pointer}
+.filters select:focus,.filters input[type=text]:focus{outline:none;border-color:#667eea}
+
+/* Tabela */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm)}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{background:var(--bg);padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em;border-bottom:1px solid var(--border)}
+.data-table td{padding:12px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(0,0,0,0.02)}
+.data-table tr.clickable{cursor:pointer}
+.data-table .text-right{text-align:right}
+.data-table .text-num{font-variant-numeric:tabular-nums}
+
+/* Status badges */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px}
+.badge-green{background:var(--green-bg);color:var(--green)}
+.badge-amber{background:var(--amber-bg);color:var(--amber)}
+.badge-red{background:var(--red-bg);color:var(--red)}
+.badge-purple{background:var(--purple-bg);color:var(--purple)}
+.badge-muted{background:var(--bg);color:var(--text-ter);border:1px solid var(--border)}
+
+/* Seção title */
+.sec-title{font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px}
+.sec-sub{font-size:13px;color:var(--text-sec);margin-bottom:24px}
+.sec{display:none}
+.sec.active{display:block}
+
+/* Empty state */
+.empty{text-align:center;padding:60px 24px;color:var(--text-ter);font-size:13px}
+.empty svg{width:40px;height:40px;stroke:var(--border);margin-bottom:12px}
+
+/* Drawer */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:500;display:none}
+.drawer-overlay.open{display:block}
+.drawer{position:fixed;right:0;top:0;bottom:0;width:520px;max-width:96vw;background:var(--surface);box-shadow:-4px 0 32px rgba(0,0,0,0.14);z-index:501;transform:translateX(100%);transition:transform 0.25s ease;overflow-y:auto;display:flex;flex-direction:column}
+.drawer.open{transform:translateX(0)}
+.drawer-header{padding:24px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0}
+.drawer-title{font-size:16px;font-weight:700;color:var(--text)}
+.drawer-sub{font-size:12px;color:var(--text-sec);margin-top:2px}
+.drawer-close{background:none;border:none;cursor:pointer;color:var(--text-ter);line-height:1;font-size:22px;padding:0;flex-shrink:0}
+.drawer-close:hover{color:var(--text)}
+.drawer-body{padding:24px;flex:1}
+
+/* Import area */
+.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:48px 24px;text-align:center;cursor:pointer;transition:border-color 0.15s,background 0.15s}
+.drop-zone:hover,.drop-zone.drag-over{border-color:#667eea;background:#f5f4ff}
+.drop-zone svg{width:40px;height:40px;stroke:var(--text-ter);margin-bottom:12px}
+.drop-zone p{font-size:14px;color:var(--text-sec);margin-bottom:4px}
+.drop-zone span{font-size:12px;color:var(--text-ter)}
+#fileInput{display:none}
+.btn{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 18px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:opacity 0.15s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{opacity:0.88}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:#dc2626;color:#fff}
+.btn-danger:hover{opacity:0.88}
+.btn:disabled{opacity:0.45;cursor:not-allowed}
+
+/* Alert boxes */
+.alert{padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:12px}
+.alert-amber{background:var(--amber-bg);color:var(--amber);border:1px solid #fcd34d}
+.alert-red{background:var(--red-bg);color:var(--red);border:1px solid #fda4af}
+.alert-green{background:var(--green-bg);color:var(--green);border:1px solid #6ee7b7}
+
+/* Progress */
+.progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:#667eea;border-radius:3px;transition:width 0.3s}
+
+/* SVG Chart */
+.chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-sm);overflow-x:auto}
+.chart-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:16px}
+
+/* Toast */
+#toast{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--accent);color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn 0.25s ease}
+.toast-item.error{background:#dc2626}
+.toast-item.success{background:var(--green)}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* Loader */
+.loader{display:flex;align-items:center;justify-content:center;padding:80px}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Importação — empresa block */
+.emp-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden;box-shadow:var(--shadow-sm)}
+.emp-block-header{padding:14px 18px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.emp-block-name{font-size:14px;font-weight:700;color:var(--text)}
+.emp-block-meta{font-size:12px;color:var(--text-sec)}
+.emp-block-body{padding:0}
+
+/* Histórico importações */
+.hist-row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);gap:12px}
+.hist-row:last-child{border-bottom:none}
+
+@media(max-width:768px){
+  .kpi-row{grid-template-columns:1fr 1fr}
+  .drawer{width:100%;max-width:100%}
+  .container{padding:20px 16px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a class="topbar-logo" href="../../index.html">Sistema RH</a>
+    <span class="topbar-sep">/</span>
+    <span class="topbar-mod">Horas Extras</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user-name" id="userName">—</span>
+    <div class="avatar" id="userAvatar">?</div>
+    <button class="btn-icon-top" onclick="logout()" title="Sair">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tabs-inner">
+    <button class="tab active" onclick="showTab('painel',this)">Painel</button>
+    <button class="tab" onclick="showTab('colaboradores',this)">Colaboradores</button>
+    <button class="tab" onclick="showTab('analise',this)">Análise</button>
+    <button class="tab hidden" id="tabImportacao" onclick="showTab('importacao',this)">Importação</button>
+  </div>
+</div>
+
+<!-- Painel -->
+<div id="sec-painel" class="sec active">
+  <div class="container">
+    <div class="sec-title">Painel de Horas Extras</div>
+    <div class="sec-sub">Visão consolidada por competência e empresa.</div>
+    <div class="filters">
+      <label>Competência</label>
+      <select id="painelComp" onchange="renderPainel()"></select>
+      <label>Empresa</label>
+      <select id="painelEmp" onchange="renderPainel()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div id="painelContent"><div class="loader"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<!-- Colaboradores -->
+<div id="sec-colaboradores" class="sec">
+  <div class="container">
+    <div class="sec-title">Colaboradores</div>
+    <div class="sec-sub">Histórico individual de horas extras.</div>
+    <div class="filters">
+      <label>Competência</label>
+      <select id="colabComp" onchange="renderColabs()"></select>
+      <label>Empresa</label>
+      <select id="colabEmp" onchange="renderColabs()">
+        <option value="">Todas</option>
+      </select>
+      <input type="text" id="colabBusca" placeholder="Buscar colaborador…" oninput="renderColabs()" style="width:220px">
+    </div>
+    <div id="colabContent"><div class="loader"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<!-- Análise -->
+<div id="sec-analise" class="sec">
+  <div class="container">
+    <div class="sec-title">Análise</div>
+    <div class="sec-sub">Comparativos e rankings por competência.</div>
+    <div class="filters">
+      <label>Competência</label>
+      <select id="analiseComp" onchange="renderAnalise()"></select>
+    </div>
+    <div id="analiseContent"><div class="loader"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<!-- Importação -->
+<div id="sec-importacao" class="sec">
+  <div class="container">
+    <div class="sec-title">Importação</div>
+    <div class="sec-sub">Carregue os PDFs de horas extras gerados pela contabilidade.</div>
+
+    <div id="importAreaWrap">
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="12"/><line x1="15" y1="15" x2="12" y2="12"/></svg>
+        <p>Arraste PDFs aqui ou clique para selecionar</p>
+        <span>Aceita múltiplos arquivos PDF</span>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf" multiple onchange="onFilesSelected(event)">
+    </div>
+
+    <div id="importParseProgress" style="display:none;margin-top:16px">
+      <p style="font-size:13px;color:var(--text-sec);margin-bottom:8px" id="importProgressMsg">Lendo PDFs…</p>
+      <div class="progress-bar"><div class="progress-fill" id="importProgressFill" style="width:0%"></div></div>
+    </div>
+
+    <div id="importPreviewArea" style="display:none;margin-top:24px"></div>
+
+    <div id="importActionsArea" style="display:none;margin-top:20px;display:none;gap:12px;align-items:center">
+      <button class="btn btn-primary" onclick="confirmarImportacao()" id="btnConfirmar">Confirmar Importação</button>
+      <button class="btn btn-secondary" onclick="cancelarImportacao()">Cancelar</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-sec);cursor:pointer">
+        <input type="checkbox" id="chkSomenteVinculados"> Importar somente os registros vinculados
+      </label>
+    </div>
+
+    <!-- Histórico de importações -->
+    <div style="margin-top:48px">
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px">Histórico de Importações</div>
+      <div id="histImportacoesContent"><div class="loader"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Drawer colaborador -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="fecharDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title" id="drawerNome">—</div>
+      <div class="drawer-sub" id="drawerSub">—</div>
+    </div>
+    <button class="drawer-close" onclick="fecharDrawer()">×</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   SUPABASE HELPERS
+════════════════════════════════════════════════════════════*/
+const SB_URL = 'https://rujtbxwssiofiialnbbg.supabase.co';
+const SB_KEY = 'sb_publishable_V4jUw9qvHjN9LvncGunqNQ_o_dj0RdH';
+let SB_HEADERS = {};
+
+async function _sbRefreshSession() {
+  try {
+    const sess = JSON.parse(localStorage.getItem('sb_session') || '{}');
+    if (!sess.refresh_token) return false;
+    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST', headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: sess.refresh_token }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    if (!data.access_token) return false;
+    const newSess = { ...JSON.parse(localStorage.getItem('sb_session')||'{}'), access_token: data.access_token, refresh_token: data.refresh_token || sess.refresh_token, expires_at: Date.now() + (data.expires_in||3600)*1000 };
+    localStorage.setItem('sb_session', JSON.stringify(newSess));
+    SB_HEADERS = { ...SB_HEADERS, Authorization: `Bearer ${data.access_token}` };
+    return true;
+  } catch { return false; }
+}
+
+async function sbGet(path) {
+  let r = await fetch(SB_URL + path, { headers: SB_HEADERS });
+  if (r.ok) return r.json();
+  const txt = await r.text().catch(() => '');
+  if (r.status === 401 || txt.includes('JWT expired')) {
+    if (await _sbRefreshSession()) {
+      r = await fetch(SB_URL + path, { headers: SB_HEADERS });
+      if (r.ok) return r.json();
+    }
+    localStorage.removeItem('sb_session'); localStorage.removeItem('sb_perfil');
+    window.location.href = '../../login.html'; return [];
+  }
+  return [];
+}
+
+async function sbPost(path, data, returnRep = false) {
+  const pref = returnRep ? 'return=representation' : 'return=minimal';
+  const r = await fetch(SB_URL + path, {
+    method: 'POST',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': pref },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) { const t = await r.text().catch(()=>''); console.error('sbPost', path, t); return null; }
+  if (returnRep) { const res = await r.json(); return Array.isArray(res) ? res[0] : res; }
+  return true;
+}
+
+async function sbPatch(path, data) {
+  const r = await fetch(SB_URL + path, {
+    method: 'PATCH',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify(data)
+  });
+  return r.ok;
+}
+
+function uuidv4() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+}
+
+function logout() {
+  localStorage.removeItem('sb_session');
+  localStorage.removeItem('sb_perfil');
+  window.location.href = '../../login.html';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ESTADO
+════════════════════════════════════════════════════════════*/
+let _paramEmpresas = [];
+let _allImportacoes = [];   // he_importacoes ativas + empresa relacionada
+let _allRegistros = [];     // he_registros de importacoes ativas
+let _colabsMap = {};        // id → { nome, cargo, matricula, empresa_registro }
+let _dataLoaded = false;
+let _colabsForImport = null;
+let _importPreviewData = []; // blocos parseados do PDF aguardando confirmação
+let _userName = '';
+let _userPerfil = '';
+
+/* ═══════════════════════════════════════════════════════════
+   FORMATAÇÃO
+════════════════════════════════════════════════════════════*/
+const _MESES_CURTOS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const _MESES_PT = { JANEIRO:'01',FEVEREIRO:'02','MARÇO':'03','MARCO':'03',ABRIL:'04',MAIO:'05',JUNHO:'06',JULHO:'07',AGOSTO:'08',SETEMBRO:'09',OUTUBRO:'10',NOVEMBRO:'11',DEZEMBRO:'12' };
+
+function fmtComp(yyyymm) {
+  if (!yyyymm) return '—';
+  const [y,m] = yyyymm.split('-');
+  return `${_MESES_CURTOS[parseInt(m)-1]}/${y}`;
+}
+function fmtN(v, dec=2) { return (+(v||0)).toLocaleString('pt-BR',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
+function fmtBRL(v) { return 'R$ ' + fmtN(v); }
+function parseBR(s) { if (!s) return 0; return parseFloat(String(s).replace(/\./g,'').replace(',','.')) || 0; }
+function titleCase(s) {
+  if (!s) return s;
+  const min = new Set(['de','da','do','dos','das','e','em','na','no']);
+  return s.toLowerCase().split(' ').map((w,i)=>(!i||!min.has(w))?w.charAt(0).toUpperCase()+w.slice(1):w).join(' ');
+}
+function initials(nome) { return (nome||'?').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+════════════════════════════════════════════════════════════*/
+function toast(msg, type='') {
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (type?' '+type:'');
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TABS
+════════════════════════════════════════════════════════════*/
+function showTab(id, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sec-'+id).classList.add('active');
+  if (id === 'painel')        renderPainel();
+  if (id === 'colaboradores') renderColabs();
+  if (id === 'analise')       renderAnalise();
+  if (id === 'importacao')    initImportacao();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CARREGAMENTO DE DADOS
+════════════════════════════════════════════════════════════*/
+async function loadData() {
+  if (_dataLoaded) return;
+
+  const [emps, importacoes] = await Promise.all([
+    sbGet('/rest/v1/param_empresa?select=*&ativo=eq.true&order=ordem'),
+    sbGet('/rest/v1/he_importacoes?ativo=eq.true&select=*,empresa:param_empresa(nome_simplificado)&order=competencia.desc,importado_em.desc')
+  ]);
+
+  _paramEmpresas = emps || [];
+  _allImportacoes = importacoes || [];
+
+  if (_allImportacoes.length) {
+    const ids = _allImportacoes.map(i => i.id);
+    // Carrega em lotes de 50 para evitar URLs muito longas
+    const chunks = [];
+    for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+    const allReg = [];
+    for (const chunk of chunks) {
+      const reg = await sbGet(`/rest/v1/he_registros?importacao_id=in.(${chunk.join(',')})&select=*&order=total_valor.desc`);
+      if (reg) allReg.push(...reg);
+    }
+    _allRegistros = allReg;
+  }
+
+  // Carrega colaboradores (apenas campos necessários)
+  const colabs = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,cargo,situacao&order=nome');
+  _colabsMap = {};
+  for (const c of (colabs||[])) _colabsMap[c.id] = c;
+
+  _dataLoaded = true;
+}
+
+function _getCompetencias() {
+  const set = new Set(_allImportacoes.map(i => i.competencia));
+  return [...set].sort().reverse();
+}
+
+function _populateCompetenciaSelect(selId, defaultFirst=true) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const comps = _getCompetencias();
+  sel.innerHTML = comps.map(c => `<option value="${c}">${fmtComp(c)}</option>`).join('');
+  if (!comps.length) sel.innerHTML = '<option value="">Sem dados</option>';
+}
+
+function _populateEmpresaSelect(selId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const opt0 = sel.querySelector('option[value=""]');
+  sel.innerHTML = '';
+  if (opt0) sel.appendChild(opt0.cloneNode(true));
+  for (const e of _paramEmpresas) {
+    const o = document.createElement('option');
+    o.value = e.id;
+    o.textContent = e.nome_simplificado;
+    sel.appendChild(o);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ABA PAINEL
+════════════════════════════════════════════════════════════*/
+async function renderPainel() {
+  const el = document.getElementById('painelContent');
+  if (!_dataLoaded) {
+    el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+    await loadData();
+    _populateCompetenciaSelect('painelComp');
+    _populateEmpresaSelect('painelEmp');
+  }
+
+  const comp = document.getElementById('painelComp').value;
+  const empId = document.getElementById('painelEmp').value;
+
+  if (!comp) { el.innerHTML = '<div class="empty">Nenhum dado disponível.</div>'; return; }
+
+  // Filtra importacoes da competência
+  const imps = _allImportacoes.filter(i => i.competencia === comp && (!empId || String(i.param_empresa_id) === empId));
+  const impIds = new Set(imps.map(i => i.id));
+
+  // Filtra registros
+  const regs = _allRegistros.filter(r => impIds.has(r.importacao_id));
+
+  if (!regs.length) {
+    el.innerHTML = '<div class="empty">Nenhum registro para o período selecionado.</div>';
+    return;
+  }
+
+  // KPIs
+  const totalColabs = new Set(regs.map(r => r.colaborador_id).filter(Boolean)).size;
+  const totalHoras = regs.reduce((s,r) => s + (r.total_quant||0), 0);
+  const totalValor = regs.reduce((s,r) => s + (r.total_valor||0), 0);
+  const ticketMedio = totalColabs ? (totalValor / totalColabs) : 0;
+
+  let html = `<div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-label">Colaboradores</div><div class="kpi-value">${totalColabs}</div><div class="kpi-sub">com horas extras</div></div>
+    <div class="kpi-card"><div class="kpi-label">Total de Horas</div><div class="kpi-value">${fmtN(totalHoras)}h</div><div class="kpi-sub">soma geral</div></div>
+    <div class="kpi-card"><div class="kpi-label">Total em R$</div><div class="kpi-value" style="font-size:20px">${fmtBRL(totalValor)}</div><div class="kpi-sub">bruto</div></div>
+    <div class="kpi-card"><div class="kpi-label">Ticket Médio</div><div class="kpi-value" style="font-size:20px">${fmtBRL(ticketMedio)}</div><div class="kpi-sub">por colaborador</div></div>
+  </div>`;
+
+  if (!empId) {
+    // Breakdown por empresa
+    html += `<div class="table-wrap"><table class="data-table">
+      <thead><tr>
+        <th>Empresa</th>
+        <th class="text-right">Colaboradores</th>
+        <th class="text-right">Horas</th>
+        <th class="text-right">Valor</th>
+        <th class="text-right">% do Total</th>
+      </tr></thead><tbody>`;
+
+    // Agrupa por empresa
+    const byEmp = {};
+    for (const imp of imps) {
+      const nome = imp.empresa?.nome_simplificado || String(imp.param_empresa_id);
+      if (!byEmp[nome]) byEmp[nome] = { colabs: new Set(), horas: 0, valor: 0 };
+      const rr = regs.filter(r => r.importacao_id === imp.id);
+      rr.forEach(r => { if (r.colaborador_id) byEmp[nome].colabs.add(r.colaborador_id); byEmp[nome].horas += r.total_quant||0; byEmp[nome].valor += r.total_valor||0; });
+    }
+
+    for (const [nome, d] of Object.entries(byEmp).sort((a,b) => b[1].valor - a[1].valor)) {
+      const pct = totalValor ? (d.valor / totalValor * 100) : 0;
+      html += `<tr><td><strong>${nome}</strong></td><td class="text-right text-num">${d.colabs.size}</td><td class="text-right text-num">${fmtN(d.horas)}h</td><td class="text-right text-num">${fmtBRL(d.valor)}</td><td class="text-right text-num">${fmtN(pct,1)}%</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  } else {
+    // Empresa selecionada — breakdown por percentual
+    const allPcts = {};
+    for (const r of regs) {
+      for (const [pct, v] of Object.entries(r.percentuais||{})) {
+        if (!allPcts[pct]) allPcts[pct] = { quant: 0, valor: 0 };
+        allPcts[pct].quant += v.quant||0;
+        allPcts[pct].valor += v.valor||0;
+      }
+    }
+    const pctKeys = Object.keys(allPcts).sort((a,b) => parseInt(a)-parseInt(b));
+    if (pctKeys.length) {
+      html += `<div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Tipo</th><th class="text-right">Horas</th><th class="text-right">Valor</th></tr></thead><tbody>`;
+      for (const k of pctKeys) {
+        html += `<tr><td><strong>HE ${k}%</strong></td><td class="text-right text-num">${fmtN(allPcts[k].quant)}h</td><td class="text-right text-num">${fmtBRL(allPcts[k].valor)}</td></tr>`;
+      }
+      html += '</tbody></table></div>';
+    }
+  }
+
+  el.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ABA COLABORADORES
+════════════════════════════════════════════════════════════*/
+async function renderColabs() {
+  const el = document.getElementById('colabContent');
+  if (!_dataLoaded) {
+    el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+    await loadData();
+    _populateCompetenciaSelect('colabComp');
+    _populateEmpresaSelect('colabEmp');
+  }
+
+  const comp = document.getElementById('colabComp').value;
+  const empId = document.getElementById('colabEmp').value;
+  const busca = (document.getElementById('colabBusca').value||'').toLowerCase().trim();
+
+  const imps = _allImportacoes.filter(i => i.competencia === comp && (!empId || String(i.param_empresa_id) === empId));
+  const impIds = new Set(imps.map(i => i.id));
+  const impMap = Object.fromEntries(imps.map(i => [i.id, i]));
+
+  let regs = _allRegistros.filter(r => impIds.has(r.importacao_id));
+
+  if (busca) {
+    regs = regs.filter(r => {
+      const c = _colabsMap[r.colaborador_id];
+      const nome = (c?.nome || r.matricula_pdf || '').toLowerCase();
+      return nome.includes(busca);
+    });
+  }
+
+  if (!regs.length) {
+    el.innerHTML = '<div class="empty">Nenhum resultado.</div>';
+    return;
+  }
+
+  el.innerHTML = `<div class="table-wrap"><table class="data-table">
+    <thead><tr>
+      <th>Colaborador</th>
+      <th>Empresa</th>
+      <th>Cargo</th>
+      <th class="text-right">Horas</th>
+      <th class="text-right">Valor</th>
+    </tr></thead>
+    <tbody>
+    ${regs.map(r => {
+      const c = _colabsMap[r.colaborador_id];
+      const nome = c ? titleCase(c.nome) : `Mat. ${r.matricula_pdf}`;
+      const cargo = c?.cargo || '—';
+      const emp = impMap[r.importacao_id]?.empresa?.nome_simplificado || '—';
+      return `<tr class="clickable" onclick="abrirDrawer(${r.colaborador_id||'null'},'${r.importacao_id}')">
+        <td><strong>${nome}</strong>${!c?'<br><span style="font-size:11px;color:var(--red)">Não vinculado</span>':''}</td>
+        <td style="color:var(--text-sec)">${emp}</td>
+        <td style="color:var(--text-sec)">${cargo}</td>
+        <td class="text-right text-num">${fmtN(r.total_quant)}h</td>
+        <td class="text-right text-num" style="color:var(--green);font-weight:600">${fmtBRL(r.total_valor)}</td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DRAWER COLABORADOR
+════════════════════════════════════════════════════════════*/
+function abrirDrawer(colabId, importacaoId) {
+  const overlay = document.getElementById('drawerOverlay');
+  const drawer  = document.getElementById('drawer');
+  const body    = document.getElementById('drawerBody');
+
+  if (!colabId) {
+    // Não vinculado — apenas mostra dados do registro
+    const r = _allRegistros.find(r => r.importacao_id === importacaoId);
+    document.getElementById('drawerNome').textContent = `Mat. ${r?.matricula_pdf || '—'}`;
+    document.getElementById('drawerSub').textContent = 'Colaborador não vinculado';
+    body.innerHTML = renderDrawerRegs(null, importacaoId);
+  } else {
+    const c = _colabsMap[colabId];
+    document.getElementById('drawerNome').textContent = c ? titleCase(c.nome) : `ID ${colabId}`;
+    document.getElementById('drawerSub').textContent = [c?.cargo, c?.empresa_registro].filter(Boolean).join(' · ');
+    body.innerHTML = renderDrawerRegs(colabId, null);
+  }
+
+  overlay.classList.add('open');
+  drawer.classList.add('open');
+}
+
+function renderDrawerRegs(colabId, importacaoId) {
+  // Pega todos os registros do colaborador (histórico completo)
+  let regs;
+  if (colabId) {
+    regs = _allRegistros.filter(r => r.colaborador_id === colabId);
+  } else {
+    regs = _allRegistros.filter(r => r.importacao_id === importacaoId);
+  }
+  regs = regs.sort((a,b) => b.competencia.localeCompare(a.competencia));
+
+  if (!regs.length) return '<div class="empty">Sem registros.</div>';
+
+  const impMap = Object.fromEntries(_allImportacoes.map(i => [i.id, i]));
+
+  // Gráfico SVG simples de evolução
+  const ultimas12 = regs.slice(0, 12).reverse();
+  const maxValor = Math.max(...ultimas12.map(r => r.total_valor||0), 1);
+  const W = 420, H = 100, barW = Math.floor(W / ultimas12.length) - 4;
+  const bars = ultimas12.map((r, i) => {
+    const h = Math.round((r.total_valor||0) / maxValor * H);
+    const x = i * (barW + 4) + 2;
+    return `<rect x="${x}" y="${H - h}" width="${barW}" height="${h}" rx="3" fill="#1849A9" fill-opacity="0.7">
+      <title>${fmtComp(r.competencia)}: ${fmtBRL(r.total_valor)}</title></rect>`;
+  }).join('');
+  const chart = `<div class="chart-wrap" style="margin-bottom:20px">
+    <div class="chart-title">Evolução — valor total (últimos ${ultimas12.length} meses)</div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">${bars}</svg>
+  </div>`;
+
+  // Tabela
+  const rows = regs.map(r => {
+    const emp = impMap[r.importacao_id]?.empresa?.nome_simplificado || r.empresa_codigo || '—';
+    const pcts = Object.entries(r.percentuais||{}).sort((a,b)=>parseInt(a[0])-parseInt(b[0]));
+    const det = pcts.map(([k,v])=>`HE ${k}%: ${fmtN(v.quant)}h`).join(' · ');
+    return `<tr>
+      <td style="padding:10px 0;border-bottom:1px solid var(--border);font-weight:600">${fmtComp(r.competencia)}</td>
+      <td style="padding:10px 0;border-bottom:1px solid var(--border);color:var(--text-sec)">${emp}</td>
+      <td style="padding:10px 0;border-bottom:1px solid var(--border);text-align:right">${fmtN(r.total_quant)}h</td>
+      <td style="padding:10px 0;border-bottom:1px solid var(--border);text-align:right;color:var(--green);font-weight:600">${fmtBRL(r.total_valor)}</td>
+      <td style="padding:10px 0;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-ter)">${det}</td>
+    </tr>`;
+  }).join('');
+
+  return chart + `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr>
+      <th style="text-align:left;padding:6px 0;font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em;border-bottom:2px solid var(--border)">Comp.</th>
+      <th style="text-align:left;padding:6px 0;font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em;border-bottom:2px solid var(--border)">Empresa</th>
+      <th style="text-align:right;padding:6px 0;font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em;border-bottom:2px solid var(--border)">Horas</th>
+      <th style="text-align:right;padding:6px 0;font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em;border-bottom:2px solid var(--border)">Valor</th>
+      <th style="text-align:right;padding:6px 0;font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em;border-bottom:2px solid var(--border)">Tipos</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function fecharDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ABA ANÁLISE
+════════════════════════════════════════════════════════════*/
+async function renderAnalise() {
+  const el = document.getElementById('analiseContent');
+  if (!_dataLoaded) {
+    el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+    await loadData();
+    _populateCompetenciaSelect('analiseComp');
+  }
+
+  const comp = document.getElementById('analiseComp').value;
+  if (!comp) { el.innerHTML = '<div class="empty">Nenhum dado.</div>'; return; }
+
+  const imps = _allImportacoes.filter(i => i.competencia === comp);
+  const impIds = new Set(imps.map(i => i.id));
+  const impMap = Object.fromEntries(imps.map(i => [i.id, i]));
+  const regs = _allRegistros.filter(r => impIds.has(r.importacao_id));
+
+  if (!regs.length) { el.innerHTML = '<div class="empty">Nenhum dado para o período.</div>'; return; }
+
+  // Comparativo por empresa (barras horizontais)
+  const byEmp = {};
+  for (const imp of imps) {
+    const nome = imp.empresa?.nome_simplificado || String(imp.param_empresa_id);
+    byEmp[nome] = byEmp[nome] || { valor: 0, horas: 0, colabs: new Set() };
+    regs.filter(r => r.importacao_id === imp.id).forEach(r => {
+      byEmp[nome].valor += r.total_valor||0;
+      byEmp[nome].horas += r.total_quant||0;
+      if (r.colaborador_id) byEmp[nome].colabs.add(r.colaborador_id);
+    });
+  }
+  const empEntries = Object.entries(byEmp).sort((a,b)=>b[1].valor-a[1].valor);
+  const maxEmpVal = empEntries[0]?.[1].valor || 1;
+
+  let html = `<div class="chart-wrap" style="margin-bottom:24px">
+    <div class="chart-title">Comparativo por Empresa — ${fmtComp(comp)}</div>`;
+  for (const [nome, d] of empEntries) {
+    const pct = (d.valor / maxEmpVal * 100).toFixed(1);
+    html += `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <span style="font-weight:600">${nome}</span>
+        <span style="color:var(--text-sec)">${fmtBRL(d.valor)} · ${fmtN(d.horas)}h · ${d.colabs.size} colab.</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:#1849A9"></div></div>
+    </div>`;
+  }
+  html += '</div>';
+
+  // Top 10 colaboradores
+  const topRegs = [...regs].filter(r=>r.colaborador_id).sort((a,b)=>(b.total_valor||0)-(a.total_valor||0)).slice(0,10);
+  if (topRegs.length) {
+    html += `<div class="table-wrap"><table class="data-table">
+      <thead><tr><th>#</th><th>Colaborador</th><th>Empresa</th><th class="text-right">Horas</th><th class="text-right">Valor</th></tr></thead>
+      <tbody>`;
+    topRegs.forEach((r,i) => {
+      const c = _colabsMap[r.colaborador_id];
+      const emp = impMap[r.importacao_id]?.empresa?.nome_simplificado || '—';
+      html += `<tr><td style="color:var(--text-ter);font-weight:700">${i+1}</td><td><strong>${c?titleCase(c.nome):r.matricula_pdf}</strong><br><span style="font-size:11px;color:var(--text-sec)">${c?.cargo||'—'}</span></td><td style="color:var(--text-sec)">${emp}</td><td class="text-right text-num">${fmtN(r.total_quant)}h</td><td class="text-right text-num" style="color:var(--green);font-weight:600">${fmtBRL(r.total_valor)}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ABA IMPORTAÇÃO — setup
+════════════════════════════════════════════════════════════*/
+let _importInitDone = false;
+
+async function initImportacao() {
+  if (_importInitDone) return;
+  _importInitDone = true;
+  if (!_dataLoaded) await loadData();
+  renderHistoricoImportacoes();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PDF PARSER
+════════════════════════════════════════════════════════════*/
+async function extractPDFPages(file) {
+  if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js não carregado.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const ab = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+  const pages = [];
+
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+
+    // Agrupa itens por linha (tolerância y ±8 pontos PDF)
+    const items = content.items
+      .filter(i => i.str && i.str.trim())
+      .map(i => ({ str: i.str.trim(), x: i.transform[4], y: i.transform[5] }));
+
+    items.sort((a,b) => b.y - a.y || a.x - b.x);
+
+    const lines = [];
+    for (const item of items) {
+      const last = lines[lines.length - 1];
+      if (last && Math.abs(last.y - item.y) < 8) {
+        last.items.push(item);
+        last.text += ' ' + item.str;
+      } else {
+        lines.push({ y: item.y, items: [item], text: item.str });
+      }
+    }
+    pages.push(lines.map(l => l.text.trim()).filter(Boolean));
+  }
+
+  return pages;
+}
+
+function parsePDFPages(allPages, fileName) {
+  const empresaBlocks = [];
+  let currentBlock = null;
+  let pageCompetencia = null;
+
+  for (const pageLines of allPages) {
+    // Detecta competência no cabeçalho da página
+    for (const line of pageLines) {
+      const m = line.match(/Compet[êe]ncia[:\s]+([A-ZÁÉÍÓÚÂÊÔÃÕÇ]+)\/(\d{4})/i);
+      if (m) {
+        const mes = _MESES_PT[m[1].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'')];
+        if (mes) pageCompetencia = `${m[2]}-${mes}`;
+        break;
+      }
+    }
+
+    for (const line of pageLines) {
+      // Detecta bloco de empresa: "0148 REVEST DO BRASIL ... Inscrição: XX.XXX.XXX/XXXX-XX"
+      const empMatch = line.match(/^(\d{3,5})\s+(.+?)\s+Inscri[çc][ãa]o[:\s]+([\d.\/\-]+)/i);
+      if (empMatch) {
+        currentBlock = {
+          empresaCodigo: empMatch[1],
+          empresaNome: empMatch[2].trim(),
+          cnpj: empMatch[3],
+          competencia: pageCompetencia,
+          percentuals: null,
+          registros: []
+        };
+        empresaBlocks.push(currentBlock);
+        continue;
+      }
+
+      // Detecta cabeçalho de colunas: linha com "HExt NN%"
+      if (currentBlock && line.includes('HExt')) {
+        const pcts = [...line.matchAll(/HExt\s+(\d+)%/g)].map(m => m[1]);
+        if (pcts.length) { currentBlock.percentuals = pcts; }
+        continue;
+      }
+
+      // Detecta linha de dados: inicia com 7 dígitos
+      if (currentBlock && currentBlock.percentuals) {
+        const dataMatch = line.match(/^(\d{7})\s+(.+?)\s+([\d,]+(?:\s+[\d,]+)+)\s*$/);
+        if (dataMatch) {
+          const nums = dataMatch[3].trim().split(/\s+/).map(parseBR);
+          const nPcts = currentBlock.percentuals.length;
+
+          const percentuais = {};
+          for (let i = 0; i < nPcts; i++) {
+            const q = nums[i*2]||0, v = nums[i*2+1]||0;
+            if (q > 0 || v > 0) percentuais[currentBlock.percentuals[i]] = { quant: q, valor: v };
+          }
+
+          const off = nPcts * 2;
+          currentBlock.registros.push({
+            matricula_pdf: dataMatch[1],
+            nome_pdf: dataMatch[2].trim(),
+            percentuais,
+            dsr_quant: nums[off]||0,
+            dsr_valor: nums[off+1]||0,
+            total_quant: nums[off+2]||0,
+            total_valor: nums[off+3]||0,
+            status_vinculo: 'nao_encontrado',
+            colaborador_id: null
+          });
+          continue;
+        }
+      }
+    }
+  }
+
+  return empresaBlocks.filter(b => b.registros.length > 0);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   IMPORTAÇÃO — drag & drop & seleção de arquivos
+════════════════════════════════════════════════════════════*/
+function onDragOver(e) { e.preventDefault(); document.getElementById('dropZone').classList.add('drag-over'); }
+function onDragLeave(e) { document.getElementById('dropZone').classList.remove('drag-over'); }
+function onDrop(e) { e.preventDefault(); document.getElementById('dropZone').classList.remove('drag-over'); processarArquivos([...e.dataTransfer.files]); }
+function onFilesSelected(e) { processarArquivos([...e.target.files]); e.target.value = ''; }
+
+async function processarArquivos(files) {
+  const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+  if (!pdfs.length) { toast('Nenhum PDF selecionado.', 'error'); return; }
+
+  if (!_colabsForImport) {
+    const c = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,situacao&order=nome');
+    _colabsForImport = c || [];
+  }
+
+  // Carrega todas as importações (ativas e inativas) para verificar substituições
+  const todasImp = await sbGet('/rest/v1/he_importacoes?select=id,competencia,param_empresa_id,versao,ativo&order=competencia.desc');
+
+  document.getElementById('importParseProgress').style.display = 'block';
+  document.getElementById('importPreviewArea').style.display = 'none';
+  document.getElementById('importActionsArea').style.display = 'none';
+
+  const allBlocks = [];
+
+  for (let fi = 0; fi < pdfs.length; fi++) {
+    const file = pdfs[fi];
+    document.getElementById('importProgressMsg').textContent = `Lendo ${file.name}… (${fi+1}/${pdfs.length})`;
+    document.getElementById('importProgressFill').style.width = `${((fi+1)/pdfs.length*60).toFixed(0)}%`;
+
+    try {
+      const pages = await extractPDFPages(file);
+      const blocks = parsePDFPages(pages, file.name);
+      blocks.forEach(b => { b.arquivoNome = file.name; });
+      allBlocks.push(...blocks);
+    } catch(e) {
+      toast(`Erro ao ler ${file.name}: ${e.message}`, 'error');
+    }
+  }
+
+  document.getElementById('importProgressMsg').textContent = 'Cruzando com colaboradores…';
+  document.getElementById('importProgressFill').style.width = '80%';
+
+  // Cruza cada bloco com param_empresa e cada registro com colaboradores
+  for (const block of allBlocks) {
+    const codigoNorm = String(parseInt(block.empresaCodigo, 10));
+    const pe = _paramEmpresas.find(e => e.codigo === codigoNorm);
+    block.param_empresa = pe || null;
+
+    // Verifica substituição
+    if (pe) {
+      const existing = (todasImp||[]).find(i => i.competencia === block.competencia && i.param_empresa_id === pe.id && i.ativo);
+      block.substituicao = existing || null;
+    }
+
+    // Cruza registros
+    for (const reg of block.registros) {
+      const matNorm = String(parseInt(reg.matricula_pdf, 10));
+      const empNome = block.param_empresa?.nome_simplificado;
+      const matches = _colabsForImport.filter(c => c.matricula === matNorm && (!empNome || c.empresa_registro === empNome));
+
+      if (!matches.length) {
+        reg.status_vinculo = 'nao_encontrado';
+      } else if (matches.length === 1) {
+        reg.colaborador_id = matches[0].id;
+        reg.status_vinculo = matches[0].situacao === 'ativo' ? 'vinculado' : 'inativo';
+      } else {
+        // Múltiplos — verifica se todos têm o mesmo nome
+        const nomes = [...new Set(matches.map(c => c.nome))];
+        if (nomes.length === 1) {
+          // Mesmo nome — vincula ao de maior id
+          const best = matches.sort((a,b) => b.id - a.id)[0];
+          reg.colaborador_id = best.id;
+          reg.status_vinculo = best.situacao === 'ativo' ? 'vinculado' : 'inativo';
+        } else {
+          reg.status_vinculo = 'ambiguo';
+        }
+      }
+    }
+  }
+
+  document.getElementById('importProgressFill').style.width = '100%';
+  setTimeout(() => { document.getElementById('importParseProgress').style.display = 'none'; }, 400);
+
+  _importPreviewData = allBlocks;
+  renderImportPreview(allBlocks);
+}
+
+function _statusBadge(s) {
+  const map = {
+    vinculado: ['badge-green','✓ Vinculado'],
+    inativo:   ['badge-amber','⚠ Inativo'],
+    ambiguo:   ['badge-purple','? Ambíguo'],
+    nao_encontrado: ['badge-red','✗ Não encontrado']
+  };
+  const [cls, txt] = map[s] || ['badge-muted', s];
+  return `<span class="badge ${cls}">${txt}</span>`;
+}
+
+function renderImportPreview(allBlocks) {
+  const area = document.getElementById('importPreviewArea');
+  if (!allBlocks.length) { area.style.display = 'none'; return; }
+
+  // Contadores globais
+  let ctV=0,ctI=0,ctA=0,ctN=0;
+  allBlocks.forEach(b => b.registros.forEach(r => {
+    if (r.status_vinculo==='vinculado') ctV++;
+    else if (r.status_vinculo==='inativo') ctI++;
+    else if (r.status_vinculo==='ambiguo') ctA++;
+    else ctN++;
+  }));
+
+  let html = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+    <span class="badge badge-green">✓ ${ctV} vinculados</span>
+    ${ctI?`<span class="badge badge-amber">⚠ ${ctI} inativos</span>`:''}
+    ${ctN?`<span class="badge badge-red">✗ ${ctN} não encontrados</span>`:''}
+    ${ctA?`<span class="badge badge-purple">? ${ctA} ambíguos</span>`:''}
+  </div>`;
+
+  for (const block of allBlocks) {
+    const compLabel = fmtComp(block.competencia) || 'Competência não detectada';
+    const empLabel = block.param_empresa ? block.param_empresa.nome_simplificado : `Empresa não mapeada (${block.empresaCodigo})`;
+    const totalValor = block.registros.reduce((s,r)=>s+(r.total_valor||0),0);
+
+    html += `<div class="emp-block">
+      <div class="emp-block-header">
+        <div>
+          <div class="emp-block-name">${block.empresaNome}</div>
+          <div class="emp-block-meta">${empLabel} · ${compLabel} · ${block.registros.length} registros · ${fmtBRL(totalValor)}</div>
+        </div>
+        ${!block.param_empresa ? '<span class="badge badge-red">Empresa não mapeada</span>' : ''}
+        ${block.substituicao ? '<span class="badge badge-amber">⚠ Substituição</span>' : '<span class="badge badge-green">Nova importação</span>'}
+      </div>`;
+
+    if (block.substituicao) {
+      html += `<div class="alert alert-amber" style="margin:12px;border-radius:8px">
+        Esta empresa já foi importada para ${compLabel}. Confirmar irá substituir a versão anterior (histórico preservado).
+      </div>`;
+    }
+    if (!block.param_empresa) {
+      html += `<div class="alert alert-red" style="margin:12px;border-radius:8px">
+        Empresa com código "${block.empresaCodigo}" não encontrada em Parâmetros. Registros serão ignorados.
+      </div>`;
+    }
+
+    html += `<div style="overflow-x:auto"><table class="data-table">
+      <thead><tr>
+        <th>Matrícula</th><th>Nome PDF</th><th>Colaborador vinculado</th><th>Status</th>
+        <th class="text-right">Horas</th><th class="text-right">Valor</th>
+      </tr></thead><tbody>`;
+
+    for (const r of block.registros) {
+      const c = r.colaborador_id ? _colabsForImport.find(x => x.id === r.colaborador_id) : null;
+      html += `<tr>
+        <td style="font-family:monospace">${r.matricula_pdf}</td>
+        <td>${r.nome_pdf}</td>
+        <td>${c ? titleCase(c.nome) : '—'}</td>
+        <td>${_statusBadge(r.status_vinculo)}</td>
+        <td class="text-right text-num">${fmtN(r.total_quant)}h</td>
+        <td class="text-right text-num">${fmtBRL(r.total_valor)}</td>
+      </tr>`;
+    }
+    html += '</tbody></table></div></div>';
+  }
+
+  area.innerHTML = html;
+  area.style.display = 'block';
+
+  const actEl = document.getElementById('importActionsArea');
+  actEl.style.display = 'flex';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   IMPORTAÇÃO — gravação
+════════════════════════════════════════════════════════════*/
+async function confirmarImportacao() {
+  const btn = document.getElementById('btnConfirmar');
+  btn.disabled = true;
+  btn.textContent = 'Salvando…';
+
+  const somenteVinculados = document.getElementById('chkSomenteVinculados').checked;
+  const todasImpAtivas = await sbGet('/rest/v1/he_importacoes?ativo=eq.true&select=id,competencia,param_empresa_id');
+
+  let total = 0;
+  for (const block of _importPreviewData) {
+    if (!block.param_empresa) continue; // ignora blocos sem empresa mapeada
+
+    const regsParaSalvar = somenteVinculados
+      ? block.registros.filter(r => r.status_vinculo === 'vinculado')
+      : block.registros;
+
+    if (!regsParaSalvar.length) continue;
+
+    // Desativa importação anterior se houver
+    const existing = (todasImpAtivas||[]).find(i => i.competencia === block.competencia && i.param_empresa_id === block.param_empresa.id);
+    if (existing) {
+      await sbPatch(`/rest/v1/he_importacoes?id=eq.${existing.id}`, { ativo: false });
+    }
+
+    // Versão
+    const versaoAnterior = existing ? 1 : 0; // simplificado
+    const novaVersao = versaoAnterior + 1;
+
+    // Cria importacao com UUID gerado client-side
+    const importacaoId = uuidv4();
+    await sbPost('/rest/v1/he_importacoes', {
+      id: importacaoId,
+      competencia: block.competencia,
+      param_empresa_id: block.param_empresa.id,
+      arquivo_nome: block.arquivoNome,
+      versao: novaVersao,
+      importado_por: _userName,
+      total_colabs: regsParaSalvar.length,
+      total_horas: regsParaSalvar.reduce((s,r) => s+(r.total_quant||0), 0),
+      total_valor: regsParaSalvar.reduce((s,r) => s+(r.total_valor||0), 0)
+    });
+
+    // Insere registros em lote
+    const payload = regsParaSalvar.map(r => ({
+      importacao_id: importacaoId,
+      colaborador_id: r.colaborador_id || null,
+      matricula_pdf: r.matricula_pdf,
+      empresa_codigo: block.empresaCodigo,
+      competencia: block.competencia,
+      percentuais: r.percentuais || {},
+      dsr_quant: r.dsr_quant || 0,
+      dsr_valor: r.dsr_valor || 0,
+      total_quant: r.total_quant || 0,
+      total_valor: r.total_valor || 0,
+      status_vinculo: r.status_vinculo
+    }));
+    await sbPost('/rest/v1/he_registros', payload);
+
+    // Atualiza histórico dos colaboradores vinculados
+    for (const r of regsParaSalvar.filter(r => r.colaborador_id)) {
+      await appendHEHistorico(r.colaborador_id, block, r);
+    }
+
+    total++;
+  }
+
+  // Recarrega dados
+  _dataLoaded = false;
+  await loadData();
+  _populateCompetenciaSelect('painelComp');
+  _populateCompetenciaSelect('colabComp');
+  _populateCompetenciaSelect('analiseComp');
+  _populateEmpresaSelect('painelEmp');
+  _populateEmpresaSelect('colabEmp');
+
+  cancelarImportacao();
+  renderHistoricoImportacoes();
+  _importInitDone = false; // força reload do histórico
+
+  toast(`${total} empresa(s) importada(s) com sucesso!`, 'success');
+  btn.disabled = false;
+  btn.textContent = 'Confirmar Importação';
+}
+
+async function appendHEHistorico(colabId, block, reg) {
+  try {
+    const colabs = await sbGet(`/rest/v1/colaboradores?id=eq.${colabId}&select=id,historico`);
+    if (!colabs || !colabs.length) return;
+    const historico = Array.isArray(colabs[0].historico) ? [...colabs[0].historico] : [];
+    historico.push({
+      tipo: 'he_importacao',
+      data: new Date().toISOString(),
+      detalhe: `${fmtComp(block.competencia)} · ${block.param_empresa.nome_simplificado} · ${fmtN(reg.total_quant)}h · ${fmtBRL(reg.total_valor)}`,
+      usuario: _userName
+    });
+    await sbPatch(`/rest/v1/colaboradores?id=eq.${colabId}`, { historico });
+  } catch(_) { /* falha silenciosa */ }
+}
+
+function cancelarImportacao() {
+  _importPreviewData = [];
+  document.getElementById('importPreviewArea').innerHTML = '';
+  document.getElementById('importPreviewArea').style.display = 'none';
+  document.getElementById('importActionsArea').style.display = 'none';
+  document.getElementById('importParseProgress').style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HISTÓRICO DE IMPORTAÇÕES
+════════════════════════════════════════════════════════════*/
+async function renderHistoricoImportacoes() {
+  const el = document.getElementById('histImportacoesContent');
+  const todas = await sbGet('/rest/v1/he_importacoes?select=*,empresa:param_empresa(nome_simplificado)&order=importado_em.desc&limit=100');
+  if (!todas || !todas.length) {
+    el.innerHTML = '<div class="empty">Nenhuma importação registrada.</div>';
+    return;
+  }
+
+  el.innerHTML = `<div class="table-wrap"><table class="data-table">
+    <thead><tr>
+      <th>Competência</th><th>Empresa</th><th>Versão</th><th>Data</th>
+      <th>Usuário</th><th class="text-right">Colabs</th>
+      <th class="text-right">Horas</th><th class="text-right">Valor</th><th>Status</th>
+    </tr></thead>
+    <tbody>
+    ${todas.map(i => `<tr>
+      <td><strong>${fmtComp(i.competencia)}</strong></td>
+      <td>${i.empresa?.nome_simplificado||'—'}</td>
+      <td style="color:var(--text-ter)">v${i.versao}</td>
+      <td style="color:var(--text-sec);font-size:12px">${new Date(i.importado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
+      <td style="color:var(--text-sec);font-size:12px">${i.importado_por||'—'}</td>
+      <td class="text-right">${i.total_colabs||0}</td>
+      <td class="text-right text-num">${fmtN(i.total_horas)}h</td>
+      <td class="text-right text-num">${fmtBRL(i.total_valor)}</td>
+      <td>${i.ativo ? '<span class="badge badge-green">Ativa</span>' : '<span class="badge badge-muted">Substituída</span>'}</td>
+    </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════════*/
+(function() {
+  const sess = localStorage.getItem('sb_session');
+  const perf = localStorage.getItem('sb_perfil');
+  if (!sess) { window.location.href = '../../login.html'; return; }
+  try {
+    const s = JSON.parse(sess);
+    if (s.expires_at < Date.now()) { localStorage.clear(); window.location.href = '../../login.html'; return; }
+    SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' };
+    const p = perf ? JSON.parse(perf) : {};
+    _userPerfil = p.perfil || '';
+    _userName = p.nome || (s.email||'').split('@')[0] || '—';
+    const ini = _userName.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+    document.getElementById('userName').textContent = _userName.split(' ')[0];
+    document.getElementById('userAvatar').textContent = ini || '?';
+
+    // Mostra aba de importação apenas para RH/admin
+    if (['rh','admin'].includes(_userPerfil)) {
+      document.getElementById('tabImportacao').classList.remove('hidden');
+    }
+  } catch(_) { localStorage.clear(); window.location.href = '../../login.html'; }
+})();
+
+// Carrega dados iniciais e renderiza painel
+(async function() {
+  await loadData();
+  _populateCompetenciaSelect('painelComp');
+  _populateCompetenciaSelect('colabComp');
+  _populateCompetenciaSelect('analiseComp');
+  _populateEmpresaSelect('painelEmp');
+  _populateEmpresaSelect('colabEmp');
+  renderPainel();
+})();
+</script>
+</body>
+</html>

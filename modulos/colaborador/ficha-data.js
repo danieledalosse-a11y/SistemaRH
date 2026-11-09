@@ -51,6 +51,7 @@ function getParam(k) { return new URLSearchParams(window.location.search).get(k)
 
 /* ── Dados ── */
 let _colab = null, _ferias = [], _avaliacoes = [], _ciclos = [], _pdi = [], _historico = [], _processosAbertos = [], _processosConcluidos = [], _historicoRemuneracao = [], _historicoEventos = [], _tiposEvento = {};
+let _heRegistros = null; // null = não carregado ainda
 
 /* ── Helpers ferias ── */
 function addDays(dateStr, days) {
@@ -149,6 +150,9 @@ async function init() {
   // Aplica reajustes com vigência vencida que o cron ainda não processou
   await _verificarReajustesPendentes(colabId);
 
+  // Carrega HE em background (não bloqueia a renderização)
+  loadHE(colabId);
+
   renderHero();
   renderResumo();
 
@@ -191,6 +195,23 @@ async function _verificarReajustesPendentes(colabId) {
       }
     } catch(_) { /* falha silenciosa — cron tentará novamente */ }
   }
+}
+
+async function loadHE(colabId) {
+  try {
+    // Busca importações ativas para usar como filtro
+    const importacoes = await sbGet('/rest/v1/he_importacoes?ativo=eq.true&select=id,competencia,param_empresa_id,empresa:param_empresa(nome_simplificado)');
+    if (!importacoes || !importacoes.length) { _heRegistros = []; renderHE(); return; }
+
+    const ids = importacoes.map(i => i.id).join(',');
+    const registros = await sbGet(`/rest/v1/he_registros?colaborador_id=eq.${colabId}&importacao_id=in.(${ids})&order=competencia.desc`);
+    if (!registros) { _heRegistros = []; renderHE(); return; }
+
+    // Enriquece cada registro com dados da importação
+    const impMap = Object.fromEntries(importacoes.map(i => [i.id, i]));
+    _heRegistros = registros.map(r => ({ ...r, _imp: impMap[r.importacao_id] || {} }));
+  } catch(_) { _heRegistros = []; }
+  renderHE();
 }
 
 function mostrarErro(msg) {
