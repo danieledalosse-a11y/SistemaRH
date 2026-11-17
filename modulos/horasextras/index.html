@@ -916,26 +916,29 @@ function _parsePDFPages(allPages, fileName) {
     const trabIdx = trabLine.items.findIndex(it => it.str === 'Trabalhador');
     if (trabIdx < 0) continue;
 
-    // Empresa: procura "Empresa" seguido de código numérico nos itens antes de Trabalhador
+    // Empresa: busca em todas as linhas da página (o cabeçalho pode estar em linha separada)
     if (!empresaCodigo) {
-      const empItemIdx = trabLine.items.slice(0, trabIdx).findIndex(it => /^empresa$/i.test(it.str));
-      if (empItemIdx >= 0) {
-        // Próximo item numérico após "Empresa"
-        for (let j = empItemIdx + 1; j < trabIdx; j++) {
-          if (/^\d{3,5}$/.test(trabLine.items[j].str)) {
-            empresaCodigo = trabLine.items[j].str.trim();
+      for (let li = 0; li < pageLines.length; li++) {
+        const ln = pageLines[li];
+        const empIdx = ln.items.findIndex(it => /^empresa$/i.test(it.str));
+        if (empIdx < 0) continue;
+        // Código numérico na mesma linha após "Empresa"
+        for (let j = empIdx + 1; j < ln.items.length; j++) {
+          if (/^\d{3,5}$/.test(ln.items[j].str.trim())) {
+            empresaCodigo = ln.items[j].str.trim();
             break;
           }
         }
-      }
-      // Fallback: qualquer item de 3-5 dígitos puro antes de Trabalhador
-      if (!empresaCodigo) {
-        for (let i = 0; i < trabIdx; i++) {
-          if (/^\d{3,5}$/.test(trabLine.items[i].str.trim())) {
-            empresaCodigo = trabLine.items[i].str.trim();
-            break;
+        // Código na linha seguinte (caso "Empresa" e o código estejam em linhas diferentes)
+        if (!empresaCodigo && pageLines[li + 1]) {
+          for (const it of pageLines[li + 1].items) {
+            if (/^\d{3,5}$/.test(it.str.trim())) {
+              empresaCodigo = it.str.trim();
+              break;
+            }
           }
         }
+        if (empresaCodigo) break;
       }
     }
 
@@ -943,14 +946,16 @@ function _parsePDFPages(allPages, fileName) {
     const afterTrab = trabLine.items.slice(trabIdx + 1).filter(it => !/^=+$/.test(it.str));
     const cols = afterTrab.map(it => {
       const m = it.str.match(/^(\d{7})\s*(.*)/);
-      return m ? { id: m[1], x: Math.round(it.x) } : null;
+      return m ? { id: m[1], nome: m[2].trim(), x: Math.round(it.x) } : null;
     }).filter(Boolean);
 
     if (!cols.length) continue;
 
     for (const col of cols) {
       if (!colabMap[col.id]) {
-        colabMap[col.id] = { percentuais: {}, dsr_quant: 0, dsr_valor: 0, total_quant: 0, total_valor: 0, pdf_total_quant: 0, pdf_total_valor: 0 };
+        colabMap[col.id] = { nome_pdf: col.nome || '', percentuais: {}, dsr_quant: 0, dsr_valor: 0, total_quant: 0, total_valor: 0, pdf_total_quant: 0, pdf_total_valor: 0 };
+      } else if (col.nome && !colabMap[col.id].nome_pdf) {
+        colabMap[col.id].nome_pdf = col.nome;
       }
     }
 
@@ -1051,7 +1056,7 @@ function _parsePDFPages(allPages, fileName) {
   // Monta resultado final
   const registros = Object.entries(colabMap).map(([id, data]) => ({
     matricula_pdf: id,
-    nome_pdf: '',
+    nome_pdf: data.nome_pdf || '',
     percentuais: data.percentuais,
     dsr_quant:   data.dsr_quant,
     dsr_valor:   data.dsr_valor,
@@ -1139,21 +1144,20 @@ async function processarArquivos(files) {
 
     // Cruza registros
     for (const reg of block.registros) {
-      const matNorm = String(parseInt(reg.matricula_pdf, 10));
-      const empNome = block.param_empresa?.nome_simplificado;
-      const peId    = block.param_empresa?.id;
+      // Empresa não mapeada: nem tenta vincular, registra motivo
+      if (!block.param_empresa) {
+        reg.status_vinculo = 'empresa_nao_mapeada';
+        continue;
+      }
 
-      // Prioridade: param_empresa_id (FK) → empresa_registro (nome) → matrícula apenas
-      let matches = peId
-        ? _colabsForImport.filter(c => c.param_empresa_id === peId && c.matricula === matNorm)
-        : [];
-      if (!matches.length && empNome)
-        matches = _colabsForImport.filter(c => c.empresa_registro === empNome && c.matricula === matNorm);
-      if (!matches.length && !peId && !empNome)
-        matches = _colabsForImport.filter(c => c.matricula === matNorm);
+      const matNorm = String(parseInt(reg.matricula_pdf, 10));
+      const empNome = block.param_empresa.nome_simplificado;
+
+      // Busca por empresa_registro (nome) + matrícula — respeita empresas com mesma matrícula
+      let matches = _colabsForImport.filter(c => c.empresa_registro === empNome && c.matricula === matNorm);
 
       if (!matches.length) {
-        reg.status_vinculo = 'nao_encontrado';
+        reg.status_vinculo = 'nao_encontrado'; // matrícula não cadastrada nesta empresa
       } else if (matches.length === 1) {
         reg.colaborador_id = matches[0].id;
         reg.status_vinculo = matches[0].ativo ? 'vinculado' : 'inativo';
@@ -1190,10 +1194,11 @@ async function processarArquivos(files) {
 
 function _statusBadge(s) {
   const map = {
-    vinculado: ['badge-green','✓ Vinculado'],
-    inativo:   ['badge-amber','⚠ Inativo'],
-    ambiguo:   ['badge-purple','? Ambíguo'],
-    nao_encontrado: ['badge-red','✗ Não encontrado']
+    vinculado:          ['badge-green', '✓ Vinculado'],
+    inativo:            ['badge-amber', '⚠ Inativo'],
+    ambiguo:            ['badge-purple','? Ambíguo'],
+    nao_encontrado:     ['badge-red',   '✗ Não encontrado'],
+    empresa_nao_mapeada:['badge-red',   '✗ Empresa não mapeada']
   };
   const [cls, txt] = map[s] || ['badge-muted', s];
   return `<span class="badge ${cls}">${txt}</span>`;
@@ -1204,11 +1209,12 @@ function renderImportPreview(allBlocks) {
   if (!allBlocks.length) { area.style.display = 'none'; return; }
 
   // Contadores globais
-  let ctV=0,ctI=0,ctA=0,ctN=0;
+  let ctV=0,ctI=0,ctA=0,ctN=0,ctE=0;
   allBlocks.forEach(b => b.registros.forEach(r => {
-    if (r.status_vinculo==='vinculado') ctV++;
-    else if (r.status_vinculo==='inativo') ctI++;
-    else if (r.status_vinculo==='ambiguo') ctA++;
+    if (r.status_vinculo==='vinculado')           ctV++;
+    else if (r.status_vinculo==='inativo')         ctI++;
+    else if (r.status_vinculo==='ambiguo')         ctA++;
+    else if (r.status_vinculo==='empresa_nao_mapeada') ctE++;
     else ctN++;
   }));
 
@@ -1216,6 +1222,7 @@ function renderImportPreview(allBlocks) {
     <span class="badge badge-green">✓ ${ctV} vinculados</span>
     ${ctI?`<span class="badge badge-amber">⚠ ${ctI} inativos</span>`:''}
     ${ctN?`<span class="badge badge-red">✗ ${ctN} não encontrados</span>`:''}
+    ${ctE?`<span class="badge badge-red">✗ ${ctE} empresa não mapeada</span>`:''}
     ${ctA?`<span class="badge badge-purple">? ${ctA} ambíguos</span>`:''}
   </div>`;
 
