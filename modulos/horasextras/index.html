@@ -890,8 +890,8 @@ function _parsePDFPages(allPages, fileName) {
   const EMP_X_MIN   = 90;  // itens com x >= 90 são valores de employee
   const X_TOL       = 5;   // tolerância de x para identificar coluna do employee
 
-  // Acumula dados por matrícula (merge de múltiplas páginas do mesmo arquivo)
-  const colabMap = {}; // id -> { percentuais, dsr_quant, dsr_valor, total_quant, total_valor }
+  // Acumula dados por chave composta empresa+matrícula (evita colisão entre empresas)
+  const colabMap = {}; // "empresaCod|matricula" -> { percentuais, dsr_quant, ... }
   let competencia  = null;
   let empresaCodigo = '';
 
@@ -900,6 +900,11 @@ function _parsePDFPages(allPages, fileName) {
     if (/\btotal\b/i.test(label)) return 'pdf_total';
     const m = label.match(/(\d+)%/);
     return m ? m[1] : null; // string não reconhecida → null (evita phantom data)
+  }
+
+  // Retorna true apenas para labels do domínio HE (evita que nomes de empresa e rodapés poluam o pending)
+  function isHELabel(s) {
+    return /^\s*(hext|dsr|total|ext)\b|\d+%|s\/extra|quant|valor/i.test(s);
   }
 
   for (const rawPageLines of allPages) {
@@ -916,31 +921,31 @@ function _parsePDFPages(allPages, fileName) {
     const trabIdx = trabLine.items.findIndex(it => it.str === 'Trabalhador');
     if (trabIdx < 0) continue;
 
-    // Empresa: busca em todas as linhas da página (o cabeçalho pode estar em linha separada)
-    if (!empresaCodigo) {
-      for (let li = 0; li < pageLines.length; li++) {
-        const ln = pageLines[li];
-        const empIdx = ln.items.findIndex(it => /^empresa$/i.test(it.str));
-        if (empIdx < 0) continue;
-        // Código numérico na mesma linha após "Empresa"
-        for (let j = empIdx + 1; j < ln.items.length; j++) {
-          if (/^\d{3,5}$/.test(ln.items[j].str.trim())) {
-            empresaCodigo = ln.items[j].str.trim();
+    // Empresa: detecta por página (pode mudar entre páginas do mesmo PDF multi-empresa)
+    let pageEmpresaCodigo = '';
+    for (let li = 0; li < pageLines.length; li++) {
+      const ln = pageLines[li];
+      const empIdx = ln.items.findIndex(it => /^empresa$/i.test(it.str));
+      if (empIdx < 0) continue;
+      for (let j = empIdx + 1; j < ln.items.length; j++) {
+        if (/^\d{3,5}$/.test(ln.items[j].str.trim())) {
+          pageEmpresaCodigo = ln.items[j].str.trim();
+          break;
+        }
+      }
+      if (!pageEmpresaCodigo && pageLines[li + 1]) {
+        for (const it of pageLines[li + 1].items) {
+          if (/^\d{3,5}$/.test(it.str.trim())) {
+            pageEmpresaCodigo = it.str.trim();
             break;
           }
         }
-        // Código na linha seguinte (caso "Empresa" e o código estejam em linhas diferentes)
-        if (!empresaCodigo && pageLines[li + 1]) {
-          for (const it of pageLines[li + 1].items) {
-            if (/^\d{3,5}$/.test(it.str.trim())) {
-              empresaCodigo = it.str.trim();
-              break;
-            }
-          }
-        }
-        if (empresaCodigo) break;
       }
+      if (pageEmpresaCodigo) break;
     }
+    // Mantém empresaCodigo global para retrocompatibilidade (resultado final usa o último encontrado)
+    if (pageEmpresaCodigo) empresaCodigo = pageEmpresaCodigo;
+    const pageEmp = pageEmpresaCodigo || empresaCodigo || '_';
 
     // Colunas de employee: itens após Trabalhador (pula separador "====")
     const afterTrab = trabLine.items.slice(trabIdx + 1).filter(it => !/^=+$/.test(it.str));
@@ -952,11 +957,13 @@ function _parsePDFPages(allPages, fileName) {
     if (!cols.length) continue;
 
     for (const col of cols) {
-      if (!colabMap[col.id]) {
-        colabMap[col.id] = { nome_pdf: col.nome || '', percentuais: {}, dsr_quant: 0, dsr_valor: 0, total_quant: 0, total_valor: 0, pdf_total_quant: 0, pdf_total_valor: 0 };
-      } else if (col.nome && !colabMap[col.id].nome_pdf) {
-        colabMap[col.id].nome_pdf = col.nome;
+      const mapKey = pageEmp + '|' + col.id;
+      if (!colabMap[mapKey]) {
+        colabMap[mapKey] = { matricula: col.id, nome_pdf: col.nome || '', percentuais: {}, dsr_quant: 0, dsr_valor: 0, total_quant: 0, total_valor: 0, pdf_total_quant: 0, pdf_total_valor: 0 };
+      } else if (col.nome && !colabMap[mapKey].nome_pdf) {
+        colabMap[mapKey].nome_pdf = col.nome;
       }
+      col._mapKey = mapKey; // referência rápida para applyValueItems
     }
 
     // Competência: busca "Inscrição MÊS/ANO" em qualquer linha
@@ -1000,7 +1007,7 @@ function _parsePDFPages(allPages, fileName) {
         if (isNaN(v)) continue;
         const ci = colIdxForX(Math.round(it.x));
         if (ci < 0) continue;
-        const reg = colabMap[cols[ci].id];
+        const reg = colabMap[cols[ci]._mapKey];
         if (!reg) continue;
         if (type === 'dsr') {
           if (isQuant) reg.dsr_quant += v; else reg.dsr_valor += v;
@@ -1020,6 +1027,7 @@ function _parsePDFPages(allPages, fileName) {
     let pendingLabelParts = [];
     let currentType  = null;
     let expectQuant  = false; // próxima linha de valores é quantidade
+    let bufferedQuant = []; // valores quant aguardando que o tipo seja conhecido
 
     for (const line of dataLines) {
       const items = line.items || [];
@@ -1031,49 +1039,85 @@ function _parsePDFPages(allPages, fileName) {
 
       if (valueItems.length >= 3) {
         // Linha com dados de employees
+        let skipApply = false;
+
         if (labelStr) {
           if (/^valor$/i.test(labelStr)) {
-            // Neste PDF Valor vem ANTES de Quant — resolve o pending para obter o tipo correto
-            // antes de aplicar os valores (sem isso, o valor seria gravado no tipo anterior).
+            // "Valor" resolve pending e descarrega bufferedQuant se tipo já conhecido
             if (pendingLabelParts.length) {
               currentType = detectType(pendingLabelParts.join(' '));
               pendingLabelParts = [];
+            }
+            if (bufferedQuant.length && currentType) {
+              applyValueItems(bufferedQuant, currentType, true);
+              bufferedQuant = [];
             }
             expectQuant = false;
           } else if (/quant/i.test(labelStr) && !/^\s*total/i.test(labelStr)) {
-            // "Quant" ou "HExt Quant": resolve pendingLabelParts em currentType
-            // Aceita "HExt Quant" (hext+quant na mesma linha) mas rejeita "TOTAL EXTRA...Quant"
+            // "Quant" ou "HExt Quant": resolve pending se houver
             if (pendingLabelParts.length) {
               currentType = detectType(pendingLabelParts.join(' '));
               pendingLabelParts = [];
             }
-            expectQuant = true;
+            if (currentType) {
+              expectQuant = true;
+            } else {
+              // Tipo ainda não conhecido: armazena em buffer para aplicar quando o tipo aparecer
+              bufferedQuant = [...valueItems];
+              skipApply = true;
+            }
           } else {
-            // Label de seção com valores inline (ex: "DSR S/EXTRA" vem com quant na mesma linha)
+            // Label de seção com valores inline
             const fullLabel = [...pendingLabelParts, labelStr].join(' ');
-            currentType = detectType(fullLabel);
-            expectQuant = true; // primeiro bloco de valores de qualquer seção = quant
-            pendingLabelParts = [];
+            const newType = detectType(fullLabel);
+            if (newType !== null) {
+              currentType = newType;
+              expectQuant = true;
+              pendingLabelParts = [];
+              // Descarrega buffer acumulado antes deste tipo
+              if (bufferedQuant.length) {
+                applyValueItems(bufferedQuant, currentType, true);
+                bufferedQuant = [];
+              }
+            } else if (isHELabel(labelStr)) {
+              // Label HE sem tipo resolvível ainda: acumula e guarda valores em buffer
+              pendingLabelParts = [...pendingLabelParts, labelStr];
+              bufferedQuant = [...valueItems];
+              skipApply = true;
+            } else {
+              // Label irrelevante (nome de empresa, rodapé): mantém currentType e aplica valores
+              pendingLabelParts = [];
+              // skipApply = false → valores serão aplicados com currentType atual
+            }
           }
         } else if (pendingLabelParts.length) {
-          // Label acumulado em linhas anteriores — primeira linha de valores após pending = quant
-          currentType = detectType(pendingLabelParts.join(' '));
+          // Label acumulado — primeira linha de valores = quant
+          const newType = detectType(pendingLabelParts.join(' '));
+          if (newType !== null) {
+            currentType = newType;
+            if (bufferedQuant.length) {
+              applyValueItems(bufferedQuant, currentType, true);
+              bufferedQuant = [];
+            }
+          }
           pendingLabelParts = [];
           expectQuant = true;
         }
 
-        if (currentType) {
+        if (!skipApply && currentType) {
           applyValueItems(valueItems, currentType, expectQuant);
           if (expectQuant) expectQuant = false;
         }
       } else if (labelStr) {
         // Linha só com label (sem dados de employee)
         if (/^valor$/i.test(labelStr)) {
-          // "Valor" label-only: resolve pending (mesmo caso do branch principal) e aplica
-          // os valores presentes mesmo sendo < 3 (DSR e TOTAL EXTRA podem ter 1-2 itens).
           if (pendingLabelParts.length) {
             currentType = detectType(pendingLabelParts.join(' '));
             pendingLabelParts = [];
+          }
+          if (bufferedQuant.length && currentType) {
+            applyValueItems(bufferedQuant, currentType, true);
+            bufferedQuant = [];
           }
           expectQuant = false;
           if (valueItems.length > 0 && currentType && currentType !== '_skip') {
@@ -1081,16 +1125,17 @@ function _parsePDFPages(allPages, fileName) {
           }
         } else if (/quant/i.test(labelStr) && !/^\s*total/i.test(labelStr)) {
           if (currentType !== '_skip') expectQuant = true;
-        } else {
+        } else if (isHELabel(labelStr)) {
           pendingLabelParts.push(labelStr);
         }
+        // Labels irrelevantes (empresa, rodapé) são silenciosamente ignorados
       }
     }
   }
 
   // Monta resultado final
-  const registros = Object.entries(colabMap).map(([id, data]) => ({
-    matricula_pdf: id,
+  const registros = Object.entries(colabMap).map(([, data]) => ({
+    matricula_pdf: data.matricula,
     nome_pdf: data.nome_pdf || '',
     percentuais: data.percentuais,
     dsr_quant:   data.dsr_quant,
