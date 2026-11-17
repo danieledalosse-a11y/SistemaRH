@@ -1084,6 +1084,30 @@ function _parsePDFPages(allPages, fileName) {
     reg.total_valor += reg.dsr_valor || 0;
   }
 
+  // DEBUG: gera download JSON com estado bruto do parser (remover após diagnóstico)
+  try {
+    const debugData = {
+      empresaCodigo, competencia,
+      colabMap: Object.entries(colabMap).map(([id, d]) => ({
+        id,
+        nome_pdf: d.nome_pdf,
+        percentuais: d.percentuais,
+        dsr_quant: d.dsr_quant,
+        dsr_valor: d.dsr_valor,
+        total_quant: registros.find(r => r.matricula_pdf === id)?.total_quant,
+        total_valor: registros.find(r => r.matricula_pdf === id)?.total_valor,
+        pdf_total_quant: d.pdf_total_quant,
+        pdf_total_valor: d.pdf_total_valor
+      }))
+    };
+    const blob = new Blob([JSON.stringify(debugData, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `debug_parser_${empresaCodigo}_${Date.now()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  } catch(e) { console.warn('debug export error', e); }
+
   return [{ empresaCodigo, empresaNome: '', competencia, registros }];
 }
 
