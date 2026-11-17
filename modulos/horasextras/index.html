@@ -1028,6 +1028,7 @@ function _parsePDFPages(allPages, fileName) {
     let currentType  = null;
     let expectQuant  = false; // próxima linha de valores é quantidade
     let bufferedQuant = []; // valores quant aguardando que o tipo seja conhecido
+    let bufferedLabelValor = []; // valores valor que vieram junto com um label (ex: "50%" com 1 valor)
 
     for (const line of dataLines) {
       const items = line.items || [];
@@ -1043,7 +1044,7 @@ function _parsePDFPages(allPages, fileName) {
 
         if (labelStr) {
           if (/^valor$/i.test(labelStr)) {
-            // "Valor" resolve pending e descarrega bufferedQuant se tipo já conhecido
+            // "Valor" resolve pending e descarrega buffers se tipo já conhecido
             if (pendingLabelParts.length) {
               currentType = detectType(pendingLabelParts.join(' '));
               pendingLabelParts = [];
@@ -1051,6 +1052,10 @@ function _parsePDFPages(allPages, fileName) {
             if (bufferedQuant.length && currentType) {
               applyValueItems(bufferedQuant, currentType, true);
               bufferedQuant = [];
+            }
+            if (bufferedLabelValor.length && currentType) {
+              applyValueItems(bufferedLabelValor, currentType, false);
+              bufferedLabelValor = [];
             }
             expectQuant = false;
           } else if (/quant/i.test(labelStr) && !/^\s*total/i.test(labelStr)) {
@@ -1074,15 +1079,26 @@ function _parsePDFPages(allPages, fileName) {
               currentType = newType;
               expectQuant = true;
               pendingLabelParts = [];
-              // Descarrega buffer acumulado antes deste tipo
+              // Descarrega buffers acumulados antes deste tipo
               if (bufferedQuant.length) {
                 applyValueItems(bufferedQuant, currentType, true);
                 bufferedQuant = [];
               }
+              if (bufferedLabelValor.length) {
+                applyValueItems(bufferedLabelValor, currentType, false);
+                bufferedLabelValor = [];
+              }
+            } else if (/\bvalor\b/i.test(labelStr)) {
+              // "Pag N Valor" = continuação de seção valor (rótulo de rodapé com valores)
+              // Mantém currentType e aplica valores diretamente como valor (isQ=false)
+              pendingLabelParts = [];
+              expectQuant = false;
+              // skipApply = false → aplica abaixo com currentType
             } else if (isHELabel(labelStr)) {
               // Label HE sem tipo resolvível ainda: acumula e guarda valores em buffer
               pendingLabelParts = [...pendingLabelParts, labelStr];
               bufferedQuant = [...valueItems];
+              bufferedLabelValor = [];
               skipApply = true;
             } else {
               // Label irrelevante (nome de empresa, rodapé): mantém currentType e aplica valores
@@ -1098,6 +1114,10 @@ function _parsePDFPages(allPages, fileName) {
             if (bufferedQuant.length) {
               applyValueItems(bufferedQuant, currentType, true);
               bufferedQuant = [];
+            }
+            if (bufferedLabelValor.length) {
+              applyValueItems(bufferedLabelValor, currentType, false);
+              bufferedLabelValor = [];
             }
           }
           pendingLabelParts = [];
@@ -1119,6 +1139,10 @@ function _parsePDFPages(allPages, fileName) {
             applyValueItems(bufferedQuant, currentType, true);
             bufferedQuant = [];
           }
+          if (bufferedLabelValor.length && currentType) {
+            applyValueItems(bufferedLabelValor, currentType, false);
+            bufferedLabelValor = [];
+          }
           expectQuant = false;
           if (valueItems.length > 0 && currentType && currentType !== '_skip') {
             applyValueItems(valueItems, currentType, false);
@@ -1127,6 +1151,11 @@ function _parsePDFPages(allPages, fileName) {
           if (currentType !== '_skip') expectQuant = true;
         } else if (isHELabel(labelStr)) {
           pendingLabelParts.push(labelStr);
+          // Salva valores que vieram junto com este label (ex: "50%" com 1 valor de 1 funcionário)
+          // Serão descarregados como valor quando o tipo for resolvido
+          if (valueItems.length > 0) {
+            bufferedLabelValor = [...bufferedLabelValor, ...valueItems];
+          }
         }
         // Labels irrelevantes (empresa, rodapé) são silenciosamente ignorados
       }
