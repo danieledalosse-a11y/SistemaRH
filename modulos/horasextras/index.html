@@ -897,9 +897,9 @@ function _parsePDFPages(allPages, fileName) {
 
   function detectType(label) {
     if (/dsr/i.test(label))       return 'dsr';
-    if (/\btotal\b/i.test(label)) return 'pdf_total'; // TOTAL EXTRA: capturar como referência de validação
+    if (/\btotal\b/i.test(label)) return 'pdf_total';
     const m = label.match(/(\d+)%/);
-    return m ? m[1] : '50'; // HExt sem % = 50%
+    return m ? m[1] : null; // string não reconhecida → null (evita phantom data)
   }
 
   for (const rawPageLines of allPages) {
@@ -1028,8 +1028,6 @@ function _parsePDFPages(allPages, fileName) {
       const labelItems = items.filter(it => it.x < LABEL_X_MAX && /\S/.test(it.str) && !/^[\d,\.]+$/.test(it.str));
       const valueItems = items.filter(it => it.x >= VALUE_X_MIN_DYN);
       const labelStr   = labelItems.map(it => it.str).join(' ').trim();
-      // DEBUG-LOG: remover após diagnóstico
-      console.log(`[HE-DBG] label="${labelStr}" valItems=${valueItems.length} pending=${JSON.stringify(pendingLabelParts)} curType=${currentType} eQ=${expectQuant}`);
 
       if (valueItems.length >= 3) {
         // Linha com dados de employees
@@ -1042,8 +1040,9 @@ function _parsePDFPages(allPages, fileName) {
               pendingLabelParts = [];
             }
             expectQuant = false;
-          } else if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
-            // "Quant" label: resolve pendingLabelParts em currentType ANTES de setar expectQuant
+          } else if (/quant/i.test(labelStr) && !/^\s*total/i.test(labelStr)) {
+            // "Quant" ou "HExt Quant": resolve pendingLabelParts em currentType
+            // Aceita "HExt Quant" (hext+quant na mesma linha) mas rejeita "TOTAL EXTRA...Quant"
             if (pendingLabelParts.length) {
               currentType = detectType(pendingLabelParts.join(' '));
               pendingLabelParts = [];
@@ -1080,7 +1079,7 @@ function _parsePDFPages(allPages, fileName) {
           if (valueItems.length > 0 && currentType && currentType !== '_skip') {
             applyValueItems(valueItems, currentType, false);
           }
-        } else if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
+        } else if (/quant/i.test(labelStr) && !/^\s*total/i.test(labelStr)) {
           if (currentType !== '_skip') expectQuant = true;
         } else {
           pendingLabelParts.push(labelStr);
