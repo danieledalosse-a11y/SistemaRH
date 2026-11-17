@@ -970,13 +970,28 @@ function _parsePDFPages(allPages, fileName) {
       }
     }
 
+    // Espaçamento médio entre colunas de funcionários (usado em colIdxForX e VALUE_X_MIN_DYN)
+    const colSpacing = cols.length > 1
+      ? (cols[cols.length - 1].x - cols[0].x) / (cols.length - 1)
+      : 20;
+
+    // Limiar dinâmico para itens de valor: captura números largos (ex: "107,26") cujo
+    // início (alinhamento à esquerda no PDF) pode cair antes do EMP_X_MIN fixo de 90.
+    const VALUE_X_MIN_DYN = cols.length > 0
+      ? Math.min(EMP_X_MIN, cols[0].x - Math.ceil(colSpacing * 1.5))
+      : EMP_X_MIN;
+
     function colIdxForX(x) {
-      let best = -1, bestDist = Infinity;
-      for (let i = 0; i < cols.length; i++) {
-        const d = Math.abs(cols[i].x - x);
-        if (d < bestDist) { bestDist = d; best = i; }
+      if (!cols.length) return -1;
+      // Rejeita itens claramente fora do intervalo de colunas (1 espaçamento de margem)
+      if (x < cols[0].x - colSpacing || x > cols[cols.length - 1].x + colSpacing) return -1;
+      if (cols.length === 1) return 0;
+      // Atribuição por zona: cada coluna "possui" a faixa até o ponto médio com a vizinha
+      let idx = 0;
+      for (let i = 1; i < cols.length; i++) {
+        if (x >= (cols[i - 1].x + cols[i].x) / 2) idx = i;
       }
-      return bestDist <= X_TOL ? best : -1;
+      return idx;
     }
 
     function applyValueItems(items, type, isQuant) {
@@ -1008,8 +1023,10 @@ function _parsePDFPages(allPages, fileName) {
 
     for (const line of dataLines) {
       const items = line.items || [];
-      const labelItems = items.filter(it => it.x < LABEL_X_MAX && /\S/.test(it.str));
-      const valueItems = items.filter(it => it.x >= EMP_X_MIN);
+      // Exclui números puros de labelItems para evitar que valores largos (ex: "107,26")
+      // que caem em x < LABEL_X_MAX poluam o labelStr e confundam o state machine.
+      const labelItems = items.filter(it => it.x < LABEL_X_MAX && /\S/.test(it.str) && !/^[\d,\.]+$/.test(it.str));
+      const valueItems = items.filter(it => it.x >= VALUE_X_MIN_DYN);
       const labelStr   = labelItems.map(it => it.str).join(' ').trim();
 
       if (valueItems.length >= 3) {
@@ -1045,7 +1062,12 @@ function _parsePDFPages(allPages, fileName) {
         }
       } else if (labelStr) {
         // Linha só com label (sem dados de employee)
-        if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
+        if (/^valor$/i.test(labelStr)) {
+          // "Valor" label-only: próxima linha de valores é valor do tipo atual (não quant).
+          // NÃO entra em pendingLabelParts — evita detectType("Valor") retornar '50' e
+          // acumular DSR valor / TOTAL EXTRA valor em percentuais['50'].quant.
+          expectQuant = false;
+        } else if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
           if (currentType !== '_skip') expectQuant = true;
         } else {
           pendingLabelParts.push(labelStr);
@@ -1083,30 +1105,6 @@ function _parsePDFPages(allPages, fileName) {
     reg.total_quant += reg.dsr_quant || 0;
     reg.total_valor += reg.dsr_valor || 0;
   }
-
-  // DEBUG: gera download JSON com estado bruto do parser (remover após diagnóstico)
-  try {
-    const debugData = {
-      empresaCodigo, competencia,
-      colabMap: Object.entries(colabMap).map(([id, d]) => ({
-        id,
-        nome_pdf: d.nome_pdf,
-        percentuais: d.percentuais,
-        dsr_quant: d.dsr_quant,
-        dsr_valor: d.dsr_valor,
-        total_quant: registros.find(r => r.matricula_pdf === id)?.total_quant,
-        total_valor: registros.find(r => r.matricula_pdf === id)?.total_valor,
-        pdf_total_quant: d.pdf_total_quant,
-        pdf_total_valor: d.pdf_total_valor
-      }))
-    };
-    const blob = new Blob([JSON.stringify(debugData, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `debug_parser_${empresaCodigo}_${Date.now()}.json`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
-  } catch(e) { console.warn('debug export error', e); }
 
   return [{ empresaCodigo, empresaNome: '', competencia, registros }];
 }
