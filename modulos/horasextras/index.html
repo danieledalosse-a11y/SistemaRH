@@ -1035,7 +1035,12 @@ function _parsePDFPages(allPages, fileName) {
         // Linha com dados de employees
         if (labelStr) {
           if (/^valor$/i.test(labelStr)) {
-            // "Valor" puro: mantém currentType, apenas garante isQuant=false
+            // Neste PDF Valor vem ANTES de Quant — resolve o pending para obter o tipo correto
+            // antes de aplicar os valores (sem isso, o valor seria gravado no tipo anterior).
+            if (pendingLabelParts.length) {
+              currentType = detectType(pendingLabelParts.join(' '));
+              pendingLabelParts = [];
+            }
             expectQuant = false;
           } else if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
             // "Quant" label: resolve pendingLabelParts em currentType ANTES de setar expectQuant
@@ -1065,10 +1070,16 @@ function _parsePDFPages(allPages, fileName) {
       } else if (labelStr) {
         // Linha só com label (sem dados de employee)
         if (/^valor$/i.test(labelStr)) {
-          // "Valor" label-only: próxima linha de valores é valor do tipo atual (não quant).
-          // NÃO entra em pendingLabelParts — evita detectType("Valor") retornar '50' e
-          // acumular DSR valor / TOTAL EXTRA valor em percentuais['50'].quant.
+          // "Valor" label-only: resolve pending (mesmo caso do branch principal) e aplica
+          // os valores presentes mesmo sendo < 3 (DSR e TOTAL EXTRA podem ter 1-2 itens).
+          if (pendingLabelParts.length) {
+            currentType = detectType(pendingLabelParts.join(' '));
+            pendingLabelParts = [];
+          }
           expectQuant = false;
+          if (valueItems.length > 0 && currentType && currentType !== '_skip') {
+            applyValueItems(valueItems, currentType, false);
+          }
         } else if (/quant/i.test(labelStr) && !/hext|dsr|total/i.test(labelStr)) {
           if (currentType !== '_skip') expectQuant = true;
         } else {
