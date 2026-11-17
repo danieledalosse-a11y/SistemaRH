@@ -159,6 +159,15 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .hist-row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);gap:12px}
 .hist-row:last-child{border-bottom:none}
 
+/* Validação de importação */
+.validation-panel{padding:16px 20px;border-radius:var(--radius);font-size:13px;margin-bottom:0;border:1px solid transparent}
+.val-ok{background:var(--green-bg);color:var(--green);border-color:#6ee7b7}
+.val-err{background:var(--red-bg);color:var(--red);border-color:#fda4af}
+.val-err .data-table{margin-top:0}
+.val-err .data-table th{background:rgba(190,18,60,0.06);color:var(--red)}
+.val-err .data-table td{color:var(--text);border-color:#fda4af}
+.val-warn{background:var(--amber-bg);color:var(--amber);border-color:#fcd34d}
+
 @media(max-width:768px){
   .kpi-row{grid-template-columns:1fr 1fr}
   .drawer{width:100%;max-width:100%}
@@ -249,18 +258,19 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
     <div id="importAreaWrap">
       <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
         <svg fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="12"/><line x1="15" y1="15" x2="12" y2="12"/></svg>
-        <p>Arraste PDFs aqui ou clique para selecionar</p>
-        <span>Aceita múltiplos arquivos PDF</span>
+        <p>Arraste arquivos aqui ou clique para selecionar</p>
+        <span>Aceita PDF · Excel (.xlsx) em breve</span>
       </div>
-      <input type="file" id="fileInput" accept=".pdf" multiple onchange="onFilesSelected(event)">
+      <input type="file" id="fileInput" accept=".pdf,.xlsx,.xls" multiple onchange="onFilesSelected(event)">
     </div>
 
     <div id="importParseProgress" style="display:none;margin-top:16px">
-      <p style="font-size:13px;color:var(--text-sec);margin-bottom:8px" id="importProgressMsg">Lendo PDFs…</p>
+      <p style="font-size:13px;color:var(--text-sec);margin-bottom:8px" id="importProgressMsg">Lendo arquivos…</p>
       <div class="progress-bar"><div class="progress-fill" id="importProgressFill" style="width:0%"></div></div>
     </div>
 
-    <div id="importPreviewArea" style="display:none;margin-top:24px"></div>
+    <div id="importValidationArea" style="display:none;margin-top:24px"></div>
+    <div id="importPreviewArea" style="display:none;margin-top:16px"></div>
 
     <div id="importActionsArea" style="display:none;margin-top:20px;gap:12px;align-items:center">
       <button class="btn btn-primary" onclick="confirmarImportacao()" id="btnConfirmar">Confirmar Importação</button>
@@ -860,7 +870,18 @@ async function extractPDFPages(file) {
   return pages;
 }
 
-function parsePDFPages(allPages, fileName) {
+/* Roteador por tipo de arquivo — retorna sempre o mesmo schema de blocos */
+async function parsePDFSource(file) {
+  const pages = await extractPDFPages(file);
+  return _parsePDFPages(pages, file.name);
+}
+
+async function parseExcelSource(file) {
+  // Reservado para implementação futura quando disponível o relatório Excel
+  throw new Error('Importação via Excel ainda não implementada. Utilize o PDF gerado pela contabilidade.');
+}
+
+function _parsePDFPages(allPages, fileName) {
   // PDF Senior: tabela pivô — employees = colunas, tipos HE = linhas
   // Linha do cabeçalho (Trabalhador) é a ÚLTIMA linha de cada página (y mais baixo)
   // Linhas de dados ficam ACIMA (y maior = topo da página em coordenadas PDF)
@@ -875,8 +896,8 @@ function parsePDFPages(allPages, fileName) {
   let empresaCodigo = '';
 
   function detectType(label) {
-    if (/dsr/i.test(label))   return 'dsr';
-    if (/\btotal\b/i.test(label)) return '_skip'; // TOTAL EXTRA: ignorar — calculamos internamente
+    if (/dsr/i.test(label))       return 'dsr';
+    if (/\btotal\b/i.test(label)) return 'pdf_total'; // TOTAL EXTRA: capturar como referência de validação
     const m = label.match(/(\d+)%/);
     return m ? m[1] : '50'; // HExt sem % = 50%
   }
@@ -929,7 +950,7 @@ function parsePDFPages(allPages, fileName) {
 
     for (const col of cols) {
       if (!colabMap[col.id]) {
-        colabMap[col.id] = { percentuais: {}, dsr_quant: 0, dsr_valor: 0, total_quant: 0, total_valor: 0 };
+        colabMap[col.id] = { percentuais: {}, dsr_quant: 0, dsr_valor: 0, total_quant: 0, total_valor: 0, pdf_total_quant: 0, pdf_total_valor: 0 };
       }
     }
 
@@ -963,10 +984,8 @@ function parsePDFPages(allPages, fileName) {
         if (!reg) continue;
         if (type === 'dsr') {
           if (isQuant) reg.dsr_quant += v; else reg.dsr_valor += v;
-        } else if (type === 'total_quant') {
-          reg.total_quant += v;
-        } else if (type === 'total_valor') {
-          reg.total_valor += v;
+        } else if (type === 'pdf_total') {
+          if (isQuant) reg.pdf_total_quant += v; else reg.pdf_total_valor += v;
         } else {
           if (!reg.percentuais[type]) reg.percentuais[type] = { quant: 0, valor: 0 };
           if (isQuant) reg.percentuais[type].quant += v;
@@ -1015,20 +1034,9 @@ function parsePDFPages(allPages, fileName) {
           pendingLabelParts = [];
         }
 
-        if (currentType && currentType !== '_skip') {
-          const adrianeCol = cols.find(c => c.id === '0000427');
-          if (adrianeCol) {
-            const aItem = valueItems.find(it => Math.abs(Math.round(it.x) - adrianeCol.x) <= X_TOL);
-            if (aItem) console.log(`[DBG] tipo=${currentType} isQ=${expectQuant} val="${aItem.str}" label="${labelStr}" pend="${pendingLabelParts.join('|')}"`);
-          }
+        if (currentType) {
           applyValueItems(valueItems, currentType, expectQuant);
           if (expectQuant) expectQuant = false;
-        } else if (currentType === '_skip') {
-          const adrianeCol = cols.find(c => c.id === '0000427');
-          if (adrianeCol) {
-            const aItem = valueItems.find(it => Math.abs(Math.round(it.x) - adrianeCol.x) <= X_TOL);
-            if (aItem) console.log(`[DBG] SKIP tipo=_skip isQ=${expectQuant} val="${aItem.str}" label="${labelStr}"`);
-          }
         }
       } else if (labelStr) {
         // Linha só com label (sem dados de employee)
@@ -1050,6 +1058,8 @@ function parsePDFPages(allPages, fileName) {
     dsr_valor:   data.dsr_valor,
     total_quant: data.total_quant,
     total_valor: data.total_valor,
+    pdf_total_quant: data.pdf_total_quant,
+    pdf_total_valor: data.pdf_total_valor,
     status_vinculo:  'nao_encontrado',
     colaborador_id:  null
   }));
@@ -1081,11 +1091,11 @@ function onDrop(e) { e.preventDefault(); document.getElementById('dropZone').cla
 function onFilesSelected(e) { processarArquivos([...e.target.files]); e.target.value = ''; }
 
 async function processarArquivos(files) {
-  const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
-  if (!pdfs.length) { toast('Nenhum PDF selecionado.', 'error'); return; }
+  const suportados = files.filter(f => /\.(pdf|xlsx|xls)$/i.test(f.name));
+  if (!suportados.length) { toast('Nenhum arquivo PDF ou Excel selecionado.', 'error'); return; }
 
   if (!_colabsForImport) {
-    const c = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,param_empresa_id,ativo&order=nome');
+    const c = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,ativo&order=nome');
     _colabsForImport = c || [];
   }
 
@@ -1098,14 +1108,14 @@ async function processarArquivos(files) {
 
   const allBlocks = [];
 
-  for (let fi = 0; fi < pdfs.length; fi++) {
-    const file = pdfs[fi];
-    document.getElementById('importProgressMsg').textContent = `Lendo ${file.name}… (${fi+1}/${pdfs.length})`;
-    document.getElementById('importProgressFill').style.width = `${((fi+1)/pdfs.length*60).toFixed(0)}%`;
+  for (let fi = 0; fi < suportados.length; fi++) {
+    const file = suportados[fi];
+    document.getElementById('importProgressMsg').textContent = `Lendo ${file.name}… (${fi+1}/${suportados.length})`;
+    document.getElementById('importProgressFill').style.width = `${((fi+1)/suportados.length*60).toFixed(0)}%`;
 
     try {
-      const pages = await extractPDFPages(file);
-      const blocks = parsePDFPages(pages, file.name);
+      const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+      const blocks = isExcel ? await parseExcelSource(file) : await parsePDFSource(file);
       blocks.forEach(b => { b.arquivoNome = file.name; });
       allBlocks.push(...blocks);
     } catch(e) {
@@ -1167,7 +1177,16 @@ async function processarArquivos(files) {
   setTimeout(() => { document.getElementById('importParseProgress').style.display = 'none'; }, 400);
 
   _importPreviewData = allBlocks;
+
+  // Validação bloqueante: compara totais calculados com totais do PDF
+  const totalColabs = allBlocks.reduce((s,b) => s + b.registros.length, 0);
+  const validResult = validarImportacao(allBlocks);
+  renderValidacaoPanel(validResult, totalColabs);
+
   renderImportPreview(allBlocks);
+
+  // Bloqueia confirmação se houver divergências
+  document.getElementById('btnConfirmar').disabled = !validResult.ok;
 }
 
 function _statusBadge(s) {
@@ -1346,8 +1365,95 @@ function cancelarImportacao() {
   _importPreviewData = [];
   document.getElementById('importPreviewArea').innerHTML = '';
   document.getElementById('importPreviewArea').style.display = 'none';
+  document.getElementById('importValidationArea').innerHTML = '';
+  document.getElementById('importValidationArea').style.display = 'none';
   document.getElementById('importActionsArea').style.display = 'none';
   document.getElementById('importParseProgress').style.display = 'none';
+  document.getElementById('btnConfirmar').disabled = false;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   VALIDAÇÃO DE INTEGRIDADE
+════════════════════════════════════════════════════════════*/
+function validarImportacao(allBlocks) {
+  const erros = [];
+  const semReferencia = []; // colaboradores onde o PDF não tinha linha TOTAL EXTRA
+
+  for (const block of allBlocks) {
+    const empLabel = block.param_empresa?.nome_simplificado || block.empresaCodigo;
+    for (const reg of block.registros) {
+      // Sem HE alguma — ignora
+      if (reg.total_quant === 0 && reg.total_valor === 0 && reg.pdf_total_quant === 0 && reg.pdf_total_valor === 0) continue;
+
+      // PDF não tinha TOTAL EXTRA para este colaborador (não conseguimos validar)
+      if (reg.pdf_total_quant === 0 && reg.pdf_total_valor === 0) {
+        semReferencia.push({ empresa: empLabel, matricula: reg.matricula_pdf });
+        continue;
+      }
+
+      const diff_quant = Math.abs(reg.total_quant - reg.pdf_total_quant);
+      const diff_valor = Math.abs(reg.total_valor - reg.pdf_total_valor);
+
+      if (diff_quant > 0.02 || diff_valor > 0.02) {
+        erros.push({
+          empresa:    empLabel,
+          matricula:  reg.matricula_pdf,
+          calc_quant: reg.total_quant,
+          pdf_quant:  reg.pdf_total_quant,
+          diff_quant,
+          calc_valor: reg.total_valor,
+          pdf_valor:  reg.pdf_total_valor,
+          diff_valor
+        });
+      }
+    }
+  }
+
+  return { ok: erros.length === 0, erros, semReferencia };
+}
+
+function renderValidacaoPanel(validResult, totalColabs) {
+  const area = document.getElementById('importValidationArea');
+
+  if (!validResult.ok) {
+    const rows = validResult.erros.map(e => {
+      const qDif = e.diff_quant > 0.02 ? `<span style="color:var(--red);font-weight:600">+${fmtN(e.diff_quant)}h</span>` : '—';
+      const vDif = e.diff_valor > 0.02 ? `<span style="color:var(--red);font-weight:600">${fmtBRL(e.diff_valor)}</span>` : '—';
+      return `<tr>
+        <td>${e.empresa}</td>
+        <td style="font-family:monospace">${e.matricula}</td>
+        <td class="text-right">${fmtN(e.pdf_quant)}h</td>
+        <td class="text-right">${fmtN(e.calc_quant)}h</td>
+        <td class="text-right">${qDif}</td>
+        <td class="text-right">${fmtBRL(e.pdf_valor)}</td>
+        <td class="text-right">${fmtBRL(e.calc_valor)}</td>
+        <td class="text-right">${vDif}</td>
+      </tr>`;
+    }).join('');
+
+    area.innerHTML = `<div class="validation-panel val-err">
+      <strong>✗ Importação bloqueada</strong> — ${validResult.erros.length} divergência(s) detectada(s) entre os totais calculados e os totais do relatório original. Corrija os dados antes de importar.
+      <div style="overflow-x:auto;margin-top:16px;border-radius:8px;overflow:hidden">
+        <table class="data-table">
+          <thead><tr>
+            <th>Empresa</th><th>Matrícula</th>
+            <th class="text-right">Horas PDF</th><th class="text-right">Horas Calc.</th><th class="text-right">Dif.</th>
+            <th class="text-right">Valor PDF</th><th class="text-right">Valor Calc.</th><th class="text-right">Dif.</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  } else {
+    const aviso = validResult.semReferencia.length
+      ? `<br><small style="opacity:0.8">⚠ ${validResult.semReferencia.length} colaborador(es) sem linha TOTAL EXTRA no PDF — valores aceitos sem comparação.</small>`
+      : '';
+    area.innerHTML = `<div class="validation-panel val-ok">
+      <strong>✓ Validação concluída</strong> — ${totalColabs} colaborador(es) verificado(s). Quantidades, valores por percentual, DSR e totais individuais conferem com o relatório original.${aviso}
+    </div>`;
+  }
+
+  area.style.display = 'block';
 }
 
 /* ═══════════════════════════════════════════════════════════
