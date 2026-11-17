@@ -881,11 +881,15 @@ function parsePDFPages(allPages, fileName) {
     return m ? m[1] : '50'; // HExt sem % = 50%
   }
 
-  for (const pageLines of allPages) {
-    if (pageLines.length < 2) continue;
+  for (const rawPageLines of allPages) {
+    if (rawPageLines.length < 2) continue;
 
-    // Cabeçalho de employees = última linha
-    const trabLine = pageLines[pageLines.length - 1];
+    // Re-ordena por y ASCENDENTE: menor y = topo da página (Trabalhador header) vem primeiro
+    // O extrator usa y descrescente; invertemos aqui para processar de cima para baixo
+    const pageLines = [...rawPageLines].sort((a, b) => a.y - b.y);
+
+    // Cabeçalho de employees = primeira linha (y mínimo = topo)
+    const trabLine = pageLines[0];
     if (!trabLine.items) continue;
 
     const trabIdx = trabLine.items.findIndex(it => it.str === 'Trabalhador');
@@ -971,8 +975,9 @@ function parsePDFPages(allPages, fileName) {
       }
     }
 
-    // Processa linhas de dados (todas exceto a última = cabeçalho)
-    const dataLines = pageLines.slice(0, -1);
+    // Processa linhas de dados (todas exceto a primeira = Trabalhador header)
+    // Ordem: de cima para baixo (HExt 50% → ... → TOTAL EXTRA → rodapé)
+    const dataLines = pageLines.slice(1);
     let pendingLabelParts = [];
     let currentType  = null;
     let expectQuant  = false; // próxima linha de valores é quantidade
@@ -1080,7 +1085,7 @@ async function processarArquivos(files) {
   if (!pdfs.length) { toast('Nenhum PDF selecionado.', 'error'); return; }
 
   if (!_colabsForImport) {
-    const c = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,ativo&order=nome');
+    const c = await sbGet('/rest/v1/colaboradores?select=id,nome,matricula,empresa_registro,param_empresa_id,ativo&order=nome');
     _colabsForImport = c || [];
   }
 
@@ -1127,7 +1132,16 @@ async function processarArquivos(files) {
     for (const reg of block.registros) {
       const matNorm = String(parseInt(reg.matricula_pdf, 10));
       const empNome = block.param_empresa?.nome_simplificado;
-      const matches = _colabsForImport.filter(c => c.matricula === matNorm && (!empNome || c.empresa_registro === empNome));
+      const peId    = block.param_empresa?.id;
+
+      // Prioridade: param_empresa_id (FK) → empresa_registro (nome) → matrícula apenas
+      let matches = peId
+        ? _colabsForImport.filter(c => c.param_empresa_id === peId && c.matricula === matNorm)
+        : [];
+      if (!matches.length && empNome)
+        matches = _colabsForImport.filter(c => c.empresa_registro === empNome && c.matricula === matNorm);
+      if (!matches.length && !peId && !empNome)
+        matches = _colabsForImport.filter(c => c.matricula === matNorm);
 
       if (!matches.length) {
         reg.status_vinculo = 'nao_encontrado';
