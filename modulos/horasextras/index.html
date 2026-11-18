@@ -1080,6 +1080,7 @@ function _parsePDFPages(allPages, fileName) {
               expectQuant = true;
               pendingLabelParts = [];
               // Descarrega buffers acumulados antes deste tipo
+              const hadBufQ = bufferedQuant.length > 0;
               if (bufferedQuant.length) {
                 applyValueItems(bufferedQuant, currentType, true);
                 bufferedQuant = [];
@@ -1087,6 +1088,12 @@ function _parsePDFPages(allPages, fileName) {
               if (bufferedLabelValor.length) {
                 applyValueItems(bufferedLabelValor, currentType, false);
                 bufferedLabelValor = [];
+              }
+              // Fix A: quando havia quant em buffer, os valueItems desta linha são
+              // valores monetários (stray valor), não quant — salva para aplicar depois
+              if (hadBufQ && valueItems.length) {
+                bufferedLabelValor = [...valueItems];
+                skipApply = true;
               }
             } else if (/\bvalor\b/i.test(labelStr)) {
               // "Pag N Valor" = continuação de seção valor (rótulo de rodapé com valores)
@@ -1158,6 +1165,11 @@ function _parsePDFPages(allPages, fileName) {
           }
         }
         // Labels irrelevantes (empresa, rodapé) são silenciosamente ignorados
+      } else {
+        // Fix B: nV < 3 e sem label — aplica como valor quando tipo é conhecido e não esperamos quant
+        if (valueItems.length > 0 && currentType && !expectQuant) {
+          applyValueItems(valueItems, currentType, false);
+        }
       }
     }
   }
