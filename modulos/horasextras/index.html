@@ -1174,37 +1174,44 @@ function _parsePDFPages(allPages, fileName) {
     }
   }
 
-  // Monta resultado final
-  const registros = Object.entries(colabMap).map(([, data]) => ({
-    matricula_pdf: data.matricula,
-    nome_pdf: data.nome_pdf || '',
-    percentuais: data.percentuais,
-    dsr_quant:   data.dsr_quant,
-    dsr_valor:   data.dsr_valor,
-    total_quant: data.total_quant,
-    total_valor: data.total_valor,
-    pdf_total_quant: data.pdf_total_quant,
-    pdf_total_valor: data.pdf_total_valor,
-    status_vinculo:  'nao_encontrado',
-    colaborador_id:  null
-  }));
+  // Monta resultado final agrupado por empresa
+  // colabMap tem chave "empresaCod|matricula" — cada empresa vira um bloco separado
+  const blocosPorEmp = {}; // empresaCodigo → { empresaCodigo, competencia, registros[] }
 
-  if (!registros.length) return [];
+  for (const [key, data] of Object.entries(colabMap)) {
+    const empCod = key.split('|')[0];
+    if (!blocosPorEmp[empCod]) {
+      blocosPorEmp[empCod] = { empresaCodigo: empCod, empresaNome: '', competencia, registros: [] };
+    }
 
-  // Recalcula total_quant e total_valor sempre — somando todos os percentuais + DSR
-  // (ignora qualquer valor que tenha vindo da linha "TOTAL EXTRA" do PDF, que é bloqueada)
-  for (const reg of registros) {
-    reg.total_quant = 0;
-    reg.total_valor = 0;
+    const reg = {
+      matricula_pdf:    data.matricula,
+      nome_pdf:         data.nome_pdf || '',
+      percentuais:      data.percentuais,
+      dsr_quant:        data.dsr_quant,
+      dsr_valor:        data.dsr_valor,
+      total_quant:      0,
+      total_valor:      0,
+      pdf_total_quant:  data.pdf_total_quant,
+      pdf_total_valor:  data.pdf_total_valor,
+      status_vinculo:   'nao_encontrado',
+      colaborador_id:   null
+    };
+
+    // Recalcula total_quant e total_valor somando percentuais + DSR
     for (const pct of Object.values(reg.percentuais)) {
       reg.total_quant += pct.quant || 0;
       reg.total_valor += pct.valor || 0;
     }
     reg.total_quant += reg.dsr_quant || 0;
     reg.total_valor += reg.dsr_valor || 0;
+
+    blocosPorEmp[empCod].registros.push(reg);
   }
 
-  return [{ empresaCodigo, empresaNome: '', competencia, registros }];
+  const blocos = Object.values(blocosPorEmp);
+  if (!blocos.length) return [];
+  return blocos;
 }
 
 /* ═══════════════════════════════════════════════════════════
