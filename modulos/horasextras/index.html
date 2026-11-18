@@ -168,10 +168,42 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .val-err .data-table td{color:var(--text);border-color:#fda4af}
 .val-warn{background:var(--amber-bg);color:var(--amber);border-color:#fcd34d}
 
+/* Eventos */
+.ev-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;box-shadow:var(--shadow-sm);display:flex;align-items:flex-start;gap:14px}
+.ev-card-body{flex:1;min-width:0}
+.ev-card-titulo{font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px}
+.ev-card-meta{font-size:12px;color:var(--text-sec);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ev-card-desc{font-size:12px;color:var(--text-ter);margin-top:6px}
+.ev-card-actions{display:flex;gap:6px;flex-shrink:0}
+.ev-card.inativo{opacity:0.55}
+.ev-hist-toggle{background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-sec);font-weight:600;padding:8px 0;display:flex;align-items:center;gap:4px;font-family:inherit}
+.ev-hist-toggle:hover{color:var(--text)}
+.ev-form-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px;box-shadow:var(--shadow-sm)}
+.ev-form-row{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.ev-form-group{display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px}
+.ev-form-group label{font-size:11px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.06em}
+.ev-form-group input,.ev-form-group select,.ev-form-group textarea{height:36px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-family:inherit;font-size:13px;color:var(--text);background:var(--surface)}
+.ev-form-group textarea{height:68px;padding:8px 12px;resize:vertical}
+.ev-form-group input:focus,.ev-form-group select:focus,.ev-form-group textarea:focus{outline:none;border-color:#667eea}
+.ev-tipos-list{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.ev-tipo-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:13px}
+.ev-tipo-row span{flex:1}
+.ev-block-banner{background:var(--blue-bg);border:1px solid #c7d7f5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--blue)}
+.ev-block-banner ul{margin:4px 0 0 16px}
+.ev-block-banner li{margin-bottom:2px}
+.ev-abrang-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:0.06em}
+.ev-abrang-global{background:#F0FDF4;color:#15803D}
+.ev-abrang-empresa{background:var(--blue-bg);color:var(--blue)}
+.ev-abrang-setor{background:var(--purple-bg);color:var(--purple)}
+.ev-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 10px;box-shadow:var(--shadow-sm)}
+.ev-chip-tipo{font-size:10px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.05em}
+.ev-chip-titulo{font-size:12px;font-weight:600;color:var(--text)}
+
 @media(max-width:768px){
   .kpi-row{grid-template-columns:1fr 1fr}
   .drawer{width:100%;max-width:100%}
   .container{padding:20px 16px}
+  .ev-form-row{flex-direction:column}
 }
 </style>
 </head>
@@ -197,6 +229,7 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
     <button class="tab active" onclick="showTab('painel',this)">Painel</button>
     <button class="tab" onclick="showTab('colaboradores',this)">Colaboradores</button>
     <button class="tab" onclick="showTab('analise',this)">Análise</button>
+    <button class="tab" id="tabEventos" onclick="showTab('eventos',this)">Eventos</button>
     <button class="tab hidden" id="tabImportacao" onclick="showTab('importacao',this)">Importação</button>
   </div>
 </div>
@@ -233,6 +266,13 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
       <input type="text" id="colabBusca" placeholder="Buscar colaborador…" oninput="renderColabs()" style="width:220px">
     </div>
     <div id="colabContent"><div class="loader"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<!-- Eventos -->
+<div id="sec-eventos" class="sec">
+  <div class="container">
+    <div id="eventosContent"><div class="loader"><div class="spinner"></div></div></div>
   </div>
 </div>
 
@@ -408,6 +448,8 @@ let _colabsForImport = null;
 let _importPreviewData = []; // blocos parseados do PDF aguardando confirmação
 let _userName = '';
 let _userPerfil = '';
+let _allEventos = [];       // he_eventos — RLS filtra por perfil automaticamente
+let _heConfig   = null;     // he_config.dados — carregado em loadData()
 
 /* ═══════════════════════════════════════════════════════════
    FORMATAÇÃO
@@ -452,6 +494,7 @@ function showTab(id, btn) {
   if (id === 'painel')        renderPainel();
   if (id === 'colaboradores') renderColabs();
   if (id === 'analise')       renderAnalise();
+  if (id === 'eventos')       renderEventos();
   if (id === 'importacao')    initImportacao();
 }
 
@@ -461,13 +504,18 @@ function showTab(id, btn) {
 async function loadData() {
   if (_dataLoaded) return;
 
-  const [emps, importacoes] = await Promise.all([
+  const [emps, importacoes, eventos, cfg] = await Promise.all([
     sbGet('/rest/v1/param_empresa?select=*&ativo=eq.true&order=ordem'),
-    sbGet('/rest/v1/he_importacoes?ativo=eq.true&select=*,empresa:param_empresa(nome_simplificado)&order=competencia.desc,importado_em.desc')
+    sbGet('/rest/v1/he_importacoes?ativo=eq.true&select=*,empresa:param_empresa(nome_simplificado)&order=competencia.desc,importado_em.desc'),
+    // Sem filtro ativo: RLS retorna todos para rh/admin, apenas ativos+escopo para demais
+    sbGet('/rest/v1/he_eventos?select=*,empresa:param_empresa(nome_simplificado)&order=data_inicio.desc'),
+    sbGet('/rest/v1/he_config?id=eq.1&select=dados&limit=1')
   ]);
 
   _paramEmpresas = emps || [];
   _allImportacoes = importacoes || [];
+  _allEventos = eventos || [];
+  _heConfig = cfg?.[0]?.dados || { tipos_evento: ['Campanha de vendas','Balanço / inventário','Ação comercial','Data comemorativa / evento','Demanda extraordinária','Reforço operacional','Outro'] };
 
   if (_allImportacoes.length) {
     const ids = _allImportacoes.map(i => i.id);
@@ -789,7 +837,36 @@ async function renderAnalise() {
   const empEntries = Object.entries(byEmp).sort((a,b)=>b[1].valor-a[1].valor);
   const maxEmpVal = empEntries[0]?.[1].valor || 1;
 
-  let html = `<div class="chart-wrap" style="margin-bottom:24px">
+  // Eventos do período — bloco de chips acima dos gráficos
+  const evsComp = _allEventos.filter(e => e.ativo && _eventoCobreComp(e, comp));
+  let showEvCheckState = true;
+  try { showEvCheckState = localStorage.getItem('he_exibir_eventos') !== 'false'; } catch(e){}
+
+  let html = '';
+  if (evsComp.length) {
+    const checked = showEvCheckState ? 'checked' : '';
+    html += `<div style="margin-bottom:20px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-sec)">
+        <input type="checkbox" id="evShowCheck" ${checked} onchange="
+          try{localStorage.setItem('he_exibir_eventos', this.checked)}catch(e){}
+          document.getElementById('evChipsBlock').style.display = this.checked ? '' : 'none';
+        ">
+        Exibir eventos e ocorrências
+      </label>
+      <div id="evChipsBlock" style="${showEvCheckState ? '' : 'display:none'}">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          ${evsComp.map(e => `
+            <div class="ev-chip" title="${_fmtDateRange(e.data_inicio, e.data_fim)}">
+              <span class="ev-chip-tipo">${e.tipo}</span>
+              <span class="ev-chip-titulo">${e.titulo}</span>
+              ${_evAbrangBadge(e)}
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  html += `<div class="chart-wrap" style="margin-bottom:24px">
     <div class="chart-title">Comparativo por Empresa — ${fmtComp(comp)}</div>`;
   for (const [nome, d] of empEntries) {
     const pct = (d.valor / maxEmpVal * 100).toFixed(1);
@@ -817,7 +894,375 @@ async function renderAnalise() {
     html += '</tbody></table></div>';
   }
 
+  // Eventos do período — linha de contexto
+  const evsPainel = _allEventos.filter(e => e.ativo && _eventoCobreComp(e, comp));
+  if (evsPainel.length) {
+    html += `<div style="margin-top:16px;padding:12px 16px;background:var(--surface-alt,var(--surface));border:1px solid var(--border);border-radius:10px;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text-sec);white-space:nowrap;padding-top:2px">📌 ${evsPainel.length} evento(s) neste período:</span>
+      ${evsPainel.map(e => `<span class="badge badge-muted" style="font-size:11px;cursor:default" title="${_fmtDateRange(e.data_inicio,e.data_fim)}">${e.titulo}</span>`).join('')}
+    </div>`;
+  }
+
   el.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ABA EVENTOS
+════════════════════════════════════════════════════════════*/
+
+// Verifica se uma data de competência (YYYY-MM) é coberta pelo evento
+function _eventoCobreComp(ev, comp) {
+  const ini = new Date(comp + '-01');
+  const fim = new Date(ini.getFullYear(), ini.getMonth() + 1, 0);
+  return new Date(ev.data_inicio) <= fim && new Date(ev.data_fim) >= ini;
+}
+
+function _evAbrangBadge(ev) {
+  if (ev.abrangencia === 'global')  return `<span class="ev-abrang-badge ev-abrang-global">Global</span>`;
+  if (ev.abrangencia === 'empresa') return `<span class="ev-abrang-badge ev-abrang-empresa">${ev.empresa?.nome_simplificado || 'Empresa'}</span>`;
+  if (ev.abrangencia === 'setor')   return `<span class="ev-abrang-badge ev-abrang-setor">${ev.empresa?.nome_simplificado || ''} · ${ev.setor}</span>`;
+  return '';
+}
+
+function _fmtDateRange(ini, fim) {
+  const f = s => { const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; };
+  return ini === fim ? f(ini) : `${f(ini)} até ${f(fim)}`;
+}
+
+function _evCardHtml(ev, canEdit) {
+  const actions = canEdit ? `
+    <div class="ev-card-actions">
+      <button class="btn btn-secondary" style="height:30px;padding:0 10px;font-size:12px" onclick="abrirFormEvento('${ev.id}')">✎</button>
+      ${ev.ativo
+        ? `<button class="btn btn-secondary" style="height:30px;padding:0 10px;font-size:12px;color:var(--red)" onclick="inativarEvento('${ev.id}')">Inativar</button>`
+        : `<button class="btn btn-secondary" style="height:30px;padding:0 10px;font-size:12px;color:var(--green)" onclick="reativarEvento('${ev.id}')">Reativar</button>`
+      }
+    </div>` : '';
+  return `
+    <div class="ev-card${ev.ativo ? '' : ' inativo'}">
+      <div class="ev-card-body">
+        <div class="ev-card-titulo">${ev.titulo}</div>
+        <div class="ev-card-meta">
+          <span class="badge badge-muted" style="font-size:11px">${ev.tipo}</span>
+          ${_evAbrangBadge(ev)}
+          <span style="color:var(--text-ter)">📅 ${_fmtDateRange(ev.data_inicio, ev.data_fim)}</span>
+          ${!ev.ativo && ev.inativado_em ? `<span style="color:var(--text-ter)">Inativado em ${new Date(ev.inativado_em).toLocaleDateString('pt-BR')}</span>` : ''}
+        </div>
+        ${ev.descricao ? `<div class="ev-card-desc">${ev.descricao}</div>` : ''}
+      </div>
+      ${actions}
+    </div>`;
+}
+
+let _evFormMode = null; // 'novo' | uuid do evento sendo editado
+
+async function renderEventos() {
+  const el = document.getElementById('eventosContent');
+  if (!_dataLoaded) {
+    el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+    await loadData();
+  }
+
+  const canEdit = ['rh','admin'].includes(_userPerfil);
+  const ativos   = _allEventos.filter(e => e.ativo);
+  const inativos = _allEventos.filter(e => !e.ativo);
+
+  let html = `<div class="sec-title">Eventos e Ocorrências</div>
+    <div class="sec-sub">Contextualize variações no volume de horas extras.</div>`;
+
+  // Formulário (injetado aqui quando aberto)
+  html += `<div id="evFormArea"></div>`;
+
+  // Botão novo + filtro — apenas RH/Admin
+  if (canEdit) {
+    html += `<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="abrirFormEvento(null)">+ Novo Evento</button>
+      <select id="evFiltroTipo" onchange="renderEventosList()" style="height:36px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-family:inherit;font-size:13px;background:var(--surface)">
+        <option value="">Todos os tipos</option>
+        ${(_heConfig?.tipos_evento||[]).map(t=>`<option value="${t}">${t}</option>`).join('')}
+      </select>
+      <select id="evFiltroAbrang" onchange="renderEventosList()" style="height:36px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-family:inherit;font-size:13px;background:var(--surface)">
+        <option value="">Todas as abrangências</option>
+        <option value="global">Global</option>
+        <option value="empresa">Por empresa</option>
+        <option value="setor">Por setor</option>
+      </select>
+    </div>`;
+  }
+
+  html += `<div id="evListaAtivos"></div>`;
+
+  // Histórico (inativos) — colapsável, visível apenas para rh/admin
+  if (canEdit && inativos.length) {
+    html += `<button class="ev-hist-toggle" onclick="toggleEvHistorico(this)">
+      ▶ Histórico — ${inativos.length} evento(s) inativado(s)
+    </button>
+    <div id="evListaInativos" style="display:none">
+      ${inativos.map(e => _evCardHtml(e, true)).join('') || '<div class="empty">Nenhum.</div>'}
+    </div>`;
+  }
+
+  // Configurar tipos — apenas RH/Admin
+  if (canEdit) {
+    html += `<div style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">Tipos de Evento</div>
+      <div class="ev-tipos-list" id="evTiposList">
+        ${(_heConfig?.tipos_evento||[]).map((t,i)=>`
+          <div class="ev-tipo-row">
+            <span>${t}</span>
+            <button class="btn btn-secondary" style="height:26px;padding:0 8px;font-size:11px" onclick="removerTipoEvento(${i})">✕</button>
+          </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="evNovoTipo" type="text" placeholder="Novo tipo..." style="height:34px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-family:inherit;font-size:13px;flex:1;background:var(--surface)">
+        <button class="btn btn-secondary" onclick="adicionarTipoEvento()">Adicionar</button>
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+  renderEventosList();
+}
+
+function renderEventosList() {
+  const el = document.getElementById('evListaAtivos');
+  if (!el) return;
+  const canEdit = ['rh','admin'].includes(_userPerfil);
+  const tipo    = document.getElementById('evFiltroTipo')?.value || '';
+  const abrang  = document.getElementById('evFiltroAbrang')?.value || '';
+
+  const ativos = _allEventos.filter(e =>
+    e.ativo &&
+    (!tipo   || e.tipo === tipo) &&
+    (!abrang || e.abrangencia === abrang)
+  );
+
+  if (!ativos.length) {
+    el.innerHTML = '<div class="empty">Nenhum evento ativo para os filtros selecionados.</div>';
+    return;
+  }
+  el.innerHTML = ativos.map(e => _evCardHtml(e, canEdit)).join('');
+}
+
+function toggleEvHistorico(btn) {
+  const el = document.getElementById('evListaInativos');
+  if (!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  btn.textContent = (open ? '▶' : '▼') + btn.textContent.slice(1);
+}
+
+function abrirFormEvento(id) {
+  const ev = id ? _allEventos.find(e => e.id === id) : null;
+  _evFormMode = id || 'novo';
+
+  const tipos = (_heConfig?.tipos_evento || []).map(t => `<option value="${t}"${ev?.tipo===t?' selected':''}>${t}</option>`).join('');
+  const empresaOpts = _paramEmpresas.map(e => `<option value="${e.id}"${ev?.empresa_id===e.id?' selected':''}>${e.nome_simplificado}</option>`).join('');
+
+  const abrang = ev?.abrangencia || 'global';
+  const showEmp  = (abrang === 'empresa' || abrang === 'setor') ? '' : 'display:none';
+  const showSet  = (abrang === 'setor') ? '' : 'display:none';
+
+  document.getElementById('evFormArea').innerHTML = `
+    <div class="ev-form-panel">
+      <div style="font-size:14px;font-weight:700;margin-bottom:16px;color:var(--text)">${ev ? 'Editar Evento' : 'Novo Evento'}</div>
+      <div class="ev-form-row">
+        <div class="ev-form-group" style="flex:2">
+          <label>Título *</label>
+          <input id="evfTitulo" type="text" value="${ev?.titulo||''}" placeholder="Ex: Balanço Jan/2026">
+        </div>
+        <div class="ev-form-group" style="flex:1">
+          <label>Tipo *</label>
+          <select id="evfTipo"><option value="">Selecione...</option>${tipos}</select>
+        </div>
+      </div>
+      <div class="ev-form-row">
+        <div class="ev-form-group">
+          <label>Data início *</label>
+          <input id="evfIni" type="date" value="${ev?.data_inicio||''}">
+        </div>
+        <div class="ev-form-group">
+          <label>Data fim *</label>
+          <input id="evfFim" type="date" value="${ev?.data_fim||''}">
+        </div>
+        <div class="ev-form-group" style="flex:2">
+          <label>Abrangência *</label>
+          <select id="evfAbrang" onchange="evToggleAbrang(this.value)">
+            <option value="global"${abrang==='global'?' selected':''}>Global</option>
+            <option value="empresa"${abrang==='empresa'?' selected':''}>Por empresa</option>
+            <option value="setor"${abrang==='setor'?' selected':''}>Por setor</option>
+          </select>
+        </div>
+      </div>
+      <div class="ev-form-row" id="evfEmpRow" style="${showEmp}">
+        <div class="ev-form-group" style="flex:1">
+          <label>Empresa *</label>
+          <select id="evfEmpresa"><option value="">Selecione...</option>${empresaOpts}</select>
+        </div>
+        <div class="ev-form-group" id="evfSetRow" style="${showSet}">
+          <label>Setor *</label>
+          <input id="evfSetor" type="text" value="${ev?.setor||''}" placeholder="Nome do setor">
+        </div>
+      </div>
+      <div class="ev-form-row">
+        <div class="ev-form-group" style="flex:1">
+          <label>Descrição</label>
+          <textarea id="evfDesc" placeholder="Contexto ou observações (opcional)">${ev?.descricao||''}</textarea>
+        </div>
+      </div>
+      <div id="evfErro" style="display:none" class="alert alert-red" style="margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="salvarEvento()">Salvar</button>
+        <button class="btn btn-secondary" onclick="fecharFormEvento()">Cancelar</button>
+      </div>
+    </div>`;
+
+  document.getElementById('evFormArea').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function fecharFormEvento() {
+  document.getElementById('evFormArea').innerHTML = '';
+  _evFormMode = null;
+}
+
+function evToggleAbrang(val) {
+  const empRow = document.getElementById('evfEmpRow');
+  const setRow = document.getElementById('evfSetRow');
+  if (!empRow) return;
+  empRow.style.display = (val === 'empresa' || val === 'setor') ? '' : 'none';
+  if (setRow) setRow.style.display = (val === 'setor') ? '' : 'none';
+}
+
+async function salvarEvento() {
+  const titulo  = document.getElementById('evfTitulo')?.value.trim();
+  const tipo    = document.getElementById('evfTipo')?.value;
+  const ini     = document.getElementById('evfIni')?.value;
+  const fim     = document.getElementById('evfFim')?.value;
+  const abrang  = document.getElementById('evfAbrang')?.value;
+  const empId   = document.getElementById('evfEmpresa')?.value || null;
+  const setor   = document.getElementById('evfSetor')?.value.trim() || null;
+  const desc    = document.getElementById('evfDesc')?.value.trim() || null;
+  const erroEl  = document.getElementById('evfErro');
+
+  const erros = [];
+  if (!titulo)                              erros.push('Título obrigatório.');
+  if (!tipo)                                erros.push('Tipo obrigatório.');
+  if (!ini)                                 erros.push('Data início obrigatória.');
+  if (!fim)                                 erros.push('Data fim obrigatória.');
+  if (ini && fim && fim < ini)              erros.push('Data fim não pode ser anterior à data início.');
+  if (abrang === 'empresa' && !empId)       erros.push('Empresa obrigatória para abrangência "Por empresa".');
+  if (abrang === 'setor' && !empId)         erros.push('Empresa obrigatória para abrangência "Por setor".');
+  if (abrang === 'setor' && !setor)         erros.push('Setor obrigatório para abrangência "Por setor".');
+
+  if (erros.length) {
+    erroEl.textContent = erros.join(' ');
+    erroEl.style.display = 'block';
+    return;
+  }
+  erroEl.style.display = 'none';
+
+  const payload = {
+    titulo, tipo,
+    data_inicio: ini, data_fim: fim,
+    abrangencia: abrang,
+    empresa_id: (abrang === 'global') ? null : (empId ? parseInt(empId) : null),
+    setor:      (abrang === 'setor') ? setor : null,
+    descricao:  desc
+  };
+
+  const isNovo = _evFormMode === 'novo';
+  if (isNovo) payload.criado_por = _userName;
+
+  let ok = false;
+  if (isNovo) {
+    const r = await fetch(`${_SB_URL}/rest/v1/he_eventos`, {
+      method: 'POST',
+      headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify(payload)
+    });
+    if (r.ok) {
+      const data = await r.json();
+      _allEventos.unshift(data[0]);
+      ok = true;
+    }
+  } else {
+    const r = await fetch(`${_SB_URL}/rest/v1/he_eventos?id=eq.${_evFormMode}`, {
+      method: 'PATCH',
+      headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(payload)
+    });
+    if (r.ok) {
+      const idx = _allEventos.findIndex(e => e.id === _evFormMode);
+      if (idx >= 0) {
+        // Atualiza empresa embedded para exibição
+        const emp = _paramEmpresas.find(e => e.id === parseInt(empId));
+        _allEventos[idx] = { ..._allEventos[idx], ...payload, empresa: emp ? { nome_simplificado: emp.nome_simplificado } : null };
+      }
+      ok = true;
+    }
+  }
+
+  if (ok) {
+    toast(isNovo ? 'Evento criado.' : 'Evento atualizado.', 'success');
+    fecharFormEvento();
+    renderEventos();
+  } else {
+    erroEl.textContent = 'Erro ao salvar. Tente novamente.';
+    erroEl.style.display = 'block';
+  }
+}
+
+async function inativarEvento(id) {
+  const r = await fetch(`${_SB_URL}/rest/v1/he_eventos?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ ativo: false, inativado_em: new Date().toISOString(), inativado_por: _userName })
+  });
+  if (r.ok) {
+    const ev = _allEventos.find(e => e.id === id);
+    if (ev) { ev.ativo = false; ev.inativado_em = new Date().toISOString(); }
+    toast('Evento inativado.', 'success');
+    renderEventos();
+  } else { toast('Erro ao inativar.', 'error'); }
+}
+
+async function reativarEvento(id) {
+  const r = await fetch(`${_SB_URL}/rest/v1/he_eventos?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ ativo: true, inativado_em: null, inativado_por: null })
+  });
+  if (r.ok) {
+    const ev = _allEventos.find(e => e.id === id);
+    if (ev) { ev.ativo = true; ev.inativado_em = null; }
+    toast('Evento reativado.', 'success');
+    renderEventos();
+  } else { toast('Erro ao reativar.', 'error'); }
+}
+
+async function adicionarTipoEvento() {
+  const input = document.getElementById('evNovoTipo');
+  const novo = input?.value.trim();
+  if (!novo) return;
+  if ((_heConfig.tipos_evento||[]).includes(novo)) { toast('Tipo já existe.', 'error'); return; }
+  _heConfig.tipos_evento.push(novo);
+  await _salvarHeConfig();
+  input.value = '';
+  renderEventos();
+}
+
+async function removerTipoEvento(idx) {
+  _heConfig.tipos_evento.splice(idx, 1);
+  await _salvarHeConfig();
+  renderEventos();
+}
+
+async function _salvarHeConfig() {
+  await fetch(`${_SB_URL}/rest/v1/he_config?id=eq.1`, {
+    method: 'PATCH',
+    headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ dados: _heConfig })
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════
