@@ -1339,9 +1339,9 @@ function renderImportPreview(allBlocks) {
   // Contadores globais
   let ctV=0,ctI=0,ctA=0,ctN=0,ctE=0;
   allBlocks.forEach(b => b.registros.forEach(r => {
-    if (r.status_vinculo==='vinculado')           ctV++;
-    else if (r.status_vinculo==='inativo')         ctI++;
-    else if (r.status_vinculo==='ambiguo')         ctA++;
+    if (r.status_vinculo==='vinculado')               ctV++;
+    else if (r.status_vinculo==='inativo')             ctI++;
+    else if (r.status_vinculo==='ambiguo')             ctA++;
     else if (r.status_vinculo==='empresa_nao_mapeada') ctE++;
     else ctN++;
   }));
@@ -1354,68 +1354,112 @@ function renderImportPreview(allBlocks) {
     ${ctA?`<span class="badge badge-purple">? ${ctA} ambíguos</span>`:''}
   </div>`;
 
+  // Agrupa blocos por arquivo (cada PDF = um grupo)
+  const grupos = {};
   for (const block of allBlocks) {
-    const compLabel = fmtComp(block.competencia) || 'Competência não detectada';
-    const empLabel = block.param_empresa ? block.param_empresa.nome_simplificado : `Empresa não mapeada (${block.empresaCodigo})`;
-    const totalValor = block.registros.reduce((s,r)=>s+(r.total_valor||0),0);
+    const arq = block.arquivoNome || 'Arquivo desconhecido';
+    if (!grupos[arq]) grupos[arq] = [];
+    grupos[arq].push(block);
+  }
 
-    // Contadores por bloco para exibir no resumo
-    const bV = block.registros.filter(r=>r.status_vinculo==='vinculado').length;
-    const bI = block.registros.filter(r=>r.status_vinculo==='inativo').length;
-    const bN = block.registros.filter(r=>r.status_vinculo==='nao_encontrado').length;
-    const bA = block.registros.filter(r=>r.status_vinculo==='ambiguo').length;
-    const badgesBloco = [
-      bV ? `<span class="badge badge-green">✓ ${bV}</span>` : '',
-      bI ? `<span class="badge badge-amber">⚠ ${bI}</span>` : '',
-      bN ? `<span class="badge badge-red">✗ ${bN}</span>` : '',
-      bA ? `<span class="badge badge-purple">? ${bA}</span>` : ''
-    ].join('');
+  // Nome amigável do arquivo: remove extensão e números/underscores do início
+  function nomeArquivo(arq) {
+    return arq.replace(/\.[^.]+$/, '').replace(/^[\d_]+/, '').trim() || arq;
+  }
 
-    html += `<div class="emp-block" onclick="this.classList.toggle('expanded')">
-      <div class="emp-block-header">
+  const gIdx = { n: 0 }; // índice único para ids dos elementos
+
+  for (const [arq, blocos] of Object.entries(grupos)) {
+    const compLabel = fmtComp(blocos[0]?.competencia) || 'Competência não detectada';
+    const nomeGrupo = nomeArquivo(arq);
+    const totalRegs = blocos.reduce((s,b) => s + b.registros.length, 0);
+    const totalValor = blocos.reduce((s,b) => s + b.registros.reduce((sv,r) => sv + (r.total_valor||0), 0), 0);
+    const gV = blocos.reduce((s,b) => s + b.registros.filter(r=>r.status_vinculo==='vinculado').length, 0);
+    const gI = blocos.reduce((s,b) => s + b.registros.filter(r=>r.status_vinculo==='inativo').length, 0);
+    const gN = blocos.reduce((s,b) => s + b.registros.filter(r=>r.status_vinculo==='nao_encontrado'||r.status_vinculo==='empresa_nao_mapeada').length, 0);
+    const temSubst = blocos.some(b => b.substituicao);
+    const gId = 'grp' + (++gIdx.n);
+
+    html += `
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">
+      <div onclick="document.getElementById('${gId}').classList.toggle('hidden')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;background:var(--bg-card,var(--bg));gap:12px;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:10px">
-          <span class="emp-block-toggle">▶</span>
+          <span style="font-size:12px;color:var(--text-ter)">▼</span>
           <div>
-            <div class="emp-block-name">${empLabel}</div>
-            <div class="emp-block-meta">${compLabel} · ${block.registros.length} registros · ${fmtBRL(totalValor)}</div>
+            <div style="font-weight:600;font-size:14px">${nomeGrupo}</div>
+            <div style="font-size:12px;color:var(--text-sec);margin-top:2px">${compLabel} · ${totalRegs} colaboradores · ${fmtBRL(totalValor)}</div>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          ${badgesBloco}
-          ${!block.param_empresa ? '<span class="badge badge-red">Empresa não mapeada</span>' : ''}
-          ${block.substituicao ? '<span class="badge badge-amber">⚠ Substituição</span>' : '<span class="badge badge-green">Nova importação</span>'}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          ${gV?`<span class="badge badge-green">✓ ${gV}</span>`:''}
+          ${gI?`<span class="badge badge-amber">⚠ ${gI}</span>`:''}
+          ${gN?`<span class="badge badge-red">✗ ${gN}</span>`:''}
+          ${temSubst?`<span class="badge badge-amber">⚠ Substituição</span>`:''}
         </div>
       </div>
-      <div class="emp-block-detail">`;
+      <div id="${gId}" style="border-top:1px solid var(--border)">`;
 
-    if (block.substituicao) {
-      html += `<div class="alert alert-amber" style="margin:12px;border-radius:8px">
-        Esta empresa já foi importada para ${compLabel}. Confirmar irá substituir a versão anterior (histórico preservado).
-      </div>`;
-    }
-    if (!block.param_empresa) {
-      html += `<div class="alert alert-red" style="margin:12px;border-radius:8px">
-        Empresa com código "${block.empresaCodigo}" não encontrada em Parâmetros. Registros serão ignorados.
-      </div>`;
+    for (const block of blocos) {
+      const empLabel = block.param_empresa ? block.param_empresa.nome_simplificado : `Empresa não mapeada (${block.empresaCodigo})`;
+      const bValor = block.registros.reduce((s,r) => s + (r.total_valor||0), 0);
+      const bV = block.registros.filter(r=>r.status_vinculo==='vinculado').length;
+      const bI = block.registros.filter(r=>r.status_vinculo==='inativo').length;
+      const bN = block.registros.filter(r=>r.status_vinculo==='nao_encontrado').length;
+      const bA = block.registros.filter(r=>r.status_vinculo==='ambiguo').length;
+      const empId = 'emp' + (++gIdx.n);
+
+      html += `
+        <div style="border-bottom:1px solid var(--border)">
+          <div onclick="document.getElementById('${empId}').classList.toggle('hidden')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 10px 32px;cursor:pointer;gap:12px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;color:var(--text-ter)">▶</span>
+              <span style="font-weight:500;font-size:13px">${empLabel}</span>
+              <span style="font-size:12px;color:var(--text-sec)">${block.registros.length} reg. · ${fmtBRL(bValor)}</span>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              ${bV?`<span class="badge badge-green">✓ ${bV}</span>`:''}
+              ${bI?`<span class="badge badge-amber">⚠ ${bI}</span>`:''}
+              ${bN?`<span class="badge badge-red">✗ ${bN}</span>`:''}
+              ${bA?`<span class="badge badge-purple">? ${bA}</span>`:''}
+              ${!block.param_empresa?`<span class="badge badge-red">Empresa não mapeada</span>`:''}
+              ${block.substituicao?`<span class="badge badge-amber">⚠ Substituição</span>`:``}
+            </div>
+          </div>
+          <div id="${empId}" class="hidden" style="padding:0 16px 12px 32px">`;
+
+      if (block.substituicao) {
+        html += `<div class="alert alert-amber" style="margin-bottom:10px;border-radius:8px">
+          Esta empresa já foi importada para ${compLabel}. Confirmar irá substituir a versão anterior (histórico preservado).
+        </div>`;
+      }
+      if (!block.param_empresa) {
+        html += `<div class="alert alert-red" style="margin-bottom:10px;border-radius:8px">
+          Empresa com código "${block.empresaCodigo}" não encontrada em Parâmetros. Registros serão ignorados.
+        </div>`;
+      }
+
+      html += `<div style="overflow-x:auto"><table class="data-table">
+        <thead><tr>
+          <th>Matrícula</th><th>Colaborador vinculado</th><th>Status</th>
+          <th class="text-right">Horas</th><th class="text-right">Valor</th>
+        </tr></thead><tbody>`;
+
+      for (const r of block.registros) {
+        const c = r.colaborador_id ? _colabsForImport.find(x => x.id === r.colaborador_id) : null;
+        html += `<tr>
+          <td style="font-family:monospace">${r.matricula_pdf}</td>
+          <td>${c ? titleCase(c.nome) : '—'}</td>
+          <td>${_statusBadge(r.status_vinculo)}</td>
+          <td class="text-right text-num">${fmtN(r.total_quant)}h</td>
+          <td class="text-right text-num">${fmtBRL(r.total_valor)}</td>
+        </tr>`;
+      }
+      html += `</tbody></table></div>
+          </div>
+        </div>`;
     }
 
-    html += `<div style="overflow-x:auto"><table class="data-table">
-      <thead><tr>
-        <th>Matrícula</th><th>Colaborador vinculado</th><th>Status</th>
-        <th class="text-right">Horas</th><th class="text-right">Valor</th>
-      </tr></thead><tbody>`;
-
-    for (const r of block.registros) {
-      const c = r.colaborador_id ? _colabsForImport.find(x => x.id === r.colaborador_id) : null;
-      html += `<tr>
-        <td style="font-family:monospace">${r.matricula_pdf}</td>
-        <td>${c ? titleCase(c.nome) : '—'}</td>
-        <td>${_statusBadge(r.status_vinculo)}</td>
-        <td class="text-right text-num">${fmtN(r.total_quant)}h</td>
-        <td class="text-right text-num">${fmtBRL(r.total_valor)}</td>
-      </tr>`;
-    }
-    html += '</tbody></table></div></div></div>';
+    html += `</div></div>`;
   }
 
   area.innerHTML = html;
