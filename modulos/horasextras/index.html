@@ -1058,17 +1058,21 @@ function _parsePDFPages(allPages, fileName) {
               bufferedLabelValor = [];
             }
             expectQuant = false;
-          } else if (/quant/i.test(labelStr) && !/^\s*total/i.test(labelStr)) {
+          } else if (/quant/i.test(labelStr) && !/\btotal\b/i.test(labelStr)) {
             // "Quant" ou "HExt Quant": resolve pending se houver
-            if (pendingLabelParts.length) {
+            // Fix C: só aplica imediatamente se o tipo foi resolvido AGORA via pending;
+            // se currentType já vinha de bloco anterior, bufferiza e aguarda o label do tipo
+            const hadPending = pendingLabelParts.length > 0;
+            if (hadPending) {
               currentType = detectType(pendingLabelParts.join(' '));
               pendingLabelParts = [];
             }
-            if (currentType) {
+            if (currentType && hadPending) {
               expectQuant = true;
             } else {
-              // Tipo ainda não conhecido: armazena em buffer para aplicar quando o tipo aparecer
+              // Tipo não resolvido agora: armazena em buffer para aplicar quando o tipo aparecer
               bufferedQuant = [...valueItems];
+              bufferedLabelValor = [];
               skipApply = true;
             }
           } else {
@@ -1154,7 +1158,7 @@ function _parsePDFPages(allPages, fileName) {
           if (valueItems.length > 0 && currentType && currentType !== '_skip') {
             applyValueItems(valueItems, currentType, false);
           }
-        } else if (/quant/i.test(labelStr) && !/^\s*total/i.test(labelStr)) {
+        } else if (/quant/i.test(labelStr) && !/\btotal\b/i.test(labelStr)) {
           if (currentType !== '_skip') expectQuant = true;
         } else if (isHELabel(labelStr)) {
           pendingLabelParts.push(labelStr);
