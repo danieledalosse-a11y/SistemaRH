@@ -1540,8 +1540,6 @@ function _parsePDFPages(allPages, fileName) {
         if (idx >= 0) { trabLine = line; trabIdx = idx; break; }
       }
     }
-    // [DBG] Loga resultado da busca por Trabalhador em cada página
-    console.log(`[HE-DBG] pág ${allPages.indexOf(rawPageLines)+1}: trabIdx=${trabIdx} trabY=${trabLine?.y?.toFixed(1)} linhas=${pageLines.length} textos_topo=${pageLines.slice(-3).map(l=>l.text?.substring(0,30)).join(' | ')}`);
     if (trabIdx < 0) continue;
 
     // Empresa: detecta por página (pode mudar entre páginas do mesmo PDF multi-empresa)
@@ -1873,9 +1871,6 @@ function _parsePaginaFormatoC(pageLines, trabLine, pageEmp, colabMap) {
 
   // Linha "Trabalhador" traz as colunas-rótulo; y dela é o limiar superior da tabela de dados.
   const trabY = trabLine.y;
-  // [DBG] Informa y do cabeçalho e quantas linhas estão abaixo dele
-  const linhasAbaixo = pageLines.filter(l => l.y < trabY);
-  console.log(`[HE-DBG FormatoC] trabY=${trabY.toFixed(1)} linhasAbaixo=${linhasAbaixo.length} primeira=${linhasAbaixo[0]?.text?.substring(0,60)} ultima=${linhasAbaixo[linhasAbaixo.length-1]?.text?.substring(0,60)}`);
 
   for (const line of pageLines) {
     // Processa apenas linhas abaixo de "Trabalhador" (y menor = abaixo no PDF.js)
@@ -1885,11 +1880,7 @@ function _parsePaginaFormatoC(pageLines, trabLine, pageEmp, colabMap) {
     // Primeiro item da linha: "MATRÍCULA NOME" ou só matrícula
     const firstStr = line.items[0].str.trim();
     const matMatch = firstStr.match(/^(\d{7})(.*)/);
-    if (!matMatch) {
-      // [DBG] Loga as primeiras linhas que falham no match de matrícula
-      if (line.y > trabY - 100) console.log(`[HE-DBG FormatoC] linha sem matrícula (y=${line.y.toFixed(1)}): "${firstStr.substring(0,40)}"`);
-      continue;
-    }
+    if (!matMatch) continue; // linha sem matrícula → pular (totais, rodapé)
 
     const matricula = matMatch[1];
     const nomeRaw   = matMatch[2].trim();
