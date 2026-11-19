@@ -176,9 +176,33 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .ev-card-meta{font-size:11px;color:var(--text-sec);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .ev-card-desc{font-size:11px;color:var(--text-ter);margin-top:3px;width:100%}
 .ev-card-actions{display:flex;gap:5px;flex-shrink:0;align-items:center}
-.ev-card.inativo{opacity:0.5}
-.ev-hist-toggle{background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-sec);font-weight:600;padding:8px 0;display:flex;align-items:center;gap:4px;font-family:inherit}
-.ev-hist-toggle:hover{color:var(--text)}
+.ev-card.inativo{opacity:0.75;border-style:dashed}
+.ev-badge-inativo{display:inline-flex;align-items:center;font-size:10px;font-weight:700;color:var(--text-ter);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:1px 7px;text-transform:uppercase;letter-spacing:0.07em}
+.ev-badge-hoje{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:#15803D;background:#F0FDF4;border:1px solid #bbf7d0;border-radius:6px;padding:1px 7px;text-transform:uppercase;letter-spacing:0.07em}
+.ev-badge-hoje::before{content:'●';font-size:8px}
+/* Acordeão ano/mês */
+.ev-ano-group{margin-bottom:4px}
+.ev-ano-btn{width:100%;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--text);transition:background .12s;text-align:left}
+.ev-ano-btn:hover{background:var(--bg)}
+.ev-ano-chevron{font-size:10px;color:var(--text-ter);flex-shrink:0;transition:transform .15s;width:12px}
+.ev-ano-label{flex:1;display:flex;align-items:center;gap:8px}
+.ev-ano-count{font-size:11px;font-weight:500;color:var(--text-ter);flex-shrink:0}
+.ev-ano-badge-atual{font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);border-radius:6px;padding:1px 7px;letter-spacing:0.04em}
+.ev-ano-body{padding:6px 0 2px 0}
+.ev-mes-group{margin-bottom:2px;padding-left:16px}
+.ev-mes-btn{width:100%;display:flex;align-items:center;gap:8px;background:none;border:none;border-bottom:1px solid var(--border);padding:8px 4px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;color:var(--text-sec);text-align:left;transition:color .12s}
+.ev-mes-btn:hover{color:var(--text)}
+.ev-mes-chevron{font-size:9px;color:var(--text-ter);flex-shrink:0;width:10px}
+.ev-mes-label{flex:1}
+.ev-mes-count{font-size:11px;font-weight:400;color:var(--text-ter)}
+.ev-mes-body{padding:8px 0 4px 0}
+/* Tipos card recolhível */
+.ev-config-card{margin-top:28px;padding:0;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.ev-config-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none}
+.ev-config-header:hover{background:color-mix(in srgb,var(--border) 30%,var(--bg))}
+.ev-config-body{padding:0 16px 14px 16px}
+.ev-config-label{font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em}
+.ev-config-actions{display:flex;align-items:center;gap:10px}
 .ev-form-panel{background:var(--surface);border:1px solid #667eea44;border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:0 0 0 3px #667eea14}
 .ev-form-row{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .ev-form-group{display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px}
@@ -186,9 +210,6 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .ev-form-group input,.ev-form-group select,.ev-form-group textarea{height:36px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-family:inherit;font-size:13px;color:var(--text);background:var(--surface)}
 .ev-form-group textarea{height:68px;padding:8px 12px;resize:vertical}
 .ev-form-group input:focus,.ev-form-group select:focus,.ev-form-group textarea:focus{outline:none;border-color:#667eea}
-.ev-config-card{margin-top:28px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)}
-.ev-config-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.ev-config-label{font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em}
 .ev-config-add-btn{background:none;border:none;cursor:pointer;font-size:11px;font-weight:600;color:var(--blue);font-family:inherit;padding:0;letter-spacing:0.02em}
 .ev-config-add-btn:hover{opacity:0.75}
 .ev-tipos-chips{display:flex;flex-wrap:wrap;gap:5px}
@@ -940,7 +961,12 @@ function _fmtDateRange(ini, fim) {
   return ini === fim ? f(ini) : `${f(ini)} até ${f(fim)}`;
 }
 
-function _evCardHtml(ev, canEdit) {
+function _evCardHtml(ev, canEdit, hoje) {
+  hoje = hoje || new Date();
+  const ini = new Date(ev.data_inicio + 'T00:00:00');
+  const fim = new Date(ev.data_fim + 'T23:59:59');
+  const emAndamento = ev.ativo && ini <= hoje && hoje <= fim;
+
   const actions = canEdit ? `
     <div class="ev-card-actions">
       ${ev.ativo
@@ -950,7 +976,8 @@ function _evCardHtml(ev, canEdit) {
       }
     </div>` : '';
   const inativInfo = !ev.ativo && ev.inativado_em
-    ? `<span style="color:var(--text-ter);font-size:11px">Inativado ${new Date(ev.inativado_em).toLocaleDateString('pt-BR')}</span>` : '';
+    ? `<span class="ev-badge-inativo">Inativado ${new Date(ev.inativado_em).toLocaleDateString('pt-BR')}</span>` : '';
+  const hojeTag = emAndamento ? `<span class="ev-badge-hoje">Em andamento</span>` : '';
   return `
     <div class="ev-card${ev.ativo ? '' : ' inativo'}">
       <div class="ev-card-body">
@@ -959,6 +986,7 @@ function _evCardHtml(ev, canEdit) {
           <span class="badge badge-muted" style="font-size:11px">${ev.tipo}</span>
           ${_evAbrangBadge(ev)}
           <span style="color:var(--text-ter)">📅 ${_fmtDateRange(ev.data_inicio, ev.data_fim)}</span>
+          ${hojeTag}
           ${inativInfo}
         </div>
         ${ev.descricao ? `<div class="ev-card-desc">${ev.descricao}</div>` : ''}
@@ -977,7 +1005,6 @@ async function renderEventos() {
   }
 
   const canEdit = ['rh','admin'].includes(_userPerfil);
-  const inativos = _allEventos.filter(e => !e.ativo);
 
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap">
     <div>
@@ -1010,19 +1037,9 @@ async function renderEventos() {
     </div>`;
   }
 
-  html += `<div id="evListaAtivos"></div>`;
+  html += `<div id="evListaAcordeon"></div>`;
 
-  // Histórico (inativos) — colapsável
-  if (canEdit && inativos.length) {
-    html += `<button class="ev-hist-toggle" onclick="toggleEvHistorico(this)" style="margin-top:4px">
-      ▶ Histórico — ${inativos.length} evento(s) inativado(s)
-    </button>
-    <div id="evListaInativos" style="display:none;margin-top:8px">
-      ${inativos.map(e => _evCardHtml(e, true)).join('')}
-    </div>`;
-  }
-
-  // Configurar tipos — card de configuração compacto
+  // Configurar tipos — card recolhível
   if (canEdit) {
     const tiposHtml = (_heConfig?.tipos_evento||[]).map((t,i) => `
       <span class="ev-tipo-chip">
@@ -1031,16 +1048,22 @@ async function renderEventos() {
       </span>`).join('');
     html += `
     <div class="ev-config-card">
-      <div class="ev-config-header">
-        <span class="ev-config-label">Tipos de Evento</span>
-        <button class="ev-config-add-btn" onclick="toggleEvTiposInput()" title="Adicionar tipo">+ Novo tipo</button>
+      <div class="ev-config-header" onclick="toggleEvTiposCard()" id="evTiposCardHeader">
+        <span class="ev-config-label">▶ Tipos de Evento</span>
+        <div class="ev-config-actions">
+          <button class="ev-config-add-btn" onclick="event.stopPropagation();toggleEvTiposInput()" title="Adicionar tipo" id="evTiposAddBtn" style="display:none">+ Novo tipo</button>
+        </div>
       </div>
-      <div class="ev-tipos-chips" id="evTiposChips">${tiposHtml}</div>
-      <div class="ev-config-row" id="evTiposArea" style="display:none">
-        <input id="evNovoTipoInput" type="text" placeholder="Nome do novo tipo..."
-          onkeydown="if(event.key==='Enter')adicionarTipoEvento();if(event.key==='Escape'){this.value='';toggleEvTiposInput()}">
-        <button class="btn btn-primary" style="height:30px;padding:0 14px;font-size:12px;white-space:nowrap" onclick="adicionarTipoEvento()">Salvar</button>
-        <button class="btn btn-secondary" style="height:30px;padding:0 10px;font-size:12px" onclick="toggleEvTiposInput()">Cancelar</button>
+      <div id="evTiposCardBody" style="display:none">
+        <div class="ev-config-body">
+          <div class="ev-tipos-chips" id="evTiposChips">${tiposHtml}</div>
+          <div class="ev-config-row" id="evTiposArea" style="display:none">
+            <input id="evNovoTipoInput" type="text" placeholder="Nome do novo tipo..."
+              onkeydown="if(event.key==='Enter')adicionarTipoEvento();if(event.key==='Escape'){this.value='';toggleEvTiposInput()}">
+            <button class="btn btn-primary" style="height:30px;padding:0 14px;font-size:12px;white-space:nowrap" onclick="adicionarTipoEvento()">Salvar</button>
+            <button class="btn btn-secondary" style="height:30px;padding:0 10px;font-size:12px" onclick="toggleEvTiposInput()">Cancelar</button>
+          </div>
+        </div>
       </div>
     </div>`;
   }
@@ -1049,32 +1072,108 @@ async function renderEventos() {
   renderEventosList();
 }
 
+const _MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
 function renderEventosList() {
-  const el = document.getElementById('evListaAtivos');
+  const el = document.getElementById('evListaAcordeon');
   if (!el) return;
   const canEdit = ['rh','admin'].includes(_userPerfil);
   const tipo    = document.getElementById('evFiltroTipo')?.value || '';
   const abrang  = document.getElementById('evFiltroAbrang')?.value || '';
 
-  const ativos = _allEventos.filter(e =>
-    e.ativo &&
+  const eventos = _allEventos.filter(e =>
     (!tipo   || e.tipo === tipo) &&
     (!abrang || e.abrangencia === abrang)
   );
 
-  if (!ativos.length) {
-    el.innerHTML = '<div class="empty">Nenhum evento ativo para os filtros selecionados.</div>';
+  if (!eventos.length) {
+    el.innerHTML = '<div class="empty">Nenhum evento encontrado.</div>';
     return;
   }
-  el.innerHTML = ativos.map(e => _evCardHtml(e, canEdit)).join('');
+
+  // Agrupar por ano → mês de início
+  const grupos = {};
+  eventos.forEach(ev => {
+    const [y, m] = ev.data_inicio.split('-');
+    if (!grupos[y]) grupos[y] = {};
+    if (!grupos[y][m]) grupos[y][m] = [];
+    grupos[y][m].push(ev);
+  });
+
+  const hoje = new Date();
+  const anoAtual = hoje.getFullYear();
+  const mesAtual = String(hoje.getMonth() + 1).padStart(2, '0');
+  const anos = Object.keys(grupos).sort((a, b) => b - a);
+
+  let html = '';
+  anos.forEach(ano => {
+    const totalAno = Object.values(grupos[ano]).reduce((s, arr) => s + arr.length, 0);
+    const isAtual = parseInt(ano) === anoAtual;
+    const anoKey = `evano_${ano}`;
+    const badgeAtual = isAtual ? `<span class="ev-ano-badge-atual">Ano atual</span>` : '';
+
+    html += `<div class="ev-ano-group">
+      <button class="ev-ano-btn" onclick="toggleEvAno('${anoKey}')" id="${anoKey}_btn">
+        <span class="ev-ano-chevron" id="${anoKey}_chev">▶</span>
+        <span class="ev-ano-label">${ano} ${badgeAtual}</span>
+        <span class="ev-ano-count">${totalAno} evento${totalAno !== 1 ? 's' : ''}</span>
+      </button>
+      <div class="ev-ano-body" id="${anoKey}_body" style="display:none">`;
+
+    const meses = Object.keys(grupos[ano]).sort((a, b) => b - a);
+    meses.forEach(mes => {
+      const evsMes = grupos[ano][mes];
+      const mesKey = `evmes_${ano}_${mes}`;
+      const nomeMes = _MESES_PT[parseInt(mes) - 1];
+      const totalMes = evsMes.length;
+
+      html += `<div class="ev-mes-group">
+        <button class="ev-mes-btn" onclick="toggleEvMes('${mesKey}')" id="${mesKey}_btn">
+          <span class="ev-mes-chevron" id="${mesKey}_chev">▶</span>
+          <span class="ev-mes-label">${nomeMes}</span>
+          <span class="ev-mes-count">${totalMes} evento${totalMes !== 1 ? 's' : ''}</span>
+        </button>
+        <div class="ev-mes-body" id="${mesKey}_body" style="display:none">
+          ${evsMes.map(e => _evCardHtml(e, canEdit, hoje)).join('')}
+        </div>
+      </div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
+  el.innerHTML = html;
 }
 
-function toggleEvHistorico(btn) {
-  const el = document.getElementById('evListaInativos');
-  if (!el) return;
-  const open = el.style.display !== 'none';
-  el.style.display = open ? 'none' : 'block';
-  btn.textContent = (open ? '▶' : '▼') + btn.textContent.slice(1);
+function toggleEvAno(key) {
+  const body = document.getElementById(key + '_body');
+  const chev = document.getElementById(key + '_chev');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (chev) chev.textContent = open ? '▶' : '▼';
+}
+
+function toggleEvMes(key) {
+  const body = document.getElementById(key + '_body');
+  const chev = document.getElementById(key + '_chev');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (chev) chev.textContent = open ? '▶' : '▼';
+}
+
+function toggleEvTiposCard() {
+  const body = document.getElementById('evTiposCardBody');
+  const header = document.getElementById('evTiposCardHeader');
+  const addBtn = document.getElementById('evTiposAddBtn');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  const lbl = header?.querySelector('.ev-config-label');
+  if (lbl) lbl.textContent = (open ? '▶' : '▼') + ' Tipos de Evento';
+  if (addBtn) addBtn.style.display = open ? 'none' : '';
 }
 
 function abrirFormEvento(id) {
