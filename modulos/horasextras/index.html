@@ -1529,11 +1529,17 @@ function _parsePDFPages(allPages, fileName) {
     // O extrator usa y descrescente; invertemos aqui para processar de cima para baixo
     const pageLines = [...rawPageLines].sort((a, b) => a.y - b.y);
 
-    // Cabeçalho de employees = primeira linha (y mínimo = topo)
-    const trabLine = pageLines[0];
-    if (!trabLine.items) continue;
+    // Cabeçalho "Trabalhador": normalmente a primeira linha (Formato A/B — y mínimo = base da página).
+    // No Formato C (horizontal), "Trabalhador" aparece no topo — buscamos em todas as linhas.
+    let trabLine = pageLines[0];
+    let trabIdx  = trabLine?.items ? trabLine.items.findIndex(it => it.str === 'Trabalhador') : -1;
 
-    const trabIdx = trabLine.items.findIndex(it => it.str === 'Trabalhador');
+    if (trabIdx < 0) {
+      for (const line of pageLines) {
+        const idx = (line.items || []).findIndex(it => it.str === 'Trabalhador');
+        if (idx >= 0) { trabLine = line; trabIdx = idx; break; }
+      }
+    }
     if (trabIdx < 0) continue;
 
     // Empresa: detecta por página (pode mudar entre páginas do mesmo PDF multi-empresa)
@@ -1562,8 +1568,26 @@ function _parsePDFPages(allPages, fileName) {
     if (pageEmpresaCodigo) empresaCodigo = pageEmpresaCodigo;
     const pageEmp = pageEmpresaCodigo || empresaCodigo || '_';
 
-    // Colunas de employee: itens após Trabalhador (pula separador "====")
+    // Competência: busca "Inscrição MÊS/ANO" em qualquer linha (antecipado — precede desvio Formato C)
+    if (!competencia) {
+      for (const line of pageLines) {
+        const m = (line.text || '').match(/Inscri[çc][ãa]o\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ]+)\/(\d{4})/i);
+        if (m) {
+          const mes = _MESES_PT[(m[1].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''))];
+          if (mes) { competencia = `${m[2]}-${mes}`; break; }
+        }
+      }
+    }
+
+    // Formato C (horizontal): itens após "Trabalhador" são tipos de HE, não IDs de 7 dígitos.
+    // Desvio isolado — o código abaixo (Formato A/B) não é tocado.
     const afterTrab = trabLine.items.slice(trabIdx + 1).filter(it => !/^=+$/.test(it.str));
+    if (afterTrab.length > 0 && !/^\d{7}/.test(afterTrab[0]?.str || '')) {
+      _parsePaginaFormatoC(pageLines, trabLine, pageEmp, colabMap);
+      continue;
+    }
+
+    // Formato A/B — colunas de employee: itens após Trabalhador (código INALTERADO)
     const cols = afterTrab.map(it => {
       const m = it.str.match(/^(\d{7})\s*(.*)/);
       return m ? { id: m[1], nome: m[2].trim(), x: Math.round(it.x) } : null;
@@ -1579,17 +1603,6 @@ function _parsePDFPages(allPages, fileName) {
         colabMap[mapKey].nome_pdf = col.nome;
       }
       col._mapKey = mapKey; // referência rápida para applyValueItems
-    }
-
-    // Competência: busca "Inscrição MÊS/ANO" em qualquer linha
-    if (!competencia) {
-      for (const line of pageLines) {
-        const m = (line.text || '').match(/Inscri[çc][ãa]o\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ]+)\/(\d{4})/i);
-        if (m) {
-          const mes = _MESES_PT[(m[1].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''))];
-          if (mes) { competencia = `${m[2]}-${mes}`; break; }
-        }
-      }
     }
 
     // Espaçamento médio entre colunas de funcionários (usado em colIdxForX e VALUE_X_MIN_DYN)
@@ -1831,6 +1844,88 @@ function _parsePDFPages(allPages, fileName) {
   const blocos = Object.values(blocosPorEmp);
   if (!blocos.length) return [];
   return blocos;
+}
+
+// Parser para Formato C (horizontal/row-based): funcionários = LINHAS, tipos HE = COLUNAS.
+// Usado pelo Jan/2025 Grupo Revest. Isolado — não toca código de Formato A/B.
+function _parsePaginaFormatoC(pageLines, trabLine, pageEmp, colabMap) {
+  // Coordenadas X fixas das colunas HE (verificadas idênticas em todas as 10 páginas do Jan/2025)
+  const COL_DEFS = [
+    { quant: 192, valor: 245, type: '50'       },
+    { quant: 278, valor: 331, type: '70'       },
+    { quant: 365, valor: 413, type: '80'       },
+    { quant: 446, valor: 494, type: '85'       },
+    { quant: 533, valor: 581, type: '100'      },
+    { quant: 614, valor: 667, type: 'dsr'      },
+    { quant: 705, valor: 763, type: 'pdf_total' },
+  ];
+  const X_TOL = 10; // tolerância ±10 pontos PDF para bater coordenada X
+
+  function colDefForX(x) {
+    for (const def of COL_DEFS) {
+      if (Math.abs(x - def.quant) <= X_TOL) return { def, isQuant: true  };
+      if (Math.abs(x - def.valor) <= X_TOL) return { def, isQuant: false };
+    }
+    return null;
+  }
+
+  // Linha "Trabalhador" traz as colunas-rótulo; y dela é o limiar superior da tabela de dados.
+  const trabY = trabLine.y;
+
+  for (const line of pageLines) {
+    // Processa apenas linhas abaixo de "Trabalhador" (y menor = abaixo no PDF.js)
+    if (line.y >= trabY) continue;
+    if (!line.items || line.items.length < 2) continue;
+
+    // Primeiro item da linha: "MATRÍCULA NOME" ou só matrícula
+    const firstStr = line.items[0].str.trim();
+    const matMatch = firstStr.match(/^(\d{7})(.*)/);
+    if (!matMatch) continue; // linha sem matrícula → pular (totais, rodapé)
+
+    const matricula = matMatch[1];
+    const nomeRaw   = matMatch[2].trim();
+    // Nome pode vir colado à matrícula ou no segundo item (PDF.js às vezes separa)
+    let nome = nomeRaw;
+    if (!nome && line.items[1] && !/^\d/.test(line.items[1].str)) {
+      nome = line.items[1].str.trim();
+    }
+
+    const mapKey = pageEmp + '|' + matricula;
+    if (!colabMap[mapKey]) {
+      colabMap[mapKey] = {
+        matricula,
+        nome_pdf: nome,
+        percentuais: {},
+        dsr_quant: 0, dsr_valor: 0,
+        total_quant: 0, total_valor: 0,
+        pdf_total_quant: 0, pdf_total_valor: 0,
+      };
+    } else if (nome && !colabMap[mapKey].nome_pdf) {
+      colabMap[mapKey].nome_pdf = nome;
+    }
+    const reg = colabMap[mapKey];
+
+    // Percorre os demais itens da linha atribuindo valores às colunas HE
+    for (let i = 1; i < line.items.length; i++) {
+      const it = line.items[i];
+      const v = parseBR(it.str);
+      if (isNaN(v)) continue;
+
+      const hit = colDefForX(Math.round(it.x));
+      if (!hit) continue;
+
+      const { def, isQuant } = hit;
+      if (def.type === 'dsr') {
+        if (isQuant) reg.dsr_quant += v; else reg.dsr_valor += v;
+      } else if (def.type === 'pdf_total') {
+        if (isQuant) reg.pdf_total_quant += v; else reg.pdf_total_valor += v;
+      } else {
+        if (!reg.percentuais[def.type]) reg.percentuais[def.type] = { quant: 0, valor: 0 };
+        if (isQuant) reg.percentuais[def.type].quant += v;
+        else         reg.percentuais[def.type].valor += v;
+      }
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
