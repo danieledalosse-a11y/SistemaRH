@@ -31,3 +31,6 @@
 - [dp_mockup_referencia](dp_mockup_referencia.md) — Mockup visual aprovado do módulo D&P: caminho permanente em .claude/dp_mockup.html no repositório SistemaRH
 - [SistemaRH/.claude/agents/ferias.md](../../../../../SistemaRH/.claude/agents/ferias.md) — Skill do módulo Férias: periodos[] JSONB append-only, fallback flat fields, 11 funções afetadas, log RH ferias_historico, migration 073
 - [logistica_state](logistica_state.md) — Estado do SistemaLogistica: stack HTML/JS/CSS puro, padrão SistemaRH, premissa Claude=dev, estrutura base criada em 12-FROTA\CLAUDE\SistemaLogistica
+- [he_eventos_proposta](he_eventos_proposta.md) — Eventos e Ocorrências HE: CONCLUÍDO Nov/2026 — migration 147, acordeão ano→mês, bugs corrigidos, segunda etapa não iniciada
+- [he_parser_state](he_parser_state.md) — Parser HE: dois formatos (Grupo Revest/Paranavaí), state machine, Fix C+D aplicados, 147+24 colaboradores validados, pitfall _MESES_PT
+- [SistemaRH/.claude/agents/horasextras.md](../../../../../SistemaRH/.claude/agents/horasextras.md) — Skill do módulo HE: parser pivot Senior, banco he_importacoes/he_registros/he_config/he_eventos, RPC he_fn_importar, fluxo de importação, aba Eventos completa
