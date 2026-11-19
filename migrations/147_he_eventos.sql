@@ -96,7 +96,7 @@ CREATE POLICY he_eventos_sel_ges ON public.he_eventos
           SELECT pe.id
             FROM public.param_empresa pe
             JOIN public.colaboradores c ON c.empresa_registro = pe.nome_simplificado
-           WHERE c.id = ANY(auth_gestor_equipe_ids())
+           WHERE c.id = ANY(SELECT auth_gestor_equipe_ids())
         )
       )
       OR (
@@ -105,7 +105,7 @@ CREATE POLICY he_eventos_sel_ges ON public.he_eventos
           SELECT 1
             FROM public.colaboradores c
             JOIN public.param_empresa pe ON c.empresa_registro = pe.nome_simplificado
-           WHERE c.id = ANY(auth_gestor_equipe_ids())
+           WHERE c.id = ANY(SELECT auth_gestor_equipe_ids())
              AND pe.id  = he_eventos.empresa_id  -- mesma empresa
              AND c.setor = he_eventos.setor       -- mesmo setor
         )
