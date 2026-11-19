@@ -186,12 +186,18 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .ev-form-group input,.ev-form-group select,.ev-form-group textarea{height:36px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-family:inherit;font-size:13px;color:var(--text);background:var(--surface)}
 .ev-form-group textarea{height:68px;padding:8px 12px;resize:vertical}
 .ev-form-group input:focus,.ev-form-group select:focus,.ev-form-group textarea:focus{outline:none;border-color:#667eea}
-.ev-tipos-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-.ev-tipo-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 12px;background:var(--bg);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--text-sec)}
-.ev-tipo-chip button{background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:13px;line-height:1;padding:0;display:flex;align-items:center}
+.ev-config-card{margin-top:28px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)}
+.ev-config-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ev-config-label{font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em}
+.ev-config-add-btn{background:none;border:none;cursor:pointer;font-size:11px;font-weight:600;color:var(--blue);font-family:inherit;padding:0;letter-spacing:0.02em}
+.ev-config-add-btn:hover{opacity:0.75}
+.ev-tipos-chips{display:flex;flex-wrap:wrap;gap:5px}
+.ev-tipo-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 10px;background:var(--surface);border:1px solid var(--border);border-radius:16px;font-size:12px;color:var(--text-sec)}
+.ev-tipo-chip button{background:none;border:none;cursor:pointer;color:var(--text-ter);font-size:14px;line-height:1;padding:0;opacity:0;transition:opacity .15s;display:flex;align-items:center}
+.ev-tipo-chip:hover button{opacity:1}
 .ev-tipo-chip button:hover{color:var(--red)}
-.ev-config-row{display:flex;gap:8px;align-items:center;max-width:420px}
-.ev-config-row input{height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-family:inherit;font-size:12px;flex:1;background:var(--surface);color:var(--text)}
+.ev-config-row{display:flex;gap:6px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.ev-config-row input{height:30px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-family:inherit;font-size:12px;flex:1;background:var(--surface);color:var(--text)}
 .ev-config-row input:focus{outline:none;border-color:#667eea}
 .ev-block-banner{background:var(--blue-bg);border:1px solid #c7d7f5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--blue)}
 .ev-block-banner ul{margin:4px 0 0 16px}
@@ -1016,20 +1022,25 @@ async function renderEventos() {
     </div>`;
   }
 
-  // Configurar tipos — compacto, chips
+  // Configurar tipos — card de configuração compacto
   if (canEdit) {
-    html += `<div style="margin-top:28px;padding-top:16px;border-top:1px solid var(--border)">
-      <div style="font-size:11px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Tipos de Evento</div>
-      <div class="ev-tipos-chips">
-        ${(_heConfig?.tipos_evento||[]).map((t,i)=>`
-          <span class="ev-tipo-chip">
-            ${t}
-            <button onclick="removerTipoEvento(${i})" title="Remover">✕</button>
-          </span>`).join('')}
+    const tiposHtml = (_heConfig?.tipos_evento||[]).map((t,i) => `
+      <span class="ev-tipo-chip">
+        ${t}
+        <button onclick="removerTipoEvento(${i})" title="Remover tipo" aria-label="Remover ${t}">×</button>
+      </span>`).join('');
+    html += `
+    <div class="ev-config-card">
+      <div class="ev-config-header">
+        <span class="ev-config-label">Tipos de Evento</span>
+        <button class="ev-config-add-btn" onclick="toggleEvTiposInput()" title="Adicionar tipo">+ Novo tipo</button>
       </div>
-      <div class="ev-config-row">
-        <input id="evNovoTipo" type="text" placeholder="Adicionar novo tipo..." onkeydown="if(event.key==='Enter')adicionarTipoEvento()">
-        <button class="btn btn-secondary" style="height:32px;padding:0 12px;font-size:12px;white-space:nowrap" onclick="adicionarTipoEvento()">Adicionar</button>
+      <div class="ev-tipos-chips" id="evTiposChips">${tiposHtml}</div>
+      <div class="ev-config-row" id="evTiposArea" style="display:none">
+        <input id="evNovoTipoInput" type="text" placeholder="Nome do novo tipo..."
+          onkeydown="if(event.key==='Enter')adicionarTipoEvento();if(event.key==='Escape'){this.value='';toggleEvTiposInput()}">
+        <button class="btn btn-primary" style="height:30px;padding:0 14px;font-size:12px;white-space:nowrap" onclick="adicionarTipoEvento()">Salvar</button>
+        <button class="btn btn-secondary" style="height:30px;padding:0 10px;font-size:12px" onclick="toggleEvTiposInput()">Cancelar</button>
       </div>
     </div>`;
   }
@@ -1192,49 +1203,55 @@ async function salvarEvento() {
   const isNovo = _evFormMode === 'novo';
   if (isNovo) payload.criado_por = _userName;
 
+  const hdrs = { ...SB_HEADERS, 'Content-Type': 'application/json' };
+
   let ok = false;
   if (isNovo) {
-    const r = await fetch(`${_SB_URL}/rest/v1/he_eventos`, {
+    const r = await fetch(`${SB_URL}/rest/v1/he_eventos`, {
       method: 'POST',
-      headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      headers: { ...hdrs, Prefer: 'return=representation' },
       body: JSON.stringify(payload)
     });
     if (r.ok) {
       const data = await r.json();
       _allEventos.unshift(data[0]);
       ok = true;
+    } else {
+      const err = await r.json().catch(() => ({}));
+      erroEl.textContent = err.message || 'Erro ao salvar. Tente novamente.';
+      erroEl.style.display = 'block';
     }
   } else {
-    const r = await fetch(`${_SB_URL}/rest/v1/he_eventos?id=eq.${_evFormMode}`, {
+    const r = await fetch(`${SB_URL}/rest/v1/he_eventos?id=eq.${_evFormMode}`, {
       method: 'PATCH',
-      headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      headers: { ...hdrs, Prefer: 'return=minimal' },
       body: JSON.stringify(payload)
     });
     if (r.ok) {
       const idx = _allEventos.findIndex(e => e.id === _evFormMode);
       if (idx >= 0) {
-        // Atualiza empresa embedded para exibição
         const emp = _paramEmpresas.find(e => e.id === parseInt(empId));
         _allEventos[idx] = { ..._allEventos[idx], ...payload, empresa: emp ? { nome_simplificado: emp.nome_simplificado } : null };
       }
       ok = true;
+    } else {
+      const err = await r.json().catch(() => ({}));
+      erroEl.textContent = err.message || 'Erro ao salvar. Tente novamente.';
+      erroEl.style.display = 'block';
     }
   }
 
   if (ok) {
-    toast(isNovo ? 'Evento criado.' : 'Evento atualizado.', 'success');
+    toast(isNovo ? 'Evento criado com sucesso.' : 'Evento atualizado.', 'success');
     fecharFormEvento();
     renderEventos();
-  } else {
-    erroEl.textContent = 'Erro ao salvar. Tente novamente.';
-    erroEl.style.display = 'block';
   }
 }
 
 async function inativarEvento(id) {
-  const r = await fetch(`${_SB_URL}/rest/v1/he_eventos?id=eq.${id}`, {
+  const r = await fetch(`${SB_URL}/rest/v1/he_eventos?id=eq.${id}`, {
     method: 'PATCH',
-    headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
     body: JSON.stringify({ ativo: false, inativado_em: new Date().toISOString(), inativado_por: _userName })
   });
   if (r.ok) {
@@ -1246,9 +1263,9 @@ async function inativarEvento(id) {
 }
 
 async function reativarEvento(id) {
-  const r = await fetch(`${_SB_URL}/rest/v1/he_eventos?id=eq.${id}`, {
+  const r = await fetch(`${SB_URL}/rest/v1/he_eventos?id=eq.${id}`, {
     method: 'PATCH',
-    headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
     body: JSON.stringify({ ativo: true, inativado_em: null, inativado_por: null })
   });
   if (r.ok) {
@@ -1260,28 +1277,63 @@ async function reativarEvento(id) {
 }
 
 async function adicionarTipoEvento() {
-  const input = document.getElementById('evNovoTipo');
+  const input = document.getElementById('evNovoTipoInput');
   const novo = input?.value.trim();
   if (!novo) return;
-  if ((_heConfig.tipos_evento||[]).includes(novo)) { toast('Tipo já existe.', 'error'); return; }
+  if ((_heConfig.tipos_evento||[]).map(t=>t.toLowerCase()).includes(novo.toLowerCase())) {
+    toast('Esse tipo já existe.', 'error'); return;
+  }
   _heConfig.tipos_evento.push(novo);
-  await _salvarHeConfig();
-  input.value = '';
-  renderEventos();
+  const ok = await _salvarHeConfig();
+  if (ok) {
+    input.value = '';
+    document.getElementById('evTiposArea').style.display = 'none';
+    _renderTiposChips();
+    toast('Tipo adicionado.', 'success');
+  } else {
+    _heConfig.tipos_evento.pop();
+    toast('Erro ao salvar tipo.', 'error');
+  }
 }
 
 async function removerTipoEvento(idx) {
-  _heConfig.tipos_evento.splice(idx, 1);
-  await _salvarHeConfig();
-  renderEventos();
+  const removed = _heConfig.tipos_evento.splice(idx, 1);
+  const ok = await _salvarHeConfig();
+  if (ok) {
+    _renderTiposChips();
+    toast(`"${removed[0]}" removido.`, 'success');
+  } else {
+    _heConfig.tipos_evento.splice(idx, 0, removed[0]);
+    toast('Erro ao remover tipo.', 'error');
+  }
 }
 
 async function _salvarHeConfig() {
-  await fetch(`${_SB_URL}/rest/v1/he_config?id=eq.1`, {
+  const r = await fetch(`${SB_URL}/rest/v1/he_config?id=eq.1`, {
     method: 'PATCH',
-    headers: { apikey: _SB_KEY, Authorization: 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
     body: JSON.stringify({ dados: _heConfig })
   });
+  return r.ok;
+}
+
+// Re-renderiza apenas a área de chips sem reconstruir toda a tela
+function _renderTiposChips() {
+  const el = document.getElementById('evTiposChips');
+  if (!el) return;
+  el.innerHTML = (_heConfig?.tipos_evento||[]).map((t,i) => `
+    <span class="ev-tipo-chip">
+      ${t}
+      <button onclick="removerTipoEvento(${i})" title="Remover tipo" aria-label="Remover ${t}">×</button>
+    </span>`).join('');
+}
+
+function toggleEvTiposInput() {
+  const area = document.getElementById('evTiposArea');
+  if (!area) return;
+  const open = area.style.display !== 'none';
+  area.style.display = open ? 'none' : 'flex';
+  if (!open) setTimeout(() => document.getElementById('evNovoTipoInput')?.focus(), 50);
 }
 
 /* ═══════════════════════════════════════════════════════════
