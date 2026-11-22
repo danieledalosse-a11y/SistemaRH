@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.2/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --bg:#F0F2F5; --surface:#fff; --border:#E4E7EC;
@@ -331,7 +332,7 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
       <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
         <svg fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="12"/><line x1="15" y1="15" x2="12" y2="12"/></svg>
         <p>Arraste arquivos aqui ou clique para selecionar</p>
-        <span>Aceita PDF · Excel (.xlsx) em breve</span>
+        <span>PDF (Senior CADCALC) · Excel gerado por este sistema</span>
       </div>
       <input type="file" id="fileInput" accept=".pdf,.xlsx,.xls" multiple onchange="onFilesSelected(event)">
     </div>
@@ -343,6 +344,14 @@ body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 
     <div id="importValidationArea" style="display:none;margin-top:24px"></div>
     <div id="importPreviewArea" style="display:none;margin-top:16px"></div>
+
+    <div id="importExcelDownloadArea" style="display:none;margin-top:16px;padding:12px 16px;background:var(--surface-2,#F8F9FB);border:1px solid var(--border);border-radius:8px;display:none;align-items:center;gap:12px">
+      <button class="btn btn-secondary" id="btnBaixarExcel" style="display:flex;align-items:center;gap:6px">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Baixar Excel para conferência
+      </button>
+      <span id="importExcelMsg" style="font-size:12px;color:var(--text-ter)"></span>
+    </div>
 
     <div id="importActionsArea" style="display:none;margin-top:20px;gap:12px;align-items:center">
       <button class="btn btn-primary" onclick="confirmarImportacao()" id="btnConfirmar">Confirmar Importação</button>
@@ -1485,7 +1494,183 @@ async function extractPDFPages(file) {
   return pages;
 }
 
-/* Roteador por tipo de arquivo — retorna sempre o mesmo schema de blocos */
+/* ═══════════════════════════════════════════════════════════════════════════
+   GERAÇÃO DE EXCEL PARA CONFERÊNCIA
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function _colLetter(idx) {
+  let n = idx + 1, s = '';
+  while (n > 0) { s = String.fromCharCode(64 + (n - 1) % 26 + 1) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+function _fmtCompExcel(comp) {
+  if (!comp) return '';
+  const [ano, mes] = comp.split('-');
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${meses[parseInt(mes)-1]}/${ano}`;
+}
+
+let _excelDownloadFn = null; // closure para o botão de download
+
+function gerarExcelHE(allBlocks, pdfFileName) {
+  if (typeof XLSX === 'undefined') {
+    toast('Biblioteca Excel não carregada. Recarregue a página e tente novamente.', 'error');
+    return;
+  }
+
+  // ── Tipos HE presentes nos dados (ou padrão se 0 colaboradores) ───────────
+  const tiposSet = new Set();
+  for (const b of allBlocks) {
+    for (const r of b.registros) {
+      Object.keys(r.percentuais || {}).forEach(t => tiposSet.add(t));
+    }
+  }
+  const tipos = tiposSet.size > 0
+    ? [...tiposSet].sort((a, b) => Number(a) - Number(b))
+    : ['50', '70', '80', '85', '100'];
+
+  // ── Mapeamento de colunas (0-based) ───────────────────────────────────────
+  const HE_START = 3;
+  const nT       = tipos.length;
+  const DSR_Q    = HE_START + nT * 2;
+  const DSR_V    = DSR_Q + 1;
+  const TOT_Q    = DSR_V + 1;
+  const TOT_V    = TOT_Q + 1;
+  const PDF_Q    = TOT_V + 1;
+  const PDF_V    = PDF_Q + 1;
+  const DIF_Q    = PDF_V + 1;
+  const DIF_V    = DIF_Q + 1;
+
+  // ── Cabeçalho ─────────────────────────────────────────────────────────────
+  const headers = ['Status', 'Matrícula', 'Nome'];
+  for (const t of tipos) { headers.push(`${t}%_Quant`, `${t}%_Valor`); }
+  headers.push('DSR_Quant', 'DSR_Valor', 'Total_Quant', 'Total_Valor', 'PDF_Total_Quant', 'PDF_Total_Valor', 'Dif_Quant', 'Dif_Valor');
+
+  function buildFormulas(rowNum) {
+    const qCols = tipos.map((_, i) => _colLetter(HE_START + i * 2) + rowNum)
+                       .concat([_colLetter(DSR_Q) + rowNum]);
+    const vCols = tipos.map((_, i) => _colLetter(HE_START + i * 2 + 1) + rowNum)
+                       .concat([_colLetter(DSR_V) + rowNum]);
+    return {
+      totQ: { f: qCols.join('+'), t: 'n' },
+      totV: { f: vCols.join('+'), t: 'n' },
+      difQ: { f: `${_colLetter(TOT_Q)}${rowNum}-${_colLetter(PDF_Q)}${rowNum}`, t: 'n' },
+      difV: { f: `${_colLetter(TOT_V)}${rowNum}-${_colLetter(PDF_V)}${rowNum}`, t: 'n' },
+    };
+  }
+
+  function buildDataRow(reg, excelRowNum) {
+    let status = 'OK';
+    if (!reg.matricula_pdf) status = 'Adicionado';
+    else if (reg.pdf_total_quant === 0 && reg.pdf_total_valor === 0) status = 'Parcial';
+
+    const row = [status, reg.matricula_pdf || '', reg.nome_pdf || ''];
+    for (const t of tipos) {
+      const p = reg.percentuais?.[t] || { quant: 0, valor: 0 };
+      row.push(p.quant || 0, p.valor || 0);
+    }
+    row.push(reg.dsr_quant || 0, reg.dsr_valor || 0);
+    const f = buildFormulas(excelRowNum);
+    row.push(f.totQ, f.totV, reg.pdf_total_quant || 0, reg.pdf_total_valor || 0, f.difQ, f.difV);
+    return row;
+  }
+
+  function buildBlankRow(excelRowNum) {
+    const row = ['Adicionado', '', ''];
+    for (let i = 0; i < nT; i++) row.push(0, 0);
+    row.push(0, 0);
+    const f = buildFormulas(excelRowNum);
+    row.push(f.totQ, f.totV, 0, 0, f.difQ, f.difV);
+    return row;
+  }
+
+  const wb = XLSX.utils.book_new();
+  wb.Props = { Title: 'HE Conferência', Author: 'SistemaRH' };
+
+  const blocosParaAba = allBlocks.length > 0 ? allBlocks : [{
+    empresaCodigo: '', competencia: '', registros: [], param_empresa: null, arquivoNome: pdfFileName || ''
+  }];
+
+  const metaInfo = [];
+
+  for (const block of blocosParaAba) {
+    const empNome = block.param_empresa?.nome_simplificado || block.empresaCodigo || 'Empresa';
+    const compFmt = _fmtCompExcel(block.competencia) || 'PREENCHER';
+    const sheetName = `${empNome} ${compFmt}`.substring(0, 31).replace(/[\/\\?\*\[\]:]/g, '-');
+
+    // ── Aba principal ────────────────────────────────────────────────────────
+    const rows = [headers];
+    for (let i = 0; i < block.registros.length; i++) {
+      rows.push(buildDataRow(block.registros[i], i + 2));
+    }
+    // Linhas em branco para adição manual
+    const extraRows = block.registros.length === 0 ? 10 : 2;
+    for (let i = 0; i < extraRows; i++) {
+      rows.push(buildBlankRow(block.registros.length + i + 2));
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+
+    // Larguras de colunas
+    ws['!cols'] = [
+      { wch: 11 }, { wch: 11 }, { wch: 30 },
+      ...tipos.flatMap(() => [{ wch: 10 }, { wch: 12 }]),
+      { wch: 10 }, { wch: 12 },
+      { wch: 11 }, { wch: 13 },
+      { wch: 13 }, { wch: 15 },
+      { wch: 10 }, { wch: 12 },
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+    // ── Aba _original (snapshot sem fórmulas) ────────────────────────────────
+    const origRows = [headers];
+    for (const reg of block.registros) {
+      const row = ['OK', reg.matricula_pdf || '', reg.nome_pdf || ''];
+      for (const t of tipos) {
+        const p = reg.percentuais?.[t] || { quant: 0, valor: 0 };
+        row.push(p.quant || 0, p.valor || 0);
+      }
+      row.push(reg.dsr_quant || 0, reg.dsr_valor || 0,
+               reg.total_quant || 0, reg.total_valor || 0,
+               reg.pdf_total_quant || 0, reg.pdf_total_valor || 0,
+               0, 0);
+      origRows.push(row);
+    }
+    const wsOrig = XLSX.utils.aoa_to_sheet(origRows);
+    XLSX.utils.book_append_sheet(wb, wsOrig, `_orig_${empNome}`.substring(0, 31));
+
+    metaInfo.push({ empresaCodigo: block.empresaCodigo, empresaNome: empNome,
+                    competencia: block.competencia, registros: block.registros.length, tipos });
+  }
+
+  // ── Aba _meta ─────────────────────────────────────────────────────────────
+  const exportedAt = new Date().toISOString();
+  const totalRegs  = allBlocks.reduce((s, b) => s + b.registros.length, 0);
+  const wsMeta = XLSX.utils.aoa_to_sheet([
+    ['Chave', 'Valor'],
+    ['source',       'sistemarh-he-export'],
+    ['version',      '1'],
+    ['exportedAt',   exportedAt],
+    ['pdfFile',      pdfFileName || ''],
+    ['parserTotal',  totalRegs],
+    ['tipos',        tipos.join(',')],
+    ['empresas',     JSON.stringify(metaInfo)],
+  ]);
+  XLSX.utils.book_append_sheet(wb, wsMeta, '_meta');
+
+  // Oculta abas _orig_* e _meta
+  wb.Workbook = { Sheets: wb.SheetNames.map(n => ({ Hidden: n.startsWith('_') ? 1 : 0 })) };
+
+  // ── Download ──────────────────────────────────────────────────────────────
+  const basename = (pdfFileName || 'HE').replace(/\.pdf$/i, '').replace(/\.xlsx?$/i, '');
+  XLSX.writeFile(wb, `${basename} - Conferência.xlsx`);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Roteador por tipo de arquivo — retorna sempre o mesmo schema de blocos
+   ═══════════════════════════════════════════════════════════════════════════ */
 async function parsePDFSource(file) {
   const pages = await extractPDFPages(file);
   return _parsePDFPages(pages, file.name);
@@ -1856,6 +2041,7 @@ async function processarArquivos(files) {
   document.getElementById('importParseProgress').style.display = 'block';
   document.getElementById('importPreviewArea').style.display = 'none';
   document.getElementById('importActionsArea').style.display = 'none';
+  document.getElementById('importExcelDownloadArea').style.display = 'none';
 
   const allBlocks = [];
 
@@ -1937,6 +2123,21 @@ async function processarArquivos(files) {
 
   // Bloqueia confirmação se houver divergências
   document.getElementById('btnConfirmar').disabled = !validResult.ok;
+
+  // ── Botão de download Excel ──────────────────────────────────────────────
+  const pdfFile = suportados.find(f => /\.pdf$/i.test(f.name));
+  const excelArea = document.getElementById('importExcelDownloadArea');
+  const excelMsg  = document.getElementById('importExcelMsg');
+  const btnExcel  = document.getElementById('btnBaixarExcel');
+
+  if (totalColabs > 0) {
+    excelMsg.textContent = `${totalColabs} colaborador${totalColabs > 1 ? 'es' : ''} · comparar com o PDF antes de confirmar`;
+  } else {
+    excelMsg.textContent = 'Parser não identificou colaboradores — baixe o template e preencha manualmente';
+  }
+
+  btnExcel.onclick = () => gerarExcelHE(allBlocks, pdfFile?.name || suportados[0]?.name || '');
+  excelArea.style.display = 'flex';
 }
 
 function _statusBadge(s) {
@@ -2169,6 +2370,7 @@ function cancelarImportacao() {
   document.getElementById('importValidationArea').style.display = 'none';
   document.getElementById('importActionsArea').style.display = 'none';
   document.getElementById('importParseProgress').style.display = 'none';
+  document.getElementById('importExcelDownloadArea').style.display = 'none';
   document.getElementById('btnConfirmar').disabled = false;
 }
 
