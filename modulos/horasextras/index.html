@@ -1677,8 +1677,114 @@ async function parsePDFSource(file) {
 }
 
 async function parseExcelSource(file) {
-  // Reservado para implementação futura quando disponível o relatório Excel
-  throw new Error('Importação via Excel ainda não implementada. Utilize o PDF gerado pela contabilidade.');
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(new Uint8Array(data), { type: 'array' });
+
+  // Verifica assinatura do sistema
+  const metaWs = wb.Sheets['_meta'];
+  if (!metaWs) throw new Error('Este arquivo não foi gerado pelo módulo de HE. Use "Baixar Excel para conferência" para exportar os dados do PDF.');
+
+  const metaRows = XLSX.utils.sheet_to_json(metaWs, { header: 1, defval: '' });
+  const meta = {};
+  for (const row of metaRows.slice(1)) { if (row[0]) meta[String(row[0])] = row[1]; }
+
+  if (meta.source !== 'sistemarh-he-export') throw new Error('Este arquivo não foi gerado pelo módulo de HE.');
+
+  const tiposFromMeta = (meta.tipos || '').split(',').filter(Boolean);
+  const empresasInfo  = JSON.parse(meta.empresas || '[]');
+
+  const blocks = [];
+  let empIdx = 0;
+
+  for (const sheetName of wb.SheetNames) {
+    if (sheetName.startsWith('_')) continue;
+
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: 0 });
+    if (rows.length < 2) { empIdx++; continue; }
+
+    const empInfo  = empresasInfo[empIdx++] || {};
+    const headers  = rows[0].map(h => String(h || ''));
+    const colMap   = {};
+    headers.forEach((h, i) => { colMap[h] = i; });
+
+    // Tipos HE presentes nos headers
+    const tiposHE = [];
+    for (const h of headers) {
+      const m = h.match(/^(\d+)%_Quant$/);
+      if (m) tiposHE.push(m[1]);
+    }
+
+    // Mapa de original: matrícula → row array
+    const origName = `_orig_${(empInfo.empresaNome||'')}`.substring(0, 31).replace(/[\/\\?\*\[\]:]/g, '-');
+    const origWs   = wb.Sheets[origName];
+    const origMap  = {};
+    if (origWs) {
+      const origRows = XLSX.utils.sheet_to_json(origWs, { header: 1, defval: 0 });
+      for (const r of origRows.slice(1)) {
+        const mat = String(r[1] || '').trim();
+        if (mat) origMap[mat] = r;
+      }
+    }
+
+    const registros = [];
+
+    for (const row of rows.slice(1)) {
+      const matricula = String(row[colMap['Matrícula']] || '').trim();
+      const nome      = String(row[colMap['Nome']] || '').trim();
+
+      // Pula linhas em branco do template
+      if (!matricula && !nome) continue;
+      const algumHE = tiposHE.some(t =>
+        Number(row[colMap[`${t}%_Quant`]]||0) !== 0 || Number(row[colMap[`${t}%_Valor`]]||0) !== 0
+      );
+      const dsr_q_row = Number(row[colMap['DSR_Quant']]||0);
+      if (!matricula && !nome && !algumHE && !dsr_q_row) continue;
+
+      const percentuais = {};
+      for (const t of tiposHE) {
+        const q = Number(row[colMap[`${t}%_Quant`]]||0);
+        const v = Number(row[colMap[`${t}%_Valor`]]||0);
+        if (q !== 0 || v !== 0) percentuais[t] = { quant: q, valor: v };
+      }
+
+      const dsr_quant     = Number(row[colMap['DSR_Quant']]||0);
+      const dsr_valor     = Number(row[colMap['DSR_Valor']]||0);
+      const pdf_total_quant = Number(row[colMap['PDF_Total_Quant']]||0);
+      const pdf_total_valor = Number(row[colMap['PDF_Total_Valor']]||0);
+
+      // Recalcula totais (células fórmula podem não ter valor cacheado)
+      const total_quant = tiposHE.reduce((s,t) => s + Number(row[colMap[`${t}%_Quant`]]||0), 0) + dsr_quant;
+      const total_valor = tiposHE.reduce((s,t) => s + Number(row[colMap[`${t}%_Valor`]]||0), 0) + dsr_valor;
+
+      // Detecta origem comparando com _original
+      const orig = origMap[matricula];
+      let fonte = matricula ? (orig ? 'pdf' : 'excel_manual') : 'excel_manual';
+      const campos_editados = [];
+
+      if (orig) {
+        for (const t of tiposHE) {
+          if (Math.abs(Number(row[colMap[`${t}%_Quant`]]||0) - Number(orig[colMap[`${t}%_Quant`]]||0)) > 0.001) campos_editados.push(`${t}%_Quant`);
+          if (Math.abs(Number(row[colMap[`${t}%_Valor`]]||0) - Number(orig[colMap[`${t}%_Valor`]]||0)) > 0.001) campos_editados.push(`${t}%_Valor`);
+        }
+        if (Math.abs(dsr_quant - Number(orig[colMap['DSR_Quant']]||0)) > 0.001) campos_editados.push('DSR_Quant');
+        if (Math.abs(dsr_valor - Number(orig[colMap['DSR_Valor']]||0)) > 0.001) campos_editados.push('DSR_Valor');
+        if (Math.abs(pdf_total_quant - Number(orig[colMap['PDF_Total_Quant']]||0)) > 0.001) campos_editados.push('PDF_Total_Quant');
+        if (Math.abs(pdf_total_valor - Number(orig[colMap['PDF_Total_Valor']]||0)) > 0.001) campos_editados.push('PDF_Total_Valor');
+        if (nome !== String(orig[2]||'').trim()) campos_editados.push('Nome');
+        if (campos_editados.length) fonte = 'excel_corrigido';
+      }
+
+      registros.push({ matricula_pdf: matricula, nome_pdf: nome, percentuais,
+        dsr_quant, dsr_valor, total_quant, total_valor,
+        pdf_total_quant, pdf_total_valor, fonte, editado: campos_editados.length > 0, campos_editados });
+    }
+
+    blocks.push({ empresaCodigo: empInfo.empresaCodigo || '', competencia: empInfo.competencia || '', registros });
+  }
+
+  if (!blocks.length) throw new Error('Nenhuma aba de dados encontrada no arquivo.');
+  return blocks;
 }
 
 function _parsePDFPages(allPages, fileName) {
@@ -2262,23 +2368,35 @@ function renderImportPreview(allBlocks) {
         </div>`;
       }
 
+      const temOrigem = block.registros.some(r => r.fonte && r.fonte !== 'pdf');
       html += `<div style="overflow-x:auto"><table class="data-table">
         <thead><tr>
-          <th>Matrícula</th><th>Colaborador vinculado</th><th>Status</th>
+          <th>Matr\u00edcula</th><th>Colaborador vinculado</th><th>Status</th>
+          ${temOrigem ? '<th>Origem</th>' : ''}
           <th class="text-right">Horas</th><th class="text-right">Valor</th>
         </tr></thead><tbody>`;
 
       for (const r of block.registros) {
         const c = r.colaborador_id ? _colabsForImport.find(x => x.id === r.colaborador_id) : null;
+        let origemCell = '';
+        if (temOrigem) {
+          if (r.fonte === 'excel_corrigido')
+            origemCell = `<td><span class="badge badge-amber" title="${(r.campos_editados||[]).join(', ')}">&#10000; Corrigido</span></td>`;
+          else if (r.fonte === 'excel_manual')
+            origemCell = `<td><span class="badge badge-purple">+ Manual</span></td>`;
+          else
+            origemCell = `<td><span class="badge" style="background:var(--bg-2,#F0F2F5);color:var(--text-sec)">PDF</span></td>`;
+        }
         html += `<tr>
-          <td style="font-family:monospace">${r.matricula_pdf}</td>
-          <td>${c ? titleCase(c.nome) : '—'}</td>
+          <td style="font-family:monospace">${r.matricula_pdf || '\u2014'}</td>
+          <td>${c ? titleCase(c.nome) : (r.nome_pdf || '\u2014')}</td>
           <td>${_statusBadge(r.status_vinculo)}</td>
+          ${origemCell}
           <td class="text-right text-num">${fmtN(r.total_quant)}h</td>
           <td class="text-right text-num">${fmtBRL(r.total_valor)}</td>
         </tr>`;
       }
-      html += `</tbody></table></div>
+      html += `</tbody></table></div>`
           </div>
         </div>`;
     }
