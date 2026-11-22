@@ -14,12 +14,13 @@ tools:
 # Módulo Horas Extras — SistemaRH
 
 ## Arquivo principal
-`modulos/horasextras/index.html` — ~1950 linhas, tudo inline (sem módulos externos além de pdfjs-dist CDN).
+`modulos/horasextras/index.html` — ~2500 linhas, tudo inline.
 
 ## Stack
 - **PDF.js (pdfjs-dist 3.11.174)** via CDN: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js`
+- **SheetJS 0.20.2** via CDN oficial: `https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js`  
+  ⚠️ Versão 0.20.x **não está no npm** — usar somente `cdn.sheetjs.com`, nunca jsdelivr/unpkg para esta versão
 - **Supabase** via fetch direto (chave publicável + JWT do usuário em `SB_HEADERS`)
-- **SheetJS** não utilizado neste módulo
 
 ## Variáveis globais de autenticação
 ```javascript
@@ -298,3 +299,136 @@ Percentuais Paranavaí/Porto Rico: 50/60/80/85/100% (convenção sindical difere
 - `_MESES_PT` já existe como objeto na linha ~490 (parser). Para nomes de meses usar `_MESES_NOMES` (array).
 - Writes sempre via `SB_HEADERS` (contém JWT); usar `SB_KEY` como Bearer faz RLS bloquear silenciosamente.
 - SRF `auth_gestor_equipe_ids()` em RLS: `= ANY(SELECT fn())`, nunca `= ANY(fn())`.
+- **Template literals multi-linha**: edições via substituição por byte-position (Python) podem fechar o backtick prematuramente, gerando código JS com literal truncado + divs soltos fora da string. Sintoma: aba Importação some + loop infinito na tela. Sempre verificar as linhas de fechamento do template literal após qualquer edição automática.
+
+---
+
+## Fluxo de conferência via Excel (implementado Nov/2026)
+
+### Visão geral — dois caminhos de importação
+```
+PDF → parsePDFSource → preview → [Baixar Excel] → [usuário confere/edita] → Reimportar Excel
+                                                                           ↓
+                                                                   parseExcelSource → preview (com badges de Origem)
+```
+
+### Aba Importação — UI com dois cards
+```html
+<div class="import-cards" id="dropZone">
+  <!-- Card 1: PDF principal -->
+  <div class="import-card import-card-primary" onclick="document.getElementById('pdfInput').click()">
+    <div class="import-card-step">1</div>  <!-- badge "1" roxo -->
+    <!-- ícone PDF + título "Importar PDF original" -->
+  </div>
+  <div class="import-cards-sep">›</div>
+  <!-- Card 2: Excel corrigido (borda tracejada) -->
+  <div class="import-card import-card-secondary" onclick="document.getElementById('excelInput').click()">
+    <div class="import-card-step">2</div>  <!-- badge "2" cinza -->
+    <!-- ícone grade + título "Reimportar Excel corrigido" -->
+  </div>
+</div>
+<!-- inputs ocultos separados por tipo -->
+<input type="file" id="pdfInput"   accept=".pdf">
+<input type="file" id="excelInput" accept=".xlsx,.xls">
+<input type="file" id="fileInput"  accept=".pdf,.xlsx,.xls">  <!-- fallback drag-drop genérico -->
+
+<!-- Bridge: aparece após parse do PDF via classList.add('visible') -->
+<div class="import-excel-bridge" id="importExcelDownloadArea">
+  <button id="btnBaixarExcel">Baixar Excel para conferência</button>
+  <span id="importExcelMsg"></span>
+</div>
+```
+Classes CSS relevantes: `.import-cards`, `.import-card`, `.import-card-primary`, `.import-card-secondary`, `.import-card-step`, `.import-cards-sep`, `.import-excel-bridge`, `.import-excel-bridge.visible`.
+
+A bridge usa `classList.add('visible')` / `classList.remove('visible')` — **nunca** `style.display`.
+
+---
+
+### Fase 1 — `gerarExcelHE(allBlocks, pdfFileName)`
+Gera um `.xlsx` estruturado para conferência após o parse do PDF.
+
+**Estrutura de colunas (dinâmica por tipos HE encontrados):**
+```
+A=Status  B=Matrícula  C=Nome
+D,E = 50%_Quant, 50%_Valor   (par por tipo — dinâmico)
+...
+DSR_Q=DSR_Quant  DSR_V=DSR_Valor
+TOT_Q=Total_Quant (formula)  TOT_V=Total_Valor (formula)
+PDF_Q=PDF_Total_Quant  PDF_V=PDF_Total_Valor
+DIF_Q=Dif_Quant (formula)  DIF_V=Dif_Valor (formula)
+```
+Índices calculados:
+```javascript
+const HE_START = 3;
+const DSR_Q = HE_START + nT * 2;
+const DSR_V = DSR_Q + 1;
+const TOT_Q = DSR_V + 1;  const TOT_V = TOT_Q + 1;
+const PDF_Q = TOT_V + 1;  const PDF_V = PDF_Q + 1;
+const DIF_Q = PDF_V + 1;  const DIF_V = DIF_Q + 1;
+```
+Fórmulas: `Total_Quant = D2+F2+...+N2+DSR_Q2`, `Dif_Quant = PDF_Q2 - TOT_Q2`.
+
+**Planilhas geradas por `wb.SheetNames`:**
+- Uma aba por empresa: nome = `${empresaCodigo} - ${_fmtCompExcel(competencia)}`
+- `_orig_${empresaNome}` (oculta): snapshot exato pré-edição para detecção de diferenças
+- `_meta` (oculta): `source=sistemarh-he-export`, `tipos`, `empresas` (JSON)
+
+Planilhas com `_` no nome ficam ocultas via:
+```javascript
+wb.Workbook = { Sheets: wb.SheetNames.map(n => ({ Hidden: n.startsWith('_') ? 1 : 0 })) };
+```
+
+Linhas em branco: 10 quando 0 colaboradores, 2 quando há dados.
+Nome do arquivo: `${basename} - Conferência.xlsx`.
+
+**Helpers usados:**
+```javascript
+function _colLetter(idx) {   // índice 0-based → letra de coluna Excel (A, B, ... AA, AB...)
+  let n = idx + 1, s = '';
+  while (n > 0) { s = String.fromCharCode(64 + (n - 1) % 26 + 1) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+function _fmtCompExcel(comp) {   // '2026-01' → 'Jan/2026'
+  const [ano, mes] = comp.split('-');
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${meses[parseInt(mes)-1]}/${ano}`;
+}
+```
+
+---
+
+### Fase 2 — `parseExcelSource(file)`
+Lê um Excel gerado por `gerarExcelHE`, detecta edições vs. `_original` e classifica cada linha.
+
+**Validação de autoria:**
+```javascript
+const metaWs = wb.Sheets['_meta'];
+if (!metaWs) throw new Error('Este arquivo não foi gerado pelo módulo de HE...');
+if (meta.source !== 'sistemarh-he-export') throw new Error('...');
+```
+
+**Campo `fonte` nos registros retornados:**
+| Valor | Significado |
+|---|---|
+| `'pdf'` | Linha existia no PDF e não foi alterada |
+| `'excel_corrigido'` | Linha existia no PDF mas teve algum campo editado |
+| `'excel_manual'` | Linha nova criada no Excel, sem correspondente no parser |
+
+Detecção: compara cada campo numérico com o snapshot `_orig_*`; `campos_editados[]` lista quais colunas diferiram.
+
+**Recálculo de totais**: células de fórmula não têm valor cacheado em arquivos XLSX recém-gerados → `total_quant` e `total_valor` são recalculados em JS somando os campos individuais:
+```javascript
+const total_quant = tiposHE.reduce((s,t) => s + Number(row[colMap[`${t}%_Quant`]]||0), 0) + dsr_quant;
+```
+
+**Coluna "Origem" no preview** (exibida quando `temOrigem = block.registros.some(r => r.fonte && r.fonte !== 'pdf')`):
+```javascript
+// excel_corrigido: badge âmbar com ✂ e tooltip dos campos editados
+// excel_manual: badge roxo com + Manual
+// pdf: badge cinza "PDF"
+```
+
+---
+
+## `confirmarImportacao()` — compatibilidade com Excel
+A RPC `he_fn_importar` recebe o mesmo formato de blocos independente da origem (PDF ou Excel). O campo `fonte` não é salvo no banco — serve apenas para o preview. Após confirmação, `_importPreviewData = []` e bridge some.
