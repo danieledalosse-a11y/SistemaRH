@@ -5872,7 +5872,12 @@ function abrirModalAprovar(idx) {
           <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Dias <span style="font-weight:400;color:var(--text-ter);">(máx. ${_saldoAprov})</span></label>
           <input type="number" id="aprvEditDias" value="${nl.dias}" min="1" max="${_saldoAprov}" oninput="aprvRecalcFim()" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);width:70px;">
         </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Abono <span style="font-weight:400;color:var(--text-ter);">(máx. ${Math.floor(_saldoAprov/3)}d)</span></label>
+          <input type="number" id="aprvEditAbono" value="0" min="0" max="${Math.floor(_saldoAprov/3)}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);width:70px;">
+        </div>
       </div>
+      <div style="margin-top:6px;font-size:11px;color:var(--text-ter);">ℹ Abono pecuniário requer solicitação escrita do colaborador (CLT art. 143).</div>
       <div id="aprvEditErro" style="display:none;margin-top:8px;font-size:12px;color:var(--red);"></div>`;
     document.getElementById('btnAprovar').textContent = '✓ Aprovar';
   }
@@ -6069,6 +6074,7 @@ async function aprovarPendente() {
     const _aprvIni  = document.getElementById('aprvEditInicio')?.value  || reg._novoLanc.inicio;
     const _aprvFim  = document.getElementById('aprvEditFim')?.value     || reg._novoLanc.fim;
     const _aprvDias = parseInt(document.getElementById('aprvEditDias')?.value) || reg._novoLanc.dias;
+    const _aprvAbono = parseInt(document.getElementById('aprvEditAbono')?.value) || 0;
     const _aprvErroEl = document.getElementById('aprvEditErro');
     const _rhEditou = _aprvIni !== _nlOriginal.inicio || _aprvFim !== _nlOriginal.fim || _aprvDias !== _nlOriginal.dias;
     // Validação das datas editadas (somente quando RH alterou)
@@ -6101,6 +6107,17 @@ async function aprovarPendente() {
       if (_aprvErroEl) _aprvErroEl.style.display = 'none';
       // Aplica correção do RH em _novoLanc para que o restante do fluxo use os valores corrigidos
       reg._novoLanc = { ...reg._novoLanc, inicio: _aprvIni, fim: _aprvFim, dias: _aprvDias };
+    }
+    // Validação de abono pecuniário
+    const _saldoParaAbono = calcSaldo(reg);
+    const _maxAbono = Math.floor(_saldoParaAbono / 3);
+    if (_aprvAbono < 0 || _aprvAbono > _maxAbono) {
+      if (_aprvErroEl) { _aprvErroEl.textContent = `Abono inválido. Máximo legal: ${_maxAbono}d (1/3 do saldo disponível).`; _aprvErroEl.style.display = 'block'; }
+      btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
+    }
+    if (_aprvDias + _aprvAbono > _saldoParaAbono) {
+      if (_aprvErroEl) { _aprvErroEl.textContent = `Férias (${_aprvDias}d) + abono (${_aprvAbono}d) = ${_aprvDias + _aprvAbono}d excedem o saldo disponível (${_saldoParaAbono}d).`; _aprvErroEl.style.display = 'block'; }
+      btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
     }
     if (reg._sbId) {
       // Pré-verificação obrigatória — sem fallback se falhar
@@ -6148,7 +6165,7 @@ async function aprovarPendente() {
       const _flatAprov = _newPerId === 0 ? { periodo1_inicio: nl.inicio, periodo1_fim: nl.fim, dias1: nl.dias }
                        : _newPerId === 1 ? { periodo2_inicio: nl.inicio, periodo2_fim: nl.fim, dias2: nl.dias }
                        : {};
-      const payload = { status: 'Aprovado', periodos: _periosAprov, atualizado_em: new Date().toISOString(), ..._flatAprov };
+      const payload = { status: 'Aprovado', periodos: _periosAprov, abono_pecuniario: _aprvAbono, atualizado_em: new Date().toISOString(), ..._flatAprov };
       Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
       // PATCH condicional com atualizado_em para detectar conflito de concorrência
       const _filtroCondicional = `id=eq.${reg._sbId}&status=eq.Pendente&atualizado_em=eq.${encodeURIComponent(tsLido)}`;
@@ -6166,6 +6183,7 @@ async function aprovarPendente() {
         return;
       }
       reg._periodos = _periosAprov;
+      reg.abonoPecuniario = _aprvAbono;
     }
     // Captura datas finais (já corrigidas, se RH editou) antes de zerar _novoLanc
     const _lancAprovDet = reg._novoLanc ? { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias } : {};
@@ -6173,12 +6191,12 @@ async function aprovarPendente() {
     reg._novoLanc = null;
     reg.status = 'Aprovado';
     const _perSyncPad = GESTOR_PERIODOS.find(p => String(p.id) === String(reg._sbId));
-    if (_perSyncPad?._feriasRow) { _perSyncPad._feriasRow.status = 'Aprovado'; _perSyncPad._feriasRow.atualizado_em = new Date().toISOString(); }
+    if (_perSyncPad?._feriasRow) { _perSyncPad._feriasRow.status = 'Aprovado'; _perSyncPad._feriasRow.atualizado_em = new Date().toISOString(); _perSyncPad._feriasRow.abono_pecuniario = _aprvAbono; }
     // Registra aprovação no histórico — inclui datas originais quando RH corrigiu
     const _perfAprov = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     let _histFalhouAprov = false;
     if (reg._sbId && colab._sbColabId) {
-      const _logDetalhe = { ..._lancAprovDet, aprovado_por: _perfAprov.nome || 'RH' };
+      const _logDetalhe = { ..._lancAprovDet, aprovado_por: _perfAprov.nome || 'RH', ...(_aprvAbono > 0 ? { abono_pecuniario: _aprvAbono } : {}) };
       if (_rhEditou) {
         _logDetalhe.corrigido_de = { inicio: _nlOriginal.inicio, fim: _nlOriginal.fim, dias: _nlOriginal.dias };
       }
