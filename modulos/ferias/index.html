@@ -3788,9 +3788,10 @@ function renderDrawerHistorico(colab) {
     if (r._novoLanc && r.status === 'Pendente') {
       const nl = r._novoLanc;
       const quemPediu = r._obsGestor ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">${r._obsGestor}</div>` : '';
-      const acaoBtns = (IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')) ? `<div style="display:flex;gap:6px;margin-top:8px;">
+      const acaoBtns = (IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')) ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
         <button onclick="rhAprovarSolicitado('${r._sbId}').then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprovar</button>
         <button onclick="rhRecusarSolicitado('${r._sbId}').then(()=>fecharDrawer())" style="padding:4px 12px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;">✕ Recusar</button>
+        <button onclick="rhAlterar('${r._sbId}')" style="padding:4px 12px;border-radius:6px;border:1.5px solid #2563EB;background:transparent;color:#2563EB;font-size:12px;font-weight:600;cursor:pointer;">✎ Alterar</button>
       </div>` : '';
       novoLancHtml = `<div style="margin:6px 12px 0;border-left:3px solid #F79009;padding-left:10px;">
         <div style="font-size:13px;font-weight:500;color:var(--text);">${formatDate(nl.inicio)} → ${formatDate(nl.fim)} · ${nl.dias}d</div>
@@ -5089,7 +5090,8 @@ function renderPendentes() {
           <div class="pendente-actions" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
             ${feriasId
               ? `<button onclick="rhAprovarSolicitado('${feriasId}',${idx})" style="padding:6px 14px;border-radius:7px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✓ Aprovar</button>
-                 <button onclick="rhRecusarSolicitado('${feriasId}',${idx})" style="padding:6px 14px;border-radius:7px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✕ Recusar</button>`
+                 <button onclick="rhRecusarSolicitado('${feriasId}',${idx})" style="padding:6px 14px;border-radius:7px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✕ Recusar</button>
+                 <button onclick="rhAlterar('${feriasId}',${idx})" style="padding:6px 14px;border-radius:7px;border:1.5px solid #2563EB;background:transparent;color:#2563EB;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✎ Alterar</button>`
               : `<button class="btn btn-outline btn-sm" onclick="abrirModalAprovar(${idx})">Analisar</button>`}
           </div>
         </div>`;
@@ -5683,7 +5685,7 @@ async function rhAprovarSolicitado(feriasId, idx) {
   // Redireciona para o modal completo (campos editáveis de data, igual ao Recusar)
   const lista = getPendentes();
   const i = (idx !== undefined && idx !== null) ? idx : lista.findIndex(p => String(p.reg._sbId) === String(feriasId));
-  if (i >= 0 && (lista[i]._tipo === 'default' || lista[i]._tipo === 'legado')) { abrirModalAprovar(i); return; }
+  if (i >= 0 && (lista[i]._tipo === 'default' || lista[i]._tipo === 'legado')) { abrirModalAprovar(i, 'aprovar'); return; }
   const btn = (typeof event !== 'undefined' && event?.target) || null;
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
@@ -5757,7 +5759,7 @@ async function rhRecusarSolicitado(feriasId, idx) {
   // Redireciona para o modal completo que já tem campo de motivo
   const lista = getPendentes();
   const i = (idx !== undefined && idx !== null) ? idx : lista.findIndex(p => String(p.reg._sbId) === String(feriasId));
-  if (i >= 0) { abrirModalAprovar(i); toggleMotivoRejeicao(); return; }
+  if (i >= 0) { abrirModalAprovar(i, 'recusar'); return; }
   const motivo = '';
   if (!motivo?.trim()) return;
   try {
@@ -5810,9 +5812,19 @@ async function rhRecusarSolicitado(feriasId, idx) {
   }
 }
 
+async function rhAlterar(feriasId, idx) {
+  const lista = getPendentes();
+  const i = (idx !== undefined && idx !== null) ? idx : lista.findIndex(p => String(p.reg._sbId) === String(feriasId));
+  if (i >= 0 && (lista[i]._tipo === 'default' || lista[i]._tipo === 'legado')) {
+    abrirModalAprovar(i, 'alterar');
+    return;
+  }
+  toast('Esta ação não está disponível para o tipo de solicitação selecionado.', 'aviso');
+}
+
 // ─── Modal aprovação ─────────────────────────────────────────────────────────
 let _pendListCache = [];
-function abrirModalAprovar(idx) {
+function abrirModalAprovar(idx, mode = 'aprovar') {
   _pendListCache = getPendentes();
   _pendIdx = idx;
   const pendItem = _pendListCache[idx];
@@ -5827,6 +5839,9 @@ function abrirModalAprovar(idx) {
   document.getElementById('motivoRejeicao').value = '';
   document.getElementById('btnAprovar').onclick = aprovarPendente;
   document.getElementById('btnRejeitar').onclick = toggleMotivoRejeicao;
+  document.getElementById('btnRejeitar').style.display = '';
+  document.getElementById('btnAprovar').removeAttribute('style');
+  document.getElementById('btnAprovar').className = 'btn btn-green';
 
   if (_tipo === 'alteracao') {
     document.getElementById('aprovarTitle').textContent = 'Analisar alteração de data';
@@ -5852,42 +5867,152 @@ function abrirModalAprovar(idx) {
       </div>`;
     document.getElementById('btnAprovar').textContent = '✓ Aprovar cancelamento';
   } else {
-    document.getElementById('aprovarTitle').textContent = 'Aprovar ou rejeitar';
     const nl = reg._novoLanc;
-    // Calcula saldo disponível para exibir no limite do campo dias
-    const _saldoAprov = calcSaldo(reg);
-    document.getElementById('aprovarInfo').innerHTML = `
-      <div style="margin-bottom:12px;padding:12px 14px;background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid #3B82F6;border-radius:8px;">
-        <div style="font-size:10px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px;">Solicitado pelo gestor</div>
-        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px;">${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</div>
-        <div style="font-size:12px;color:var(--text-sec);"><strong style="color:var(--text);">${nl.dias} dias</strong>${nl.motivo ? ' · ' + nl.motivo : ''}</div>
-      </div>
-      <div style="padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
-        <div style="font-size:10px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;">Ajuste RH</div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-          <div>
-            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Início</label>
-            <input type="date" id="aprvEditInicio" value="${nl.inicio}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg);" oninput="aprvRecalcFim()">
-          </div>
-          <div>
-            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Fim</label>
-            <input type="date" id="aprvEditFim" value="${nl.fim}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg);" oninput="aprvRecalcDias()">
-          </div>
-          <div>
-            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Dias <span style="font-weight:400;color:var(--text-ter);">(máx. ${_saldoAprov})</span></label>
-            <input type="number" id="aprvEditDias" value="${nl.dias}" min="1" max="${_saldoAprov}" oninput="aprvRecalcFim()" style="font-size:13px;padding:6px 8px;border:1.5px solid #3B82F6;border-radius:6px;color:var(--text);background:var(--bg);width:70px;">
-          </div>
-          <div>
-            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Abono <span style="font-weight:400;color:var(--text-ter);">(máx. ${Math.floor(_saldoAprov/3)}d)</span></label>
-            <input type="number" id="aprvEditAbono" value="0" min="0" max="${Math.floor(_saldoAprov/3)}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg);width:70px;">
-          </div>
+    const _abonoPec = reg.abonoPecuniario || 0;
+    const btnAprovarEl = document.getElementById('btnAprovar');
+    const btnRejeitarEl = document.getElementById('btnRejeitar');
+    if (mode === 'alterar') {
+      document.getElementById('aprovarTitle').textContent = 'Ajustar solicitação';
+      const _saldoAprov = calcSaldo(reg);
+      document.getElementById('aprovarInfo').innerHTML = `
+        <div style="margin-bottom:12px;padding:12px 14px;background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid #3B82F6;border-radius:8px;">
+          <div style="font-size:10px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px;">Solicitado pelo gestor</div>
+          <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px;">${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</div>
+          <div style="font-size:12px;color:var(--text-sec);"><strong style="color:var(--text);">${nl.dias} dias</strong>${nl.motivo ? ' · ' + nl.motivo : ''}</div>
         </div>
-        <div style="margin-top:10px;padding:6px 10px;background:#FEFCE8;border:1px solid #FDE68A;border-radius:5px;font-size:11px;color:#92400E;">ℹ Abono pecuniário requer solicitação escrita do colaborador (CLT art. 143).</div>
-      </div>
-      <div id="aprvEditErro" style="display:none;margin-top:8px;font-size:12px;color:var(--red);"></div>`;
-    document.getElementById('btnAprovar').textContent = '✓ Aprovar';
+        <div style="padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
+          <div style="font-size:10px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;">Ajuste RH</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Início</label>
+              <input type="date" id="aprvEditInicio" value="${nl.inicio}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg);" oninput="aprvRecalcFim()">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Fim</label>
+              <input type="date" id="aprvEditFim" value="${nl.fim}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg);" oninput="aprvRecalcDias()">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Dias <span style="font-weight:400;color:var(--text-ter);">(máx. ${_saldoAprov})</span></label>
+              <input type="number" id="aprvEditDias" value="${nl.dias}" min="1" max="${_saldoAprov}" oninput="aprvRecalcFim()" style="font-size:13px;padding:6px 8px;border:1.5px solid #3B82F6;border-radius:6px;color:var(--text);background:var(--bg);width:70px;">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Abono <span style="font-weight:400;color:var(--text-ter);">(máx. ${Math.floor(_saldoAprov/3)}d)</span></label>
+              <input type="number" id="aprvEditAbono" value="${_abonoPec}" min="0" max="${Math.floor(_saldoAprov/3)}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg);width:70px;">
+            </div>
+          </div>
+          <div style="margin-top:10px;padding:6px 10px;background:#FEFCE8;border:1px solid #FDE68A;border-radius:5px;font-size:11px;color:#92400E;">ℹ Abono pecuniário requer solicitação escrita do colaborador (CLT art. 143).</div>
+        </div>
+        <div id="aprvEditErro" style="display:none;margin-top:8px;font-size:12px;color:var(--red);"></div>`;
+      btnRejeitarEl.style.display = 'none';
+      btnAprovarEl.className = 'btn'; btnAprovarEl.setAttribute('style', 'background:#2563EB;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:600;cursor:pointer;');
+      btnAprovarEl.textContent = '💾 Salvar ajuste';
+      btnAprovarEl.onclick = salvarAjuste;
+    } else if (mode === 'aprovar') {
+      document.getElementById('aprovarTitle').textContent = 'Confirmar aprovação';
+      document.getElementById('aprovarInfo').innerHTML = `
+        <div style="padding:14px 16px;background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid #3B82F6;border-radius:8px;">
+          <div style="font-size:10px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">Solicitação a confirmar</div>
+          <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px;">${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</div>
+          <div style="font-size:13px;color:var(--text-sec);">${nl.dias} dias de descanso${_abonoPec > 0 ? ` · ${_abonoPec}d de abono pecuniário` : ''}</div>
+        </div>`;
+      btnRejeitarEl.style.display = 'none';
+      btnAprovarEl.className = 'btn btn-green';
+      btnAprovarEl.textContent = '✓ Confirmar aprovação';
+      btnAprovarEl.onclick = aprovarPendente;
+    } else if (mode === 'recusar') {
+      document.getElementById('aprovarTitle').textContent = 'Recusar solicitação';
+      document.getElementById('aprovarInfo').innerHTML = `
+        <div style="padding:14px 16px;background:#FEF2F2;border:1px solid #FECACA;border-left:4px solid #D92D20;border-radius:8px;">
+          <div style="font-size:10px;font-weight:700;color:#D92D20;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">Solicitação</div>
+          <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px;">${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</div>
+          <div style="font-size:13px;color:var(--text-sec);">${nl.dias} dias${_abonoPec > 0 ? ` · ${_abonoPec}d abono` : ''}</div>
+        </div>`;
+      document.getElementById('motivoRejeicaoField').style.display = 'block';
+      btnRejeitarEl.style.display = 'none';
+      btnAprovarEl.className = 'btn btn-red';
+      btnAprovarEl.textContent = '✕ Confirmar rejeição';
+      btnAprovarEl.onclick = rejeitarPendente;
+    }
   }
   document.getElementById('modalAprovar').classList.add('open');
+}
+
+async function salvarAjuste() {
+  if (_pendIdx === null) return;
+  const pendItem = _pendListCache[_pendIdx];
+  const { colab, reg } = pendItem;
+  const btnAprovarEl = document.getElementById('btnAprovar');
+  btnAprovarEl.disabled = true; btnAprovarEl.textContent = 'Salvando...';
+
+  const ini = document.getElementById('aprvEditInicio')?.value || '';
+  const fim = document.getElementById('aprvEditFim')?.value || '';
+  const dias = parseInt(document.getElementById('aprvEditDias')?.value);
+  const abono = parseInt(document.getElementById('aprvEditAbono')?.value) || 0;
+  const erroEl = document.getElementById('aprvEditErro');
+
+  if (!ini || !fim || !dias || dias < 1) {
+    if (erroEl) { erroEl.textContent = 'Preencha início, fim e dias.'; erroEl.style.display = 'block'; }
+    btnAprovarEl.disabled = false; btnAprovarEl.textContent = '💾 Salvar ajuste'; return;
+  }
+  if (fim < ini) {
+    if (erroEl) { erroEl.textContent = 'A data de fim não pode ser anterior ao início.'; erroEl.style.display = 'block'; }
+    btnAprovarEl.disabled = false; btnAprovarEl.textContent = '💾 Salvar ajuste'; return;
+  }
+  const _saldo = calcSaldo(reg);
+  const _maxAbonoSalv = Math.floor(_saldo / 3);
+  if (abono < 0 || abono > _maxAbonoSalv) {
+    if (erroEl) { erroEl.textContent = `Abono inválido. Máximo legal: ${_maxAbonoSalv}d (1/3 do saldo).`; erroEl.style.display = 'block'; }
+    btnAprovarEl.disabled = false; btnAprovarEl.textContent = '💾 Salvar ajuste'; return;
+  }
+  if (dias + abono > _saldo) {
+    if (erroEl) { erroEl.textContent = `Férias (${dias}d) + abono (${abono}d) = ${dias + abono}d excedem o saldo (${_saldo}d).`; erroEl.style.display = 'block'; }
+    btnAprovarEl.disabled = false; btnAprovarEl.textContent = '💾 Salvar ajuste'; return;
+  }
+  const _exclConflSalv = new Set(['Pendente','Rejeitado','Cancelado','Descartado','Alteracao_Solicitada']);
+  const _outrosSalv = [];
+  colab.registros.forEach(r => {
+    if (_exclConflSalv.has(r.status)) return;
+    r.lancamentos.forEach(l => _outrosSalv.push(l));
+  });
+  if (_outrosSalv.some(l => l.inicio && l.fim && ini <= l.fim && fim >= l.inicio)) {
+    if (erroEl) { erroEl.textContent = 'As novas datas conflitam com outro período já programado.'; erroEl.style.display = 'block'; }
+    btnAprovarEl.disabled = false; btnAprovarEl.textContent = '💾 Salvar ajuste'; return;
+  }
+  if (erroEl) erroEl.style.display = 'none';
+
+  const _origSalv = { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias, abono: reg.abonoPecuniario || 0 };
+
+  let _periosAlt;
+  try {
+    const rows = await sbGet('ferias', `id=eq.${reg._sbId}&select=periodos`);
+    _periosAlt = rows?.[0]?.periodos ? [...rows[0].periodos]
+      : reg.lancamentos.map((l, i) => ({ id: l.id ?? i, inicio: l.inicio, fim: l.fim, dias: l.dias, nota: l.nota || null, status: l.status || 'aprovado' }));
+  } catch(e) {
+    btnAprovarEl.disabled = false; btnAprovarEl.textContent = '💾 Salvar ajuste';
+    toast('Erro ao verificar estado atual. Tente novamente.', 'erro'); return;
+  }
+  const _solIdxSalv = _periosAlt.findIndex(p => p.status === 'solicitado');
+  if (_solIdxSalv >= 0) _periosAlt[_solIdxSalv] = { ..._periosAlt[_solIdxSalv], inicio: ini, fim: fim, dias: dias };
+
+  try {
+    await sbPatch('ferias', `id=eq.${reg._sbId}&status=eq.Pendente`, { periodos: _periosAlt, abono_pecuniario: abono, atualizado_em: new Date().toISOString() });
+  } catch(e) {
+    btnAprovarEl.disabled = false; btnAprovarEl.textContent = '💾 Salvar ajuste';
+    toast('Erro ao salvar ajuste. Tente novamente.', 'erro'); return;
+  }
+
+  reg._novoLanc = { ...reg._novoLanc, inicio: ini, fim: fim, dias: dias };
+  reg.abonoPecuniario = abono;
+  reg._periodos = _periosAlt;
+  const _perSyncSalv = GESTOR_PERIODOS.find(p => String(p.id) === String(reg._sbId));
+  if (_perSyncSalv?._feriasRow) { _perSyncSalv._feriasRow.abono_pecuniario = abono; }
+
+  const _perfSalv = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  const _logDetSalv = { original: _origSalv, alterado_para: { inicio: ini, fim: fim, dias: dias, abono: abono }, alterado_por: _perfSalv.nome || 'RH' };
+  try { await _logAtiv(reg._sbId, colab._sbColabId, 'ajustado_rh', _perfSalv.nome || 'RH', _logDetSalv); } catch(e) { console.warn('[salvarAjuste _logAtiv]', e); }
+
+  document.getElementById('modalAprovar').classList.remove('open');
+  toast(`Ajuste salvo — ${colab.nome}. Solicitação continua pendente.`, '');
 }
 
 function aprvRecalcFim() {
@@ -6080,7 +6205,9 @@ async function aprovarPendente() {
     const _aprvIni  = document.getElementById('aprvEditInicio')?.value  || reg._novoLanc.inicio;
     const _aprvFim  = document.getElementById('aprvEditFim')?.value     || reg._novoLanc.fim;
     const _aprvDias = parseInt(document.getElementById('aprvEditDias')?.value) || reg._novoLanc.dias;
-    const _aprvAbono = parseInt(document.getElementById('aprvEditAbono')?.value) || 0;
+    const _aprvAbono = document.getElementById('aprvEditAbono')
+      ? (parseInt(document.getElementById('aprvEditAbono').value) || 0)
+      : (reg.abonoPecuniario || 0);
     const _aprvErroEl = document.getElementById('aprvEditErro');
     const _rhEditou = _aprvIni !== _nlOriginal.inicio || _aprvFim !== _nlOriginal.fim || _aprvDias !== _nlOriginal.dias;
     // Validação das datas editadas (somente quando RH alterou)
@@ -6114,16 +6241,19 @@ async function aprovarPendente() {
       // Aplica correção do RH em _novoLanc para que o restante do fluxo use os valores corrigidos
       reg._novoLanc = { ...reg._novoLanc, inicio: _aprvIni, fim: _aprvFim, dias: _aprvDias };
     }
-    // Validação de abono pecuniário
-    const _saldoParaAbono = calcSaldo(reg);
-    const _maxAbono = Math.floor(_saldoParaAbono / 3);
-    if (_aprvAbono < 0 || _aprvAbono > _maxAbono) {
-      if (_aprvErroEl) { _aprvErroEl.textContent = `Abono inválido. Máximo legal: ${_maxAbono}d (1/3 do saldo disponível).`; _aprvErroEl.style.display = 'block'; }
-      btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
-    }
-    if (_aprvDias + _aprvAbono > _saldoParaAbono) {
-      if (_aprvErroEl) { _aprvErroEl.textContent = `Férias (${_aprvDias}d) + abono (${_aprvAbono}d) = ${_aprvDias + _aprvAbono}d excedem o saldo disponível (${_saldoParaAbono}d).`; _aprvErroEl.style.display = 'block'; }
-      btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
+    // Validação de abono pecuniário (somente quando campo está visível — modo alterar)
+    if (document.getElementById('aprvEditAbono')) {
+      const _saldoParaAbono = calcSaldo(reg);
+      const _maxAbono = Math.floor(_saldoParaAbono / 3);
+      if (_aprvAbono < 0 || _aprvAbono > _maxAbono) {
+        if (_aprvErroEl) { _aprvErroEl.textContent = `Abono inválido. Máximo legal: ${_maxAbono}d (1/3 do saldo disponível).`; _aprvErroEl.style.display = 'block'; }
+        btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
+      }
+      const _saldoParaAbono2 = calcSaldo(reg);
+      if (_aprvDias + _aprvAbono > _saldoParaAbono2) {
+        if (_aprvErroEl) { _aprvErroEl.textContent = `Férias (${_aprvDias}d) + abono (${_aprvAbono}d) = ${_aprvDias + _aprvAbono}d excedem o saldo disponível (${_saldoParaAbono2}d).`; _aprvErroEl.style.display = 'block'; }
+        btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar'; return;
+      }
     }
     if (reg._sbId) {
       // Pré-verificação obrigatória — sem fallback se falhar
