@@ -5126,7 +5126,7 @@ function renderListaAnual() {
     if (_statusFiltro === 'hoje')     return regs.some(reg => reg.lancamentos.some(l => l.inicio && l.fim && HOJE >= l.inicio && HOJE <= l.fim));
     if (_statusFiltro === 'risco')    return isRiscoDobra(c);
     if (_statusFiltro === 'sem')      return isSemAgendado(c);
-    if (_statusFiltro === 'ok')       return getPendentes().some(p => p.colab.__key === c.__key) || c.registros.some(r => (r.realizacoes||[]).some(rx => rx.status === 'pendente_gestor'));
+    if (_statusFiltro === 'ok')       return getPendentes().some(p => p.colab.__key === c.__key);
     if (_statusFiltro === 'agendado') return regs.some(reg =>
       ['aprovado','agendado'].includes((reg.status||'').toLowerCase()) &&
       reg.lancamentos.some(l => l.fim && l.fim >= HOJE)
@@ -5169,10 +5169,9 @@ function renderListaAnual() {
         return reg.paInicio && reg.paFim && HOJE >= reg.paInicio && HOJE <= reg.paFim;
       });
     } else if (_statusFiltro === 'ok') {
-      // Pendentes: inclui status 'Pendente' OU realizacoes com pendente_gestor
+      // Pendentes de aprovação RH: status Pendente, Cancelamento_Solicitado ou Alteracao_Solicitada
       pasDoAno = c.registros.filter(reg =>
-        (reg.status === 'Pendente' && reg._novoLanc) ||
-        (reg.realizacoes||[]).some(rx => rx.status === 'pendente_gestor')
+        ['Pendente', 'Cancelamento_Solicitado', 'Alteracao_Solicitada'].includes(reg.status)
       );
     } else if (_statusFiltro === 'agendado') {
       // Agendados: PAs com ao menos um lançamento aprovado com fim >= hoje
