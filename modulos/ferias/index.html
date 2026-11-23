@@ -2311,7 +2311,7 @@
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-title" id="aprovarTitle">Aprovar ou rejeitar</div>
     <div class="modal-sub" id="aprovarSub">—</div>
-    <div id="aprovarInfo" style="background:#f9f9f9;border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
+    <div id="aprovarInfo" style="margin-bottom:16px;font-size:13px;"></div>
     <div class="field" id="motivoRejeicaoField" style="display:none;">
       <label>Motivo da rejeição <span style="color:var(--red)">*</span></label>
       <textarea id="motivoRejeicao" placeholder="Informe o motivo para o gestor..."></textarea>
@@ -5820,7 +5820,9 @@ function abrirModalAprovar(idx) {
   const _tipo = pendItem._tipo;
   const _altMeta = pendItem._altMeta;
 
-  document.getElementById('aprovarSub').textContent = `${colab.nome} · ${colab.setor || colab.unidade || '—'}`;
+  const _subNome = (colab.nome || '').replace(/</g, '&lt;');
+  const _subSetor = (colab.setor || colab.unidade || '—').replace(/</g, '&lt;');
+  document.getElementById('aprovarSub').innerHTML = `<span style="font-size:14px;font-weight:600;color:var(--text);">${_subNome}</span><span style="font-size:12px;font-weight:400;color:var(--text-sec);"> · ${_subSetor}</span>`;
   document.getElementById('motivoRejeicaoField').style.display = 'none';
   document.getElementById('motivoRejeicao').value = '';
   document.getElementById('btnAprovar').onclick = aprovarPendente;
@@ -5855,29 +5857,33 @@ function abrirModalAprovar(idx) {
     // Calcula saldo disponível para exibir no limite do campo dias
     const _saldoAprov = calcSaldo(reg);
     document.getElementById('aprovarInfo').innerHTML = `
-      <div style="margin-bottom:12px;padding:10px 12px;background:#F8FAFC;border:1px solid var(--border);border-radius:7px;">
-        <div style="font-size:10px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Solicitado pelo gestor</div>
-        <div style="font-size:13px;color:var(--text-sec);">${formatDate(nl.inicio)} → ${formatDate(nl.fim)} · <strong>${nl.dias} dias</strong>${nl.motivo ? ' · ' + nl.motivo : ''}</div>
+      <div style="margin-bottom:12px;padding:12px 14px;background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid #3B82F6;border-radius:8px;">
+        <div style="font-size:10px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px;">Solicitado pelo gestor</div>
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px;">${formatDate(nl.inicio)} → ${formatDate(nl.fim)}</div>
+        <div style="font-size:12px;color:var(--text-sec);"><strong style="color:var(--text);">${nl.dias} dias</strong>${nl.motivo ? ' · ' + nl.motivo : ''}</div>
       </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-        <div>
-          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Início</label>
-          <input type="date" id="aprvEditInicio" value="${nl.inicio}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);" oninput="aprvRecalcFim()">
+      <div style="padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;">Ajuste RH</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Início</label>
+            <input type="date" id="aprvEditInicio" value="${nl.inicio}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg);" oninput="aprvRecalcFim()">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Fim</label>
+            <input type="date" id="aprvEditFim" value="${nl.fim}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg);" oninput="aprvRecalcDias()">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Dias <span style="font-weight:400;color:var(--text-ter);">(máx. ${_saldoAprov})</span></label>
+            <input type="number" id="aprvEditDias" value="${nl.dias}" min="1" max="${_saldoAprov}" oninput="aprvRecalcFim()" style="font-size:13px;padding:6px 8px;border:1.5px solid #3B82F6;border-radius:6px;color:var(--text);background:var(--bg);width:70px;">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Abono <span style="font-weight:400;color:var(--text-ter);">(máx. ${Math.floor(_saldoAprov/3)}d)</span></label>
+            <input type="number" id="aprvEditAbono" value="0" min="0" max="${Math.floor(_saldoAprov/3)}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg);width:70px;">
+          </div>
         </div>
-        <div>
-          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Fim</label>
-          <input type="date" id="aprvEditFim" value="${nl.fim}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);" oninput="aprvRecalcDias()">
-        </div>
-        <div>
-          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Dias <span style="font-weight:400;color:var(--text-ter);">(máx. ${_saldoAprov})</span></label>
-          <input type="number" id="aprvEditDias" value="${nl.dias}" min="1" max="${_saldoAprov}" oninput="aprvRecalcFim()" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);width:70px;">
-        </div>
-        <div>
-          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Abono <span style="font-weight:400;color:var(--text-ter);">(máx. ${Math.floor(_saldoAprov/3)}d)</span></label>
-          <input type="number" id="aprvEditAbono" value="0" min="0" max="${Math.floor(_saldoAprov/3)}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);width:70px;">
-        </div>
+        <div style="margin-top:10px;padding:6px 10px;background:#FEFCE8;border:1px solid #FDE68A;border-radius:5px;font-size:11px;color:#92400E;">ℹ Abono pecuniário requer solicitação escrita do colaborador (CLT art. 143).</div>
       </div>
-      <div style="margin-top:6px;font-size:11px;color:var(--text-ter);">ℹ Abono pecuniário requer solicitação escrita do colaborador (CLT art. 143).</div>
       <div id="aprvEditErro" style="display:none;margin-top:8px;font-size:12px;color:var(--red);"></div>`;
     document.getElementById('btnAprovar').textContent = '✓ Aprovar';
   }
