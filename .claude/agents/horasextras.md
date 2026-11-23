@@ -397,6 +397,29 @@ function _fmtCompExcel(comp) {   // '2026-01' → 'Jan/2026'
 
 ---
 
+### UI de preview — comportamento por origem
+
+**Importação de PDF** (comportamento inalterado): grupos e empresas colapsados por padrão.
+
+**Reimportação de Excel corrigido**: quando qualquer registro tem `fonte !== 'pdf'`:
+- Grupo **abre automaticamente** (`hidden` não é emitido)
+- Empresa **abre automaticamente** idem
+- Badge `✂ N corrigidos` (badge-amber) e `+ N manuais` (badge-purple) aparecem nos cabeçalhos de grupo e empresa ANTES dos demais badges
+- Coluna "Origem" exibida na tabela com badge por linha
+
+Lógica de contagem (calculada antes do HTML do cabeçalho, dentro do `for` de blocos):
+```javascript
+const bCorr = block.registros.filter(r=>r.fonte==='excel_corrigido').length;
+const bMan  = block.registros.filter(r=>r.fonte==='excel_manual').length;
+const temOrigem = bCorr > 0 || bMan > 0;
+// grupo:
+const gCorr = blocos.reduce((s,b) => s + b.registros.filter(r=>r.fonte==='excel_corrigido').length, 0);
+const gMan  = blocos.reduce((s,b) => s + b.registros.filter(r=>r.fonte==='excel_manual').length, 0);
+const temOrigem_grp = gCorr > 0 || gMan > 0;
+```
+
+---
+
 ### Fase 2 — `parseExcelSource(file)`
 Lê um Excel gerado por `gerarExcelHE`, detecta edições vs. `_original` e classifica cada linha.
 
