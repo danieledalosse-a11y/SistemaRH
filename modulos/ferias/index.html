@@ -2982,9 +2982,20 @@ function getPendentes() {
         return;
       }
       if (reg.status === 'Cancelamento_Solicitado') {
-        if (!reg._cancelamentoMeta) return;
         const meta = reg._cancelamentoMeta;
-        result.push({ colab, reg, ri, lancamento: { inicio: meta.inicio, fim: meta.fim, dias: meta.dias }, _tipo: 'cancelamento', _cancelMeta: meta });
+        let lanc;
+        if (meta) {
+          lanc = { inicio: meta.inicio, fim: meta.fim, dias: meta.dias };
+        } else {
+          const hist = FERIAS_HISTORICO.find(
+            h => String(h.ferias_id) === String(reg._sbId) &&
+                 (h.acao || '').toLowerCase() === 'cancelamento_solicitado'
+          );
+          lanc = hist?.detalhe
+            ? { inicio: hist.detalhe.inicio, fim: hist.detalhe.fim, dias: hist.detalhe.dias }
+            : {};
+        }
+        result.push({ colab, reg, ri, lancamento: lanc, _tipo: 'cancelamento', _cancelMeta: meta });
         return;
       }
       if (reg.status !== 'Pendente') return;
