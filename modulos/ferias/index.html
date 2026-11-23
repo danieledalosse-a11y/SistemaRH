@@ -5719,6 +5719,7 @@ async function rhAprovarSolicitado(feriasId, idx) {
     // Sincroniza GESTOR_LANCAMENTOS e _feriasRow para refletir na visão do gestor sem reload
     const _perAprov = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
     if (_perAprov?._feriasRow) {
+      _perAprov._feriasRow.status = 'Aprovado';
       _perAprov._feriasRow.atualizado_em = _agora;
       if (_periosAprov) _perAprov._feriasRow.periodos = _periosAprov;
     }
@@ -5740,6 +5741,7 @@ async function rhAprovarSolicitado(feriasId, idx) {
     if (_aprovColabId) await _logColabHist(_aprovColabId, 'ferias_aprovado', `Férias aprovadas${_aprovLanc?.inicio ? ': ' + formatDate(_aprovLanc.inicio) + ' → ' + formatDate(_aprovLanc.fim) + ' (' + (_aprovLanc.dias||'?') + 'd)' : ''}`, _perfAprov.nome || 'RH');
     toast(_histFalhouAprov ? '✓ Férias aprovadas — histórico não registrado, contate o suporte.' : '✓ Férias aprovadas', _histFalhouAprov ? 'aviso' : '');
     renderPendentes();
+    renderKPI();
     renderListaAnual();
     renderRhAtividade();
     if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
@@ -5775,7 +5777,10 @@ async function rhRecusarSolicitado(feriasId, idx) {
     }));
     // Sincroniza GESTOR_LANCAMENTOS e _feriasRow para refletir na visão do gestor sem reload
     const _perRec = GESTOR_PERIODOS.find(p => String(p.id) === String(feriasId));
-    if (_perRec?._feriasRow) _perRec._feriasRow.atualizado_em = _agoraRec;
+    if (_perRec?._feriasRow) {
+      _perRec._feriasRow.status = 'Rejeitado';
+      _perRec._feriasRow.atualizado_em = _agoraRec;
+    }
     GESTOR_LANCAMENTOS.forEach(l => {
       if (String(l.periodo_id) === String(feriasId) && (l.status||'').toLowerCase() === 'solicitado') {
         l.status = 'recusado';
@@ -5794,6 +5799,7 @@ async function rhRecusarSolicitado(feriasId, idx) {
     }
     toast(_histFalhouRec ? 'Solicitação recusada — histórico não registrado, contate o suporte.' : 'Solicitação recusada', _histFalhouRec ? 'aviso' : '');
     renderPendentes();
+    renderKPI();
     renderListaAnual();
     renderRhAtividade();
     if (typeof renderGestorAlerts === 'function') renderGestorAlerts();
@@ -5977,6 +5983,8 @@ async function aprovarPendente() {
       reg._alteracaoMeta = null;
       reg._obsGestor     = null;
       reg.status = 'Aprovado';
+      const _perSyncAlt = GESTOR_PERIODOS.find(p => String(p.id) === String(reg._sbId));
+      if (_perSyncAlt?._feriasRow) { _perSyncAlt._feriasRow.status = 'Aprovado'; _perSyncAlt._feriasRow.atualizado_em = new Date().toISOString(); }
       // Log
       const _perfAprov2 = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
       let _histFalhouAlt = false;
@@ -6022,6 +6030,8 @@ async function aprovarPendente() {
       reg._cancelamentoMeta = null;
       reg._obsGestor        = null;
       reg.status = novoStatus;
+      const _perSyncCanc = GESTOR_PERIODOS.find(p => String(p.id) === String(reg._sbId));
+      if (_perSyncCanc?._feriasRow) { _perSyncCanc._feriasRow.status = novoStatus; _perSyncCanc._feriasRow.atualizado_em = new Date().toISOString(); }
       // Log
       const _perfAprovC = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
       let _histFalhouCancAprov = false;
@@ -6148,6 +6158,8 @@ async function aprovarPendente() {
     reg.lancamentos.push({ ...reg._novoLanc });
     reg._novoLanc = null;
     reg.status = 'Aprovado';
+    const _perSyncPad = GESTOR_PERIODOS.find(p => String(p.id) === String(reg._sbId));
+    if (_perSyncPad?._feriasRow) { _perSyncPad._feriasRow.status = 'Aprovado'; _perSyncPad._feriasRow.atualizado_em = new Date().toISOString(); }
     // Registra aprovação no histórico — inclui datas originais quando RH corrigiu
     const _perfAprov = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     let _histFalhouAprov = false;
@@ -6196,6 +6208,8 @@ async function rejeitarPendente() {
       reg._alteracaoMeta = null;
       reg._obsGestor     = null;
       reg.status = 'Aprovado';
+      const _perSyncAltRec = GESTOR_PERIODOS.find(p => String(p.id) === String(reg._sbId));
+      if (_perSyncAltRec?._feriasRow) { _perSyncAltRec._feriasRow.status = 'Aprovado'; _perSyncAltRec._feriasRow.atualizado_em = new Date().toISOString(); }
       // Log
       const _perfRec2 = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
       let _histFalhouAltRec = false;
@@ -6223,6 +6237,8 @@ async function rejeitarPendente() {
       reg._cancelamentoMeta = null;
       reg._obsGestor        = null;
       reg.status = 'Aprovado';
+      const _perSyncCancRec = GESTOR_PERIODOS.find(p => String(p.id) === String(reg._sbId));
+      if (_perSyncCancRec?._feriasRow) { _perSyncCancRec._feriasRow.status = 'Aprovado'; _perSyncCancRec._feriasRow.atualizado_em = new Date().toISOString(); }
       const _perfRecC = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
       let _histFalhouCancRec = false;
       if (reg._sbId && colab._sbColabId) {
@@ -6253,6 +6269,8 @@ async function rejeitarPendente() {
     reg._novoLanc = null;
     reg.status = 'Rejeitado';
     reg._motivoRejeicao = motivo;
+    const _perSyncRejPad = GESTOR_PERIODOS.find(p => String(p.id) === String(reg._sbId));
+    if (_perSyncRejPad?._feriasRow) { _perSyncRejPad._feriasRow.status = 'Rejeitado'; _perSyncRejPad._feriasRow.atualizado_em = new Date().toISOString(); }
     const _perfRejPad = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
     let _histFalhouRejPad = false;
     if (reg._sbId && colab._sbColabId) {
