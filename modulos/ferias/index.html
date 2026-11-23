@@ -5862,7 +5862,7 @@ function abrirModalAprovar(idx) {
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
         <div>
           <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Início</label>
-          <input type="date" id="aprvEditInicio" value="${nl.inicio}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);" oninput="aprvRecalcDias()">
+          <input type="date" id="aprvEditInicio" value="${nl.inicio}" style="font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);" oninput="aprvRecalcFim()">
         </div>
         <div>
           <label style="display:block;font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;">Fim</label>
@@ -5936,6 +5936,20 @@ async function aprovarPendente() {
   btnAprovar.disabled = true;
   btnAprovar.textContent = 'Salvando...';
   try {
+    if (_tipo === 'default' || _tipo === 'legado') {
+      const _diasEl = document.getElementById('aprvEditDias');
+      if (_diasEl) {
+        const _diasVal = parseInt(_diasEl.value);
+        const _diasMax = parseInt(_diasEl.max) || 30;
+        if (!_diasVal || _diasVal < 1 || _diasVal > _diasMax) {
+          const _erroEl = document.getElementById('aprvEditErro');
+          if (_erroEl) { _erroEl.textContent = `Dias excedem o saldo disponível (máx. ${_diasMax}d). Corrija antes de aprovar.`; _erroEl.style.display = 'block'; }
+          btnAprovar.disabled = false;
+          btnAprovar.textContent = '✓ Aprovar';
+          return;
+        }
+      }
+    }
     if (_tipo === 'alteracao') {
       const _altMeta = pendItem._altMeta;
       // Validação de conflito
