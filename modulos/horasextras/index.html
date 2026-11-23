@@ -2348,6 +2348,9 @@ function renderImportPreview(allBlocks) {
     const gI = blocos.reduce((s,b) => s + b.registros.filter(r=>r.status_vinculo==='inativo').length, 0);
     const gN = blocos.reduce((s,b) => s + b.registros.filter(r=>r.status_vinculo==='nao_encontrado'||r.status_vinculo==='empresa_nao_mapeada').length, 0);
     const temSubst = blocos.some(b => b.substituicao);
+    const gCorr = blocos.reduce((s,b) => s + b.registros.filter(r=>r.fonte==='excel_corrigido').length, 0);
+    const gMan  = blocos.reduce((s,b) => s + b.registros.filter(r=>r.fonte==='excel_manual').length, 0);
+    const temOrigem_grp = gCorr > 0 || gMan > 0;
     const gId = 'grp' + (++gIdx.n);
 
     html += `
@@ -2365,13 +2368,15 @@ function renderImportPreview(allBlocks) {
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          ${gCorr?`<span class="badge badge-amber">&#10000; ${gCorr} corrigido${gCorr>1?'s':''}</span>`:''}
+          ${gMan?`<span class="badge badge-purple">+ ${gMan} manual${gMan>1?'is':''}</span>`:''}
           ${gV?`<span class="badge badge-green">✓ ${gV}</span>`:''}
           ${gI?`<span class="badge badge-amber">⚠ ${gI}</span>`:''}
           ${gN?`<span class="badge badge-red">✗ ${gN}</span>`:''}
           ${temSubst?`<span class="badge badge-amber">⚠ Substituição</span>`:''}
         </div>
       </div>
-      <div id="${gId}" hidden style="border-top:1px solid var(--border)">`;
+      <div id="${gId}" ${temOrigem_grp?'':'hidden'} style="border-top:1px solid var(--border)">`;
 
     for (const block of blocos) {
       const empLabel = block.param_empresa ? block.param_empresa.nome_simplificado : `Empresa não mapeada (${block.empresaCodigo})`;
@@ -2380,6 +2385,9 @@ function renderImportPreview(allBlocks) {
       const bI = block.registros.filter(r=>r.status_vinculo==='inativo').length;
       const bN = block.registros.filter(r=>r.status_vinculo==='nao_encontrado').length;
       const bA = block.registros.filter(r=>r.status_vinculo==='ambiguo').length;
+      const bCorr = block.registros.filter(r=>r.fonte==='excel_corrigido').length;
+      const bMan  = block.registros.filter(r=>r.fonte==='excel_manual').length;
+      const temOrigem = bCorr > 0 || bMan > 0;
       const empId = 'emp' + (++gIdx.n);
 
       html += `
@@ -2391,6 +2399,8 @@ function renderImportPreview(allBlocks) {
               <span style="font-size:12px;color:var(--text-sec)">${block.registros.length} reg. · ${fmtBRL(bValor)}</span>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              ${bCorr?`<span class="badge badge-amber">&#10000; ${bCorr} corrigido${bCorr>1?'s':''}</span>`:''}
+              ${bMan?`<span class="badge badge-purple">+ ${bMan} manual${bMan>1?'is':''}</span>`:''}
               ${bV?`<span class="badge badge-green">✓ ${bV}</span>`:''}
               ${bI?`<span class="badge badge-amber">⚠ ${bI}</span>`:''}
               ${bN?`<span class="badge badge-red">✗ ${bN}</span>`:''}
@@ -2399,7 +2409,7 @@ function renderImportPreview(allBlocks) {
               ${block.substituicao?`<span class="badge badge-amber">⚠ Substituição</span>`:``}
             </div>
           </div>
-          <div id="${empId}" hidden style="padding:0 16px 12px 32px">`;
+          <div id="${empId}" ${temOrigem?'':'hidden'} style="padding:0 16px 12px 32px">`;
 
       if (block.substituicao) {
         html += `<div class="alert alert-amber" style="margin-bottom:10px;border-radius:8px">
@@ -2412,7 +2422,6 @@ function renderImportPreview(allBlocks) {
         </div>`;
       }
 
-      const temOrigem = block.registros.some(r => r.fonte && r.fonte !== 'pdf');
       html += `<div style="overflow-x:auto"><table class="data-table">
         <thead><tr>
           <th>Matr\u00edcula</th><th>Colaborador vinculado</th><th>Status</th>
