@@ -13185,7 +13185,40 @@ function _renderGsolHistoricoRH(c) {
     });
   }
 
-  document.getElementById('gsolListaRHConteudo').innerHTML = periodos.map(per => {
+  // Banner: acordos de gozo aguardando aprovação do RH
+  const _gozosAguardando = [];
+  if (_rhColab) {
+    _rhColab.registros.forEach(reg => {
+      (reg.realizacoes || []).forEach(rx => {
+        if (rx.status !== 'pendente_gestor') return;
+        // Encontra o PA correspondente pelo lancIdx
+        const _per = periodos.find(p => {
+          const lancs = GESTOR_LANCAMENTOS.filter(l => String(l.periodo_id) === String(p.id));
+          const lancIdx = Number(rx.lancIdx ?? 0);
+          return lancs.length > lancIdx;
+        });
+        const paAnoRef = _per ? ((_per._feriasRow?.ano) || (_per.pa_fim || _per.pa_inicio || '').slice(0,4)) : '—';
+        _gozosAguardando.push({ rx, paAno: paAnoRef });
+      });
+    });
+  }
+  const _bannerGozo = _gozosAguardando.length
+    ? `<div style="margin-bottom:14px;border:1.5px solid #BAE6FD;border-radius:8px;background:#F0F9FF;padding:10px 14px;">
+        <div style="font-size:12px;font-weight:700;color:#0369A1;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Acordo${_gozosAguardando.length > 1 ? 's' : ''} de Gozo aguardando aprovação do RH
+        </div>
+        ${_gozosAguardando.map(({ rx, paAno }) =>
+          `<div style="font-size:12px;color:#0C4A6E;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>${formatDate(rx.saida)} → ${formatDate(rx.retorno)} · ${rx.dias}d</span>
+            <span style="font-size:11px;background:#E0F2FE;color:#0369A1;border-radius:4px;padding:1px 6px;">PA ${paAno}</span>
+            ${rx.obs ? `<span style="font-size:11px;color:#075985;font-style:italic;">${rx.obs}</span>` : ''}
+          </div>`
+        ).join('')}
+      </div>`
+    : '';
+
+  document.getElementById('gsolListaRHConteudo').innerHTML = _bannerGozo + periodos.map(per => {
     const row     = per._feriasRow || {};
     const _firstLancInicio = GESTOR_LANCAMENTOS.find(l => String(l.periodo_id) === String(per.id))?.inicio;
     const paAno   = row.ano || (_firstLancInicio?.slice(0,4)) || (per.pa_fim ? per.pa_fim.slice(0,4) : per.pa_inicio?.slice(0,4) || '—');
