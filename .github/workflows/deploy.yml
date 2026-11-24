@@ -21,23 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 11
-      - name: Inject version cache-busting
-        run: |
-          VERSION=$(git rev-parse --short HEAD)
-          # Last 11 commit SHAs: covers 10+ minutes of back-to-back deploys at any frequency
-          ALL_SHAS=$(git log --format='%h' -n 11)
-          for dir in modulos/*/; do
-            for sha in $ALL_SHAS; do
-              mkdir -p "${dir}v${sha}"
-              # <base href="../"> fixes HTML attribute paths; history.replaceState restores browser URL
-              # so JS relative navigation and anchor links (#) work correctly from any depth
-              sed 's|<head>|<head><base href="../"><script>history.replaceState(null,"","../")</script>|' \
-                "${dir}index.html" > "${dir}v${sha}/index.html"
-            done
-            printf '<!doctype html><script>location.replace("./v%s/")</script>' "$VERSION" > "${dir}index.html"
-          done
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v4
         with:
