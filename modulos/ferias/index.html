@@ -11683,7 +11683,13 @@ function renderGestorAtencao() {
         ? `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`
         : `<span class="badge-status-v"><span class="la-dot la-dot-v" style="background:var(--green)"></span>Concluído</span>`;
     }
-    else if (!lancsPa.length)  badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
+    else if (!lancsPa.length) {
+      // lançamento pode estar sob PA diferente do paEfetivo — verifica todos do colaborador
+      const _anyCancel = lancs.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado');
+      badge = _anyCancel
+        ? `<span class="badge-status-v" style="background:#FFF1F2;color:#9F1239;border:1px solid #FECDD3;"><span class="la-dot" style="background:#E11D48;"></span>Canc. pendente</span>`
+        : `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
+    }
     else {
       const temSolicitado = lancsPa.some(l => (l.status||'').toLowerCase() === 'solicitado');
       const temAprovado   = lancsPa.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.fim >= hoje);
@@ -11733,7 +11739,8 @@ function renderGestorAtencao() {
     const lancsFuturosAtivos = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id) && l.fim >= hoje);
     const lancsPA = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
     const temSolicitado = lancsPA.some(l => (l.status||'').toLowerCase() === 'solicitado'); // sem filtro de data
-    const temCancelPend = lancsPA.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado');
+    const temCancelPend = lancsPA.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado')
+                       || lancs.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado');
     const temRecusado   = lancsFuturosAtivos.some(l => (l.status||'').toLowerCase() === 'recusado');
     const temAprovado   = lancsFuturosAtivos.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
     let btnAcao;
