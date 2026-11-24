@@ -1485,7 +1485,7 @@ async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
 
 **Regra obrigatória (commit `6bbdfad`):** INSERT e render em blocos try/catch **separados**. Se o INSERT tiver sucesso mas `renderGestorAtividade` lançar, o erro de render é logado silenciosamente — jamais exibe toast de falha nem reabilita o botão. Isso evita que o Gestor clique "Ciente" duas vezes quando o registro já foi gravado.
 
-**Dedup natural:** após INSERT bem-sucedido, `_gestorAgruparProcessos` elege `gestor_ciente` como evento mais recente → `_gestorProcessoInfo` retorna `ativo: false` → item sai de "Atividade Recente" → botão nunca é renderizado novamente.
+**Dedup natural:** após INSERT bem-sucedido, `_gestorAgruparProcessos` elege o evento de negócio (ex: `aprovado`) como representante do processo → `_gestorProcessoInfo` retorna `ativo: false` → item sai de "Atividade Recente" → botão nunca é renderizado novamente. `gestor_ciente` fica preservado no banco e visível na timeline de expansão do RH, mas nunca substitui o desfecho na lista.
 
 **Ações que exibem o botão Ciente** (`_DESFECHOS_RH` + fallback):
 ```js
@@ -1590,22 +1590,58 @@ const _statusPendG = { solicitado: 'pendente', cancelamento_solicitado: 'cancela
 
 **Regra:** o fallback só dispara quando `_statusPendG[acao]` existe **E** `_rowStatus` está preenchido **E** difere do status esperado para pendente. Quando `_periodo` não existe (registro fora do escopo do gestor), `_rowStatus` é `''` → fallback não dispara → comportamento original preservado.
 
+#### `_ACOES_ADMIN_HIST` + `_escolherEventoRepresentante` (commits `75e6ba0`, `593ac97`)
+
+Constante e função **compartilhadas por RH e Gestor** que definem qual evento representa um processo na lista do Histórico:
+
+```js
+const _ACOES_ADMIN_HIST = new Set(['gestor_ciente']);
+
+function _escolherEventoRepresentante(candidato, atual) {
+  // Prioridade: evento de negócio > evento admin; entre iguais: mais recente
+  const cAdmin = _ACOES_ADMIN_HIST.has((candidato.acao || '').toLowerCase());
+  const aAdmin = _ACOES_ADMIN_HIST.has((atual.acao || '').toLowerCase());
+  if (cAdmin && !aAdmin) return atual;
+  if (!cAdmin && aAdmin) return candidato;
+  return (candidato.criado_em || '') > (atual.criado_em || '') ? candidato : atual;
+}
+```
+
+**Regra:** `gestor_ciente` nunca substitui um evento de negócio (aprovado, rejeitado, etc.) como representante da linha. Se o único evento do processo for `gestor_ciente`, ele é exibido (fallback). O registro permanece no banco e aparece na timeline de expansão do RH.
+
+**Dois pontos de uso (mesma função):**
+- `_gestorAgruparProcessos`: `byId.set(key, existing ? _escolherEventoRepresentante(h, existing) : h)`
+- `procMap` em `renderRhAtividade`: `procMap.set(key, existing ? _escolherEventoRepresentante(h, existing) : h)`
+
 #### `_gestorAgruparProcessos(idsPermitidos)`
 
-Agrupa `FERIAS_HISTORICO` por `ferias_id`, mantendo apenas o evento mais recente (maior `criado_em`) por processo. Retorna array de eventos — um por processo.
+Agrupa `FERIAS_HISTORICO` por `ferias_id`, mantendo o evento **representante** de cada processo (via `_escolherEventoRepresentante`). Retorna array de eventos — um por processo.
 
-#### `renderGestorAtividade()` — Gestor
+#### `renderAtividade(opts)` — renderer único compartilhado (commit `75e6ba0`)
 
-- **Atividade Recente:** processos com `ativo: true` (aguardando RH) — usa `_gestorAgruparProcessos` (1 evento por `ferias_id`, o mais recente)
-- **Histórico:** todos os eventos de processos concluídos (`ativo: false`), agrupados por colaborador → subagrupados por `ferias_id` → ordenados cronologicamente dentro de cada bloco (commits `87c3723` e `ea3278e`)
-- Datas exibidas: `inicio`/`fim`/`dias` do objeto `info` (vindos de `GESTOR_LANCAMENTOS` via `lanc?.inicio` com fallback para `h.detalhe`)
+Substitui `renderGestorAtividade` e `renderRhAtividade` duplicados. Os dois viram thin wrappers que passam `opts`. Três flags distinguem os perfis:
+
+| Flag | RH | Gestor |
+|---|---|---|
+| `expansivel` | `true` — clique na linha do Histórico abre timeline inline | `false` — sem expansão |
+| `mostrarUsuario` | `true` — exibe quem registrou o desfecho | `false` |
+| `btnAcaoFn` | "Analisar" (pendentes) ou chip | chip + "Ciente" (desfechos) |
+
+**Histórico — lista compacta:** uma linha por processo (`chip · nome · cargo · período · data`). Para o RH: clicar expande timeline cronológica completa do `ferias_id` via `_rhLinhaExpanded` (Set, sem nova query). Para o Gestor: mesma lista, sem expansão.
+
+**Adaptadores de dados intocados:** `_rhProcessoInfo` e `_gestorProcessoInfo` continuam separados (fontes de dados diferentes: `COLABORADORES.registros` vs `GESTOR_LANCAMENTOS`/`GESTOR_PERIODOS`).
 
 **Estado global:**
 ```js
-let _gestorExpandido  = false;   // toda a seção aberta/fechada
+// Gestor
+let _gestorExpandido  = false;
 let _gestorAba        = 'recente'; // 'recente' | 'historico'
-let _gestorHistOffset = 0;       // paginação do Histórico
-const _gestorHistExpanded = new Set(); // IDs de colaboradores com card expandido no Histórico
+let _gestorHistOffset = 0;
+// RH
+let _rhExpandido  = false;
+let _rhAba        = 'recente';
+let _rhHistOffset = 0;
+const _rhLinhaExpanded = new Set(); // ferias_ids com timeline aberta (RH apenas)
 ```
 
 **Fallback obrigatório (out/2026):** após `_gestorAgruparProcessos`, injeta itens sintéticos para lançamentos em `GESTOR_LANCAMENTOS` com `status='solicitado'` cujo `periodo_id` não existe em `FERIAS_HISTORICO`. Garante que solicitações antigas (anteriores ao `_logAtiv`) ou com falha silenciosa apareçam na Atividade Recente. Itens sintéticos têm `_fallback: true` e `criado_em: null`.
