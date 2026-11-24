@@ -4457,6 +4457,23 @@ if (acao === 'gozo_recusado')
 
 **`ativo`** usa `GESTOR_PERIODOS._feriasRow.realizacoes` (não `COLABORADORES`) porque a Atividade recente roda nas duas visões.
 
+### `_rhEhRecente` — tratamento de `gozo_solicitado`
+
+Função que decide se um evento do histórico ainda está "ativo" (pendente de decisão) na Atividade Recente do RH. Para `gozo_solicitado`, a lógica é diferente dos outros tipos:
+
+```js
+if (acao === 'gozo_solicitado') {
+  // Ativo enquanto existir realizacao pendente_gestor com a mesma saida
+  const _reg = COLABORADORES.flatMap(c => c.registros).find(r => String(r._sbId) === String(h.ferias_id));
+  if (!_reg) return false;
+  return (_reg.realizacoes || []).some(rx =>
+    rx.status === 'pendente_gestor' && (!det.saida || rx.saida === det.saida)
+  );
+}
+```
+
+**Por quê:** para os outros tipos (solicitado, cancelamento_solicitado, alteracao_solicitada), `_rhEhRecente` verifica se o status do PA ainda corresponde ao estado pendente. Para gozo, o PA não muda de status — a fonte de verdade é a presença de `realizacoes.pendente_gestor` com a mesma `saida`.
+
 ### Botão "Analisar" padronizado na Atividade recente do RH
 
 Todos os itens pendentes usam o mesmo botão "Analisar" — inclusive acordos de gozo. Não há botões inline de Aprovar/Recusar direto na lista.
@@ -4530,6 +4547,20 @@ else if (saldo <= 0)
 | `rhRejeitarGozoPendente(colabKey, sbId, lancIdx, saida)` | RH recusa: seta `status:'recusado'` na realização; loga `'gozo_recusado'` |
 
 **Identificação da realização:** par `(lancIdx, saida)` — único dentro de um PA.
+
+### `renderPendentes` — card `_tipo === 'gozo'`
+
+A aba/seção Pendentes (distinta da Atividade Recente) também renderiza acordos de gozo. O card usa botões inline Aprovar/Recusar diretamente (sem modal), igual ao card de solicitações normais:
+
+```js
+if (_tipo === 'gozo') {
+  // card com borda azul (#0EA5E9), chip "Acordo de Gozo"
+  // Botão Aprovar → rhAprovarGozoPendente(colab.__key, reg._sbId, rx.lancIdx??0, rx.saida)
+  // Botão Recusar → rhRejeitarGozoPendente(colab.__key, reg._sbId, rx.lancIdx??0, rx.saida)
+}
+```
+
+**Diferença de contexto:** na **Atividade Recente** o botão é "Analisar" (abre modal com detalhes). Na **lista Pendentes** os botões são inline diretos — padrão consistente com todos os outros tipos nessa lista.
 
 ### Ações registradas em `ferias_historico` (atualização)
 
