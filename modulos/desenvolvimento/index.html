@@ -1197,7 +1197,7 @@
       </div>
       <div class="sidebar-col" id="ciclosSidebar">
         <div class="sidebar-panel">
-          <div class="panel-title">Ciclo atual</div>
+          <div class="panel-title">Ciclo mais recente</div>
           <div id="cicloSidebarStats"><div style="font-size:12px;color:var(--text-ter)">Nenhum ciclo ativo.</div></div>
         </div>
       </div>
@@ -2298,8 +2298,8 @@ function populateCicloSelect() {
     if (c.status === 'aberto') opt.textContent += ' (ativo)';
     sel.appendChild(opt);
   });
-  // auto-selecionar ciclo aberto
-  const aberto = _ciclos.find(c => c.status === 'aberto');
+  // auto-selecionar o ciclo ativo mais recente (query ordenada por criado_em.desc)
+  const aberto = _ciclos.find(c => c.status === 'aberto' || c.status === 'em_andamento');
   if (aberto) { sel.value = aberto.id; onCicloChange(); }
 }
 
@@ -2790,23 +2790,30 @@ function dpRenderCiclosUnificado(ciclosInput, opts = {}) {
     return;
   }
 
-  const ativo      = ciclosInput.find(c => c.status === 'aberto' || c.status === 'em_andamento');
+  const ativos     = ciclosInput.filter(c => c.status === 'aberto' || c.status === 'em_andamento');
+  const ativo      = ativos[0] || null; // mais recente (query ordenada por criado_em.desc) — usado apenas na sidebar
   const rascunhos  = showRascunhos  ? ciclosInput.filter(c => c.status === 'rascunho')  : [];
   const anteriores = showAnteriores ? ciclosInput.filter(c => c.status === 'encerrado' || c.status === 'cancelado') : [];
 
   let html = '';
 
-  if (ativo) {
-    const statusLabel = ativo.status === 'em_andamento' ? 'Em andamento' : 'Aberto';
-    const dtBanner = [ativo.data_inicio, ativo.data_fim].filter(Boolean).map(formatDate).join(' a ');
-    html += `<div class="ciclo-banner" onclick="_dpCicloClickFn('${ativo.id}')" style="cursor:pointer">
-      <div class="ciclo-banner-title">${ativo.nome} — ${statusLabel}</div>
+  ativos.forEach((cicloAtivo, idx) => {
+    const statusLabel = cicloAtivo.status === 'em_andamento' ? 'Em andamento' : 'Aberto';
+    const dtBanner = [cicloAtivo.data_inicio, cicloAtivo.data_fim].filter(Boolean).map(formatDate).join(' a ');
+    const bannerId = `${containerId}_${idx}`;
+    html += `<div class="ciclo-banner" onclick="_dpCicloClickFn('${cicloAtivo.id}')" style="cursor:pointer">
+      <div class="ciclo-banner-title">${cicloAtivo.nome} — ${statusLabel}</div>
       <div class="ciclo-banner-sub"><span style="font-weight:400;margin-right:4px">Período avaliado</span>${dtBanner || 'Período não definido'}</div>
       <div class="ciclo-banner-progress-row">
-        <div class="ciclo-banner-progress"><div class="ciclo-banner-fill" style="width:0%" id="cbannerFill_${containerId}"></div></div>
-        <span class="ciclo-banner-pct" id="cbannerPct_${containerId}">—</span>
+        <div class="ciclo-banner-progress"><div class="ciclo-banner-fill" style="width:0%" id="cbannerFill_${bannerId}"></div></div>
+        <span class="ciclo-banner-pct" id="cbannerPct_${bannerId}">—</span>
       </div>
     </div>`;
+  });
+
+  if (ativo) {
+    const dtBanner = [ativo.data_inicio, ativo.data_fim].filter(Boolean).map(formatDate).join(' a ');
+    const bannerId = `${containerId}_0`;
     // Sidebar: query leve de avaliações para o ciclo ativo — respeitando RLS do perfil
     const sideEl = sidebarId ? document.getElementById(sidebarId) : null;
     if (sideEl) {
@@ -2825,9 +2832,9 @@ function dpRenderCiclosUnificado(ciclosInput, opts = {}) {
         // Progresso = respondidas (inclui concluídas/publicadas) — o que falta é responder
         const respondidas  = avals.filter(a => a.status === 'respondida' || a.status === 'concluida' || a.status === 'publicada').length;
         const pct = total ? Math.round(respondidas / total * 100) : 0;
-        const fill = document.getElementById('cbannerFill_' + containerId);
+        const fill = document.getElementById('cbannerFill_' + bannerId);
         if (fill) fill.style.width = pct + '%';
-        const pctEl = document.getElementById('cbannerPct_' + containerId);
+        const pctEl = document.getElementById('cbannerPct_' + bannerId);
         if (pctEl) pctEl.textContent = pct + '%';
         const hoje = new Date(); hoje.setHours(0,0,0,0);
         const dtPeriodo = ativo.data_inicio && ativo.data_fim
@@ -2927,10 +2934,10 @@ function dpRenderCiclosUnificado(ciclosInput, opts = {}) {
     html += rascunhos.map(renderCicloCard).join('');
   }
   if (anteriores.length) {
-    html += `<div class="section-header" style="margin-top:${ativo||rascunhos.length?'20px':'0'}"><span class="section-title">Ciclos anteriores</span><span class="section-count">${anteriores.length}</span></div>`;
+    html += `<div class="section-header" style="margin-top:${ativos.length||rascunhos.length?'20px':'0'}"><span class="section-title">Ciclos anteriores</span><span class="section-count">${anteriores.length}</span></div>`;
     html += anteriores.map(renderCicloCard).join('');
   }
-  if (!ativo && !rascunhos.length && !anteriores.length) {
+  if (!ativos.length && !rascunhos.length && !anteriores.length) {
     html = `<div class="empty-state"><p>${showRascunhos ? 'Nenhum ciclo cadastrado. Crie o primeiro ciclo de avaliação.' : 'Nenhum ciclo de avaliação aberto para sua equipe no momento.'}</p></div>`;
   }
   el.innerHTML = html;
