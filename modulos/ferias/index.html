@@ -9096,14 +9096,29 @@ async function _logColabHist(colabId, tipo, detalhe, usuario) {
 
 // ── Classificação Atividade Recente vs Histórico ─────────────────────────────
 
-// Gestor: agrupa FERIAS_HISTORICO por ferias_id, retorna último evento de cada processo
+// Ações internas que nunca representam o desfecho de um processo no Histórico.
+// O registro permanece no banco e aparece na timeline de expansão do RH.
+const _ACOES_ADMIN_HIST = new Set(['gestor_ciente']);
+
+// Regra compartilhada (RH e Gestor): ao comparar dois eventos do mesmo ferias_id,
+// retorna o que melhor representa o processo na lista do Histórico.
+// Prioridade: evento de negócio > evento admin; entre iguais: mais recente.
+function _escolherEventoRepresentante(candidato, atual) {
+  const cAdmin = _ACOES_ADMIN_HIST.has((candidato.acao || '').toLowerCase());
+  const aAdmin = _ACOES_ADMIN_HIST.has((atual.acao || '').toLowerCase());
+  if (cAdmin && !aAdmin) return atual;
+  if (!cAdmin && aAdmin) return candidato;
+  return (candidato.criado_em || '') > (atual.criado_em || '') ? candidato : atual;
+}
+
+// Gestor: agrupa FERIAS_HISTORICO por ferias_id, retorna evento representante de cada processo
 function _gestorAgruparProcessos(idsPermitidos) {
   const byId = new Map();
   FERIAS_HISTORICO.forEach(h => {
     if (!idsPermitidos.has(String(h.colaborador_id))) return;
     const key = String(h.ferias_id);
     const existing = byId.get(key);
-    if (!existing || (h.criado_em || '') > (existing.criado_em || '')) byId.set(key, h);
+    byId.set(key, existing ? _escolherEventoRepresentante(h, existing) : h);
   });
   return [...byId.values()];
 }
@@ -9382,7 +9397,7 @@ function renderRhAtividade() {
   historico.forEach(h => {
     const key = String(h.ferias_id);
     const existing = procMap.get(key);
-    if (!existing || (h.criado_em || '') > (existing.criado_em || '')) procMap.set(key, h);
+    procMap.set(key, existing ? _escolherEventoRepresentante(h, existing) : h);
   });
   const processos = [...procMap.values()];
 
