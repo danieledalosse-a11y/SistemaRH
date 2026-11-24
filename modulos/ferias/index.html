@@ -8998,8 +8998,9 @@ function gestorSaldoPeriodo(periodo) {
   const direito    = Number(periodo.dias_direito) || 30;
   const abono      = Number(periodo._feriasRow?.abono_pecuniario) || 0;
   const antecipados = Number(periodo._feriasRow?.dias_antecipados) || 0;
+  // 'cancelamento_solicitado' conta como usado enquanto o cancelamento aguarda aprovação do RH
   const usados     = GESTOR_LANCAMENTOS
-    .filter(l => String(l.periodo_id) === String(periodo.id) && !l._isRealizacao && ['aprovado','agendado','gozado'].includes((l.status||'').toLowerCase()))
+    .filter(l => String(l.periodo_id) === String(periodo.id) && !l._isRealizacao && ['aprovado','agendado','gozado','cancelamento_solicitado'].includes((l.status||'').toLowerCase()))
     .reduce((s, l) => s + (Number(l.dias) || 0), 0);
   return direito - usados - abono - antecipados;
 }
@@ -11695,6 +11696,8 @@ function renderGestorAtencao() {
         badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;border:1px solid #BFDBFE;"><span class="la-dot" style="background:#1849A9;"></span>Agendado <span style="font-size:11px;color:#92400E;margin-left:4px;">+1 pendente</span></span>`;
       else if (lancsPa.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()) && l.fim >= hoje) || ativo)
         badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;"><span class="la-dot la-dot-v" style="background:#1849A9;"></span>Agendado</span>`;
+      else if (lancsPa.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado'))
+        badge = `<span class="badge-status-v" style="background:#FFF1F2;color:#9F1239;border:1px solid #FECDD3;"><span class="la-dot" style="background:#E11D48;"></span>Canc. pendente</span>`;
       else
         badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
     }
@@ -11730,12 +11733,13 @@ function renderGestorAtencao() {
     const lancsFuturosAtivos = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id) && l.fim >= hoje);
     const lancsPA = GESTOR_LANCAMENTOS.filter(l => l.colaborador_id === c.id && String(l.periodo_id) === String(pa?.id));
     const temSolicitado = lancsPA.some(l => (l.status||'').toLowerCase() === 'solicitado'); // sem filtro de data
+    const temCancelPend = lancsPA.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado');
     const temRecusado   = lancsFuturosAtivos.some(l => (l.status||'').toLowerCase() === 'recusado');
     const temAprovado   = lancsFuturosAtivos.some(l => ['aprovado','agendado'].includes((l.status||'').toLowerCase()));
     let btnAcao;
     if (semPA) {
       btnAcao = `<button onclick="event.stopPropagation();gestorSolicitarNovoPa('${c.id}')" class="gstor-btn-sm gstor-btn-indigo">Solicitar</button>`;
-    } else if (temSolicitado && !temAprovado) {
+    } else if ((temSolicitado || temCancelPend) && !temAprovado) {
       btnAcao = `<button onclick="event.stopPropagation();gestorAbrirSolicitacoes('${c.id}')" class="gstor-btn-sm gstor-btn-amber" style="cursor:default;">⏳ Aguardando RH</button>`;
     } else if (temRecusado && !temAprovado && !temSolicitado) {
       btnAcao = `<button onclick="event.stopPropagation();gestorAbrirSolicitacoes('${c.id}')" class="gstor-btn-sm gstor-btn-red-outline">Ver recusa →</button>`;
