@@ -3798,16 +3798,17 @@ function renderDrawerHistorico(colab) {
 
     // Bloco de alteração/cancelamento aguardando aprovação RH
     let altPendHtml = '';
-    if (r.status === 'Alteracao_Solicitada' && r._alteracaoMeta) {
+    if (r.status === 'Alteracao_Solicitada') {
       const meta = r._alteracaoMeta;
-      const solDt = meta.data_solicitacao ? ` em ${formatDate(meta.data_solicitacao)}` : '';
-      const solicitante = meta.solicitante ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Solicitado por ${meta.solicitante}${solDt}</div>` : '';
+      const datasHtml = meta ? `<div style="font-size:13px;font-weight:500;color:var(--text);">${formatDate(meta.novo_inicio)} → ${formatDate(meta.novo_fim)} · ${meta.dias}d</div>` : '';
+      const solDt = meta?.data_solicitacao ? ` em ${formatDate(meta.data_solicitacao)}` : '';
+      const solicitante = meta?.solicitante ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Solicitado por ${meta.solicitante}${solDt}</div>` : '';
       const acaoBtns = (IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')) ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
         <button onclick="const _i=getPendentes().findIndex(p=>String(p.reg._sbId)==='${r._sbId}');if(_i>=0)abrirModalAprovar(_i);" style="padding:4px 12px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">Analisar alteração</button>
       </div>` : '';
       altPendHtml = `<div style="margin:6px 12px 0;border-left:3px solid #2563EB;padding-left:10px;">
         <div style="font-size:12px;font-weight:600;color:#1849A9;margin-bottom:2px;">Alteração solicitada pelo gestor</div>
-        <div style="font-size:13px;font-weight:500;color:var(--text);">${formatDate(meta.novo_inicio)} → ${formatDate(meta.novo_fim)} · ${meta.dias}d</div>
+        ${datasHtml}
         ${solicitante}
         ${acaoBtns}
       </div>`;
