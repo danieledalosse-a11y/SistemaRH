@@ -7991,13 +7991,21 @@ async function dpExportarResultados() {
   const nomeCiclo = _dpCiclos.find(c => c.id === _dpCicloAtual?.id)?.nome || 'Ciclo';
   const dataExp = new Date().toLocaleDateString('pt-BR');
 
+  // Busca empresa_registro_nome atualizado para todos os participantes do ciclo em uma única query.
+  // Sem filtro ativo para cobrir colaboradores desativados após inclusão no ciclo.
+  const colabIds = [...new Set(_dpParticipantes.map(p => p.colaborador_id).filter(Boolean))];
+  const empresaMap = new Map();
+  if (colabIds.length) {
+    const rows = await sbGet(`/rest/v1/colaboradores?select=id,empresa_registro_nome&id=in.(${colabIds.join(',')})`) || [];
+    rows.forEach(r => { if (r.empresa_registro_nome) empresaMap.set(r.id, r.empresa_registro_nome); });
+  }
+
   const participantes = [];
   const naoParticipantes = [];
 
   for (const p of _dpParticipantes) {
     const snap = p.snapshot || {};
-    const colab = _colaboradores.find(c => c.id === p.colaborador_id);
-    const empresaNome = colab?.empresa_registro_nome || snap.empresa_registro_nome || '—';
+    const empresaNome = empresaMap.get(p.colaborador_id) || snap.empresa_registro_nome || '—';
     if (p.nao_participa) {
       naoParticipantes.push({
         empresa: empresaNome,
