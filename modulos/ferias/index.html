@@ -9255,8 +9255,14 @@ function _rhEhRecente(h) {
   // Fallback: status do banco como fonte de verdade (cobre histórico incompleto ou falha de _logAtiv)
   const _statusPendente = { solicitado: 'Pendente', cancelamento_solicitado: 'Cancelamento_Solicitado', alteracao_solicitada: 'Alteracao_Solicitada' };
   if (_reg.status !== _statusPendente[acao]) return false;
+  // Uma resposta só invalida esta solicitação se tiver timestamp posterior a ela.
+  // Se qualquer um dos dois não tem criado_em, não é possível confirmar a ordem — não invalida.
   return !respostas[acao].some(r =>
-    FERIAS_HISTORICO.some(x => x.ferias_id === h.ferias_id && (x.acao || '').toLowerCase() === r)
+    FERIAS_HISTORICO.some(x =>
+      x.ferias_id === h.ferias_id &&
+      (x.acao || '').toLowerCase() === r &&
+      h.criado_em && x.criado_em && x.criado_em > h.criado_em
+    )
   );
 }
 
