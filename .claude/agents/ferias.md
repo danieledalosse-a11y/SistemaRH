@@ -4293,3 +4293,234 @@ PDF e Excel do Gestor compartilham `_getDadosEscalaGestor` — ambos corrigidos 
 - Anderson: 20 dias fantasmas não aparecem mais (row 1864 corrigida); 4 dias legítimos (row 1856) permanecem
 - Lançamentos normais: inalterados
 - Gantt, Mapa Anual, drawer, saldos: sem alterações
+
+---
+
+## Acordo de Gozo — fluxo completo e regras visuais (Nov/2026)
+
+### O que é um Acordo de Gozo
+
+Mecanismo que permite ao Gestor propor ao colaborador um gozo em data diferente do período original aprovado. O Gestor registra a proposta; o RH aprova ou recusa. O acordo **não altera o PA** — apenas registra quando o colaborador realmente usufruiu os dias.
+
+### Estrutura de dados — `realizacoes` JSONB
+
+Campo na row `ferias` (append-only, igual a `periodos[]`):
+
+```json
+{
+  "saida":   "YYYY-MM-DD",
+  "retorno": "YYYY-MM-DD",
+  "dias":    N,
+  "lancIdx": 0,
+  "obs":     "observação opcional",
+  "status":  "pendente_gestor"
+}
+```
+
+| `status` | Significado |
+|---|---|
+| `"pendente_gestor"` | Acordo proposto pelo Gestor, aguardando aprovação do RH |
+| ausente / `null` | Acordo aprovado pelo RH — gozo efetivo registrado |
+
+**`lancIdx`**: índice do lançamento pai em `periodos[]` ao qual o gozo se refere. `rx.lancIdx ?? 0` — fallback para 0 quando ausente.
+
+### Regra crítica de fonte de dados
+
+> **Usar sempre `GESTOR_PERIODOS[i]._feriasRow.realizacoes` como fonte primária** — NUNCA `COLABORADORES` como fonte principal para código compartilhado RH/Gestor.
+
+**Por quê:** `COLABORADORES` é populado apenas na visão RH. Na visão Gestor `COLABORADORES = []` → qualquer código que dependa de `COLABORADORES` como fonte primária fica silencioso na visão do Gestor.
+
+**Padrão correto** para código que roda nas duas visões:
+
+```js
+// 1. Fonte primária: GESTOR_PERIODOS (disponível em ambas as visões)
+const _gozosAguardando = [];
+periodos.forEach(per => {
+  (per._feriasRow?.realizacoes || []).forEach(rx => {
+    if (rx.status !== 'pendente_gestor') return;
+    _gozosAguardando.push({ rx, paAno: per._feriasRow?.ano || '—' });
+  });
+});
+
+// 2. Complemento: COLABORADORES (só existe na visão RH)
+if (_rhColab) {
+  _rhColab.registros.forEach(reg => {
+    (reg.realizacoes || []).forEach(rx => {
+      if (rx.status !== 'pendente_gestor') return;
+      const jaConta = _gozosAguardando.some(g => g.rx.saida === rx.saida && g.rx.retorno === rx.retorno);
+      if (jaConta) return;
+      _gozosAguardando.push({ rx, paAno: reg.ano || '—' });
+    });
+  });
+}
+```
+
+### Banner de Gozo Pendente no Drawer (`_renderGsolHistoricoRH`)
+
+Exibido no topo da aba Férias do drawer RH/Gestor quando há realizações com `status = 'pendente_gestor'`.
+
+**Localização:** inserido em `_renderGsolHistoricoRH`, imediatamente antes do `periodos.map(per => {`.
+
+**Regras:**
+- Usa `GESTOR_PERIODOS._feriasRow.realizacoes` como fonte primária (ver padrão acima)
+- Paleta âmbar: `background:#FFFBEB; border:1.5px solid #FDE68A; color:#92400E`
+- Exibe cada acordo pendente com datas, dias e PA de referência
+- Visível nas duas visões (RH e Gestor)
+- Ausente quando não há `pendente_gestor`
+
+### Padrão visual âmbar — regra global de pendências
+
+> **Toda mensagem de pendência que aguarda ação do RH deve usar a paleta âmbar**, não azul nem laranja/vermelho. O âmbar diferencia claramente do azul dominante da interface.
+
+| Token | Valor |
+|---|---|
+| `background` | `#FFFBEB` |
+| `border` | `1.5px solid #FDE68A` |
+| `color` / `text` | `#92400E` |
+| Dot / ícone | `#F79009` |
+| Texto secundário | `#78350F` |
+
+**Elementos que usam âmbar (atualizado Nov/2026):**
+- Chip `.gstor-ativ-chip.cancel-sol` — Atividade recente do Gestor (acordos, cancelamentos, alterações)
+- `bannerGozo` no drawer — Acordo de Gozo aguardando RH
+- `bannerAlt` no drawer — Alteração de data aguardando RH
+- Badge "Acordo pendente" na coluna Situação e no drawer
+
+**CSS do chip:**
+```css
+.gstor-ativ-chip.cancel-sol {
+  background: #FFFBEB;
+  color: #92400E;
+  border: 1px solid #FDE68A;
+}
+```
+
+### `_gestorProcessoInfo` — casos de gozo (Atividade recente do Gestor)
+
+Adicionados antes do `return` final da função:
+
+```js
+if (acao === 'gozo_solicitado') {
+  const _gozoPendente = (GESTOR_PERIODOS || []).some(p =>
+    (p._feriasRow?.realizacoes || []).some(rx =>
+      rx.status === 'pendente_gestor' && (!det.saida || rx.saida === det.saida)
+    )
+  );
+  return {
+    estado: 'Acordo aguardando RH',
+    cls: 'cancel-sol',          // âmbar
+    ativo: _gozoPendente,       // desaparece da lista quando aprovado/recusado
+    inicio: det.saida  || inicio,
+    fim:    det.retorno || fim,
+    dias:   det.dias   || dias,
+    motivo
+  };
+}
+if (acao === 'gozo_aprovado')
+  return { estado: 'Acordo aprovado', cls: 'aprov', ativo: ativoResolvido,
+           inicio: det.saida||inicio, fim: det.retorno||fim, dias: det.dias||dias,
+           motivo, _ehDesfecho: true, _acaoEfetiva: 'gozo_aprovado' };
+if (acao === 'gozo_recusado')
+  return { estado: 'Acordo recusado', cls: 'recus', ativo: ativoResolvido,
+           inicio: det.saida||inicio, fim: det.retorno||fim, dias: det.dias||dias,
+           motivo, _ehDesfecho: true, _acaoEfetiva: 'gozo_recusado' };
+```
+
+**`ativo`** usa `GESTOR_PERIODOS._feriasRow.realizacoes` (não `COLABORADORES`) porque a Atividade recente roda nas duas visões.
+
+### Botão "Analisar" padronizado na Atividade recente do RH
+
+Todos os itens pendentes usam o mesmo botão "Analisar" — inclusive acordos de gozo. Não há botões inline de Aprovar/Recusar direto na lista.
+
+**Fluxo:** `_pendentesIds.has(String(h.ferias_id))` → botão "Analisar" → `_rhAtivAbrirModal(ferias_id)` → `abrirModalAprovar(idx)` com branch `_tipo === 'gozo'`.
+
+### `abrirModalAprovar` — branch `_tipo === 'gozo'`
+
+Adicionado antes do branch `_tipo === 'cancelamento'`:
+
+```js
+} else if (_tipo === 'gozo') {
+  const rx = pendItem._gozoRx;
+  document.getElementById('aprovarTitle').textContent = 'Analisar Acordo de Gozo';
+  document.getElementById('aprovarInfo').innerHTML = `
+    <div ...>
+      <div style="...background:#FFFBEB;border:1.5px solid #FDE68A;color:#92400E;">
+        ⏱ Acordo de Gozo aguardando aprovação do RH
+      </div>
+      <div>Período: <strong>${formatDate(rx.saida)} → ${formatDate(rx.retorno)} · ${rx.dias}d</strong></div>
+      ${rx.obs ? `<div>Observação: <strong>${rx.obs}</strong></div>` : ''}
+      <div>Solicitado por: <strong>${colab.nome}</strong></div>
+    </div>`;
+  document.getElementById('btnAprovar').onclick = async function() {
+    await rhAprovarGozoPendente(colab.__key, reg._sbId, rx.lancIdx ?? 0, rx.saida);
+    document.getElementById('modalAprovar').classList.remove('open');
+  };
+  document.getElementById('btnRejeitar').onclick = async function() {
+    await rhRejeitarGozoPendente(colab.__key, reg._sbId, rx.lancIdx ?? 0, rx.saida);
+    document.getElementById('modalAprovar').classList.remove('open');
+  };
+```
+
+### Badge "Acordo pendente" — prioridade de exibição
+
+**Regra:** verificar `realizacoes.some(rx => rx.status === 'pendente_gestor')` **antes** de verificar `saldo <= 0 → "Concluído"`. Um PA com saldo zero mas com acordo pendente não é "Concluído".
+
+#### `paBadge` (coluna Situação na lista anual RH)
+
+```js
+// Prioridade inserida antes da verificação de saldo <= 0:
+if ((reg.realizacoes || []).some(rx => rx.status === 'pendente_gestor'))
+  return `<span class="badge-status-v" style="background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;">
+    <span class="la-dot" style="background:#F79009;"></span>Acordo pendente
+  </span>`;
+// Só depois:
+if (saldo <= 0) { ... return "Concluído" ou "Agendado" }
+```
+
+#### `situBadge` no drawer
+
+```js
+else if ((r.realizacoes || []).some(rx => rx.status === 'pendente_gestor'))
+  situBadge = `<span class="badge badge-amber">Acordo pendente</span>`;
+else if (saldo <= 0)
+  situBadge = `<span class="badge badge-verde">Concluído</span>`;
+```
+
+### KPI "Aguard. aprovação" e filtro — acordos de gozo não entram
+
+**Regra:** `getPendentes()` e o filtro `_statusFiltro === 'ok'` operam sobre status do PA (`Pendente`, `Cancelamento_Solicitado`, `Alteracao_Solicitada`). Acordos de gozo (`realizacoes.pendente_gestor`) são fluxo do Gestor — **não entram no KPI RH de pendências**.
+
+```js
+// Layer 1 — quais colaboradores aparecem no filtro 'ok':
+if (_statusFiltro === 'ok') return getPendentes().some(p => p.colab.__key === c.__key);
+// NÃO inclui realizacoes.some(rx => rx.status === 'pendente_gestor')
+
+// Layer 2 — quais registros renderizar:
+} else if (_statusFiltro === 'ok') {
+  pasDoAno = c.registros.filter(reg =>
+    ['Pendente', 'Cancelamento_Solicitado', 'Alteracao_Solicitada'].includes(reg.status)
+  );
+  // NÃO inclui realizacoes
+}
+```
+
+**Por quê:** o KPI do RH conta pendências que o RH precisa aprovar (solicitações, alterações, cancelamentos de período). Acordos de gozo têm seu próprio fluxo de visibilidade (banner no drawer + atividade recente + badge "Acordo pendente") e não devem inflar o KPI de pendências regulares.
+
+### Funções de aprovação/rejeição de gozo
+
+| Função | O que faz |
+|---|---|
+| `grhEnviarSolicitarGozo(colabKey, sbId, lancIdx, saida, retorno, dias, obs)` | Gestor registra acordo: append em `realizacoes[]` com `status:'pendente_gestor'`; loga `'gozo_solicitado'` em `ferias_historico` |
+| `rhAprovarGozoPendente(colabKey, sbId, lancIdx, saida)` | RH aprova: remove `status` da realização (ou seta null); loga `'gozo_aprovado'` |
+| `rhRejeitarGozoPendente(colabKey, sbId, lancIdx, saida)` | RH recusa: seta `status:'recusado'` na realização; loga `'gozo_recusado'` |
+
+**Identificação da realização:** par `(lancIdx, saida)` — único dentro de um PA.
+
+### Ações registradas em `ferias_historico` (atualização)
+
+| `acao` | Origem | Detalhe |
+|---|---|---|
+| `'gozo_solicitado'` | Gestor | `{ saida, retorno, dias, lancIdx, obs }` |
+| `'gozo_aprovado'` | RH | `{ saida, dias, lancIdx, aprovado_por }` |
+| `'gozo_recusado'` | RH | `{ saida, lancIdx, recusado_por }` |
+| `'gestor_ciente'` | Gestor | `{ acao_referencia: 'gozo_aprovado'/'gozo_recusado', saida, retorno, dias }` |
