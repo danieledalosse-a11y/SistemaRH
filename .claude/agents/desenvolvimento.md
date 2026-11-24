@@ -2784,6 +2784,20 @@ Substitui `gestorDpRenderCiclos` (40+ linhas com estrutura distinta). RH e Gesto
 | `showBtnEncerrar` | `true` | `false` |
 | `showBtnAbrir` | `true` | `false` |
 
+### Múltiplos ciclos ativos simultâneos (commits 9922c67, 549e017 — nov/2026)
+
+A premissa de ciclo único foi removida. A função suporta N ciclos com `status='aberto'` ou `'em_andamento'` ao mesmo tempo:
+
+- **`ativos = ciclosInput.filter(...)`** substitui o antigo `ativo = ciclosInput.find(...)` — todos os ciclos ativos são retornados
+- Um banner `.ciclo-banner` é renderizado para **cada** ciclo ativo, com id único `cbannerFill_${containerId}_${idx}` / `cbannerPct_${containerId}_${idx}`
+- **`_carregarProgresso(cicloObj, bannerId, sideEl)`** — função auxiliar interna que faz o `Promise.all` de `dp_avaliacoes` + `dp_ciclo_participantes` para um ciclo específico e preenche sua barra de progresso. Recebe `sideEl=null` para banners que não atualizam a sidebar
+- Os banners de ciclos adicionais (idx ≥ 1) chamam `_carregarProgresso` com `sideEl=null` — apenas o banner, sem sidebar
+- A **sidebar** continua exibindo apenas o ciclo mais recente (`ativos[0]`, o primeiro da query ordenada por `criado_em.desc`)
+- O `panel-title` da sidebar RH foi renomeado de "Ciclo atual" para **"Ciclo mais recente"** (linha ~1200 do index.html)
+- `populateCicloSelect` auto-seleciona `c.status === 'aberto' || c.status === 'em_andamento'` (antes só `'aberto'`)
+
+**Regra:** nunca reverter para `find()` nessa linha — causaria o bug de ciclos anteriores desaparecendo ao criar um novo.
+
 ### Estrutura da sidebar do Gestor (`sec-gestor-dp`)
 
 Adicionado `<div class="content-area">` com `.list-col` + `.sidebar-col` — mesma estrutura do RH. Sidebar renderiza contadores, progresso e dots via as mesmas queries (`dp_avaliacoes` + `dp_ciclo_participantes`), filtradas pelo RLS do Supabase ao perfil do Gestor.
@@ -2794,7 +2808,7 @@ Adicionado `<div class="content-area">` com `.list-col` + `.sidebar-col` — mes
 
 ### ID do cbannerFill
 
-`id="cbannerFill_${containerId}"` e `id="cbannerPct_${containerId}"` para evitar colisão se ambas as views existirem no DOM simultaneamente.
+`id="cbannerFill_${containerId}_${idx}"` e `id="cbannerPct_${containerId}_${idx}"` — sufixo `_${idx}` garante IDs únicos quando há múltiplos ciclos ativos. Nunca usar `containerId` sozinho como sufixo.
 
 ### `_dpSidebarAvalCounts` restrito ao RH
 
@@ -2803,6 +2817,10 @@ Populado apenas quando `containerId === 'ciclosList'`. `dpEncerrarCicloSidebar` 
 ### Nome do modelo no Gestor
 
 `loadDpModelos()` chamado dentro de `gestorDpLoadCiclos` via `Promise.all`, mas **somente se `_dpModelos.length === 0`** (sem requisição redundante se RH já carregou). Popula `_dpVersoes` para que `_dpCicloModeloNome` retorne o nome completo ("Avaliação Mensal Produtividade CD — V1").
+
+### CI — `cancel-in-progress: false` (commit de968cc — nov/2026)
+
+`.github/workflows/deploy.yml` foi alterado para `cancel-in-progress: false`. O valor `true` causava race condition entre `upload-pages-artifact@v4` e `deploy-pages@v4` quando dois commits eram enviados em sequência rápida — o artifact era registrado mas o deploy-pages não o encontrava ("Found 0 artifacts"). Com `false`, cada deploy aguarda sua vez sem cancelar o anterior.
 
 ---
 
