@@ -224,6 +224,7 @@ Tabela de auditoria imutável — nunca editada, só recebe INSERT.
 | `'cancelamento_aprovado'` | RH | `{ status: 'Cancelamento aprovado' }` |
 | `'cancelamento_recusado'` | RH | `{ status: 'Cancelamento recusado' }` |
 | `'gestor_ciente'` | Gestor (commit 993c54f) | `{ acao_referencia, inicio, fim, dias }` |
+| `'ajustado_rh'` | RH (`salvarAjuste` — commit `ece14ac`, Nov/2026) | `{ original: {inicio,fim,dias,abono}, alterado_para: {inicio,fim,dias,abono}, alterado_por: nome }` |
 
 As ações `lancado_rh`, `editado_rh` e `excluido_rh` usam `sbPost('ferias_historico', ...).catch(() => {})` diretamente (não passam por `_logAtiv`) — falha no log nunca bloqueia a operação principal.
 
@@ -351,6 +352,9 @@ Classes CSS:
 
 | Badge | Cor | Significado |
 |---|---|---|
+| Canc. pendente | vermelho claro (`#9F1239`, bg `#FFF1F2`, borda `#FECDD3`, dot `#E11D48`) | Cancelamento do agendamento aguardando decisão do RH |
+| Alt. pendente | âmbar claro (`#78350F`, bg `#FFFDE7`, borda `#FDE68A`) | Alteração de datas aguardando decisão do RH |
+| Aguardando aprovação | âmbar (`#92400E`, bg `#FFFBEB`, borda `#FDE68A`) | Solicitação inicial aguardando aprovação do RH |
 | Concluído | verde (`#027A48`, bg `#ECFDF3`) | Saldo zerado E todos os lançamentos no passado |
 | Agendado | **azul** (`#1849A9`, bg `#EFF6FF`) | Período futuro lançado (saldo > 0 ou saldo = 0 com futuro) |
 | Sem agendamento | âmbar | PA com saldo sem nenhum lançamento futuro ativo |
@@ -360,16 +364,55 @@ Classes CSS:
 ### Prioridade do `paBadge` (visão RH lista)
 
 ```js
-1. Pendente de aprovação RH → "Aguardando aprovação" (prioridade máxima)
-2. Risco de dobra (saldo > 0 + dpd ≤ 180) → badge de risco (Crítico/Atenção/No radar)
-3. saldo <= 0 + reg.lancamentos.some(l => l.inicio >= HOJE) → "Agendado"
+1. Cancelamento_Solicitado → "Canc. pendente" (prioridade máxima — âmbar escuro)
+2. Alteracao_Solicitada    → "Alt. pendente"  (prioridade máxima — âmbar claro)
+3. Pendente de aprovação RH → "Aguardando aprovação"
+4. Risco de dobra (saldo > 0 + dpd ≤ 180) → badge de risco (Crítico/Atenção/No radar)
+5. saldo <= 0 + reg.lancamentos.some(l => l.inicio >= HOJE) → "Agendado"
    // (saldo zerado mas com lançamentos futuros — ainda não gozados)
-4. saldo <= 0 sem lançamento futuro → "Concluído"
-5. !_temFuturoAtivo(colab) → "Sem agendamento"
-6. fallthrough → "Agendado"
+6. saldo <= 0 sem lançamento futuro → "Concluído"
+7. !_temFuturoAtivo(colab) → "Sem agendamento"
+8. fallthrough → "Agendado"
 ```
 
 **Regra 3 — Alessandro case:** quando todos os dias do PA estão programados para o futuro, o saldo é 0 mas as férias não foram gozadas. Checar `reg.lancamentos` (não cross-PA) porque `saldo <= 0` significa que o `reg` é o próprio PA responsável pelos dias.
+
+### KPI "Pendentes de Aprovação" — alinhamento entre contagem e lista (Nov/2026)
+
+**Regra:** todo registro que `getPendentes()` contabiliza no KPI deve aparecer como linha na lista.
+
+#### `getPendentes()` — fonte de verdade do KPI
+
+Retorna um array de itens para todos os registros com `status ∈ {Pendente, Cancelamento_Solicitado, Alteracao_Solicitada}`.
+
+Para `Cancelamento_Solicitado`, recupera o período em dois passos:
+1. Usa `reg._cancelamentoMeta` (derivado de `JSON.parse(f.obs_gestor)` em `supabaseParaModelo`) quando disponível.
+2. Fallback: busca em `FERIAS_HISTORICO` a entrada com `ferias_id === reg._sbId` e `acao === 'cancelamento_solicitado'` → usa `hist.detalhe.{inicio,fim,dias}`.
+3. Se nem um nem outro estiver disponível, usa `{}` (nunca assume slot p1 ou p2 por suposição).
+
+#### `renderListaAnual` — filtro `_statusFiltro === 'ok'`
+
+Dois layers que devem ser simétricos com `getPendentes()`:
+
+**Layer 1** (quais colaboradores aparecem):
+```js
+if (_statusFiltro === 'ok') return getPendentes().some(p => p.colab.__key === c.__key);
+// NÃO inclui realizacoes.some(rx => rx.status === 'pendente_gestor') — realizações são fluxo do Gestor, não do RH
+```
+
+**Layer 2** (quais registros renderizar para o colaborador):
+```js
+} else if (_statusFiltro === 'ok') {
+  pasDoAno = c.registros.filter(reg =>
+    ['Pendente', 'Cancelamento_Solicitado', 'Alteracao_Solicitada'].includes(reg.status)
+  );
+  // NÃO inclui realizacoes — mesma regra do Layer 1
+}
+```
+
+**Armadilha:** antes de Nov/2026, Layer 2 usava `reg.status === 'Pendente' && reg._novoLanc || realizacoes...`, causando:
+- Cancelamento_Solicitado/Alteracao_Solicitada não apareciam na lista (mas eram contados no KPI)
+- Colaboradores com apenas realizações pendentes do Gestor apareciam indevidamente no filtro RH
 
 ### `_temFuturoAtivo(colab)` — helper cross-PA
 
@@ -529,7 +572,32 @@ function gestorPeriodoAtivo(colaborador_id) {
 }
 ```
 
-`gestorSaldoPeriodo` conta apenas lançamentos com status `['aprovado','agendado','gozado']` — lançamentos `solicitado` (pendentes) **não** reduzem o saldo.
+`gestorSaldoPeriodo` conta lançamentos com status `['aprovado','agendado','gozado','cancelamento_solicitado']` — `cancelamento_solicitado` é incluído para manter os dias contabilizados enquanto o cancelamento aguarda aprovação do RH. Lançamentos `solicitado` (pendentes) **não** reduzem o saldo.
+
+### Badge Cancelamento_Solicitado — lógica dos dois branches (commit 21c523d)
+
+```js
+// Branch 1: lancsPa vazio (lançamento sob PA diferente do paEfetivo)
+else if (!lancsPa.length) {
+  const _anyCancel = lancs.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado');
+  badge = _anyCancel
+    ? `<span ...>Canc. pendente</span>`
+    : `<span ...>Sem agendamento</span>`;
+}
+
+// Branch 2: lancsPa com entradas (caso normal)
+else if (lancsPa.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado'))
+  badge = `<span ...>Canc. pendente</span>`;
+else
+  badge = `<span ...>Sem agendamento</span>`;
+
+// Botão de ação — verifica ambas as fontes
+const temCancelPend = lancsPA.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado')
+                   || lancs.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado');
+// temCancelPend ativa btnAcao "⏳ Aguardando RH"
+```
+
+**Regra:** `lancsPa` pode estar vazio mesmo que o cancelamento exista — dedup em `processGestorFerias` pode eleger como `paEfetivo` um PA diferente do PA que contém o lançamento de cancelamento. Sempre checar `lancs` no branch `!lancsPa.length`.
 
 ### Anti-padrão crítico
 
@@ -3447,45 +3515,71 @@ if (_tipo === 'cancelamento') {
 
 ---
 
-#### RH pode corrigir datas no modal de aprovação (commits `4ad38e3` / `dee4197` / `a954249`, 09/11/2026)
+#### Três botões independentes no fluxo de aprovação RH (commits `622e6e0`/`99814da`/`59dff25`/`ece14ac`/`1a7765d`, Nov/2026)
 
-**Feature:** quando um Gestor envia uma solicitação com datas incorretas (ex: 16 dias em vez de 15), o RH pode corrigir diretamente no modal de aprovação sem rejeitar e reabrir o processo.
+**Arquitetura:** modal único reutilizado com parâmetro `mode`. Nenhuma duplicação de código. Todos os botões aparecem no drawer do colaborador **e** na lista de pendentes.
 
-**Escopo:** somente `_tipo === 'default'` ou `'legado'` (solicitações iniciais pendentes). Alterações e cancelamentos não são afetados.
+##### Botões disponíveis (IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar'))
 
-**UI no modal (`abrirModalAprovar` — ramo `else`):**
-- Bloco cinza de referência: "SOLICITADO PELO GESTOR — DD/MM → DD/MM · N dias"
-- Campo `aprvEditInicio` (date, editável) — oninput chama `aprvRecalcDias()`
-- Campo `aprvEditFim` (date, editável) — oninput chama `aprvRecalcDias()`
-- Campo `aprvEditDias` (number, editável) — oninput chama `aprvRecalcFim()`; label mostra "(máx. Xd)"
-- `div#aprvEditErro` para erros inline
+| Botão | Função chamada | Mode do modal |
+|---|---|---|
+| ✓ Aprovar | `rhAprovarSolicitado(id, idx)` | `'aprovar'` |
+| ✕ Recusar | `rhRecusarSolicitado(id, idx)` | `'recusar'` |
+| ✎ Alterar | `rhAlterar(id, idx)` | `'alterar'` |
 
-**Funções de recálculo:**
-- `aprvRecalcDias()` — datas mudam → dias = fim − inicio + 1
-- `aprvRecalcFim()` — dias mudam → fim = addDays(inicio, dias − 1); valida dias ≥ 1 e dias ≤ max
+**Escopo:** somente `_tipo === 'default'` ou `'legado'`. Alterações e cancelamentos continuam no fluxo anterior (modal sem mode).
 
-**Detecção de edição:**
+##### `abrirModalAprovar(idx, mode = 'aprovar')` — ramo `else` (default/legado)
+
+| `mode` | Título | Conteúdo | Botão confirm | Botão Rejeitar |
+|---|---|---|---|---|
+| `'aprovar'` | "Confirmar aprovação" | Card azul readonly com dados salvos + abono se >0 | "✓ Confirmar aprovação" (btn-green, chama `aprovarPendente`) | oculto |
+| `'recusar'` | "Recusar solicitação" | Card vermelho readonly + campo motivo visível imediatamente | "✕ Confirmar rejeição" (btn-red, chama `rejeitarPendente`) | oculto |
+| `'alterar'` | "Ajustar solicitação" | Card azul de referência + campos editáveis (início, fim, dias, abono) | "💾 Salvar ajuste" (azul `#2563EB`, chama `salvarAjuste`) | oculto |
+
+**Lógica de início → fim:** `aprvEditInicio` chama `aprvRecalcFim()` (mantém os dias, desloca o fim). `aprvEditFim` chama `aprvRecalcDias()` (recalcula os dias). `aprvEditDias` chama `aprvRecalcFim()`.
+
+**Campo Abono Pecuniário (modo alterar):** pré-preenchido com `reg.abonoPecuniario || 0`. Máximo = `Math.floor(saldo / 3)` (CLT art. 143). Aviso âmbar sobre necessidade de solicitação escrita do colaborador.
+
+##### `salvarAjuste()` — mantém status=Pendente, registra histórico
+
+Validações (mesmas de `aprovarPendente`): campos preenchidos, fim ≥ inicio, dias ≤ saldo, abono ≤ piso/3, conflito com outros lançamentos.
+
+Fluxo:
+1. Captura `_origSalv = { inicio, fim, dias, abono }` **antes** de qualquer alteração
+2. Busca `periodos[]` atualizado do banco (`sbGet ferias select=periodos`)
+3. Atualiza o item `status==='solicitado'` em `periodos[]` com as novas datas
+4. PATCH com `status=eq.Pendente` no filtro — operação idempotente, não muda status
+5. Atualiza memória local (`reg._novoLanc`, `reg.abonoPecuniario`, `reg._periodos`)
+6. `_logAtiv` com `acao: 'ajustado_rh'`, detalhe: `{ original: _origSalv, alterado_para: {...}, alterado_por: nome }`
+7. Toast: "Ajuste salvo — Nome. Solicitação continua pendente."
+
+##### `aprovarPendente` — correções após os três botões
+
+**`_aprvAbono`:** quando o campo `aprvEditAbono` não existe no DOM (modo `'aprovar'`), usa `reg.abonoPecuniario` como fallback — evita sobrescrever abono já salvo pelo `salvarAjuste` com zero.
 ```js
-const _nlOriginal = { inicio: reg._novoLanc.inicio, fim: reg._novoLanc.fim, dias: reg._novoLanc.dias };
-const _rhEditou = _aprvIni !== _nlOriginal.inicio || _aprvFim !== _nlOriginal.fim || _aprvDias !== _nlOriginal.dias;
+const _aprvAbono = document.getElementById('aprvEditAbono')
+  ? (parseInt(document.getElementById('aprvEditAbono').value) || 0)
+  : (reg.abonoPecuniario || 0);
 ```
 
-**Fluxo em `aprovarPendente` quando `_rhEditou = true`:**
-1. Valida campos preenchidos + fim ≥ inicio
-2. Valida dias ≤ saldo disponível (`calcSaldo(reg)`)
-3. Valida conflito com outros lançamentos do mesmo colaborador
-4. Atualiza `reg._novoLanc` com os valores corrigidos **antes** do check de concorrência
-5. Check de concorrência compara banco com `_nlOriginal` (não os valores editados)
-6. Grava no banco com as datas corrigidas
-7. `_logAtiv` inclui `corrigido_de: { inicio, fim, dias }` para rastreabilidade
-8. Toast: `"✓ Férias aprovadas com correção — Nome"`
+**Validação de abono:** encapsulada em `if (document.getElementById('aprvEditAbono'))` — só executa quando o campo está no DOM (modo `'alterar'`), não em `'aprovar'`.
 
-**`rhAprovarSolicitado` redireciona para `abrirModalAprovar`:** botão "✓ Aprovar" no card chama `rhAprovarSolicitado`, que agora redireciona para `abrirModalAprovar` quando `_tipo === 'default'/'legado'` — garante que o RH sempre veja o modal com campos editáveis antes de confirmar. Alterações e cancelamentos continuam no fluxo direto.
+##### Histórico — nova ação
 
-**Regras permanentes:**
-- Nunca atualizar `reg._novoLanc` antes de capturar `_nlOriginal` — a detecção de edição depende da comparação com os valores originais do Gestor
-- O check de concorrência sempre usa `_nlOriginal` (não os valores editados)
-- Fluxo do Gestor, alteração, cancelamento e lançamento direto RH: inalterados
+| `acao` | Origem | Detalhe |
+|---|---|---|
+| `'ajustado_rh'` | RH (`salvarAjuste`) | `{ original: {inicio,fim,dias,abono}, alterado_para: {inicio,fim,dias,abono}, alterado_por: nome }` |
+
+##### Campo de motivo de rejeição (commit `1a7765d`)
+
+`#motivoRejeicao` tem `width:100%; box-sizing:border-box; min-height:90px; resize:vertical` — ocupa toda a largura do modal e permite redimensionamento pelo usuário.
+
+##### Regras permanentes após os três botões
+- `rhAprovarSolicitado` sempre chama `abrirModalAprovar(i, 'aprovar')` para default/legado — RH vê confirmação antes de gravar
+- `rhRecusarSolicitado` sempre chama `abrirModalAprovar(i, 'recusar')` — motivo direto no modal, sem `toggleMotivoRejeicao()`
+- `rhAlterar` só age em default/legado; outros tipos mostram toast de aviso
+- Fluxo do Gestor, alteração e cancelamento: inalterados
 
 ---
 
