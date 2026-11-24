@@ -11770,11 +11770,14 @@ function renderGestorAtencao() {
     else if (!lancsPa.length) {
       // lançamento pode estar sob PA diferente do paEfetivo — verifica todos do colaborador
       const _anyCancel = lancs.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado');
-      const _altPend = GESTOR_PERIODOS.some(p => String(p.colaborador_id) === String(c.id) && (p._feriasRow?.status || '').toLowerCase() === 'alteracao_solicitada');
+      const _altPend   = GESTOR_PERIODOS.some(p => String(p.colaborador_id) === String(c.id) && (p._feriasRow?.status || '').toLowerCase() === 'alteracao_solicitada');
+      const _gozoPend  = lancs.some(l => (l.status||'').toLowerCase() === 'pendente_gestor');
       badge = _anyCancel
         ? `<span class="badge-status-v" style="background:#FFF1F2;color:#9F1239;border:1px solid #FECDD3;"><span class="la-dot" style="background:#E11D48;"></span>Canc. pendente</span>`
         : _altPend
         ? `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;border:1px solid #BFDBFE;"><span class="la-dot" style="background:#1849A9;"></span>Alt. pendente</span>`
+        : _gozoPend
+        ? `<span class="badge-status-v" style="background:#F0F9FF;color:#0369A1;border:1px solid #BAE6FD;"><span class="la-dot" style="background:#0EA5E9;"></span>Acordo pendente</span>`
         : `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
     }
     else {
@@ -11793,6 +11796,8 @@ function renderGestorAtencao() {
         badge = `<span class="badge-status-v" style="background:#FFF1F2;color:#9F1239;border:1px solid #FECDD3;"><span class="la-dot" style="background:#E11D48;"></span>Canc. pendente</span>`;
       else if (GESTOR_PERIODOS.some(p => String(p.colaborador_id) === String(c.id) && (p._feriasRow?.status || '').toLowerCase() === 'alteracao_solicitada'))
         badge = `<span class="badge-status-v" style="background:#EFF6FF;color:#1849A9;border:1px solid #BFDBFE;"><span class="la-dot" style="background:#1849A9;"></span>Alt. pendente</span>`;
+      else if (lancsPa.some(l => (l.status||'').toLowerCase() === 'pendente_gestor'))
+        badge = `<span class="badge-status-v" style="background:#F0F9FF;color:#0369A1;border:1px solid #BAE6FD;"><span class="la-dot" style="background:#0EA5E9;"></span>Acordo pendente</span>`;
       else
         badge = `<span class="badge-status-a"><span class="la-dot la-dot-a"></span>Sem agendamento</span>`;
     }
@@ -11806,8 +11811,9 @@ function renderGestorAtencao() {
     }
     else if (saldo <= 0) borderClr = 'var(--green)';
     else if (!lancsPa.length) {
-      const _altPendBorder = GESTOR_PERIODOS.some(p => String(p.colaborador_id) === String(c.id) && (p._feriasRow?.status || '').toLowerCase() === 'alteracao_solicitada');
-      borderClr = _altPendBorder ? '#1849A9' : '#F59E0B';
+      const _altPendBorder  = GESTOR_PERIODOS.some(p => String(p.colaborador_id) === String(c.id) && (p._feriasRow?.status || '').toLowerCase() === 'alteracao_solicitada');
+      const _gozoPendBorder = lancs.some(l => (l.status||'').toLowerCase() === 'pendente_gestor');
+      borderClr = _altPendBorder ? '#1849A9' : _gozoPendBorder ? '#0EA5E9' : '#F59E0B';
     }
     else {
       const temSolPend = lancsPa.some(l => (l.status||'').toLowerCase() === 'solicitado' && l.fim >= hoje);
