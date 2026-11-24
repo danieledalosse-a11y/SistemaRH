@@ -3591,6 +3591,8 @@ function renderDrawerHistorico(colab) {
     if (r.status === 'Pendente')    situBadge = `<span class="badge badge-amber">Pendente aprovação</span>`;
     else if (r.status === 'Rejeitado') situBadge = `<span class="badge badge-vermelho">Rejeitado</span>`;
     else if (r.status === 'Cancelado') situBadge = `<span class="badge badge-cinza">Cancelado</span>`;
+    else if (r.status === 'Alteracao_Solicitada')    situBadge = `<span class="badge badge-azul">Alt. pendente</span>`;
+    else if (r.status === 'Cancelamento_Solicitado') situBadge = `<span class="badge badge-amber">Canc. pendente</span>`;
     else if (r.lancamentos.length === 0 && saldo > 0) situBadge = `<span class="badge badge-amber">Sem agendamento</span>`;
     else if (saldo <= 0) situBadge = `<span class="badge badge-verde">Concluído</span>`;
     else situBadge = `<span class="badge badge-azul">Em andamento</span>`;
@@ -3794,6 +3796,31 @@ function renderDrawerHistorico(colab) {
 
     const abonoChipHtml = abonoPec > 0 ? `<div style="padding:6px 12px 0;"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;background:#F5F3FF;border:1px solid #DDD6FE;font-size:11px;color:#5B21B6;font-weight:600;">Abono pecuniário · ${abonoPec}d</span></div>` : '';
 
+    // Bloco de alteração/cancelamento aguardando aprovação RH
+    let altPendHtml = '';
+    if (r.status === 'Alteracao_Solicitada' && r._alteracaoMeta) {
+      const meta = r._alteracaoMeta;
+      const solDt = meta.data_solicitacao ? ` em ${formatDate(meta.data_solicitacao)}` : '';
+      const solicitante = meta.solicitante ? `<div style="font-size:11px;color:var(--text-sec);margin-top:2px;">Solicitado por ${meta.solicitante}${solDt}</div>` : '';
+      const acaoBtns = (IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')) ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        <button onclick="const _i=getPendentes().findIndex(p=>String(p.reg._sbId)==='${r._sbId}');if(_i>=0)abrirModalAprovar(_i);" style="padding:4px 12px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">Analisar alteração</button>
+      </div>` : '';
+      altPendHtml = `<div style="margin:6px 12px 0;border-left:3px solid #2563EB;padding-left:10px;">
+        <div style="font-size:12px;font-weight:600;color:#1849A9;margin-bottom:2px;">Alteração solicitada pelo gestor</div>
+        <div style="font-size:13px;font-weight:500;color:var(--text);">${formatDate(meta.novo_inicio)} → ${formatDate(meta.novo_fim)} · ${meta.dias}d</div>
+        ${solicitante}
+        ${acaoBtns}
+      </div>`;
+    } else if (r.status === 'Cancelamento_Solicitado') {
+      const acaoBtns = (IS_RH && !IS_DIRETORIA && podeAcao('ferias','alterar')) ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        <button onclick="const _i=getPendentes().findIndex(p=>String(p.reg._sbId)==='${r._sbId}');if(_i>=0)abrirModalAprovar(_i);" style="padding:4px 12px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">Analisar cancelamento</button>
+      </div>` : '';
+      altPendHtml = `<div style="margin:6px 12px 0;border-left:3px solid #F79009;padding-left:10px;">
+        <div style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:4px;">Cancelamento solicitado pelo gestor</div>
+        ${acaoBtns}
+      </div>`;
+    }
+
     // Bloco do período pendente (_novoLanc) com borda âmbar e botões inline
     let novoLancHtml = '';
     if (r._novoLanc && r.status === 'Pendente') {
@@ -3812,8 +3839,8 @@ function renderDrawerHistorico(colab) {
     }
 
     const timelineHtml = lancsHtml ? `<div class="gsol-rh-tl">${lancsHtml}</div>` : '';
-    const lancs = (timelineHtml || abonoChipHtml || novoLancHtml)
-      ? (timelineHtml || '') + (novoLancHtml || '') + (abonoChipHtml || '')
+    const lancs = (timelineHtml || abonoChipHtml || novoLancHtml || altPendHtml)
+      ? (timelineHtml || '') + (altPendHtml || '') + (novoLancHtml || '') + (abonoChipHtml || '')
       : '<p style="font-size:12px;color:var(--text-sec);padding:4px 12px;">Sem lançamentos neste PA.</p>';
 
     const temPendenciaPA = !excluirPA && realizacoes.length > 0 && r.lancamentos.some((l, li) => {
