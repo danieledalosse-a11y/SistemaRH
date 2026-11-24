@@ -3003,6 +3003,15 @@ function getPendentes() {
       result.push({ colab, reg, ri, lancamento: nl, _tipo: 'legado' });
     });
   });
+  // Acordos de Gozo pendentes (realizacoes com status pendente_gestor)
+  COLABORADORES.forEach(colab => {
+    colab.registros.forEach((reg, ri) => {
+      (reg.realizacoes || []).forEach(rx => {
+        if (rx.status !== 'pendente_gestor') return;
+        result.push({ colab, reg, ri, lancamento: { inicio: rx.saida, fim: rx.retorno, dias: rx.dias }, _tipo: 'gozo', _gozoRx: rx });
+      });
+    });
+  });
   return result;
 }
 
@@ -4611,6 +4620,7 @@ async function rhAprovarGozoPendente(colabKey, sbId, lancIdx, saida) {
   }
   if (colab?._sbColabId) await _logColabHist(colab._sbColabId, 'ferias_gozo_aprovado', `Gozo aprovado: saída ${saida}${_gozoAprov?.dias ? ' · ' + _gozoAprov.dias + 'd' : ''}`, _perfGozo.nome || 'RH');
   renderRhAtividade();
+  renderPendentes();
   if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
   toast(_histFalhouGozo ? '✓ Gozo aprovado (histórico não registrado — contate o suporte)' : '✓ Gozo aprovado e registrado!', _histFalhouGozo ? 'aviso' : '');
 }
@@ -4627,9 +4637,18 @@ async function rhRejeitarGozoPendente(colabKey, sbId, lancIdx, saida) {
     await sbPatch('ferias', `id=eq.${sbId}`, { realizacoes: nova });
   } catch(e) { toast(_erroApi(e), 'erro'); return; }
   reg.realizacoes = nova;
+  const _perfRej = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
+  if (colab?._sbColabId) {
+    try { await _logAtiv(sbId, colab._sbColabId, 'gozo_recusado', _perfRej.nome || 'RH', { saida, lancIdx: Number(lancIdx) }); }
+    catch(e) { console.error('[_logAtiv gozo_recusado]', e); }
+    try { await _logColabHist(colab._sbColabId, 'ferias_gozo_recusado', `Gozo recusado: saída ${saida}`, _perfRej.nome || 'RH'); } catch(_) {}
+  }
   try { renderDrawerHistorico(colab); } catch(_) {}
   try { renderMetricas(); } catch(_) {}
-  toast('Solicitação rejeitada.');
+  renderRhAtividade();
+  renderPendentes();
+  if (typeof renderGestorAtividade === 'function') renderGestorAtividade();
+  toast('Solicitação de gozo recusada.');
 }
 
 // ─── Navegação ───────────────────────────────────────────────────────────────
@@ -5085,7 +5104,28 @@ function renderPendentes() {
 
   document.getElementById('pendContent').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px;">
-      ${lista.map(({ colab, reg, ri, lancamento, _tipo, _altMeta }, idx) => {
+      ${lista.map(({ colab, reg, ri, lancamento, _tipo, _altMeta, _gozoRx }, idx) => {
+        if (_tipo === 'gozo') {
+          const rx = _gozoRx;
+          return `<div class="pendente-item" style="border-left:4px solid #0EA5E9;">
+            <div class="pendente-body" style="flex:1;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <div class="pendente-nome">${colab.nome}</div>
+                <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#F0F9FF;color:#0369A1;font-weight:600;">Acordo de Gozo</span>
+              </div>
+              <div class="pendente-info">${colab.cargo || '—'} · ${colab.setor || colab.unidade || '—'}${colab.gestor ? ' · Gestor: ' + colab.gestor : ''}</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+                <span class="badge badge-azul">${formatDate(rx.saida)} → ${formatDate(rx.retorno)}</span>
+                <span class="badge badge-cinza">${rx.dias} dias</span>
+                ${rx.obs ? `<span class="badge badge-cinza">${rx.obs}</span>` : ''}
+              </div>
+            </div>
+            <div class="pendente-actions" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+              <button onclick="rhAprovarGozoPendente('${colab.__key}',${reg._sbId},${rx.lancIdx ?? 0},'${rx.saida}')" style="padding:6px 14px;border-radius:7px;border:none;background:#16A34A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✓ Aprovar</button>
+              <button onclick="rhRejeitarGozoPendente('${colab.__key}',${reg._sbId},${rx.lancIdx ?? 0},'${rx.saida}')" style="padding:6px 14px;border-radius:7px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✕ Recusar</button>
+            </div>
+          </div>`;
+        }
         if (_tipo === 'alteracao') {
           const meta = _altMeta;
           return `<div class="pendente-item" style="border-left:4px solid #3B82F6;">
@@ -9243,6 +9283,15 @@ function _gestorProcessoInfo(h) {
 // RH: evento ainda está pendente de decisão?
 function _rhEhRecente(h) {
   const acao = (h.acao || '').toLowerCase();
+  // Gozo solicitado: pendente enquanto a realizacao pendente_gestor com a mesma saida existir
+  if (acao === 'gozo_solicitado') {
+    const det = h.detalhe || {};
+    const _reg = COLABORADORES.flatMap(c => c.registros).find(r => String(r._sbId) === String(h.ferias_id));
+    if (!_reg) return false;
+    return (_reg.realizacoes || []).some(rx =>
+      rx.status === 'pendente_gestor' && (!det.saida || rx.saida === det.saida)
+    );
+  }
   const respostas = {
     solicitado:              ['aprovado',              'rejeitado'],
     cancelamento_solicitado: ['cancelamento_aprovado', 'cancelamento_recusado'],
@@ -9280,6 +9329,9 @@ const ACAO_LABEL = {
   gestor_ciente:                'Ciente',
   solicitacao_retirada:         'Solicitação retirada',
   solicitacao_datas_alteradas:  'Datas da solicitação atualizadas',
+  gozo_solicitado:              'Gozo solicitado',
+  gozo_aprovado:                'Gozo aprovado',
+  gozo_recusado:                'Gozo recusado',
 };
 const ACAO_CLS = {
   aprovado:                    'aprov',
@@ -9294,6 +9346,9 @@ const ACAO_CLS = {
   gestor_ciente:               'aprov',
   solicitacao_retirada:        'cancel-sol',
   solicitacao_datas_alteradas: 'neutro',
+  gozo_solicitado:             'neutro',
+  gozo_aprovado:               'aprov',
+  gozo_recusado:               'recus',
 };
 // SVGs reutilizáveis por categoria visual
 const ACAO_SVG = {
@@ -9334,8 +9389,8 @@ function _rhProcessoInfo(h) {
   return {
     cls,
     estado: chip,
-    inicio: det.inicio || det.novo_inicio || null,
-    fim:    det.fim    || det.novo_fim    || null,
+    inicio: det.inicio || det.novo_inicio || det.saida   || null,
+    fim:    det.fim    || det.novo_fim    || det.retorno  || null,
     dias:   det.dias   || null,
     motivo: det.motivo || det.obs_gestor  || null,
   };
@@ -9453,8 +9508,22 @@ function renderRhAtividade() {
       get histOffset() { return _rhHistOffset; },  set histOffset(v) { _rhHistOffset = v; },
     },
     btnAcaoFn: (h, info) => {
-      if (IS_RH && !IS_DIRETORIA && _rhEhRecente(h) && _pendentesIds.has(String(h.ferias_id)))
-        return `<button onclick="_rhAtivAbrirModal('${h.ferias_id}')" style="flex-shrink:0;padding:5px 12px;border-radius:6px;border:1.5px solid var(--blue,#1570EF);background:transparent;color:var(--blue,#1570EF);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Analisar</button>`;
+      if (IS_RH && !IS_DIRETORIA && _rhEhRecente(h)) {
+        if ((h.acao || '').toLowerCase() === 'gozo_solicitado') {
+          const det = h.detalhe || {};
+          const _gc = colabMap.get(String(h.colaborador_id));
+          const _gr = _gc?.registros?.find(r => String(r._sbId) === String(h.ferias_id));
+          if (_gc && _gr && det.saida) {
+            const _li = det.lancIdx ?? 0;
+            return `<div style="display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+              <button onclick="rhAprovarGozoPendente('${_gc.__key}',${h.ferias_id},${_li},'${det.saida}')" style="padding:5px 10px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">✓ Aprovar</button>
+              <button onclick="rhRejeitarGozoPendente('${_gc.__key}',${h.ferias_id},${_li},'${det.saida}')" style="padding:5px 10px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">✕ Recusar</button>
+            </div>`;
+          }
+        }
+        if (_pendentesIds.has(String(h.ferias_id)))
+          return `<button onclick="_rhAtivAbrirModal('${h.ferias_id}')" style="flex-shrink:0;padding:5px 12px;border-radius:6px;border:1.5px solid var(--blue,#1570EF);background:transparent;color:var(--blue,#1570EF);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Analisar</button>`;
+      }
       return `<span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>`;
     },
     mostrarUsuario: true,
