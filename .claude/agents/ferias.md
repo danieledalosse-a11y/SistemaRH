@@ -356,27 +356,31 @@ Classes CSS:
 | Canc. pendente | vermelho claro (`#9F1239`, bg `#FFF1F2`, borda `#FECDD3`, dot `#E11D48`) | Cancelamento do agendamento aguardando decisão do RH |
 | Alt. pendente | âmbar claro (`#78350F`, bg `#FFFDE7`, borda `#FDE68A`) | Alteração de datas aguardando decisão do RH |
 | Aguardando aprovação | âmbar (`#92400E`, bg `#FFFBEB`, borda `#FDE68A`) | Solicitação inicial aguardando aprovação do RH |
+| Acordo pendente | âmbar (`#92400E`, bg `#FFFBEB`, borda `#FDE68A`, dot `#F79009`) | PA com acordo de gozo aguardando aprovação do RH |
 | Concluído | verde (`#027A48`, bg `#ECFDF3`) | Saldo zerado E todos os lançamentos no passado |
 | Agendado | **azul** (`#1849A9`, bg `#EFF6FF`) | Período futuro lançado (saldo > 0 ou saldo = 0 com futuro) |
 | Sem agendamento | âmbar | PA com saldo sem nenhum lançamento futuro ativo |
 
 **Regra crítica:** Agendado é azul (não verde) para diferenciar de Concluído.
 
-### Prioridade do `paBadge` (visão RH lista)
+### Prioridade do `paBadge` (visão RH lista) — atualizado Nov/2026
 
 ```js
-1. Cancelamento_Solicitado → "Canc. pendente" (prioridade máxima — âmbar escuro)
-2. Alteracao_Solicitada    → "Alt. pendente"  (prioridade máxima — âmbar claro)
-3. Pendente de aprovação RH → "Aguardando aprovação"
-4. Risco de dobra (saldo > 0 + dpd ≤ 180) → badge de risco (Crítico/Atenção/No radar)
-5. saldo <= 0 + reg.lancamentos.some(l => l.inicio >= HOJE) → "Agendado"
-   // (saldo zerado mas com lançamentos futuros — ainda não gozados)
-6. saldo <= 0 sem lançamento futuro → "Concluído"
-7. !_temFuturoAtivo(colab) → "Sem agendamento"
-8. fallthrough → "Agendado"
+1. Cancelamento_Solicitado → "Canc. pendente"      (vermelho claro — prioridade máxima)
+2. Alteracao_Solicitada    → "Alt. pendente"        (âmbar claro — prioridade máxima)
+3. Pendente                → "Aguardando aprovação" (âmbar)
+4. Risco de dobra (saldo > 0 + dpd ≤ 180)          → badge Crítico/Atenção/No radar
+5. realizacoes.some(pendente_gestor)                → "Acordo pendente" (âmbar)
+   // ← inserido ANTES do saldo <= 0 para evitar "Concluído" indevido
+6. saldo <= 0 + lancamento futuro                   → "Agendado" (azul)
+7. saldo <= 0 sem lançamento futuro                 → "Concluído" (verde)
+8. !_temFuturoAtivo(colab)                          → "Sem agendamento" (âmbar)
+9. fallthrough                                      → "Agendado" (azul)
 ```
 
 **Regra 3 — Alessandro case:** quando todos os dias do PA estão programados para o futuro, o saldo é 0 mas as férias não foram gozadas. Checar `reg.lancamentos` (não cross-PA) porque `saldo <= 0` significa que o `reg` é o próprio PA responsável pelos dias.
+
+**Regra 5 — Madson/Flávio case (Nov/2026):** PA com `saldo=0` e `status=Aprovado` mas com acordo de gozo pendente. Sem a verificação na posição 5, o badge retornaria "Concluído" mesmo o PA necessitando de ação do RH.
 
 ### KPI "Pendentes de Aprovação" — alinhamento entre contagem e lista (Nov/2026)
 
@@ -391,6 +395,27 @@ Para `Cancelamento_Solicitado`, recupera o período em dois passos:
 2. Fallback: busca em `FERIAS_HISTORICO` a entrada com `ferias_id === reg._sbId` e `acao === 'cancelamento_solicitado'` → usa `hist.detalhe.{inicio,fim,dias}`.
 3. Se nem um nem outro estiver disponível, usa `{}` (nunca assume slot p1 ou p2 por suposição).
 
+#### `getPendentes()` — fonte de verdade do KPI (atualizado Nov/2026)
+
+Inclui **dois grupos**:
+1. PAs com `status ∈ {Pendente, Cancelamento_Solicitado, Alteracao_Solicitada}`
+2. **Acordos de Gozo**: realização com `status === 'pendente_gestor'` em qualquer PA com status não excluído — cada realização gera um item `{ colab, reg, ri, lancamento, _tipo:'gozo', _gozoRx:rx }` no array resultado
+
+```js
+// Grupo 2 — adicionado à getPendentes() em Nov/2026:
+COLABORADORES.forEach(colab => {
+  colab.registros.forEach((reg, ri) => {
+    (reg.realizacoes || []).forEach(rx => {
+      if (rx.status !== 'pendente_gestor') return;
+      result.push({ colab, reg, ri,
+        lancamento: { inicio: rx.saida, fim: rx.retorno, dias: rx.dias },
+        _tipo: 'gozo', _gozoRx: rx
+      });
+    });
+  });
+});
+```
+
 #### `renderListaAnual` — filtro `_statusFiltro === 'ok'`
 
 Dois layers que devem ser simétricos com `getPendentes()`:
@@ -398,22 +423,26 @@ Dois layers que devem ser simétricos com `getPendentes()`:
 **Layer 1** (quais colaboradores aparecem):
 ```js
 if (_statusFiltro === 'ok') return getPendentes().some(p => p.colab.__key === c.__key);
-// NÃO inclui realizacoes.some(rx => rx.status === 'pendente_gestor') — realizações são fluxo do Gestor, não do RH
+// Inclui tanto PAs com status pendente quanto colaboradores com realizacoes pendente_gestor
+// (getPendentes() já retorna ambos — ver seção acima)
 ```
 
-**Layer 2** (quais registros renderizar para o colaborador):
+**Layer 2** (quais registros renderizar para o colaborador — atualizado Nov/2026):
 ```js
 } else if (_statusFiltro === 'ok') {
+  // Inclui PAs com status pendente E PAs com realizacao de gozo pendente
   pasDoAno = c.registros.filter(reg =>
-    ['Pendente', 'Cancelamento_Solicitado', 'Alteracao_Solicitada'].includes(reg.status)
+    ['Pendente', 'Cancelamento_Solicitado', 'Alteracao_Solicitada'].includes(reg.status) ||
+    (reg.realizacoes || []).some(rx => rx.status === 'pendente_gestor')
   );
-  // NÃO inclui realizacoes — mesma regra do Layer 1
 }
 ```
 
-**Armadilha:** antes de Nov/2026, Layer 2 usava `reg.status === 'Pendente' && reg._novoLanc || realizacoes...`, causando:
+**Caso Madson/Flávio (Nov/2026):** PAs com `status='Aprovado'` e `saldo=0` mas com realizações `pendente_gestor`. Layer 1 os encontrava via `getPendentes()` (KPI contava 4), mas Layer 2 não os renderizava (lista mostrava apenas 2). Fix: adicionar `|| realizacoes.some(pendente_gestor)` ao Layer 2.
+
+**Armadilha histórica:** antes de Nov/2026, Layer 2 usava apenas status do PA, causando:
 - Cancelamento_Solicitado/Alteracao_Solicitada não apareciam na lista (mas eram contados no KPI)
-- Colaboradores com apenas realizações pendentes do Gestor apareciam indevidamente no filtro RH
+- Acordos de gozo pendentes não apareciam na lista (mas eram contados no KPI)
 
 ### `_temFuturoAtivo(colab)` — helper cross-PA
 
@@ -4486,25 +4515,11 @@ else if (saldo <= 0)
   situBadge = `<span class="badge badge-verde">Concluído</span>`;
 ```
 
-### KPI "Aguard. aprovação" e filtro — acordos de gozo não entram
+### KPI "Aguard. aprovação" — acordos de gozo entram (Nov/2026)
 
-**Regra:** `getPendentes()` e o filtro `_statusFiltro === 'ok'` operam sobre status do PA (`Pendente`, `Cancelamento_Solicitado`, `Alteracao_Solicitada`). Acordos de gozo (`realizacoes.pendente_gestor`) são fluxo do Gestor — **não entram no KPI RH de pendências**.
+**Regra:** `getPendentes()` **inclui** realizações com `pendente_gestor`. Acordos de gozo aparecem no KPI e no filtro "Aguard. aprovação" junto com as demais pendências do RH.
 
-```js
-// Layer 1 — quais colaboradores aparecem no filtro 'ok':
-if (_statusFiltro === 'ok') return getPendentes().some(p => p.colab.__key === c.__key);
-// NÃO inclui realizacoes.some(rx => rx.status === 'pendente_gestor')
-
-// Layer 2 — quais registros renderizar:
-} else if (_statusFiltro === 'ok') {
-  pasDoAno = c.registros.filter(reg =>
-    ['Pendente', 'Cancelamento_Solicitado', 'Alteracao_Solicitada'].includes(reg.status)
-  );
-  // NÃO inclui realizacoes
-}
-```
-
-**Por quê:** o KPI do RH conta pendências que o RH precisa aprovar (solicitações, alterações, cancelamentos de período). Acordos de gozo têm seu próprio fluxo de visibilidade (banner no drawer + atividade recente + badge "Acordo pendente") e não devem inflar o KPI de pendências regulares.
+**Layer 1 e Layer 2** — ver seção "KPI Pendentes de Aprovação" acima para o código completo e o caso Madson/Flávio.
 
 ### Funções de aprovação/rejeição de gozo
 
