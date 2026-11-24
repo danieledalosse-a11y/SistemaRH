@@ -5934,6 +5934,29 @@ function abrirModalAprovar(idx, mode = 'aprovar') {
         <div>Solicitado por: <strong>${_altMeta.solicitante || '—'}</strong>${solDt}</div>
       </div>`;
     document.getElementById('btnAprovar').textContent = '✓ Aprovar alteração';
+  } else if (_tipo === 'gozo') {
+    const rx = pendItem._gozoRx;
+    document.getElementById('aprovarTitle').textContent = 'Analisar Acordo de Gozo';
+    document.getElementById('aprovarInfo').innerHTML = `
+      <div style="font-size:13px;display:flex;flex-direction:column;gap:8px;">
+        <div style="padding:10px 12px;background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:7px;color:#92400E;font-size:12px;">
+          ⏱ Acordo de Gozo aguardando aprovação do RH
+        </div>
+        <div>Período: <strong>${formatDate(rx.saida)} → ${formatDate(rx.retorno)} · ${rx.dias} dia${rx.dias !== 1 ? 's' : ''}</strong></div>
+        ${rx.obs ? `<div>Observação: <strong>${rx.obs}</strong></div>` : ''}
+        <div>Solicitado por: <strong>${colab.nome}</strong></div>
+      </div>`;
+    document.getElementById('btnAprovar').textContent = '✓ Aprovar acordo';
+    document.getElementById('btnAprovar').onclick = async function() {
+      this.disabled = true; this.textContent = 'Aprovando...';
+      await rhAprovarGozoPendente(colab.__key, reg._sbId, rx.lancIdx ?? 0, rx.saida);
+      document.getElementById('modalAprovar').classList.remove('open');
+    };
+    document.getElementById('btnRejeitar').onclick = async function() {
+      this.disabled = true; this.textContent = 'Recusando...';
+      await rhRejeitarGozoPendente(colab.__key, reg._sbId, rx.lancIdx ?? 0, rx.saida);
+      document.getElementById('modalAprovar').classList.remove('open');
+    };
   } else if (_tipo === 'cancelamento') {
     const _cancelMeta = pendItem._cancelMeta;
     document.getElementById('aprovarTitle').textContent = 'Analisar cancelamento de férias';
@@ -9526,18 +9549,6 @@ function renderRhAtividade() {
     },
     btnAcaoFn: (h, info) => {
       if (IS_RH && !IS_DIRETORIA && _rhEhRecente(h)) {
-        if ((h.acao || '').toLowerCase() === 'gozo_solicitado') {
-          const det = h.detalhe || {};
-          const _gc = colabMap.get(String(h.colaborador_id));
-          const _gr = _gc?.registros?.find(r => String(r._sbId) === String(h.ferias_id));
-          if (_gc && _gr && det.saida) {
-            const _li = det.lancIdx ?? 0;
-            return `<div style="display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
-              <button onclick="rhAprovarGozoPendente('${_gc.__key}',${h.ferias_id},${_li},'${det.saida}')" style="padding:5px 10px;border-radius:6px;border:none;background:#16A34A;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">✓ Aprovar</button>
-              <button onclick="rhRejeitarGozoPendente('${_gc.__key}',${h.ferias_id},${_li},'${det.saida}')" style="padding:5px 10px;border-radius:6px;border:1.5px solid #D92D20;background:transparent;color:#D92D20;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">✕ Recusar</button>
-            </div>`;
-          }
-        }
         if (_pendentesIds.has(String(h.ferias_id)))
           return `<button onclick="_rhAtivAbrirModal('${h.ferias_id}')" style="flex-shrink:0;padding:5px 12px;border-radius:6px;border:1.5px solid var(--blue,#1570EF);background:transparent;color:var(--blue,#1570EF);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Analisar</button>`;
       }
