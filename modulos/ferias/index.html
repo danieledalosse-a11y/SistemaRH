@@ -9274,6 +9274,23 @@ function _gestorProcessoInfo(h) {
   if (acao === 'cancelamento_recusado')
     return { estado: 'Canc. recusado',       cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
 
+  if (acao === 'gozo_solicitado') {
+    // Ativo enquanto existir realizacao pendente_gestor com mesma saida em GESTOR_PERIODOS
+    const _gozoPendente = (GESTOR_PERIODOS || []).some(p =>
+      (p._feriasRow?.realizacoes || []).some(rx =>
+        rx.status === 'pendente_gestor' && (!det.saida || rx.saida === det.saida)
+      )
+    );
+    const _inicioGozo = det.saida  || inicio;
+    const _fimGozo    = det.retorno || fim;
+    const _diasGozo   = det.dias   || dias;
+    return { estado: 'Acordo aguardando RH', cls: 'cancel-sol', ativo: _gozoPendente, inicio: _inicioGozo, fim: _fimGozo, dias: _diasGozo, motivo };
+  }
+  if (acao === 'gozo_aprovado')
+    return { estado: 'Acordo aprovado',  cls: 'aprov', ativo: ativoResolvido, inicio: det.saida || inicio, fim: det.retorno || fim, dias: det.dias || dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'gozo_aprovado' };
+  if (acao === 'gozo_recusado')
+    return { estado: 'Acordo recusado',  cls: 'recus', ativo: ativoResolvido, inicio: det.saida || inicio, fim: det.retorno || fim, dias: det.dias || dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'gozo_recusado' };
+
   if (acao === 'gestor_ciente')
     return { estado: 'Ciente', cls: 'aprov', ativo: false, inicio: det.inicio || inicio, fim: det.fim || fim, dias: det.dias || dias, motivo };
 
