@@ -357,7 +357,7 @@ Mostra toda a equipe por padrão. Ao clicar num card de alerta, filtra para aque
 
 ## Tabelas Supabase
 
-- **`colaboradores`**: lidos `id, nome, cargo, setor, gestor, empresa_registro_nome, empresa_atuacao_nome, data_demissao`
+- **`colaboradores`**: lidos `id, nome, cargo, setor, gestor, empresa_registro, empresa_atuacao, data_demissao`
 - **`ferias`**: `id, colaborador_id, matricula_colaborador, ano, pa_inicio, pa_fim, status, dias_antecipados, abono_pecuniario` + colunas de lançamento inline (`periodo*`)
 - **`param_gestor`**: `colaborador_id`, `apelido`, `nome` — vincula usuário gestor à sua equipe
 

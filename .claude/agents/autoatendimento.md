@@ -184,12 +184,12 @@ function renderHero() {
   }
   document.getElementById('heroNome').textContent = c.nome || '—';
   document.getElementById('heroSub').textContent  = [c.cargo, c.setor].filter(Boolean).join(' · ');
-  // chips: status ativo/inativo, empresa_registro_nome, empresa_atuacao_nome, matricula, data_admissao
+  // chips: status ativo/inativo, empresa_registro, empresa_atuacao, matricula, data_admissao
   document.getElementById('heroChips').innerHTML = chips;
 }
 ```
 
-Campos usados: `c.nome`, `c.cargo`, `c.setor`, `c.foto_url`, `c.data_demissao`, `c.empresa_registro_nome`, `c.empresa_atuacao_nome`, `c.matricula`, `c.data_admissao`.
+Campos usados: `c.nome`, `c.cargo`, `c.setor`, `c.foto_url`, `c.data_demissao`, `c.empresa_registro`, `c.empresa_atuacao`, `c.matricula`, `c.data_admissao`.
 
 ## renderResumo()
 

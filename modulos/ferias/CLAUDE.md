@@ -19,8 +19,7 @@ aprovação pelo RH, alertas de risco de dobra e sem agendamento. Suporta múlti
 ### Tabelas usadas
 
 #### `colaboradores`
-Campos lidos: `id, matricula, nome, cargo, setor, empresa_registro, empresa_registro_nome,
-empresa_atuacao, empresa_atuacao_nome, data_demissao`
+Campos lidos: `id, matricula, nome, cargo, setor, empresa_registro, empresa_atuacao, data_demissao`
 
 - `ativo` = `!data_demissao`
 - Matrículas podem se repetir entre empresas — identificação correta = matrícula + nome
@@ -58,8 +57,8 @@ das duas tabelas do Supabase.
   matricula: '421',
   nome: 'João Silva',
   cargo, setor,
-  empresa: 'Revest Matriz',           // empresa_registro_nome
-  empresaAtuacao: 'Revest CD',        // empresa_atuacao_nome
+  empresa: 'Revest Matriz',           // empresa_registro
+  empresaAtuacao: 'Revest CD',        // empresa_atuacao
   ativo: true,                        // !data_demissao
   registros: [ /* PA[] ordenados ASC por ano */ ]
 }

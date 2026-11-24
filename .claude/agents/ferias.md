@@ -94,7 +94,8 @@ Todos os helpers compartilhados ficam **agrupados antes de `_ganttPrepararLancs`
 ## Tabelas Supabase (módulo férias)
 
 ### `colaboradores`
-`id, matricula, nome, cargo, setor, gestor, empresa_registro, empresa_registro_nome, empresa_atuacao, empresa_atuacao_nome, data_demissao, foto_url`
+`id, matricula, nome, cargo, setor, gestor, empresa_registro, empresa_atuacao, data_demissao, foto_url`
+- `empresa_registro` e `empresa_atuacao` são as **fontes oficiais** dos nomes. Colunas `empresa_registro_nome` e `empresa_atuacao_nome` são legado — **nunca referenciar em código novo**.
 - `ativo = !data_demissao`
 - Matrículas repetem entre empresas → identificar por matricula + nome
 - `gestor` = **fonte de verdade da equipe no módulo Férias** — valor igual a `param_gestor.apelido || param_gestor.nome`. `_carregarEquipeGestor` filtra por `gestor ilike GESTOR_APELIDO`.
@@ -785,7 +786,7 @@ usuarios_perfil.colaborador_id
 
 ```js
 async function _carregarEquipeGestor(gestor_id, cfg = {}) {
-  const _colSelect = 'select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo,empresa_atuacao';
+  const _colSelect = 'select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro,foto_url,tipo_vinculo,empresa_atuacao';
   const _isCLT = c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt';
   let _baseColabs;
   if (gestor_id) {

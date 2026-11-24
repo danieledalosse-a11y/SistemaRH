@@ -4,9 +4,35 @@ description: "Estado atual do SistemaRH — módulos implementados, banco de dad
 metadata: 
   node_type: memory
   type: project
-  updated: 2026-10-16T00:00:00
+  updated: 2026-11-24T00:00:00
   originSessionId: 8172e317-1917-45cd-9732-a1d412d45df8
-  modified: 2026-11-03T19:35:56.461Z
+  modified: 2026-11-24T00:00:00
+---
+
+## Padronização de colunas `empresa` — CONCLUÍDA (2026-11-24)
+
+### Contexto
+A tabela `colaboradores` tinha 6 colunas para empresas: `empresa_registro_id`, `empresa_atuacao_id` (FKs), `empresa_registro`, `empresa_atuacao` (fontes oficiais de texto) e `empresa_registro_nome`, `empresa_atuacao_nome` (colunas ad hoc legadas criadas fora do fluxo de migrations).
+
+### O que foi feito
+**Phase 1 (código):** todos os módulos padronizados para usar `empresa_registro` e `empresa_atuacao` como únicas fontes:
+- D&P: `loadColaboradores`, `dpExportarResultados` e `dpGerarPreviewParticipantes`
+- Férias: query principal e `_carregarEquipeGestor`
+- Autoatendimento: chips do hero
+- Ficha do Colaborador: `ficha-render.js` (hero, infoRow, timeline) e `src/app.js`
+
+**Phase 2 (banco) — migration 148 (2026-11-24):**
+1. Corrigiu 2 registros com `empresa_atuacao` NULL: id=1801 → `'Paranavaí'`, id=1669 → `'Matriz'`
+2. Executou DROP das duas colunas legadas dentro de transação com validações pré e pós
+3. Backup dos 663 registros que tinham dados nas colunas legadas salvo em `RH - Documentos/backup_empresa_nome_colunas_2026-11-24.csv`
+
+### Regra permanente
+**Usar somente `empresa_registro` e `empresa_atuacao`.** As colunas `empresa_registro_nome` e `empresa_atuacao_nome` foram removidas do banco em 2026-11-24. Nunca recriar.
+
+### Notas de retrocompatibilidade (D&P)
+- Snapshots antigos em `dp_ciclo_participantes.snapshot` JSONB ainda podem ter a chave `empresa_registro_nome` — isso é inofensivo (JSON, não coluna do banco)
+- `dpExportarResultados` tem fallback `snap.empresa_registro_nome || snap.empresa_registro` para esses snapshots históricos — manter
+
 ---
 
 ## D&P — Prévia do Construtor: modo tela cheia fiel ao formulário real (commits 1c67a02 / 9c60fcf / 388640f, 04/11/2026)
@@ -334,10 +360,10 @@ Feature que rastreia histórico de desempenho por colaborador, gravando em `dev_
 
 **Regras:**
 - Participantes primeiro; não-participantes no final
-- **Empresa:** `_colaboradores.find(c => c.id === p.colaborador_id)?.empresa_registro_nome` (não snapshot — campo não existia nos snapshots antigos)
+- **Empresa:** busca `empresa_registro` via `empresaMap` (query por `colaborador_id` no momento da exportação), com fallback para `snap.empresa_registro_nome || snap.empresa_registro` para snapshots históricos cujo JSON ainda tem essa chave. Coluna `empresa_registro_nome` **removida do banco** na migration 148 (2026-11-24) — nunca selecionar
 - **Valor:** `valor_bonus` de `_dpResultadosBonus` formatado como `R$ X.XXX,XX`
 - **Lookup avaliação:** `a.participante_id === p.id` (não `colaborador_id` — campo inexistente em `dp_avaliacoes`)
-- `loadColaboradores` e query de retroativos agora incluem `empresa_registro_nome` no select
+- `loadColaboradores` e query de retroativos incluem `empresa_registro` (fonte oficial) no select
 - `<colgroup>` com larguras fixas: Nome 220pt, Cargo 180pt, Empresa 160pt, Status 120pt, Valor 90pt, Matrícula 70pt
 - Status badge colorido inline via `<span>` com fundo/cor por valor
 

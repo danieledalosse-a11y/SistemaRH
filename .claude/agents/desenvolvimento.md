@@ -1006,13 +1006,13 @@ let _gdpCiclosCarregados    = []    // ciclos enriquecidos do gestorDpLoadCiclos
 |---|---|
 | `dpExportarResultados()` | Gera .xls (HTML-as-XLS com mso-conditionals); participantes antes dos não-participantes; colunas: Empresa, Matrícula, Nome, Cargo, Valor, Status; badges coloridos por status; `<colgroup>` com larguras fixas (Nome 220pt, Cargo 180pt, Empresa 160pt, Status 120pt, Valor 90pt, Matrícula 70pt) |
 
-**Regras de `dpExportarResultados()` (commits 92762d5 / e885120 / eff1736):**
-- **Empresa:** `_colaboradores.find(c => c.id === p.colaborador_id)?.empresa_registro_nome` com fallback para `snap.empresa_registro_nome`. Não usa snapshot de ciclos antigos (campo adicionado ao SELECT só em 2026-10-27).
+**Regras de `dpExportarResultados()` (commits 92762d5 / e885120 / eff1736 / a84cf1e / e2bd234):**
+- **Empresa:** busca `empresa_registro` do banco na hora da exportação via `empresaMap` (query por `colaborador_id`), com fallback para `snap.empresa_registro_nome || snap.empresa_registro`. O fallback cobre snapshots históricos cujo JSON ainda contém a chave `empresa_registro_nome` — a **coluna** foi removida do banco na migration 148 (2026-11-24), mas a chave no JSONB é inofensiva.
 - **Valor:** `_dpResultadosBonus` → `valor_bonus`; formata como `R$ X.XXX,XX`; `—` quando sem bônus calculado.
 - **Status:** badge colorido inline: verde (Concluída), azul (Publicada), âmbar (Em andamento), vermelho (Não iniciada), roxo (Respondida), cinza (Não participou).
 - **Lookup de avaliação:** `_dpAvaliacoes.find(a => a.participante_id === p.id)` — não por `colaborador_id` (campo inexistente em `dp_avaliacoes`).
-- **`loadColaboradores`** e query de retroativos agora incluem `empresa_registro_nome` no `select=`.
-- **Snapshot** em `dpAdicionarColaboradores` mapeado com `empresa_registro_nome: c.empresa_registro_nome || ''`.
+- **`loadColaboradores`** e query de retroativos incluem `empresa_registro` no `select=`. Nunca selecionar `empresa_registro_nome` — coluna removida do banco.
+- **Snapshot** em `dpAdicionarColaboradores` mapeado com `empresa_registro_nome: c.empresa_registro || ''` (chave no JSON mantida para retrocompatibilidade com snapshots antigos — não é a coluna do banco).
 
 ## Melhorias entregues (2026-10-27) — fluxo Ajustar e Resultados
 
