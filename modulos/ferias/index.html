@@ -5237,9 +5237,11 @@ function renderListaAnual() {
         return reg.paInicio && reg.paFim && HOJE >= reg.paInicio && HOJE <= reg.paFim;
       });
     } else if (_statusFiltro === 'ok') {
-      // Pendentes de aprovação RH: status Pendente, Cancelamento_Solicitado ou Alteracao_Solicitada
+      // Pendentes de aprovação RH: status Pendente, Cancelamento_Solicitado, Alteracao_Solicitada
+      // ou PA com realizacao pendente_gestor (Acordo de Gozo aguardando RH)
       pasDoAno = c.registros.filter(reg =>
-        ['Pendente', 'Cancelamento_Solicitado', 'Alteracao_Solicitada'].includes(reg.status)
+        ['Pendente', 'Cancelamento_Solicitado', 'Alteracao_Solicitada'].includes(reg.status) ||
+        (reg.realizacoes || []).some(rx => rx.status === 'pendente_gestor')
       );
     } else if (_statusFiltro === 'agendado') {
       // Agendados: PAs com ao menos um lançamento aprovado com fim >= hoje
