@@ -79,7 +79,7 @@ function renderHero() {
   const locItems = [];
   if (c.setor)
     locItems.push(`<span class="hero-loc-item">${ICO_ORG}<span>${c.setor}</span></span>`);
-  const unidade = c.empresa_atuacao_nome || c.empresa_atuacao;
+  const unidade = c.empresa_atuacao;
   if (unidade)
     locItems.push(`<span class="hero-loc-item">${ICO_PIN}<span>${unidade}</span></span>`);
   document.getElementById('heroLoc').innerHTML =
@@ -269,8 +269,8 @@ function renderResumo() {
       ${infoRow('Matrícula', c.matricula)}
       ${infoRow('Cargo', c.cargo)}
       ${infoRow('Setor', c.setor)}
-      ${infoRow('Empresa de registro', c.empresa_registro_nome || c.empresa_registro)}
-      ${infoRow('Unidade de atuação', c.empresa_atuacao_nome || c.empresa_atuacao)}
+      ${infoRow('Empresa de registro', c.empresa_registro)}
+      ${infoRow('Unidade de atuação', c.empresa_atuacao)}
       ${infoRow('Tipo de vínculo', vinculoLabel)}
       ${infoRow('Gestor', c.gestor)}
       ${infoRow('Admissão', fd(c.data_admissao))}
@@ -321,7 +321,7 @@ function renderCarreira() {
       data: _colab.data_admissao,
       tipo: 'admissao',
       titulo: `Admitido como ${cargoAdmissao}`,
-      descricao: [_colab.empresa_registro_nome, _colab.setor].filter(Boolean).join(' · '),
+      descricao: [_colab.empresa_registro, _colab.setor].filter(Boolean).join(' · '),
     });
   }
 
@@ -627,7 +627,7 @@ function renderHistorico() {
       data: _colab.data_admissao,
       tipo: 'admissao',
       titulo: `Admitido como ${_cargoAdm}`,
-      descricao: [_colab.empresa_registro_nome, _colab.setor].filter(Boolean).join(' · '),
+      descricao: [_colab.empresa_registro, _colab.setor].filter(Boolean).join(' · '),
     });
   }
 

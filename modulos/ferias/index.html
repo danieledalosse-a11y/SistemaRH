@@ -2703,8 +2703,8 @@ function supabaseParaModelo(feriasRows, colaborRows) {
         cargo,
         setor:         normSetor(colabDados.setor || ''),
         unidade:       '',
-        empresa:       colabDados.empresa_registro_nome || colabDados.empresa_registro || '',
-        empresaAtuacao:colabDados.empresa_atuacao_nome  || colabDados.empresa_atuacao  || '',
+        empresa:       colabDados.empresa_registro || '',
+        empresaAtuacao:colabDados.empresa_atuacao  || '',
         ativo:         !colabDados.data_demissao,
         gestor:        colabDados.gestor || '',
         fotoUrl:       colabDados.foto_url || null,
@@ -2728,7 +2728,7 @@ async function carregarDoSupabase() {
   try {
     const [feriasRows, colaborRows, histRows, configRows] = await Promise.all([
       sbGet('ferias', 'select=*&order=matricula_colaborador,ano'),
-      sbGet('colaboradores', 'select=id,matricula,nome,cargo,setor,gestor,empresa_registro,empresa_registro_nome,empresa_atuacao,empresa_atuacao_nome,data_demissao,foto_url,tipo_vinculo'),
+      sbGet('colaboradores', 'select=id,matricula,nome,cargo,setor,gestor,empresa_registro,empresa_atuacao,data_demissao,foto_url,tipo_vinculo'),
       sbGet('ferias_historico', 'select=*&order=criado_em.desc&limit=500').catch(() => []),
       sbGet('param_ferias_config', 'select=dias_resposta_visivel&limit=1').catch(() => []),
     ]);
@@ -8835,7 +8835,7 @@ function processGestorFerias(rows) {
 
 async function _carregarEquipeGestor(gestor_id, cfg = {}) {
   if (!cfg.skipGestorUI) setGestorMsg('Carregando equipe...');
-  const _colSelect = 'select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro_nome,foto_url,tipo_vinculo,empresa_atuacao';
+  const _colSelect = 'select=id,nome,cargo,setor,data_admissao,gestor,empresa_registro,foto_url,tipo_vinculo,empresa_atuacao';
   const _isCLT = c => (c.tipo_vinculo || 'clt').toLowerCase() === 'clt';
   // normalização idêntica aos filtros do módulo: sem acento, lowercase
   const _norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();

@@ -2262,7 +2262,7 @@ function isEmExperienciaNoContexto(snap, cicloDataFim) {
 }
 
 async function loadColaboradores() {
-  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro_nome,foto_url,gestor,ativo,em_experiencia,data_fim_experiencia,data_admissao,data_demissao&ativo=eq.true&order=nome.asc');
+  _colaboradores = await sbGet('/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro,foto_url,gestor,ativo,em_experiencia,data_fim_experiencia,data_admissao,data_demissao&ativo=eq.true&order=nome.asc');
   _colaboradores = _colaboradores || [];
 }
 
@@ -5237,7 +5237,7 @@ async function dpAbrirDrawerCiclo(cicloId, abaInicial) {
   // Retroativos (ciclos antigos) e motivos são independentes dos participantes — paralelo
   if (fimCiclo && fimCiclo < hoje) {
     loadsIniciais.push(
-      sbGet(`/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro_nome,foto_url,gestor,ativo,em_experiencia,data_fim_experiencia,data_admissao,data_demissao&ativo=eq.false&data_demissao=gte.${_dpCicloAtual.data_inicio}&order=nome.asc`)
+      sbGet(`/rest/v1/colaboradores?select=id,matricula,nome,cargo,setor,empresa_atuacao,empresa_registro,foto_url,gestor,ativo,em_experiencia,data_fim_experiencia,data_admissao,data_demissao&ativo=eq.false&data_demissao=gte.${_dpCicloAtual.data_inicio}&order=nome.asc`)
         .then(inicos => {
           const idsExistentes = new Set(_colaboradores.map(c => c.id));
           (inicos || []).forEach(c => { if (!idsExistentes.has(c.id)) _colaboradores.push(c); });
@@ -5426,7 +5426,7 @@ async function dpAdicionarColaboradores(colabs) {
       nome:          c.nome          || '',
       matricula:     c.matricula     || '',
       empresa:             c.empresa_atuacao || '',
-      empresa_registro_nome: c.empresa_registro_nome || '',
+      empresa_registro_nome: c.empresa_registro || '',
       setor:         c.setor         || '',
       cargo:         c.cargo         || '',
       unidade:       c.unidade       || '',
@@ -7991,13 +7991,13 @@ async function dpExportarResultados() {
   const nomeCiclo = _dpCiclos.find(c => c.id === _dpCicloAtual?.id)?.nome || 'Ciclo';
   const dataExp = new Date().toLocaleDateString('pt-BR');
 
-  // Busca empresa_registro_nome atualizado para todos os participantes do ciclo em uma única query.
+  // Busca empresa_registro atualizado para todos os participantes do ciclo em uma única query.
   // Sem filtro ativo para cobrir colaboradores desativados após inclusão no ciclo.
   const colabIds = [...new Set(_dpParticipantes.map(p => p.colaborador_id).filter(Boolean))];
   const empresaMap = new Map();
   if (colabIds.length) {
-    const rows = await sbGet(`/rest/v1/colaboradores?select=id,empresa_registro_nome,empresa_registro&id=in.(${colabIds.join(',')})`) || [];
-    rows.forEach(r => { const v = r.empresa_registro_nome || r.empresa_registro || null; if (v) empresaMap.set(r.id, v); });
+    const rows = await sbGet(`/rest/v1/colaboradores?select=id,empresa_registro&id=in.(${colabIds.join(',')})`) || [];
+    rows.forEach(r => { if (r.empresa_registro) empresaMap.set(r.id, r.empresa_registro); });
   }
 
   const participantes = [];
@@ -8005,7 +8005,7 @@ async function dpExportarResultados() {
 
   for (const p of _dpParticipantes) {
     const snap = p.snapshot || {};
-    const empresaNome = empresaMap.get(p.colaborador_id) || snap.empresa_registro_nome || '—';
+    const empresaNome = empresaMap.get(p.colaborador_id) || snap.empresa_registro_nome || snap.empresa_registro || '—';
     if (p.nao_participa) {
       naoParticipantes.push({
         empresa: empresaNome,
@@ -10593,7 +10593,7 @@ function trGerarRelatorio(matricula) {
       <div>
         <div class="rel-nome">${colab.nome || matricula}</div>
         <div class="rel-sub">${[colab.cargo, colab.setor].filter(Boolean).join(' · ') || '—'}</div>
-        ${colab.empresa_registro_nome ? `<div class="rel-sub">${colab.empresa_registro_nome}</div>` : ''}
+        ${colab.empresa_registro ? `<div class="rel-sub">${colab.empresa_registro}</div>` : ''}
         ${colab.data_admissao ? `<div class="rel-sub">Admissão: ${formatDate(colab.data_admissao)}${tempoEmpresa ? ` · ${tempoEmpresa}` : ''}</div>` : ''}
         <div class="rel-sub" style="margin-top:2px">Matrícula: ${matricula}</div>
       </div>
