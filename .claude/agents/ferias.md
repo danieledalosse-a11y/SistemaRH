@@ -609,10 +609,18 @@ function gestorPeriodoAtivo(colaborador_id) {
 ```js
 // Branch 1: lancsPa vazio (lançamento sob PA diferente do paEfetivo)
 else if (!lancsPa.length) {
+  // Fix 323c4c7 (nov/2026): verificar Alteracao_Solicitada em GESTOR_PERIODOS antes de cair em "Sem agendamento"
+  const _altPend = GESTOR_PERIODOS.some(p =>
+    String(p.colaborador_id) === String(c.id) &&
+    (p._feriasRow?.status || '').toLowerCase() === 'alteracao_solicitada'
+  );
   const _anyCancel = lancs.some(l => (l.status||'').toLowerCase() === 'cancelamento_solicitado');
-  badge = _anyCancel
-    ? `<span ...>Canc. pendente</span>`
-    : `<span ...>Sem agendamento</span>`;
+  badge = _altPend
+    ? `<span style="background:#EFF6FF;color:#1849A9;border:1px solid #BFDBFE;">Alt. pendente</span>`
+    : _anyCancel
+      ? `<span ...>Canc. pendente</span>`
+      : `<span ...>Sem agendamento</span>`;
+  // borderClr: '#1849A9' se _altPend, '#F59E0B' caso contrário
 }
 
 // Branch 2: lancsPa com entradas (caso normal)
@@ -628,6 +636,9 @@ const temCancelPend = lancsPA.some(l => (l.status||'').toLowerCase() === 'cancel
 ```
 
 **Regra:** `lancsPa` pode estar vazio mesmo que o cancelamento exista — dedup em `processGestorFerias` pode eleger como `paEfetivo` um PA diferente do PA que contém o lançamento de cancelamento. Sempre checar `lancs` no branch `!lancsPa.length`.
+
+**Fix 323c4c7 — badge "Alt. pendente" no bloco `!lancsPa.length` (nov/2026):**
+Antes do fix, quando `lancsPa` estava vazio, o bloco usava só `lancs` (lançamentos individuais) e caia direto em "Sem agendamento" para `Alteracao_Solicitada`, pois o status fica em `ferias.status` (`_feriasRow.status`) e não nos lançamentos individuais. Fix adicionou check em `GESTOR_PERIODOS._feriasRow.status === 'alteracao_solicitada'` **antes** do fallback — a mesma fonte que `_computeGestorMetricas` usa para o KPI. Badge azul (#EFF6FF/#1849A9), `borderClr = '#1849A9'`.
 
 ### Anti-padrão crítico
 
@@ -1755,6 +1766,23 @@ function _rhEhRecente(h) {
     FERIAS_HISTORICO.some(x => x.ferias_id === h.ferias_id && x.acao === r)
   );
 }
+```
+
+**Fix be9835c — invalidação por ordem cronológica (nov/2026):**
+
+Antes do fix, qualquer resposta (`aprovado`/`recusado`/`alteracao_aprovada`/etc.) para o mesmo `ferias_id` invalidava a solicitação — sem verificar ordem de tempo. Isso ocultava uma 2ª solicitação quando a 1ª havia sido recusada anteriormente.
+
+Após o fix, **uma resposta só invalida a solicitação se tiver `criado_em` posterior ao da própria solicitação**. Se qualquer um dos dois não tem `criado_em`, a ordem não pode ser confirmada e a solicitação permanece visível.
+
+```js
+// Versão corrigida (be9835c):
+return !respostas[h.acao].some(r =>
+  FERIAS_HISTORICO.some(x =>
+    x.ferias_id === h.ferias_id &&
+    (x.acao || '').toLowerCase() === r &&
+    h.criado_em && x.criado_em && x.criado_em > h.criado_em  // ← timestamp check
+  )
+);
 ```
 
 **Problema conhecido — entrada órfã em `ferias_historico` (out/2026):**
@@ -4525,12 +4553,41 @@ if (saldo <= 0) { ... return "Concluído" ou "Agendado" }
 
 #### `situBadge` no drawer
 
+Prioridade completa (fix 423d961, nov/2026):
+
 ```js
+// Prioridade 1: status do registro de férias (Alteracao/Cancelamento pendentes)
+else if (r.status === 'Alteracao_Solicitada')    situBadge = `<span class="badge badge-azul">Alt. pendente</span>`;
+else if (r.status === 'Cancelamento_Solicitado') situBadge = `<span class="badge badge-amber">Canc. pendente</span>`;
+// Prioridade 2: realizacoes com gozo pendente
 else if ((r.realizacoes || []).some(rx => rx.status === 'pendente_gestor'))
   situBadge = `<span class="badge badge-amber">Acordo pendente</span>`;
+// Prioridade 3: saldo
 else if (saldo <= 0)
   situBadge = `<span class="badge badge-verde">Concluído</span>`;
 ```
+
+**Regra:** `Alteracao_Solicitada`/`Cancelamento_Solicitado` têm prioridade sobre verificações de saldo. Sem esse fix, um PA com saldo zero mas com alteração pendente mostrava "Concluído" no lugar de "Alt. pendente".
+
+#### Bloco `altPendHtml` no drawer (commits 423d961 + ebc5107, nov/2026)
+
+Quando `r.status === 'Alteracao_Solicitada'` ou `r.status === 'Cancelamento_Solicitado'`, o drawer exibe um bloco visual **antes** da timeline normal.
+
+**Alteração solicitada** — borda azul (`#2563EB`):
+- Título "Alteração solicitada pelo gestor"
+- Datas propostas + dias (se `_alteracaoMeta` existir; fix ebc5107 — não depende mais de `_alteracaoMeta` para renderizar)
+- Solicitante + data (se disponíveis em `_alteracaoMeta`)
+- Botão "Analisar alteração" (apenas `IS_RH && podeAcao('ferias','alterar')`)
+
+**Cancelamento solicitado** — borda âmbar (`#F79009`):
+- Título "Cancelamento solicitado pelo gestor"
+- Botão "Analisar cancelamento" (apenas `IS_RH && podeAcao('ferias','alterar')`)
+
+Botão usa: `const _i = getPendentes().findIndex(p => String(p.reg._sbId) === '${r._sbId}'); if (_i >= 0) abrirModalAprovar(_i);`
+
+**Fix ebc5107** — condição mudou de `if (r.status === 'Alteracao_Solicitada' && r._alteracaoMeta)` para `if (r.status === 'Alteracao_Solicitada')`. O bloco exibe mesmo sem metadados da alteração; os dados internos usam optional chaining (`meta?.novo_inicio`, etc.).
+
+Gestor vê o bloco mas **sem** os botões de ação.
 
 ### KPI "Aguard. aprovação" — acordos de gozo entram (Nov/2026)
 
