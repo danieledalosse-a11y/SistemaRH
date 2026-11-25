@@ -79,6 +79,29 @@ _ganttRenderContent(content, dados, diasNoMes, mesInicio, mesFim, mes, ano);
 function _renderAgendCell(lRef, alertaHtml) { ... }
 ```
 
+### Regra obrigatória — exibição de datas de período (commits 5b3aab8/fb46bc2, 25/11/2026)
+
+**Nunca usar `l.fim` ou `lRef.fim` diretamente em exibição de período.** Sempre calcular o último dia de férias na hora da renderização:
+
+```js
+// CORRETO — último dia calculado a partir de inicio + dias
+formatDate(addDays(l.inicio, l.dias - 1))
+
+// ERRADO — fim armazenado pode ser a data de retorno em registros antigos
+formatDate(l.fim)
+```
+
+**Pontos afetados (todos já corrigidos):**
+
+| Linha | Contexto |
+|---|---|
+| ~3377 | `drawer-tl-dates` — aba Períodos, drawer RH |
+| ~3437 | `pr-tl-dates` — aba Períodos, drawer Gestor |
+| ~3793 | `gsol-rh-dates` — lista principal RH, item de lançamento |
+| ~8303 | `_renderAgendCell` — coluna Agendamentos, listas RH e Gestor |
+
+**Por quê:** `fim` é calculado corretamente como `addDays(ini, dias-1)` em registros novos, mas registros antigos (pré-migration 073) podiam armazenar o valor como data de retorno. Recalcular na exibição evita ambiguidade e mantém consistência independente da fonte do dado.
+
 ### Onde adicionar novos helpers
 
 Todos os helpers compartilhados ficam **agrupados antes de `_ganttPrepararLancs`**, que é o marco divisório entre a lógica específica de visão e a camada de renderização compartilhada.
