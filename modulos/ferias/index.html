@@ -9224,9 +9224,16 @@ async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
   // Copia datas do registro original para o detalhe do ciente
   const original = FERIAS_HISTORICO.find(h => String(h.ferias_id) === String(feriasId) && (h.acao || '').toLowerCase() === (acaoRef || '').toLowerCase());
   const det = { acao_referencia: acaoRef };
-  if (original?.detalhe?.inicio) det.inicio = original.detalhe.inicio;
-  if (original?.detalhe?.fim)    det.fim    = original.detalhe.fim;
-  if (original?.detalhe?.dias)   det.dias   = original.detalhe.dias;
+  const _acaoLower = (acaoRef || '').toLowerCase();
+  if (_acaoLower === 'gozo_aprovado' || _acaoLower === 'gozo_recusado') {
+    if (original?.detalhe?.saida)   det.saida   = original.detalhe.saida;
+    if (original?.detalhe?.retorno) det.retorno = original.detalhe.retorno;
+    if (original?.detalhe?.dias)    det.dias    = original.detalhe.dias;
+  } else {
+    if (original?.detalhe?.inicio) det.inicio = original.detalhe.inicio;
+    if (original?.detalhe?.fim)    det.fim    = original.detalhe.fim;
+    if (original?.detalhe?.dias)   det.dias   = original.detalhe.dias;
+  }
   try {
     await _logAtiv(feriasId, colabId, 'gestor_ciente', GESTOR_NOME_USUARIO, det);
   } catch(e) {
@@ -9236,6 +9243,7 @@ async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
     return;
   }
   try { renderGestorAtividade(); } catch(e) { console.error('[renderGestorAtividade pós-ciente]', e); }
+  toast('✓ Ciente registrado.', 'sucesso');
 }
 
 // Gestor: retorna { estado, cls, ativo, inicio, fim, dias, motivo } para o processo
@@ -9494,9 +9502,17 @@ function renderGestorAtividade() {
       const _DESFECHOS = new Set(['aprovado','alteracao_aprovada','rejeitado','alteracao_recusada','cancelamento_aprovado','cancelamento_recusado']);
       const ehDesfecho = _DESFECHOS.has((h.acao || '').toLowerCase()) || !!info._ehDesfecho;
       const _acaoParaCiente = info._acaoEfetiva || h.acao || '';
-      const btnCiente = ehDesfecho
-        ? `<button onclick="gestorMarcarCiente(${h.ferias_id},${h.colaborador_id},'${_acaoParaCiente}',this)" style="margin-left:6px;padding:4px 10px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text-sec);cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">Ciente</button>`
-        : '';
+      let btnCiente = '';
+      if (ehDesfecho) {
+        const jaCiente = (FERIAS_HISTORICO || []).some(x =>
+          String(x.ferias_id) === String(h.ferias_id) &&
+          (x.acao || '').toLowerCase() === 'gestor_ciente' &&
+          (x.detalhe?.acao_referencia || '').toLowerCase() === _acaoParaCiente.toLowerCase()
+        );
+        btnCiente = jaCiente
+          ? `<button disabled style="margin-left:6px;padding:4px 10px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text-ter);cursor:default;white-space:nowrap;font-family:inherit;flex-shrink:0;">✓ Ciente</button>`
+          : `<button onclick="gestorMarcarCiente(${h.ferias_id},${h.colaborador_id},'${_acaoParaCiente}',this)" style="margin-left:6px;padding:4px 10px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text-sec);cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">Ciente</button>`;
+      }
       return `<div style="display:flex;align-items:center;flex-shrink:0;"><span class="gstor-ativ-chip ${info.cls}">${info.estado}</span>${btnCiente}</div>`;
     },
     mostrarUsuario: false,
