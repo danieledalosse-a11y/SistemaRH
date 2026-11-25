@@ -495,6 +495,14 @@
               <option value="">Todas as lotações</option>
             </select>
           </div>
+          <div class="lot-filter-row">
+            <label class="lot-filter-label">Tipo de vínculo</label>
+            <div style="display:flex;gap:12px;padding:4px 0;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="clt" checked> CLT</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="promotora" checked> Promotora</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;"><input type="checkbox" class="f-vinculo" value="pro_labore" checked> Pró-labore</label>
+            </div>
+          </div>
 
           <!-- Bloco 2: Agrupamentos -->
           <div id="f-lot-quebras-section">
@@ -2234,12 +2242,14 @@ function _lotGrupoLabel(key, valor) {
 }
 
 function _dadosLotacao() {
-  const situacao = document.getElementById('f-lot-situacao')?.value || '';
-  const empresa  = (document.getElementById('f-lot-empresa')?.value || '').trim();
-  const setor    = (document.getElementById('f-lot-setor')?.value || '').trim();
-  const lotacao  = (document.getElementById('f-lot-lotacao')?.value || '').trim();
+  const situacao  = document.getElementById('f-lot-situacao')?.value || '';
+  const empresa   = (document.getElementById('f-lot-empresa')?.value || '').trim();
+  const setor     = (document.getElementById('f-lot-setor')?.value || '').trim();
+  const lotacao   = (document.getElementById('f-lot-lotacao')?.value || '').trim();
+  const vincSel   = vinculos(); // reutiliza função já existente — lê .f-vinculo:checked no modal
 
   let lista = COLABORADORES.filter(c => {
+    if (!vincSel.includes(c.tipoVinculo)) return false;
     if (situacao && c.situacao !== situacao) return false;
     if (empresa && stripNum(c.empresaAtuacao) !== empresa) return false;
     if (setor && (stripNum(c.setor) || c.setor) !== setor) return false;
@@ -2254,6 +2264,7 @@ function _dadosLotacao() {
   if (empresa) chips.push('Empresa: ' + empresa);
   if (setor) chips.push('Setor: ' + setor);
   if (lotacao) chips.push('Lotação: ' + lotacao);
+  if (vincSel.length < 3) chips.push('Vínculo: ' + vincSel.join(', '));
   if (!chips.length) chips.push('Todos');
 
   return { lista, chips, total: lista.length, dataHora: agora() };
@@ -2392,9 +2403,20 @@ function _lotXlsHeader(titulo, chips, total, dataHora) {
 <tr><td colspan="20" style="border:none;padding:3px;"></td></tr>`;
 }
 
+// Cor de fundo da linha por tipo de vínculo (Excel)
+function _lotXlsRowBg(c) {
+  if (c.tipoVinculo === 'promotora')  return '#FFFBEB'; // âmbar creme
+  if (c.tipoVinculo === 'pro_labore') return '#F0FDF4'; // verde menta
+  return '#fff'; // CLT — sem destaque
+}
+
 function _lotXlsColsHtml(colunas) {
   const F = "font-family:'Calibri',sans-serif;";
-  return colunas.map(col => `<th style="background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:7px 10px;border:1px solid #DDE5F0;">${col.label}</th>`).join('');
+  return colunas.map((col, ci) => {
+    // coluna de nome recebe largura explícita para o Excel respeitar
+    const w = col.key === 'nome' ? 'mso-width-source:userset;width:220pt;' : '';
+    return `<th style="${w}background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:7px 10px;border:none;border-bottom:2px solid #2C3E6B;">${col.label}</th>`;
+  }).join('');
 }
 
 function _lotXlsGruposRows(grupos, colunas, nivel, F) {
@@ -2405,16 +2427,17 @@ function _lotXlsGruposRows(grupos, colunas, nivel, F) {
   const fg = colorLvl[Math.min(nivel, colorLvl.length-1)];
   let rows = '';
   grupos.forEach(g => {
-    rows += `<tr><td colspan="${colunas.length}" style="background:${bg};color:${fg};${F}font-size:10pt;font-weight:bold;padding:7px 10px;border:1px solid ${nivel===0?'#1a2d52':'#DDE5F0'};">${g.label} (${g.total})</td></tr>`;
+    rows += `<tr><td colspan="${colunas.length}" style="background:${bg};color:${fg};${F}font-size:10pt;font-weight:bold;padding:7px 10px;border:none;border-bottom:1px solid ${nivel===0?'#1a2d52':'#DDE5F0'};">${g.label} (${g.total})</td></tr>`;
     if (Array.isArray(g.filhos) && g.filhos.length && g.filhos[0].chave) {
       rows += _lotXlsGruposRows(g.filhos, colunas, nivel+1, F);
     } else {
-      (Array.isArray(g.filhos) ? g.filhos : []).forEach((c, i) => {
-        const bgr = i%2===0 ? '#fff' : '#F5F8FD';
+      (Array.isArray(g.filhos) ? g.filhos : []).forEach((c) => {
+        const bgr = _lotXlsRowBg(c);
         rows += `<tr>${colunas.map(col => {
           const v = _lotFmtValor(c, col.key);
           const isNome = col.key === 'nome';
-          return `<td style="background:${bgr};color:${isNome?'#1E2740':'#5E718A'};${F}${isNome?'font-weight:bold;':''}font-size:10pt;padding:6px 10px;border:1px solid #ECF0F8;">${v}</td>`;
+          const w = col.key === 'nome' ? 'mso-width-source:userset;width:220pt;' : '';
+          return `<td style="${w}background:${bgr};color:${isNome?'#1E2740':'#5E718A'};${F}${isNome?'font-weight:bold;':''}font-size:10pt;padding:6px 10px;border:none;border-bottom:1px solid #F0F4FB;">${v}</td>`;
         }).join('')}</tr>`;
       });
     }
@@ -2434,18 +2457,19 @@ function gerarLotacaoExcel() {
     const grupos = _agruparPorChaves(lista, xlsKeys);
     rows = _lotXlsGruposRows(grupos, colunas, 0, F);
   } else {
-    lista.forEach((c, i) => {
-      const bgr = i%2===0 ? '#fff' : '#F5F8FD';
+    lista.forEach((c) => {
+      const bgr = _lotXlsRowBg(c);
       rows += `<tr>${colunas.map(col => {
         const v = _lotFmtValor(c, col.key);
         const isNome = col.key === 'nome';
-        return `<td style="background:${bgr};color:${isNome?'#1E2740':'#5E718A'};${F}${isNome?'font-weight:bold;':''}font-size:10pt;padding:6px 10px;border:1px solid #ECF0F8;">${v}</td>`;
+        const w = col.key === 'nome' ? 'mso-width-source:userset;width:220pt;' : '';
+        return `<td style="${w}background:${bgr};color:${isNome?'#1E2740':'#5E718A'};${F}${isNome?'font-weight:bold;':''}font-size:10pt;padding:6px 10px;border:none;border-bottom:1px solid #F0F4FB;">${v}</td>`;
       }).join('')}</tr>`;
     });
   }
-  rows += `<tr><td colspan="${colunas.length}" style="background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:7px 10px;border:1px solid #DDE5F0;text-align:right;">Total: ${total} colaborador${total!==1?'es':''}</td></tr>`;
+  rows += `<tr><td colspan="${colunas.length}" style="background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:7px 10px;border:none;border-top:2px solid #2C3E6B;text-align:right;">Total: ${total} colaborador${total!==1?'es':''}</td></tr>`;
   const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Por Lotacao</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Por Lotacao</x:Name><x:WorksheetOptions><x:DisplayGridlines>False</x:DisplayGridlines></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
 <body><table>
 ${_lotXlsHeader('Relatório por Lotação', chips, total, dataHora)}
 <tr>${_lotXlsColsHtml(colunas)}</tr>
