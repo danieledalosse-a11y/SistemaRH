@@ -44,7 +44,23 @@ Campos principais usados no módulo:
 | `aviso_previo` | text | Tipo de aviso (Trabalhado / Indenizado) — de `param_aviso_previo` |
 | `data_aviso` | date | Data em que o aviso prévio foi comunicado |
 | `venc_aviso` | date | Vencimento do aviso — calculado automaticamente |
+| `lotacao` | text | Local de lotação — de `param_lotacao`; preenchido via UPDATE em nov/2026 |
 | `causa_rescisao` | text | **Legado** — não exibido nem editado; mantido no banco para histórico |
+
+## Campo Lotação (nov/2026)
+
+Campo `lotacao` (text) adicionado ao drawer, aba Geral, **abaixo de Empresa (atuação)** e acima de Tipo de Vínculo.
+
+- Alimentado por `param_lotacao` (ativo, ordenado por `ordem, descricao`).
+- Campo opcional — não bloqueia save quando vazio.
+- Carregado em `carregarLotacaoParam()` → `popularSelectLotacao(valorAtual?)`, chamado junto com as demais cargas iniciais.
+- Mapeado em `mapRow`, `abrirFicha`, `syncColabState`, payload de novo colaborador e payload de atualização.
+- Incluído no array de reset ao iniciar novo cadastro (`df-lotacao`).
+- **Independente de Empresa (atuação)** — pode ter valor diferente; ambos os campos coexistem sem relação de dependência.
+
+**Seed e carga inicial (migration 149 + UPDATE pontual):**
+1. Migration criou `param_lotacao` com seed a partir de `colaboradores.empresa_atuacao` (casing original, dedup por `LOWER/TRIM`).
+2. UPDATE preencheu `colaboradores.lotacao` via JOIN com `param_lotacao` (`LOWER(pl.descricao) = LOWER(TRIM(empresa_atuacao))`), somente onde `lotacao IS NULL`. Colaboradores sem `empresa_atuacao` ficaram com `lotacao` nulo.
 
 ## Fluxo de desligamento (Aba Geral — seção Desligamento)
 

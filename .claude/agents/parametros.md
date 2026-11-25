@@ -151,6 +151,33 @@ supabase login
 supabase functions deploy criar-usuario-auth --project-ref rujtbxwssiofiialnbbg
 ```
 
+## Categoria Lotação (nov/2026)
+
+Nova categoria `lotacao` adicionada à seção **Estrutura** (order 5), tabela `param_lotacao`.
+
+### Tabela `param_lotacao`
+```sql
+id          serial PRIMARY KEY
+descricao   text NOT NULL
+ativo       boolean NOT NULL DEFAULT true
+ordem       int NOT NULL DEFAULT 0
+created_at  timestamptz DEFAULT now()
+updated_at  timestamptz DEFAULT now()
+criado_por  text
+alterado_por text
+CONSTRAINT param_lotacao_descricao_unique UNIQUE (descricao)
+```
+
+**Sem flag `noAuditCols`** — a tabela tem todas as colunas de auditoria (`criado_por`, `alterado_por`, `updated_at`, `created_at`), igual às demais categorias padrão.
+
+**Seed inicial (migration 149):** valores distintos de `colaboradores.empresa_atuacao`, com casing original preservado. Deduplicação por `LOWER(TRIM())` antes de inserir. Um UPDATE posterior preencheu `colaboradores.lotacao` com o equivalente em `param_lotacao.descricao` para todos os colaboradores que tinham `empresa_atuacao`.
+
+**Dependência:** entrada em `DEPENDENCIAS` aponta para `colaboradores.lotacao` — bloqueia exclusão quando houver colaborador vinculado.
+
+**Regra:** a constraint `UNIQUE(descricao)` impede cadastro de lotações duplicadas diretamente no banco. Para inserção via seed/script, usar `ON CONFLICT (descricao) DO NOTHING`.
+
+---
+
 ## CATS — flag `noAuditCols` (set/2026)
 
 O módulo Parâmetros usa um objeto `CATS` para configurar cada categoria de cadastro (tabela, label, campos, etc.). A lógica genérica de `salvar()` e `toggleAtivo()` injeta automaticamente colunas de auditoria (`alterado_por`, `updated_at`, `criado_por`) em todo PATCH/POST.
