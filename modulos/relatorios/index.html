@@ -258,6 +258,14 @@
         <div class="card-desc">Controle de cotas legais — colaboradores PCD e jovens aprendizes ativos.</div>
         <span class="card-tag tag-exist">↺ Existente</span>
       </div>
+      <div class="rel-card" id="card-lotacao" onclick="abrirDetalhe('lotacao')">
+        <div class="card-top">
+          <div class="card-name">Por Lotação</div>
+          <span class="card-arrow">›</span>
+        </div>
+        <div class="card-desc">Hierarquia configurável por Lotação, Empresa e Setor. Filtros e colunas selecionáveis.</div>
+        <span class="card-tag tag-new">✦ Novo</span>
+      </div>
     </div>
 
     <!-- RH -->
@@ -420,6 +428,8 @@ function supabaseToJS(row) {
     empresaTerceirizada: row.empresa_terceirizada || '',
     situacao:       ativo ? 'Ativo' : 'Inativo',
     dependentesLista: row.dependentes_lista || [],
+    lotacao:    row.lotacao || '',
+    matricula:  row.matricula || '',
   };
 }
 
@@ -447,7 +457,7 @@ async function init() {
       sbGet('colaboradores',
         'select=id,nome,cargo,data_admissao,data_ingresso_grupo,data_nascimento,data_demissao,' +
         'empresa_registro,empresa_atuacao,setor,gestor,sexo,pcd,pro_labore,tipo_vinculo,' +
-        'empresa_terceirizada,dependentes_lista&order=nome'),
+        'empresa_terceirizada,dependentes_lista,lotacao,matricula&order=nome'),
       sbGet('param_marco_tempo_casa', 'select=anos&ativo=eq.true&order=anos'),
     ]);
     COLABORADORES = dados.map(supabaseToJS);
@@ -663,6 +673,83 @@ const RELATORIOS = {
     pdf:   () => gerarCotasPDF(),
     excel: () => gerarCotasExcel(),
   },
+  lotacao: {
+    cat: 'Colaboradores',
+    title: 'Por Lotação',
+    desc: 'Listagem configurável com agrupamentos por Lotação, Empresa e Setor. Escolha o modo, os filtros, as colunas e a ordem de agrupamento.',
+    note: 'Lê o campo lotacao cadastrado em Parâmetros Gerais. Colaboradores sem lotação aparecem como "Sem lotação".',
+    renderFiltros: () => `
+      <div class="filter-row">
+        <label class="filter-label">Modo de exibição</label>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;flex:1;background:var(--gray-bg);border:1px solid var(--bdr);border-radius:7px;padding:7px 10px;">
+            <input type="radio" name="f-lot-modo" value="quebras" checked onchange="_lotModoChange()"> Com quebras (cascata)
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;flex:1;background:var(--gray-bg);border:1px solid var(--bdr);border-radius:7px;padding:7px 10px;">
+            <input type="radio" name="f-lot-modo" value="tabela" onchange="_lotModoChange()"> Sem quebras (tabela)
+          </label>
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-sec);margin:14px 0 8px;">Filtros</div>
+      <div class="filter-row">
+        <label class="filter-label">Situação</label>
+        <select class="filter-select" id="f-lot-situacao">
+          <option value="Ativo" selected>Ativos</option>
+          <option value="Inativo">Inativos</option>
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Empresa de atuação</label>
+        <select class="filter-select emp-filter" id="f-lot-empresa"></select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Setor</label>
+        <select class="filter-select" id="f-lot-setor">
+          <option value="">Todos os setores</option>
+        </select>
+      </div>
+      <div class="filter-row">
+        <label class="filter-label">Lotação</label>
+        <select class="filter-select" id="f-lot-lotacao">
+          <option value="">Todas as lotações</option>
+        </select>
+      </div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-sec);margin:14px 0 8px;">Colunas e ordem</div>
+      <div id="f-lot-colunas-container" style="display:flex;flex-direction:column;gap:4px;"></div>
+      <div id="f-lot-quebras-section">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-sec);margin:14px 0 8px;">Ordem dos agrupamentos</div>
+        <div class="filter-row">
+          <label class="filter-label">1ª quebra</label>
+          <select class="filter-select" id="f-lot-q1" onchange="_lotSyncBreaks()">
+            <option value="lotacao" selected>Lotação</option>
+            <option value="empresaAtuacao">Empresa</option>
+            <option value="setor">Setor</option>
+          </select>
+        </div>
+        <div class="filter-row">
+          <label class="filter-label">2ª quebra</label>
+          <select class="filter-select" id="f-lot-q2" onchange="_lotSyncBreaks()">
+            <option value="">Nenhuma</option>
+            <option value="lotacao">Lotação</option>
+            <option value="empresaAtuacao" selected>Empresa</option>
+            <option value="setor">Setor</option>
+          </select>
+        </div>
+        <div class="filter-row">
+          <label class="filter-label">3ª quebra</label>
+          <select class="filter-select" id="f-lot-q3" onchange="_lotSyncBreaks()">
+            <option value="">Nenhuma</option>
+            <option value="lotacao">Lotação</option>
+            <option value="empresaAtuacao">Empresa</option>
+            <option value="setor" selected>Setor</option>
+          </select>
+        </div>
+      </div>`,
+    pdf:   () => gerarLotacaoPDF(),
+    excel: () => gerarLotacaoExcel(),
+    onOpen: () => _lotInit(),
+  },
   headcount: {
     cat: 'RH',
     title: 'Headcount',
@@ -852,6 +939,7 @@ function abrirDetalhe(id) {
 
   document.getElementById('detailPanel').classList.add('open');
   popularFiltroEmpresas();
+  if (rel.onOpen) rel.onOpen();
 }
 
 function fecharDetalhe() {
@@ -1788,6 +1876,301 @@ function gerarCargosExcel() {
     rows += `<tr><td colspan="4" ${BLANK}></td></tr>`;
   }
   baixarExcel(_xlsWrap('Distribuição por Cargo', chips.join(' | ') + ` · ${total} colaboradores · ${dataHora}`, 'Por Cargo', rows, 4), 'Distribuicao_Cargos');
+}
+
+// ─── Relatório por Lotação ────────────────────────────────────────────────────
+
+const LOT_COLUNAS_DEF = [
+  { key: 'nome',          label: 'Colaborador',  def: true  },
+  { key: 'matricula',     label: 'Matrícula',    def: true  },
+  { key: 'cargo',         label: 'Cargo',        def: true  },
+  { key: 'gestor',        label: 'Gestor',       def: true  },
+  { key: 'dataAdmissao',  label: 'Admissão',     def: true  },
+  { key: 'empresaAtuacao',label: 'Empresa',      def: true  },
+  { key: 'setor',         label: 'Setor',        def: true  },
+  { key: 'lotacao',       label: 'Lotação',      def: true  },
+];
+
+let _lotColOrder = LOT_COLUNAS_DEF.map((_, i) => i);
+
+function _lotInit() {
+  const setores = [...new Set(COLABORADORES.filter(c => c.setor).map(c => stripNum(c.setor) || c.setor))].sort();
+  const sel = document.getElementById('f-lot-setor');
+  if (sel) {
+    sel.innerHTML = '<option value="">Todos os setores</option>';
+    setores.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
+  }
+  const lotacoes = [...new Set(COLABORADORES.filter(c => c.lotacao).map(c => c.lotacao))].sort();
+  const selL = document.getElementById('f-lot-lotacao');
+  if (selL) {
+    selL.innerHTML = '<option value="">Todas as lotações</option>';
+    lotacoes.forEach(l => { const o = document.createElement('option'); o.value = l; o.textContent = l; selL.appendChild(o); });
+  }
+  _lotColOrder = LOT_COLUNAS_DEF.map((_, i) => i);
+  _lotRenderColunas();
+  _lotModoChange();
+}
+
+function _lotRenderColunas() {
+  const c = document.getElementById('f-lot-colunas-container');
+  if (!c) return;
+  c.innerHTML = '';
+  _lotColOrder.forEach((colIdx, pos) => {
+    const col = LOT_COLUNAS_DEF[colIdx];
+    const id = 'f-lot-col-' + colIdx;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--gray-bg);border:1px solid var(--bdr);border-radius:6px;padding:5px 8px;';
+    row.innerHTML = `
+      <input type="checkbox" id="${id}" data-idx="${colIdx}" ${col.def ? 'checked' : ''} style="cursor:pointer;">
+      <label for="${id}" style="flex:1;font-size:12px;cursor:pointer;">${col.label}</label>
+      <button onclick="_lotMoveCol(${pos},-1)" style="background:none;border:none;cursor:pointer;color:var(--txt-sec);font-size:13px;padding:0 2px;" title="Mover para cima">↑</button>
+      <button onclick="_lotMoveCol(${pos},1)" style="background:none;border:none;cursor:pointer;color:var(--txt-sec);font-size:13px;padding:0 2px;" title="Mover para baixo">↓</button>`;
+    c.appendChild(row);
+  });
+}
+
+function _lotMoveCol(pos, dir) {
+  const newPos = pos + dir;
+  if (newPos < 0 || newPos >= _lotColOrder.length) return;
+  const tmp = _lotColOrder[pos];
+  _lotColOrder[pos] = _lotColOrder[newPos];
+  _lotColOrder[newPos] = tmp;
+  _lotRenderColunas();
+}
+
+function _lotModoChange() {
+  const modo = document.querySelector('input[name="f-lot-modo"]:checked')?.value || 'quebras';
+  const sec = document.getElementById('f-lot-quebras-section');
+  if (sec) sec.style.display = modo === 'quebras' ? '' : 'none';
+}
+
+function _lotSyncBreaks() {
+  // selects are independent; deduplication happens at generation time via _lotBreakKeys()
+}
+
+function _lotColsAtivas() {
+  return _lotColOrder
+    .filter(idx => document.getElementById('f-lot-col-' + idx)?.checked)
+    .map(idx => LOT_COLUNAS_DEF[idx]);
+}
+
+function _lotFmtValor(c, key) {
+  if (key === 'dataAdmissao') return fmtDateBR(c.dataAdmissao);
+  if (key === 'empresaAtuacao') return stripNum(c.empresaAtuacao) || c.empresaAtuacao || '—';
+  if (key === 'setor') return stripNum(c.setor) || c.setor || '—';
+  if (key === 'lotacao') return c.lotacao || 'Sem lotação';
+  return c[key] || '—';
+}
+
+function _lotGrupoLabel(key, valor) {
+  if (key === 'setor') return stripNum(valor) || valor || 'Sem setor';
+  if (key === 'lotacao') return valor || 'Sem lotação';
+  if (key === 'empresaAtuacao') return stripNum(valor) || valor || 'Sem empresa';
+  return valor || '—';
+}
+
+function _dadosLotacao() {
+  const situacao = document.getElementById('f-lot-situacao')?.value || '';
+  const empresa  = (document.getElementById('f-lot-empresa')?.value || '').trim();
+  const setor    = (document.getElementById('f-lot-setor')?.value || '').trim();
+  const lotacao  = (document.getElementById('f-lot-lotacao')?.value || '').trim();
+
+  let lista = COLABORADORES.filter(c => {
+    if (situacao && c.situacao !== situacao) return false;
+    if (empresa && stripNum(c.empresaAtuacao) !== empresa) return false;
+    if (setor && (stripNum(c.setor) || c.setor) !== setor) return false;
+    if (lotacao && c.lotacao !== lotacao) return false;
+    return true;
+  });
+  if (!lista.length) { alert('Nenhum colaborador encontrado para o filtro selecionado.'); return null; }
+  lista.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  const chips = [];
+  if (situacao) chips.push(situacao);
+  if (empresa) chips.push('Empresa: ' + empresa);
+  if (setor) chips.push('Setor: ' + setor);
+  if (lotacao) chips.push('Lotação: ' + lotacao);
+  if (!chips.length) chips.push('Todos');
+
+  return { lista, chips, total: lista.length, dataHora: agora() };
+}
+
+function _agruparPorChaves(lista, chaves) {
+  if (!chaves.length) return lista;
+  const key = chaves[0];
+  const grupos = {};
+  lista.forEach(c => {
+    const v = key === 'setor' ? (stripNum(c.setor)||c.setor||'') :
+              key === 'empresaAtuacao' ? (stripNum(c.empresaAtuacao)||c.empresaAtuacao||'') :
+              (c[key] || '');
+    if (!grupos[v]) grupos[v] = [];
+    grupos[v].push(c);
+  });
+  return Object.entries(grupos).sort(([a],[b]) => a.localeCompare(b,'pt-BR')).map(([val, items]) => ({
+    chave: key, valor: val, label: _lotGrupoLabel(key, val),
+    total: items.length,
+    filhos: chaves.length > 1 ? _agruparPorChaves(items, chaves.slice(1)) : items,
+  }));
+}
+
+function _lotBreakKeys() {
+  const q1 = document.getElementById('f-lot-q1')?.value || 'lotacao';
+  const q2 = document.getElementById('f-lot-q2')?.value || '';
+  const q3 = document.getElementById('f-lot-q3')?.value || '';
+  const keys = [q1];
+  const used = new Set([q1]);
+  if (q2 && !used.has(q2)) { keys.push(q2); used.add(q2); }
+  if (q3 && !used.has(q3)) { keys.push(q3); }
+  return keys;
+}
+
+// ── PDF ──
+
+const LOT_LEVEL_STYLES = [
+  { bg:'#2C3E6B', color:'#fff', pad:'9px 20px 9px 20px',  fs:'12px', fw:'700' },
+  { bg:'#EDF1FA', color:'#2C3E6B', pad:'7px 20px 7px 32px', fs:'11px', fw:'700' },
+  { bg:'#F5F8FD', color:'#3B72B0', pad:'6px 20px 6px 44px', fs:'11px', fw:'600' },
+];
+const LOT_LEVEL_CNT = [
+  { bg:'#1A7F6A', color:'#fff' },
+  { bg:'#3B72B0', color:'#fff' },
+  { bg:'#6C7589', color:'#fff' },
+];
+
+function _lotPDFGruposHtml(grupos, colunas, nivel) {
+  if (nivel >= 10) return '';
+  const st = LOT_LEVEL_STYLES[Math.min(nivel, LOT_LEVEL_STYLES.length-1)];
+  const sc = LOT_LEVEL_CNT[Math.min(nivel, LOT_LEVEL_CNT.length-1)];
+  let html = '';
+  grupos.forEach(g => {
+    html += `<tr style="background:${st.bg}">
+      <td colspan="${colunas.length}" style="padding:${st.pad};font-size:${st.fs};font-weight:${st.fw};color:${st.color};">
+        ${g.label}
+        <span style="margin-left:12px;background:${sc.bg};color:${sc.color};border-radius:20px;padding:2px 10px;font-size:10px;font-weight:700;">${g.total} colaborador${g.total!==1?'es':''}</span>
+      </td></tr>`;
+    if (Array.isArray(g.filhos) && g.filhos.length && g.filhos[0].chave) {
+      html += _lotPDFGruposHtml(g.filhos, colunas, nivel+1);
+    } else {
+      (Array.isArray(g.filhos) ? g.filhos : []).forEach((c, i) => {
+        const bg = i%2===1 ? 'background:#F9FAFB' : '';
+        html += `<tr style="${bg}">${colunas.map((col,ci) => {
+          const v = _lotFmtValor(c, col.key);
+          const isNome = col.key === 'nome';
+          return `<td style="padding:8px 12px${ci===0?' padding-left:'+(20+(nivel+1)*12)+'px':''};font-size:12px;${isNome?'font-weight:600;':''}color:${isNome?'#1E2740':'#5E718A'}">${v}</td>`;
+        }).join('')}</tr>`;
+      });
+    }
+  });
+  return html;
+}
+
+function _lotPDFQuebras(lista, colunas, keys, chips, total, dataHora) {
+  const grupos = _agruparPorChaves(lista, keys);
+  const thStyle = 'padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5E718A;text-align:left;background:#F0F4FB;border-bottom:2px solid #DDE5F0;';
+  const ths = colunas.map(col => `<th style="${thStyle}">${col.label}</th>`).join('');
+  const tbody = _lotPDFGruposHtml(grupos, colunas, 0);
+  return htmlRelPDF('Por Lotação', chips, total, 'colaboradores', dataHora,
+    `<table><thead><tr>${ths}</tr></thead><tbody>${tbody}</tbody></table>`);
+}
+
+function _lotPDFTabela(lista, colunas, chips, total, dataHora) {
+  const thStyle = 'padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5E718A;text-align:left;background:#F0F4FB;border-bottom:2px solid #DDE5F0;';
+  const ths = colunas.map(col => `<th style="${thStyle}">${col.label}</th>`).join('');
+  const rows = lista.map((c, i) => {
+    const bg = i%2===1 ? 'background:#F5F8FD' : '';
+    return `<tr style="${bg}">${colunas.map(col => {
+      const v = _lotFmtValor(c, col.key);
+      const isNome = col.key === 'nome';
+      return `<td style="padding:9px 12px;font-size:12px;${isNome?'font-weight:600;':''}color:${isNome?'#1E2740':'#5E718A'}">${v}</td>`;
+    }).join('')}</tr>`;
+  }).join('');
+  return htmlRelPDF('Por Lotação', chips, total, 'colaboradores', dataHora,
+    `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`);
+}
+
+function gerarLotacaoPDF() {
+  const d = _dadosLotacao(); if (!d) return;
+  const { lista, chips, total, dataHora } = d;
+  const colunas = _lotColsAtivas();
+  if (!colunas.length) { alert('Selecione ao menos uma coluna.'); return; }
+  const modo = document.querySelector('input[name="f-lot-modo"]:checked')?.value || 'quebras';
+  if (modo === 'quebras') {
+    abrirPDF(_lotPDFQuebras(lista, colunas, _lotBreakKeys(), chips, total, dataHora));
+  } else {
+    abrirPDF(_lotPDFTabela(lista, colunas, chips, total, dataHora));
+  }
+}
+
+// ── Excel ──
+
+function _lotXlsHeader(titulo, chips, total, dataHora) {
+  const F = "font-family:'Calibri',sans-serif;";
+  const txt = chips.join(' | ');
+  return `<tr><td colspan="20" style="background:#2C3E6B;color:#fff;${F}font-size:14pt;font-weight:bold;padding:10px;border:none;">${titulo} — Revest</td></tr>
+<tr><td colspan="20" style="background:#3B4F7A;color:#C8D8F0;${F}font-size:10pt;padding:5px 10px;border:none;">${txt} · ${total} colaborador${total!==1?'es':''} · Gerado em ${dataHora}</td></tr>
+<tr><td colspan="20" style="border:none;padding:3px;"></td></tr>`;
+}
+
+function _lotXlsColsHtml(colunas) {
+  const F = "font-family:'Calibri',sans-serif;";
+  return colunas.map(col => `<th style="background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:7px 10px;border:1px solid #DDE5F0;">${col.label}</th>`).join('');
+}
+
+function _lotXlsGruposRows(grupos, colunas, nivel, F) {
+  if (nivel >= 10) return '';
+  const bgLvl = ['#2C3E6B','#EDF1FA','#F5F8FD'];
+  const colorLvl = ['#FFFFFF','#2C3E6B','#3B72B0'];
+  const bg = bgLvl[Math.min(nivel, bgLvl.length-1)];
+  const fg = colorLvl[Math.min(nivel, colorLvl.length-1)];
+  let rows = '';
+  grupos.forEach(g => {
+    rows += `<tr><td colspan="${colunas.length}" style="background:${bg};color:${fg};${F}font-size:10pt;font-weight:bold;padding:7px 10px;border:1px solid ${nivel===0?'#1a2d52':'#DDE5F0'};">${g.label} (${g.total})</td></tr>`;
+    if (Array.isArray(g.filhos) && g.filhos.length && g.filhos[0].chave) {
+      rows += _lotXlsGruposRows(g.filhos, colunas, nivel+1, F);
+    } else {
+      (Array.isArray(g.filhos) ? g.filhos : []).forEach((c, i) => {
+        const bgr = i%2===0 ? '#fff' : '#F5F8FD';
+        rows += `<tr>${colunas.map(col => {
+          const v = _lotFmtValor(c, col.key);
+          const isNome = col.key === 'nome';
+          return `<td style="background:${bgr};color:${isNome?'#1E2740':'#5E718A'};${F}${isNome?'font-weight:bold;':''}font-size:10pt;padding:6px 10px;border:1px solid #ECF0F8;">${v}</td>`;
+        }).join('')}</tr>`;
+      });
+    }
+  });
+  return rows;
+}
+
+function gerarLotacaoExcel() {
+  const d = _dadosLotacao(); if (!d) return;
+  const { lista, chips, total, dataHora } = d;
+  const colunas = _lotColsAtivas();
+  if (!colunas.length) { alert('Selecione ao menos uma coluna.'); return; }
+  const modo = document.querySelector('input[name="f-lot-modo"]:checked')?.value || 'quebras';
+  const F = "font-family:'Calibri',sans-serif;";
+  let rows = '';
+  if (modo === 'quebras') {
+    const grupos = _agruparPorChaves(lista, _lotBreakKeys());
+    rows = _lotXlsGruposRows(grupos, colunas, 0, F);
+  } else {
+    lista.forEach((c, i) => {
+      const bgr = i%2===0 ? '#fff' : '#F5F8FD';
+      rows += `<tr>${colunas.map(col => {
+        const v = _lotFmtValor(c, col.key);
+        const isNome = col.key === 'nome';
+        return `<td style="background:${bgr};color:${isNome?'#1E2740':'#5E718A'};${F}${isNome?'font-weight:bold;':''}font-size:10pt;padding:6px 10px;border:1px solid #ECF0F8;">${v}</td>`;
+      }).join('')}</tr>`;
+    });
+  }
+  rows += `<tr><td colspan="${colunas.length}" style="background:#EDF1FA;color:#2C3E6B;${F}font-size:10pt;font-weight:bold;padding:7px 10px;border:1px solid #DDE5F0;text-align:right;">Total: ${total} colaborador${total!==1?'es':''}</td></tr>`;
+  const xls = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Por Lotacao</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>
+${_lotXlsHeader('Relatório por Lotação', chips, total, dataHora)}
+<tr>${_lotXlsColsHtml(colunas)}</tr>
+${rows}
+</table></body></html>`;
+  baixarExcel(xls, `Relatorio_Por_Lotacao_${new Date().toISOString().slice(0,10)}`);
 }
 
 // ─── Start ───────────────────────────────────────────────────────────────────
