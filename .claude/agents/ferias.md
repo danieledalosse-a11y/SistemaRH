@@ -323,10 +323,12 @@ Helper compartilhado por RH, Gestor e Diretoria. Cada visão calcula `lRef` e `a
 ```js
 function _renderAgendCell(lRef, alertaHtml) {
   if (!lRef) return `<span style="font-size:11px;color:var(--text-ter);">—</span>`;
-  return `<span style="font-size:11px;white-space:nowrap;">${formatDate(lRef.inicio)} → ${formatDate(lRef.fim)} · ${lRef.dias}d</span>
+  return `<span style="font-size:11px;white-space:nowrap;">${formatDate(lRef.inicio)} → ${formatDate(addDays(lRef.inicio, lRef.dias - 1))} · ${lRef.dias}d</span>
           ${alertaHtml || ''}`;
 }
 ```
+
+> **Atenção:** usar `addDays(lRef.inicio, lRef.dias - 1)` — nunca `lRef.fim` diretamente. Ver regra na seção "Regra obrigatória — exibição de datas de período".
 
 **Padrão visual:** `DD/MM/AAAA → DD/MM/AAAA · Nd` + alerta de dobra quando aplicável. **Sem `+N período`** — demais períodos ficam acessíveis no drawer.
 
@@ -4722,3 +4724,34 @@ if (_tipo === 'gozo') {
 | `'gozo_aprovado'` | RH | `{ saida, dias, lancIdx, aprovado_por }` |
 | `'gozo_recusado'` | RH | `{ saida, lancIdx, recusado_por }` |
 | `'gestor_ciente'` | Gestor | `{ acao_referencia: 'gozo_aprovado'/'gozo_recusado', saida, retorno, dias }` |
+
+## PA com ciclo de datas incorreto — causa e correção (nov/2026)
+
+### Sintoma
+
+PA exibindo ciclo `01/10 → 30/09` em vez do ciclo esperado pela data de admissão real (ex: `08/03 → 07/03`).
+
+### Causa raiz
+
+`autocriarPasFaltantes` encadeia PAs a partir de `lastReg.paFim + 1 dia`. Se o **primeiro PA no banco tiver `pa_inicio` errado**, todos os PAs subsequentes herdam o erro — o ciclo inteiro fica deslocado.
+
+A data errada no primeiro PA geralmente vem de **cadastro duplicado criado por transferência de CNPJ tratada como demissão + nova admissão**: o segundo cadastro tem `data_admissao` = data da transferência (não a data de admissão original), e os PAs são criados a partir dessa data incorreta.
+
+### Diagnóstico
+
+1. Verificar se existem **dois registros** na tabela `colaboradores` com o mesmo nome/CPF
+2. Comparar `data_admissao` dos dois — o original tem a data real, o duplicado tem a data da transferência
+3. Verificar PAs em `ferias` para ambos os `colaborador_id`
+
+### Correção (caso Cleber Pastorelli, 25/11/2026)
+
+Procedimento executado quando confirmado cadastro duplicado por transferência de CNPJ:
+
+1. **Backup** completo dos dois colaboradores e todos os PAs envolvidos
+2. **PATCH** no colaborador original: remover `data_demissao`, atualizar empresa/cargo/setor para os valores atuais, reativar (`ativo=true`), adicionar evento `tipo:"empresa"` no `historico` com `de/para` descrevendo a transferência e `usuario:"Correção cadastral — transferência de CNPJ"`
+3. **Migrar** todos os vínculos do cadastro duplicado para o original: `ferias`, `unif_movimentacoes`, `param_gestor`, `historico_eventos` — atualizar apenas o `colaborador_id`, preservar todos os demais dados
+4. **Excluir** os PAs do cadastro duplicado (ciclo errado)
+5. **Excluir** o cadastro duplicado
+6. Os 7 PAs do cadastro original (ciclo correto) ficam preservados intactos
+
+> **Dica:** ao tentar excluir um colaborador, o banco retorna `23503` (FK violation) listando a tabela com referência. Iterar: migrar cada tabela referenciada → tentar excluir novamente → repetir até sucesso.
