@@ -241,6 +241,12 @@
   .lot-chip-btn { background: none; border: none; cursor: pointer; color: var(--txt-sec); font-size: 13px; padding: 0 2px; line-height: 1; transition: color .12s; }
   .lot-chip-btn:hover:not(:disabled) { color: var(--accent); }
   .lot-chip-btn:disabled { opacity: .25; cursor: default; }
+  /* drag & drop nas colunas */
+  .lot-col-item { cursor: grab; user-select: none; }
+  .lot-col-item.dragging { opacity: .4; cursor: grabbing; }
+  .lot-col-item.drag-over { border-color: var(--accent); background: #EEF3FF; }
+  .lot-drag-handle { color: var(--txt-sec); font-size: 14px; cursor: grab; flex-shrink: 0; line-height: 1; padding: 0 2px; }
+  .lot-col-item.dragging .lot-drag-handle { cursor: grabbing; }
   .lot-modal-ft {
     padding: 16px 26px 20px; border-top: 1px solid var(--bdr);
     display: flex; gap: 10px; position: sticky; bottom: 0; background: #fff;
@@ -448,37 +454,19 @@
       <div>
         <div class="lot-modal-cat">Colaboradores</div>
         <div class="lot-modal-title">Por Lotação</div>
-        <div class="lot-modal-desc">Listagem configurável com agrupamentos por Lotação, Empresa e Setor.</div>
+        <div class="lot-modal-desc">Listagem configurável com agrupamentos e colunas selecionáveis.</div>
       </div>
       <button class="lot-modal-close" onclick="fecharLotModal()">✕</button>
     </div>
     <div class="lot-modal-body">
 
-      <!-- Modo -->
-      <div class="lot-sec-label">Modo de exibição</div>
-      <div class="lot-mode-row">
-        <label class="lot-mode-btn selected" id="lot-modo-btn-quebras">
-          <input type="radio" name="f-lot-modo" value="quebras" checked onchange="_lotModoChange()">
-          <div>
-            <div class="lot-mode-btn-label">Com quebras (cascata)</div>
-            <div class="lot-mode-btn-sub">Hierarquia configurável por nível</div>
-          </div>
-        </label>
-        <label class="lot-mode-btn" id="lot-modo-btn-tabela">
-          <input type="radio" name="f-lot-modo" value="tabela" onchange="_lotModoChange()">
-          <div>
-            <div class="lot-mode-btn-label">Sem quebras (tabela)</div>
-            <div class="lot-mode-btn-sub">Lista plana com colunas selecionáveis</div>
-          </div>
-        </label>
-      </div>
-
-      <!-- Duas colunas: Filtros | Colunas -->
+      <!-- 3 blocos em sequência: Filtros → Agrupamentos → Colunas -->
       <div class="lot-cols2">
 
         <!-- Coluna esquerda: Filtros + Agrupamentos -->
         <div>
-          <div class="lot-sec-label">Filtros</div>
+          <!-- Bloco 1: Filtros -->
+          <div class="lot-sec-label">1. Filtros</div>
           <div class="lot-filter-row">
             <label class="lot-filter-label">Situação</label>
             <select class="lot-filter-select" id="f-lot-situacao">
@@ -504,16 +492,19 @@
             </select>
           </div>
 
+          <!-- Bloco 2: Agrupamentos -->
           <div id="f-lot-quebras-section">
-            <div class="lot-sec-label" style="margin-top:18px;">Agrupamentos</div>
-            <div class="lot-chips-hint">Marque e reordene os níveis de agrupamento.</div>
+            <div class="lot-sec-label" style="margin-top:20px;">2. Agrupar por</div>
+            <div class="lot-chips-hint">Campos marcados viram títulos de seção no relatório. Reordene com ↑↓.</div>
             <div id="f-lot-chips-list"></div>
+            <div class="lot-chips-hint" id="f-lot-modo-info" style="margin-top:6px;font-style:italic;"></div>
           </div>
         </div>
 
-        <!-- Coluna direita: Colunas e ordem -->
+        <!-- Coluna direita: Colunas de dados (drag & drop) -->
         <div>
-          <div class="lot-sec-label">Colunas e ordem</div>
+          <div class="lot-sec-label">3. Colunas de dados</div>
+          <div class="lot-chips-hint">Arraste para reordenar. Campos usados em agrupamentos são ocultados automaticamente.</div>
           <div id="f-lot-colunas-container"></div>
         </div>
 
@@ -2049,42 +2040,90 @@ function _lotInit() {
   ];
   _lotRenderChips();
   _lotRenderColunas();
-  _lotModoChange();
+  _lotModoChange(); // atualiza info de modo automático
 }
+
+let _lotDragSrc = null;
 
 function _lotRenderColunas() {
   const c = document.getElementById('f-lot-colunas-container');
   if (!c) return;
   c.innerHTML = '';
-  _lotColOrder.forEach((colIdx, pos) => {
+  // Chaves ativas nos agrupamentos ficam ocultas das colunas
+  const hiddenKeys = new Set(_lotChips.filter(ch => ch.active).map(ch => ch.key));
+  _lotColOrder.forEach((colIdx) => {
     const col = LOT_COLUNAS_DEF[colIdx];
+    if (hiddenKeys.has(col.key)) return; // oculto porque é agrupamento ativo
     const id = 'f-lot-col-' + colIdx;
     const row = document.createElement('div');
     row.className = 'lot-col-item';
+    row.draggable = true;
+    row.dataset.idx = colIdx;
+    // estado do checkbox: mantém o último valor se já existia
+    const prevEl = document.getElementById(id);
+    const checked = prevEl ? prevEl.checked : col.def;
     row.innerHTML = `
-      <input type="checkbox" id="${id}" data-idx="${colIdx}" ${col.def ? 'checked' : ''}>
-      <label for="${id}">${col.label}</label>
-      <button class="lot-col-btn" onclick="_lotMoveCol(${pos},-1)" title="Mover para cima">↑</button>
-      <button class="lot-col-btn" onclick="_lotMoveCol(${pos},1)" title="Mover para baixo">↓</button>`;
+      <span class="lot-drag-handle" title="Arrastar para reordenar">⠿</span>
+      <input type="checkbox" id="${id}" data-idx="${colIdx}" ${checked ? 'checked' : ''}>
+      <label for="${id}" style="cursor:pointer;">${col.label}</label>`;
+    // drag & drop
+    row.addEventListener('dragstart', e => {
+      _lotDragSrc = row;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => row.classList.add('dragging'), 0);
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      c.querySelectorAll('.lot-col-item').forEach(r => r.classList.remove('drag-over'));
+    });
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (_lotDragSrc && _lotDragSrc !== row) {
+        c.querySelectorAll('.lot-col-item').forEach(r => r.classList.remove('drag-over'));
+        row.classList.add('drag-over');
+      }
+    });
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!_lotDragSrc || _lotDragSrc === row) return;
+      row.classList.remove('drag-over');
+      const srcIdx = parseInt(_lotDragSrc.dataset.idx);
+      const dstIdx = parseInt(row.dataset.idx);
+      // salva estados dos checkboxes antes de reordenar
+      const checks = {};
+      c.querySelectorAll('.lot-col-item input[type=checkbox]').forEach(cb => {
+        checks[cb.dataset.idx] = cb.checked;
+      });
+      // reordena _lotColOrder
+      const srcPos = _lotColOrder.indexOf(srcIdx);
+      const dstPos = _lotColOrder.indexOf(dstIdx);
+      _lotColOrder.splice(srcPos, 1);
+      _lotColOrder.splice(dstPos, 0, srcIdx);
+      // aplica checks salvos ao re-renderizar
+      _lotRenderColunasComChecks(checks);
+    });
     c.appendChild(row);
   });
 }
 
-function _lotMoveCol(pos, dir) {
-  const newPos = pos + dir;
-  if (newPos < 0 || newPos >= _lotColOrder.length) return;
-  const tmp = _lotColOrder[pos];
-  _lotColOrder[pos] = _lotColOrder[newPos];
-  _lotColOrder[newPos] = tmp;
+function _lotRenderColunasComChecks(checks) {
   _lotRenderColunas();
+  if (!checks) return;
+  Object.entries(checks).forEach(([idx, checked]) => {
+    const el = document.getElementById('f-lot-col-' + idx);
+    if (el) el.checked = checked;
+  });
 }
 
 function _lotModoChange() {
-  const modo = document.querySelector('input[name="f-lot-modo"]:checked')?.value || 'quebras';
-  const sec = document.getElementById('f-lot-quebras-section');
-  if (sec) sec.style.display = modo === 'quebras' ? '' : 'none';
-  document.getElementById('lot-modo-btn-quebras')?.classList.toggle('selected', modo === 'quebras');
-  document.getElementById('lot-modo-btn-tabela')?.classList.toggle('selected', modo === 'tabela');
+  // Modo é automático: se há agrupamentos ativos → com quebras; senão → tabela flat
+  const info = document.getElementById('f-lot-modo-info');
+  if (!info) return;
+  const hasBreaks = _lotChips.some(c => c.active);
+  info.textContent = hasBreaks
+    ? 'Modo: com seções agrupadas (' + _lotChips.filter(c=>c.active).map(c=>c.label).join(' → ') + ')'
+    : 'Modo: tabela simples, sem agrupamento';
 }
 
 // Estado dos chips de agrupamento: array de objetos { key, label, active }
@@ -2123,18 +2162,25 @@ function _lotRenderChips() {
 }
 
 function _lotChipToggle(pos) {
+  // salva checks antes de reordenar colunas
+  const checks = {};
+  document.querySelectorAll('#f-lot-colunas-container input[type=checkbox]').forEach(cb => {
+    checks[cb.dataset.idx] = cb.checked;
+  });
   _lotChips[pos].active = !_lotChips[pos].active;
   _lotRenderChips();
+  _lotRenderColunasComChecks(checks);
+  _lotModoChange();
 }
 
 function _lotChipMove(pos, dir) {
-  // só move dentro dos ativos; impede mistura ativo/inativo
   const targetPos = pos + dir;
   if (targetPos < 0 || targetPos >= _lotChips.length) return;
   const tmp = _lotChips[pos];
   _lotChips[pos] = _lotChips[targetPos];
   _lotChips[targetPos] = tmp;
   _lotRenderChips();
+  _lotModoChange();
 }
 
 function _lotSyncBreaks() { /* deduplicação ocorre em _lotBreakKeys() */ }
@@ -2158,8 +2204,13 @@ function _lotOverlayClick(e) {
 }
 
 function _lotColsAtivas() {
+  const hiddenKeys = new Set(_lotChips.filter(ch => ch.active).map(ch => ch.key));
   return _lotColOrder
-    .filter(idx => document.getElementById('f-lot-col-' + idx)?.checked)
+    .filter(idx => {
+      const col = LOT_COLUNAS_DEF[idx];
+      if (hiddenKeys.has(col.key)) return false; // campo usado como agrupamento
+      return document.getElementById('f-lot-col-' + idx)?.checked;
+    })
     .map(idx => LOT_COLUNAS_DEF[idx]);
 }
 
@@ -2318,10 +2369,10 @@ function gerarLotacaoPDF() {
   const d = _dadosLotacao(); if (!d) return;
   const { lista, chips, total, dataHora } = d;
   const colunas = _lotColsAtivas();
-  if (!colunas.length) { alert('Selecione ao menos uma coluna.'); return; }
-  const modo = document.querySelector('input[name="f-lot-modo"]:checked')?.value || 'quebras';
-  if (modo === 'quebras') {
-    abrirPDF(_lotPDFQuebras(lista, colunas, _lotBreakKeys(), chips, total, dataHora));
+  if (!colunas.length) { alert('Selecione ao menos uma coluna de dados.'); return; }
+  const keys = _lotBreakKeys();
+  if (keys.length) {
+    abrirPDF(_lotPDFQuebras(lista, colunas, keys, chips, total, dataHora));
   } else {
     abrirPDF(_lotPDFTabela(lista, colunas, chips, total, dataHora));
   }
@@ -2372,11 +2423,11 @@ function gerarLotacaoExcel() {
   const { lista, chips, total, dataHora } = d;
   const colunas = _lotColsAtivas();
   if (!colunas.length) { alert('Selecione ao menos uma coluna.'); return; }
-  const modo = document.querySelector('input[name="f-lot-modo"]:checked')?.value || 'quebras';
   const F = "font-family:'Calibri',sans-serif;";
   let rows = '';
-  if (modo === 'quebras') {
-    const grupos = _agruparPorChaves(lista, _lotBreakKeys());
+  const xlsKeys = _lotBreakKeys();
+  if (xlsKeys.length) {
+    const grupos = _agruparPorChaves(lista, xlsKeys);
     rows = _lotXlsGruposRows(grupos, colunas, 0, F);
   } else {
     lista.forEach((c, i) => {
