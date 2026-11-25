@@ -844,6 +844,12 @@
         </div>
         <div class="sf-row">
           <div class="sf-cell">
+            <div class="sf-lbl">Lotação</div>
+            <select class="sf-inp" id="df-lotacao"><option value="">Selecione a lotação</option></select>
+          </div>
+        </div>
+        <div class="sf-row">
+          <div class="sf-cell">
             <div class="sf-lbl">Tipo de Vínculo</div>
             <select class="sf-inp" id="df-tipo-vinculo" onchange="_toggleEmpresaTerceirizada()">
             </select>
@@ -1583,6 +1589,31 @@ function popularSelect(id, lista, placeholder) {
   sel.value = prev;
 }
 
+// ─── Lotação (select de param_lotacao) ───────────────────────────────────────
+let LOTACAO_PARAM = [];
+
+async function carregarLotacaoParam() {
+  try {
+    LOTACAO_PARAM = await sbGet('param_lotacao', 'select=id,descricao&ativo=eq.true&order=ordem,descricao');
+    popularSelectLotacao();
+  } catch(e) { console.warn('Lotações não carregadas:', e.message); }
+}
+
+function popularSelectLotacao(valorAtual) {
+  const sel = document.getElementById('df-lotacao');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  const prev = valorAtual !== undefined ? valorAtual : sel.value;
+  sel.innerHTML = '<option value="">Selecione a lotação</option>';
+  LOTACAO_PARAM.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.descricao;
+    opt.dataset.id = l.id;
+    opt.textContent = l.descricao;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+}
+
 // ─── Empresa (atuação) (select de param_empresa) ─────────────────────────────
 let EMPRESAS_PARAM = [];
 
@@ -1764,6 +1795,7 @@ function supabaseToJS(row) {
     empresaRegistroId:    row.empresa_registro_id || null,
     empresaAtuacao:       row.empresa_atuacao || '',
     empresaAtuacaoId:     row.empresa_atuacao_id || null,
+    lotacao:              row.lotacao || '',
     setor:            row.setor || '',
     gestor:           row.gestor || '',
     dependentes:      parseInt(row.dependentes) || 0,
@@ -2155,6 +2187,7 @@ async function carregarDoSupabase() {
       carregarTiposVinculo(),
       carregarInstituicoesAprendiz(),
       carregarEmpresasParam(),
+      carregarLotacaoParam(),
       carregarJornadas(),
       carregarMotivosDesligamento(),
       carregarCbosParam(),
@@ -2875,7 +2908,7 @@ function novoColaborador() {
   document.getElementById('df-situacao').value = 'Ativo';
   ['df-contrato','df-sexo','df-nacionalidade','df-cor','df-escolaridade',
    'df-estadoCivil','df-possuiFilhos','df-jornada','df-tipoAdmissao',
-   'df-aviso','df-vt','df-tipoConta']
+   'df-aviso','df-vt','df-tipoConta','df-lotacao']
   .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const tvEl = document.getElementById('df-tipo-vinculo');
   if (tvEl) tvEl.value = 'clt';
@@ -3010,6 +3043,7 @@ function abrirFicha(idx) {
   document.getElementById('df-empresa').value       = c.empresa || '';
   popularSelectSetor(c.setor || '', c.empresa || '');
   popularSelectEmpresaAtuacao(c.empresaAtuacao || '');
+  popularSelectLotacao(c.lotacao || '');
   popularSelectGestor(c.gestor || '');
   document.getElementById('df-nascimento').value    = c.dataNascimento || '';
   document.getElementById('df-sexo').value          = c.sexo || '';
@@ -3449,6 +3483,7 @@ function salvarFicha() {
       empresa_registro_id: (() => { const o = document.querySelector('#df-empresa option:checked'); return o && o.dataset.id ? parseInt(o.dataset.id) : null; })(),
       empresa_atuacao:     document.getElementById('df-empresa-atuacao').value.trim() || null,
       empresa_atuacao_id:  (() => { const o = document.querySelector('#df-empresa-atuacao option:checked'); return o && o.dataset.id ? parseInt(o.dataset.id) : null; })(),
+      lotacao:             document.getElementById('df-lotacao').value.trim() || null,
       tipo_vinculo:         tipoVincSel || 'clt',
       empresa_terceirizada: document.getElementById('df-empresa-terceirizada').value.trim() || null,
       gestor:               document.getElementById('df-gestor').value.trim() || null,
@@ -3550,6 +3585,7 @@ function salvarFicha() {
   c.fimContrato           = document.getElementById('df-fimContrato').value;
   c.instituicaoAprendiz   = up(document.getElementById('df-instituicaoAprendiz').value);
   c.empresaAtuacao    = document.getElementById('df-empresa-atuacao').value.trim() || null;
+  c.lotacao           = document.getElementById('df-lotacao').value.trim() || null;
   c.dataNascimento    = document.getElementById('df-nascimento').value;
   c.sexo              = document.getElementById('df-sexo').value;
   c.nacionalidade     = document.getElementById('df-nacionalidade').value;
@@ -3652,6 +3688,7 @@ function salvarFicha() {
       setor:              c.setor,
       empresa_atuacao:    c.empresaAtuacao || null,
       empresa_atuacao_id: (() => { const o = document.querySelector('#df-empresa-atuacao option:checked'); return o && o.dataset.id ? parseInt(o.dataset.id) : (c.empresaAtuacaoId || null); })(),
+      lotacao:            c.lotacao || null,
       empresa_registro_id: c.empresaRegistroId || null,
       gestor:             c.gestor || null,
       data_admissao:        c.dataAdmissao || null,
