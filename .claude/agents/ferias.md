@@ -214,7 +214,8 @@ Tabela de auditoria imutável — nunca editada, só recebe INSERT.
 | `'aprovado'` | RH (`aprovarPendente` fluxo padrão — commit `177d847`, 26/10/2026) | `{ inicio, fim, dias, aprovado_por }` |
 | `'rejeitado'` | RH | `{ status, obs_gestor }` |
 | `'gozo_solicitado'` | Gestor | `{ saida, retorno, dias, lancIdx }` |
-| `'gozo_aprovado'` | RH | `{ saida, dias, lancIdx }` |
+| `'gozo_aprovado'` | RH | `{ saida, retorno, dias, lancIdx }` — retorno adicionado em Nov/2026 (commit 17a98e8) |
+| `'gozo_recusado'` | RH | `{ saida, retorno, lancIdx }` — retorno adicionado em Nov/2026 |
 | `'lancado_rh'` | RH drawer (commit ea7c99e) | `{ inicio, fim, dias, id_periodo, nota }` |
 | `'editado_rh'` | RH drawer (commit ea7c99e) | `{ id_periodo, inicio_anterior, fim_anterior, inicio_novo, fim_novo, dias_novo }` |
 | `'excluido_rh'` | RH drawer (commit ea7c99e) | `{ id_periodo, inicio, fim, dias }` |
@@ -224,8 +225,10 @@ Tabela de auditoria imutável — nunca editada, só recebe INSERT.
 | `'alteracao_recusada'` | RH | `{ status: 'Alteração recusada' }` |
 | `'cancelamento_aprovado'` | RH | `{ status: 'Cancelamento aprovado' }` |
 | `'cancelamento_recusado'` | RH | `{ status: 'Cancelamento recusado' }` |
-| `'gestor_ciente'` | Gestor (commit 993c54f) | `{ acao_referencia, inicio, fim, dias }` |
+| `'gestor_ciente'` | Gestor | `{ acao_referencia, saida, retorno, dias }` para gozo; `{ acao_referencia, inicio, fim, dias }` demais ações |
 | `'ajustado_rh'` | RH (`salvarAjuste` — commit `ece14ac`, Nov/2026) | `{ original: {inicio,fim,dias,abono}, alterado_para: {inicio,fim,dias,abono}, alterado_por: nome }` |
+
+> **Retrocompatibilidade:** registros `gozo_aprovado` gravados antes de Nov/2026 têm `{ saida, dias, lancIdx }` sem `retorno`. O `_renderHistLinha` trata esse caso com fallback `inicio && dias ? 'Saída DD/MM · Xd' : ''`.
 
 As ações `lancado_rh`, `editado_rh` e `excluido_rh` usam `sbPost('ferias_historico', ...).catch(() => {})` diretamente (não passam por `_logAtiv`) — falha no log nunca bloqueia a operação principal.
 
@@ -1499,7 +1502,7 @@ toast(_histFalhouXxx ? '✓ Operação — histórico não registrado, contate o
 
 ### `gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl)`
 
-Botão "Ciente" exibido ao Gestor quando o RH responde (aprovado, rejeitado, alterações, cancelamentos). **Corrigido em commit `6bbdfad`** (dois try/catch separados).
+Botão "Ciente" exibido ao Gestor quando o RH responde (aprovado, rejeitado, alterações, cancelamentos, acordos de gozo). **Corrigido em commits `6bbdfad` e `993c54f`** (dois try/catch; detalhe por tipo de ação; toast de confirmação).
 
 ```js
 async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
@@ -1509,9 +1512,17 @@ async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
     (h.acao || '').toLowerCase() === (acaoRef || '').toLowerCase()
   );
   const det = { acao_referencia: acaoRef };
-  if (original?.detalhe?.inicio) det.inicio = original.detalhe.inicio;
-  if (original?.detalhe?.fim)    det.fim    = original.detalhe.fim;
-  if (original?.detalhe?.dias)   det.dias   = original.detalhe.dias;
+  const _acaoLower = (acaoRef || '').toLowerCase();
+  // Gozo usa saida/retorno; demais ações usam inicio/fim
+  if (_acaoLower === 'gozo_aprovado' || _acaoLower === 'gozo_recusado') {
+    if (original?.detalhe?.saida)   det.saida   = original.detalhe.saida;
+    if (original?.detalhe?.retorno) det.retorno = original.detalhe.retorno;
+    if (original?.detalhe?.dias)    det.dias    = original.detalhe.dias;
+  } else {
+    if (original?.detalhe?.inicio) det.inicio = original.detalhe.inicio;
+    if (original?.detalhe?.fim)    det.fim    = original.detalhe.fim;
+    if (original?.detalhe?.dias)   det.dias   = original.detalhe.dias;
+  }
   try {
     await _logAtiv(feriasId, colabId, 'gestor_ciente', GESTOR_NOME_USUARIO, det);
   } catch(e) {
@@ -1521,12 +1532,27 @@ async function gestorMarcarCiente(feriasId, colabId, acaoRef, btnEl) {
     return;
   }
   try { renderGestorAtividade(); } catch(e) { console.error('[renderGestorAtividade pós-ciente]', e); }
+  toast('✓ Ciente registrado.', 'sucesso');
 }
 ```
 
-**Regra obrigatória (commit `6bbdfad`):** INSERT e render em blocos try/catch **separados**. Se o INSERT tiver sucesso mas `renderGestorAtividade` lançar, o erro de render é logado silenciosamente — jamais exibe toast de falha nem reabilita o botão. Isso evita que o Gestor clique "Ciente" duas vezes quando o registro já foi gravado.
+**Regra obrigatória (commit `6bbdfad`):** INSERT e render em blocos try/catch **separados**. Se o INSERT tiver sucesso mas `renderGestorAtividade` lançar, o erro de render é logado silenciosamente — jamais exibe toast de falha nem reabilita o botão.
 
-**Dedup natural:** após INSERT bem-sucedido, `_gestorAgruparProcessos` elege o evento de negócio (ex: `aprovado`) como representante do processo → `_gestorProcessoInfo` retorna `ativo: false` → item sai de "Atividade Recente" → botão nunca é renderizado novamente. `gestor_ciente` fica preservado no banco e visível na timeline de expansão do RH, mas nunca substitui o desfecho na lista.
+**Toast de confirmação:** após INSERT bem-sucedido (mesmo que render falhe), exibe `'✓ Ciente registrado.'` — feedback visual imediato para o Gestor.
+
+**Dedup via `_ar`:** após INSERT bem-sucedido, `renderGestorAtividade` recalcula `_ar(acaoEf)` → encontra `gestor_ciente` no `FERIAS_HISTORICO` → retorna `ativo: false` → item migra de "Atividade Recente" para "Histórico". O botão renderizado no Histórico usa a mesma verificação e aparece já no estado `disabled` ("✓ Ciente"), impedindo clique duplo.
+
+**Dedup do botão no `btnAcaoFn`:**
+```js
+const jaCiente = (FERIAS_HISTORICO || []).some(x =>
+  String(x.ferias_id) === String(h.ferias_id) &&
+  (x.acao || '').toLowerCase() === 'gestor_ciente' &&
+  (x.detalhe?.acao_referencia || '').toLowerCase() === _acaoParaCiente.toLowerCase()
+);
+btnCiente = jaCiente
+  ? `<button disabled style="...">✓ Ciente</button>`
+  : `<button onclick="gestorMarcarCiente(${h.ferias_id},${h.colaborador_id},'${_acaoParaCiente}',this)" ...>Ciente</button>`;
+```
 
 **Ações que exibem o botão Ciente** (`_DESFECHOS_RH` + fallback):
 ```js
@@ -1564,7 +1590,7 @@ Duas abas dentro da seção de atividade: **Atividade Recente** e **Histórico**
 
 #### Classificação
 
-A função `_gestorProcessoInfo(h)` recebe o evento mais recente de um processo (`ferias_id`) e retorna `{ estado, cls, ativo, inicio, fim, dias }`.
+A função `_gestorProcessoInfo(h)` recebe o evento mais recente de um processo (`ferias_id`) e retorna `{ estado, cls, ativo, inicio, fim, dias, motivo, _ehDesfecho, _acaoEfetiva }`.
 
 **Regra obrigatória:** `ativo: true` APENAS para os três estados "aguardando decisão do RH":
 
@@ -1584,6 +1610,37 @@ A função `_gestorProcessoInfo(h)` recebe o evento mais recente de um processo 
 ```
 
 **Nunca** verificar data (`passou`) ou retomada (`temNovo`, `paVenc`) para decidir `ativo`. A classificação é puramente pelo tipo de ação do último evento.
+
+#### `_ar(acaoEf)` — helper de Atividade Recente para desfechos (commit `993c54f`, Nov/2026)
+
+Para desfechos (aprovado, rejeitado, gozo_aprovado etc.), `ativo` não é simplesmente `ativoResolvido` (baseado em tempo). Ele depende de **já ter sido marcado Ciente pelo gestor**:
+
+```js
+const ativoResolvido = diasAtras <= (FERIAS_CONFIG.dias_resposta_visivel ?? 7);
+
+// _ar retorna false quando gestor já clicou Ciente para essa ação específica
+const _ar = acaoEf => ativoResolvido && !(FERIAS_HISTORICO || []).some(x =>
+  String(x.ferias_id) === String(h.ferias_id) &&
+  (x.acao || '').toLowerCase() === 'gestor_ciente' &&
+  (x.detalhe?.acao_referencia || '').toLowerCase() === (acaoEf || '').toLowerCase()
+);
+```
+
+**Uso:** todos os retornos de desfecho em `_gestorProcessoInfo` usam `_ar(acaoEf)` em vez de `ativo: ativoResolvido`. O efeito é que o item migra imediatamente de "Atividade Recente" para "Histórico" ao clicar em "Ciente" — sem esperar expirar o prazo de `dias_resposta_visivel`.
+
+**Gozo:** `_ar('gozo_aprovado')` / `_ar('gozo_recusado')` — os campos `acao_referencia` gravados em `gestor_ciente` para gozo usam essas strings exatas.
+
+#### Regra para `fim` em `_gestorProcessoInfo` para gozo (commit `3996fc0`, Nov/2026)
+
+Para `gozo_aprovado` / `gozo_recusado`, o fallback de `fim` **nunca deve ser o `fim` do período principal**:
+
+```js
+// CORRETO — fim=null quando det.retorno ausente (evita exibir fim do período principal)
+return { ..., inicio: det.saida || inicio, fim: det.retorno || null, dias: det.dias || dias, ... };
+// ERRADO (antigo) — fim: det.retorno || fim → usava data fim do período principal como fallback
+```
+
+**Por quê:** `fim` no escopo de `_gestorProcessoInfo` vem de `lanc?.fim` (período principal). Para gozo, o `fim` relevante é `det.retorno` (data de retorno do gozo). Se não existir (registros anteriores ao fix de log), `fim` deve ser `null` para que `_renderHistLinha` use o branch `'Saída DD/MM · Xd'` em vez de exibir datas incorretas (início do gozo → fim do período principal).
 
 #### ⚠ Fallback: `ferias.status` como fonte de verdade (commits `263becd`, `4bd7b43`, `7f5dcba` — 26/10/2026)
 
@@ -1669,6 +1726,21 @@ Substitui `renderGestorAtividade` e `renderRhAtividade` duplicados. Os dois vira
 | `btnAcaoFn` | "Analisar" (pendentes) ou chip | chip + "Ciente" (desfechos) |
 
 **Histórico — lista compacta:** uma linha por processo (`chip · nome · cargo · período · data`). Para o RH: clicar expande timeline cronológica completa do `ferias_id` via `_rhLinhaExpanded` (Set, sem nova query). Para o Gestor: mesma lista, sem expansão.
+
+**`_renderHistLinha` — cálculo do período exibido (commit `993c54f` + `17a98e8`, Nov/2026):**
+
+```js
+const det   = h.detalhe || {};
+const inicio = info.inicio || det.inicio || det.saida;   // fallback para gozo (saida)
+const fim    = info.fim    || det.fim    || det.retorno;  // fallback para gozo (retorno)
+const dias   = info.dias   || det.dias;
+const per   = inicio && fim
+  ? `${fmtD(inicio)} → ${fmtD(fim)}${dias ? ' · ' + dias + 'd' : ''}`
+  : inicio && dias ? `Saída ${fmtD(inicio)} · ${dias}d`   // ← retrocompat sem retorno
+  : '';
+```
+
+Exibido como `<span>` inline ao lado do nome/cargo quando `per !== ''`.
 
 **Adaptadores de dados intocados:** `_rhProcessoInfo` e `_gestorProcessoInfo` continuam separados (fontes de dados diferentes: `COLABORADORES.registros` vs `GESTOR_LANCAMENTOS`/`GESTOR_PERIODOS`).
 
