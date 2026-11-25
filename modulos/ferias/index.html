@@ -9267,27 +9267,33 @@ function _gestorProcessoInfo(h) {
   // Desfechos: ficam em Atividade Recente por param_ferias_config.dias_resposta_visivel dias
   const diasAtras = h.criado_em ? (Date.now() - new Date(h.criado_em).getTime()) / 86400000 : 999;
   const ativoResolvido = diasAtras <= (FERIAS_CONFIG.dias_resposta_visivel ?? 7);
+  // Desfecho visível em Atividade Recente apenas enquanto gestor não tiver marcado Ciente
+  const _ar = acaoEf => ativoResolvido && !(FERIAS_HISTORICO || []).some(x =>
+    String(x.ferias_id) === String(h.ferias_id) &&
+    (x.acao || '').toLowerCase() === 'gestor_ciente' &&
+    (x.detalhe?.acao_referencia || '').toLowerCase() === (acaoEf || '').toLowerCase()
+  );
 
   // Fallback: status do banco indica resolução mas histórico está incompleto (mesma lógica do RH)
   const _statusPendG = { solicitado: 'pendente', cancelamento_solicitado: 'cancelamento_solicitado', alteracao_solicitada: 'alteracao_solicitada' };
   if (_statusPendG[acao] && _rowStatus && _rowStatus !== _statusPendG[acao]) {
     if (acao === 'solicitado') {
       if (_rowStatus === 'aprovado' || _rowStatus === 'agendado')
-        return { estado: 'Aprovadas',     cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'aprovado' };
+        return { estado: 'Aprovadas',     cls: 'aprov',       ativo: _ar('aprovado'),               inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'aprovado' };
       if (_rowStatus === 'rejeitado')
-        return { estado: 'Recusadas',     cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'rejeitado' };
+        return { estado: 'Recusadas',     cls: 'recus',       ativo: _ar('rejeitado'),               inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'rejeitado' };
     }
     if (acao === 'cancelamento_solicitado') {
       if (_rowStatus === 'cancelado')
-        return { estado: 'Canceladas',    cls: 'cancel-aprov',ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'cancelamento_aprovado' };
+        return { estado: 'Canceladas',    cls: 'cancel-aprov',ativo: _ar('cancelamento_aprovado'),   inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'cancelamento_aprovado' };
       if (_rowStatus === 'aprovado')
-        return { estado: 'Canc. recusado',cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'cancelamento_recusado' };
+        return { estado: 'Canc. recusado',cls: 'aprov',       ativo: _ar('cancelamento_recusado'),   inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'cancelamento_recusado' };
     }
     if (acao === 'alteracao_solicitada') {
       if (_rowStatus === 'aprovado')
-        return { estado: 'Alt. aprovada', cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'alteracao_aprovada' };
+        return { estado: 'Alt. aprovada', cls: 'aprov',       ativo: _ar('alteracao_aprovada'),      inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'alteracao_aprovada' };
       if (_rowStatus === 'rejeitado')
-        return { estado: 'Alt. recusada', cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'alteracao_recusada' };
+        return { estado: 'Alt. recusada', cls: 'recus',       ativo: _ar('alteracao_recusada'),      inicio, fim, dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'alteracao_recusada' };
     }
     return { estado: acao, cls: 'neutro', ativo: false, inicio, fim, dias, motivo };
   }
@@ -9300,15 +9306,15 @@ function _gestorProcessoInfo(h) {
     return { estado: 'Cancelamento aguardando RH',cls: 'cancel-sol', ativo: _ehSurvivor, inicio, fim, dias, motivo };
 
   if (acao === 'aprovado' || acao === 'alteracao_aprovada')
-    return { estado: 'Aprovadas',            cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Aprovadas',            cls: 'aprov',       ativo: _ar(acao),                    inicio, fim, dias, motivo };
   if (acao === 'rejeitado')
-    return { estado: 'Recusadas',            cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Recusadas',            cls: 'recus',       ativo: _ar('rejeitado'),               inicio, fim, dias, motivo };
   if (acao === 'alteracao_recusada')
-    return { estado: 'Alt. recusada',        cls: 'recus',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Alt. recusada',        cls: 'recus',       ativo: _ar('alteracao_recusada'),      inicio, fim, dias, motivo };
   if (acao === 'cancelamento_aprovado')
-    return { estado: 'Canceladas',           cls: 'cancel-aprov',ativo: ativoResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Canceladas',           cls: 'cancel-aprov',ativo: _ar('cancelamento_aprovado'),   inicio, fim, dias, motivo };
   if (acao === 'cancelamento_recusado')
-    return { estado: 'Canc. recusado',       cls: 'aprov',       ativo: ativoResolvido, inicio, fim, dias, motivo };
+    return { estado: 'Canc. recusado',       cls: 'aprov',       ativo: _ar('cancelamento_recusado'),   inicio, fim, dias, motivo };
 
   if (acao === 'gozo_solicitado') {
     // Ativo enquanto existir realizacao pendente_gestor com mesma saida em GESTOR_PERIODOS
@@ -9323,9 +9329,9 @@ function _gestorProcessoInfo(h) {
     return { estado: 'Acordo aguardando RH', cls: 'cancel-sol', ativo: _gozoPendente, inicio: _inicioGozo, fim: _fimGozo, dias: _diasGozo, motivo };
   }
   if (acao === 'gozo_aprovado')
-    return { estado: 'Acordo aprovado',  cls: 'aprov', ativo: ativoResolvido, inicio: det.saida || inicio, fim: det.retorno || fim, dias: det.dias || dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'gozo_aprovado' };
+    return { estado: 'Acordo aprovado',  cls: 'aprov', ativo: _ar('gozo_aprovado'), inicio: det.saida || inicio, fim: det.retorno || fim, dias: det.dias || dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'gozo_aprovado' };
   if (acao === 'gozo_recusado')
-    return { estado: 'Acordo recusado',  cls: 'recus', ativo: ativoResolvido, inicio: det.saida || inicio, fim: det.retorno || fim, dias: det.dias || dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'gozo_recusado' };
+    return { estado: 'Acordo recusado',  cls: 'recus', ativo: _ar('gozo_recusado'), inicio: det.saida || inicio, fim: det.retorno || fim, dias: det.dias || dias, motivo, _ehDesfecho: true, _acaoEfetiva: 'gozo_recusado' };
 
   if (acao === 'gestor_ciente')
     return { estado: 'Ciente', cls: 'aprov', ativo: false, inicio: det.inicio || inicio, fim: det.fim || fim, dias: det.dias || dias, motivo };
