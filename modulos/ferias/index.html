@@ -4616,7 +4616,7 @@ async function rhAprovarGozoPendente(colabKey, sbId, lancIdx, saida) {
   const _perfGozo = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
   let _histFalhouGozo = false;
   if (colab?._sbColabId) {
-    try { await _logAtiv(sbId, colab._sbColabId, 'gozo_aprovado', _perfGozo.nome || 'RH', { saida, dias: _gozoAprov?.dias ?? null, lancIdx: Number(lancIdx) }); }
+    try { await _logAtiv(sbId, colab._sbColabId, 'gozo_aprovado', _perfGozo.nome || 'RH', { saida, retorno: _gozoAprov?.retorno ?? null, dias: _gozoAprov?.dias ?? null, lancIdx: Number(lancIdx) }); }
     catch(e) { _histFalhouGozo = true; console.error('[_logAtiv gozo_aprovado]', e); }
   }
   if (colab?._sbColabId) await _logColabHist(colab._sbColabId, 'ferias_gozo_aprovado', `Gozo aprovado: saída ${saida}${_gozoAprov?.dias ? ' · ' + _gozoAprov.dias + 'd' : ''}`, _perfGozo.nome || 'RH');
@@ -4631,6 +4631,7 @@ async function rhRejeitarGozoPendente(colabKey, sbId, lancIdx, saida) {
   const colab = COLABORADORES.find(c => c.__key === colabKey);
   const reg   = colab?.registros.find(r => r._sbId == sbId);
   if (!reg) return;
+  const _gozoRej = (reg.realizacoes || []).find(rx => rx.status === 'pendente_gestor' && Number(rx.lancIdx) === Number(lancIdx) && rx.saida === saida);
   const nova = (reg.realizacoes || []).filter(rx =>
     !(rx.status === 'pendente_gestor' && Number(rx.lancIdx) === Number(lancIdx) && rx.saida === saida)
   );
@@ -4640,7 +4641,7 @@ async function rhRejeitarGozoPendente(colabKey, sbId, lancIdx, saida) {
   reg.realizacoes = nova;
   const _perfRej = JSON.parse(localStorage.getItem('sb_perfil') || '{}');
   if (colab?._sbColabId) {
-    try { await _logAtiv(sbId, colab._sbColabId, 'gozo_recusado', _perfRej.nome || 'RH', { saida, lancIdx: Number(lancIdx) }); }
+    try { await _logAtiv(sbId, colab._sbColabId, 'gozo_recusado', _perfRej.nome || 'RH', { saida, retorno: _gozoRej?.retorno ?? null, lancIdx: Number(lancIdx) }); }
     catch(e) { console.error('[_logAtiv gozo_recusado]', e); }
     try { await _logColabHist(colab._sbColabId, 'ferias_gozo_recusado', `Gozo recusado: saída ${saida}`, _perfRej.nome || 'RH'); } catch(_) {}
   }
@@ -9640,8 +9641,8 @@ function renderAtividade(opts) {
     const nome  = colab ? colab.nome : '—';
     const cargo = colab ? [colab.cargo, colab.setor].filter(Boolean).join(' · ') : '';
     const det   = h.detalhe || {};
-    const inicio = info.inicio || det.inicio;
-    const fim    = info.fim    || det.fim;
+    const inicio = info.inicio || det.inicio || det.saida;
+    const fim    = info.fim    || det.fim    || det.retorno;
     const dias   = info.dias   || det.dias;
     const per   = inicio && fim ? `${fmtD(inicio)} → ${fmtD(fim)}${dias ? ' · ' + dias + 'd' : ''}` : '';
     const ts    = h.criado_em ? fmtDH(h.criado_em) : '';
