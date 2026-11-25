@@ -241,6 +241,73 @@ const TD = (par) => `style="${F}...border:1px solid ${par?'#EEF2FA':'#F5F8FD'};b
 - **Colunas:** Nome | Cargo | Admissão | Empresa | Tipo
 - **Funções:** `_dadosCotas()`, `gerarCotasPDF()`, `gerarCotasExcel()`
 
+### Por Lotação (modal centralizado)
+
+Relatório mais completo do módulo. Abre via modal centralizado (não usa o painel lateral `.detail-panel`).
+
+**Card:** `id="card-lotacao"`, abre `abrirLotModal()` em vez de `abrirDetalhe()`.
+
+**Estado global:**
+```js
+const LOT_COLUNAS_DEF = [
+  { key: 'nome', label: 'Colaborador', def: true },
+  { key: 'matricula', label: 'Matrícula', def: true },
+  { key: 'cargo', label: 'Cargo', def: true },
+  { key: 'gestor', label: 'Gestor', def: true },
+  { key: 'dataAdmissao', label: 'Admissão', def: true },
+  { key: 'empresaAtuacao', label: 'Empresa', def: true },
+  { key: 'setor', label: 'Setor', def: true },
+  { key: 'lotacao', label: 'Lotação', def: true },
+];
+let _lotColOrder = LOT_COLUNAS_DEF.map((_, i) => i);  // ordem por drag & drop
+let _lotDragSrc = null;
+let _lotChips = [
+  { key: 'lotacao',        label: 'Lotação', active: true  },
+  { key: 'empresaAtuacao', label: 'Empresa', active: true  },
+  { key: 'setor',          label: 'Setor',   active: false },
+];
+const LOT_COL_WEIGHTS = {
+  nome: 2.4, matricula: 0.7, cargo: 1.4, gestor: 1.2,
+  dataAdmissao: 0.9, empresaAtuacao: 1.2, setor: 1.1, lotacao: 1.0,
+};
+```
+
+**Modal — estrutura HTML (3 blocos sequenciais):**
+- **Bloco 1 — Filtros:** Situação, Empresa, Setor, Lotação, Tipo de vínculo (`.f-vinculo` checkboxes: CLT, Promotora, Pró-labore)
+- **Bloco 2 — Agrupar por:** chips `_lotChips` com ↑↓ e toggle ativo/inativo; número de ordem mostrado em círculo azul; chips inativos ficam acinzentados
+- **Bloco 3 — Colunas de dados:** lista drag & drop (`draggable`) com handle `⠿`; campos ativos nos chips de agrupamento são automaticamente ocultados da lista
+
+**Detecção automática de modo:** `_lotBreakKeys().length > 0` → PDF/Excel com quebras de seção; `=== 0` → tabela plana. Não há toggle manual.
+
+**Funções principais:**
+- `_dadosLotacao()` — aplica filtros (situação, empresa, setor, lotação, `vinculos()`) e retorna `{lista, chips, total, dataHora}`
+- `_lotBreakKeys()` — retorna `_lotChips.filter(c => c.active).map(c => c.key)`
+- `_lotColsAtivas()` — retorna colunas checadas, excluindo as que estão ativas no agrupamento (`hiddenKeys`)
+- `_lotRenderColunas()` — renderiza lista drag & drop; preserva estado de checkboxes via `_lotRenderColunasComChecks(checks)`
+- `_lotRenderChips()` — renderiza chips de agrupamento com numeração e botões ↑↓
+- `_lotColgroup(colunas)` — `<colgroup>` com larguras proporcionais via `LOT_COL_WEIGHTS` (PDF dinâmico)
+- `gerarLotacaoPDF()` → chama `_lotPDFQuebras()` ou `_lotPDFTabela()` conforme modo
+- `gerarLotacaoExcel()` → gera tabela com `<colgroup>`, nome `width:220pt`, sem grid lines
+
+**Excel — cor de linha por tipoVinculo (`_lotXlsRowBg`):**
+- `promotora` → `#FFFBEB` (âmbar creme)
+- `pro_labore` → `#F0FDF4` (verde menta)
+- `clt` → `#fff` (branco)
+
+**Excel — MSO directive (grid lines desligado):**
+```html
+<!--[if gte mso 9]><xml><x:ExcelWorkbook>...<x:DisplayGridlines>False</x:DisplayGridlines>...</xml><![endif]-->
+```
+> **Atenção:** usar `<x:DisplayGridlines>False</x:DisplayGridlines>` (com valor), **não** `<x:DisplayGridlines/>` (vazio). Vazio = grid ligado.
+
+**Regra de carregamento:** `supabaseToJS` deve mapear `tipo_vinculo` → `tipoVinculo` e `lotacao` → `lotacao`. O select de carregamento deve incluir `matricula,tipo_vinculo,lotacao`.
+
+**Coluna de dados vs. query:** os campos `matricula`, `tipoVinculo` e `lotacao` são usados por Por Lotação mas não pelos demais relatórios. Verificar se o `select=` do `init()` os inclui antes de qualquer edição no carregamento.
+
+**Feature pendente (não implementada):** título customizável de seção — prefixo editável antes do valor do agrupamento (ex: "Lotação: CD" em vez de "CD"). Aguarda validação da interface atual pela usuária.
+
+---
+
 ## Como adicionar um novo relatório
 
 1. Criar card HTML dentro do `.cat-section` correto:
