@@ -370,6 +370,33 @@ await fetch(`${SB_URL}/rest/v1/admissao_fichas?id=eq.${fichaId}`, {
 
 ---
 
+## Integração: campos preservados na efetivação (fix nov/2026)
+
+### CNH Categoria (`cnh_categoria`)
+
+**Problema corrigido:** o painel de revisão usava `fiSel('cnh_categoria', ...)` — um `<select>` com opções fixas (A, B, AB, C, D, E). Quando o candidato preenchia um valor que não correspondia exatamente às opções (ex: "b", "ab"), o SELECT ficava em branco e o save sobrescrevia o banco com `null`.
+
+**Fix aplicado:**
+1. Painel de revisão: substituído `fiSel()` por `fi()` (input texto livre) — o valor do candidato sempre aparece e pode ser editado pelo RH sem risco de perda.
+2. Save (`savePanel()`): `cnh_categoria: fv('cnh_categoria') || currentFicha.cnh_categoria || null` — fallback para o valor original da ficha se o campo estiver em branco no painel.
+
+**Regra crítica:** campos preenchidos pelo candidato no formulário online **DEVEM** usar `fi()` no painel de revisão, **NUNCA** `fiSel()`. Um SELECT com opções fixas silenciosamente descarta valores que não batem exatamente.
+
+### Possui filhos / Quantidade de filhos (`tem_filhos`, `qtd_filhos`)
+
+**Problema corrigido:** o toggle "Possui filhos?" era inicializado com `deps.length` (comprimento do array de dependentes cadastrados pelo RH no painel). Se o candidato declarou "Sim" mas o RH não adicionou dependentes individuais, o toggle ficava em "Não" e o save gravava `tem_filhos: false`, apagando o dado original.
+
+**Fix aplicado:**
+1. Inicialização do toggle: `(deps.length || f.tem_filhos) ? ...` — o toggle já aparece ativo quando o candidato declarou filhos, mesmo sem dependentes cadastrados no painel.
+2. Save (`savePanel()`): `tem_filhos: getPanelDeps().length > 0 || currentFicha.tem_filhos || false` — preserva o valor original quando o RH não adicionou dependentes pelo painel.
+3. `qtd_filhos` é pré-preenchido com `f.qtd_filhos` no input `panel-qtd-filhos` — preservado automaticamente.
+
+### Regra geral para campos da ficha de admissão
+
+Quando um campo existe tanto na ficha online quanto no painel de revisão:
+- **No painel:** sempre `fi()` (nunca `fiSel()`) para campos de texto livre preenchidos pelo candidato.
+- **No save:** sempre fallback `|| currentFicha.campoOriginal || null` para evitar que interação do RH com o painel sobrescreva o dado do candidato com vazio.
+
 ## Pendências conhecidas
 
 - Notificação por email ao candidato quando convite é criado
