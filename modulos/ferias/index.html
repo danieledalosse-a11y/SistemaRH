@@ -8793,14 +8793,6 @@ function _buildRelatorioHTML(linhas, mesLabel, opts) {
     trs += `<tr>${cols.map(c => c.td(l)).join('')}</tr>`;
   });
 
-  // Legenda de setores únicos
-  const setoresUnicos = [...new Map(sorted.map(l => [l.setor, _corSetor(l.setor)])).entries()];
-  const legenda = setoresUnicos.map(([s, c]) =>
-    `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:16px;">
-      <span style="width:10px;height:10px;border-radius:50%;background:${c.bg};border:1px solid rgba(0,0,0,0.15);display:inline-block;"></span>
-      <span>${s}</span>
-    </span>`
-  ).join('');
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
   <title>Férias ${mesLabel}</title>
@@ -8820,7 +8812,6 @@ function _buildRelatorioHTML(linhas, mesLabel, opts) {
     td:last-child { border-right: none; }
     tr.emp-sep td { background: #f1f5f9; color: #334155; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; padding: 5px 10px; border-bottom: 1px solid #cbd5e1; border-right: none; }
     .rel-footer { position: fixed; bottom: 8mm; left: 12mm; right: 12mm; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; }
-    .legenda { display: flex; flex-wrap: wrap; gap: 4px; }
     @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
   </style>
   </head><body>
@@ -8837,8 +8828,7 @@ function _buildRelatorioHTML(linhas, mesLabel, opts) {
     <tbody>${trs}</tbody>
   </table>
   <div class="rel-footer">
-    <div class="legenda">${legenda}</div>
-    <div>FÉRIAS — ${mesLabel.toUpperCase()} &nbsp;|&nbsp; 1 de 1</div>
+    <div>FÉRIAS — ${mesLabel.toUpperCase()} &nbsp;|&nbsp; ${sorted.length} registro(s)</div>
   </div>
   </body></html>`;
 }
@@ -8885,10 +8875,6 @@ function _buildExcelHTML(linhas, mesLabel, opts) {
     trs += `<tr>${cols.map(c => c.td(l, cs)).join('')}</tr>`;
   });
 
-  const setoresUnicos = [...new Map(sorted.map(l => [l.setor, _corSetor(l.setor)])).entries()];
-  const legendaCells = setoresUnicos.map(([s, c]) =>
-    `<td style="background:${c.bg};color:${c.text};padding:4px 10px;font-size:10pt;border:1px solid rgba(0,0,0,0.1);">${s}</td>`
-  ).join('');
 
   const thead = cols.map(c => `<td style="${c.thStyle}">${c.label}</td>`).join('');
   const colgroup = cols.map(c => `<col style="mso-width-source:userset;width:${c.w}pt">`).join('');
@@ -8901,7 +8887,6 @@ function _buildExcelHTML(linhas, mesLabel, opts) {
     <tr><td colspan="${nCols}" style="font-size:10pt;color:#64748b;padding:0 10px 10px;border:none;font-family:Arial,sans-serif;">${sorted.length} registro(s) · Gerado em ${gerado}</td></tr>
     <tr>${thead}</tr>
     ${trs}
-    ${!hide.has('setor') ? `<tr><td colspan="${nCols}" style="padding:6px 0;border:none;"></td></tr><tr>${legendaCells}</tr>` : ''}
   </table>
   </body></html>`;
 }
