@@ -1851,6 +1851,17 @@
       </div>
     </div>
 
+    <div class="rel-field">
+      <label style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Colunas de dados</span>
+        <label class="rel-mes-master-wrap" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:400;font-size:12px;color:var(--text-sec);">
+          <input type="checkbox" id="f-relmes-master" onchange="_relMesSelectAll(this)">
+          <span id="f-relmes-master-label">8 de 8</span>
+        </label>
+      </label>
+      <div id="f-relmes-colunas-container" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;"></div>
+    </div>
+
     <div class="rel-actions">
       <button class="btn-rel-cancel" onclick="document.getElementById('modalRelatorio').classList.remove('open')">Cancelar</button>
       <button class="btn-excel" onclick="exportarRelatorioExcel()">
@@ -8455,6 +8466,7 @@ function abrirModalRelatorio() {
     mesInput.value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
   }
   document.getElementById('modalRelatorio')?.classList.add('open');
+  _relMesRenderColunas();
 }
 
 function fecharModalRelatorio(e) {
@@ -8555,6 +8567,98 @@ function _corSetor(setor) {
   return { bg: '#f5f5f5', text: '#000' };
 }
 
+// --- Seletor de colunas do Relatório do Mês ---
+const _REL_MES_COLS_DEF = [
+  { key: 'empresa',   label: 'Empresa de Registro' },
+  { key: 'setor',     label: 'Setor' },
+  { key: 'matricula', label: 'Matrícula' },
+  { key: 'nome',      label: 'Nome do Colaborador' },
+  { key: 'cargo',     label: 'Cargo' },
+  { key: 'dias',      label: 'Dias' },
+  { key: 'inicio',    label: 'Início' },
+  { key: 'fim',       label: 'Fim' },
+];
+
+function _relMesRenderColunas() {
+  const container = document.getElementById('f-relmes-colunas-container');
+  if (!container) return;
+  container.innerHTML = _REL_MES_COLS_DEF.map(col => `
+    <div class="rel-mes-col-item" draggable="true" data-key="${col.key}"
+         style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg,#fff);border:1px solid var(--border,#e2e8f0);border-radius:6px;cursor:grab;user-select:none;"
+         ondragstart="_relMesDragStart(event)" ondragover="_relMesDragOver(event)" ondrop="_relMesDrop(event)" ondragend="_relMesDragEnd(event)">
+      <span style="color:var(--text-ter,#6C7589);font-size:13px;line-height:1;cursor:grab;">&#8942;&#8942;</span>
+      <input type="checkbox" checked onchange="_relMesUpdateMaster()" onclick="event.stopPropagation()">
+      <label style="font-size:12px;color:var(--text,#101828);flex:1;cursor:pointer;"
+             onmousedown="event.preventDefault()">${col.label}</label>
+    </div>`).join('');
+  _relMesUpdateMaster();
+}
+
+function _relMesUpdateMaster() {
+  const container = document.getElementById('f-relmes-colunas-container');
+  const master = document.getElementById('f-relmes-master');
+  const label = document.getElementById('f-relmes-master-label');
+  if (!container || !master) return;
+  const all = [...container.querySelectorAll('input[type=checkbox]')];
+  const checked = all.filter(cb => cb.checked).length;
+  const total = all.length;
+  if (label) label.textContent = `${checked} de ${total}`;
+  if (checked === 0) { master.checked = false; master.indeterminate = false; }
+  else if (checked === total) { master.checked = true; master.indeterminate = false; }
+  else { master.checked = false; master.indeterminate = true; }
+}
+
+function _relMesSelectAll(masterCb) {
+  const container = document.getElementById('f-relmes-colunas-container');
+  if (!container) return;
+  const state = masterCb.checked;
+  container.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = state);
+  _relMesUpdateMaster();
+}
+
+function _relMesGetCols(ALL_COLS_DEF) {
+  const container = document.getElementById('f-relmes-colunas-container');
+  if (!container) return ALL_COLS_DEF;
+  const items = [...container.querySelectorAll('.rel-mes-col-item')];
+  const result = [];
+  items.forEach(item => {
+    const cb = item.querySelector('input[type=checkbox]');
+    const key = item.dataset.key;
+    if (cb && cb.checked) {
+      const col = ALL_COLS_DEF.find(c => c.key === key);
+      if (col) result.push(col);
+    }
+  });
+  return result.length > 0 ? result : ALL_COLS_DEF;
+}
+
+// Drag & drop para reordenar colunas
+let _relMesDragSrc = null;
+function _relMesDragStart(e) {
+  _relMesDragSrc = e.currentTarget;
+  e.dataTransfer.effectAllowed = 'move';
+  _relMesDragSrc.style.opacity = '0.5';
+}
+function _relMesDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const target = e.currentTarget;
+  if (target !== _relMesDragSrc && target.classList.contains('rel-mes-col-item')) {
+    const container = target.parentNode;
+    const items = [...container.children];
+    const srcIdx = items.indexOf(_relMesDragSrc);
+    const tgtIdx = items.indexOf(target);
+    if (srcIdx < tgtIdx) container.insertBefore(_relMesDragSrc, target.nextSibling);
+    else container.insertBefore(_relMesDragSrc, target);
+  }
+}
+function _relMesDrop(e) { e.preventDefault(); }
+function _relMesDragEnd(e) {
+  if (_relMesDragSrc) _relMesDragSrc.style.opacity = '';
+  _relMesDragSrc = null;
+}
+// --- Fim seletor de colunas ---
+
 function _fmtData(iso) {
   if (!iso || iso === '—') return iso;
   const p = iso.split('-');
@@ -8594,7 +8698,7 @@ function _buildRelatorioHTML(linhas, mesLabel, opts) {
     { key: 'fim',       label: 'Fim',                   thStyle: 'text-align:center;', w: '8%',
       td: l => { const c=_corSetor(l.setor); return `<td style="background:${c.bg};color:${c.text};text-align:center;">${_fmtData(l.fim)}</td>`; } },
   ];
-  const cols = ALL_COLS.filter(c => !hide.has(c.key));
+  const cols = opts.hideColumns ? ALL_COLS.filter(c => !hide.has(c.key)) : _relMesGetCols(ALL_COLS);
   const nCols = cols.length;
 
   // Redistribui larguras proporcionalmente
@@ -8689,7 +8793,7 @@ function _buildExcelHTML(linhas, mesLabel, opts) {
     { key: 'inicio',    thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.inicio)}</td>`,                                 label: 'Início' },
     { key: 'fim',       thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.fim)}</td>`,                                    label: 'Fim' },
   ];
-  const cols = ALL_COLS.filter(c => !hide.has(c.key));
+  const cols = opts.hideColumns ? ALL_COLS.filter(c => !hide.has(c.key)) : _relMesGetCols(ALL_COLS);
   const nCols = cols.length;
 
   const agruparEmpresa = document.getElementById('relChkAgruparEmpresa')?.checked ?? false;
