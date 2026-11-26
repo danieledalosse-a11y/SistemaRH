@@ -1923,6 +1923,13 @@
       <button class="btn-rel-cancel" onclick="document.getElementById('modalRelatorio').classList.remove('open')">Cancelar</button>
       <button class="btn-pdf" onclick="exportarRelatorioPDF()" style="flex:1;">📄 Gerar PDF</button>
       <button class="btn-excel" onclick="exportarRelatorioExcel()" style="flex:1;">📊 Gerar Excel</button>
+      <div style="position:relative;display:inline-flex;">
+        <button id="btnAcordosMenu" onclick="event.stopPropagation();_toggleAcordosMenu()" style="padding:8px 14px;border:1.5px solid #CBD5E1;background:#F8FAFC;color:#374151;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">Acordos ▾</button>
+        <div id="acordosDropdown" style="display:none;position:absolute;bottom:calc(100% + 6px);right:0;background:#fff;border:1px solid #E2E8F0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:140px;z-index:9999;">
+          <button onclick="_toggleAcordosMenu();exportarAcordosPDF()" style="display:block;width:100%;padding:10px 16px;border:none;background:none;text-align:left;font-size:13px;cursor:pointer;color:#1a202c;">📄 PDF</button>
+          <button onclick="_toggleAcordosMenu();exportarAcordosExcel()" style="display:block;width:100%;padding:10px 16px;border:none;background:none;text-align:left;font-size:13px;cursor:pointer;color:#1a202c;border-top:1px solid #F1F5F9;">📊 Excel</button>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -8999,6 +9006,260 @@ function exportarRelatorioPDF() {
   w.document.write(html);
   w.document.close();
   document.getElementById('modalRelatorio')?.classList.remove('open');
+}
+
+// === RELATÓRIO DE ACORDOS (independente) ===
+
+function _toggleAcordosMenu() {
+  const dd = document.getElementById('acordosDropdown');
+  if (!dd) return;
+  const isOpen = dd.style.display !== 'none';
+  dd.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    const closeHandler = function(e) {
+      if (!document.getElementById('btnAcordosMenu')?.contains(e.target) &&
+          !dd.contains(e.target)) {
+        dd.style.display = 'none';
+        document.removeEventListener('click', closeHandler);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+  }
+}
+
+function _getDadosAcordos() {
+  const mesVal = document.getElementById('relMes')?.value || '';
+  const empVal = document.getElementById('relEmpresa')?.value || '';
+  const setVal = document.getElementById('relSetor')?.value  || '';
+  const gestVal = document.getElementById('relGestor')?.value || '';
+
+  let mesInicio = '', mesFim = '', mesLabel = 'Todos os meses';
+  if (mesVal) {
+    mesInicio = mesVal + '-01';
+    const [y, m] = mesVal.split('-').map(Number);
+    const ultimoDia = new Date(y, m, 0).getDate();
+    mesFim = `${mesVal}-${String(ultimoDia).padStart(2, '0')}`;
+    const nomesMes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    mesLabel = `${nomesMes[m - 1]} ${y}`;
+  }
+
+  const empLabel = empVal || 'Todas as empresas';
+  const itens = [];
+
+  (COLABORADORES || []).forEach(c => {
+    if (empVal  && (c.empresa || '') !== empVal)  return;
+    if (setVal  && (c.setor  || '') !== setVal)   return;
+    if (gestVal && (c.gestor || '') !== gestVal)  return;
+
+    (c.registros || []).forEach(reg => {
+      const excluir = new Set(['Cancelado','Descartado','Rejeitado']);
+      if (excluir.has(reg.status)) return;
+
+      // Tipo A — lançamentos com diasTrabalhar > 0
+      (reg.lancamentos || []).forEach(l => {
+        if (!l.inicio) return;
+        if (mesInicio && (l.inicio < mesInicio || l.inicio > mesFim)) return;
+        const dt = Number(l.diasTrabalhar);
+        if (!(dt > 0)) return;
+        itens.push({
+          nome: c.nome, cargo: c.cargo || '', setor: c.setor || '',
+          empresa: c.empresa || '', matricula: c.matricula || '',
+          inicio: l.inicio, fim: l.fim || '', dias: l.dias || 0,
+          diasTrabalhar: dt,
+          tipoAcordo: 'Lançamento c/ dias trabalhados',
+          statusLancamento: reg.status || '',
+          obsLancamento: l.nota || l.obs || reg.obs || '',
+        });
+      });
+
+      // Tipo B — realizações de período encerrado antes do mês
+      (reg.realizacoes || []).forEach(rx => {
+        if (!rx.saida) return;
+        if (mesInicio && (rx.saida < mesInicio || rx.saida > mesFim)) return;
+        const lancPai = (reg.lancamentos || [])[Number(rx.lancIdx ?? 0)];
+        if (!lancPai || !lancPai.fim || lancPai.fim >= mesInicio) return;
+        itens.push({
+          nome: c.nome, cargo: c.cargo || '', setor: c.setor || '',
+          empresa: c.empresa || '', matricula: c.matricula || '',
+          inicio: rx.saida, fim: rx.retorno || '', dias: Number(rx.dias) || 0,
+          diasTrabalhar: null,
+          tipoAcordo: 'Realização de período encerrado',
+          statusLancamento: reg.status || '',
+          obsLancamento: rx.obs || '',
+        });
+      });
+    });
+  });
+
+  itens.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  return { itens, mesLabel, empLabel };
+}
+
+function _buildAcordosPDF(itens, mesLabel, empLabel) {
+  const fmtD = s => {
+    if (!s) return '—';
+    const [y, m, d] = s.split('-');
+    return `${d}/${m}/${y}`;
+  };
+  const tipoA = itens.filter(i => i.tipoAcordo === 'Lançamento c/ dias trabalhados');
+  const tipoB = itens.filter(i => i.tipoAcordo === 'Realização de período encerrado');
+
+  const renderLinhas = (lista) => lista.map(i => `
+    <tr>
+      <td>${i.nome}</td>
+      <td>${i.cargo}</td>
+      <td>${i.setor}</td>
+      <td>${i.empresa}</td>
+      <td style="white-space:nowrap;">${fmtD(i.inicio)} → ${fmtD(i.fim)}</td>
+      <td style="text-align:center;">${i.dias}</td>
+      <td style="text-align:center;">${i.diasTrabalhar != null ? i.diasTrabalhar : '—'}</td>
+      <td>${i.tipoAcordo}</td>
+      <td>${i.statusLancamento}</td>
+      <td>${i.obsLancamento || '—'}</td>
+    </tr>`).join('');
+
+  const grupos = [];
+  if (tipoA.length) {
+    grupos.push(`
+      <tr><td colspan="10" style="background:#F1F5F9;color:#374151;font-weight:700;font-size:11px;padding:6px 10px;text-transform:uppercase;letter-spacing:.05em;">Tipo A — Lançamento com dias trabalhados (${tipoA.length} registro${tipoA.length !== 1 ? 's' : ''})</td></tr>
+      ${renderLinhas(tipoA)}`);
+  }
+  if (tipoB.length) {
+    grupos.push(`
+      <tr><td colspan="10" style="background:#F1F5F9;color:#374151;font-weight:700;font-size:11px;padding:6px 10px;text-transform:uppercase;letter-spacing:.05em;">Tipo B — Realização de período encerrado (${tipoB.length} registro${tipoB.length !== 1 ? 's' : ''})</td></tr>
+      ${renderLinhas(tipoB)}`);
+  }
+
+  const corpo = itens.length === 0
+    ? `<tr><td colspan="10" style="text-align:center;padding:24px;color:#6B7280;font-style:italic;">Nenhum acordo encontrado para o período selecionado.</td></tr>`
+    : grupos.join('');
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Relatório de Acordos — ${mesLabel}</title>
+<style>
+  @page { size: A4 landscape; margin: 10mm; }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 0; padding: 0; }
+  h1 { font-size: 15px; color: #1E3A5F; margin: 0 0 2px 0; text-transform: uppercase; letter-spacing: .04em; }
+  .sub { font-size: 11px; color: #64748B; margin: 0 0 10px 0; }
+  .aviso { background: #FFFBEB; border: 1.5px solid #FDE68A; color: #92400E; padding: 8px 14px; border-radius: 6px; font-size: 11px; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th { background: #1E3A5F; color: #fff; font-size: 10px; font-weight: 700; padding: 5px 7px; text-align: left; white-space: nowrap; }
+  td { font-size: 10px; padding: 4px 7px; border-bottom: 1px solid #E2E8F0; vertical-align: top; word-break: break-word; }
+  tr:nth-child(even) td { background: #F8FAFC; }
+  .footer { position: fixed; bottom: 4mm; right: 4mm; font-size: 9px; color: #9CA3AF; }
+</style></head><body>
+<h1>Relatório de Acordos de Férias — Uso Interno</h1>
+<div class="sub">${mesLabel} · ${empLabel} · Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+<div class="aviso">⚠️ Este relatório é para validação e controle interno. Os registros aqui listados podem ou não gerar pagamento — conferir caso a caso.</div>
+<table>
+  <colgroup>
+    <col style="width:16%"><col style="width:11%"><col style="width:9%"><col style="width:9%">
+    <col style="width:12%"><col style="width:5%"><col style="width:5%">
+    <col style="width:14%"><col style="width:9%"><col style="width:10%">
+  </colgroup>
+  <thead><tr>
+    <th>Nome</th><th>Cargo</th><th>Setor</th><th>Empresa</th>
+    <th>Período</th><th>Dias aus.</th><th>Dias trab.</th>
+    <th>Tipo</th><th>Status lanç.</th><th>Obs</th>
+  </tr></thead>
+  <tbody>${corpo}</tbody>
+</table>
+<div class="footer">ACORDOS DE FÉRIAS — USO INTERNO</div>
+</body></html>`;
+}
+
+function _buildAcordosExcel(itens, mesLabel, empLabel) {
+  const fmtD = s => {
+    if (!s) return '—';
+    const [y, m, d] = s.split('-');
+    return `${d}/${m}/${y}`;
+  };
+  const tipoA = itens.filter(i => i.tipoAcordo === 'Lançamento c/ dias trabalhados');
+  const tipoB = itens.filter(i => i.tipoAcordo === 'Realização de período encerrado');
+
+  const hdrRow = `<tr style="background:#1E3A5F;color:#fff;font-weight:bold;font-size:11px;">
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Nome</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Cargo</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Setor</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Empresa</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Início</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Fim</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Dias aus.</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Dias trab.</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Tipo</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Status lanç.</td>
+    <td style="background:#1E3A5F;color:#fff;font-weight:bold;">Obs</td>
+  </tr>`;
+
+  const renderLinhas = (lista) => lista.map((i, idx) => {
+    const bg = idx % 2 === 0 ? '#fff' : '#F8FAFC';
+    return `<tr style="background:${bg};font-size:11px;">
+      <td style="background:${bg};">${i.nome}</td>
+      <td style="background:${bg};">${i.cargo}</td>
+      <td style="background:${bg};">${i.setor}</td>
+      <td style="background:${bg};">${i.empresa}</td>
+      <td style="background:${bg};white-space:nowrap;">${fmtD(i.inicio)}</td>
+      <td style="background:${bg};white-space:nowrap;">${fmtD(i.fim)}</td>
+      <td style="background:${bg};text-align:center;">${i.dias}</td>
+      <td style="background:${bg};text-align:center;">${i.diasTrabalhar != null ? i.diasTrabalhar : '—'}</td>
+      <td style="background:${bg};">${i.tipoAcordo}</td>
+      <td style="background:${bg};">${i.statusLancamento}</td>
+      <td style="background:${bg};">${i.obsLancamento || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const secoes = [];
+  secoes.push(`<tr><td colspan="11" style="background:#F1F5F9;color:#374151;font-weight:bold;font-size:12px;padding:6px 8px;">Aviso: Relatório para validação e controle interno. Os registros podem ou não gerar pagamento — conferir caso a caso.</td></tr>`);
+  if (tipoA.length) {
+    secoes.push(`<tr><td colspan="11" style="background:#EFF6FF;color:#1849A9;font-weight:bold;font-size:11px;">Tipo A — Lançamento com dias trabalhados</td></tr>`);
+    secoes.push(hdrRow);
+    secoes.push(renderLinhas(tipoA));
+    secoes.push(`<tr><td colspan="11"></td></tr>`);
+  }
+  if (tipoB.length) {
+    secoes.push(`<tr><td colspan="11" style="background:#FFFBEB;color:#92400E;font-weight:bold;font-size:11px;">Tipo B — Realização de período encerrado</td></tr>`);
+    secoes.push(hdrRow);
+    secoes.push(renderLinhas(tipoB));
+  }
+  if (itens.length === 0) {
+    secoes.push(`<tr><td colspan="11" style="text-align:center;color:#6B7280;font-style:italic;">Nenhum acordo encontrado para o período selecionado.</td></tr>`);
+  }
+
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="UTF-8">
+  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>
+  <x:ExcelWorksheet><x:Name>Acordos</x:Name><x:WorksheetOptions><x:Print><x:ValidPrinterInfo/></x:Print></x:WorksheetOptions></x:ExcelWorksheet>
+  </x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+  </head><body>
+  <table border="1" style="border-collapse:collapse;font-family:Arial;font-size:11px;">
+    <tr><td colspan="11" style="background:#1E3A5F;color:#fff;font-weight:bold;font-size:14px;padding:8px;">Relatório de Acordos de Férias — Uso Interno</td></tr>
+    <tr><td colspan="11" style="background:#F8FAFC;color:#64748B;font-size:11px;">${mesLabel} · ${empLabel} · Gerado em ${new Date().toLocaleString('pt-BR')}</td></tr>
+    <tr><td colspan="11"></td></tr>
+    ${secoes.join('\n')}
+  </table>
+  </body></html>`;
+}
+
+function exportarAcordosPDF() {
+  const { itens, mesLabel, empLabel } = _getDadosAcordos();
+  const html = _buildAcordosPDF(itens, mesLabel, empLabel);
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+}
+
+function exportarAcordosExcel() {
+  const { itens, mesLabel, empLabel } = _getDadosAcordos();
+  const xls = _buildAcordosExcel(itens, mesLabel, empLabel);
+  const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Acordos_Ferias_${mesLabel.replace(/\s/g, '_')}.xls`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─── Visão Gestor ─────────────────────────────────────────────────────────────
