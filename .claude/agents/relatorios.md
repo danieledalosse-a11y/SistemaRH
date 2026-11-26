@@ -320,6 +320,71 @@ Funções: `_lotPDFRowBg(c, i)` (PDF — aplicada em `_lotPDFTabela` e `_lotPDFG
 
 **Coluna de dados vs. query:** os campos `matricula`, `tipoVinculo` e `lotacao` são usados por Por Lotação mas não pelos demais relatórios. Verificar se o `select=` do `init()` os inclui antes de qualquer edição no carregamento.
 
+---
+
+## Relatório do Mês — Férias (`modulos/ferias/index.html`)
+
+> Este relatório está no módulo de Férias, não na Central de Relatórios — documentado aqui por ter lógica compartilhada de geração PDF/Excel.
+
+### Funções de geração
+
+| Função | Saída | Localização aprox. |
+|---|---|---|
+| `_buildRelatorioHTML(linhas, mesLabel, opts)` | HTML para PDF | ~linha 8564 |
+| `_buildExcelHTML(linhas, mesLabel)` | HTML para Excel MSO | ~linha 8780 |
+| `exportarRelatorioMes()` | Abre PDF em nova janela | — |
+| `exportarRelatorioExcel()` | Baixa `.xls` | — |
+
+### Seletor de colunas (implementado 26/11/2026)
+
+**Constante de definição:**
+```js
+const _REL_MES_COLS_DEF = [
+  { key: 'empresa',   label: 'Empresa de Registro' },
+  { key: 'setor',     label: 'Setor' },
+  { key: 'matricula', label: 'Matrícula' },
+  { key: 'nome',      label: 'Nome do Colaborador' },
+  { key: 'cargo',     label: 'Cargo' },
+  { key: 'dias',      label: 'Dias' },
+  { key: 'inicio',    label: 'Início' },
+  { key: 'fim',       label: 'Fim' },
+];
+```
+
+**Funções de controle:**
+- `_relMesRenderColunas()` — renderiza items draggable no `#f-relmes-colunas-container`; chamada toda vez que o modal abre
+- `_relMesUpdateMaster()` — atualiza master checkbox (3 estados: checked / indeterminate / unchecked) e contador "X de Y"
+- `_relMesSelectAll(bool)` — marca ou desmarca tudo e chama `_relMesUpdateMaster()`
+- `_relMesGetCols(ALL_COLS_DEF)` — lê ordem e visibilidade do DOM e retorna subconjunto filtrado/reordenado
+
+**Integração com PDF e Excel:**
+- `_buildRelatorioHTML`: usa `opts.hideColumns ? ALL_COLS.filter(...) : _relMesGetCols(ALL_COLS)` — se `hideColumns` for passado (visão Gestor), comportamento antigo preservado; se chamado sem opts (visão RH), respeita seleção do usuário
+- `_buildExcelHTML`: mesma lógica via `_relMesGetCols(ALL_COLS)`
+
+**Drag & drop:** padrão idêntico ao Por Lotação — `dragstart` bloqueado em `INPUT` e `LABEL`, via `e.preventDefault()` direto no elemento e guard em `dragstart` do row.
+
+### Opção "Agrupar por empresa"
+
+Checkbox `#relChkAgruparEmpresa` no modal (padrão: desmarcado). Ambas as funções de geração lêem:
+```js
+const agruparEmpresa = document.getElementById('relChkAgruparEmpresa')?.checked ?? false;
+```
+Quando marcado → emite linha de cabeçalho `— EMPRESA` antes de cada grupo. Quando desmarcado → tabela plana sem quebras, mas com coluna "Empresa de Registro" em cada linha.
+
+### Larguras das colunas PDF (após ajuste 26/11/2026)
+
+| Coluna | Largura | Notas |
+|---|---|---|
+| empresa | 14% | — |
+| setor | 10% | — |
+| matricula | 6% | — |
+| nome | 25% | `white-space:normal` para nomes longos |
+| cargo | 17% | — |
+| dias | 5% | — |
+| inicio | 12% | `white-space:nowrap` — data nunca truncada |
+| fim | 11% | `white-space:nowrap` — data nunca truncada |
+
+A redistribuição é proporcional (`totalW` = soma das colunas visíveis). Colunas de data têm `white-space:nowrap` nas células para garantir que "DD/MM/AAAA" não seja cortado independentemente de quantas colunas estejam visíveis.
 
 ---
 
