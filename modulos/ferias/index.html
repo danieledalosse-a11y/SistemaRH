@@ -9045,6 +9045,7 @@ function _getDadosAcordos() {
 
   const empLabel = empVal || 'Todas as empresas';
   const itens = [];
+  const _realizDedup = new Set(); // dedup Tipo B: colaborador_id|saida
 
   (COLABORADORES || []).forEach(c => {
     if (empVal  && (c.empresa || '') !== empVal)  return;
@@ -9078,6 +9079,9 @@ function _getDadosAcordos() {
         if (mesInicio && (rx.saida < mesInicio || rx.saida > mesFim)) return;
         const lancPai = (reg.lancamentos || [])[Number(rx.lancIdx ?? 0)];
         if (!lancPai || !lancPai.fim || lancPai.fim >= mesInicio) return;
+        const dedupKey = (c.id || c.matricula || c.nome) + '|' + rx.saida;
+        if (_realizDedup.has(dedupKey)) return;
+        _realizDedup.add(dedupKey);
         itens.push({
           nome: c.nome, cargo: c.cargo || '', setor: c.setor || '',
           empresa: c.empresa || '', matricula: c.matricula || '',
