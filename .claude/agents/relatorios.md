@@ -283,16 +283,32 @@ const LOT_COL_WEIGHTS = {
 - `_dadosLotacao()` — aplica filtros (situação, empresa, setor, lotação, `vinculos()`) e retorna `{lista, chips, total, dataHora}`
 - `_lotBreakKeys()` — retorna `_lotChips.filter(c => c.active).map(c => c.key)`
 - `_lotColsAtivas()` — retorna colunas checadas, excluindo as que estão ativas no agrupamento (`hiddenKeys`)
-- `_lotRenderColunas()` — renderiza lista drag & drop; preserva estado de checkboxes via `_lotRenderColunasComChecks(checks)`
+- `_lotRenderColunas()` — renderiza lista drag & drop + linha mestre; preserva estado de checkboxes via `_lotRenderColunasComChecks(checks)`
+- `_lotUpdateMaster()` — atualiza checkbox mestre (3 estados: checked / indeterminate / unchecked) e contador "X de Y"
+- `_lotSelectAll(bool)` — marca ou desmarca todas as colunas visíveis e chama `_lotUpdateMaster()`
 - `_lotRenderChips()` — renderiza chips de agrupamento com numeração e botões ↑↓
 - `_lotColgroup(colunas)` — `<colgroup>` com larguras proporcionais via `LOT_COL_WEIGHTS` (PDF dinâmico)
+- `_lotPDFRowBg(c, i)` — cor de linha do PDF por `tipoVinculo` (mesmos tons do Excel; CLT usa zebrado)
 - `gerarLotacaoPDF()` → chama `_lotPDFQuebras()` ou `_lotPDFTabela()` conforme modo
 - `gerarLotacaoExcel()` → gera tabela com `<colgroup>`, nome `width:220pt`, sem grid lines
 
-**Excel — cor de linha por tipoVinculo (`_lotXlsRowBg`):**
+**Cor de linha por tipoVinculo — PDF e Excel (mesmos tons):**
 - `promotora` → `#FFFBEB` (âmbar creme)
 - `pro_labore` → `#F0FDF4` (verde menta)
-- `clt` → `#fff` (branco)
+- `clt` ímpar → `#F9FAFB` / par → `#fff` (zebrado sutil)
+
+Funções: `_lotPDFRowBg(c, i)` (PDF — aplicada em `_lotPDFTabela` e `_lotPDFGruposHtml`) e `_lotXlsRowBg(c)` (Excel).
+
+**Seletor de colunas — master checkbox:**
+- Linha `.lot-col-master` acima da lista (fundo `#EDF1FA`, separada visualmente)
+- Checkbox com 3 estados: ✓ todas marcadas / `—` indeterminate (misto) / vazio (nenhuma)
+- Contador dinâmico "X de Y" ao lado do label, atualizado a cada mudança
+- Clicar no mestre quando `—` ou vazio → marca tudo; quando ✓ → desmarca tudo
+
+**Correção drag & drop nos checkboxes:**
+- `dragstart` no `input` e no `label` chama `e.preventDefault()` explicitamente
+- `row.addEventListener('dragstart')` também cancela quando `e.target.tagName === 'INPUT' || 'LABEL'`
+- Impede que o browser interprete clique no checkbox como início de arrasto (bug Windows)
 
 **Excel — MSO directive (grid lines desligado):**
 ```html
