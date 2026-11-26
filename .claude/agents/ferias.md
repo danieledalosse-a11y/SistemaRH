@@ -2229,6 +2229,20 @@ O dropdown de setor/empresa na aba Lista Anual usa `MultiSelect` com instâncias
 
 **Contagem "Todos":** ao contar colaboradores para o filtro, o total inclui colaboradores sem setor/empresa definido — não restringir apenas aos que possuem o campo preenchido.
 
+### Filtro Empresa na barra superior (Lista de Colaboradores — Visão RH)
+
+O `<select id="sidebarEmpresa">` na barra da lista é diferente dos MultiSelects acima. Ele é populado por `popularSidebarFiltros()` e aplicado por `getColabsVisao()`. O campo correto é `c.empresa` em ambos os pontos — **nunca `c.empresaRegistro`** (campo nunca populado no modelo JS do módulo).
+
+```js
+// popularSidebarFiltros — populate das opções (correto):
+const empresas = [...new Set(COLABORADORES.map(c => c.empresa || '').filter(Boolean))].sort();
+
+// getColabsVisao — aplicação do filtro (correto):
+if (sbEmp && (c.empresa||'') !== sbEmp) return false;
+```
+
+Histórico: o bug original usava `c.empresaRegistro||c.unidade||''` em ambos os pontos, fazendo o select aparecer vazio e o filtro nunca filtrar nada. Corrigido em 26/11/2026 (commit 748cc66).
+
 ## Fluxo Gestor → RH: solicitação de gozo (`pendente_gestor`)
 
 O Gestor pode solicitar o registro de dias de gozo real para lançamentos com saldo pendente. A solicitação fica aguardando aprovação do RH.
@@ -2781,7 +2795,7 @@ O filtro em `_getDadosRelatorio()` compara `c.gestor === gestVal` (string exata)
 
 `_getDadosRelatorio()` lê os três filtros e combina:
 ```js
-if (empVal  && (c.empresaRegistro||c.unidade||'') !== empVal) return;
+if (empVal  && (c.empresa||'') !== empVal) return;
 if (setVal  && (c.setor||'') !== setVal) return;
 if (gestVal && (c.gestor||'') !== gestVal) return;
 ```
