@@ -8847,14 +8847,14 @@ function _buildExcelHTML(linhas, mesLabel, opts) {
   const THC = TH + 'text-align:center;';
 
   const ALL_COLS = [
-    { key: 'empresa',   thStyle: TH,  td: (l, cs) => `<td style="${cs}padding:5px 10px;">${l.empresa}</td>`,                                                            label: 'Empresa de Registro' },
-    { key: 'setor',     thStyle: TH,  td: (l, cs) => `<td style="${cs}font-weight:700;padding:5px 10px;">${l.setor}</td>`,                                              label: 'Setor' },
-    { key: 'matricula', thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;font-weight:700;padding:5px 10px;">${l.matricula}</td>`,                        label: 'Matrícula' },
-    { key: 'nome',      thStyle: TH,  td: (l, cs) => `<td style="${cs}padding:5px 10px;">${l.nome}</td>`,                                                               label: 'Nome do Colaborador' },
-    { key: 'cargo',     thStyle: TH,  td: (l)     => `<td style="padding:5px 10px;">${l.cargo}</td>`,                                                                   label: 'Cargo' },
-    { key: 'dias',      thStyle: THC, td: (l)     => `<td style="text-align:center;padding:5px 10px;">${l.dias}</td>`,                                                  label: 'Dias' },
-    { key: 'inicio',    thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.inicio)}</td>`,                                 label: 'Início' },
-    { key: 'fim',       thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;padding:5px 10px;">${_fmtData(l.fim)}</td>`,                                    label: 'Fim' },
+    { key: 'empresa',   w: 130, thStyle: TH,  td: (l, cs) => `<td style="${cs}padding:5px 10px;">${l.empresa}</td>`,                                                            label: 'Empresa de Registro' },
+    { key: 'setor',     w: 100, thStyle: TH,  td: (l, cs) => `<td style="${cs}font-weight:700;padding:5px 10px;">${l.setor}</td>`,                                              label: 'Setor' },
+    { key: 'matricula', w:  60, thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;font-weight:700;padding:5px 10px;">${l.matricula}</td>`,                        label: 'Matrícula' },
+    { key: 'nome',      w: 220, thStyle: TH,  td: (l, cs) => `<td style="${cs}padding:5px 10px;white-space:nowrap;">${l.nome}</td>`,                                            label: 'Nome do Colaborador' },
+    { key: 'cargo',     w: 150, thStyle: TH,  td: (l)     => `<td style="padding:5px 10px;">${l.cargo}</td>`,                                                                   label: 'Cargo' },
+    { key: 'dias',      w:  45, thStyle: THC, td: (l)     => `<td style="text-align:center;padding:5px 10px;">${l.dias}</td>`,                                                  label: 'Dias' },
+    { key: 'inicio',    w:  90, thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;padding:5px 10px;white-space:nowrap;">${_fmtData(l.inicio)}</td>`,              label: 'Início' },
+    { key: 'fim',       w:  90, thStyle: THC, td: (l, cs) => `<td style="${cs}text-align:center;padding:5px 10px;white-space:nowrap;">${_fmtData(l.fim)}</td>`,                 label: 'Fim' },
   ];
   const cols = opts.hideColumns ? ALL_COLS.filter(c => !hide.has(c.key)) : _relMesGetCols(ALL_COLS);
   const nCols = cols.length;
@@ -8878,10 +8878,12 @@ function _buildExcelHTML(linhas, mesLabel, opts) {
   ).join('');
 
   const thead = cols.map(c => `<td style="${c.thStyle}">${c.label}</td>`).join('');
+  const colgroup = cols.map(c => `<col style="mso-width-source:userset;width:${c.w}pt">`).join('');
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
   <head><meta charset="UTF-8"></head><body>
-  <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;">
+  <table style="border-collapse:collapse;font-family:Arial,sans-serif;">
+    <colgroup>${colgroup}</colgroup>
     <tr><td colspan="${nCols}" style="font-size:18pt;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;padding:12px 10px 4px;border:none;font-family:Arial,sans-serif;">FÉRIAS — ${mesLabel.toUpperCase()}</td></tr>
     <tr><td colspan="${nCols}" style="font-size:10pt;color:#64748b;padding:0 10px 10px;border:none;font-family:Arial,sans-serif;">${sorted.length} registro(s) · Gerado em ${gerado}</td></tr>
     <tr>${thead}</tr>
