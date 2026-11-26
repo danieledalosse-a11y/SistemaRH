@@ -8632,11 +8632,11 @@ function _relMesRenderColunas() {
   if (!container) return;
   container.innerHTML = _REL_MES_COLS_DEF.map(col => `
     <div class="rel-col-chip active" draggable="true" data-key="${col.key}"
-         onclick="_relColToggle(this)"
+         onmousedown="_relMesChipMouseDown(event)" onmouseup="_relMesChipMouseUp(event)"
          ondragstart="_relMesDragStart(event)" ondragover="_relMesDragOver(event)" ondrop="_relMesDrop(event)" ondragend="_relMesDragEnd(event)">
-      <span class="rcc-handle" onclick="event.stopPropagation()">&#8942;&#8942;</span>
+      <span class="rcc-handle">&#8942;&#8942;</span>
       <span class="rcc-label">${col.label}</span>
-      <span class="rcc-toggle" onclick="event.stopPropagation();_relColToggle(this.closest('.rel-col-chip'))">✕</span>
+      <span class="rcc-toggle">✕</span>
     </div>`).join('');
   _relMesUpdateMaster();
 }
@@ -8695,10 +8695,22 @@ function _relMesGetCols(ALL_COLS_DEF) {
   return result.length > 0 ? result : ALL_COLS_DEF;
 }
 
+// Clique vs drag nos chips de coluna
+let _relMesMouseDownPos = null;
+function _relMesChipMouseDown(e) {
+  _relMesMouseDownPos = { x: e.clientX, y: e.clientY };
+}
+function _relMesChipMouseUp(e) {
+  if (!_relMesMouseDownPos) return;
+  const dx = Math.abs(e.clientX - _relMesMouseDownPos.x);
+  const dy = Math.abs(e.clientY - _relMesMouseDownPos.y);
+  _relMesMouseDownPos = null;
+  if (dx < 5 && dy < 5) _relColToggle(e.currentTarget); // foi clique, não drag
+}
+
 // Drag & drop para reordenar colunas
 let _relMesDragSrc = null;
 function _relMesDragStart(e) {
-  if (e.target.classList && e.target.classList.contains('rcc-toggle')) { e.preventDefault(); return; }
   _relMesDragSrc = e.currentTarget;
   e.dataTransfer.effectAllowed = 'move';
   _relMesDragSrc.style.opacity = '0.5';
