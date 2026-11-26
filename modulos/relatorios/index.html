@@ -252,6 +252,14 @@
   .lot-col-item.drag-over { border-color: var(--accent); background: #EEF3FF; }
   .lot-drag-handle { color: var(--txt-sec); font-size: 14px; cursor: grab; flex-shrink: 0; line-height: 1; padding: 0 2px; }
   .lot-col-item.dragging .lot-drag-handle { cursor: grabbing; }
+  .lot-col-master {
+    display: flex; align-items: center; gap: 7px;
+    background: #EDF1FA; border: 1px solid #c8d3ea; border-radius: 6px;
+    padding: 5px 8px; margin-bottom: 6px; cursor: default; user-select: none;
+  }
+  .lot-col-master input[type=checkbox] { cursor: pointer; accent-color: var(--accent); }
+  .lot-col-master label { flex: 1; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--txt); }
+  .lot-col-master-count { font-size: 11px; color: var(--txt-sec); font-weight: 400; }
   .lot-modal-ft {
     padding: 12px 20px 14px; border-top: 1px solid var(--bdr);
     display: flex; gap: 10px; position: sticky; bottom: 0; background: #fff;
@@ -515,13 +523,7 @@
 
         <!-- Coluna direita: Colunas de dados (drag & drop) -->
         <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-            <div class="lot-sec-label" style="margin-bottom:0;">3. Colunas de dados</div>
-            <div style="display:flex;gap:6px;">
-              <button onclick="_lotSelectAll(true)" style="font-size:11px;padding:2px 8px;border:1px solid var(--bdr);border-radius:4px;background:var(--gray-bg);color:var(--txt-sec);cursor:pointer;" title="Marcar todas">Marcar todas</button>
-              <button onclick="_lotSelectAll(false)" style="font-size:11px;padding:2px 8px;border:1px solid var(--bdr);border-radius:4px;background:var(--gray-bg);color:var(--txt-sec);cursor:pointer;" title="Desmarcar todas">Desmarcar todas</button>
-            </div>
-          </div>
+          <div class="lot-sec-label">3. Colunas de dados</div>
           <div class="lot-chips-hint">Arraste para reordenar. Campos usados em agrupamentos são ocultados automaticamente.</div>
           <div id="f-lot-colunas-container"></div>
         </div>
@@ -2063,21 +2065,47 @@ function _lotInit() {
 
 let _lotDragSrc = null;
 
+function _lotUpdateMaster() {
+  const master = document.getElementById('f-lot-col-master');
+  if (!master) return;
+  const cbs = [...document.querySelectorAll('#f-lot-colunas-container .lot-col-item input[type=checkbox]')];
+  const total = cbs.length;
+  const checked = cbs.filter(cb => cb.checked).length;
+  master.checked = checked === total;
+  master.indeterminate = checked > 0 && checked < total;
+  const lbl = document.getElementById('f-lot-col-master-count');
+  if (lbl) lbl.textContent = total > 0 ? `${checked} de ${total}` : '';
+}
+
 function _lotRenderColunas() {
   const c = document.getElementById('f-lot-colunas-container');
   if (!c) return;
   c.innerHTML = '';
+
+  // Linha mestre (master checkbox)
+  const masterRow = document.createElement('div');
+  masterRow.className = 'lot-col-master';
+  masterRow.innerHTML = `
+    <input type="checkbox" id="f-lot-col-master" checked>
+    <label for="f-lot-col-master">Selecionar tudo</label>
+    <span class="lot-col-master-count" id="f-lot-col-master-count"></span>`;
+  masterRow.querySelector('input').addEventListener('change', e => {
+    const val = e.target.checked;
+    document.querySelectorAll('#f-lot-colunas-container .lot-col-item input[type=checkbox]').forEach(cb => { cb.checked = val; });
+    _lotUpdateMaster();
+  });
+  c.appendChild(masterRow);
+
   // Chaves ativas nos agrupamentos ficam ocultas das colunas
   const hiddenKeys = new Set(_lotChips.filter(ch => ch.active).map(ch => ch.key));
   _lotColOrder.forEach((colIdx) => {
     const col = LOT_COLUNAS_DEF[colIdx];
-    if (hiddenKeys.has(col.key)) return; // oculto porque é agrupamento ativo
+    if (hiddenKeys.has(col.key)) return;
     const id = 'f-lot-col-' + colIdx;
     const row = document.createElement('div');
     row.className = 'lot-col-item';
     row.draggable = true;
     row.dataset.idx = colIdx;
-    // estado do checkbox: mantém o último valor se já existia
     const prevEl = document.getElementById(id);
     const checked = prevEl ? prevEl.checked : col.def;
     row.innerHTML = `
@@ -2087,6 +2115,8 @@ function _lotRenderColunas() {
     // impede drag ao clicar no checkbox ou label
     row.querySelector('input').addEventListener('dragstart', e => e.preventDefault());
     row.querySelector('label').addEventListener('dragstart', e => e.preventDefault());
+    // atualiza master ao mudar item
+    row.querySelector('input').addEventListener('change', _lotUpdateMaster);
     // drag & drop
     row.addEventListener('dragstart', e => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') { e.preventDefault(); return; }
@@ -2112,27 +2142,22 @@ function _lotRenderColunas() {
       row.classList.remove('drag-over');
       const srcIdx = parseInt(_lotDragSrc.dataset.idx);
       const dstIdx = parseInt(row.dataset.idx);
-      // salva estados dos checkboxes antes de reordenar
       const checks = {};
-      c.querySelectorAll('.lot-col-item input[type=checkbox]').forEach(cb => {
-        checks[cb.dataset.idx] = cb.checked;
-      });
-      // reordena _lotColOrder
+      c.querySelectorAll('.lot-col-item input[type=checkbox]').forEach(cb => { checks[cb.dataset.idx] = cb.checked; });
       const srcPos = _lotColOrder.indexOf(srcIdx);
       const dstPos = _lotColOrder.indexOf(dstIdx);
       _lotColOrder.splice(srcPos, 1);
       _lotColOrder.splice(dstPos, 0, srcIdx);
-      // aplica checks salvos ao re-renderizar
       _lotRenderColunasComChecks(checks);
     });
     c.appendChild(row);
   });
+  _lotUpdateMaster();
 }
 
 function _lotSelectAll(marcar) {
-  document.querySelectorAll('#f-lot-colunas-container input[type=checkbox]').forEach(cb => {
-    cb.checked = marcar;
-  });
+  document.querySelectorAll('#f-lot-colunas-container .lot-col-item input[type=checkbox]').forEach(cb => { cb.checked = marcar; });
+  _lotUpdateMaster();
 }
 
 function _lotRenderColunasComChecks(checks) {
