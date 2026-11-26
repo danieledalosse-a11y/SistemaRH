@@ -2515,14 +2515,18 @@ Cada bloco de PA tem `id="pa-block-${r._sbId}"` para o scroll funcionar. Banner 
 
 | Função | Responsabilidade |
 |---|---|
-| `_getDadosRelatorio()` | Lê `COLABORADORES`, filtra pelo mês selecionado, retorna `{ linhas, mesLabel }` |
+| `_getDadosRelatorio()` | Lê `COLABORADORES`, filtra pelo mês selecionado, retorna `{ linhas, acordos, mesLabel, empLabel }` |
 | `_SETOR_CORES` | Map de setor normalizado → `{ bg, text }`. Chave: `_normKey(setor)` |
 | `_corSetor(setor)` | Retorna `{ bg, text }` via `_SETOR_CORES`; fallback `#f8fafc`/`#111` |
 | `_fmtData(str)` | Converte `YYYY-MM-DD` → `DD/MM/YYYY` |
-| `_buildRelatorioHTML(linhas, mesLabel, opts?)` | Gera HTML para **PDF/visualização**: ícone 📅, cabeçalho azul escuro, separador por empresa, legenda com bolinhas CSS, footer `position:fixed` |
-| `_buildExcelHTML(linhas, mesLabel, opts?)` | Gera HTML para **Excel**: sem emoji, sem `position:fixed`, legenda em células coloridas, **todos os estilos inline** (Excel ignora `<style>`) |
+| `_buildRelatorioHTML(linhas, mesLabel, opts?, acordos?)` | Gera HTML para **PDF/visualização**: ícone 📅, cabeçalho azul escuro, separador por empresa, legenda com bolinhas CSS, footer `position:fixed`. Opcional: seção Acordos ao final quando `acordos` não vazio. |
+| `_buildExcelHTML(linhas, mesLabel, opts?, acordos?)` | Gera HTML para **Excel**: sem emoji, sem `position:fixed`, legenda em células coloridas, **todos os estilos inline** (Excel ignora `<style>`). Opcional: seção Acordos ao final. |
 | `exportarRelatorioPDF()` | Abre nova aba com `_buildRelatorioHTML` |
 | `exportarRelatorioExcel()` | Gera blob `.xls` com `_buildExcelHTML` |
+| `_getDadosAcordos()` | **INDEPENDENTE** — coleta Tipo A (`diasTrabalhar > 0`) e Tipo B (realizações com `lancPai.fim < mesInicio`). Retorna `{ itens, mesLabel, empLabel }` |
+| `_buildAcordosPDF(itens, mesLabel, empLabel)` | HTML A4 com banner âmbar, tabela por tipo, para o relatório independente |
+| `_buildAcordosExcel(itens, mesLabel, empLabel)` | MSO HTML com seções Tipo A e Tipo B para o relatório independente |
+| `exportarAcordosPDF()` / `exportarAcordosExcel()` | Exportação do relatório independente; chamados pelo botão "Acordos ▾" no modal |
 
 ### Campo empresa
 
@@ -4461,6 +4465,75 @@ PDF e Excel do Gestor compartilham `_getDadosEscalaGestor` — ambos corrigidos 
 - Anderson: 20 dias fantasmas não aparecem mais (row 1864 corrigida); 4 dias legítimos (row 1856) permanecem
 - Lançamentos normais: inalterados
 - Gantt, Mapa Anual, drawer, saldos: sem alterações
+
+---
+
+## Relatório de Acordos Independente (Nov/2026)
+
+### Contexto e motivação
+
+O Relatório Mensal de Férias já estava funcionando e validado. Para identificar e conferir os "acordos" (férias que são somente para controle interno, não encaminhadas ao escritório para pagamento) sem risco de regressão, foi criado um relatório **completamente independente** — com coleta de dados e funções próprias, sem nenhum ponto de contato com as funções do relatório mensal.
+
+**Regra de ouro:** as funções do relatório mensal (`_getDadosRelatorio`, `_buildRelatorioHTML`, `_buildExcelHTML`, `exportarRelatorioPDF`, `exportarRelatorioExcel`) permanecem **intocadas**.
+
+---
+
+### Classificação de acordos — dois tipos
+
+| Tipo | Discriminador | Significado |
+|---|---|---|
+| **Tipo A** | Lançamento com `l.diasTrabalhar > 0` | Colaborador trabalha X dias durante o período de férias |
+| **Tipo B** *(provisório)* | Realização onde `lancPai.fim < mesInicio` | Gozo registrado em mês posterior ao término completo do lançamento pai |
+
+**Atenção sobre Tipo B:** a classificação é **provisória e está sendo validada**. O discriminador correto é `lancPai.fim < mesInicio` (lançamento encerrou completamente antes do mês do relatório). Usar `lancPai.inicio < mesInicio` seria errado — capturaria realizações de lançamentos que se iniciam antes do mês mas ainda estão vigentes (férias normais que cruzam a virada do mês).
+
+---
+
+### Funções implementadas
+
+| Função | Responsabilidade |
+|---|---|
+| `_getDadosAcordos()` | Coleta Tipo A e Tipo B; retorna `{ itens, mesLabel, empLabel }` |
+| `_buildAcordosPDF(itens, mesLabel, empLabel)` | Gera HTML A4 com banner âmbar, tabela separada por tipo |
+| `_buildAcordosExcel(itens, mesLabel, empLabel)` | Gera MSO HTML com seções Tipo A e Tipo B |
+| `exportarAcordosPDF()` | Lê dados e abre PDF em nova aba |
+| `exportarAcordosExcel()` | Lê dados e faz download do `.xls` |
+| `_toggleAcordosMenu()` | Abre/fecha o dropdown "Acordos ▾" no footer do modal |
+
+**Localização no arquivo:** inseridas após `exportarRelatorioPDF`, separadas pelo comentário `// === RELATÓRIO DE ACORDOS (independente) ===`.
+
+**Botão de acesso:** dropdown "Acordos ▾" no footer do modal `#modalRelatorio`, ao lado dos botões existentes "Gerar PDF" e "Exportar Excel".
+
+---
+
+### Deduplicação — Tipo B
+
+**Problema:** um colaborador pode ter múltiplas fichas (rows) de férias para PAs diferentes. Sem deduplicação, a mesma realização (mesma data de saída) aparece uma vez por PA.
+
+**Solução:** `_realizDedup = new Set()` declarado fora do loop de registros, keyed por `(c.id || c.matricula || c.nome) + '|' + rx.saida`.
+
+```js
+const _realizDedup = new Set();
+(COLABORADORES || []).forEach(c => {
+  (c.registros || []).forEach(reg => {
+    (reg.realizacoes || []).forEach(rx => {
+      const dedupKey = (c.id || c.matricula || c.nome) + '|' + rx.saida;
+      if (_realizDedup.has(dedupKey)) return;
+      _realizDedup.add(dedupKey);
+      // ...push item
+    });
+  });
+});
+```
+
+**Regra:** prioridade `c.id` > `c.matricula` > `c.nome`. Nunca usar só o nome como chave.
+
+---
+
+### Commits
+
+- **c567960** — implementação inicial do Relatório de Acordos independente (Tipo A + Tipo B + botão + exports)
+- **a92f910** — correção da duplicidade da Daniele Martins (duas fichas de PA distintas com mesma saida=2026-11-10), via `_realizDedup` Set com chave `c.id|rx.saida`
 
 ---
 

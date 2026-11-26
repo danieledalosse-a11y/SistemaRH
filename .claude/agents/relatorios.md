@@ -352,8 +352,10 @@ const _REL_MES_COLS_DEF = [
 ```
 
 **Funções de controle:**
-- `_relMesRenderColunas()` — renderiza items draggable no `#f-relmes-colunas-container`; chamada toda vez que o modal abre
-- `_relMesUpdateMaster()` — atualiza master checkbox (3 estados: checked / indeterminate / unchecked) e contador "X de Y"
+- `_relMesRenderColunas()` — renderiza chips no `#f-relmes-colunas-container`; chamada toda vez que o modal abre
+- `_relMesChipMouseDown(e)` / `_relMesChipMouseUp(e)` — detectam clique vs drag (deslocamento < 5px = clique); necessário porque `draggable="true"` suprime `onclick` no Chrome/Edge
+- `_relColToggle(chip)` — alterna ativo/inativo no chip e atualiza contador
+- `_relMesUpdateMaster()` — atualiza contador "X de Y" no cabeçalho de Colunas
 - `_relMesSelectAll(bool)` — marca ou desmarca tudo e chama `_relMesUpdateMaster()`
 - `_relMesGetCols(ALL_COLS_DEF)` — lê ordem e visibilidade do DOM e retorna subconjunto filtrado/reordenado
 
@@ -361,7 +363,9 @@ const _REL_MES_COLS_DEF = [
 - `_buildRelatorioHTML`: usa `opts.hideColumns ? ALL_COLS.filter(...) : _relMesGetCols(ALL_COLS)` — se `hideColumns` for passado (visão Gestor), comportamento antigo preservado; se chamado sem opts (visão RH), respeita seleção do usuário
 - `_buildExcelHTML`: mesma lógica via `_relMesGetCols(ALL_COLS)`
 
-**Drag & drop:** padrão idêntico ao Por Lotação — `dragstart` bloqueado em `INPUT` e `LABEL`, via `e.preventDefault()` direto no elemento e guard em `dragstart` do row.
+**ATENÇÃO — drag + clique em chips:** `draggable="true"` suprime `onclick` no Chrome/Edge. Sempre usar `onmousedown`/`onmouseup` com delta de posição (< 5px = clique) em vez de `onclick` em elementos arrastáveis.
+
+**Drag & drop:** `_relMesDragStart`, `_relMesDragOver`, `_relMesDrop`, `_relMesDragEnd` — reordenam chips no DOM. `_relMesDragSrc` guarda o chip sendo arrastado.
 
 ### Opção "Agrupar por empresa"
 
@@ -370,6 +374,23 @@ Checkbox `#relChkAgruparEmpresa` no modal (padrão: desmarcado). Ambas as funç�
 const agruparEmpresa = document.getElementById('relChkAgruparEmpresa')?.checked ?? false;
 ```
 Quando marcado → emite linha de cabeçalho `— EMPRESA` antes de cada grupo. Quando desmarcado → tabela plana sem quebras, mas com coluna "Empresa de Registro" em cada linha.
+
+### Larguras das colunas Excel (após ajuste 26/11/2026)
+
+`_buildExcelHTML` usa `<colgroup>` com `mso-width-source:userset` para forçar larguras no Excel:
+
+| Coluna | Largura | Notas |
+|---|---|---|
+| empresa | 130pt | — |
+| setor | 100pt | — |
+| matricula | 60pt | — |
+| nome | 220pt | `white-space:nowrap` — nome nunca quebra linha |
+| cargo | 150pt | — |
+| dias | 45pt | — |
+| inicio | 90pt | `white-space:nowrap` |
+| fim | 90pt | `white-space:nowrap` |
+
+A largura da tabela não é `width:100%` — usa tamanho natural para respeitar as larguras absolutas em pt.
 
 ### Larguras das colunas PDF (após ajuste 26/11/2026)
 
@@ -385,6 +406,8 @@ Quando marcado → emite linha de cabeçalho `— EMPRESA` antes de cada grupo. 
 | fim | 11% | `white-space:nowrap` — data nunca truncada |
 
 A redistribuição é proporcional (`totalW` = soma das colunas visíveis). Colunas de data têm `white-space:nowrap` nas células para garantir que "DD/MM/AAAA" não seja cortado independentemente de quantas colunas estejam visíveis.
+
+**Rodapé do PDF:** exibe apenas `FÉRIAS — MÊS | X registro(s)`. A legenda de chips coloridos de setor foi removida de PDF e Excel — é redundante pois as próprias linhas já carregam as cores.
 
 ---
 
