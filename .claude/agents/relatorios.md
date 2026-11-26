@@ -320,7 +320,6 @@ Funções: `_lotPDFRowBg(c, i)` (PDF — aplicada em `_lotPDFTabela` e `_lotPDFG
 
 **Coluna de dados vs. query:** os campos `matricula`, `tipoVinculo` e `lotacao` são usados por Por Lotação mas não pelos demais relatórios. Verificar se o `select=` do `init()` os inclui antes de qualquer edição no carregamento.
 
-**Feature pendente (não implementada):** título customizável de seção — prefixo editável antes do valor do agrupamento (ex: "Lotação: CD" em vez de "CD"). Aguarda validação da interface atual pela usuária.
 
 ---
 
