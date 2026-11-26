@@ -515,7 +515,13 @@
 
         <!-- Coluna direita: Colunas de dados (drag & drop) -->
         <div>
-          <div class="lot-sec-label">3. Colunas de dados</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+            <div class="lot-sec-label" style="margin-bottom:0;">3. Colunas de dados</div>
+            <div style="display:flex;gap:6px;">
+              <button onclick="_lotSelectAll(true)" style="font-size:11px;padding:2px 8px;border:1px solid var(--bdr);border-radius:4px;background:var(--gray-bg);color:var(--txt-sec);cursor:pointer;" title="Marcar todas">Marcar todas</button>
+              <button onclick="_lotSelectAll(false)" style="font-size:11px;padding:2px 8px;border:1px solid var(--bdr);border-radius:4px;background:var(--gray-bg);color:var(--txt-sec);cursor:pointer;" title="Desmarcar todas">Desmarcar todas</button>
+            </div>
+          </div>
           <div class="lot-chips-hint">Arraste para reordenar. Campos usados em agrupamentos são ocultados automaticamente.</div>
           <div id="f-lot-colunas-container"></div>
         </div>
@@ -2078,8 +2084,12 @@ function _lotRenderColunas() {
       <span class="lot-drag-handle" title="Arrastar para reordenar">⠿</span>
       <input type="checkbox" id="${id}" data-idx="${colIdx}" ${checked ? 'checked' : ''}>
       <label for="${id}" style="cursor:pointer;">${col.label}</label>`;
+    // impede drag ao clicar no checkbox ou label
+    row.querySelector('input').addEventListener('dragstart', e => e.preventDefault());
+    row.querySelector('label').addEventListener('dragstart', e => e.preventDefault());
     // drag & drop
     row.addEventListener('dragstart', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') { e.preventDefault(); return; }
       _lotDragSrc = row;
       e.dataTransfer.effectAllowed = 'move';
       setTimeout(() => row.classList.add('dragging'), 0);
@@ -2116,6 +2126,12 @@ function _lotRenderColunas() {
       _lotRenderColunasComChecks(checks);
     });
     c.appendChild(row);
+  });
+}
+
+function _lotSelectAll(marcar) {
+  document.querySelectorAll('#f-lot-colunas-container input[type=checkbox]').forEach(cb => {
+    cb.checked = marcar;
   });
 }
 
