@@ -1892,6 +1892,10 @@
           <input type="checkbox" id="relChkRisco" style="display:none;">
           Risco de dobra
         </div>
+        <div class="rel-toggle-chip active" onclick="_relToggleChip(this,'relChkAcordos')">
+          <input type="checkbox" id="relChkAcordos" checked style="display:none;">
+          Acordos
+        </div>
         <div class="rel-toggle-chip" onclick="_relToggleChip(this,'relChkAgruparEmpresa')">
           <input type="checkbox" id="relChkAgruparEmpresa" style="display:none;">
           Agrupar por empresa
@@ -8537,7 +8541,9 @@ function _getDadosRelatorio() {
   const mesFim    = `${anoR}-${mesStr}-${String(new Date(anoR, mesR, 0).getDate()).padStart(2,'0')}`;
   const meses = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
+  const chkAcordos = document.getElementById('relChkAcordos')?.checked ?? true;
   const linhas = [];
+  const acordos = [];
   COLABORADORES.forEach(c => {
     if (c.ativo === false) return;
     if (empVal  && (c.empresaRegistro||c.unidade||'') !== empVal) return;
@@ -8547,10 +8553,16 @@ function _getDadosRelatorio() {
     c.registros.forEach(reg => {
       const lans = reg.lancamentos.filter(l => l.inicio >= mesInicio && l.inicio <= mesFim);
       lans.forEach(l => {
-        if (reg.status === 'Aprovado' && chkAprov) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Aprovado' });
-        else if (reg.status === 'Pendente' && chkPend) linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: l.inicio, fim: l.fim, dias: l.dias, status: 'Pend. aprovação' });
+        const base = { nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: l.inicio, fim: l.fim, dias: l.dias };
+        if (l.diasTrabalhar > 0) {
+          // Acordo: vai para seção separada
+          if (chkAcordos) acordos.push({ ...base, diasTrabalhar: l.diasTrabalhar, status: 'Acordo' });
+        } else {
+          if (reg.status === 'Aprovado' && chkAprov) linhas.push({ ...base, status: 'Aprovado' });
+          else if (reg.status === 'Pendente' && chkPend) linhas.push({ ...base, status: 'Pend. aprovação' });
+        }
       });
-      // Realizações (acordos de gozo): inclui quando a saída está no mês E o lançamento pai começa fora do mês
+      // Realizações (gozo real de dias aprovados): inclui quando a saída está no mês E o lançamento pai começa fora do mês
       if (reg.status === 'Aprovado' && chkAprov) {
         (reg.realizacoes || []).forEach(rx => {
           if (!rx.saida || !(Number(rx.dias) > 0)) return;
@@ -8574,7 +8586,7 @@ function _getDadosRelatorio() {
     gestVal ? `Gestor: ${gestVal}` : null,
   ].filter(Boolean).join(' · ') || 'Todos';
 
-  return { linhas, mesLabel: mesVal ? `${meses[mesR]} ${anoR}` : '—', empLabel: filtroLabel };
+  return { linhas, acordos, mesLabel: mesVal ? `${meses[mesR]} ${anoR}` : '—', empLabel: filtroLabel };
 }
 
 // Mapa de cores por setor — chave em minúsculas sem acento para match tolerante
@@ -8741,8 +8753,9 @@ function _fmtData(iso) {
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
 }
 
-function _buildRelatorioHTML(linhas, mesLabel, opts) {
+function _buildRelatorioHTML(linhas, mesLabel, opts, acordos) {
   opts = opts || {};
+  acordos = acordos || [];
   const hide = new Set(opts.hideColumns || []);
 
   // Ordena: empresa → setor → nome
@@ -8794,6 +8807,40 @@ function _buildRelatorioHTML(linhas, mesLabel, opts) {
   });
 
 
+  // ── Seção de acordos ──
+  let acordosHtml = '';
+  if (acordos.length > 0) {
+    const sortedAcordos = [...acordos].sort((a, b) => {
+      const ea = (a.empresa||'').localeCompare(b.empresa||'', 'pt-BR');
+      if (ea !== 0) return ea;
+      const sa = (a.setor||'').localeCompare(b.setor||'', 'pt-BR');
+      if (sa !== 0) return sa;
+      return (a.nome||'').localeCompare(b.nome||'', 'pt-BR');
+    });
+    const aCols = [...cols, { key: '_diasTrab', label: 'Dias trabalhando', thStyle: 'text-align:center;',
+      td: l => `<td style="text-align:center;background:#FEF9C3;color:#78350F;font-weight:700;">${l.diasTrabalhar}d trabalhando</td>` }];
+    const aColgroup = aCols.map(c => `<col style="width:${c.w || 'auto'}">`).join('');
+    const aThead = aCols.map(c => `<th${c.thStyle ? ` style="${c.thStyle}"` : ''}>${c.label}</th>`).join('');
+    let aTrs = '';
+    sortedAcordos.forEach(l => {
+      aTrs += `<tr class="acordo-row">${aCols.map(c => c.td(l)).join('')}</tr>`;
+    });
+    acordosHtml = `
+  <div class="acordo-banner">
+    <div class="acordo-banner-icon">⚠</div>
+    <div>
+      <div class="acordo-banner-title">Acordos de Férias — Apenas para controle interno do RH</div>
+      <div class="acordo-banner-desc">Os registros abaixo são acordos em que o colaborador permanecerá parcialmente em atividade durante o período de férias. <strong>Não devem ser encaminhados ao escritório</strong> para fins de processamento de folha de pagamento.</div>
+    </div>
+  </div>
+  <table class="acordo-tbl">
+    <colgroup>${aColgroup}</colgroup>
+    <thead><tr>${aThead}</tr></thead>
+    <tbody>${aTrs}</tbody>
+  </table>
+  <div class="acordo-footer">${acordos.length} acordo(s) — somente controle interno &bull; não encaminhar ao escritório</div>`;
+  }
+
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
   <title>Férias ${mesLabel}</title>
   <style>
@@ -8812,14 +8859,22 @@ function _buildRelatorioHTML(linhas, mesLabel, opts) {
     td:last-child { border-right: none; }
     tr.emp-sep td { background: #f1f5f9; color: #334155; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; padding: 5px 10px; border-bottom: 1px solid #cbd5e1; border-right: none; }
     .rel-footer { position: fixed; bottom: 8mm; left: 12mm; right: 12mm; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 5px; }
-    @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
+    .acordo-banner { display:flex; align-items:flex-start; gap:10px; margin:22px 0 10px; padding:10px 14px; background:#FEF3C7; border:1.5px solid #FCD34D; border-radius:6px; }
+    .acordo-banner-icon { font-size:16px; line-height:1.4; flex-shrink:0; color:#D97706; }
+    .acordo-banner-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:#78350F; }
+    .acordo-banner-desc { font-size:10px; color:#78350F; margin-top:3px; line-height:1.5; }
+    .acordo-tbl thead tr { background: #B45309; }
+    .acordo-row td { background: #FFFDE7; }
+    .acordo-row:nth-child(even) td { background: #FFF8C5; }
+    .acordo-footer { margin-top:6px; font-size:9px; color:#B45309; font-weight:700; text-align:right; }
+    @media print { table { page-break-inside: auto; } tr { page-break-inside: avoid; } .acordo-banner { page-break-before: auto; } }
   </style>
   </head><body>
   <div class="rel-header">
     <div class="rel-icon">📅</div>
     <div>
       <div class="rel-mes">Férias — ${mesLabel}</div>
-      <div class="rel-sub">${sorted.length} registro(s) &bull; Gerado em ${gerado}</div>
+      <div class="rel-sub">${sorted.length} lançamento(s) &bull; Gerado em ${gerado}</div>
     </div>
   </div>
   <table>
@@ -8827,14 +8882,16 @@ function _buildRelatorioHTML(linhas, mesLabel, opts) {
     <thead><tr>${thead}</tr></thead>
     <tbody>${trs}</tbody>
   </table>
+  ${acordosHtml}
   <div class="rel-footer">
-    <div>FÉRIAS — ${mesLabel.toUpperCase()} &nbsp;|&nbsp; ${sorted.length} registro(s)</div>
+    <div>FÉRIAS — ${mesLabel.toUpperCase()} &nbsp;|&nbsp; ${sorted.length} lançamento(s)${acordos.length > 0 ? ` · ${acordos.length} acordo(s)` : ''}</div>
   </div>
   </body></html>`;
 }
 
-function _buildExcelHTML(linhas, mesLabel, opts) {
+function _buildExcelHTML(linhas, mesLabel, opts, acordos) {
   opts = opts || {};
+  acordos = acordos || [];
   const hide = new Set(opts.hideColumns || []);
 
   const sorted = [...linhas].sort((a, b) => {
@@ -8879,21 +8936,54 @@ function _buildExcelHTML(linhas, mesLabel, opts) {
   const thead = cols.map(c => `<td style="${c.thStyle}">${c.label}</td>`).join('');
   const colgroup = cols.map(c => `<col style="mso-width-source:userset;width:${c.w}pt">`).join('');
 
+  // ── Seção de acordos no Excel ──
+  let acordosXls = '';
+  if (acordos.length > 0) {
+    const sortedAcordos = [...acordos].sort((a, b) => {
+      const ea = (a.empresa||'').localeCompare(b.empresa||'', 'pt-BR');
+      if (ea !== 0) return ea;
+      const sa = (a.setor||'').localeCompare(b.setor||'', 'pt-BR');
+      if (sa !== 0) return sa;
+      return (a.nome||'').localeCompare(b.nome||'', 'pt-BR');
+    });
+    const TH_AC = 'background:#B45309;color:#fff;font-family:Arial,sans-serif;font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;border:1px solid #7c3909;text-align:left;';
+    const TH_ACC = TH_AC + 'text-align:center;';
+    const aCols = [...ALL_COLS, { key: '_diasTrab', w: 110, thStyle: TH_ACC,
+      td: (l) => `<td style="text-align:center;background:#FEF9C3;color:#78350F;font-weight:700;padding:5px 10px;">${l.diasTrabalhar}d trabalhando</td>`,
+      label: 'Dias trabalhando' }].filter(c => !hide.has(c.key));
+    const aColgroup = aCols.map(c => `<col style="mso-width-source:userset;width:${c.w}pt">`).join('');
+    const aTheadRow = aCols.map(c => `<td style="${c.thStyle}">${c.label}</td>`).join('');
+    const nACols = aCols.length;
+    let aTrs = '';
+    sortedAcordos.forEach(l => {
+      const cor = _corSetor(l.setor);
+      const cs  = `background:${cor.bg};color:${cor.text};`;
+      aTrs += `<tr>${aCols.map(c => c.td(l, cs)).join('')}</tr>`;
+    });
+    acordosXls = `
+    <tr><td colspan="${nACols}" style="border:none;padding:14px 10px 4px;font-family:Arial,sans-serif;"></td></tr>
+    <tr><td colspan="${nACols}" style="background:#FEF3C7;color:#78350F;font-size:12pt;font-weight:900;text-transform:uppercase;padding:8px 10px;border:1.5px solid #FCD34D;font-family:Arial,sans-serif;">⚠ ACORDOS DE FÉRIAS — APENAS PARA CONTROLE INTERNO DO RH</td></tr>
+    <tr><td colspan="${nACols}" style="background:#FFFDE7;color:#78350F;font-size:9pt;padding:5px 10px 8px;border:1px solid #FCD34D;border-top:none;font-family:Arial,sans-serif;">Não encaminhar ao escritório para fins de processamento de folha de pagamento. ${acordos.length} acordo(s).</td></tr>
+    <tr><colgroup>${aColgroup}</colgroup>${aTheadRow}</tr>
+    ${aTrs}`;
+  }
+
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
   <head><meta charset="UTF-8"></head><body>
   <table style="border-collapse:collapse;font-family:Arial,sans-serif;">
     <colgroup>${colgroup}</colgroup>
     <tr><td colspan="${nCols}" style="font-size:18pt;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;padding:12px 10px 4px;border:none;font-family:Arial,sans-serif;">FÉRIAS — ${mesLabel.toUpperCase()}</td></tr>
-    <tr><td colspan="${nCols}" style="font-size:10pt;color:#64748b;padding:0 10px 10px;border:none;font-family:Arial,sans-serif;">${sorted.length} registro(s) · Gerado em ${gerado}</td></tr>
+    <tr><td colspan="${nCols}" style="font-size:10pt;color:#64748b;padding:0 10px 10px;border:none;font-family:Arial,sans-serif;">${sorted.length} lançamento(s) · Gerado em ${gerado}</td></tr>
     <tr>${thead}</tr>
     ${trs}
+    ${acordosXls}
   </table>
   </body></html>`;
 }
 
 function exportarRelatorioExcel() {
-  const { linhas, mesLabel } = _getDadosRelatorio();
-  const xls = _buildExcelHTML(linhas, mesLabel);
+  const { linhas, acordos, mesLabel } = _getDadosRelatorio();
+  const xls = _buildExcelHTML(linhas, mesLabel, {}, acordos);
   const blob = new Blob(['﻿' + xls], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -8903,8 +8993,8 @@ function exportarRelatorioExcel() {
 }
 
 function exportarRelatorioPDF() {
-  const { linhas, mesLabel } = _getDadosRelatorio();
-  const html = _buildRelatorioHTML(linhas, mesLabel);
+  const { linhas, acordos, mesLabel } = _getDadosRelatorio();
+  const html = _buildRelatorioHTML(linhas, mesLabel, {}, acordos);
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
