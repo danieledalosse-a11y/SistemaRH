@@ -8562,6 +8562,8 @@ function _getDadosRelatorio() {
         const base = { nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: l.inicio, fim: l.fim, dias: l.dias };
         if (l.diasTrabalhar > 0) {
           // Tipo A — coletado por _getDadosAcordos(); nunca vai à tabela principal
+        } else if ((c.empresa||'').toUpperCase() === 'PJ') {
+          // PJ — coletado por _getDadosAcordos(); nunca vai à tabela principal
         } else {
           if (reg.status === 'Aprovado' && chkAprov) linhas.push({ ...base, status: 'Aprovado' });
           else if (reg.status === 'Pendente' && chkPend) linhas.push({ ...base, status: 'Pend. aprovação' });
@@ -8579,6 +8581,8 @@ function _getDadosRelatorio() {
           const _baseRealiz = { nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: rx.saida, fim: rx.retorno || rx.saida, dias: rx.dias };
           // Tipo B — coletado por _getDadosAcordos(); nunca vai à tabela principal
           if (lancPai && lancPai.fim && lancPai.fim < mesInicio) return;
+          // PJ — controle interno, via _getDadosAcordos(); nunca vai à tabela principal
+          if ((c.empresa||'').toUpperCase() === 'PJ') return;
           linhas.push({ ..._baseRealiz, status: 'Aprovado' });
         });
       }
@@ -9113,6 +9117,24 @@ function _getDadosAcordos() {
           obsLancamento: rx.obs || '',
         });
       });
+
+      // PJ — lançamentos de colaboradores PJ (controle interno; não processados pelo escritório)
+      if ((c.empresa || '').toUpperCase() === 'PJ') {
+        (reg.lancamentos || []).forEach(l => {
+          if (!l.inicio) return;
+          if (mesInicio && (l.inicio < mesInicio || l.inicio > mesFim)) return;
+          if (Number(l.diasTrabalhar) > 0) return; // já capturado como Tipo A acima
+          itens.push({
+            nome: c.nome, cargo: c.cargo || '', setor: c.setor || '',
+            empresa: c.empresa || '', matricula: c.matricula || '',
+            inicio: l.inicio, fim: l.fim || '', dias: l.dias || 0,
+            diasTrabalhar: null,
+            tipoAcordo: 'Colaborador PJ — controle interno',
+            statusLancamento: reg.status || '',
+            obsLancamento: l.nota || l.obs || reg.obs || '',
+          });
+        });
+      }
     });
   });
 
