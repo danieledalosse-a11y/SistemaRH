@@ -3722,6 +3722,102 @@ if (_tipo === 'cancelamento') {
 
 **Regra:** o PA só recebe status `'Cancelado'` quando **não restar nenhum slot válido**. Se houver p1 e p2, e apenas p1 for cancelado, o PA continua `'Aprovado'` com apenas p2.
 
+#### `aprovarPendente` tipo='alteracao' — identificação por `periodo_id` (commit `352c27c`, 27/11/2026)
+
+**Bug corrigido:** antes do commit `352c27c`, o ramo de aprovação de alteração usava `slotIdx = _altMeta.slot === 'p2' ? 1 : 0` para localizar o período no array `periodos[]`. Isso assumia que a posição no array era sempre igual ao slot do gestor — o que falha quando `lancamentos[]` tem mais de dois itens ou quando a ordenação cronológica diverge do slot original.
+
+**Nova abordagem:** o `gestorEnviarAlteracao` captura o `periodo_id` do item em `periodos[]` **no momento da solicitação** e o grava em `_altMeta`. A aprovação localiza o período pelo `id` estável, sem depender de posição ou slot.
+
+##### `_altMeta` — estrutura atual (novas solicitações)
+
+```json
+{
+  "tipo": "alteracao",
+  "slot": "p1",
+  "periodo_id": 1,
+  "novo_inicio": "2027-01-18",
+  "novo_fim": "2027-02-01",
+  "dias": 15,
+  "data_anterior_inicio": "2026-12-15",
+  "data_anterior_fim": "2026-12-29",
+  "solicitante": "Alessandro",
+  "data_solicitacao": "2026-11-27T..."
+}
+```
+
+`periodo_id` é o campo novo. Solicitações antigas não têm esse campo.
+
+##### Lógica de aprovação — `aprovarPendente` tipo='alteracao'
+
+```js
+if (_altMeta.periodo_id != null) {
+  // Nova solicitação: busca direta pelo ID estável
+  _perAltIdx = _periosAlt.findIndex(p => p.id === _altMeta.periodo_id && p.status === 'aprovado');
+  if (_perAltIdx < 0) {
+    toast('Período original não localizado (ID ' + _altMeta.periodo_id + '). Verifique o cadastro antes de aprovar.', 'erro');
+    return; // bloqueia — periodos[] intacto
+  }
+} else {
+  // Solicitação antiga: busca por datas, exige correspondência única
+  const _matchesAlt = _periosAlt
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => p.status === 'aprovado' && p.inicio === _altMeta.data_anterior_inicio && p.fim === _altMeta.data_anterior_fim);
+  if (_matchesAlt.length === 0) {
+    toast('Período original não localizado (...). Verifique o cadastro antes de aprovar.', 'erro');
+    return; // bloqueia
+  }
+  if (_matchesAlt.length > 1) {
+    toast('Mais de um período com as mesmas datas encontrado. Não é possível identificar qual alterar.', 'erro');
+    return; // bloqueia
+  }
+  _perAltIdx = _matchesAlt[0].i;
+}
+_periosAlt[_perAltIdx] = { ..._periosAlt[_perAltIdx], inicio: _altMeta.novo_inicio, fim: _altMeta.novo_fim };
+```
+
+**Regra obrigatória:** nenhum fallback por slot ou posição de array em qualquer cenário. Se o período não for identificado de forma inequívoca, a aprovação é bloqueada e `periodos[]` permanece intacto.
+
+##### Sincronização em memória após aprovação
+
+```js
+// Atualiza o lancamento local pelo id do período, não pelo slot
+const _lancAltUpd = reg.lancamentos.find(l => (l.id ?? -1) === _periosAlt[_perAltIdx].id);
+if (_lancAltUpd) { _lancAltUpd.inicio = _altMeta.novo_inicio; _lancAltUpd.fim = _altMeta.novo_fim; }
+```
+
+##### Captura de `periodo_id` em `gestorEnviarAlteracao`
+
+```js
+// Localiza o período em periodos[] antes de criar o meta
+const _rowGesAlt    = GESTOR_PERIODOS.find(p => String(p.id) === String(_gestorAltCtx.periodoId))?._feriasRow;
+const _periosRowGes = Array.isArray(_rowGesAlt?.periodos) ? _rowGesAlt.periodos : [];
+const _perMatchGes  = _periosRowGes.find(p =>
+  p.status === 'aprovado' && p.inicio === _gestorAltCtx.inicio && p.fim === _gestorAltCtx.fim
+);
+if (!_perMatchGes) {
+  erroEl.textContent = 'Não foi possível identificar o período original no cadastro. Recarregue a página e tente novamente.';
+  return; // bloqueia o envio — periodo_id obrigatório para novas solicitações
+}
+_periodoIdCapturado = _perMatchGes.id;
+```
+
+> **Rollback disponível:** `git revert 352c27c && git push origin main` restaura o código anterior (slot-based). A lógica antiga está preservada no histórico do git.
+
+<details>
+<summary>⚠ Lógica anterior (slot-based) — arquivada para referência</summary>
+
+```js
+// LÓGICA ANTIGA (antes do commit 352c27c) — NUNCA restaurar sem entender o bug
+const slotIdx    = _altMeta.slot === 'p2' ? 1 : 0;
+const _lAlterado = reg.lancamentos[slotIdx];
+const _pidAlt    = _lAlterado?.id ?? slotIdx;
+let _perAltIdx   = _periosAlt.findIndex(p => p.id === _pidAlt);
+if (_perAltIdx < 0) _perAltIdx = slotIdx; // fallback por posição — PERIGOSO
+// Problema: se lancamentos[0] = Julho e gestor viu Dezembro como "p1" (slot='p1'),
+// slotIdx=0 → modifica Julho em vez de Dezembro
+```
+</details>
+
 ---
 
 #### Três botões independentes no fluxo de aprovação RH (commits `622e6e0`/`99814da`/`59dff25`/`ece14ac`/`1a7765d`, Nov/2026)
