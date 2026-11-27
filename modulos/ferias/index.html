@@ -6296,27 +6296,44 @@ async function aprovarPendente() {
         btnAprovar.textContent = '✓ Aprovar alteração';
         return;
       }
-      const slotIdx = _altMeta.slot === 'p2' ? 1 : 0;
       // Atualiza periodos[] para alteração aprovada
       const _periosAlt = reg._periodos
         ? [...reg._periodos]
         : reg.lancamentos.map((ll, i) => ({ id: ll.id ?? i, inicio: ll.inicio, fim: ll.fim, dias: ll.dias, nota: ll.nota || null, status: ll.status || 'aprovado' }));
-      const _lAlterado = reg.lancamentos[slotIdx];
-      const _pidAlt = _lAlterado ? (_lAlterado.id ?? slotIdx) : slotIdx;
-      const _perAltIdx = _periosAlt.findIndex(p => p.id === _pidAlt);
-      if (_perAltIdx >= 0) {
-        _periosAlt[_perAltIdx] = { ..._periosAlt[_perAltIdx], inicio: _altMeta.novo_inicio, fim: _altMeta.novo_fim };
+      // Localiza o período original sem fallback por slot ou posição no array
+      let _perAltIdx;
+      if (_altMeta.periodo_id != null) {
+        // Nova solicitação: busca direta pelo ID estável registrado no pedido
+        _perAltIdx = _periosAlt.findIndex(p => p.id === _altMeta.periodo_id && p.status === 'aprovado');
+        if (_perAltIdx < 0) {
+          toast('Período original não localizado (ID ' + _altMeta.periodo_id + '). Verifique o cadastro antes de aprovar.', 'erro');
+          btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar alteração';
+          return;
+        }
+      } else {
+        // Solicitação antiga: busca por datas, exige correspondência única
+        const _matchesAlt = _periosAlt.map((p, i) => ({ p, i })).filter(({ p }) => p.status === 'aprovado' && p.inicio === _altMeta.data_anterior_inicio && p.fim === _altMeta.data_anterior_fim);
+        if (_matchesAlt.length === 0) {
+          toast('Período original não localizado (' + _altMeta.data_anterior_inicio + ' → ' + _altMeta.data_anterior_fim + '). Verifique o cadastro antes de aprovar.', 'erro');
+          btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar alteração';
+          return;
+        }
+        if (_matchesAlt.length > 1) {
+          toast('Mais de um período com as mesmas datas encontrado. Não é possível identificar qual alterar. Verifique o cadastro.', 'erro');
+          btnAprovar.disabled = false; btnAprovar.textContent = '✓ Aprovar alteração';
+          return;
+        }
+        _perAltIdx = _matchesAlt[0].i;
       }
+      _periosAlt[_perAltIdx] = { ..._periosAlt[_perAltIdx], inicio: _altMeta.novo_inicio, fim: _altMeta.novo_fim };
       const patch = _altMeta.slot === 'p1'
         ? { periodo1_inicio: _altMeta.novo_inicio, periodo1_fim: _altMeta.novo_fim, periodos: _periosAlt, status: 'Aprovado', obs_gestor: null }
         : { periodo2_inicio: _altMeta.novo_inicio, periodo2_fim: _altMeta.novo_fim, periodos: _periosAlt, status: 'Aprovado', obs_gestor: null };
       await sbPatch('ferias', `id=eq.${reg._sbId}`, patch);
       reg._periodos = _periosAlt;
       // Atualizar local
-      if (reg.lancamentos[slotIdx]) {
-        reg.lancamentos[slotIdx].inicio = _altMeta.novo_inicio;
-        reg.lancamentos[slotIdx].fim    = _altMeta.novo_fim;
-      }
+      const _lancAltUpd = reg.lancamentos.find(l => (l.id ?? -1) === _periosAlt[_perAltIdx].id);
+      if (_lancAltUpd) { _lancAltUpd.inicio = _altMeta.novo_inicio; _lancAltUpd.fim = _altMeta.novo_fim; }
       reg._alteracaoMeta = null;
       reg._obsGestor     = null;
       reg.status = 'Aprovado';
@@ -13279,9 +13296,25 @@ async function gestorEnviarAlteracao() {
   }
   const novoFim = addDays(novoInicio, _gestorAltCtx.dias - 1);
   const slot    = _gestorAltCtx.slot;
+  // Captura periodo_id para novas solicitações — obrigatório, sem fallback
+  let _periodoIdCapturado = undefined;
+  if (!_gestorAltCtx._modoSolicitado) {
+    const _rowGesAlt    = GESTOR_PERIODOS.find(p => String(p.id) === String(_gestorAltCtx.periodoId))?._feriasRow;
+    const _periosRowGes = Array.isArray(_rowGesAlt?.periodos) ? _rowGesAlt.periodos : [];
+    const _perMatchGes  = _periosRowGes.find(p =>
+      p.status === 'aprovado' && p.inicio === _gestorAltCtx.inicio && p.fim === _gestorAltCtx.fim
+    );
+    if (!_perMatchGes) {
+      erroEl.textContent   = 'Não foi possível identificar o período original no cadastro. Recarregue a página e tente novamente.';
+      erroEl.style.display = '';
+      return;
+    }
+    _periodoIdCapturado = _perMatchGes.id;
+  }
   const meta = {
     tipo: 'alteracao',
     slot,
+    ...(_periodoIdCapturado != null ? { periodo_id: _periodoIdCapturado } : {}),
     novo_inicio:          novoInicio,
     novo_fim:             novoFim,
     dias:                 _gestorAltCtx.dias,
