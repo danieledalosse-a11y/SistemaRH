@@ -8578,7 +8578,13 @@ function _getDadosRelatorio() {
           if (lancPai && lancPai.inicio >= mesInicio && lancPai.inicio <= mesFim) return;
           if (_realizSet.has(rx.saida)) return; // mesmo colaborador, mesma data em outro PA
           _realizSet.add(rx.saida);
-          linhas.push({ nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: rx.saida, fim: rx.retorno || rx.saida, dias: rx.dias, status: 'Aprovado' });
+          const _baseRealiz = { nome: c.nome, cargo: c.cargo||'', setor: c.setor||c.unidade||'', empresa: c.empresa||c.unidade||'', matricula: c.matricula||'', inicio: rx.saida, fim: rx.retorno || rx.saida, dias: rx.dias };
+          // Tipo B: lançamento pai encerrou antes do mês → acordo de controle interno, não vai ao escritório
+          if (chkAcordos && lancPai && lancPai.fim && lancPai.fim < mesInicio) {
+            acordos.push({ ..._baseRealiz, diasTrabalhar: null, status: 'Acordo' });
+          } else {
+            linhas.push({ ..._baseRealiz, status: 'Aprovado' });
+          }
         });
       }
       if (chkRisco && isSemAgendado(c)) {
@@ -8824,8 +8830,10 @@ function _buildRelatorioHTML(linhas, mesLabel, opts, acordos) {
       if (sa !== 0) return sa;
       return (a.nome||'').localeCompare(b.nome||'', 'pt-BR');
     });
-    const aCols = [...cols, { key: '_diasTrab', label: 'Dias trabalhando', thStyle: 'text-align:center;',
-      td: l => `<td style="text-align:center;background:#FEF9C3;color:#78350F;font-weight:700;">${l.diasTrabalhar}d trabalhando</td>` }];
+    const aCols = [...cols, { key: '_diasTrab', label: 'Tipo de Acordo', thStyle: 'text-align:center;',
+      td: l => l.diasTrabalhar > 0
+        ? `<td style="text-align:center;background:#FEF9C3;color:#78350F;font-weight:700;">${l.diasTrabalhar}d trabalhando</td>`
+        : `<td style="text-align:center;background:#FEF3C7;color:#92400E;font-size:10px;font-weight:600;">Gozo fora do período</td>` }];
     const aColgroup = aCols.map(c => `<col style="width:${c.w || 'auto'}">`).join('');
     const aThead = aCols.map(c => `<th${c.thStyle ? ` style="${c.thStyle}"` : ''}>${c.label}</th>`).join('');
     let aTrs = '';
@@ -8837,7 +8845,7 @@ function _buildRelatorioHTML(linhas, mesLabel, opts, acordos) {
     <div class="acordo-banner-icon">⚠</div>
     <div>
       <div class="acordo-banner-title">Acordos de Férias — Apenas para controle interno do RH</div>
-      <div class="acordo-banner-desc">Os registros abaixo são acordos em que o colaborador permanecerá parcialmente em atividade durante o período de férias. <strong>Não devem ser encaminhados ao escritório</strong> para fins de processamento de folha de pagamento.</div>
+      <div class="acordo-banner-desc">Os registros abaixo são acordos de controle interno: colaboradores que trabalham parcialmente durante as férias ou que gozaram dias de períodos já encerrados. <strong>Não devem ser encaminhados ao escritório</strong> para fins de processamento de folha de pagamento.</div>
     </div>
   </div>
   <table class="acordo-tbl">
@@ -8956,8 +8964,10 @@ function _buildExcelHTML(linhas, mesLabel, opts, acordos) {
     const TH_AC = 'background:#B45309;color:#fff;font-family:Arial,sans-serif;font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;border:1px solid #7c3909;text-align:left;';
     const TH_ACC = TH_AC + 'text-align:center;';
     const aCols = [...ALL_COLS, { key: '_diasTrab', w: 110, thStyle: TH_ACC,
-      td: (l) => `<td style="text-align:center;background:#FEF9C3;color:#78350F;font-weight:700;padding:5px 10px;">${l.diasTrabalhar}d trabalhando</td>`,
-      label: 'Dias trabalhando' }].filter(c => !hide.has(c.key));
+      td: (l) => l.diasTrabalhar > 0
+        ? `<td style="text-align:center;background:#FEF9C3;color:#78350F;font-weight:700;padding:5px 10px;">${l.diasTrabalhar}d trabalhando</td>`
+        : `<td style="text-align:center;background:#FEF3C7;color:#92400E;font-size:9pt;font-weight:600;padding:5px 10px;">Gozo fora do período</td>`,
+      label: 'Tipo de Acordo' }].filter(c => !hide.has(c.key));
     const aColgroup = aCols.map(c => `<col style="mso-width-source:userset;width:${c.w}pt">`).join('');
     const aTheadRow = aCols.map(c => `<td style="${c.thStyle}">${c.label}</td>`).join('');
     const nACols = aCols.length;
